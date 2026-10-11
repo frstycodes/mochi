@@ -17,6 +17,7 @@ import { useSidebarWidth } from './SidebarResizer';
 import { HarnessProvider, useHarness, useSpace, useView, type View } from './store';
 import { ThreadView } from './ThreadView';
 import { useIdleScrollbars } from './useIdleScrollbars';
+import { useWorktreeManager } from './git/useWorktreeManager';
 import { SpaceIcon, StepStatusIcon, ThreadStatusIcon, lineColor } from './ui';
 
 export function App() {
@@ -57,6 +58,7 @@ function Shell() {
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
+  useWorktreeManager();
 
   return (
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
