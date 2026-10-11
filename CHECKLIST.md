@@ -60,9 +60,9 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [ ] Android emulator through the same tab (`adb`, `emulator`) — later
 
 ### Side chat
-- [ ] A throwaway chat about the current thread that doesn't touch its goal or transcript ("why did it pick Redis?")
-- [ ] Reads the thread's context; can be promoted to a real message or a new thread
-- [ ] Ask about a selection (diff hunk, terminal output, file range)
+- [x] A throwaway chat about the current thread that doesn't touch its goal or transcript ("why did it pick Redis?"); one per side chat tab, persisted, clearable
+- [x] Reads the thread's context (goal, steps, recent activity, diff summary); can be promoted to a real message or a new thread (answers are a canned preview until `agent.ask` gets a real model)
+- [x] Ask about a selection (diff hunk, terminal output, file range)
 
 ### Diffs (Changes)
 - [x] Real git diff of the worktree vs base, file tree with `+/−`

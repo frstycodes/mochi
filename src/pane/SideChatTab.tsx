@@ -1,6 +1,152 @@
-import { MessageAdd } from 'reicon-react';
-import { PlannedTab } from './PlannedTab';
+import { ArrowUp, Broom, Code, Document, Edit, MessageAdd, MessageQuestion, Send, X, type IconComponent } from 'reicon-react';
+import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '@/components/ai-elements/conversation';
+import { Message, MessageActions, MessageContent, MessageResponse } from '@/components/ai-elements/message';
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputHeader, PromptInputSubmit, PromptInputTextarea, PromptInputTools } from '@/components/ai-elements/prompt-input';
+import { Shimmer } from '@/components/ai-elements/shimmer';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ComposerCard } from '../Composer';
+import { useSideChat } from '../sidechat/useSideChat';
+import { useHarness } from '../store';
+import { SOURCE_NAMES, type Quote, type QuoteSource, type SideMessage } from '../store/sidechat';
+import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from '../viz/FenceVisual';
+import { VizThreadProvider } from '../viz/WidgetVisual';
+import type { PaneTabProps } from './tabs';
 
-export function SideChatTab() {
-  return <PlannedTab icon={MessageAdd} title="No side chat yet" description="Ask something without derailing this thread." />;
+export function SideChatTab({ thread, tab }: PaneTabProps) {
+  const { dispatch } = useHarness();
+  const side = useSideChat(thread, tab.id);
+  const isEmpty = side.chat.messages.length === 0;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-3">
+        <p className="min-w-0 flex-1 truncate type-meta text-muted-foreground">
+          Aside from <span className="text-foreground">{thread.title}</span>
+        </p>
+        <HeaderAction label="New side chat" icon={MessageAdd} onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind: 'sidechat' })} />
+        <HeaderAction label="Clear side chat" icon={Broom} disabled={isEmpty || side.isStreaming} onClick={side.clear} />
+      </header>
+      {isEmpty ? (
+        <EmptySideChat />
+      ) : (
+        <Conversation className="min-h-0 flex-1">
+          <VizThreadProvider value={thread.id}>
+            <ConversationContent className="gap-5 px-4 pt-2 pb-4">
+              {side.chat.messages.map((m) => (m.role === 'user' ? <Question key={m.id} message={m} /> : <Answer key={m.id} message={m} onPromote={(to) => side.promote(m.id, to)} />))}
+            </ConversationContent>
+          </VizThreadProvider>
+          <ConversationScrollButton />
+        </Conversation>
+      )}
+      <div className="shrink-0 px-3 pb-3">
+        <ComposerCard>
+          <PromptInput onSubmit={({ text }) => void (text.trim() && side.ask(text.trim()))}>
+            {!!side.chat.draft && (
+              <PromptInputHeader className="px-3 pt-3">
+                <QuoteCard quote={side.chat.draft} onRemove={() => side.setDraft(undefined)} />
+              </PromptInputHeader>
+            )}
+            <PromptInputBody>
+              <PromptInputTextarea autoFocus={!!side.chat.draft} placeholder={side.chat.draft ? 'Ask about this selection' : 'Ask about this thread'} className="min-h-10 px-4 pt-3 type-prose max-md:text-base" />
+            </PromptInputBody>
+            <PromptInputFooter className="justify-end px-2 pb-2">
+              <PromptInputTools>
+                <PromptInputSubmit aria-label="Ask" disabled={side.isStreaming} className="rounded-full">
+                  <ArrowUp className="size-4" />
+                </PromptInputSubmit>
+              </PromptInputTools>
+            </PromptInputFooter>
+          </PromptInput>
+        </ComposerCard>
+      </div>
+    </div>
+  );
+}
+
+function HeaderAction({ label, icon: Icon, ...props }: { label: string; icon: IconComponent } & Omit<React.ComponentProps<typeof Button>, 'children'>) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={label} className="text-muted-foreground" {...props}>
+          <Icon />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function EmptySideChat() {
+  return (
+    <ConversationEmptyState className="min-h-0 flex-1">
+      <MessageQuestion className="size-6 text-muted-foreground" aria-hidden />
+      <div className="flex max-w-64 flex-col gap-1">
+        <h3 className="type-title">Ask without derailing the thread</h3>
+        <p className="type-meta text-muted-foreground">Answers see the goal, steps, recent activity and diff, but nothing here reaches the agent unless you send it.</p>
+      </div>
+    </ConversationEmptyState>
+  );
+}
+
+function Question({ message }: { message: SideMessage }) {
+  return (
+    <Message from="user">
+      <MessageContent className="type-prose">
+        {!!message.quote && <QuoteCard quote={message.quote} />}
+        <p className="whitespace-pre-wrap">{message.text}</p>
+      </MessageContent>
+    </Message>
+  );
+}
+
+function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 'message' | 'thread') => void }) {
+  const isThinking = !!message.isStreaming && !message.text;
+  const canPromote = !message.isStreaming && !message.promotedTo;
+  return (
+    <Message from="assistant" className="max-w-full">
+      <MessageContent className="w-full type-prose">
+        {isThinking && <Shimmer className="type-meta">Reading the thread</Shimmer>}
+        <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={!!message.isStreaming}>
+          {message.text}
+        </MessageResponse>
+      </MessageContent>
+      {canPromote && (
+        <MessageActions className="-ml-2">
+          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote('message')}>
+            <Send aria-hidden />
+            Send to thread
+          </Button>
+          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote('thread')}>
+            <MessageAdd aria-hidden />
+            New thread
+          </Button>
+        </MessageActions>
+      )}
+      {!!message.promotedTo && <p className="type-caption text-subtle-foreground">{message.promotedTo === 'message' ? 'Sent to the thread' : 'Started a new thread'}</p>}
+    </Message>
+  );
+}
+
+const SOURCE_ICONS = { diff: Edit, terminal: Code, file: Document } satisfies Record<QuoteSource, IconComponent>;
+
+function QuoteCard({ quote, onRemove }: { quote: Quote; onRemove?: () => void }) {
+  const Icon = SOURCE_ICONS[quote.source];
+  return (
+    <figure className="flex w-full min-w-0 flex-col overflow-hidden rounded-lg border bg-background/60">
+      <figcaption className="flex h-7 items-center gap-1.5 pr-1 pl-2.5 type-caption text-subtle-foreground">
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        <span className="shrink-0 font-medium text-muted-foreground">{SOURCE_NAMES[quote.source]}</span>
+        <span className="min-w-0 truncate font-mono" title={quote.label}>
+          {quote.label}
+        </span>
+        {!!onRemove && (
+          <Button variant="ghost" size="icon-xs" aria-label="Remove selection" className="ml-auto" onClick={onRemove}>
+            <X />
+          </Button>
+        )}
+      </figcaption>
+      <pre className="max-h-32 overflow-auto px-2.5 pb-2 font-mono text-xs leading-5 text-foreground">{quote.text}</pre>
+    </figure>
+  );
 }

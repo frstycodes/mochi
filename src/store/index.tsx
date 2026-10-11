@@ -3,6 +3,7 @@ import { SPACES, type QueueItem, type Thread } from '../model.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
+import { initialSideChat, saveSideChats, sidechatReducer, type SideChatAction, type SideChatState } from './sidechat.ts';
 import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState } from './threads.ts';
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
 
@@ -15,17 +16,17 @@ export interface Snapshot {
   queue: QueueItem[];
 }
 
-export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState;
-export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | { type: 'reset' };
+export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState;
+export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | { type: 'reset' };
 
-const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer];
+const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer];
 
 function initialState(): State {
-  return { ...initialThreads(), ...initialQueue(), ...initialPanes(), ...initialLayout(), ...initialUi() };
+  return { ...initialThreads(), ...initialQueue(), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat() };
 }
 
 function reducer(state: State, action: Action): State {
-  if (action.type === 'reset') return { ...initialState(), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }) };
+  if (action.type === 'reset') return { ...initialState(), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }), ...initialSideChat({}) };
   return SLICES.reduce((s, slice) => slice(s, action), state);
 }
 
@@ -41,6 +42,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);
+  useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
 }
 

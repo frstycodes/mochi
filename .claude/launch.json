@@ -176,6 +176,17 @@
         "--strictPort"
       ],
       "port": 5291
+    },
+    {
+      "name": "harness-sidechat",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5297",
+        "--strictPort"
+      ],
+      "port": 5297
     }
   ]
 }
