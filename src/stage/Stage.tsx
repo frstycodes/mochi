@@ -1,4 +1,4 @@
-import { startTransition, useLayoutEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { startTransition, useLayoutEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { endDrag, moveDrag, startDrag } from '../layout/drag';
@@ -66,13 +66,24 @@ export function Stage() {
         style={isStage ? { scrollbarWidth: 'none' } : undefined}
         className={cn('h-full', isStage ? cn('overscroll-contain bg-sidebar', isPortrait ? 'snap-y snap-mandatory overflow-x-hidden overflow-y-auto' : 'snap-x snap-mandatory overflow-x-auto overflow-y-hidden') : 'overflow-hidden')}
       >
-        <div className={cn('relative flex', isPortrait ? 'w-full flex-col' : 'h-full')} style={isPortrait ? { height: `${pages * 100}%` } : { width: `${pages * 100}%` }}>
-          {isStage && slots.ids.map((id, i) => <span key={`${id}:${i}`} aria-hidden className="absolute size-px snap-start snap-always" style={{ [isPortrait ? 'top' : 'left']: `${(i * 100) / pages}%` }} />)}
-          <div className="sticky top-0 left-0 flex shrink-0 items-center justify-center overflow-hidden" style={isPortrait ? { width: '100%', height: `${100 / pages}%` } : { height: '100%', width: `${100 / pages}%` }}>
-            <CenterFrame isStage={isStage} isPortrait={isPortrait} pos={pos} center={slots.center} size={size} />
-            {isStage && [slots.center - 1, slots.center + 1].map((i) => !!slots.ids[i] && slots.ids[i] !== CENTER && <NeighborFrame key={slots.ids[i]} id={slots.ids[i]} slot={i} isPortrait={isPortrait} pos={pos} size={size} />)}
-            {isStage && <EdgeCards slots={slots} pos={pos} size={size} isPortrait={isPortrait} isFlat={reduce} onOpen={scrollToSlot} />}
-          </div>
+        <div className="relative h-full w-full" style={isPortrait ? { height: `${pages * 100}%` } : { width: `${pages * 100}%` }}>
+          {isStage && (
+            <div className="pointer-events-none sticky top-0 left-0 h-full w-full" style={isPortrait ? { height: `${100 / pages}%` } : { width: `${100 / pages}%` }}>
+              <EdgeCards slots={slots} pos={pos} size={size} isPortrait={isPortrait} isFlat={reduce} onOpen={scrollToSlot} />
+            </div>
+          )}
+          <Page slot={isStage ? slots.center : 0} pages={pages} isPortrait={isPortrait}>
+            <CenterFrame isStage={isStage} isPortrait={isPortrait} />
+          </Page>
+          {isStage &&
+            slots.ids.map(
+              (id, i) =>
+                i !== slots.center && (
+                  <Page key={`${id}:${i}`} slot={i} pages={pages} isPortrait={isPortrait}>
+                    {Math.abs(i - slots.center) === 1 && id !== CENTER && <NeighborFrame id={id} isPortrait={isPortrait} />}
+                  </Page>
+                ),
+            )}
         </div>
       </div>
       {state.isOverview && <Overview />}
@@ -80,41 +91,41 @@ export function Stage() {
   );
 }
 
-/** The workspace. Always the same element so toggling the stage never remounts the sessions in it. Off rest it slides by exactly the swipe distance. */
-function CenterFrame({ isStage, isPortrait, pos, center, size }: { isStage: boolean; isPortrait: boolean; pos: MotionValue<number>; center: number; size: MotionValue<number> }) {
-  const transform = useSlotTransform(center, pos, size, isPortrait, !isStage);
+/**
+ * One snap page of the scroll content. Every session sits in its own page and the browser scrolls them natively (on the compositor, no frame of lag);
+ * committing a swipe only moves the live workspace's page to the slot you landed on, a style change rather than a remount.
+ */
+function Page({ slot, pages, isPortrait, children }: { slot: number; pages: number; isPortrait: boolean; children: ReactNode }) {
+  const at = `${(slot * 100) / pages}%`;
+  const span = `${100 / pages}%`;
   return (
-    <motion.div style={{ transform }} className={cn('min-h-0 min-w-0', isStage ? frameClass(isPortrait) : 'size-full')}>
-      <Workspace />
-    </motion.div>
+    <div className="pointer-events-none absolute flex snap-start snap-always items-center justify-center" style={isPortrait ? { top: at, height: span, left: 0, right: 0 } : { left: at, width: span, top: 0, bottom: 0 }}>
+      {children}
+    </div>
   );
 }
 
-/** The pinned thread on either side of the center, rendered for real (read-only) in its own page, so a swipe slides its content in instead of a blank. */
-function NeighborFrame({ id, slot, isPortrait, pos, size }: { id: string; slot: number; isPortrait: boolean; pos: MotionValue<number>; size: MotionValue<number> }) {
+/** The workspace. Always the same element so toggling the stage never remounts the sessions in it. */
+function CenterFrame({ isStage, isPortrait }: { isStage: boolean; isPortrait: boolean }) {
+  return (
+    <div className={cn('pointer-events-auto min-h-0 min-w-0', isStage ? frameClass(isPortrait) : 'size-full')}>
+      <Workspace />
+    </div>
+  );
+}
+
+/** The pinned thread on either side of the center, rendered for real (read-only), so a swipe slides its content in instead of a blank. */
+function NeighborFrame({ id, isPortrait }: { id: string; isPortrait: boolean }) {
   const thread = useThread(id);
-  const transform = useSlotTransform(slot, pos, size, isPortrait, false);
   if (!thread) return null;
   return (
-    <motion.div style={{ transform }} className={cn('absolute inset-0 m-auto', frameClass(isPortrait))}>
+    <div className={frameClass(isPortrait)}>
       <ThreadPreview thread={thread} />
-    </motion.div>
+    </div>
   );
 }
 
 const frameClass = (isPortrait: boolean) => cn('isolate overflow-hidden rounded-xl border border-border bg-background', isPortrait ? 'h-[88%] w-[calc(100%-24px)]' : 'h-[calc(100%-24px)] w-[88%]');
-
-/** Every page sits at (slot − scroll position) × page size, so all of them move together with the scroller, 1:1. */
-function useSlotTransform(slot: number, pos: MotionValue<number>, size: MotionValue<number>, isPortrait: boolean, isStill: boolean) {
-  const slotRef = useRef(slot);
-  slotRef.current = slot;
-  // `none` at rest: any transform would make the frame the containing block of the fixed-position layers inside (the pop-out preview).
-  return useTransform([pos, size], ([p, px]: number[]) => {
-    const d = slotRef.current - p;
-    if (isStill || Math.abs(d) < 0.002) return 'none';
-    return isPortrait ? `translateY(${d * px}px)` : `translateX(${d * px}px)`;
-  });
-}
 
 function EdgeCards({ slots, pos, size, isPortrait, isFlat, onOpen }: { slots: StageSlots; pos: MotionValue<number>; size: MotionValue<number>; isPortrait: boolean; isFlat: boolean; onOpen: (i: number) => void }) {
   const snaps = useThreadSnapshots(slots.ids.filter((id) => id !== CENTER));
