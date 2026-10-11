@@ -51,4 +51,4 @@ Decided: Electron desktop shell; the web build (Vite single file / artifact) kee
 
 ## Wave 3: needs a real agent runtime or a server
 
-Scheduled threads, team spaces, replay, voice, mobile companion, settings sync (§6 9–14). These wait until threads run on real Claude Code / Codex processes instead of the `tick` simulation. That runtime isn't on the checklist yet; it belongs in `electron/ipc/agent.ts` and is the next thing to plan.
+Scheduled threads, team spaces, replay, voice, mobile companion, settings sync (§6 9–14). These wait until threads run on real Claude Code / Codex processes instead of the `tick` simulation. The runtime is designed in [RUNTIME.md](RUNTIME.md), with its own waves R0–R2.
