@@ -63,12 +63,12 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [ ] Ask about a selection (diff hunk, terminal output, file range)
 
 ### Diffs (Changes)
-- [ ] Real git diff of the worktree vs base, file tree with `+/−`
-- [ ] Unified / split view toggle, word-level highlighting (already on `@pierre/diffs`)
-- [ ] Per-step diff: filter changes by the step that made them (uses `Step.footprint`)
-- [ ] Stage / unstage / revert per file and per hunk
-- [ ] Comment on a line → goes to the agent as a review note
-- [ ] Commit, push, open PR from the tab; PR checks inline
+- [x] Real git diff of the worktree vs base, file tree with `+/−`
+- [x] Unified / split view toggle, word-level highlighting (already on `@pierre/diffs`)
+- [x] Per-step diff: filter changes by the step that made them (uses `Step.footprint`)
+- [x] Stage / unstage / revert per file and per hunk
+- [x] Comment on a line → goes to the agent as a review note
+- [x] Commit, push, open PR from the tab; PR checks inline (push and PR ask first; not yet run against a real remote)
 
 ### File preview / editor
 - [ ] File tree for the worktree with search (Cmd P)
@@ -195,7 +195,7 @@ Ranked by how much they help running many agents at once.
 - [ ] **Notifications center + OS notifications** for needs-you, CI fail, PR review, race lost — with "jump to" and quiet hours.
 - [ ] **Cost and usage per thread / space** next to context usage: tokens, $, plan limits remaining, rate-limit warnings before an agent stalls.
 - [ ] **Checkpoints / rewind**: restore files and transcript to any step boundary (the timeline scrubber already picks the moment).
-- [ ] **Worktree manager**: one worktree per thread, disk usage, clean up settled ones, sync with base.
+- [x] **Worktree manager**: one worktree per thread, disk usage, clean up settled ones, sync with base. Worktrees live in `~/.harness/worktrees/<repo>/<thread>`; GAP: threads carry a project name, not a folder, so every project still resolves to the app's cwd (`projectRoot` in `src/host/cwd.ts`).
 - [ ] **Handoff between agents**: move a thread or a single step from Claude to Codex (or back) with the goal and context summary.
 - [ ] **Command palette actions**, not just search: every action in the app reachable from Cmd K.
 - [ ] **Thread forking**: fork at a message to try an alternative approach, then compare diffs and keep one (pairs with race).
