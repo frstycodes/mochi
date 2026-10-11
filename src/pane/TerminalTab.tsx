@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { Thread } from '../model';
+import { AskInSideChat } from '../sidechat/AskInSideChat';
 import { IconAction } from '../terminal/IconAction';
 import { addShell, closeSession, showSession, toggleSplit, type TerminalSession } from '../terminal/sessions';
 import { useTerminals } from '../terminal/useTerminals';
@@ -62,6 +63,7 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
             Send to chat
           </Button>
         )}
+        {!!focused?.selection && <AskInSideChat threadId={thread.id} quote={{ source: 'terminal', label: focused.title, text: focused.selection.trim() }} />}
         <IconAction aria-label="Search output" aria-keyshortcuts="Meta+F" onClick={() => setIsSearching((v) => !v)}>
           <Search />
         </IconAction>

@@ -12,6 +12,7 @@ import { ShipBar } from '../git/ShipBar';
 import { useConfirm } from '../git/useConfirm';
 import { useGitAction, useGitDiff } from '../git/useGit';
 import { WorktreeMenu } from '../git/WorktreeMenu';
+import { AskAboutHunk } from '../sidechat/AskInSideChat';
 import { useWorktreePath } from '../git/worktrees';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
@@ -81,6 +82,7 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
             <DiffStat added={sum(files, 'added')} removed={sum(files, 'removed')} />
           </span>
         )}
+        <AskAboutHunk threadId={thread.id} files={files} />
         <ToggleGroup type="single" size="sm" value={diffStyle} onValueChange={(v) => v && setDiffStyle(v as DiffStyle)} aria-label="Diff layout">
           <ToggleGroupItem value="unified" aria-label="Unified diff">
             <RowVertical />

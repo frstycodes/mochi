@@ -10,6 +10,7 @@ import { QuickOpen } from '@/files/QuickOpen';
 import { useFileList } from '@/files/useFiles';
 import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
+import { AskAboutFileRange } from '@/sidechat/AskInSideChat';
 import type { PaneTabProps } from './tabs';
 
 // Narrower than this, the tree and the file don't both fit, so opening a file folds the tree away.
@@ -18,10 +19,10 @@ const SIDE_BY_SIDE_MIN_WIDTH = 640;
 export function FilesTab({ thread, tab }: PaneTabProps) {
   const root = threadCwd(thread);
   if (!root) return <NoFolderState />;
-  return <FilesBrowser key={root} root={root} initial={tab.file} />;
+  return <FilesBrowser key={root} threadId={thread.id} root={root} initial={tab.file} />;
 }
 
-function FilesBrowser({ root, initial }: { root: string; initial?: { path: string; line?: number } }) {
+function FilesBrowser({ threadId, root, initial }: { threadId: string; root: string; initial?: { path: string; line?: number } }) {
   const { files, error } = useFileList(root);
   const [selected, setSelected] = useState(initial ?? null);
   const [isTreeOpen, setIsTreeOpen] = useState(!initial);
@@ -56,6 +57,7 @@ function FilesBrowser({ root, initial }: { root: string; initial?: { path: strin
           Go to file <Kbd>⌘P</Kbd>
         </TooltipContent>
       </Tooltip>
+      {!!selected && <AskAboutFileRange threadId={threadId} path={selected.path} />}
     </>
   );
   return (
