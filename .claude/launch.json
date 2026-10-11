@@ -55,6 +55,17 @@
         "--strictPort"
       ],
       "port": 5215
+    },
+    {
+      "name": "harness-slices",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5237",
+        "--strictPort"
+      ],
+      "port": 5237
     }
   ]
 }
