@@ -1,4 +1,7 @@
 import { FAKE_TOOLS, genericTools, NOW0, seedThreads, type ActivityEntry, type LineSlot, type Provider, type QueueItem, type Step, type Thread } from '../model.ts';
+import { stepTitleFrom, type DriftKind } from '../drift.ts';
+import { applyDraft, type GoalDraft } from '../goals/edit.ts';
+import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 
@@ -18,7 +21,11 @@ export type ThreadsAction =
   | { type: 'add-scope'; threadId: string }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
-  | { type: 'create'; title: string; provider: Provider; project: string | null; dependOn?: { threadId: string; stepId: string } }
+  | { type: 'create'; title: string; provider: Provider; project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string }
+  | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string }
+  | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
+  | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
+  | { type: 'edit-goal'; threadId: string; draft: GoalDraft }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot };
@@ -40,13 +47,21 @@ export function threadsReducer(state: State, action: Action): State {
     case 'settle':
       return {
         ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: 'settled' })),
+        threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: 'settled', settledAt: state.now })),
         queue: state.queue.filter((q) => q.threadId !== action.threadId),
       };
     case 'unsettle':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: hasOpenWork(t) ? 'running' : 'review' })) };
     case 'create':
       return create(state, action);
+    case 'send':
+      return send(state, action);
+    case 'drift-new-thread':
+      return driftNewThread(state, action);
+    case 'drift-settings':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { threshold: action.threshold, isMuted: action.isMuted } })) };
+    case 'edit-goal':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now)) };
     case 'reorder':
       return { ...state, threads: reorderThreads(state.threads, action.pinned, action.unpinned) };
     case 'say':
@@ -102,6 +117,10 @@ function tick(state: State): State {
     const running = t.steps.some((s) => s.status === 'running');
     if (running) return t;
     const next = t.steps.find((s) => s.status === 'ready');
+    if (next?.gate) {
+      queue = [...queue, gateItem(t, next.id, next.title, now)];
+      return log(mapStep({ ...t, status: 'needs-you' }, next.id, (s) => ({ ...s, status: 'blocked', note: 'Paused before this step for your approval' })), { at: now, who: 'harness', kind: 'event', text: `Paused before "${next.title}"` });
+    }
     if (next) return mapStep({ ...t, status: 'running' }, next.id, (s) => ({ ...s, status: 'running', startedAt: now }));
     if (hasOpenWork(t) || t.status === 'review') return t;
     if (queue.some((q) => q.kind === 'review' && q.threadId === t.id)) return { ...t, status: 'review' };
@@ -127,9 +146,13 @@ function completeStep(threads: Thread[], threadId: string, stepId: string, now: 
   const source = threads.find((t) => t.id === threadId)!;
   const step = source.steps.find((s) => s.id === stepId)!;
   let next = mapThread(threads, threadId, (t) =>
-    log(
-      mapStep(t, stepId, (s) => ({ ...s, status: 'done', progress: 1, doneAt: now })),
-      { at: now, who: t.providers[0], kind: 'event', text: `Finished "${step.title}"` },
+    checkAcceptance(
+      log(
+        mapStep(t, stepId, (s) => ({ ...s, status: 'done', progress: 1, doneAt: now })),
+        { at: now, who: t.providers[0], kind: 'event', text: `Finished "${step.title}"` },
+      ),
+      step,
+      now,
     ),
   );
 
@@ -327,7 +350,10 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     startedAt: now,
     revisions: [{ n: 1, at: now, label: 'Goal set', by: 'you' }],
     steps,
-    activity: [{ at: now, who: 'you', kind: 'message', text: action.title }],
+    activity: [
+      ...(action.branchFrom ? [{ at: now, who: 'harness' as const, kind: 'event' as const, text: `Branched off ${action.branchFrom}` }] : []),
+      { at: now, who: 'you', kind: 'message', text: action.title },
+    ],
     prs: [],
     skills: [],
     sources: [],
@@ -340,4 +366,63 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     );
   }
   return { ...state, threads, seq: state.seq + 1, views: { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
+}
+
+function gateItem(thread: Thread, stepId: string, title: string, now: number): QueueItem {
+  const after = thread.steps.filter((s) => s.status === 'ready' && s.id !== stepId).length;
+  return {
+    id: `q-gate-${stepId}`,
+    kind: 'approval',
+    threadId: thread.id,
+    title: `Start "${title}"`,
+    detail: `You asked to approve this step before it runs. Steps after it: ${after}.`,
+    blocks: { steps: after + 1, threads: 1 },
+    createdAt: now,
+  };
+}
+
+// GAP: simulated. The real agent runs the command in the thread's worktree and fails the step on a non-zero exit.
+function checkAcceptance(thread: Thread, step: Step, now: number) {
+  if (!step.acceptance) return thread;
+  const what = step.acceptance.command ? `\`${step.acceptance.command}\` passed` : `"${step.acceptance.text}" met`;
+  return log(thread, { at: now, who: thread.providers[0], kind: 'event', text: `Checked "${step.title}": ${what}` });
+}
+
+function send(state: State, action: Extract<Action, { type: 'send' }>): State {
+  const now = state.now;
+  return {
+    ...state,
+    threads: mapThread(state.threads, action.threadId, (t) => {
+      const said = log(t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
+      if (action.drift === 'off-goal') return log(said, { at: now, who: 'harness', kind: 'event', text: `Drift guard: sent off-goal, not counted toward the goal (${action.reason})` });
+      if (action.drift === 'on-goal') return said;
+      const n = t.revisions.length + 1;
+      const title = stepTitleFrom(action.text);
+      const added: Step = { id: `${t.id}-d${n}`, title, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: 'you', revision: n };
+      const withStep = { ...said, steps: [...said.steps, added], revisions: [...said.revisions, { n, at: now, label: 'Scope from your message', by: 'you' as const, diff: [`+ ${title}`] }] };
+      return log(withStep, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: +1 step "${title}" (${action.reason})` });
+    }),
+  };
+}
+
+/** Off-goal prompt to a new thread. A finished goal is settled first: its review stays queued while a PR is open, otherwise it resolves. */
+function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new-thread' }>): State {
+  const source = state.threads.find((t) => t.id === action.threadId);
+  if (!source) return state;
+  const now = state.now;
+  const isGoalDone = source.status === 'review' || progressAt(source, now, true).pct >= 1;
+  const hasOpenPr = source.prs.some((p) => p.state === 'open');
+  const short = action.prompt.length > 40 ? `${action.prompt.slice(0, 39)}…` : action.prompt;
+  let next: State = state;
+  if (isGoalDone) {
+    const outcome = hasOpenPr ? 'its PR review stays in your queue' : 'review resolved';
+    next = {
+      ...next,
+      threads: mapThread(next.threads, source.id, (t) => log({ ...t, status: 'settled', settledAt: now }, { at: now, who: 'harness', kind: 'event', text: `Goal done, settled to start a new thread; ${outcome}` })),
+      queue: next.queue.filter((q) => q.threadId !== source.id || (hasOpenPr && q.kind === 'review')),
+    };
+  }
+  next = { ...next, threads: mapThread(next.threads, source.id, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: `Drift guard: moved "${short}" to a new thread` })) };
+  const branchFrom = action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
+  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: source.repo?.project ?? null, branchFrom: source.repo ? branchFrom : undefined });
 }

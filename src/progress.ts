@@ -107,7 +107,7 @@ export function duration(minutes: number) {
 
 const STOP = new Set(['the', 'and', 'for', 'with', 'into', 'add', 'from', 'that', 'this', 'per']);
 
-function tokens(text: string) {
+export function tokens(text: string) {
   return new Set(
     text
       .toLowerCase()
