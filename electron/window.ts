@@ -33,8 +33,8 @@ export function createWindow(route = '', bounds?: Rectangle) {
     ...(isMain ? savedBounds() : bounds),
     show: false,
     titleBarStyle: 'hiddenInset',
-    // Centres the 12px lights on the 44px headers; their buttons start after `in-data-desktop:pl-22`.
-    trafficLightPosition: { x: 16, y: 16 },
+    // Centres the lights on the 44px headers; the fixed sidebar toggle starts at 88px (`SidebarToggle`).
+    trafficLightPosition: { x: 16, y: 15 },
     backgroundColor: background(),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),

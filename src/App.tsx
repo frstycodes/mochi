@@ -8,6 +8,7 @@ import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
+import { SidebarToggle } from './SidebarToggle';
 import { Stage } from './stage/Stage';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
@@ -65,6 +66,7 @@ function Shell() {
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
       <AppSidebar onSearch={() => setSearchOpen(true)} width={sidebarWidth} onResize={setSidebarWidth} />
       <SidebarPeek onSearch={() => setSearchOpen(true)} />
+      <SidebarToggle />
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
           {review.isOpen ? <ReviewView /> : <Stage />}

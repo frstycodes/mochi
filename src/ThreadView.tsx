@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, Thread } from './model';
@@ -21,6 +21,7 @@ import { SidePane } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
+import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
 import { useSettle } from './useSettle';
 import { ProgressRing, ThreadStatusIcon } from './ui';
@@ -201,14 +202,13 @@ function ThreadHeader({
   onTogglePane: () => void;
 }) {
   const { state } = useHarness();
-  const { state: sidebarState, isMobile } = useSidebar();
   const { isFirst } = useSplit();
   const { pct } = progressAt(thread, state.now, true);
-  const showTrigger = isFirst && (isMobile || sidebarState === 'collapsed');
+  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
 
   return (
-    <header className={cn('@container flex h-11 shrink-0 items-center gap-2 px-3', showTrigger && 'in-data-desktop:pl-22')}>
-      {showTrigger && <SidebarTrigger className="-ml-1" />}
+    <header className={cn('@container flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
+      {hasTrigger && <SidebarTrigger className="-ml-1" />}
       {thread.status === 'running' ? <AgentLoader phase={agentPhase(thread)} className="text-muted-foreground" /> : <ThreadStatusIcon status={thread.status} />}
       <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
       {!!thread.repo && (

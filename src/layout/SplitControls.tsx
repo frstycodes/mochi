@@ -14,10 +14,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
 import { useHarness } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
@@ -141,12 +142,11 @@ function PresetSubmenu() {
 /** Header for splits that aren't threads (Queue, Board, New thread, a dropped tab). Hidden for a lone split unless it must carry the sidebar toggle. */
 export function LeafBar({ children }: { children: ReactNode }) {
   const { isMulti, isFirst } = useSplit();
-  const { state, isMobile } = useSidebar();
-  const showTrigger = isFirst && (isMobile || state === 'collapsed');
-  if (!isMulti && !showTrigger) return null;
+  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
+  if (!isMulti && !hasTrigger && !reservesToggle) return null;
   return (
-    <div className={cn('flex h-11 shrink-0 items-center gap-2 px-3', showTrigger && 'in-data-desktop:pl-22')}>
-      {showTrigger && <SidebarTrigger className="-ml-1" />}
+    <div className={cn('flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
+      {hasTrigger && <SidebarTrigger className="-ml-1" />}
       <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
       <SplitControls />
     </div>
