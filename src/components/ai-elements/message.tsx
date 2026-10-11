@@ -24,7 +24,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
+import { useTheme } from "next-themes";
+import { Streamdown, type PluginConfig } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -317,26 +318,62 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-// GAP: cjk, code, math and mermaid plugins removed to keep the single-file prototype under 16 MB; restore them in the desktop build.
-const streamdownPlugins = {};
-
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
-      )}
-      plugins={streamdownPlugins}
-      {...props}
-    />
-  ),
+  ({ className, plugins, ...props }: MessageResponseProps) => {
+    const loaded = useStreamdownPlugins();
+    const merged = useMemo(() => ({ ...loaded, ...plugins }), [loaded, plugins]);
+    const { resolvedTheme } = useTheme();
+    const mermaid = useMemo(() => ({ config: { theme: resolvedTheme === "dark" ? "dark" : "neutral" } as const }), [resolvedTheme]);
+    // Streamdown's memoised blocks ignore a changed mermaid config, so a diagram keeps the old theme until remounted.
+    const hasMermaid = typeof props.children === "string" && props.children.includes("```mermaid");
+    return (
+      <Streamdown
+        key={hasMermaid ? resolvedTheme : undefined}
+        className={cn(
+          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          className
+        )}
+        plugins={merged}
+        mermaid={mermaid}
+        {...props}
+      />
+    );
+  },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     nextProps.isAnimating === prevProps.isAnimating
 );
 
 MessageResponse.displayName = "MessageResponse";
+
+let loadedPlugins: PluginConfig = {};
+let pluginsLoading: Promise<PluginConfig> | null = null;
+
+// Dynamic imports keep mermaid, KaTeX and the highlighter out of the first parse; messages render plain until they land.
+function loadStreamdownPlugins() {
+  pluginsLoading ??= Promise.all([
+    import("@streamdown/code"),
+    import("@streamdown/math"),
+    import("@streamdown/mermaid"),
+    import("@streamdown/cjk"),
+    import("katex/dist/katex.min.css"),
+    // The shiki alias (src/lib/shiki-slim.ts) bundles no themes, so the code plugin gets theme objects instead of names.
+    import("shiki/dist/themes/github-light.mjs"),
+    import("shiki/dist/themes/github-dark.mjs"),
+  ]).then(([code, math, mermaid, cjk, , light, dark]) => {
+    loadedPlugins = { code: code.createCodePlugin({ themes: [light.default, dark.default] }), math: math.math, mermaid: mermaid.mermaid, cjk: cjk.cjk };
+    return loadedPlugins;
+  });
+  return pluginsLoading;
+}
+
+function useStreamdownPlugins() {
+  const [plugins, setPlugins] = useState(loadedPlugins);
+  useEffect(() => {
+    loadStreamdownPlugins().then(setPlugins);
+  }, []);
+  return plugins;
+}
 
 export type MessageToolbarProps = ComponentProps<"div">;
 
