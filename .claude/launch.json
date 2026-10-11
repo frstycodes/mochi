@@ -154,6 +154,17 @@
         "--strictPort"
       ],
       "port": 5267
+    },
+    {
+      "name": "harness-sim",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5273",
+        "--strictPort"
+      ],
+      "port": 5273
     }
   ]
 }

@@ -49,12 +49,14 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Persist scrollback across reloads
 
 ### iOS simulator (and Android emulator)
-- [ ] List booted / available simulators (`xcrun simctl list`), boot, shutdown
-- [ ] Live stream of the simulator screen in a pane tab
-- [ ] Tap, swipe, type, hardware buttons, rotate, deep link
-- [ ] Build & run the thread's app into it; show build logs in a Terminal tab
-- [ ] Screenshot / record into the composer, same as the browser
-- [ ] Device picker (iPhone sizes, iPad), appearance toggle, Dynamic Type size
+- [x] List booted / available simulators (`xcrun simctl list`), boot, shutdown
+- [x] Live stream of the simulator screen in a pane tab (framebuffer IOSurface via a Swift helper, ~56 FPS while moving)
+- [x] Tap, swipe, type, hardware buttons (home, lock), deep link
+- [ ] Rotate: GAP, no host-side API found (Purple GSEvent and Indigo device-motion attempts didn't rotate; Xcode 27 ships no Simulator.app to script)
+- [x] Build & run the thread's app into it (first scheme, install + launch)
+- [ ] Build logs in a Terminal tab: GAP, shown inline in the Simulator tab until the `term` session's pty API lands
+- [x] Screenshot / record into the composer, same as the browser (posted as the file path; GAP: chat entries can't carry attachments yet)
+- [x] Device picker (iPhone sizes, iPad), appearance toggle, Dynamic Type size
 - [ ] Android emulator through the same tab (`adb`, `emulator`) — later
 
 ### Side chat
