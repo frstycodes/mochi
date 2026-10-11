@@ -1,0 +1,54 @@
+import { agent as desktopAgent } from './desktop/agent.ts';
+import { browser as desktopBrowser } from './desktop/browser.ts';
+import { fs as desktopFs } from './desktop/fs.ts';
+import { git as desktopGit } from './desktop/git.ts';
+import { notify as desktopNotify } from './desktop/notify.ts';
+import { ports as desktopPorts } from './desktop/ports.ts';
+import { pty as desktopPty } from './desktop/pty.ts';
+import { sim as desktopSim } from './desktop/sim.ts';
+import { windows as desktopWindows } from './desktop/windows.ts';
+import type { HostBridge, Namespace } from './types/index.ts';
+import { agent as webAgent } from './web/agent.ts';
+import { browser as webBrowser } from './web/browser.ts';
+import { fs as webFs } from './web/fs.ts';
+import { git as webGit } from './web/git.ts';
+import { notify as webNotify } from './web/notify.ts';
+import { ports as webPorts } from './web/ports.ts';
+import { pty as webPty } from './web/pty.ts';
+import { sim as webSim } from './web/sim.ts';
+import { windows as webWindows } from './web/windows.ts';
+
+export type { HostBridge, Namespace } from './types/index.ts';
+
+type Registry = { [K in Namespace]: { web: HostBridge[K]; desktop: () => HostBridge[K] } };
+
+// Desktop impls are getters so the web build never touches window.harnessHost.
+// Annotated, not `satisfies`: `pick` needs the mapped type to correlate `registry[ns]` with `HostBridge[K]`.
+export const registry: Registry = {
+  pty: { web: webPty, desktop: desktopPty },
+  git: { web: webGit, desktop: desktopGit },
+  fs: { web: webFs, desktop: desktopFs },
+  ports: { web: webPorts, desktop: desktopPorts },
+  sim: { web: webSim, desktop: desktopSim },
+  browser: { web: webBrowser, desktop: desktopBrowser },
+  notify: { web: webNotify, desktop: desktopNotify },
+  windows: { web: webWindows, desktop: desktopWindows },
+  agent: { web: webAgent, desktop: desktopAgent },
+};
+
+const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
+
+const pick = <K extends Namespace>(ns: K): HostBridge[K] => (isDesktop ? registry[ns].desktop() : registry[ns].web);
+
+export const host = {
+  isDesktop,
+  pty: pick('pty'),
+  git: pick('git'),
+  fs: pick('fs'),
+  ports: pick('ports'),
+  sim: pick('sim'),
+  browser: pick('browser'),
+  notify: pick('notify'),
+  windows: pick('windows'),
+  agent: pick('agent'),
+} satisfies HostBridge & { isDesktop: boolean };
