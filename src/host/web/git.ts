@@ -70,6 +70,24 @@ const UNSTAGED = [
   '',
 ].join('\n');
 
+const FORK = [
+  'diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx',
+  'index 2b7e9d0..77d1e04 100644',
+  '--- a/apps/web/routes/admin/usage.tsx',
+  '+++ b/apps/web/routes/admin/usage.tsx',
+  '@@ -20,8 +20,7 @@ export function UsagePage() {',
+  '       <header className="flex items-center gap-2">',
+  '         <h1>API usage</h1>',
+  '         <span>Last 14 days</span>',
+  '       </header>',
+  '-      <Chart data={data.byDay} />',
+  '+      <UsageTable rows={data.byKey} virtualized />',
+  '     </section>',
+  '   );',
+  ' }',
+  '',
+].join('\n');
+
 export const git: GitHost = {
   async status() {
     return {
@@ -81,9 +99,12 @@ export const git: GitHost = {
       ],
     };
   },
-  async diff(_cwd, scope) {
+  async diff(cwd, scope) {
     const staged = parseDiff(STAGED, scope === 'uncommitted');
-    return { branch: 'feat/admin-usage', base: 'origin/main', files: [...staged, ...parseDiff(UNSTAGED, false)] };
+    const files = [...staged, ...parseDiff(UNSTAGED, false)];
+    // A forked worktree took another approach, so the fork comparison has two different sides to show.
+    if (cwd.includes('/fork-')) return { branch: 'feat/admin-usage-fork', base: 'origin/main', files: [...files.slice(0, 1), ...parseDiff(FORK, false)] };
+    return { branch: 'feat/admin-usage', base: 'origin/main', files };
   },
   async stage() {},
   async unstage() {},
@@ -120,5 +141,12 @@ export const git: GitHost = {
   async removeWorktree() {},
   async diskUsage() {
     return 48_200_000;
+  },
+  async checkpoint(_cwd, threadId, n) {
+    return `${threadId}${n}`.padEnd(40, '0');
+  },
+  async restoreCheckpoint() {},
+  async forkWorktree(_cwd, threadId) {
+    return `~/.harness/worktrees/demo/${threadId}`;
   },
 };

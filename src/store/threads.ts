@@ -3,6 +3,9 @@ import { stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
+import { recordCheckpoints, rewind, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
+import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
+import { handoff } from '../rewind/handoff.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 
 export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
@@ -12,6 +15,11 @@ export interface ThreadsState {
   threads: Thread[];
   fired: { overlap: boolean; scope: boolean };
   seq: number;
+  checkpoints: Record<string, Checkpoint[]>;
+  checkpointSeq: number;
+  rewindUndo: RewindUndo | null;
+  /** Fork thread id → where it was forked from. */
+  forks: Record<string, Fork>;
 }
 
 export type ThreadsAction =
@@ -28,13 +36,33 @@ export type ThreadsAction =
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
-  | { type: 'restore'; snapshot: Snapshot };
+  | { type: 'restore'; snapshot: Snapshot }
+  | { type: 'rewind'; threadId: string; n: number }
+  | { type: 'rewind-undo' }
+  | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
+  | { type: 'fork'; threadId: string; point: ForkPoint }
+  | { type: 'fork-keep'; keepId: string; dropId: string }
+  | { type: 'handoff'; threadId: string; stepId?: string; to: Provider; summary: string };
 
 export function initialThreads(): ThreadsState {
-  return { now: NOW0, threads: seedThreads(), fired: { overlap: false, scope: false }, seq: 1 };
+  const threads = seedThreads();
+  let checkpointSeq = 0;
+  const checkpoints = Object.fromEntries(
+    threads.map((t) => {
+      const list = seedCheckpoints(t, checkpointSeq);
+      checkpointSeq += list.length;
+      return [t.id, list];
+    }),
+  );
+  return { now: NOW0, threads, fired: { overlap: false, scope: false }, seq: 1, checkpoints, checkpointSeq, rewindUndo: null, forks: {} };
 }
 
 export function threadsReducer(state: State, action: Action): State {
+  const next = reduce(state, action);
+  return next === state ? state : recordCheckpoints(state, next);
+}
+
+function reduce(state: State, action: Action): State {
   switch (action.type) {
     case 'tick':
       return tick(state);
@@ -68,6 +96,21 @@ export function threadsReducer(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => log(t, { ...action.entry, at: state.now })) };
     case 'restore':
       return { ...state, ...action.snapshot };
+    case 'rewind':
+      return rewind(state, action.threadId, action.n);
+    case 'rewind-undo':
+      return undoRewind(state);
+    case 'checkpoint-ref':
+      return {
+        ...state,
+        checkpoints: { ...state.checkpoints, [action.threadId]: (state.checkpoints[action.threadId] ?? []).map((c) => (c.n === action.n ? { ...c, ref: action.ref ?? undefined, wantsFiles: false } : c)) },
+      };
+    case 'fork':
+      return forkThread(state, action.threadId, action.point);
+    case 'fork-keep':
+      return keepFork(state, action.keepId, action.dropId);
+    case 'handoff':
+      return handoff(state, action.threadId, action.stepId, action.to, action.summary);
     default:
       return state;
   }
@@ -139,7 +182,7 @@ function withTool(thread: Thread, s: Step, now: number) {
   const tools = FAKE_TOOLS[s.id] ?? genericTools(s.title);
   const used = thread.activity.filter((a) => a.kind === 'tool' && a.at >= (s.startedAt ?? 0)).length;
   const context = { ...thread.context, used: Math.min(Math.round(thread.context.max * CONTEXT_CEILING), thread.context.used + TOKENS_PER_TOOL) };
-  return log({ ...thread, context }, { at: now, who: thread.providers[0], kind: 'tool', text: tools[used % tools.length] });
+  return log({ ...thread, context }, { at: now, who: s.owner ?? thread.providers[0], kind: 'tool', text: tools[used % tools.length] });
 }
 
 function completeStep(threads: Thread[], threadId: string, stepId: string, now: number): Thread[] {
@@ -149,7 +192,7 @@ function completeStep(threads: Thread[], threadId: string, stepId: string, now: 
     checkAcceptance(
       log(
         mapStep(t, stepId, (s) => ({ ...s, status: 'done', progress: 1, doneAt: now })),
-        { at: now, who: t.providers[0], kind: 'event', text: `Finished "${step.title}"` },
+        { at: now, who: step.owner ?? t.providers[0], kind: 'event', text: `Finished "${step.title}"` },
       ),
       step,
       now,
@@ -302,7 +345,7 @@ function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State
   return { ...state, threads, queue, seq: state.seq + 1 };
 }
 
-function freeLine(threads: Thread[]): LineSlot {
+export function freeLine(threads: Thread[]): LineSlot {
   const used = new Set(threads.filter((t) => t.status !== 'settled').map((t) => t.line));
   return ([1, 2, 3, 4, 5] as const).find((l) => !used.has(l)) ?? 5;
 }

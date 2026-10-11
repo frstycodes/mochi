@@ -1,14 +1,18 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronRight, ClipboardTick, Pause, Radio } from 'reicon-react';
+import { ChevronRight, ClipboardTick, History, Pause, Radio, Routing, TransferH } from 'reicon-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, Step, StepStatus, Thread } from './model';
 import { BurnUp, timeScale, type TimeScale } from './BurnUp';
 import { revisionDiff } from './goals/edit';
 import { clock, duration, minutesLeft, progressAt, statusAt, type Progress } from './progress';
+import { checkpointAt, checkpointPhrase } from './rewind/checkpoints';
+import { PROVIDER_NAME, stepOwner } from './rewind/handoff';
+import { openRewind } from './rewind/requests';
 import { useHarness } from './store';
 import { ProviderMark, SizeBadge, StepStatusIcon, lineColor, stepColor, stepLabel } from './ui';
 
@@ -95,8 +99,22 @@ function ProgressSummary({ thread, live, eta, scrubAt, onLive }: { thread: Threa
             Back to live
           </Button>
         )}
+        {scrubAt !== null && <RewindHere thread={thread} at={scrubAt} />}
       </div>
     </div>
+  );
+}
+
+/** The scrubbed moment snaps back to the step boundary at or before it. */
+function RewindHere({ thread, at }: { thread: Thread; at: number }) {
+  const { state } = useHarness();
+  const checkpoint = checkpointAt(state.checkpoints[thread.id] ?? [], at);
+  if (!checkpoint) return null;
+  return (
+    <Button variant="outline" size="xs" title={`Rewind to ${checkpointPhrase(checkpoint)} at ${clock(checkpoint.at)}`} onClick={() => openRewind({ kind: 'rewind', threadId: thread.id, n: checkpoint.n })}>
+      <History data-icon="inline-start" />
+      Rewind to here
+    </Button>
   );
 }
 
@@ -176,7 +194,7 @@ function StepList({ thread, viewT, isLive, scale, now }: { thread: Thread; viewT
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-              className="grid grid-cols-1 items-center gap-x-6 py-2 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)]"
+              className="group/step relative grid grid-cols-1 items-center gap-x-6 py-2 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)]"
             >
               <StepInfo thread={thread} step={step} status={status} liveTool={isLive && status === 'running' ? current : undefined} />
               {scale && <StepTrack thread={thread} step={step} status={status} scale={scale} viewT={isLive ? now : viewT} />}
@@ -217,12 +235,14 @@ function StepInfo({ thread, step, status, liveTool }: { thread: Thread; step: St
           </span>
           <SizeBadge size={step.size} />
           {step.revision > 1 && <Badge variant="outline">v{step.revision}</Badge>}
+          {thread.providers.length > 1 && <ProviderMark provider={stepOwner(thread, step)} size={12} className="shrink-0" />}
           {step.gate && status !== 'done' && (
             <Badge variant="outline" title="Pauses for your approval before it starts">
               <Pause data-icon="inline-start" />
               Pause before
             </Badge>
           )}
+          <StepActions thread={thread} step={step} status={status} />
         </div>
         {step.acceptance && <AcceptanceLine acceptance={step.acceptance} />}
         <StepLinkLine thread={thread} step={step} />
@@ -235,6 +255,49 @@ function StepInfo({ thread, step, status, liveTool }: { thread: Thread; step: St
         )}
       </div>
     </div>
+  );
+}
+
+/** Rewind or fork at a finished step's checkpoint; hand an open step to the other agent. Shown on row hover or focus. */
+function StepActions({ thread, step, status }: { thread: Thread; step: Step; status: StepStatus }) {
+  const { state } = useHarness();
+  const checkpoint = state.checkpoints[thread.id]?.findLast((c) => c.stepId === step.id);
+  const isOpen = step.status !== 'done' && step.status !== 'dropped';
+  const other = stepOwner(thread, step) === 'claude' ? 'codex' : 'claude';
+  const canRewind = status === 'done' && !!checkpoint;
+  if (!canRewind && !isOpen) return null;
+  return (
+    // Overlaid on the row's right edge so the hidden buttons take no width from the step title.
+    <span className="absolute top-1.5 right-0 z-10 flex items-center rounded-md bg-popover opacity-0 shadow-popover transition-opacity duration-150 group-hover/step:opacity-100 group-focus-within/step:opacity-100 pointer-coarse:opacity-100">
+      {canRewind && (
+        <>
+          <StepAction label={`Rewind to after "${step.title}"`} onClick={() => openRewind({ kind: 'rewind', threadId: thread.id, n: checkpoint.n })}>
+            <History />
+          </StepAction>
+          <StepAction label={`Fork from after "${step.title}"`} onClick={() => openRewind({ kind: 'fork', threadId: thread.id, point: { kind: 'checkpoint', n: checkpoint.n } })}>
+            <Routing />
+          </StepAction>
+        </>
+      )}
+      {isOpen && (
+        <StepAction label={`Hand "${step.title}" to ${PROVIDER_NAME[other]}`} onClick={() => openRewind({ kind: 'handoff', threadId: thread.id, stepId: step.id })}>
+          <TransferH />
+        </StepAction>
+      )}
+    </span>
+  );
+}
+
+function StepAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-xs" aria-label={label} className="relative z-10 text-muted-foreground" onClick={onClick}>
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

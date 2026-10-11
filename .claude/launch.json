@@ -187,6 +187,17 @@
         "--strictPort"
       ],
       "port": 5297
+    },
+    {
+      "name": "harness-rewind",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5303",
+        "--strictPort"
+      ],
+      "port": 5303
     }
   ]
 }
