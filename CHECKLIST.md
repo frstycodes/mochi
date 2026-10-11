@@ -196,11 +196,11 @@ Ranked by how much they help running many agents at once.
 
 - [ ] **Notifications center + OS notifications** for needs-you, CI fail, PR review, race lost — with "jump to" and quiet hours.
 - [ ] **Cost and usage per thread / space** next to context usage: tokens, $, plan limits remaining, rate-limit warnings before an agent stalls.
-- [ ] **Checkpoints / rewind**: restore files and transcript to any step boundary (the timeline scrubber already picks the moment).
+- [x] **Checkpoints / rewind**: restore files and transcript to any step boundary (the timeline scrubber already picks the moment). A checkpoint per finished step (transcript and steps in the threads slice, files under `refs/harness/checkpoints/<thread>/<n>` once the thread has its own worktree); rewind from the scrubber, a step row or the thread menu, confirmed, one undo. GAP: seeded threads and threads in the project folder rewind the transcript only; files are saved just after the boundary until the agent runtime checkpoints itself.
 - [x] **Worktree manager**: one worktree per thread, disk usage, clean up settled ones, sync with base. Worktrees live in `~/.harness/worktrees/<repo>/<thread>`; GAP: threads carry a project name, not a folder, so every project still resolves to the app's cwd (`projectRoot` in `src/host/cwd.ts`).
-- [ ] **Handoff between agents**: move a thread or a single step from Claude to Codex (or back) with the goal and context summary.
+- [x] **Handoff between agents**: move a thread or a single step from Claude to Codex (or back) with the goal and context summary. Logged as a harness event, a goal revision and the editable summary; GAP: no `host.agent` runtime yet, so the handoff only changes `Thread.providers` and the step owner.
 - [ ] **Command palette actions**, not just search: every action in the app reachable from Cmd K.
-- [ ] **Thread forking**: fork at a message to try an alternative approach, then compare diffs and keep one (pairs with race).
+- [x] **Thread forking**: fork at a message to try an alternative approach, then compare diffs and keep one (pairs with race). Fork at any message or checkpoint from the thread menu or a step row; the fork gets its own branch and a worktree seeded from the checkpoint's files; Compare shows both branch diffs side by side and keeping one settles the other. GAP: no per-message fork button in the chat yet (the chat belongs to `viz`), the fork dialog lists the messages instead.
 - [ ] **Review mode**: walk all threads in `review` one after another — diff, preview, approve / request changes — like an inbox.
 - [ ] **Scheduled and background threads**: run nightly, on a PR event, or on a cron; land in the Queue when done.
 - [ ] **Shared / team spaces**: see teammates' threads on the metro board so overlaps catch cross-person duplication too.
