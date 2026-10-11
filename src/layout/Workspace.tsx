@@ -93,7 +93,7 @@ function SplitView({ split, firstId }: { split: Split; firstId: string }) {
   );
 }
 
-function LeafView({ leaf, isMulti, isZoomed, isFirst }: { leaf: Leaf; isMulti: boolean; isZoomed: boolean; isFirst: boolean }) {
+export function LeafView({ leaf, isMulti, isZoomed, isFirst }: { leaf: Leaf; isMulti: boolean; isZoomed: boolean; isFirst: boolean }) {
   const { state, dispatch } = useHarness();
   const ref = useRef<HTMLElement>(null);
   const isWide = useIsWider(ref, WIDE_SPLIT_PX);
@@ -273,6 +273,6 @@ function useWindowOrientation() {
 function useLayoutPersistence() {
   const { state } = useHarness();
   useEffect(() => {
-    saveLayouts({ layouts: state.layouts, watched: state.watched });
-  }, [state.layouts, state.watched]);
+    saveLayouts({ layouts: state.layouts, watched: state.watched, isNeedsYouNear: state.isNeedsYouNear });
+  }, [state.layouts, state.watched, state.isNeedsYouNear]);
 }

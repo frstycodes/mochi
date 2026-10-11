@@ -12,7 +12,8 @@ import { Orbit } from './Orbit';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
 import { PRESETS, PRESET_LABELS } from './layout/tree';
-import { Workspace } from './layout/Workspace';
+import { Stage } from './stage/Stage';
+import { TornWindow } from './stage/TornWindow';
 import { HarnessProvider, useHarness, type Action, type View } from './store';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useWorktreeManager } from './git/useWorktreeManager';
@@ -26,6 +27,8 @@ export function App() {
       <TooltipProvider delayDuration={400}>
         {route === 'design' ? (
           <DesignPage />
+        ) : route.startsWith('/window/') ? (
+          <TornWindow threadId={route.slice('/window/'.length)} />
         ) : (
           <HarnessProvider>
             <Shell />
@@ -62,7 +65,7 @@ function Shell() {
       <SidebarPeek onSearch={() => setSearchOpen(true)} />
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          <Workspace />
+          <Stage />
         </div>
       </SidebarInset>
       <SearchPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
