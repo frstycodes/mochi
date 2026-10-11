@@ -1,46 +1,18 @@
-import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react';
-import {
-  FAKE_TOOLS,
-  genericTools,
-  NOW0,
-  SPACES,
-  seedQueue,
-  seedPanes,
-  seedThreads,
-  type ActivityEntry,
-  type Pane,
-  type PaneTabKind,
-  type LineSlot,
-  type Provider,
-  type QueueItem,
-  type Step,
-  type Thread,
-} from './model';
-import { reorderThreads } from './reorder';
+import { FAKE_TOOLS, genericTools, NOW0, seedThreads, type ActivityEntry, type LineSlot, type Provider, type QueueItem, type Step, type Thread } from '../model.ts';
+import { reorderThreads } from '../reorder.ts';
+import type { Action, Snapshot, State } from './index.tsx';
 
-export type View = { kind: 'queue' } | { kind: 'board' } | { kind: 'new' } | { kind: 'thread'; id: string };
 export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
 
-export interface Snapshot {
-  threads: Thread[];
-  queue: QueueItem[];
-}
-
-export interface State extends Snapshot {
+export interface ThreadsState {
   now: number;
-  panes: Pane[];
-  spaceId: string;
-  views: Record<string, View>;
-  paused: boolean;
+  threads: Thread[];
   fired: { overlap: boolean; scope: boolean };
   seq: number;
 }
 
-export type Action =
+export type ThreadsAction =
   | { type: 'tick' }
-  | { type: 'go'; view: View }
-  | { type: 'space'; id: string }
-  | { type: 'answer'; queueId: string; choice?: string }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
   | { type: 'add-scope'; threadId: string }
@@ -49,97 +21,16 @@ export type Action =
   | { type: 'create'; title: string; provider: Provider; project: string | null; dependOn?: { threadId: string; stepId: string } }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
-  | { type: 'restore'; snapshot: Snapshot }
-  | { type: 'pane-toggle'; threadId: string }
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind }
-  | { type: 'pane-select-tab'; threadId: string; tabId: string }
-  | { type: 'pane-close-tab'; threadId: string; tabId: string }
-  | { type: 'pane-pop'; threadId: string; tabId: string; isPopped: boolean }
-  | { type: 'pause' }
-  | { type: 'reset' };
+  | { type: 'restore'; snapshot: Snapshot };
 
-function initialState(): State {
-  return {
-    now: NOW0,
-    spaceId: 'latitude',
-    views: { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } },
-    panes: seedPanes(),
-    threads: seedThreads(),
-    queue: seedQueue(),
-    paused: false,
-    fired: { overlap: false, scope: false },
-    seq: 1,
-  };
+export function initialThreads(): ThreadsState {
+  return { now: NOW0, threads: seedThreads(), fired: { overlap: false, scope: false }, seq: 1 };
 }
 
-const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
-
-export function HarnessProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, initialState);
-  useEffect(() => {
-    if (state.paused) return;
-    const id = setInterval(() => dispatch({ type: 'tick' }), 1000);
-    return () => clearInterval(id);
-  }, [state.paused]);
-  return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
-}
-
-export function useHarness() {
-  const ctx = useContext(HarnessContext);
-  if (!ctx) throw new Error('useHarness must be used inside HarnessProvider');
-  return ctx;
-}
-
-export function useSpace() {
-  const { state } = useHarness();
-  return SPACES.find((s) => s.id === state.spaceId)!;
-}
-
-export function useView(spaceId?: string) {
-  const { state } = useHarness();
-  return state.views[spaceId ?? state.spaceId];
-}
-
-export function useThread(id: string) {
-  const { state } = useHarness();
-  return state.threads.find((t) => t.id === id);
-}
-
-export function useSpaceThreads(spaceId?: string) {
-  const { state } = useHarness();
-  const id = spaceId ?? state.spaceId;
-  return state.threads.filter((t) => t.spaceId === id);
-}
-
-export function useSpaceQueue(spaceId?: string) {
-  const { state } = useHarness();
-  const id = spaceId ?? state.spaceId;
-  const ids = new Set(state.threads.filter((t) => t.spaceId === id).map((t) => t.id));
-  return rankQueue(state.queue.filter((q) => ids.has(q.threadId)));
-}
-
-export function rankQueue(items: QueueItem[]) {
-  const weight = (q: QueueItem) => q.blocks.steps * 2 + q.blocks.threads * 3 + (q.kind === 'overlap' ? 4 : 0);
-  return [...items].sort((a, b) => weight(b) - weight(a) || a.createdAt - b.createdAt);
-}
-
-export function snapshot(state: State): Snapshot {
-  return { threads: state.threads, queue: state.queue };
-}
-
-function reducer(state: State, action: Action): State {
+export function threadsReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'tick':
       return tick(state);
-    case 'go': {
-      const view = action.view;
-      const spaceId = view.kind === 'thread' ? (state.threads.find((t) => t.id === view.id)?.spaceId ?? state.spaceId) : state.spaceId;
-      return { ...state, spaceId, views: { ...state.views, [spaceId]: action.view } };
-    }
-    case 'space':
-      return { ...state, spaceId: action.id };
-    case 'answer':
-      return answer(state, action.queueId, action.choice);
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
     case 'trigger-overlap':
@@ -162,69 +53,24 @@ function reducer(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => log(t, { ...action.entry, at: state.now })) };
     case 'restore':
       return { ...state, ...action.snapshot };
-    case 'pane-toggle': {
-      const pane = state.panes.find((p) => p.threadId === action.threadId);
-      if (pane) return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: !p.isOpen })) };
-      return { ...state, panes: [...state.panes, newPane(action.threadId, state.seq)], seq: state.seq + 1 };
-    }
-    case 'pane-open-tab': {
-      const thread = state.threads.find((t) => t.id === action.threadId);
-      const tab = { id: `tab-${state.seq}`, kind: action.kind, title: TAB_TITLES[action.kind], url: action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined };
-      const existing = state.panes.find((p) => p.threadId === action.threadId) ?? newPane(action.threadId, state.seq);
-      const pane = { ...existing, isOpen: true, tabs: [...existing.tabs.filter((t) => t.kind !== 'new'), tab], activeTab: tab.id };
-      return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane], seq: state.seq + 1 };
-    }
-    case 'pane-select-tab':
-      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, activeTab: action.tabId })) };
-    case 'pane-pop':
-      return {
-        ...state,
-        panes: mapPane(state.panes, action.threadId, (p) => {
-          const tabs = p.tabs.map((t) => (t.id === action.tabId ? { ...t, isPopped: action.isPopped } : t));
-          const docked = tabs.filter((t) => !t.isPopped);
-          const activeTab = action.isPopped ? (p.activeTab === action.tabId ? (docked[docked.length - 1]?.id ?? '') : p.activeTab) : action.tabId;
-          return { ...p, isOpen: action.isPopped ? p.isOpen : true, tabs, activeTab };
-        }),
-      };
-    case 'pane-close-tab':
-      return {
-        ...state,
-        panes: mapPane(state.panes, action.threadId, (p) => {
-          const tabs = p.tabs.filter((t) => t.id !== action.tabId);
-          if (tabs.length === 0) return { ...p, isOpen: false, tabs: [], activeTab: '' };
-          return { ...p, tabs, activeTab: p.activeTab === action.tabId ? tabs[tabs.length - 1].id : p.activeTab };
-        }),
-      };
-    case 'pause':
-      return { ...state, paused: !state.paused };
-    case 'reset':
-      return initialState();
+    default:
+      return state;
   }
 }
 
-const TAB_TITLES = { browser: 'Preview', changes: 'Changes', terminal: 'Terminal', new: 'New tab' } satisfies Record<PaneTabKind, string>;
-
-function newPane(threadId: string, seq: number): Pane {
-  return { threadId, isOpen: true, tabs: [{ id: `tab-${seq}`, kind: 'new', title: TAB_TITLES.new }], activeTab: `tab-${seq}` };
-}
-
-function mapPane(panes: Pane[], threadId: string, fn: (p: Pane) => Pane) {
-  return panes.map((p) => (p.threadId === threadId ? fn(p) : p));
-}
-
-function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {
+export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {
   return threads.map((t) => (t.id === id ? fn(t) : t));
 }
 
-function mapStep(thread: Thread, id: string, fn: (s: Step) => Step): Thread {
+export function mapStep(thread: Thread, id: string, fn: (s: Step) => Step): Thread {
   return { ...thread, steps: thread.steps.map((s) => (s.id === id ? fn(s) : s)) };
 }
 
-function log(thread: Thread, entry: ActivityEntry): Thread {
+export function log(thread: Thread, entry: ActivityEntry): Thread {
   return { ...thread, activity: [...thread.activity, entry] };
 }
 
-function hasOpenWork(t: Thread) {
+export function hasOpenWork(t: Thread) {
   return t.steps.some((s) => s.status !== 'done' && s.status !== 'dropped');
 }
 
@@ -436,27 +282,6 @@ function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State
 function freeLine(threads: Thread[]): LineSlot {
   const used = new Set(threads.filter((t) => t.status !== 'settled').map((t) => t.line));
   return ([1, 2, 3, 4, 5] as const).find((l) => !used.has(l)) ?? 5;
-}
-
-function answer(state: State, queueId: string, choice?: string): State {
-  const item = state.queue.find((q) => q.id === queueId);
-  if (!item) return state;
-  const now = state.now;
-  const queue = state.queue.filter((q) => q.id !== queueId);
-  const label = item.choices?.find((c) => c.id === choice)?.label;
-
-  const threads = mapThread(state.threads, item.threadId, (t) => {
-    if (item.kind === 'review') {
-      const prs = t.prs.map((p) => (p.state === 'open' ? { ...p, state: 'merged' as const } : p));
-      const done = !hasOpenWork(t);
-      return log({ ...t, prs, status: done ? 'settled' : t.status }, { at: now, who: 'you', kind: 'event', text: done ? 'Approved and merged. Every PR is merged, thread settled.' : 'Approved and merged' });
-    }
-    const blocked = t.steps.find((s) => s.status === 'blocked');
-    const unblocked = blocked ? mapStep(t, blocked.id, (s) => ({ ...s, status: 'running', note: undefined })) : t;
-    const text = item.kind === 'approval' ? `Approved: ${item.code ?? item.title}` : (label ?? 'Answered');
-    return log({ ...unblocked, status: 'running' }, { at: now, who: 'you', kind: item.kind === 'approval' ? 'event' : 'message', text });
-  });
-  return { ...state, threads, queue };
 }
 
 function addScope(state: State, threadId: string): State {

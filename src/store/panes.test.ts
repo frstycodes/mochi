@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import type { Pane } from '../model.ts';
+import type { State } from './index.tsx';
+import { panesReducer } from './panes.ts';
+
+const pane = (rest: Partial<Pane> = {}): Pane => ({
+  threadId: 't',
+  isOpen: true,
+  activeTab: 'a',
+  tabs: [
+    { id: 'a', kind: 'browser' },
+    { id: 'b', kind: 'changes' },
+    { id: 'c', kind: 'terminal' },
+  ],
+  ...rest,
+});
+const run = (p: Pane | undefined, ...actions: Parameters<typeof panesReducer>[1][]) =>
+  actions.reduce((s, a) => panesReducer(s, a), { panes: p ? [p] : [], threads: [] } as unknown as State).panes[0];
+
+test('opening a kind replaces the active new-tab page in place and selects it', () => {
+  const p = run(undefined, { type: 'pane-toggle', threadId: 't' }, { type: 'pane-open-tab', threadId: 't', kind: 'files' });
+  assert.deepEqual(p.tabs.map((t) => t.kind), ['files']);
+  assert.equal(p.activeTab, p.tabs[0].id);
+  const q = run(p, { type: 'pane-open-tab', threadId: 't', kind: 'ports' });
+  assert.deepEqual(q.tabs.map((t) => t.kind), ['files', 'ports']);
+  assert.notEqual(q.tabs[0].id, q.tabs[1].id);
+});
+
+test('closing the active tab selects its right neighbour, then its left, and the last close hides the pane', () => {
+  assert.equal(run(pane(), { type: 'pane-close-tab', threadId: 't', tabId: 'a' }).activeTab, 'b');
+  assert.equal(run(pane({ activeTab: 'c' }), { type: 'pane-close-tab', threadId: 't', tabId: 'c' }).activeTab, 'b');
+  assert.equal(run(pane({ activeTab: 'b' }), { type: 'pane-close-tab', threadId: 't', tabId: 'a' }).activeTab, 'b');
+  const empty = run(pane(), ...['a', 'b', 'c'].map((tabId) => ({ type: 'pane-close-tab' as const, threadId: 't', tabId })));
+  assert.equal(empty.isOpen, false);
+  assert.equal(empty.activeTab, '');
+});
+
+test('reorder follows the given order and keeps unlisted tabs after it', () => {
+  const p = run(pane(), { type: 'pane-reorder', threadId: 't', order: ['c', 'a'] });
+  assert.deepEqual(p.tabs.map((t) => t.id), ['c', 'a', 'b']);
+});
+
+test('popping out any kind moves selection to a docked neighbour, putting back selects it and opens the pane', () => {
+  const popped = run(pane({ activeTab: 'b' }), { type: 'pane-pop', threadId: 't', tabId: 'b', isPopped: true });
+  assert.equal(popped.tabs.find((t) => t.id === 'b')?.isPopped, true);
+  assert.equal(popped.activeTab, 'c');
+  const back = run({ ...popped, isOpen: false }, { type: 'pane-pop', threadId: 't', tabId: 'b', isPopped: false });
+  assert.equal(back.activeTab, 'b');
+  assert.equal(back.isOpen, true);
+  assert.equal(back.tabs.find((t) => t.id === 'b')?.isPopped, false);
+});

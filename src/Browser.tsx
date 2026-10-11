@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { PaneTab, Thread } from './model';
+import type { Pane, PaneTab, Thread } from './model';
+import { PANE_TABS, tabTitle } from './pane/tabs';
 import { useHarness } from './store';
 import { ProviderMark } from './ui';
 
@@ -82,7 +83,7 @@ export function PipLayer({ thread }: { thread: Thread }) {
 
   return (
     <div ref={layerRef} className="pointer-events-none absolute inset-3 isolate">
-      {bounds.w > 0 && popped.map((tab) => <PipWindow key={tab.id} thread={thread} tab={tab} isDriving={pane?.driver === thread.providers[0] && thread.status === 'running'} bounds={bounds} />)}
+      {bounds.w > 0 && !!pane && popped.map((tab) => <PipWindow key={tab.id} thread={thread} pane={pane} tab={tab} isDriving={pane.driver === thread.providers[0] && thread.status === 'running'} bounds={bounds} />)}
     </div>
   );
 }
@@ -103,7 +104,7 @@ function anchorFor(corner: Corner, w: number, h: number, bounds: { w: number; h:
   return { x: corner[1] === 'r' ? bounds.w - w : 0, y: corner[0] === 'b' ? bounds.h - h : 0 };
 }
 
-function PipWindow({ thread, tab, isDriving, bounds }: { thread: Thread; tab: PaneTab; isDriving: boolean; bounds: { w: number; h: number } }) {
+function PipWindow({ thread, pane, tab, isDriving, bounds }: { thread: Thread; pane: Pane; tab: PaneTab; isDriving: boolean; bounds: { w: number; h: number } }) {
   const { dispatch } = useHarness();
   const [corner, setCorner] = useState<Corner>('br');
   const [size, setSize] = useState(PIP);
@@ -146,7 +147,7 @@ function PipWindow({ thread, tab, isDriving, bounds }: { thread: Thread; tab: Pa
 
   return (
     <motion.section
-      aria-label={`Floating preview: ${tab.url}`}
+      aria-label={`Floating ${tabTitle(tab)}`}
       drag
       dragControls={controls}
       dragListener={false}
@@ -161,28 +162,34 @@ function PipWindow({ thread, tab, isDriving, bounds }: { thread: Thread; tab: Pa
     >
       {/* Clip here, not on the section: Chromium drops a backdrop-filter's mask under a rounded overflow clip. */}
       <div inert={isTucked || undefined} className="h-full overflow-hidden rounded-[inherit]">
-        <PagePreview thread={thread} width={w} height={h} isDriving={isDriving && !isCommenting} isCommenting={isCommenting} onCommented={() => setCommenting(false)} />
+        {tab.kind === 'browser' ? (
+          <PagePreview thread={thread} width={w} height={h} isDriving={isDriving && !isCommenting} isCommenting={isCommenting} onCommented={() => setCommenting(false)} />
+        ) : (
+          <PoppedTab thread={thread} pane={pane} tab={tab} />
+        )}
       </div>
 
       {!isTucked && (
         <div className="pointer-events-none absolute top-0 left-0 isolate flex h-20 w-44 items-start gap-1 rounded-tl-[inherit] p-3 opacity-0 transition-opacity duration-150 group-hover/pip:pointer-events-auto group-hover/pip:opacity-100 group-focus-within/pip:pointer-events-auto group-focus-within/pip:opacity-100">
           <span aria-hidden className="pip-blur absolute inset-0 -z-10 rounded-tl-[inherit]" />
-          <PipButton label="Close preview" onClick={() => dispatch({ type: 'pane-close-tab', threadId: thread.id, tabId: tab.id })}>
+          <PipButton label={`Close ${tabTitle(tab)}`} onClick={() => dispatch({ type: 'pane-close-tab', threadId: thread.id, tabId: tab.id })}>
             <X />
           </PipButton>
           <PipButton label="Put back in the side pane" onClick={() => dispatch({ type: 'pane-pop', threadId: thread.id, tabId: tab.id, isPopped: false })}>
             <ExitPip />
           </PipButton>
-          <PipButton label={isCommenting ? 'Stop commenting' : 'Comment on the page'} pressed={isCommenting} onClick={() => setCommenting((c) => !c)}>
-            <CommentPlus />
-          </PipButton>
+          {tab.kind === 'browser' && (
+            <PipButton label={isCommenting ? 'Stop commenting' : 'Comment on the page'} pressed={isCommenting} onClick={() => setCommenting((c) => !c)}>
+              <CommentPlus />
+            </PipButton>
+          )}
         </div>
       )}
 
       {isTucked && (
         <button
           type="button"
-          aria-label="Show preview"
+          aria-label={`Show ${tabTitle(tab)}`}
           onClick={() => setTucked(false)}
           className={cn('absolute inset-y-0 z-10 flex items-center justify-center bg-popover text-muted-foreground hover:text-foreground', tuckSide === 1 ? 'left-0 rounded-l-[inherit]' : 'right-0 rounded-r-[inherit]')}
           style={{ width: TUCK_TAB }}
@@ -192,6 +199,15 @@ function PipWindow({ thread, tab, isDriving, bounds }: { thread: Thread; tab: Pa
       )}
       {!isTucked && <ResizeHandle corner={corner} start={{ w, h }} onResize={(nw, nh) => setSize({ w: clamp(nw, MIN.w, bounds.w), h: clamp(nh, MIN.h, bounds.h) })} />}
     </motion.section>
+  );
+}
+
+function PoppedTab({ thread, pane, tab }: { thread: Thread; pane: Pane; tab: PaneTab }) {
+  const Content = PANE_TABS[tab.kind].component;
+  return (
+    <div className="h-full bg-sidebar pt-10">
+      <Content thread={thread} pane={pane} tab={tab} />
+    </div>
   );
 }
 
