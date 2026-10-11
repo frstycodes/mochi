@@ -106,7 +106,7 @@ Principles: no assumed orientation (portrait monitors are first class), every la
 - [x] Narrow split degrades gracefully: summary column folds into a sheet, side pane becomes a tab
 
 ### Pinned tabs, made useful
-- [ ] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the Stage Manager cards)
+- [x] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the Stage Manager cards)
 - [x] Cmd 1–9 jumps to pinned N; Cmd Opt 1–9 opens pinned N in a new split
 - [x] Hover a pinned thread → live peek (transcript tail + preview thumbnail) without switching
 - [ ] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (watch toggle + in-app toast for needs-you / done done; OS notifications and CI fail wait for `notify`)
@@ -114,26 +114,26 @@ Principles: no assumed orientation (portrait monitors are first class), every la
 ### Stage Manager mode
 The main session (or split) sits centered; pinned sessions hover at both screen edges as 3D cards, sticking out slightly.
 
-- [ ] Center stage: one session or a split group, scaled to ~85–90% width so the edge cards stay visible
-- [ ] Edge cards in pinned order: pins before the current one on the left, after it on the right (a carousel, so position = order)
-- [ ] Cards are rotated toward the center (`rotateY` ~35–50°), recede in depth, ~24–40px visible; the nearer one is larger
-- [ ] Live thumbnails: a cheap snapshot (title, progress ring, now-step, last message, preview frame), not a live React tree per card
-- [ ] Horizontal two-finger scroll / swipe moves 1:1 with the fingers; crossing a detent swaps the center; release snaps with a critically damped spring (reuse the model-picker carousel physics from `ModelControls.tsx`)
-- [ ] Ctrl ← / → steps one card; no animation on keyboard nav (DESIGN.md rule) or a short one — decide
-- [ ] Hover an edge card → it slides out further with a peek; click brings it center
-- [ ] Drag an edge card into the center → opens it as a split beside the current session
-- [ ] Needs-you cards pulse their amber dot and sort nearer the center (optional, setting)
-- [ ] Group stacking: more than ~3 per side collapses into a stack with a count
-- [ ] Portrait monitor: cards on top / bottom edges, vertical scroll switches
-- [ ] Reduced motion: flat cards, crossfade only
-- [ ] Exit back to normal layout keeps the current center as the active thread
-- [ ] Performance budget: 60fps on scroll with 9 pinned; thumbnails throttled to ~1 fps
+- [x] Center stage: one session or a split group, scaled to ~85–90% width so the edge cards stay visible (88%; Shift Cmd S or the header toggle)
+- [x] Edge cards in pinned order: pins before the current one on the left, after it on the right (a carousel, so position = order)
+- [x] Cards are rotated toward the center (`rotateY` ~35–50°), recede in depth, ~24–40px visible; the nearer one is larger
+- [x] Live thumbnails: a cheap snapshot (title, progress ring, now-step, last message, preview frame), not a live React tree per card (preview frame is a native capture on desktop; the web build shows the address only)
+- [x] Horizontal two-finger scroll / swipe moves 1:1 with the fingers; crossing a detent swaps the center; release snaps (the model dock's physics: a native scroller read through Motion, so the snap is CSS scroll-snap, not a JS spring; the dock has no spring to share)
+- [x] Ctrl ← / → steps one card; no animation on keyboard nav (decided: none). Inside a split group the arrows move split focus first and step the stage at the group's edge
+- [x] Hover an edge card → it slides out further with a peek; click brings it center
+- [x] Drag an edge card into the center → opens it as a split beside the current session
+- [x] Needs-you cards pulse their amber dot and sort nearer the center (optional, setting in the Cmd ↑ overview)
+- [x] Group stacking: more than ~3 per side collapses into a stack with a count
+- [x] Portrait monitor: cards on top / bottom edges, vertical scroll switches
+- [x] Reduced motion: flat cards, crossfade only
+- [x] Exit back to normal layout keeps the current center as the active thread
+- [x] Performance budget: 60fps on scroll with 9 pinned; thumbnails throttled to ~1 fps (59 fps over a 4 s sweep with 9 pinned in headless Chrome; the 2–3 long frames are the center swapping at a detent)
 
 ### Decided
 - Stage Manager order is pinned order, not recency: positions never move (same rule as Orbit). The edge-card item above follows this.
 - Unpinned running threads stay off stage; the Queue covers them.
-- [ ] Multi-window: tear a split into its own OS window, one per monitor
-- [ ] Mission-control overview (Cmd ↑): all sessions as a grid of live cards
+- [x] Multi-window: tear a split into its own OS window, one per monitor (split menu → Move to a new window; the main window's store is the only one, torn windows mirror it over `host.windows` broadcasts; web opens a tab at `#/window/<id>`)
+- [x] Mission-control overview (Cmd ↑): all sessions as a grid of live cards
 
 ## 4. Goal features (everything that exists, so nothing gets lost)
 
