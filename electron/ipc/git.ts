@@ -76,7 +76,7 @@ export const git = {
   async pr(_sender, cwd) {
     const top = await topLevel(string(cwd, 'cwd'));
     const view = await run('gh', top, ['pr', 'view', '--json', 'number,url,state']).catch((error: Error) => {
-      if (/no (open )?pull requests? found/i.test(error.message)) return null;
+      if (/no (open )?pull requests? found|no git remotes/i.test(error.message)) return null;
       throw error;
     });
     if (!view) return null;

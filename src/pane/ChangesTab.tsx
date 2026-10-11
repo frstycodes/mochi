@@ -46,9 +46,9 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-1.5 px-3">
+      <div className="@container flex h-11 shrink-0 items-center gap-1.5 px-3">
         <Select value={scope} onValueChange={(v) => setScope(v as DiffScope)}>
-          <SelectTrigger size="sm" aria-label="Compare">
+          <SelectTrigger size="sm" aria-label="Compare" className="shrink-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -60,7 +60,7 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
         </Select>
         {steps.length > 0 && (
           <Select value={stepId} onValueChange={setStepId}>
-            <SelectTrigger size="sm" aria-label="Filter by step" className="min-w-0">
+            <SelectTrigger size="sm" aria-label="Filter by step" className="min-w-0 max-w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -76,7 +76,11 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
           </Select>
         )}
         <span className="flex-1" />
-        {files.length > 0 && <DiffStat added={sum(files, 'added')} removed={sum(files, 'removed')} />}
+        {files.length > 0 && (
+          <span className="hidden @lg:flex">
+            <DiffStat added={sum(files, 'added')} removed={sum(files, 'removed')} />
+          </span>
+        )}
         <ToggleGroup type="single" size="sm" value={diffStyle} onValueChange={(v) => v && setDiffStyle(v as DiffStyle)} aria-label="Diff layout">
           <ToggleGroupItem value="unified" aria-label="Unified diff">
             <RowVertical />
