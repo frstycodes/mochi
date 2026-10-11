@@ -80,34 +80,34 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 ## 2. Drag to pin threads
 
 - [x] Pinned list exists in the sidebar; `reorder` action takes `pinned` / `unpinned` (`src/reorder.ts`)
-- [ ] Drag a thread row into the Pinned section to pin, out to unpin, within to reorder
-- [ ] Drop indicator line and a placeholder gap; auto-scroll near edges
-- [ ] Keyboard: Cmd Shift P pin/unpin, Alt ↑/↓ reorder
-- [ ] Pinned order drives Orbit slots, Stage Manager order (§3) and Cmd 1–9 jump
-- [ ] Drag a thread onto a split drop zone to open it there (§3)
+- [x] Drag a thread row into the Pinned section to pin, out to unpin, within to reorder
+- [x] Drop indicator line and a placeholder gap; auto-scroll near edges
+- [x] Keyboard: Cmd Shift P pin/unpin, Alt ↑/↓ reorder
+- [x] Pinned order drives Orbit slots, Stage Manager order (§3) and Cmd 1–9 jump (`pinnedThreads` in `src/reorder.ts` is the one order)
+- [x] Drag a thread onto a split drop zone to open it there (§3)
 
 ## 3. Multitasking
 
 Principles: no assumed orientation (portrait monitors are first class), every layout reachable by keyboard and by drag, layouts are saved and named, the focused session is always obvious.
 
 ### Splits
-- [ ] Split any session horizontally or vertically; nest splits (tiling tree, not fixed 2-up)
-- [ ] Drop zones while dragging a thread or pane tab: left / right / top / bottom / center (replace)
-- [ ] Resize with handles; double-click equalizes; snap to 1/3, 1/2, 2/3
-- [ ] Auto orientation from aspect ratio: portrait window defaults to stacked (top/bottom), landscape to side-by-side; user override sticks
-- [ ] Each split has its own composer, header and side pane; side pane can also be shared across the split
-- [ ] Focus ring on the active split; Cmd [ / ] or Ctrl Arrow moves focus; Cmd Shift Enter maximizes one split (zoom) and back
-- [ ] Composer target follows focus; Cmd Enter in an unfocused split never sends there
-- [ ] Swap splits, rotate layout (H ↔ V), close split
-- [ ] Layout presets: 2-up, 3 columns, 2×2, main + stack, portrait stack of 3
-- [ ] Save layout as a workspace per space; restore on launch
-- [ ] Narrow split degrades gracefully: summary column folds into a sheet, side pane becomes a tab
+- [x] Split any session horizontally or vertically; nest splits (tiling tree, not fixed 2-up)
+- [x] Drop zones while dragging a thread or pane tab: left / right / top / bottom / center (replace)
+- [x] Resize with handles; double-click equalizes; snap to 1/3, 1/2, 2/3
+- [x] Auto orientation from aspect ratio: portrait window defaults to stacked (top/bottom), landscape to side-by-side; user override sticks
+- [x] Each split has its own composer, header and side pane; side pane can also be shared across the split (panes are per thread; a pane tab dragged out becomes its own split)
+- [x] Focus ring on the active split; Cmd [ / ] or Ctrl Arrow moves focus; Cmd Shift Enter maximizes one split (zoom) and back
+- [x] Composer target follows focus; Cmd Enter in an unfocused split never sends there
+- [x] Swap splits, rotate layout (H ↔ V), close split
+- [x] Layout presets: 2-up, 3 columns, 2×2, main + stack, portrait stack of 3
+- [x] Save layout as a workspace per space; restore on launch (one saved layout per space; named workspaces not yet)
+- [x] Narrow split degrades gracefully: summary column folds into a sheet, side pane becomes a tab
 
 ### Pinned tabs, made useful
 - [ ] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the Stage Manager cards)
-- [ ] Cmd 1–9 jumps to pinned N; Cmd Opt 1–9 opens pinned N in a new split
-- [ ] Hover a pinned thread → live peek (transcript tail + preview thumbnail) without switching
-- [ ] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible
+- [x] Cmd 1–9 jumps to pinned N; Cmd Opt 1–9 opens pinned N in a new split
+- [x] Hover a pinned thread → live peek (transcript tail + preview thumbnail) without switching
+- [ ] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (watch toggle + in-app toast for needs-you / done done; OS notifications and CI fail wait for `notify`)
 
 ### Stage Manager mode
 The main session (or split) sits centered; pinned sessions hover at both screen edges as 3D cards, sticking out slightly.

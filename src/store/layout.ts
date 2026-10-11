@@ -1,28 +1,217 @@
+import {
+  buildPreset,
+  closeLeaf,
+  equalizeSplit,
+  findLeaf,
+  leaves,
+  materialize,
+  parentOf,
+  presetSize,
+  resizeSplit,
+  rotateSplit,
+  sameView,
+  setLeafView,
+  singleLayout,
+  splitLeaf,
+  swapLeaves,
+  type Orientation,
+  type Preset,
+  type Side,
+  type SpaceLayout,
+  type View,
+  type Zone,
+} from '../layout/tree.ts';
 import type { Action, State } from './index.tsx';
 
-export type View = { kind: 'queue' } | { kind: 'board' } | { kind: 'new' } | { kind: 'thread'; id: string };
+export type { View };
 
 export interface LayoutState {
   spaceId: string;
+  /** Mirror of each space's focused leaf view: other slices and `useView` read and write this, the layout reducer keeps both in step. */
   views: Record<string, View>;
+  layouts: Record<string, SpaceLayout>;
+  orientation: Orientation;
+  watched: string[];
 }
 
-export type LayoutAction = { type: 'go'; view: View } | { type: 'space'; id: string };
+export type LayoutAction =
+  | { type: 'go'; view: View }
+  | { type: 'space'; id: string }
+  | { type: 'layout-split'; view: View; leafId?: string; side?: Side }
+  | { type: 'layout-drop'; leafId: string; zone: Zone; view: View }
+  | { type: 'layout-close'; leafId?: string }
+  | { type: 'layout-focus'; leafId: string }
+  | { type: 'layout-focus-step'; step: 1 | -1 }
+  | { type: 'layout-zoom' }
+  | { type: 'layout-swap'; leafId?: string; withId?: string }
+  | { type: 'layout-rotate' }
+  | { type: 'layout-resize'; splitId: string; sizes: number[] }
+  | { type: 'layout-equalize'; splitId: string }
+  | { type: 'layout-preset'; preset: Preset }
+  | { type: 'layout-aspect'; orientation: Orientation }
+  | { type: 'watch-toggle'; threadId: string };
 
-export function initialLayout(): LayoutState {
-  return { spaceId: 'latitude', views: { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } } };
+const STORAGE_KEY = 'harness.layouts.v1';
+
+const DEFAULT_VIEWS = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } } satisfies Record<string, View>;
+
+export function initialLayout(saved = loadLayouts()): LayoutState {
+  const orientation = typeof window === 'undefined' ? 'row' : window.innerWidth >= window.innerHeight ? 'row' : 'column';
+  const layouts = Object.fromEntries(Object.entries(DEFAULT_VIEWS).map(([id, view]) => [id, saved.layouts[id] ?? singleLayout(view, orientation)]));
+  return { spaceId: 'latitude', views: mirror(layouts), layouts, orientation, watched: saved.watched };
 }
 
 export function layoutReducer(state: State, action: Action): State {
+  const adopted = adoptForeignView(state);
+  const next = reduce(adopted, action);
+  if (next.layouts === state.layouts) return next === adopted ? state : next;
+  return { ...next, views: mirror(next.layouts) };
+}
+
+function reduce(state: State, action: Action): State {
+  const layout = state.layouts[state.spaceId];
+  const set = (l: SpaceLayout, spaceId = state.spaceId): State => ({ ...state, layouts: { ...state.layouts, [spaceId]: l } });
+  const edit = () => materialize(layout, state.orientation);
+
   switch (action.type) {
     case 'go': {
       const view = action.view;
-      const spaceId = view.kind === 'thread' ? (state.threads.find((t) => t.id === view.id)?.spaceId ?? state.spaceId) : state.spaceId;
-      return { ...state, spaceId, views: { ...state.views, [spaceId]: view } };
+      const threadId = view.kind === 'thread' ? view.id : view.kind === 'tab' ? view.threadId : undefined;
+      const spaceId = threadId ? (state.threads.find((t) => t.id === threadId)?.spaceId ?? state.spaceId) : state.spaceId;
+      return { ...set(openView(state.layouts[spaceId], view), spaceId), spaceId };
     }
     case 'space':
       return { ...state, spaceId: action.id };
+    case 'layout-split': {
+      const existing = action.view.kind !== 'new' && leaves(layout.root).find((l) => sameView(l.view, action.view));
+      if (existing) return set({ ...layout, focusId: existing.id, zoomId: layout.zoomId && existing.id });
+      const l = edit();
+      const side = action.side ?? (state.orientation === 'row' ? 'right' : 'bottom');
+      const { root, leafId } = splitLeaf(l.root, action.leafId ?? l.focusId, action.view, side);
+      return set({ ...l, root, focusId: leafId, zoomId: undefined });
+    }
+    case 'layout-drop': {
+      // A view already open in another split moves: dropped in the centre the two swap, dropped on an edge it leaves its old split.
+      const existing = leaves(layout.root).find((l) => sameView(l.view, action.view));
+      if (existing?.id === action.leafId) return state;
+      if (action.zone === 'center') {
+        const root = existing ? swapLeaves(layout.root, existing.id, action.leafId) : setLeafView(layout.root, action.leafId, action.view);
+        return set({ ...layout, root, focusId: action.leafId });
+      }
+      const l = edit();
+      const base = existing ? closeLeaf(l.root, existing.id)! : l.root;
+      const { root, leafId } = splitLeaf(base, action.leafId, action.view, action.zone);
+      return set({ ...l, root, focusId: leafId, zoomId: undefined });
+    }
+    case 'layout-close': {
+      const id = action.leafId ?? layout.focusId;
+      const order = leaves(layout.root);
+      const root = closeLeaf(layout.root, id);
+      if (!root) return state;
+      const i = order.findIndex((l) => l.id === id);
+      const focusId = id === layout.focusId ? (order[i - 1] ?? order[i + 1]).id : layout.focusId;
+      return set({ ...layout, root, focusId, zoomId: undefined });
+    }
+    case 'layout-focus':
+      if (action.leafId === layout.focusId || !findLeaf(layout.root, action.leafId)) return state;
+      return set({ ...layout, focusId: action.leafId, zoomId: layout.zoomId && action.leafId });
+    case 'layout-focus-step': {
+      const order = leaves(layout.root);
+      const i = order.findIndex((l) => l.id === layout.focusId);
+      const focusId = order.at((i + action.step) % order.length)!.id;
+      return set({ ...layout, focusId, zoomId: layout.zoomId && focusId });
+    }
+    case 'layout-zoom':
+      if (leaves(layout.root).length < 2) return state;
+      return set({ ...layout, zoomId: layout.zoomId ? undefined : layout.focusId });
+    case 'layout-swap': {
+      const order = leaves(layout.root);
+      const id = action.leafId ?? layout.focusId;
+      const i = order.findIndex((l) => l.id === id);
+      const withId = action.withId ?? order[(i + 1) % order.length].id;
+      if (withId === id) return state;
+      return set({ ...layout, root: swapLeaves(layout.root, id, withId), focusId: layout.focusId === id ? withId : layout.focusId });
+    }
+    case 'layout-rotate': {
+      const l = edit();
+      const target = parentOf(l.root, l.focusId) ?? l.root;
+      if (target.kind === 'leaf') return state;
+      return set({ ...l, root: rotateSplit(l.root, target.id), isAuto: false });
+    }
+    case 'layout-resize':
+      return set({ ...layout, root: resizeSplit(layout.root, action.splitId, action.sizes) });
+    case 'layout-equalize':
+      return set({ ...layout, root: equalizeSplit(layout.root, action.splitId) });
+    case 'layout-preset': {
+      const views = presetViews(state, presetSize(action.preset));
+      const root = buildPreset(action.preset, views, state.orientation);
+      const isFixed = action.preset === '3-columns' || action.preset === 'stack-3';
+      return set({ root, focusId: leaves(root)[0].id, builtFor: state.orientation, isAuto: !isFixed });
+    }
+    case 'layout-aspect':
+      return action.orientation === state.orientation ? state : { ...state, orientation: action.orientation };
+    case 'watch-toggle': {
+      const isWatched = state.watched.includes(action.threadId);
+      return { ...state, watched: isWatched ? state.watched.filter((id) => id !== action.threadId) : [...state.watched, action.threadId] };
+    }
     default:
       return state;
   }
+}
+
+/** Going somewhere already open in a split focuses that split instead of opening it twice. */
+function openView(layout: SpaceLayout, view: View): SpaceLayout {
+  const existing = leaves(layout.root).find((l) => sameView(l.view, view));
+  if (existing) return { ...layout, focusId: existing.id, zoomId: layout.zoomId && existing.id };
+  return { ...layout, root: setLeafView(layout.root, layout.focusId, view) };
+}
+
+/** Another slice (a new thread) wrote `views` directly: move that view into the focused leaf. */
+function adoptForeignView(state: State): State {
+  const layout = state.layouts[state.spaceId];
+  const view = state.views[state.spaceId];
+  const focused = findLeaf(layout.root, layout.focusId);
+  if (!focused || !view || focused.view === view) return state;
+  return { ...state, layouts: { ...state.layouts, [state.spaceId]: { ...layout, root: setLeafView(layout.root, layout.focusId, view) } } };
+}
+
+function mirror(layouts: Record<string, SpaceLayout>) {
+  return Object.fromEntries(Object.entries(layouts).map(([id, l]) => [id, findLeaf(l.root, l.focusId)?.view ?? leaves(l.root)[0].view]));
+}
+
+/** Preset fill order: the focused view, then pinned threads in pin order, then other active threads. */
+function presetViews(state: State, count: number): View[] {
+  const layout = state.layouts[state.spaceId];
+  const focused = findLeaf(layout.root, layout.focusId)!.view;
+  const threads = state.threads.filter((t) => t.spaceId === state.spaceId && t.status !== 'settled');
+  const ranked = [...threads.filter((t) => t.orbitSlot !== undefined).sort((a, b) => a.orbitSlot! - b.orbitSlot!), ...threads.filter((t) => t.orbitSlot === undefined)];
+  const views: View[] = [focused];
+  for (const t of ranked) {
+    const v: View = { kind: 'thread', id: t.id };
+    if (!views.some((x) => sameView(x, v))) views.push(v);
+  }
+  return views.slice(0, count);
+}
+
+export function saveLayouts(state: Pick<LayoutState, 'layouts' | 'watched'>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ layouts: state.layouts, watched: state.watched }));
+  } catch {
+    // Storage blocked (private window, artifact preview): layouts just don't persist.
+  }
+}
+
+function loadLayouts(): Pick<LayoutState, 'layouts' | 'watched'> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
+    const layouts = Object.fromEntries(Object.entries(raw?.layouts ?? {}).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
+    return { layouts, watched: Array.isArray(raw?.watched) ? raw.watched : [] };
+  } catch {
+    return { layouts: {}, watched: [] };
+  }
+}
+
+function isValidLayout(l: unknown): l is SpaceLayout {
+  const layout = l as SpaceLayout;
+  return !!layout?.root && typeof layout.focusId === 'string' && !!findLeaf(layout.root, layout.focusId);
 }

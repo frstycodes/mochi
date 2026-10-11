@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTab, Thread } from './model';
 import { PANE_TABS, tabTitle } from './pane/tabs';
+import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { useHarness } from './store';
 
 export function SidePane({ thread, pane }: { thread: Thread; pane: Pane }) {
@@ -73,8 +74,16 @@ function TabStrip({ thread, tabs, active }: { thread: Thread; tabs: PaneTab[]; a
               key={tab.id}
               as="div"
               value={tab.id}
-              onDragStart={() => setDraggingId(tab.id)}
-              onDragEnd={() => setDraggingId(null)}
+              onDragStart={(_, info) => {
+                setDraggingId(tab.id);
+                startDrag({ kind: 'tab', threadId: thread.id, tabId: tab.id }, title, info.point.x, info.point.y);
+              }}
+              onDrag={(_, info) => moveDrag(info.point.x, info.point.y)}
+              onDragEnd={() => {
+                setDraggingId(null);
+                const landed = endDrag();
+                if (landed) dispatch({ type: 'layout-drop', ...landed });
+              }}
               className={cn(
                 'group/tab relative flex h-7 min-w-16 flex-[0_1_11rem] items-center rounded-lg',
                 isActive ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:bg-accent/60',

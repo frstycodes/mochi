@@ -25,7 +25,7 @@ function initialState(): State {
 }
 
 function reducer(state: State, action: Action): State {
-  if (action.type === 'reset') return { ...initialState(), ...initialPanes([]) };
+  if (action.type === 'reset') return { ...initialState(), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }) };
   return SLICES.reduce((s, slice) => slice(s, action), state);
 }
 

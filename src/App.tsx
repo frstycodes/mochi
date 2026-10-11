@@ -1,23 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeProvider } from 'next-themes';
-import { Edit, Inbox, Route } from 'reicon-react';
+import { Edit, Grid, Inbox, Route } from 'reicon-react';
 import { toast } from 'sonner';
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@/components/ui/command';
-import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@/components/ui/command';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { SPACES, type Space } from './model';
-import { BoardView } from './BoardView';
+import { SPACES } from './model';
 import { DesignPage } from './design/DesignPage';
-import { NewThreadView } from './NewThreadView';
 import { Orbit } from './Orbit';
-import { QueueView } from './QueueView';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
-import { HarnessProvider, useHarness, useSpace, useView, type View } from './store';
-import { ThreadView } from './ThreadView';
+import { PRESETS, PRESET_LABELS } from './layout/tree';
+import { Workspace } from './layout/Workspace';
+import { HarnessProvider, useHarness, type Action, type View } from './store';
 import { useIdleScrollbars } from './useIdleScrollbars';
-import { SpaceIcon, StepStatusIcon, ThreadStatusIcon, lineColor } from './ui';
+import { StepStatusIcon, ThreadStatusIcon, lineColor } from './ui';
 
 export function App() {
   const route = useHashRoute();
@@ -51,8 +49,6 @@ function useHashRoute() {
 
 function Shell() {
   const [isSearchOpen, setSearchOpen] = useState(false);
-  const space = useSpace();
-  const view = useView();
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
@@ -63,9 +59,8 @@ function Shell() {
       <AppSidebar onSearch={() => setSearchOpen(true)} width={sidebarWidth} onResize={setSidebarWidth} />
       <SidebarPeek onSearch={() => setSearchOpen(true)} />
       <SidebarInset className="min-h-0 overflow-hidden">
-        {view.kind !== 'thread' && <ContentTopBar space={space} />}
         <div className="min-h-0 flex-1">
-          <CurrentView />
+          <Workspace />
         </div>
       </SidebarInset>
       <SearchPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
@@ -73,35 +68,13 @@ function Shell() {
   );
 }
 
-function ContentTopBar({ space }: { space: Space }) {
-  const { state, isMobile } = useSidebar();
-  if (!isMobile && state === 'expanded') return null;
-  return (
-    <div className="flex h-11 shrink-0 items-center gap-2 px-3">
-      <SidebarTrigger className="-ml-1" />
-      <SpaceIcon space={space} className="size-4 text-muted-foreground" />
-      <span className="type-meta font-medium">{space.name}</span>
-    </div>
-  );
-}
-
-function CurrentView() {
-  const view = useView();
-  const { state } = useHarness();
-  if (view.kind === 'queue') return <QueueView />;
-  if (view.kind === 'board') return <BoardView />;
-  if (view.kind === 'new') return <NewThreadView />;
-  const thread = state.threads.find((t) => t.id === view.id);
-  if (!thread) return <QueueView />;
-  return <ThreadView thread={thread} />;
-}
-
 function SearchPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { state, dispatch } = useHarness();
-  const go = (view: View) => {
-    dispatch({ type: 'go', view });
+  const run = (action: Action) => {
+    dispatch(action);
     onOpenChange(false);
   };
+  const go = (view: View) => run({ type: 'go', view });
   const spaceName = (id: string) => SPACES.find((s) => s.id === id)?.name;
   const liveSteps = state.threads
     .filter((t) => t.spaceId === state.spaceId && t.status !== 'settled')
@@ -109,43 +82,70 @@ function SearchPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange} title="Search" description="Jump to a thread, step or view">
-      <CommandInput placeholder="Jump to a thread, step or view" />
-      <CommandList>
-        <CommandEmpty>Nothing matches. Try a thread title or a step name.</CommandEmpty>
-        <CommandGroup heading="Go to">
-          <CommandItem onSelect={() => go({ kind: 'queue' })}>
-            <Inbox />
-            Queue
-          </CommandItem>
-          <CommandItem onSelect={() => go({ kind: 'board' })}>
-            <Route />
-            Board
-          </CommandItem>
-          <CommandItem onSelect={() => go({ kind: 'new' })}>
-            <Edit />
-            New thread
-            <CommandShortcut>N</CommandShortcut>
-          </CommandItem>
-        </CommandGroup>
-        <CommandGroup heading="Threads">
-          {state.threads.map((t) => (
-            <CommandItem key={t.id} value={`${t.title} ${t.repo?.branch ?? ''}`} onSelect={() => go({ kind: 'thread', id: t.id })}>
-              <ThreadStatusIcon status={t.status} />
-              <span className="truncate">{t.title}</span>
-              <CommandShortcut className="tracking-normal">{spaceName(t.spaceId)}</CommandShortcut>
+      <Command>
+        <CommandInput placeholder="Jump to a thread, step or view" />
+        <CommandList>
+          <CommandEmpty>Nothing matches. Try a thread title or a step name.</CommandEmpty>
+          <CommandGroup heading="Go to">
+            <CommandItem onSelect={() => go({ kind: 'queue' })}>
+              <Inbox />
+              Queue
             </CommandItem>
-          ))}
-        </CommandGroup>
-        <CommandGroup heading="Steps in this space">
-          {liveSteps.map(({ thread, step }) => (
-            <CommandItem key={step.id} value={`${step.title} ${thread.title}`} onSelect={() => go({ kind: 'thread', id: thread.id })}>
-              <StepStatusIcon status={step.status} />
-              <span className="truncate">{step.title}</span>
-              <span aria-hidden className="ml-auto size-2 shrink-0 rounded-full" style={{ background: lineColor(thread.line) }} />
+            <CommandItem onSelect={() => go({ kind: 'board' })}>
+              <Route />
+              Board
             </CommandItem>
-          ))}
-        </CommandGroup>
-      </CommandList>
+            <CommandItem onSelect={() => go({ kind: 'new' })}>
+              <Edit />
+              New thread
+              <CommandShortcut>N</CommandShortcut>
+            </CommandItem>
+          </CommandGroup>
+          <CommandGroup heading="Layout">
+            {PRESETS.map((p) => (
+              <CommandItem key={p} value={`Layout ${PRESET_LABELS[p]}`} onSelect={() => run({ type: 'layout-preset', preset: p })}>
+                <Grid />
+                Layout: {PRESET_LABELS[p]}
+              </CommandItem>
+            ))}
+            <CommandItem value="Split rotate" onSelect={() => run({ type: 'layout-rotate' })}>
+              <Grid />
+              Rotate the focused split
+            </CommandItem>
+            <CommandItem value="Split swap" onSelect={() => run({ type: 'layout-swap' })}>
+              <Grid />
+              Swap the focused split with the next
+            </CommandItem>
+            <CommandItem value="Split zoom maximize" onSelect={() => run({ type: 'layout-zoom' })}>
+              <Grid />
+              Zoom the focused split
+              <CommandShortcut>Shift Cmd Enter</CommandShortcut>
+            </CommandItem>
+            <CommandItem value="Split close" onSelect={() => run({ type: 'layout-close' })}>
+              <Grid />
+              Close the focused split
+            </CommandItem>
+          </CommandGroup>
+          <CommandGroup heading="Threads">
+            {state.threads.map((t) => (
+              <CommandItem key={t.id} value={`${t.title} ${t.repo?.branch ?? ''}`} onSelect={() => go({ kind: 'thread', id: t.id })}>
+                <ThreadStatusIcon status={t.status} />
+                <span className="truncate">{t.title}</span>
+                <CommandShortcut className="tracking-normal">{spaceName(t.spaceId)}</CommandShortcut>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+          <CommandGroup heading="Steps in this space">
+            {liveSteps.map(({ thread, step }) => (
+              <CommandItem key={step.id} value={`${step.title} ${thread.title}`} onSelect={() => go({ kind: 'thread', id: thread.id })}>
+                <StepStatusIcon status={step.status} />
+                <span className="truncate">{step.title}</span>
+                <span aria-hidden className="ml-auto size-2 shrink-0 rounded-full" style={{ background: lineColor(thread.line) }} />
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
     </CommandDialog>
   );
 }

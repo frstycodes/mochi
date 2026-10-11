@@ -99,6 +99,17 @@
         "--strictPort"
       ],
       "port": 5285
+    },
+    {
+      "name": "harness-layout",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5279",
+        "--strictPort"
+      ],
+      "port": 5279
     }
   ]
 }
