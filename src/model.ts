@@ -30,6 +30,7 @@ export interface Step {
   sharedKey?: string;
   gate?: boolean;
   acceptance?: { text: string; command?: string };
+  owner?: Provider;
 }
 
 export interface Revision {

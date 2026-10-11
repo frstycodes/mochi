@@ -9,9 +9,9 @@ export const WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
 const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
 
 /** execFile, never a shell: args go to the binary verbatim. `okCodes` lists non-zero exits that still carry a result. */
-export function run(cmd: 'git' | 'gh' | 'du', cwd: string, args: string[], { input, okCodes = [0] }: { input?: string; okCodes?: number[] } = {}) {
+export function run(cmd: 'git' | 'gh' | 'du', cwd: string, args: string[], { input, okCodes = [0], env }: { input?: string; okCodes?: number[]; env?: Record<string, string> } = {}) {
   return new Promise<string>((done, fail) => {
-    const child = execFile(cmd, args, { cwd, env: ENV, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const child = execFile(cmd, args, { cwd, env: { ...ENV, ...env }, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (!error || (typeof error.code === 'number' && okCodes.includes(error.code))) return done(stdout);
       fail(new Error(stderr.trim() || error.message));
     });

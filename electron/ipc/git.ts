@@ -3,8 +3,9 @@ import { mkdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
+import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../git/checkpoints.ts';
 import { WORKTREE_ROOT, inside, insideWorktreeRoot, run, runGit, topLevel } from '../git/run.ts';
-import { record, string, type Handlers } from './handlers.ts';
+import { integer, record, string, type Handlers } from './handlers.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
@@ -125,6 +126,40 @@ export const git = {
   async diskUsage(_sender, path) {
     const top = await topLevel(string(path, 'path'));
     return Number((await run('du', top, ['-sk', top])).split('\t')[0]) * 1024;
+  },
+
+  // Checkpoints and rewind only run in a Harness worktree: resetting a branch is never done to the user's own checkout.
+  async checkpoint(_sender, cwd, threadId, n) {
+    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
+    const ref = checkpointRef(string(threadId, 'threadId', 64), integer(n, 'n', 0, 1_000_000));
+    return snapshot(top, ref, `harness checkpoint ${n}`);
+  },
+
+  async restoreCheckpoint(_sender, cwd, threadId, n) {
+    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
+    const id = string(threadId, 'threadId', 64);
+    const which = n === 'undo' ? 'undo' : integer(n, 'n', 0, 1_000_000);
+    const commit = await resolveCommit(top, checkpointRef(id, which));
+    if (!commit) throw new Error(`Checkpoint ${which} does not exist`);
+    if (which !== 'undo') await snapshot(top, checkpointRef(id, 'undo'), 'harness checkpoint before rewind');
+    await restore(top, commit);
+  },
+
+  async forkWorktree(_sender, cwd, threadId, branch, from) {
+    const source = await topLevel(string(cwd, 'cwd'));
+    const top = await mainRepo(source);
+    const id = string(threadId, 'threadId', 64);
+    if (!/^[\w-]+$/.test(id)) throw new Error('threadId must be letters, digits, - or _');
+    const name = (await runGit(top, ['check-ref-format', '--branch', string(branch, 'branch', 255)])).trim();
+    const point = from === undefined ? null : record(from, 'from');
+    const commit = point ? await resolveCommit(source, checkpointRef(string(point.threadId, 'from.threadId', 64), integer(point.n, 'from.n', 0, 1_000_000))) : '';
+    if (point && !commit) throw new Error('That checkpoint has no saved files');
+    const dir = join(WORKTREE_ROOT, basename(top), id);
+    if (existsSync(dir)) throw new Error(`${dir} already exists`);
+    await mkdir(dirname(dir), { recursive: true });
+    await runGit(top, ['worktree', 'add', '-b', name, dir, commit ? `${commit}^` : (await runGit(source, ['rev-parse', 'HEAD'])).trim()]);
+    if (commit) await applyFiles(dir, commit);
+    return dir;
   },
 } satisfies Handlers<GitHost>;
 

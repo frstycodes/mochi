@@ -90,6 +90,12 @@ export interface GitHost {
   worktrees(root: string): Promise<Worktree[]>;
   removeWorktree(path: string): Promise<void>;
   diskUsage(path: string): Promise<number>;
+  /** Snapshots the worktree's files (untracked included) under `refs/harness/checkpoints/<threadId>/<n>` without touching HEAD, index or files; resolves to the commit. */
+  checkpoint(cwd: string, threadId: string, n: number): Promise<string>;
+  /** Resets the worktree's branch and files to checkpoint `n`, after saving the current files as the `undo` checkpoint. */
+  restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo'): Promise<void>;
+  /** New worktree for `threadId` on `branch`, starting from `from`'s checkpoint, or from `cwd`'s HEAD without one. */
+  forkWorktree(cwd: string, threadId: string, branch: string, from?: { threadId: string; n: number }): Promise<string>;
 }
 
 export const gitMethods = {
@@ -107,4 +113,7 @@ export const gitMethods = {
   worktrees: 'invoke',
   removeWorktree: 'invoke',
   diskUsage: 'invoke',
+  checkpoint: 'invoke',
+  restoreCheckpoint: 'invoke',
+  forkWorktree: 'invoke',
 } satisfies Manifest<GitHost>;
