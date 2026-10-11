@@ -71,11 +71,11 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [ ] Commit, push, open PR from the tab; PR checks inline
 
 ### File preview / editor
-- [ ] File tree for the worktree with search (Cmd P)
-- [ ] Monaco or CodeMirror 6 editor: syntax highlight, find/replace, save, dirty state
-- [ ] Image, SVG, PDF, Markdown (rendered), JSON tree previews
-- [ ] Conflict warning when the agent edits a file you have open with unsaved changes
-- [ ] "Open in VS Code / Cursor / Zed" escape hatch
+- [x] File tree for the worktree with search (Cmd P)
+- [x] Monaco or CodeMirror 6 editor: syntax highlight, find/replace, save, dirty state
+- [x] Image, SVG, PDF, Markdown (rendered), JSON tree previews
+- [x] Conflict warning when the agent edits a file you have open with unsaved changes
+- [x] "Open in VS Code / Cursor / Zed" escape hatch
 
 ## 2. Drag to pin threads
 
