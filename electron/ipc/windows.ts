@@ -13,4 +13,7 @@ export const windows = {
     const payload = record(message, 'message');
     for (const win of BrowserWindow.getAllWindows()) if (win.webContents !== sender) win.webContents.send('windows:onMessage', payload);
   },
+  async isFullScreen(sender) {
+    return BrowserWindow.fromWebContents(sender)?.isFullScreen() ?? false;
+  },
 } satisfies Handlers<WindowsHost>;

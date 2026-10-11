@@ -20,4 +20,10 @@ export const windows: WindowsHost = {
     tabs()?.addEventListener('message', forward);
     return () => tabs()?.removeEventListener('message', forward);
   },
+  async isFullScreen() {
+    return false;
+  },
+  onFullScreenChange() {
+    return () => {};
+  },
 };

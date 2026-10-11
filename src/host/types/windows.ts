@@ -6,10 +6,14 @@ export interface WindowsHost {
   /** Delivers `message` to every other Harness window (desktop) or tab (web), never back to the sender. */
   broadcast(message: unknown): Promise<void>;
   onMessage(listener: (message: unknown) => void): () => void;
+  isFullScreen(): Promise<boolean>;
+  onFullScreenChange(listener: (isFullScreen: boolean) => void): () => void;
 }
 
 export const windowsMethods = {
   open: 'invoke',
   broadcast: 'invoke',
   onMessage: 'event',
+  isFullScreen: 'invoke',
+  onFullScreenChange: 'event',
 } satisfies Manifest<WindowsHost>;

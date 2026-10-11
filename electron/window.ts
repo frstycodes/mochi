@@ -44,6 +44,8 @@ export function createWindow(route = '', bounds?: Rectangle) {
     },
   });
   win.once('ready-to-show', () => win.show());
+  win.on('enter-full-screen', () => win.webContents.send('windows:onFullScreenChange', true));
+  win.on('leave-full-screen', () => win.webContents.send('windows:onFullScreenChange', false));
   if (isMain) win.on('close', () => writeFileSync(stateFile(), JSON.stringify(win.getNormalBounds())));
 
   win.webContents.setWindowOpenHandler(({ url }) => {
