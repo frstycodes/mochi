@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
+import type { Thread } from '../model';
 import { Edit, Inbox, Route } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
@@ -15,7 +16,7 @@ import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
 import { LeafBar } from './SplitControls';
-import { SplitContext } from './SplitContext';
+import { PreviewContext, SplitContext } from './SplitContext';
 import { displayRoot, equalSizes, findLeaf, leaves, snapSizes, type Leaf, type LayoutNode, type Split, type View, type Zone } from './tree';
 import { useLayoutKeys } from './useLayoutKeys';
 import { useWatchToasts } from './useWatchToasts';
@@ -212,6 +213,21 @@ function DragChip() {
       {drag.label}
     </div>,
     document.body,
+  );
+}
+
+/** A thread outside the layout, drawn the way a lone split draws it: Stage Manager's neighbouring pages, so a swipe slides real content in. */
+export function ThreadPreview({ thread }: { thread: Thread }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isWide = useIsWider(ref, WIDE_SPLIT_PX);
+  return (
+    <div ref={ref} inert aria-hidden className="size-full min-h-0 min-w-0 bg-background">
+      <PreviewContext.Provider value>
+        <SplitContext.Provider value={{ leafId: `preview-${thread.id}`, isFocused: false, isMulti: false, isZoomed: false, isFirst: false, isWide }}>
+          <ThreadView thread={thread} />
+        </SplitContext.Provider>
+      </PreviewContext.Provider>
+    </div>
   );
 }
 

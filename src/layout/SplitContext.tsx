@@ -14,6 +14,9 @@ export interface SplitInfo {
 
 export const SplitContext = createContext<SplitInfo | null>(null);
 
+/** Inside a read-only preview (Stage Manager's neighbouring pages): native overlays such as browser views must not attach. */
+export const PreviewContext = createContext(false);
+
 export function useSplit() {
   const split = useContext(SplitContext);
   if (!split) throw new Error('useSplit must be used inside a Workspace leaf');

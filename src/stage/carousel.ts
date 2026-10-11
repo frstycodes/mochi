@@ -62,14 +62,14 @@ export interface CardPose {
 
 /**
  * Pose of the card `d` slots from the scroll position (`i - pos`): |d| ≥ 1 sits in its side's deck, nearer cards larger and less receded;
- * 0 < |d| < 1 travels toward the center and fades as the live view takes over. Past `STACK_VISIBLE` cards share the last card's pose, then fade out.
+ * 0 < |d| < 1 fades out within the first fifth of the way, as its real page (rendered beside the center) slides in. Past `STACK_VISIBLE` cards share the last card's pose, then fade out.
  */
 export function cardPose(d: number, isFlat: boolean, g: CardGeometry = GEOMETRY): CardPose {
   const a = Math.abs(d);
   const z = 100 - Math.round(a * 10);
   if (a < 1) {
     const t = 1 - a;
-    return { inset: g.visible + t * g.travel, fan: 0, depth: 0, rotate: isFlat ? 0 : g.rotate * (1 - t / 2), scale: 1, opacity: smoothstep(0.2, 0.75, a), z };
+    return { inset: g.visible + t * g.travel, fan: 0, depth: 0, rotate: isFlat ? 0 : g.rotate * (1 - t / 2), scale: 1, opacity: smoothstep(0.8, 1, a), z };
   }
   const k = Math.min(a - 1, STACK_VISIBLE - 1);
   const beyond = a - STACK_VISIBLE;

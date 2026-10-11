@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { Danger } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import type { Thread } from '@/model';
+import { PreviewContext } from '../layout/SplitContext';
 import { pickDemoElement } from './actions';
 import { DemoPage } from './DemoPage';
 import { DEVICES, fitDevice } from './devices';
@@ -92,7 +93,8 @@ export function deviceSize(page: Page) {
 function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, device: { width: number; height: number } | null) {
   const params = useRef({ page, device });
   params.current = { page, device };
-  const id = page.hostId;
+  const isPreview = useContext(PreviewContext);
+  const id = isPreview ? undefined : page.hostId;
 
   useEffect(() => {
     if (!id) return;
