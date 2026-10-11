@@ -194,8 +194,8 @@ The main session (or split) sits centered; pinned sessions hover at both screen 
 
 Ranked by how much they help running many agents at once.
 
-- [ ] **Notifications center + OS notifications** for needs-you, CI fail, PR review, race lost — with "jump to" and quiet hours.
-- [ ] **Cost and usage per thread / space** next to context usage: tokens, $, plan limits remaining, rate-limit warnings before an agent stalls.
+- [x] **Notifications center + OS notifications** for needs-you, CI fail, PR review, race lost — with "jump to" and quiet hours. Derived in the `notifications` slice from store transitions (`src/notify/model.ts`); bell in the sidebar, OS notifications while the window is in the background, dock badge with the needs-you count in Electron. GAP: PR review requests come from new open PRs in the simulation, the real source is GitHub's review_requested event.
+- [x] **Cost and usage per thread / space** next to context usage: tokens, $, plan limits remaining, rate-limit warnings before an agent stalls. Estimated from the simulation's activity log (`src/usage/model.ts`); GAP: real numbers come from `host.agent` and provider usage APIs, and `MODEL_PRICES` / `PLAN_LIMITS` are unverified placeholders.
 - [ ] **Checkpoints / rewind**: restore files and transcript to any step boundary (the timeline scrubber already picks the moment).
 - [x] **Worktree manager**: one worktree per thread, disk usage, clean up settled ones, sync with base. Worktrees live in `~/.harness/worktrees/<repo>/<thread>`; GAP: threads carry a project name, not a folder, so every project still resolves to the app's cwd (`projectRoot` in `src/host/cwd.ts`).
 - [ ] **Handoff between agents**: move a thread or a single step from Claude to Codex (or back) with the goal and context summary.

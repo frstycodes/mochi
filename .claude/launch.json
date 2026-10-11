@@ -165,6 +165,17 @@
         "--strictPort"
       ],
       "port": 5273
+    },
+    {
+      "name": "harness-notify",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5315",
+        "--strictPort"
+      ],
+      "port": 5315
     }
   ]
 }
