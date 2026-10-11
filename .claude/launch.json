@@ -143,6 +143,17 @@
         "--strictPort"
       ],
       "port": 5261
+    },
+    {
+      "name": "harness-files",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5267",
+        "--strictPort"
+      ],
+      "port": 5267
     }
   ]
 }
