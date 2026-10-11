@@ -34,19 +34,19 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [ ] Before / after compare: same URL on base branch vs thread branch, side by side or slider
 
 ### Ports and previews
-- [ ] Detect listening ports from the thread's processes (lsof / netstat on the worktree's PIDs)
-- [ ] Ports list: port, process, command, uptime; open in pane, open in PiP, open in system browser, copy URL, kill
-- [ ] Run dev server from `package.json` scripts / `.claude/launch.json` with one click
-- [ ] Toast when a new port opens: "localhost:5173 is up — open preview"
-- [ ] Per-thread port isolation so parallel worktrees don't collide (auto-assign PORT)
+- [x] Detect listening ports from the thread's processes (lsof / netstat on the worktree's PIDs)
+- [x] Ports list: port, process, command, uptime; open in pane, open in PiP, open in system browser, copy URL, kill
+- [x] Run dev server from `package.json` scripts / `.claude/launch.json` with one click
+- [x] Toast when a new port opens: "localhost:5173 is up — open preview"
+- [x] Per-thread port isolation so parallel worktrees don't collide (auto-assign PORT)
 
 ### Terminal
-- [ ] Real PTY (xterm.js + node-pty), cwd = thread worktree
-- [ ] Multiple terminals per thread, split within the tab
-- [ ] Agent's commands mirrored read-only, user terminals separate
-- [ ] Select output → "Send to chat"; failing command → "Ask agent to fix"
-- [ ] Search, clickable file paths (open in editor tab) and URLs (open in browser tab)
-- [ ] Persist scrollback across reloads
+- [x] Real PTY (xterm.js + node-pty), cwd = thread worktree
+- [x] Multiple terminals per thread, split within the tab
+- [x] Agent's commands mirrored read-only, user terminals separate (fed from the thread's tool activity until a real agent runtime streams output)
+- [x] Select output → "Send to chat"; failing command → "Ask agent to fix"
+- [x] Search, clickable file paths (open in editor tab) and URLs (open in browser tab)
+- [x] Persist scrollback across reloads
 
 ### iOS simulator (and Android emulator)
 - [ ] List booted / available simulators (`xcrun simctl list`), boot, shutdown
