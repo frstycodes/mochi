@@ -19,6 +19,7 @@ import { WorkLog } from './WorkLog';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
+import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 
 type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; showAuthor: boolean }
@@ -192,13 +193,14 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
 }
 
 function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thread; decisions: QueueItem[]; isTrayOpen: boolean; onToggleTray: () => void }) {
-  const { dispatch } = useHarness();
   const [isQueue, setIsQueue] = useState(false);
   const provider = thread.providers[0];
+  const drift = useDriftGuard(thread);
   useSeedAttachment(thread.id === 'adm');
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
+      <DriftCard guard={drift} thread={thread} />
       <ComposerCard className="in-data-image-over:border-ring">
         {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
         <ComposerInput
@@ -208,7 +210,7 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
             const trimmed = text.trim();
             if (!trimmed && files.length === 0) return;
             const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-            dispatch({ type: 'say', threadId: thread.id, entry: { who: 'you', kind: 'message', text: isQueue ? `Queued: ${withFiles}` : withFiles } });
+            return drift.submit(withFiles, isQueue ? 'Queued: ' : '');
           }}
           placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
           onKeyDown={(e) => e.key === 'Meta' && setIsQueue(true)}

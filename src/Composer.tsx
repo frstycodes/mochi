@@ -38,13 +38,14 @@ export function ComposerCard({ className, children, ...props }: ComponentProps<'
 type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSubmit'> & {
   provider: Provider;
   onModelChange?: (model: ModelOption) => void;
-  onSend: (message: PromptInputMessage) => void;
+  /** Return `false` to hold the message: the text stays in the input, as with the drift guard's card. */
+  onSend: (message: PromptInputMessage) => void | boolean;
   submitLabel?: string;
 };
 
 export function ComposerInput({ provider, onModelChange, onSend, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
   return (
-    <PromptInput multiple globalDrop className="[&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent" onSubmit={onSend}>
+    <PromptInput multiple globalDrop className="[&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent" onSubmit={(message) => hold(onSend(message))}>
       <ComposerAttachments />
       <PromptInputBody>
         <PromptInputTextarea className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
@@ -74,6 +75,11 @@ export function ComposerInput({ provider, onModelChange, onSend, submitLabel = '
       </PromptInputFooter>
     </PromptInput>
   );
+}
+
+// PromptInput clears the input after onSubmit unless it throws; it swallows the throw.
+function hold(result: void | boolean) {
+  if (result === false) throw new Error('Message held');
 }
 
 function ComposerAttachments() {

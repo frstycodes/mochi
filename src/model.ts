@@ -28,6 +28,8 @@ export interface Step {
   note?: string;
   link?: StepLink;
   sharedKey?: string;
+  gate?: boolean;
+  acceptance?: { text: string; command?: string };
 }
 
 export interface Revision {
@@ -35,6 +37,7 @@ export interface Revision {
   at: number;
   label: string;
   by: Author;
+  diff?: string[];
 }
 
 export interface ActivityEntry {
@@ -43,6 +46,7 @@ export interface ActivityEntry {
   kind: 'message' | 'tool' | 'event' | 'reasoning';
   text: string;
   seconds?: number;
+  drift?: 'on-goal' | 'scope-add' | 'off-goal';
 }
 
 export interface SkillUse {
@@ -80,6 +84,8 @@ export interface Thread {
   sources: Source[];
   context: { used: number; max: number };
   orbitSlot?: number;
+  settledAt?: number;
+  drift?: { threshold: number; isMuted: boolean };
 }
 
 export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap';

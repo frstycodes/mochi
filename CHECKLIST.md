@@ -165,28 +165,28 @@ The main session (or split) sits centered; pinned sessions hover at both screen 
 - [x] All steps done → review item in the Queue, thread goes to `review`
 - [x] Settle / Reactivate a thread
 - [x] Orbit: needs-you inner ring, pinned threads on fixed outer slots
-- [ ] Goal editing UI: rename goal, add / remove / reorder / resize steps by hand
-- [ ] Step-level approval gates ("pause before this step")
-- [ ] Goal templates (e.g. "API endpoint", "migration") per space
-- [ ] Goal history diff: what changed between v2 and v3
-- [ ] Acceptance criteria per step, checked by the agent (tests named, command to run)
-- [ ] Settled-goal archive with outcome summary, PRs, time spent, cost
+- [x] Goal editing UI: rename goal, add / remove / reorder / resize steps by hand (each save is one revision)
+- [x] Step-level approval gates ("pause before this step" → approval item in the Queue when reached)
+- [x] Goal templates (e.g. "API endpoint", "migration") per space (fixtures, applied from the goal editor)
+- [x] Goal history diff: what changed between v2 and v3
+- [x] Acceptance criteria per step, checked by the agent (tests named, command to run); the check is simulated until the agent runtime exists
+- [ ] Settled-goal archive with outcome summary, PRs, time spent, cost (outcome summary, PRs and time spent done in the summary panel; cost and a dedicated archive view open)
 
 ## 5. Drift guard (prompt deviates from the goal)
 
-- [ ] On send, score the prompt against the thread goal + open steps
+- [x] On send, score the prompt against the thread goal + open steps
   - Cheap first pass: reuse `similarity()` in `src/progress.ts` (token overlap) against goal and step titles and footprint paths
   - Ambiguous scores escalate to a small-model classifier: `on-goal` / `scope-add` / `off-goal`, with a one-line reason
-- [ ] `on-goal` → send as normal
-- [ ] `scope-add` → send and add a step (existing revision flow), show "Goal v3: +1 step" event
-- [ ] `off-goal` → inline card above the composer, not a modal:
+- [x] `on-goal` → send as normal
+- [x] `scope-add` → send and add a step (existing revision flow), show "Goal v3: +1 step" event
+- [x] `off-goal` → inline card above the composer, not a modal:
   - "This looks unrelated to *Public API rate limiting*." Buttons: **New thread** (primary), **Continue here**, and **Add to goal**
   - New thread: prefilled with the prompt, same project, branch off the current one or base (choice remembered)
   - Continue here: send, mark the message as off-goal so it doesn't skew progress
-- [ ] Goal at 100% (or in `review`) and user picks New thread → settle the current thread (with its review item resolved or carried to the Queue), then create and open the new one; one undo toast for both
-- [ ] Never block: Enter again on the card = Continue here; Esc dismisses
-- [ ] Threshold and "don't ask again for this thread" setting
-- [ ] Log every decision as a harness event so the timeline shows where scope came from
+- [x] Goal at 100% (or in `review`) and user picks New thread → settle the current thread (with its review item resolved or carried to the Queue), then create and open the new one; one undo toast for both
+- [x] Never block: Enter again on the card = Continue here; Esc dismisses
+- [x] Threshold and "don't ask again for this thread" setting
+- [x] Log every decision as a harness event so the timeline shows where scope came from
 
 ## 6. Additions (accepted)
 

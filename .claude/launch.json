@@ -88,6 +88,17 @@
         "--strictPort"
       ],
       "port": 5243
+    },
+    {
+      "name": "harness-goals",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5285",
+        "--strictPort"
+      ],
+      "port": 5285
     }
   ]
 }
