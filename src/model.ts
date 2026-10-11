@@ -1,3 +1,4 @@
+import { vizGalleryThread } from './viz/fixtures.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
 export type Size = 1 | 2 | 3;
@@ -401,6 +402,7 @@ export function seedThreads(): Thread[] {
     flakyCheckout(),
     authMigration(),
     onboardingEmails(),
+    vizGalleryThread(),
     simpleThread('lobby', 'personal', 'map-veto', 'Realtime veto lobby', 'claude', 1, 700, ['Presence channel', 'Lobby state machine', 'Veto turn timer', 'Reconnect handling'], 2, 1),
     simpleThread('timer', 'personal', 'focus-mode', 'Sync timer across devices', 'codex', 2, 760, ['CRDT timer state', 'Sync over relay', 'Conflict UI'], 1),
     simpleThread('queues', 'personal', null, 'Compare Postgres job queues', 'claude', 3, 790, ['Collect the options', 'Compare tradeoffs'], 1),

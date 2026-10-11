@@ -16,6 +16,9 @@ import { ProviderMark } from './ui';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
 import { ThreadMinimap } from './ThreadMinimap';
 import { WorkLog } from './WorkLog';
+import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
+import { ImageDropTarget } from './viz/ImageVisual';
+import { VizThreadProvider } from './viz/WidgetVisual';
 
 type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; showAuthor: boolean }
@@ -34,20 +37,24 @@ export function ChatView({ thread }: { thread: Thread }) {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6">
-          {rows.map((row, i) => (
-            <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-              <ChatRowView row={row} isLive={row.kind === 'work' && i === rows.length - 1 && isRunning} />
-            </div>
-          ))}
-        </ConversationContent>
+        <VizThreadProvider value={thread.id}>
+          <ConversationContent className="mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6">
+            {rows.map((row, i) => (
+              <div key={row.key} data-chat-row={i} className="scroll-mt-6">
+                <ChatRowView row={row} isLive={i === rows.length - 1 && isRunning} />
+              </div>
+            ))}
+          </ConversationContent>
+        </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         <ThreadMinimap labels={rows.map(rowLabel)} className="absolute top-6 right-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
         <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />
       </Conversation>
       <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
         <PromptInputProvider key={thread.id}>
-          <Composer thread={thread} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} />
+          <ImageDropTarget>
+            <Composer thread={thread} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} />
+          </ImageDropTarget>
         </PromptInputProvider>
       </div>
     </div>
@@ -87,6 +94,7 @@ function useChatRows(activity: ActivityEntry[]): ChatRow[] {
   return rows;
 }
 
+// isLive: the newest row of a running thread, the one still being written.
 function ChatRowView({ row, isLive }: { row: ChatRow; isLive: boolean }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} isLive={isLive} />;
   if (row.kind === 'event')
@@ -103,7 +111,7 @@ function ChatRowView({ row, isLive }: { row: ChatRow; isLive: boolean }) {
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
   return (
     <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
-      <MessageContent className="type-prose">
+      <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
         {isAgent && row.showAuthor && (
           <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
             <ProviderMark provider={entry.who as Provider} size={14} />
@@ -111,7 +119,10 @@ function ChatRowView({ row, isLive }: { row: ChatRow; isLive: boolean }) {
             <span className="tabular">{clock(entry.at)}</span>
           </span>
         )}
-        <MessageResponse>{entry.text}</MessageResponse>
+        {/* GAP: the tick simulation never streams text; once the agent runtime does, isAnimating should follow the stream, not the row position. */}
+        <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
+          {entry.text}
+        </MessageResponse>
       </MessageContent>
     </Message>
   );
@@ -188,7 +199,7 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
-      <ComposerCard>
+      <ComposerCard className="in-data-image-over:border-ring">
         {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
         <ComposerInput
           provider={provider}

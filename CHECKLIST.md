@@ -207,15 +207,15 @@ Ranked by how much they help running many agents at once.
 
 ## 7. Chat visualizations
 
-Inline visuals in agent messages, like Claude's and Codex's. Streamdown's code, math, mermaid and CJK plugins are already dependencies but were dropped from the prototype (DESIGN.md, Known gaps).
+Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```chart ````, ```` ```svg ````, ```` ```html ````, ```` ```harness-burnup ````, ```` ```harness-metro ````, ```` ```harness-diff ```` (schemas in `src/viz/fence.ts`, examples in `src/viz/fixtures.ts`).
 
-- [ ] Re-enable Streamdown plugins: syntax-highlighted code, KaTeX math, Mermaid diagrams, CJK
-- [ ] Charts from data in a message (recharts, already a dependency), using the thread line palette and both themes
-- [ ] Inline SVG / HTML widgets rendered in a sandboxed iframe (no access to the app, its storage or the network)
-- [ ] Interactive widgets can send a prompt back to the chat (like `sendPrompt`)
-- [ ] Tables: sortable, copy as CSV / Markdown
-- [ ] Image output: rendered with a lightbox, can be dropped into the composer
-- [ ] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source)
-- [ ] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
-- [ ] Theme-aware: re-render on light / dark switch; contrast checked in both
-- [ ] Harness-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
+- [x] Re-enable Streamdown plugins: syntax-highlighted code, KaTeX math, Mermaid diagrams, CJK (lazy-loaded; artifact stays under 16 MB)
+- [x] Charts from data in a message (recharts, already a dependency), using the thread line palette and both themes
+- [x] Inline SVG / HTML widgets rendered in a sandboxed iframe (no access to the app, its storage or the network)
+- [x] Interactive widgets can send a prompt back to the chat (like `sendPrompt`)
+- [x] Tables: sortable, copy as CSV / Markdown
+- [x] Image output: rendered with a lightbox, can be dropped into the composer
+- [ ] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). Copy, download and fullscreen done; side-pane tab and PiP wait for a visual tab kind in the pane registry
+- [x] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
+- [x] Theme-aware: re-render on light / dark switch; contrast checked in both (colours come from the theme tokens; no separate contrast measurement)
+- [x] Harness-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
