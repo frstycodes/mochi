@@ -149,7 +149,11 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
     if (isPaneOpen) {
       p.expand();
       p.resize(target);
-    } else p.collapse();
+    } else {
+      // Read the size from the layout before collapsing: onResize measures the DOM, so it reports widths mid-transition.
+      lastSize.current = p.getSize().asPercentage;
+      p.collapse();
+    }
     const t = window.setTimeout(() => setAnimating(false), PANE_ANIMATION_MS);
     return () => window.clearTimeout(t);
   }, [isPaneOpen]);
@@ -167,9 +171,6 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
         collapsedSize="0%"
         minSize="25%"
         defaultSize={isPaneOpen ? `${DEFAULT_PANE_PCT}%` : '0%'}
-        onResize={(size) => {
-          if (size.asPercentage > 0) lastSize.current = size.asPercentage;
-        }}
       >
         <div className={cn('h-full transition-opacity duration-200', isPaneOpen ? 'opacity-100' : 'opacity-0')} inert={!isPaneOpen || undefined}>
           {pane ? <SidePane thread={thread} pane={pane} /> : <NoPaneYet thread={thread} />}
