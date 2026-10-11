@@ -1,6 +1,6 @@
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
-import type { AgentAskContext, AgentAskMessage, AgentEvent } from '../host/types/agent';
+import type { AgentAskContext, AgentAskEvent, AgentAskMessage } from '../host/types/agent';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { chatFor, questionText, type Quote, type SideMessage } from '../store/sidechat';
@@ -65,9 +65,9 @@ async function diffSummary(thread: Thread): Promise<AgentAskContext['diff']> {
 
 /** `host.agent.ask` answers through the shared event channel; this pulls out one answer's chunks as an async stream. */
 async function* askAgent(context: AgentAskContext, messages: AgentAskMessage[]) {
-  const pending: AgentEvent[] = [];
+  const pending: AgentAskEvent[] = [];
   let wake = () => {};
-  const off = host.agent.onEvent((event) => {
+  const off = host.agent.onAskEvent((event) => {
     pending.push(event);
     wake();
   });
