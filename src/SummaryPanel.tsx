@@ -12,7 +12,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { Source, Step, Thread } from './model';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
-import { burnSeries, minutesLeft, progressAt } from './progress';
+import { GoalEditor } from './goals/GoalEditor';
+import { outcomeOf } from './goals/outcome';
+import { burnSeries, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
 import { summarize, type ToolVerb } from './summary';
 import { StepStatusIcon, lineColor } from './ui';
@@ -32,6 +34,7 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-0.5 px-2 pt-2 pb-3">
           <PanelHeader thread={thread} />
+          {thread.status === 'settled' && <OutcomeSection thread={thread} />}
           <GoalSection thread={thread} />
           <SummaryRow icon={Edit} label="Changes" onClick={notYet}>
             <span className="tabular type-caption">
@@ -203,6 +206,7 @@ function GoalSection({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
+  const [isEditing, setEditing] = useState(false);
   const live = progressAt(thread, state.now, true);
   const eta = minutesLeft(thread, state.now);
   const latest = thread.revisions[thread.revisions.length - 1];
@@ -220,6 +224,10 @@ function GoalSection({ thread }: { thread: Thread }) {
               v{latest.n}
             </Badge>
             <span className="flex-1" />
+            {/* z-10 lifts it above the stretched open-timeline button. */}
+            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => setEditing(true)}>
+              <Edit />
+            </Button>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon-xs" className="after:absolute after:inset-0 after:rounded-lg" aria-label={isOpen ? 'Close the full timeline' : 'Open the full timeline'}>
                 <Maximize />
@@ -270,6 +278,7 @@ function GoalSection({ thread }: { thread: Thread }) {
         </div>
         <GoalTimeline thread={thread} />
       </PopoverContent>
+      {isEditing && <GoalEditor thread={thread} onClose={() => setEditing(false)} />}
     </Popover>
   );
 }
@@ -304,5 +313,32 @@ function Sparkline({ thread, now }: { thread: Thread; now: number }) {
       <path d={`${path('done')} H${W} V${endY}`} fill="none" stroke={color} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
       <path d={`${path('scope')} H${W}`} fill="none" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
     </svg>
+  );
+}
+
+function OutcomeSection({ thread }: { thread: Thread }) {
+  const outcome = outcomeOf(thread);
+  return (
+    <section aria-label="Outcome" className="flex flex-col gap-1.5 rounded-lg px-2 py-2">
+      <h2 className="type-title">Outcome</h2>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 type-meta">
+        <dt className="text-subtle-foreground">Time</dt>
+        <dd className="tabular">{duration(outcome.minutes)} from start to settle</dd>
+        <dt className="text-subtle-foreground">Steps</dt>
+        <dd className="tabular">
+          {outcome.done} done
+          {outcome.dropped > 0 && `, ${outcome.dropped} dropped`}
+          {outcome.open > 0 && `, ${outcome.open} left open`}
+        </dd>
+        <dt className="text-subtle-foreground">Goal</dt>
+        <dd className="tabular">{outcome.revisions === 0 ? 'Unchanged since it was set' : `Revised to v${outcome.revisions + 1}`}</dd>
+        <dt className="text-subtle-foreground">PRs</dt>
+        <dd className="tabular">
+          {outcome.merged.length + outcome.unmerged.length === 0
+            ? 'None'
+            : [...outcome.merged.map((p) => `#${p.number} merged`), ...outcome.unmerged.map((p) => `#${p.number} ${p.state}`)].join(', ')}
+        </dd>
+      </dl>
+    </section>
   );
 }

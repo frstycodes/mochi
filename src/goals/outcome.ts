@@ -2,7 +2,7 @@ import type { Thread } from '../model.ts';
 
 /** What a settled goal came to. GAP: no cost yet, the tick simulation tracks tokens but not spend. */
 export function outcomeOf(thread: Thread) {
-  const end = thread.settledAt ?? thread.activity.at(-1)?.at ?? thread.startedAt;
+  const end = thread.settledAt ?? Math.max(thread.startedAt, ...thread.activity.map((a) => a.at), ...thread.steps.map((s) => s.doneAt ?? s.droppedAt ?? 0));
   const done = thread.steps.filter((s) => s.status === 'done');
   const dropped = thread.steps.filter((s) => s.status === 'dropped');
   const open = thread.steps.length - done.length - dropped.length;

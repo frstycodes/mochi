@@ -1,11 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Radio } from 'reicon-react';
+import { ChevronRight, ClipboardTick, Pause, Radio } from 'reicon-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, Step, StepStatus, Thread } from './model';
 import { BurnUp, timeScale, type TimeScale } from './BurnUp';
+import { revisionDiff } from './goals/edit';
 import { clock, duration, minutesLeft, progressAt, statusAt, type Progress } from './progress';
 import { useHarness } from './store';
 import { ProviderMark, SizeBadge, StepStatusIcon, lineColor, stepColor, stepLabel } from './ui';
@@ -82,9 +84,8 @@ function ProgressSummary({ thread, live, eta, scrubAt, onLive }: { thread: Threa
         <dd className="tabular">
           +{added} pts added{dropped > 0 && `, ${dropped} dropped`}
         </dd>
-        <dt className="text-subtle-foreground">Revisions</dt>
-        <dd>{thread.revisions.length > 1 ? thread.revisions.slice(1).map((r) => `v${r.n} ${r.label.toLowerCase()}`).join('; ') : 'None yet'}</dd>
       </dl>
+      <RevisionHistory thread={thread} />
       <div className="flex flex-wrap items-center gap-3 type-caption text-subtle-foreground">
         <LegendSwatch color={lineColor(thread.line)} label="Done" filled />
         <LegendSwatch color="var(--muted-foreground)" label="Scope" />
@@ -98,6 +99,50 @@ function ProgressSummary({ thread, live, eta, scrubAt, onLive }: { thread: Threa
     </div>
   );
 }
+
+function RevisionHistory({ thread }: { thread: Thread }) {
+  return (
+    <section aria-label="Goal history" className="flex flex-col gap-0.5">
+      <h3 className="type-meta text-subtle-foreground">History</h3>
+      <ol className="flex flex-col">
+        {[...thread.revisions].reverse().map((r) => (
+          <li key={r.n}>
+            <RevisionRow thread={thread} n={r.n} label={r.label} at={r.at} />
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function RevisionRow({ thread, n, label, at }: { thread: Thread; n: number; label: string; at: number }) {
+  const diff = revisionDiff(thread, n);
+  return (
+    <Collapsible className="group/rev">
+      <CollapsibleTrigger disabled={diff.length === 0} className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left type-meta hover:bg-accent/60 disabled:hover:bg-transparent">
+        <ChevronRight aria-hidden className={cn('size-3 shrink-0 text-subtle-foreground transition-transform duration-150 group-data-[state=open]/rev:rotate-90', diff.length === 0 && 'invisible')} />
+        <Badge variant="outline">v{n}</Badge>
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="tabular type-caption text-subtle-foreground">{clock(at)}</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul aria-label={n > 1 ? `Changes from v${n - 1} to v${n}` : 'First plan'} className="flex flex-col gap-0.5 py-1 pl-6.5 type-caption">
+          {diff.map((line, i) => (
+            <li key={i} className="flex min-w-0 gap-1.5">
+              <span aria-hidden className={cn('w-2 shrink-0 font-mono', DIFF_TONE[line[0] as DiffMark] ?? 'text-subtle-foreground')}>
+                {line[0]}
+              </span>
+              <span className="min-w-0 text-muted-foreground text-pretty">{line.slice(2)}</span>
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+type DiffMark = '+' | '−' | '~';
+const DIFF_TONE = { '+': 'text-success', '−': 'text-destructive', '~': 'text-subtle-foreground' } satisfies Record<DiffMark, string>;
 
 function LegendSwatch({ color, label, filled }: { color: string; label: string; filled?: boolean }) {
   return (
@@ -172,7 +217,14 @@ function StepInfo({ thread, step, status, liveTool }: { thread: Thread; step: St
           </span>
           <SizeBadge size={step.size} />
           {step.revision > 1 && <Badge variant="outline">v{step.revision}</Badge>}
+          {step.gate && status !== 'done' && (
+            <Badge variant="outline" title="Pauses for your approval before it starts">
+              <Pause data-icon="inline-start" />
+              Pause before
+            </Badge>
+          )}
         </div>
+        {step.acceptance && <AcceptanceLine acceptance={step.acceptance} />}
         <StepLinkLine thread={thread} step={step} />
         {!!step.note && !step.link && <span className="type-meta text-subtle-foreground">{step.note}</span>}
         {liveTool && (
@@ -183,6 +235,16 @@ function StepInfo({ thread, step, status, liveTool }: { thread: Thread; step: St
         )}
       </div>
     </div>
+  );
+}
+
+function AcceptanceLine({ acceptance }: { acceptance: NonNullable<Step['acceptance']> }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 type-meta text-muted-foreground" title="Acceptance criteria">
+      <ClipboardTick aria-label="Acceptance criteria" className="size-3.5 shrink-0" />
+      {!!acceptance.text && <span className="min-w-0 truncate">{acceptance.text}</span>}
+      {!!acceptance.command && <code className="min-w-0 truncate font-mono type-caption text-subtle-foreground">{acceptance.command}</code>}
+    </span>
   );
 }
 

@@ -40,7 +40,7 @@ export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Au
     if (!old) {
       if (d.isRemoved || !title) return;
       diff.push(`+ ${title}`);
-      steps.push({ id: `${thread.id}-r${n}-${i}`, title, size: d.size, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: by, revision: n, gate: d.gate || undefined, acceptance: d.acceptance });
+      steps.push({ id: `${thread.id}-r${n}-${i}`, title, size: d.size, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: by, revision: n, gate: d.gate || undefined, acceptance: criteria(d) });
       return;
     }
     if (d.isRemoved && !d.isLocked) {
@@ -48,7 +48,7 @@ export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Au
       steps.push({ ...old, status: 'dropped', droppedAt: now, note: `Dropped: removed by ${by === 'you' ? 'you' : by} in v${n}` });
       return;
     }
-    const next = { ...old, title: title || old.title, size: d.size, gate: d.gate || undefined, acceptance: d.acceptance?.text.trim() ? d.acceptance : undefined };
+    const next = { ...old, title: title || old.title, size: d.size, gate: d.gate || undefined, acceptance: criteria(d) };
     if (next.title !== old.title) diff.push(`~ "${old.title}" renamed to "${next.title}"`);
     if (next.size !== old.size) diff.push(`~ ${next.title}: size ${old.size} → ${next.size}`);
     if (!!next.gate !== !!old.gate) diff.push(`~ ${next.title}: ${next.gate ? 'pause before it' : 'no pause'}`);
@@ -72,6 +72,12 @@ export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Au
     revisions: [...thread.revisions, { n, at: now, label, by, diff }],
     activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: ${label}` }],
   };
+}
+
+function criteria(d: DraftStep) {
+  const text = d.acceptance?.text.trim() ?? '';
+  const command = d.acceptance?.command?.trim() || undefined;
+  return text || command ? { text, command } : undefined;
 }
 
 /** What changed in a revision. Older revisions without a stored diff fall back to the steps they added. */
