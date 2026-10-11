@@ -34,11 +34,6 @@ export function needsYouNearCenter({ ids, center }: StageSlots, needsYou: (id: s
   return { ids: [...byNeed(left, true), ids[center], ...byNeed(right, false)], center };
 }
 
-/** The slot a scroll position rests in: crossing the half-way point between two slots is the detent. */
-export function detentIndex(pos: number, count: number) {
-  return Math.min(count - 1, Math.max(0, Math.round(pos)));
-}
-
 export interface CardGeometry {
   /** How far the nearest card sticks out from the window edge, px. */
   visible: number;

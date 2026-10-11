@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CENTER, cardPose, detentIndex, needsYouNearCenter, stackCount, stageSlots } from './carousel.ts';
+import { CENTER, cardPose, needsYouNearCenter, stackCount, stageSlots } from './carousel.ts';
 
 const PINS = ['a', 'b', 'c', 'd', 'e'];
 
@@ -20,13 +20,6 @@ test('an unpinned center sits before the first pin', () => {
 test('needs-you threads move nearest the center on their own side only', () => {
   const urgent = new Set(['a', 'e']);
   assert.deepEqual(needsYouNearCenter({ ids: PINS, center: 2 }, (id) => urgent.has(id)), { ids: ['b', 'a', 'c', 'e', 'd'], center: 2 });
-});
-
-test('the detent is the half-way point, clamped to the ends', () => {
-  assert.equal(detentIndex(1.49, 5), 1);
-  assert.equal(detentIndex(1.5, 5), 2);
-  assert.equal(detentIndex(-0.8, 5), 0);
-  assert.equal(detentIndex(7, 5), 4);
 });
 
 test('nearer cards are larger and stick out further; the deck recedes', () => {

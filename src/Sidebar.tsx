@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { animate, motion, useMotionValue, useTransform, type MotionValue } from 'motion/react';
+import { motion, useTransform, type MotionValue } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, More, Pause, Play, Refresh, Route, Search, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
 import { useReviewEntry } from './review/useReviewMode';
+import { usePagedSwipe } from './usePagedSwipe';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
 import { ProgressRing, SpaceIcon } from './ui';
@@ -39,7 +40,7 @@ import { ProgressRing, SpaceIcon } from './ui';
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
   const index = SPACES.findIndex((s) => s.id === state.spaceId);
-  const swipe = useSpaceSwipe(index, (step) => dispatch({ type: 'space', id: SPACES[index + step].id }));
+  const swipe = usePagedSwipe({ index, count: SPACES.length, axis: 'x', onStep: (step) => dispatch({ type: 'space', id: SPACES[index + step].id }) });
 
   return (
     <Sidebar onWheel={swipe.onWheel} collapsible={collapsible}>
@@ -568,65 +569,4 @@ function ThemeButton() {
       <Icon />
     </Button>
   );
-}
-
-const COMMIT_FRACTION = 0.3;
-const FLICK_PROJECTION = 10;
-const EDGE_RESISTANCE = 4;
-// The web gets no finger-lift signal for trackpad scrolls. Lift with velocity shows up as macOS momentum (deltas decaying every frame) → settle right away.
-// Lift at rest is indistinguishable from resting fingers → settle after HOLD_MS of silence, so a pause shorter than that holds the swipe mid-change.
-const MOMENTUM_EVENTS = 6;
-const HOLD_MS = 500;
-const SETTLE = { type: 'spring', bounce: 0, duration: 0.35 } as const;
-
-type Step = 1 | -1;
-
-/** Arc-style: `pos` (fractional space index) tracks the horizontal scroll 1:1 and settles once the gesture ends — at most one space per gesture. */
-function useSpaceSwipe(index: number, onStep: (step: Step) => void) {
-  const pos = useMotionValue(index);
-  const ref = useRef<HTMLDivElement>(null);
-  const gesture = useRef({ axis: null as 'x' | 'y' | null, offset: 0, lastDelta: 0, decaying: 0, isReleased: false });
-  const endTimer = useRef(0);
-  const canStep = (step: Step) => !!SPACES[index + step];
-
-  useEffect(() => {
-    const controls = animate(pos, index, SETTLE);
-    return () => controls.stop();
-  }, [index, pos]);
-
-  const release = () => {
-    const g = gesture.current;
-    g.isReleased = true;
-    const width = ref.current?.clientWidth ?? 1;
-    const projected = g.offset + g.lastDelta * FLICK_PROJECTION;
-    const step: Step = projected > 0 ? 1 : -1;
-    if (Math.abs(projected) >= width * COMMIT_FRACTION && canStep(step)) onStep(step);
-    else animate(pos, index, SETTLE);
-  };
-
-  const end = () => {
-    if (!gesture.current.isReleased && gesture.current.axis === 'x') release();
-    gesture.current = { axis: null, offset: 0, lastDelta: 0, decaying: 0, isReleased: false };
-  };
-
-  const onWheel = (e: React.WheelEvent) => {
-    if (!e.deltaX && !e.deltaY) return;
-    const g = gesture.current;
-    g.axis ??= Math.abs(e.deltaX) > Math.abs(e.deltaY) ? 'x' : 'y';
-    window.clearTimeout(endTimer.current);
-    endTimer.current = window.setTimeout(end, g.isReleased ? 140 : HOLD_MS);
-    if (g.axis === 'y' || g.isReleased) return;
-
-    const isDecaying = Math.sign(e.deltaX) === Math.sign(g.lastDelta) && Math.abs(e.deltaX) < Math.abs(g.lastDelta);
-    g.decaying = isDecaying ? g.decaying + 1 : 0;
-    g.lastDelta = e.deltaX;
-    if (g.decaying >= MOMENTUM_EVENTS) return release();
-
-    const width = ref.current?.clientWidth ?? 1;
-    g.offset = Math.max(-width, Math.min(width, g.offset + e.deltaX));
-    const isPastEdge = !canStep(g.offset > 0 ? 1 : -1);
-    pos.set(index + g.offset / width / (isPastEdge ? EDGE_RESISTANCE : 1));
-  };
-
-  return { pos, ref, onWheel };
 }

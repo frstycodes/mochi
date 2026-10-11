@@ -6,65 +6,41 @@ import { findLeaf, leaves, type Side } from '../layout/tree';
 import { Workspace } from '../layout/Workspace';
 import { pinnedThreads } from '../reorder';
 import { useHarness, type State } from '../store';
-import { CENTER, cardPose, detentIndex, needsYouNearCenter, stackCount, stageSlots, type StageSlots } from './carousel';
+import { CENTER, cardPose, needsYouNearCenter, stackCount, stageSlots, type StageSlots } from './carousel';
 import { Overview } from './Overview';
 import { SnapshotCard, type StripSide } from './SnapshotCard';
 import { useThreadSnapshots, type ThreadSnapshot } from './snapshot';
 import { useStageKeys } from './useStageKeys';
+import { usePagedSwipe } from '../usePagedSwipe';
 import { useWindowSyncHost } from './windowSync';
 
-// Finger travel per card: the strip tracks the scroll 1:1 and every STEP_PX is a detent.
-const STEP_PX = 200;
 const CARD = { landscape: { w: 248, h: 176 }, portrait: { w: 248, h: 150 } };
 const DRAG_SLOP_PX = 6;
-// The live center eases a little toward the scroll and dims through the detent, so the swap reads as a crossfade.
-const CENTER_SHIFT_PX = 48;
 
 /**
  * The main area. Normally the split workspace; in Stage Manager mode the workspace (one session or a split group) sits centered at 88%
- * and the other pinned threads stick out of the edges as 3D cards. The scroller is a native one: the browser owns tracking, momentum and
- * the snap (scroll-snap), Motion only reads the offset to pose the cards, the same split as the model dock.
+ * and the other pinned threads stick out of the edges as 3D cards. A swipe moves the center 1:1 like a canvas, one card per gesture at most.
  */
 export function Stage() {
-  const { state } = useHarness();
+  const { state, dispatch } = useHarness();
   useWindowSyncHost();
   const reduce = !!useReducedMotion();
   const isStage = state.isStage;
   const isPortrait = state.orientation === 'column';
   const slots = useStageSlots(state);
-  const scroller = useRef<HTMLDivElement>(null);
-  const pos = useMotionValue(slots.center);
   const width = useMotionValue(0);
   const height = useMotionValue(0);
-  const live = useRef({ slots, focusedId: focusedThreadId(state), pending: null as string | null });
-  live.current = { ...live.current, slots, focusedId: focusedThreadId(state) };
-  const { dispatch } = useHarness();
-
-  const scrollTo = (i: number, isAnimated: boolean) => {
-    const el = scroller.current;
-    if (!el) return;
-    el.scrollTo({ [isPortrait ? 'top' : 'left']: i * STEP_PX, behavior: isAnimated ? 'smooth' : 'instant' });
-  };
   const open = (id: string) => startTransition(() => dispatch({ type: 'go', view: { kind: 'thread', id } }));
-
-  useStageKeys((step) => {
-    const { ids, center } = live.current.slots;
-    const id = ids[center + step];
+  const openSlot = (i: number) => {
+    const id = slots.ids[i];
     if (id && id !== CENTER) open(id);
-  });
+  };
+  const swipe = usePagedSwipe({ index: slots.center, count: slots.ids.length, axis: isPortrait ? 'y' : 'x', onStep: (step) => openSlot(slots.center + step) });
 
-  // The center changed from outside the scroller (keys, a click, the sidebar): put the strip on it without animating.
-  useLayoutEffect(() => {
-    live.current.pending = null;
-    const el = scroller.current;
-    if (!el || !isStage) return;
-    const offset = isPortrait ? el.scrollTop : el.scrollLeft;
-    if (detentIndex(offset / STEP_PX, slots.ids.length) !== slots.center) scrollTo(slots.center, false);
-    pos.set((isPortrait ? el.scrollTop : el.scrollLeft) / STEP_PX);
-  }, [isStage, isPortrait, slots.center, slots.ids.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  useStageKeys((step) => openSlot(slots.center + step));
 
   useLayoutEffect(() => {
-    const el = scroller.current;
+    const el = swipe.ref.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
       width.set(el.clientWidth);
@@ -72,56 +48,25 @@ export function Stage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [width, height]);
+  }, [swipe.ref, width, height]);
 
-  const onScroll = () => {
-    const el = scroller.current;
-    if (!el || !isStage) return;
-    const p = (isPortrait ? el.scrollTop : el.scrollLeft) / STEP_PX;
-    pos.set(p);
-    const { slots: s, focusedId, pending } = live.current;
-    const id = s.ids[detentIndex(p, s.ids.length)];
-    if (id === CENTER || id === focusedId || id === pending) return;
-    live.current.pending = id;
-    open(id);
-  };
-
-  const extra = isStage ? (slots.ids.length - 1) * STEP_PX : 0;
-  const axis = isPortrait ? 'y' : 'x';
-
+  const size = isPortrait ? height : width;
   return (
-    <div className="relative h-full min-h-0 overflow-hidden">
-      <div
-        ref={scroller}
-        onScroll={onScroll}
-        data-stage={isStage || undefined}
-        // Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility.
-        style={isStage ? { scrollbarWidth: 'none', scrollSnapType: `${axis} mandatory`, overscrollBehavior: 'contain' } : undefined}
-        className={cn('h-full', isStage ? (isPortrait ? 'overflow-x-hidden overflow-y-auto' : 'overflow-x-auto overflow-y-hidden') : 'overflow-hidden', isStage && 'bg-sidebar')}
-      >
-        <div className="relative" style={isPortrait ? { width: '100%', height: `calc(100% + ${extra}px)` } : { height: '100%', width: `calc(100% + ${extra}px)` }}>
-          {isStage && slots.ids.map((id, i) => <span key={`${id}:${i}`} aria-hidden className="absolute size-px" style={{ [isPortrait ? 'top' : 'left']: i * STEP_PX, scrollSnapAlign: 'start' }} />)}
-          <div
-            className="sticky top-0 left-0 flex items-center justify-center"
-            style={isPortrait ? { width: '100%', height: `calc(100% - ${extra}px)` } : { height: '100%', width: `calc(100% - ${extra}px)` }}
-          >
-            <CenterFrame isStage={isStage} isPortrait={isPortrait} isFlat={reduce} pos={pos} center={slots.center} />
-            {isStage && <EdgeCards slots={slots} pos={pos} size={isPortrait ? height : width} isPortrait={isPortrait} isFlat={reduce} onOpen={(i) => scrollTo(i, !reduce)} />}
-          </div>
-        </div>
-      </div>
+    <div ref={swipe.ref} onWheel={isStage ? swipe.onWheel : undefined} data-stage={isStage || undefined} className={cn('relative flex h-full min-h-0 items-center justify-center overflow-hidden', isStage && 'bg-sidebar')}>
+      <CenterFrame isStage={isStage} isPortrait={isPortrait} isFlat={reduce} pos={swipe.pos} center={slots.center} size={size} />
+      {isStage && <EdgeCards slots={slots} pos={swipe.pos} size={size} isPortrait={isPortrait} isFlat={reduce} onOpen={openSlot} />}
       {state.isOverview && <Overview />}
     </div>
   );
 }
 
-/** The workspace. Always the same element so toggling the stage never remounts the sessions in it. */
-function CenterFrame({ isStage, isPortrait, isFlat, pos, center }: { isStage: boolean; isPortrait: boolean; isFlat: boolean; pos: MotionValue<number>; center: number }) {
+/** The workspace. Always the same element so toggling the stage never remounts the sessions in it. Off rest it slides by exactly the swipe distance. */
+function CenterFrame({ isStage, isPortrait, isFlat, pos, center, size }: { isStage: boolean; isPortrait: boolean; isFlat: boolean; pos: MotionValue<number>; center: number; size: MotionValue<number> }) {
   const centerRef = useRef(center);
   centerRef.current = center;
   const dc = useTransform(pos, (p) => (isStage ? centerRef.current - p : 0));
   // `none` at rest: any transform would make this the containing block of the fixed-position layers inside (the pop-out preview).
-  const transform = useTransform(dc, (d) => (isFlat || Math.abs(d) < 0.002 ? 'none' : isPortrait ? `translateY(${d * CENTER_SHIFT_PX}px)` : `translateX(${d * CENTER_SHIFT_PX}px)`));
+  const transform = useTransform([dc, size], ([d, px]: number[]) => (isFlat || Math.abs(d) < 0.002 ? 'none' : isPortrait ? `translateY(${d * px}px)` : `translateX(${d * px}px)`));
   const opacity = useTransform(dc, (d) => 1 - Math.min(Math.abs(d), 0.5) * 1.2);
   return (
     <motion.div
