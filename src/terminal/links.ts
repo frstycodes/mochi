@@ -4,3 +4,8 @@ const FILE_PATH = /(?<![\w:/.@-])(?:\.{1,2}\/|\/)?(?:[\w@.-]+\/)+[\w.-]+\.[A-Za-
 export function filePathsIn(line: string) {
   return [...line.matchAll(FILE_PATH)].map((m) => ({ text: m[0], start: m.index }));
 }
+
+export function fileLink(link: string) {
+  const [, path, line] = link.match(/^(.*?)(?::(\d+))?(?::\d+)?$/)!;
+  return { path, line: line ? Number(line) : undefined };
+}
