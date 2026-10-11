@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BranchDown, BranchUp, CheckCircle, MessageQuestion, ShieldCheck, type IconComponent } from 'reicon-react';
+import { BranchDown, BranchUp, CheckCircle, MessageQuestion, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import type { QueueItem, QueueKind, Thread } from './model';
 import { duration } from './progress';
+import { useReviewEntry } from './review/useReviewMode';
 import { snapshot, useHarness, useSpaceQueue, type OverlapMode } from './store';
 import { ProviderMarks, lineColor } from './ui';
 
@@ -33,6 +34,8 @@ const KIND = {
 
 export function QueueView() {
   const items = useSpaceQueue();
+  const { state } = useHarness();
+  const review = useReviewEntry(state.spaceId);
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, Math.max(0, items.length - 1));
   useListKeys(items.length, index, setSelected);
@@ -50,6 +53,12 @@ export function QueueView() {
             <Kbd>K</Kbd>
             move
           </KbdGroup>
+          {review.count > 0 && (
+            <Button variant="outline" size="sm" onClick={review.open}>
+              <TaskSquare data-icon="inline-start" />
+              Review <span className="tabular">{review.count}</span>
+            </Button>
+          )}
         </div>
         {items.length === 0 && <EmptyQueue />}
         <ol className="flex flex-col gap-3">
@@ -136,7 +145,7 @@ function ThreadLink({ thread, onOpen }: { thread: Thread; onOpen: () => void }) 
   );
 }
 
-function useUndoable() {
+export function useUndoable() {
   const { state, dispatch } = useHarness();
   return (message: string, run: () => void) => {
     const before = snapshot(state);
