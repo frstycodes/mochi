@@ -145,7 +145,7 @@ export function LeafBar({ children }: { children: ReactNode }) {
   const showTrigger = isFirst && (isMobile || state === 'collapsed');
   if (!isMulti && !showTrigger) return null;
   return (
-    <div className="flex h-11 shrink-0 items-center gap-2 px-3">
+    <div className={cn('flex h-11 shrink-0 items-center gap-2 px-3', showTrigger && 'in-data-desktop:pl-22')}>
       {showTrigger && <SidebarTrigger className="-ml-1" />}
       <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
       <SplitControls />

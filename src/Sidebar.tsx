@@ -104,7 +104,7 @@ function SpaceHeader() {
   const space = useSpace();
   const { isMobile } = useSidebar();
   return (
-    <SidebarHeader className="h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2">
+    <SidebarHeader className="h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 in-data-desktop:pl-22">
       {!isMobile && <SidebarTrigger className="text-muted-foreground" />}
       <Tooltip>
         <TooltipTrigger asChild>

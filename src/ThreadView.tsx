@@ -207,7 +207,7 @@ function ThreadHeader({
   const showTrigger = isFirst && (isMobile || sidebarState === 'collapsed');
 
   return (
-    <header className="@container flex h-11 shrink-0 items-center gap-2 px-3">
+    <header className={cn('@container flex h-11 shrink-0 items-center gap-2 px-3', showTrigger && 'in-data-desktop:pl-22')}>
       {showTrigger && <SidebarTrigger className="-ml-1" />}
       {thread.status === 'running' ? <AgentLoader phase={agentPhase(thread)} className="text-muted-foreground" /> : <ThreadStatusIcon status={thread.status} />}
       <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
