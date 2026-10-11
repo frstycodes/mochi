@@ -47,8 +47,9 @@ test('rewind restores the snapshot, drops later checkpoints, and one undo brings
   s = threadsReducer(s, { type: 'rewind', threadId: 'rl', n: target.n });
   const rewound = thread(s, 'rl');
   assert.equal(rewound.steps.filter((x) => x.status === 'done').length, 1);
-  assert.equal(rewound.activity.at(-1)!.text, `Rewound transcript to ${target.label}`);
-  assert.equal(rewound.revisions.at(-1)!.label, `Rewound to ${target.label}`);
+  assert.equal(rewound.activity.at(-1)!.text, 'Rewound transcript to after "Agree limit tiers per plan"');
+  assert.equal(rewound.revisions.at(-1)!.label, 'Rewound to after "Agree limit tiers per plan"');
+  assert.ok(rewound.steps.filter((x) => x.status === 'running').every((x) => x.startedAt === s.now), 'running steps restart their clock');
   assert.equal(s.checkpoints.rl.at(-1)!.n, target.n);
   s = threadsReducer(s, { type: 'rewind-undo' });
   const back = thread(s, 'rl');

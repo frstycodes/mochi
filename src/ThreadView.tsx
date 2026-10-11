@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils';
 import type { Pane, Thread } from './model';
 import { AgentLoader, agentPhase } from './AgentLoader';
 import { PipLayer } from './Browser';
+import { RewindLayer } from './rewind/RewindLayer';
+import { RewindMenuItems } from './rewind/RewindMenuItems';
 import { ChatView } from './ChatView';
 import { progressAt } from './progress';
 import { SidePane } from './SidePane';
@@ -239,6 +241,7 @@ function ThreadHeader({
         <TooltipContent>{isPaneOpen ? 'Hide the side pane' : 'Show the side pane'}</TooltipContent>
       </Tooltip>
       <ThreadMenu thread={thread} />
+      <RewindLayer thread={thread} />
       <SplitControls />
     </header>
   );
@@ -278,6 +281,7 @@ function ThreadMenu({ thread }: { thread: Thread }) {
               Copy branch name
             </DropdownMenuItem>
           )}
+          <RewindMenuItems thread={thread} />
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

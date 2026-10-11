@@ -22,6 +22,11 @@ export interface RewindUndo {
   hasFiles: boolean;
 }
 
+/** The label inside a sentence: "Rewound to after "Charts page"". */
+export function checkpointPhrase(checkpoint: Pick<Checkpoint, 'label'>) {
+  return checkpoint.label[0].toLowerCase() + checkpoint.label.slice(1);
+}
+
 /** Latest checkpoint at or before `t`, else the first one. */
 export function checkpointAt(list: Checkpoint[], t: number) {
   return list.findLast((c) => c.at <= t) ?? list[0];
@@ -100,16 +105,18 @@ export function rewind(state: State, threadId: string, n: number): State {
   const revision = cp.thread.revisions.length + 1;
   const restored: Thread = {
     ...cp.thread,
+    // Work resumes now: a step that was running at the checkpoint restarts its clock instead of claiming the hours since.
+    steps: cp.thread.steps.map((s) => (s.status === 'running' ? { ...s, startedAt: state.now } : s)),
     title: current.title,
     line: current.line,
     orbitSlot: current.orbitSlot,
     providers: current.providers,
-    revisions: [...cp.thread.revisions, { n: revision, at: state.now, label: `Rewound to ${cp.label}`, by: 'you', diff: rewindDiff(current, cp.thread) }],
+    revisions: [...cp.thread.revisions, { n: revision, at: state.now, label: `Rewound to ${checkpointPhrase(cp)}`, by: 'you', diff: rewindDiff(current, cp.thread) }],
   };
   const files = cp.ref ? 'files and transcript' : 'transcript';
   return {
     ...state,
-    threads: mapThread(state.threads, threadId, () => log(restored, { at: state.now, who: 'harness', kind: 'event', text: `Rewound ${files} to ${cp.label}` })),
+    threads: mapThread(state.threads, threadId, () => log(restored, { at: state.now, who: 'harness', kind: 'event', text: `Rewound ${files} to ${checkpointPhrase(cp)}` })),
     checkpoints: { ...state.checkpoints, [threadId]: list.slice(0, index + 1) },
     queue: state.queue.filter((q) => q.threadId !== threadId || q.createdAt <= cp.at),
     rewindUndo: { threadId, thread: current, checkpoints: list, queue: state.queue.filter((q) => q.threadId === threadId), hasFiles: !!cp.ref },

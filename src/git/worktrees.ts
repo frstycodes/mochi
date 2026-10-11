@@ -13,6 +13,10 @@ export function useWorktreePath(threadId: string) {
   return useSyncExternalStore(subscribe, () => paths[threadId]);
 }
 
+export function useWorktreePaths() {
+  return useSyncExternalStore(subscribe, () => paths);
+}
+
 export function setWorktreePath(threadId: string, path: string | null) {
   const { [threadId]: _, ...rest } = paths;
   paths = path ? { ...rest, [threadId]: path } : rest;
