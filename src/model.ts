@@ -104,6 +104,7 @@ export interface PaneTab {
   kind: PaneTabKind;
   title?: string;
   url?: string;
+  file?: { path: string; line?: number };
   isPopped?: boolean;
 }
 
