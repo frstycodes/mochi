@@ -7,11 +7,12 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind }
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   | { type: 'pane-close-tab'; threadId: string; tabId: string }
   | { type: 'pane-pop'; threadId: string; tabId: string; isPopped: boolean }
-  | { type: 'pane-reorder'; threadId: string; order: string[] };
+  | { type: 'pane-reorder'; threadId: string; order: string[] }
+  | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> };
 
 const STORAGE_KEY = 'harness.panes.v1';
 
@@ -30,7 +31,7 @@ export function panesReducer(state: State, action: Action): State {
     case 'pane-open-tab': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       const existing = state.panes.find((p) => p.threadId === action.threadId) ?? newPane(action.threadId);
-      const tab: PaneTab = { id: nextTabId(existing.tabs), kind: action.kind, url: action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined };
+      const tab: PaneTab = { id: nextTabId(existing.tabs), kind: action.kind, url: action.kind === 'browser' ? action.url ?? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined };
       const tabs = existing.tabs.flatMap((t) => (t.kind !== 'new' ? [t] : t.id === existing.activeTab ? [tab] : []));
       const pane = { ...existing, isOpen: true, tabs: tabs.includes(tab) ? tabs : [...tabs, tab], activeTab: tab.id };
       return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
@@ -57,6 +58,8 @@ export function panesReducer(state: State, action: Action): State {
       };
     case 'pane-reorder':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, tabs: reorderTabs(p.tabs, action.order) })) };
+    case 'pane-update-tab':
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, tabs: p.tabs.map((t) => (t.id === action.tabId ? { ...t, ...action.patch } : t)) })) };
     default:
       return state;
   }
