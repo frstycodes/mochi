@@ -15,6 +15,7 @@ import { PRESETS, PRESET_LABELS } from './layout/tree';
 import { Workspace } from './layout/Workspace';
 import { HarnessProvider, useHarness, type Action, type View } from './store';
 import { useIdleScrollbars } from './useIdleScrollbars';
+import { useWorktreeManager } from './git/useWorktreeManager';
 import { StepStatusIcon, ThreadStatusIcon, lineColor } from './ui';
 
 export function App() {
@@ -53,6 +54,7 @@ function Shell() {
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
+  useWorktreeManager();
 
   return (
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>

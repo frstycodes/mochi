@@ -132,6 +132,17 @@
         "--strictPort"
       ],
       "port": 5255
+    },
+    {
+      "name": "harness-git",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5261",
+        "--strictPort"
+      ],
+      "port": 5261
     }
   ]
 }

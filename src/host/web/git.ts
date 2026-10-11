@@ -1,25 +1,124 @@
+import { parseDiff } from '../../git/parse.ts';
 import type { GitHost } from '../types/git.ts';
+
+// Fixture paths match the `adm` thread's step footprints, so the per-step filter has something to show.
+const STAGED = [
+  'diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts',
+  'new file mode 100644',
+  'index 0000000..8f3c2a1',
+  '--- /dev/null',
+  '+++ b/apps/api/routes/admin/usage.ts',
+  '@@ -0,0 +1,14 @@',
+  "+import { db } from '@latitude/db';",
+  "+import { cursorPage } from '../../lib/pagination';",
+  '+',
+  '+export async function usage(req: AdminRequest) {',
+  '+  const { cursor, days = 14 } = req.query;',
+  '+  return cursorPage(',
+  '+    db.apiUsageDaily',
+  "+      .where('day', '>=', daysAgo(days))",
+  "+      .groupBy(['key_id', 'day'])",
+  "+      .orderBy(['key_id', 'day']),",
+  '+    cursor,',
+  '+    500,',
+  '+  );',
+  '+}',
+  '',
+].join('\n');
+
+const UNSTAGED = [
+  'diff --git a/apps/web/routes/admin/usage.tsx b/apps/web/routes/admin/usage.tsx',
+  'index 2b7e9d0..c41a7f3 100644',
+  '--- a/apps/web/routes/admin/usage.tsx',
+  '+++ b/apps/web/routes/admin/usage.tsx',
+  '@@ -1,8 +1,10 @@',
+  "-import { Chart } from '../../components/Chart';",
+  "+import { BarChart } from '../../components/charts/BarChart';",
+  "+import { DateRangePicker } from '../../components/DateRangePicker';",
+  " import { useUsage } from '../../api/usage';",
+  ' ',
+  ' export function UsagePage() {',
+  '-  const { data } = useUsage();',
+  '+  const [range, setRange] = useState(last14Days);',
+  '+  const { data } = useUsage({ range });',
+  '   if (!data) return <UsageSkeleton />;',
+  ' ',
+  '   return (',
+  '@@ -20,8 +22,10 @@ export function UsagePage() {',
+  '       <header className="flex items-center gap-2">',
+  '         <h1>API usage</h1>',
+  '-        <span>Last 14 days</span>',
+  '+        <DateRangePicker value={range} onChange={setRange} />',
+  '       </header>',
+  '-      <Chart data={data.byDay} />',
+  '+      <BarChart data={data.byDay} x="day" y="requests" />',
+  '+      <KeyTable rows={data.byKey} />',
+  '+      <ExportButton range={range} />',
+  '     </section>',
+  '   );',
+  ' }',
+  'diff --git a/apps/web/components/Chart.tsx b/apps/web/components/Chart.tsx',
+  'deleted file mode 100644',
+  'index 9a1b2c3..0000000',
+  '--- a/apps/web/components/Chart.tsx',
+  '+++ /dev/null',
+  '@@ -1,4 +0,0 @@',
+  "-import { LineChart } from 'recharts';",
+  '-export function Chart({ data }: { data: unknown[] }) {',
+  '-  return <LineChart data={data} />;',
+  '-}',
+  '',
+].join('\n');
 
 export const git: GitHost = {
   async status() {
     return {
-      branch: 'feat/checkout-flow',
+      branch: 'feat/admin-usage',
       files: [
-        { path: 'src/checkout/Cart.tsx', status: 'modified' },
-        { path: 'src/checkout/useTotals.ts', status: 'added' },
-        { path: 'src/legacy/cart.js', status: 'deleted' },
+        { path: 'apps/api/routes/admin/usage.ts', status: 'added' },
+        { path: 'apps/web/routes/admin/usage.tsx', status: 'modified' },
+        { path: 'apps/web/components/Chart.tsx', status: 'deleted' },
       ],
     };
   },
-  async diff() {
-    return [
-      'diff --git a/src/checkout/Cart.tsx b/src/checkout/Cart.tsx',
-      '--- a/src/checkout/Cart.tsx',
-      '+++ b/src/checkout/Cart.tsx',
-      '@@ -1,3 +1,3 @@',
-      "-import { totals } from '../legacy/cart';",
-      "+import { useTotals } from './useTotals';",
-      '',
-    ].join('\n');
+  async diff(_cwd, scope) {
+    const staged = parseDiff(STAGED, scope === 'uncommitted');
+    return { branch: 'feat/admin-usage', base: 'origin/main', files: [...staged, ...parseDiff(UNSTAGED, false)] };
+  },
+  async stage() {},
+  async unstage() {},
+  async revert() {},
+  async commit() {
+    return '0000000';
+  },
+  async push() {},
+  async createPr() {
+    return 'https://github.com/latitude-dev/latitude/pull/490';
+  },
+  async pr() {
+    return {
+      number: 490,
+      url: 'https://github.com/latitude-dev/latitude/pull/490',
+      state: 'OPEN',
+      checks: [
+        { name: 'typecheck', state: 'pass' },
+        { name: 'unit', state: 'pass' },
+        { name: 'e2e', state: 'pending' },
+        { name: 'lint', state: 'fail' },
+      ],
+    };
+  },
+  async sync() {
+    return { base: 'origin/main', conflicts: [] };
+  },
+  async addWorktree(_root, threadId) {
+    return `~/.harness/worktrees/demo/${threadId}`;
+  },
+  async worktrees() {
+    return [];
+  },
+  async removeWorktree() {},
+  async diskUsage() {
+    return 48_200_000;
   },
 };
