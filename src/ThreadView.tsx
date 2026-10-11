@@ -16,9 +16,10 @@ import { PipLayer } from './Browser';
 import { ChatView } from './ChatView';
 import { progressAt } from './progress';
 import { SidePane } from './SidePane';
+import { SplitControls } from './layout/SplitControls';
+import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
 import { useHarness } from './store';
-import { useIsWide } from './useIsWide';
 import { useSettle } from './useSettle';
 import { ProgressRing, ThreadStatusIcon } from './ui';
 
@@ -27,28 +28,37 @@ const DEFAULT_PANE_PCT = 36;
 
 export function ThreadView({ thread }: { thread: Thread }) {
   const { state, dispatch } = useHarness();
-  const isWide = useIsWide();
+  const { isWide } = useSplit();
   const pane = state.panes.find((p) => p.threadId === thread.id);
   const isPaneOpen = !!pane?.isOpen;
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
-  const [isPaneSheetOpen, setPaneSheetOpen] = useState(false);
+  const [isPaneTabOpen, setPaneTabOpen] = useState(false);
+  const [isSummarySheetOpen, setSummarySheetOpen] = useState(false);
 
-  const chat = (
-    <div className="relative flex h-full min-w-0 flex-col">
-      <ThreadHeader
-        thread={thread}
-        isSummaryOpen={summary.isShown}
-        onToggleSummary={summary.toggle}
-        isPaneOpen={isWide ? isPaneOpen : isPaneSheetOpen}
-        onTogglePane={() => (isWide ? dispatch({ type: 'pane-toggle', threadId: thread.id }) : setPaneSheetOpen((o) => !o))}
-      />
+  // Narrow splits show the side pane as a tab in place of the chat instead of docking it.
+  const body =
+    !isWide && isPaneTabOpen ? (
+      <div className="min-h-0 flex-1">{pane ? <SidePane thread={thread} pane={pane} /> : <NoPaneYet thread={thread} />}</div>
+    ) : (
       <div
-        className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
+        className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
         style={{ gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}` }}
       >
         <ChatView thread={thread} />
         {isWide && <DockedSummary thread={thread} isOpen={summary.isDocked} />}
       </div>
+    );
+
+  const chat = (
+    <div className="relative flex h-full min-w-0 flex-col">
+      <ThreadHeader
+        thread={thread}
+        isSummaryOpen={isWide ? summary.isShown : isSummarySheetOpen}
+        onToggleSummary={isWide ? summary.toggle : () => setSummarySheetOpen((o) => !o)}
+        isPaneOpen={isWide ? isPaneOpen : isPaneTabOpen}
+        onTogglePane={() => (isWide ? dispatch({ type: 'pane-toggle', threadId: thread.id }) : setPaneTabOpen((o) => !o))}
+      />
+      {body}
       {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} />}
       <div className="pointer-events-none absolute inset-x-0 top-12 bottom-36 z-30 overflow-hidden">
         <PipLayer thread={thread} />
@@ -60,16 +70,10 @@ export function ThreadView({ thread }: { thread: Thread }) {
     return (
       <div className="h-full min-h-0">
         {chat}
-        <Sheet open={summary.isShown} onOpenChange={summary.toggle}>
+        <Sheet open={isSummarySheetOpen} onOpenChange={setSummarySheetOpen}>
           <SheetContent side="right" className="w-[300px] p-0 sm:max-w-[300px]">
             <SheetTitle className="sr-only">Thread summary</SheetTitle>
             <SummaryPanel thread={thread} className="h-full" />
-          </SheetContent>
-        </Sheet>
-        <Sheet open={isPaneSheetOpen} onOpenChange={setPaneSheetOpen}>
-          <SheetContent side="right" className="w-[92vw] p-0 sm:max-w-[560px]">
-            <SheetTitle className="sr-only">Side pane</SheetTitle>
-            {pane ? <SidePane thread={thread} pane={pane} /> : <NoPaneYet thread={thread} />}
           </SheetContent>
         </Sheet>
       </div>
@@ -196,22 +200,23 @@ function ThreadHeader({
 }) {
   const { state } = useHarness();
   const { state: sidebarState, isMobile } = useSidebar();
+  const { isFirst } = useSplit();
   const { pct } = progressAt(thread, state.now, true);
-  const showTrigger = isMobile || sidebarState === 'collapsed';
+  const showTrigger = isFirst && (isMobile || sidebarState === 'collapsed');
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2 px-3">
+    <header className="@container flex h-11 shrink-0 items-center gap-2 px-3">
       {showTrigger && <SidebarTrigger className="-ml-1" />}
       {thread.status === 'running' ? <AgentLoader phase={agentPhase(thread)} className="text-muted-foreground" /> : <ThreadStatusIcon status={thread.status} />}
       <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
       {!!thread.repo && (
-        <span className="hidden min-w-0 items-center gap-1 truncate font-mono type-caption text-subtle-foreground lg:flex">
+        <span className="hidden min-w-0 items-center gap-1 truncate font-mono type-caption text-subtle-foreground @2xl:flex">
           <BranchUp className="size-3.5 shrink-0" />
           {thread.repo.branch}
         </span>
       )}
       {thread.prs.map((pr) => (
-        <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden md:inline-flex">
+        <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden @xl:inline-flex">
           #{pr.number}
         </Badge>
       ))}
@@ -234,6 +239,7 @@ function ThreadHeader({
         <TooltipContent>{isPaneOpen ? 'Hide the side pane' : 'Show the side pane'}</TooltipContent>
       </Tooltip>
       <ThreadMenu thread={thread} />
+      <SplitControls />
     </header>
   );
 }
