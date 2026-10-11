@@ -1,13 +1,17 @@
 {
   "name": "harness-proto",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "typecheck": "tsc -b",
-    "test": "node --test src/*.test.ts",
-    "artifact": "pnpm build && node scripts/artifact.mjs"
+    "typecheck": "tsc -b && tsc -p electron",
+    "test": "node --test 'src/**/*.test.ts'",
+    "artifact": "pnpm build && node scripts/artifact.mjs",
+    "electron:dev": "vite --mode electron",
+    "electron:build": "tsc -b && tsc -p electron && vite build --mode electron && electron-builder --mac --dir"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -54,9 +58,33 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
+    "vite-plugin-electron": "1.1.2",
     "vite-plugin-singlefile": "^2.3.3"
+  },
+  "build": {
+    "appId": "dev.harness.app",
+    "productName": "Harness",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "!node_modules/**"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": "dir",
+      "identity": null
+    }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
   }
 }
