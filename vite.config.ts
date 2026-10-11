@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => ({
     viteSingleFile(),
     mode === 'electron' &&
       electron({
-        main: { entry: 'electron/main.ts' },
+        // node-pty is a native addon: bundling it breaks its `.node` and spawn-helper lookups.
+        main: { entry: 'electron/main.ts', vite: { build: { rolldownOptions: { external: ['node-pty'] } } } },
         // A sandboxed preload must be CommonJS; `.cjs` keeps it CJS under the package's `"type": "module"`.
         preload: { input: 'electron/preload.ts', vite: { build: { rolldownOptions: { output: { entryFileNames: '[name].cjs' } } } } },
       }),
