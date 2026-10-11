@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "test": "node --test src/*.test.ts",
+    "test": "node --test 'src/**/*.test.ts'",
     "artifact": "pnpm build && node scripts/artifact.mjs"
   },
   "dependencies": {

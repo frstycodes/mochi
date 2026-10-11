@@ -96,12 +96,13 @@ export interface QueueItem {
   createdAt: number;
 }
 
-export type PaneTabKind = 'browser' | 'changes' | 'terminal' | 'new';
+export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'new'] as const;
+export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
 export interface PaneTab {
   id: string;
   kind: PaneTabKind;
-  title: string;
+  title?: string;
   url?: string;
   isPopped?: boolean;
 }
@@ -123,7 +124,7 @@ export function seedPanes(): Pane[] {
       driver: 'codex',
       tabs: [
         { id: 'adm-browser', kind: 'browser', title: 'API usage', url: 'localhost:3000/admin/usage' },
-        { id: 'adm-changes', kind: 'changes', title: 'Changes' },
+        { id: 'adm-changes', kind: 'changes' },
       ],
     },
   ];
