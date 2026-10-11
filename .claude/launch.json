@@ -110,6 +110,17 @@
         "--strictPort"
       ],
       "port": 5279
+    },
+    {
+      "name": "harness-browser",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5249",
+        "--strictPort"
+      ],
+      "port": 5249
     }
   ]
 }

@@ -8,6 +8,7 @@ import { PromptInputProvider, usePromptInputController } from '@/components/ai-e
 import { Kbd } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { ComposerInbox } from './browser/composer';
 import type { ActivityEntry, Author, Provider, QueueItem, Thread } from './model';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
@@ -56,6 +57,7 @@ export function ChatView({ thread }: { thread: Thread }) {
           <ImageDropTarget>
             <Composer thread={thread} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} />
           </ImageDropTarget>
+          <ComposerInbox threadId={thread.id} />
         </PromptInputProvider>
       </div>
     </div>
