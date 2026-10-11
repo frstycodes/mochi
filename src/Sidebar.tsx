@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { animate, motion, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useTheme } from 'next-themes';
-import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, More, Pause, Play, Refresh, Route, Search, Sun, Undo } from 'reicon-react';
+import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, More, Pause, Play, Refresh, Route, Search, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -31,6 +31,7 @@ import { ThreadPeek } from './layout/ThreadPeek';
 import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
+import { useReviewEntry } from './review/useReviewMode';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
 import { ProgressRing, SpaceIcon } from './ui';
@@ -133,6 +134,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
   const view = useView(spaceId);
   const threads = useSpaceThreads(spaceId);
   const queue = useSpaceQueue(spaceId);
+  const review = useReviewEntry(spaceId);
   const { setOpenMobile } = useSidebar();
   const go = (v: View) => {
     dispatch({ type: 'go', view: v });
@@ -163,6 +165,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
             />
             <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<Kbd className="hidden md:inline-flex">N</Kbd>} />
             <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length > 0 ? queue.length : undefined} />
+            {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
           </SidebarMenu>
         </SidebarGroupContent>

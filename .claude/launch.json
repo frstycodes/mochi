@@ -198,6 +198,17 @@
         "--strictPort"
       ],
       "port": 5303
+    },
+    {
+      "name": "harness-review",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5309",
+        "--strictPort"
+      ],
+      "port": 5309
     }
   ]
 }
