@@ -4,8 +4,10 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 const html = readFileSync('dist/index.html', 'utf8');
 const pick = (re) => html.match(re)?.[1] ?? '';
 const title = pick(/(<title>[\s\S]*?<\/title>)/);
-const head = pick(/<head>([\s\S]*)<\/head>/).replace(/<meta[^>]*>|<title>[\s\S]*?<\/title>/g, '');
-const body = pick(/<body>([\s\S]*)<\/body>/);
+// Indexes, not a regex: inlined bundles (mermaid, KaTeX) carry literal "</head>" and "<body>" strings.
+const bodyAt = html.lastIndexOf('<body>');
+const head = html.slice(html.indexOf('<head>') + 6, html.lastIndexOf('</head>', bodyAt)).replace(/<meta[^>]*>|<title>[\s\S]*?<\/title>/g, '');
+const body = html.slice(bodyAt + 6, html.lastIndexOf('</body>'));
 
 mkdirSync('artifact', { recursive: true });
 // Some dependencies ship a literal U+FFFD inside string and regex literals; the Artifact publisher rejects the raw character, the escape means the same thing to JS.

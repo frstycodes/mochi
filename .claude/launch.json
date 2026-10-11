@@ -77,6 +77,17 @@
         "--strictPort"
       ],
       "port": 5237
+    },
+    {
+      "name": "harness-viz",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5243",
+        "--strictPort"
+      ],
+      "port": 5243
     }
   ]
 }

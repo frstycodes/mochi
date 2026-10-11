@@ -144,7 +144,6 @@ Everything is composed from the shadcn primitives in `src/components/ui`. App co
 - Body text is 13px, meta 12px and captions 11px, matching Codex and T3 Code density; that is below the usual 14px floor for secondary text. Revisit if it reads small on non-Retina screens. Phones keep 16px in inputs so iOS doesn't zoom.
 - Light mode is designed but less exercised than dark.
 - Space icons are fixed per space until spaces get user-picked icons.
-- Agent messages render markdown without the Streamdown code, math, mermaid and CJK plugins; they were dropped to keep the single-file prototype small and come back in the desktop build.
 - reicon has no git branch, merge or pull-request glyphs; `BranchUp` / `BranchDown` stand in for them.
 - Changes, PR and source rows in the summary panel open nothing yet; in the real app they open tabs in a side pane like Codex's (Changes, browser, Terminal, Files, Side chat, plugins).
 - Trackpad haptics for the model and effort dock need the desktop shell (`NSHapticFeedbackManager`); browsers have no API for it, so the web build only vibrates on phones.
