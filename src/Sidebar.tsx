@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Reorder, animate, motion, useMotionValue, useTransform, type MotionValue } from 'motion/react';
+import { createPortal } from 'react-dom';
+import { animate, motion, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useTheme } from 'next-themes';
-import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Flash, Inbox, Monitor, Moon, More, Pause, Play, Refresh, Route, Search, Sun, Undo } from 'reicon-react';
+import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, More, Pause, Play, Refresh, Route, Search, Sun, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -24,7 +25,10 @@ import {
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { SPACES, type PullRequest, type Thread } from './model';
+import { PIN_SLOTS, SPACES, type PullRequest, type Thread } from './model';
+import { endDrag, moveDrag, startDrag } from './layout/drag';
+import { ThreadPeek } from './layout/ThreadPeek';
+import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
@@ -135,8 +139,8 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
     setOpenMobile(false);
   };
 
-  const pinned = threads.filter((t) => t.orbitSlot !== undefined && t.status !== 'settled');
-  const active = threads.filter((t) => t.orbitSlot === undefined && t.status !== 'settled');
+  const pinned = pinnedThreads(threads, spaceId);
+  const active = activeThreads(threads, spaceId);
   const settled = threads.filter((t) => t.status === 'settled');
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
   const row = (t: Thread) => <ThreadItem thread={t} isActive={isActive(t)} onSelect={() => go({ kind: 'thread', id: t.id })} />;
@@ -192,72 +196,210 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
   );
 }
 
-const PINNED = 'label-pinned';
-const UNPINNED = 'label-threads';
-
-/** Pinned and active threads as one draggable list split by the Threads label: dropping a thread above it pins the thread. Alt+Up/Down moves the focused row. */
+/** Pinned and active threads, split by the Threads label. Drag a row across the label to pin or unpin, within a section to reorder, or out onto a split to open it there. Alt ↑/↓ does the same from the keyboard. */
 function ThreadList({ pinned, active, row }: { pinned: Thread[]; active: Thread[]; row: (t: Thread) => ReactNode }) {
   const { dispatch } = useHarness();
-  const { isMobile } = useSidebar();
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const pinnedIds = pinned.map((t) => t.id);
+  const activeIds = active.map((t) => t.id);
+  const reorder = (lists: { pinned: string[]; unpinned: string[] } | null) => lists && dispatch({ type: 'reorder', ...lists });
+  const drag = useRowDrag(listRef, pinnedIds, reorder);
   if (pinned.length + active.length === 0) return null;
 
-  const byId = new Map([...pinned, ...active].map((t) => [t.id, t]));
-  const order = [PINNED, ...pinned.map((t) => t.id), UNPINNED, ...active.map((t) => t.id)];
-  const reorder = (next: string[]) => {
-    if (next[0] !== PINNED) return;
-    const split = next.indexOf(UNPINNED);
-    dispatch({ type: 'reorder', pinned: next.slice(1, split), unpinned: next.slice(split + 1) });
+  const dragged = drag.state && [...pinned, ...active].find((t) => t.id === drag.state!.id);
+  const step = (id: string, by: 1 | -1) => {
+    reorder(stepPin(pinnedIds, activeIds, id, by));
+    // Moving a focused node in the DOM can drop its focus; put it back on the row.
+    requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>(`[data-row-id="${id}"] [data-sidebar=menu-button]`)?.focus());
   };
-  const move = (id: string, step: 1 | -1) => {
-    const from = order.indexOf(id);
-    const to = from + step;
-    if (to < 1 || to >= order.length) return;
-    const next = [...order];
-    [next[from], next[to]] = [next[to], next[from]];
-    reorder(next);
+  const section = (threads: Thread[], isPinned: boolean) => {
+    const rows = threads.filter((t) => t.id !== drag.state?.id).map((t, i) => {
+      const item = (
+        <SidebarMenuItem
+          key={t.id}
+          data-row-id={t.id}
+          data-pinned={isPinned || undefined}
+          onPointerDown={(e) => drag.onPointerDown(e, t)}
+          onKeyDown={(e) => {
+            if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+            e.preventDefault();
+            step(t.id, e.key === 'ArrowUp' ? -1 : 1);
+          }}
+          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+        >
+          {row(t)}
+        </SidebarMenuItem>
+      );
+      if (!isPinned) return item;
+      return (
+        <ThreadPeek key={t.id} thread={t} pinNumber={i + 1} isDisabled={!!drag.state}>
+          {item}
+        </ThreadPeek>
+      );
+    });
+    const slot = drag.state?.slot;
+    if (slot && slot.toPinned === isPinned) rows.splice(slot.index, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} />);
+    return rows;
   };
+  const showPinned = pinned.length > 0 || !!drag.state;
+  const isPinnedEmpty = pinned.filter((t) => t.id !== drag.state?.id).length === 0 && drag.state?.slot?.toPinned !== true;
 
   return (
     <SidebarGroup>
-      <SidebarMenu asChild>
-        <Reorder.Group axis="y" values={order} onReorder={reorder} className="select-none">
-          {order.map((id) => {
-            if (id === PINNED) return <ListLabel key={id} value={id} className={cn(pinned.length === 0 && !draggingId && 'hidden')}>Pinned</ListLabel>;
-            if (id === UNPINNED) return <ListLabel key={id} value={id} className="mt-3">Threads</ListLabel>;
-            return (
-              <SidebarMenuItem key={id} asChild>
-                <Reorder.Item
-                  value={id}
-                  dragListener={!isMobile}
-                  onDragStart={() => setDraggingId(id)}
-                  onDragEnd={() => setDraggingId(null)}
-                  onKeyDown={(e) => {
-                    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
-                    e.preventDefault();
-                    move(id, e.key === 'ArrowUp' ? -1 : 1);
-                  }}
-                  className={cn('rounded-md', draggingId === id && 'z-10 bg-sidebar shadow-float')}
-                >
-                  {row(byId.get(id)!)}
-                </Reorder.Item>
-              </SidebarMenuItem>
-            );
-          })}
-        </Reorder.Group>
+      <SidebarMenu ref={listRef} className="select-none">
+        {showPinned && (
+          <li>
+            <SidebarGroupLabel>Pinned</SidebarGroupLabel>
+          </li>
+        )}
+        {section(pinned, true)}
+        {!!drag.state && isPinnedEmpty && (
+          <li aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
+            Drop here to pin
+          </li>
+        )}
+        <li data-threads-label className="mt-3">
+          <SidebarGroupLabel>Threads</SidebarGroupLabel>
+        </li>
+        {section(active, false)}
       </SidebarMenu>
+      {!!drag.state && !!dragged && <RowGhost thread={dragged} drag={drag.state} />}
     </SidebarGroup>
   );
 }
 
-function ListLabel({ value, className, children }: { value: string; className?: string; children: ReactNode }) {
+function DropPlaceholder({ height }: { height: number }) {
   return (
-    <SidebarMenuItem asChild>
-      <Reorder.Item value={value} dragListener={false} className={className}>
-        <SidebarGroupLabel>{children}</SidebarGroupLabel>
-      </Reorder.Item>
-    </SidebarMenuItem>
+    <li aria-hidden className="relative" style={{ height }}>
+      <span className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-foreground/40" />
+    </li>
   );
+}
+
+function RowGhost({ thread, drag }: { thread: Thread; drag: RowDragState }) {
+  return createPortal(
+    <ul aria-hidden data-sidebar="menu" className="pointer-events-none fixed z-[600] list-none rounded-md bg-sidebar text-sidebar-foreground shadow-float" style={{ left: drag.x - drag.grabX, top: drag.y - drag.grabY, width: drag.width }}>
+      <SidebarMenuItem>
+        <ThreadItem thread={thread} isActive={false} onSelect={() => undefined} />
+      </SidebarMenuItem>
+    </ul>,
+    document.body,
+  );
+}
+
+interface RowDragState {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  grabX: number;
+  grabY: number;
+  slot: { toPinned: boolean; index: number } | null;
+}
+
+const DRAG_THRESHOLD = 5;
+const EDGE_SCROLL_PX = 40;
+const EDGE_SCROLL_SPEED = 12;
+const LIST_SLACK_PX = 24;
+
+/** Pointer drag for sidebar rows: placeholder slot from live row midpoints, edge auto-scroll, and a hand-off to the split drop zones once the pointer leaves the sidebar. */
+function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds: string[], onReorder: (lists: ReturnType<typeof dropPin>) => void) {
+  const { state, dispatch } = useHarness();
+  const { isMobile } = useSidebar();
+  const [drag, setDrag] = useState<RowDragState | null>(null);
+  const latest = useRef({ pinnedIds, state, onReorder });
+  latest.current = { pinnedIds, state, onReorder };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLLIElement>, thread: Thread) => {
+    if (e.button !== 0 || isMobile || (e.target as HTMLElement).closest('[data-sidebar=menu-action]')) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const start = { x: e.clientX, y: e.clientY };
+    let current: RowDragState | null = null;
+    let pointerY = e.clientY;
+    let frame = 0;
+
+    const scroller = () => listRef.current?.closest<HTMLElement>('[data-sidebar=content]');
+    const autoScroll = () => {
+      const el = scroller();
+      if (current && el) {
+        const r = el.getBoundingClientRect();
+        if (pointerY < r.top + EDGE_SCROLL_PX) el.scrollTop -= EDGE_SCROLL_SPEED;
+        else if (pointerY > r.bottom - EDGE_SCROLL_PX) el.scrollTop += EDGE_SCROLL_SPEED;
+      }
+      frame = requestAnimationFrame(autoScroll);
+    };
+    const update = (next: RowDragState) => {
+      current = next;
+      setDrag(next);
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      pointerY = ev.clientY;
+      if (!current) {
+        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD) return;
+        startDrag({ kind: 'thread', id: thread.id }, thread.title, ev.clientX, ev.clientY, true);
+        document.documentElement.style.userSelect = 'none';
+        window.getSelection()?.removeAllRanges();
+        frame = requestAnimationFrame(autoScroll);
+      }
+      moveDrag(ev.clientX, ev.clientY);
+      update({ id: thread.id, x: ev.clientX, y: ev.clientY, width: rect.width, height: rect.height, grabX: start.x - rect.left, grabY: start.y - rect.top, slot: slotAt(listRef.current, thread.id, latest.current.pinnedIds, ev.clientX, ev.clientY) });
+    };
+    const finish = (isCancel: boolean) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('keydown', onKey, true);
+      cancelAnimationFrame(frame);
+      if (!current) return;
+      document.documentElement.style.userSelect = '';
+      // The pointerup after a drag still fires a click on the row; swallow it so the drop doesn't also navigate.
+      const swallow = (c: MouseEvent) => c.stopPropagation();
+      window.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }));
+      const landed = endDrag();
+      const { slot } = current;
+      setDrag(null);
+      if (isCancel) return;
+      if (landed) return dispatch({ type: 'layout-drop', leafId: landed.leafId, zone: landed.zone, view: landed.view });
+      if (!slot) return;
+      const { state: s, onReorder: reorder } = latest.current;
+      const pinned = pinnedThreads(s.threads, s.spaceId).map((t) => t.id);
+      const unpinned = activeThreads(s.threads, s.spaceId).map((t) => t.id);
+      reorder(dropPin(pinned, unpinned, thread.id, slot.toPinned, slot.index));
+    };
+    const onUp = () => finish(false);
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape' || !current) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      finish(true);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('keydown', onKey, true);
+  };
+
+  return { state: drag, onPointerDown };
+}
+
+/**
+ * Where a dragged row would land, read from the rows as rendered (the placeholder included), so moving the placeholder never flips the answer back.
+ * Above the Threads label is Pinned; a full Pinned sends the row to the top of Threads.
+ */
+function slotAt(list: HTMLUListElement | null, draggedId: string, pinnedIds: string[], x: number, y: number): RowDragState['slot'] {
+  if (!list) return null;
+  const box = list.getBoundingClientRect();
+  if (x < box.left - LIST_SLACK_PX || x > box.right + LIST_SLACK_PX) return null;
+  const label = list.querySelector('[data-threads-label]')!.getBoundingClientRect();
+  const isFull = pinnedIds.filter((id) => id !== draggedId).length >= PIN_SLOTS.length;
+  const toPinned = y < label.top + label.height / 2 && !isFull;
+  const rows = [...list.querySelectorAll<HTMLElement>(toPinned ? '[data-row-id][data-pinned]' : '[data-row-id]:not([data-pinned])')];
+  const index = rows.filter((r) => {
+    const rr = r.getBoundingClientRect();
+    return rr.top + rr.height / 2 < y;
+  }).length;
+  return { toPinned, index };
 }
 
 function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: ReactNode; label: string; isActive?: boolean; onClick: () => void; trailing?: ReactNode; badge?: number }) {
@@ -300,6 +442,7 @@ function ThreadItem({ thread, isActive, onSelect }: { thread: Thread; isActive: 
           <ProgressRing pct={row.pct} slot={thread.line} size={12} />
           <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>
           <span className="min-w-0 flex-1 truncate">{row.detail}</span>
+          {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           {!!pr && <PrBadge pr={pr} />}
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
         </span>
@@ -334,7 +477,7 @@ function useThreadRow(thread: Thread) {
   const lastAt = thread.activity[thread.activity.length - 1]?.at ?? thread.startedAt;
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you' };
+  return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWatched: state.watched.includes(thread.id) };
 }
 
 function threadDetail(thread: Thread, question?: string) {
