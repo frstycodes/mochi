@@ -29,7 +29,7 @@ import { EffortPicker, ModelPicker, type ModelOption } from './ModelControls';
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-float transition-colors has-[textarea:focus]:border-primary/30', className)} {...props}>
+    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-lift transition-colors has-[textarea:focus]:border-primary/30', className)} {...props}>
       <AutoHeight className="justify-end">{children}</AutoHeight>
     </div>
   );

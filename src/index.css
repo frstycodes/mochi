@@ -79,7 +79,8 @@
   --scrim: oklch(0.99 0.002 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.64);
   --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
-  --elev-float: 0 0 0 1px var(--border), 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
+  --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
+  --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
 }
@@ -119,7 +120,8 @@
     --scrim: oklch(0.12 0.006 285 / 0.72);
     --skeleton-highlight: oklch(1 0 285 / 0.04);
     --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
-    --elev-float: 0 0 0 1px var(--border), 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+    --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+    --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
     color-scheme: dark;
   }
 }
@@ -158,7 +160,8 @@
   --scrim: oklch(0.12 0.006 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.04);
   --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
-  --elev-float: 0 0 0 1px var(--border), 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+  --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+  --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
   color-scheme: dark;
 }
 
@@ -213,6 +216,8 @@
 
   --shadow-popover: var(--elev-popover);
   --shadow-float: var(--elev-float);
+  /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
+  --shadow-lift: var(--elev-lift);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);

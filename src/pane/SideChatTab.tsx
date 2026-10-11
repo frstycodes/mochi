@@ -133,7 +133,7 @@ const SOURCE_ICONS = { diff: Edit, terminal: Code, file: Document } satisfies Re
 function QuoteCard({ quote, onRemove }: { quote: Quote; onRemove?: () => void }) {
   const Icon = SOURCE_ICONS[quote.source];
   return (
-    <figure className="flex w-full min-w-0 flex-col overflow-hidden rounded-lg border bg-background/60">
+    <figure className="flex w-full min-w-0 flex-col overflow-hidden rounded-lg border">
       <figcaption className="flex h-7 items-center gap-1.5 pr-1 pl-2.5 type-caption text-subtle-foreground">
         <Icon className="size-3.5 shrink-0" aria-hidden />
         <span className="shrink-0 font-medium text-muted-foreground">{SOURCE_NAMES[quote.source]}</span>
