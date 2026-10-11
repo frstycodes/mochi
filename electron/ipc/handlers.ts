@@ -21,3 +21,8 @@ export function record(value: unknown, name: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${name} must be an object`);
   return value as Record<string, unknown>;
 }
+
+export function integer(value: unknown, name: string, min: number, max: number): number {
+  if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) throw new TypeError(`${name} must be an integer in ${min}–${max}`);
+  return value as number;
+}
