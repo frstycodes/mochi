@@ -1,0 +1,279 @@
+import { useEffect, useRef, useState } from 'react';
+import { Archive, BranchUp, More, Scale, SidebarRight, Undo } from 'reicon-react';
+import { toast } from 'sonner';
+import type { PanelImperativeHandle } from 'react-resizable-panels';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import type { Pane, Thread } from './model';
+import { AgentLoader, agentPhase } from './AgentLoader';
+import { PipLayer } from './Browser';
+import { ChatView } from './ChatView';
+import { progressAt } from './progress';
+import { SidePane } from './SidePane';
+import { SummaryPanel } from './SummaryPanel';
+import { useHarness } from './store';
+import { useIsWide } from './useIsWide';
+import { useSettle } from './useSettle';
+import { ProgressRing, ThreadStatusIcon } from './ui';
+
+const PANE_ANIMATION_MS = 260;
+const DEFAULT_PANE_PCT = 36;
+
+export function ThreadView({ thread }: { thread: Thread }) {
+  const { state, dispatch } = useHarness();
+  const isWide = useIsWide();
+  const pane = state.panes.find((p) => p.threadId === thread.id);
+  const isPaneOpen = !!pane?.isOpen;
+  const summary = useSummaryState(isWide && isPaneOpen, isWide);
+  const [isPaneSheetOpen, setPaneSheetOpen] = useState(false);
+
+  const chat = (
+    <div className="relative flex h-full min-w-0 flex-col">
+      <ThreadHeader
+        thread={thread}
+        isSummaryOpen={summary.isShown}
+        onToggleSummary={summary.toggle}
+        isPaneOpen={isWide ? isPaneOpen : isPaneSheetOpen}
+        onTogglePane={() => (isWide ? dispatch({ type: 'pane-toggle', threadId: thread.id }) : setPaneSheetOpen((o) => !o))}
+      />
+      <div
+        className="grid min-h-0 flex-1 transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
+        style={{ gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}` }}
+      >
+        <ChatView thread={thread} />
+        {isWide && <DockedSummary thread={thread} isOpen={summary.isDocked} />}
+      </div>
+      {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} />}
+      <div className="pointer-events-none absolute inset-x-0 top-12 bottom-36 z-30 overflow-hidden">
+        <PipLayer thread={thread} />
+      </div>
+    </div>
+  );
+
+  if (!isWide)
+    return (
+      <div className="h-full min-h-0">
+        {chat}
+        <Sheet open={summary.isShown} onOpenChange={summary.toggle}>
+          <SheetContent side="right" className="w-[300px] p-0 sm:max-w-[300px]">
+            <SheetTitle className="sr-only">Thread summary</SheetTitle>
+            <SummaryPanel thread={thread} className="h-full" />
+          </SheetContent>
+        </Sheet>
+        <Sheet open={isPaneSheetOpen} onOpenChange={setPaneSheetOpen}>
+          <SheetContent side="right" className="w-[92vw] p-0 sm:max-w-[560px]">
+            <SheetTitle className="sr-only">Side pane</SheetTitle>
+            {pane ? <SidePane thread={thread} pane={pane} /> : <NoPaneYet thread={thread} />}
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
+
+  return <DockedLayout chat={chat} thread={thread} pane={pane} isPaneOpen={isPaneOpen} />;
+}
+
+/**
+ * While the side pane is open the docked summary hides and the toggle opens a floating one instead.
+ * Closing the pane docks the summary if the floating one was open, otherwise restores the docked state from before.
+ */
+function useSummaryState(isPaneOpen: boolean, isWide: boolean) {
+  const [isDockedOpen, setDockedOpen] = useState(isWide);
+  const [isFloatingOpen, setFloatingOpen] = useState(false);
+  const [wasPaneOpen, setWasPaneOpen] = useState(isPaneOpen);
+  if (isPaneOpen !== wasPaneOpen) {
+    setWasPaneOpen(isPaneOpen);
+    if (!isPaneOpen && isFloatingOpen) setDockedOpen(true);
+    setFloatingOpen(false);
+  }
+
+  const isDocked = !isPaneOpen && isDockedOpen;
+  const isFloating = isPaneOpen && isFloatingOpen;
+  const toggle = () => (isPaneOpen ? setFloatingOpen((o) => !o) : setDockedOpen((o) => !o));
+  return { isDocked, isFloating, isShown: isDocked || isFloating, toggle };
+}
+
+/** The summary column grows from the right edge while the card itself rises out of the header toggle above it. */
+function DockedSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) {
+  return (
+    <div className="min-w-0 overflow-hidden" inert={!isOpen || undefined}>
+      <div
+        className={cn(
+          'h-full w-[300px] origin-top-right pr-3 pb-3 transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
+          isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
+        )}
+      >
+        <SummaryPanel thread={thread} className="h-full rounded-xl border bg-card" />
+      </div>
+    </div>
+  );
+}
+
+function FloatingSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) {
+  return (
+    <div
+      inert={!isOpen || undefined}
+      className={cn(
+        'pointer-events-none absolute top-11 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
+        isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
+      )}
+    >
+      {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
+      <SummaryPanel thread={thread} className={cn('max-h-full rounded-xl bg-popover shadow-float', isOpen && 'pointer-events-auto')} />
+    </div>
+  );
+}
+
+function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNode; thread: Thread; pane?: Pane; isPaneOpen: boolean }) {
+  const panel = useRef<PanelImperativeHandle | null>(null);
+  const lastSize = useRef(DEFAULT_PANE_PCT);
+  const [isAnimating, setAnimating] = useState(false);
+
+  useEffect(() => {
+    const p = panel.current;
+    if (!p || p.isCollapsed() === !isPaneOpen) return;
+    setAnimating(true);
+    const target = `${lastSize.current}%`;
+    if (isPaneOpen) {
+      p.expand();
+      p.resize(target);
+    } else p.collapse();
+    const t = window.setTimeout(() => setAnimating(false), PANE_ANIMATION_MS);
+    return () => window.clearTimeout(t);
+  }, [isPaneOpen]);
+
+  return (
+    <ResizablePanelGroup orientation="horizontal" className={cn('h-full', isAnimating && 'pane-animating')}>
+      <ResizablePanel id="chat" minSize="35%">
+        {chat}
+      </ResizablePanel>
+      <ResizableHandle className={cn('bg-transparent hover:bg-border', !isPaneOpen && 'pointer-events-none')} />
+      <ResizablePanel
+        id="pane"
+        panelRef={panel}
+        collapsible
+        collapsedSize="0%"
+        minSize="25%"
+        defaultSize={isPaneOpen ? `${DEFAULT_PANE_PCT}%` : '0%'}
+        onResize={(size) => {
+          if (size.asPercentage > 0) lastSize.current = size.asPercentage;
+        }}
+      >
+        <div className={cn('h-full transition-opacity duration-200', isPaneOpen ? 'opacity-100' : 'opacity-0')} inert={!isPaneOpen || undefined}>
+          {pane ? <SidePane thread={thread} pane={pane} /> : <NoPaneYet thread={thread} />}
+        </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
+}
+
+function NoPaneYet({ thread }: { thread: Thread }) {
+  const { dispatch } = useHarness();
+  return (
+    <div className="flex h-full items-center justify-center bg-sidebar p-6">
+      <Button onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind: 'new' })}>Open a tab</Button>
+    </div>
+  );
+}
+
+function ThreadHeader({
+  thread,
+  isSummaryOpen,
+  onToggleSummary,
+  isPaneOpen,
+  onTogglePane,
+}: {
+  thread: Thread;
+  isSummaryOpen: boolean;
+  onToggleSummary: () => void;
+  isPaneOpen: boolean;
+  onTogglePane: () => void;
+}) {
+  const { state } = useHarness();
+  const { state: sidebarState, isMobile } = useSidebar();
+  const { pct } = progressAt(thread, state.now, true);
+  const showTrigger = isMobile || sidebarState === 'collapsed';
+
+  return (
+    <header className="flex h-11 shrink-0 items-center gap-2 px-3">
+      {showTrigger && <SidebarTrigger className="-ml-1" />}
+      {thread.status === 'running' ? <AgentLoader phase={agentPhase(thread)} className="text-muted-foreground" /> : <ThreadStatusIcon status={thread.status} />}
+      <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
+      {!!thread.repo && (
+        <span className="hidden min-w-0 items-center gap-1 truncate font-mono type-caption text-subtle-foreground lg:flex">
+          <BranchUp className="size-3.5 shrink-0" />
+          {thread.repo.branch}
+        </span>
+      )}
+      {thread.prs.map((pr) => (
+        <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden md:inline-flex">
+          #{pr.number}
+        </Badge>
+      ))}
+      <span className="flex-1" />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
+            <ProgressRing pct={pct} slot={thread.line} size={14} />
+            <span className="tabular">{Math.round(pct * 100)}%</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{isSummaryOpen ? 'Hide the summary' : 'Show the summary'}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={isPaneOpen ? 'Hide the side pane' : 'Show the side pane'} aria-pressed={isPaneOpen} onClick={onTogglePane} className={cn('text-muted-foreground', isPaneOpen && 'bg-accent text-foreground')}>
+            <SidebarRight />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{isPaneOpen ? 'Hide the side pane' : 'Show the side pane'}</TooltipContent>
+      </Tooltip>
+      <ThreadMenu thread={thread} />
+    </header>
+  );
+}
+
+function ThreadMenu({ thread }: { thread: Thread }) {
+  const { dispatch } = useHarness();
+  const { repo } = thread;
+  const other = thread.providers[0] === 'claude' ? 'Codex' : 'Claude';
+  const { isSettled, toggle: settle } = useSettle(thread);
+
+  const secondOpinion = () => {
+    dispatch({ type: 'say', threadId: thread.id, entry: { who: 'harness', kind: 'event', text: `Sent the latest diff to ${other} for a second opinion` } });
+    toast(`Asked ${other} for a second opinion`, { description: 'Its review lands in this thread as a new run.' });
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="Thread actions" className="text-muted-foreground">
+          <More />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuGroup>
+          <DropdownMenuItem onSelect={secondOpinion}>
+            <Scale />
+            Ask {other} for a second opinion
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={settle}>
+            {isSettled ? <Undo /> : <Archive />}
+            {isSettled ? 'Move back to active' : 'Settle thread'}
+          </DropdownMenuItem>
+          {repo && (
+            <DropdownMenuItem onSelect={() => navigator.clipboard?.writeText(repo.branch).catch(() => undefined)}>
+              <BranchUp />
+              Copy branch name
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

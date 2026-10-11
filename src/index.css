@@ -1,0 +1,490 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/inter';
+@source '../node_modules/streamdown/dist/*.js';
+
+/* Dark is active when the root says so, or when the OS is dark and nothing forces light. */
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+      @slot;
+    }
+  }
+}
+
+/* The design page pins interaction states with data-preview="hover focus active". */
+@custom-variant hover {
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+  &[data-preview~='hover'] {
+    @slot;
+  }
+}
+@custom-variant focus-visible (&:focus-visible, &[data-preview~="focus"]);
+@custom-variant active (&:active, &[data-preview~="active"]);
+
+/* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
+:root {
+
+  --background: oklch(0.975 0.003 285);
+  --foreground: oklch(0.2 0.01 285);
+  --card: oklch(0.997 0.001 285);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.997 0.001 285);
+  --popover-foreground: var(--foreground);
+  --float: oklch(0.995 0.002 285 / 0.9);
+  --glass: oklch(0.995 0.002 285 / 0.62);
+  --glass-edge: oklch(0.2 0.01 285 / 0.1);
+  --primary: oklch(0.22 0.01 285);
+  --primary-foreground: oklch(0.98 0.002 285);
+  --secondary: oklch(0.955 0.004 285);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.96 0.004 285);
+  --muted-foreground: oklch(0.46 0.012 285);
+  --subtle-foreground: oklch(0.54 0.012 285);
+  --accent: oklch(0.94 0.006 285);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.56 0.2 25);
+  --success: oklch(0.5 0.14 150);
+  --warning: oklch(0.54 0.13 65);
+  --border: oklch(0.25 0.02 285 / 0.1);
+  --input: oklch(0.25 0.02 285 / 0.15);
+  --ring: oklch(0.45 0.012 285);
+  --highlight: oklch(1 0 285 / 0.7);
+
+  --sidebar: oklch(0.99 0.002 285);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(0.25 0.02 285 / 0.07);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-grid: oklch(0.25 0.02 285 / 0.07);
+  --chart-axis: oklch(0.25 0.02 285 / 0.18);
+
+  --scrim: oklch(0.99 0.002 285 / 0.72);
+  --skeleton-highlight: oklch(1 0 285 / 0.64);
+  --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
+  --elev-float: 0 0 0 1px var(--border), 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
+  --corner-scale: 1;
+  --radius: calc(0.75rem * var(--corner-scale));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --background: oklch(0.145 0.006 285);
+    --foreground: oklch(0.965 0.003 285);
+    --card: oklch(0.19 0.007 285);
+    --popover: oklch(0.205 0.008 285);
+    --float: oklch(0.205 0.008 285 / 0.9);
+    --glass: oklch(0.22 0.008 285 / 0.55);
+    --glass-edge: oklch(1 0 0 / 0.1);
+    --primary: oklch(0.965 0.003 285);
+    --primary-foreground: oklch(0.18 0.006 285);
+    --secondary: oklch(0.235 0.008 285);
+    --muted: oklch(0.215 0.007 285);
+    --muted-foreground: oklch(0.73 0.01 285);
+    --subtle-foreground: oklch(0.63 0.01 285);
+    --accent: oklch(0.25 0.009 285);
+    --destructive: oklch(0.68 0.18 25);
+    --success: oklch(0.74 0.16 150);
+    --warning: oklch(0.82 0.14 80);
+    --border: oklch(0.95 0.01 285 / 0.08);
+    --input: oklch(0.95 0.01 285 / 0.12);
+    --ring: oklch(0.75 0.01 285);
+    --highlight: oklch(0.98 0.005 285 / 0.06);
+    --sidebar: oklch(0.175 0.007 285);
+    --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+    --chart-grid: oklch(0.95 0.01 285 / 0.06);
+    --chart-axis: oklch(0.95 0.01 285 / 0.16);
+    --scrim: oklch(0.12 0.006 285 / 0.72);
+    --skeleton-highlight: oklch(1 0 285 / 0.04);
+    --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+    --elev-float: 0 0 0 1px var(--border), 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --background: oklch(0.145 0.006 285);
+  --foreground: oklch(0.965 0.003 285);
+  --card: oklch(0.19 0.007 285);
+  --popover: oklch(0.205 0.008 285);
+  --float: oklch(0.205 0.008 285 / 0.9);
+  --glass: oklch(0.22 0.008 285 / 0.55);
+  --glass-edge: oklch(1 0 0 / 0.1);
+  --primary: oklch(0.965 0.003 285);
+  --primary-foreground: oklch(0.18 0.006 285);
+  --secondary: oklch(0.235 0.008 285);
+  --muted: oklch(0.215 0.007 285);
+  --muted-foreground: oklch(0.73 0.01 285);
+  --subtle-foreground: oklch(0.63 0.01 285);
+  --accent: oklch(0.25 0.009 285);
+  --destructive: oklch(0.68 0.18 25);
+  --success: oklch(0.74 0.16 150);
+  --warning: oklch(0.82 0.14 80);
+  --border: oklch(0.95 0.01 285 / 0.08);
+  --input: oklch(0.95 0.01 285 / 0.12);
+  --ring: oklch(0.75 0.01 285);
+  --highlight: oklch(0.98 0.005 285 / 0.06);
+  --sidebar: oklch(0.175 0.007 285);
+  --sidebar-accent: oklch(0.95 0.01 285 / 0.07);
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-grid: oklch(0.95 0.01 285 / 0.06);
+  --chart-axis: oklch(0.95 0.01 285 / 0.16);
+  --scrim: oklch(0.12 0.006 285 / 0.72);
+  --skeleton-highlight: oklch(1 0 285 / 0.04);
+  --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+  --elev-float: 0 0 0 1px var(--border), 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-float: var(--float);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(8px * var(--corner-scale));
+  --radius-md: calc(10px * var(--corner-scale));
+  --radius-lg: calc(12px * var(--corner-scale));
+  --radius-xl: calc(18px * var(--corner-scale));
+  --radius-2xl: calc(24px * var(--corner-scale));
+  --radius-3xl: calc(24px * var(--corner-scale));
+  --radius-4xl: 9999px;
+
+  --shadow-popover: var(--elev-popover);
+  --shadow-float: var(--elev-float);
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@theme {
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 1px 2px oklch(0.2 0.02 285 / 0.06);
+  --shadow-md: var(--elev-popover);
+  --shadow-lg: var(--elev-popover);
+
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1rem;
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1.125rem;
+  --text-body: 0.8125rem;
+  --text-body--line-height: 1.25rem;
+  --text-prose: 0.875rem;
+  --text-prose--line-height: 1.375rem;
+  --text-title: 0.875rem;
+  --text-title--line-height: 1.25rem;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.5rem;
+  --text-display: 1.5rem;
+  --text-display--line-height: 1.75rem;
+  /* shadcn components size their text with text-sm; compact harness density puts it at 13px. */
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+}
+
+@utility type-display {
+  font-size: var(--text-display);
+  line-height: var(--text-display--line-height);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+@utility type-heading {
+  font-size: var(--text-heading);
+  line-height: var(--text-heading--line-height);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+@utility type-title {
+  font-size: var(--text-title);
+  line-height: var(--text-title--line-height);
+  font-weight: 600;
+  letter-spacing: -0.006em;
+}
+@utility type-prose {
+  font-size: var(--text-prose);
+  line-height: var(--text-prose--line-height);
+}
+@utility type-body {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+@utility type-meta {
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+@utility type-caption {
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  letter-spacing: 0.005em;
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    @apply font-sans;
+    font-feature-settings: 'cv11', 'ss03';
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-background text-foreground type-body;
+    margin: 0;
+    overflow: hidden;
+  }
+}
+
+/* Unlayered on purpose: the Artifact host wraps the page in its own skeleton, and its unlayered body colour beats `@layer base`, so text without a colour class turned light-theme dark on the dark theme. */
+#root {
+  color: var(--foreground);
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  /* The squircle rule reaches pseudo-elements, and the rounded-full exemption only matches the element itself. */
+  corner-shape: round;
+  background: currentColor;
+  animation: pulse-ring 1.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes station-pulse {
+  0% {
+    r: 7;
+    opacity: 0.5;
+  }
+  100% {
+    r: 16;
+    opacity: 0;
+  }
+}
+
+.station-pulse {
+  animation: station-pulse 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse::after,
+  .station-pulse {
+    animation: none;
+  }
+}
+
+/* The composer floats over the transcript, so messages scroll under it. */
+@utility surface-glass {
+  background: var(--glass);
+  border-color: var(--glass-edge);
+  backdrop-filter: blur(20px) saturate(1.6);
+  @media (prefers-reduced-transparency: reduce) {
+    background: var(--card);
+    backdrop-filter: none;
+  }
+}
+
+/* Floating windows (expanded goal, PiP satellites). Glass is allowed here because content scrolls underneath. */
+@utility surface-float {
+  backdrop-filter: blur(24px) saturate(1.5);
+}
+
+/* The fake web page inside a PiP satellite is someone else's site, so it stays light in both app themes. */
+.web-page {
+  --page-bg: oklch(0.985 0.003 250);
+  --page-fg: oklch(0.24 0.02 250);
+  --page-muted: oklch(0.5 0.02 250);
+  --page-line: oklch(0.9 0.01 250);
+  --page-bar: oklch(0.58 0.15 255);
+  --page-panel: oklch(1 0 0);
+  background: var(--page-bg);
+  color: var(--page-fg);
+  color-scheme: light;
+}
+
+/* Apple-style squircles. 1.84 puts each corner's 45° point where the round fallback has it, so browsers without corner-shape look equally round. */
+@supports (corner-shape: squircle) {
+  :root {
+    --corner-scale: 1.84;
+  }
+  *,
+  ::before,
+  ::after {
+    corner-shape: squircle;
+  }
+  /* Any rounded-full, including variant-prefixed ones like group-data-[type=radio]:rounded-full, stays a true circle. */
+  [class*='rounded-full'] {
+    corner-shape: round;
+  }
+}
+
+/* One diagonal band crosses every skeleton on screen in step: the gradient is pinned to the viewport. */
+@keyframes skeleton-sheen {
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton-sheen {
+  background: linear-gradient(120deg, transparent 40%, var(--skeleton-highlight), transparent 60%) var(--color-muted) 0 0 / 200% 100% fixed;
+  animation: skeleton-sheen 2s -1s infinite linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-sheen {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+/* The soft blurred patch behind the PiP's hover controls, like Codex: blur that fades out from the corner. */
+.pip-blur {
+  backdrop-filter: blur(14px);
+  background: oklch(0.18 0.01 285 / 0.55);
+  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, black 50%, transparent 90%);
+  mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, black 50%, transparent 90%);
+}
+
+/* Toggling the side pane animates the panels' flex-grow; dragging the handle never does. */
+.pane-animating [data-panel] {
+  transition: flex-grow 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pane-animating [data-panel] {
+    transition: none;
+  }
+}
+
+/* Native scrollers (chat, sidebar) match ScrollArea: thin, and visible only while scrolling. useIdleScrollbars sets data-scrolling. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+[data-scrolling] {
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+
+/* Fades an edge only while there is more content past it. A scroller that doesn't overflow has an inactive timeline, so both fades stay 0. */
+@property --scroll-fade-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --scroll-fade-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes scroll-fade-top {
+  to {
+    --scroll-fade-top: 1.5rem;
+  }
+}
+@keyframes scroll-fade-bottom {
+  from {
+    --scroll-fade-bottom: 1.5rem;
+  }
+}
+@utility scroll-fade-y {
+  @supports (animation-timeline: scroll()) {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--scroll-fade-top),
+      #000 calc(100% - var(--scroll-fade-bottom)),
+      transparent
+    );
+    /* Shorthand first: `animation` resets animation-timeline. */
+    animation: scroll-fade-top linear both, scroll-fade-bottom linear both;
+    animation-timeline: scroll(self), scroll(self);
+    animation-range: 0 1.5rem, calc(100% - 1.5rem) 100%;
+  }
+}
+
+/* Dragging the sidebar edge must track the pointer 1:1, so the collapse transitions are off meanwhile. */
+[data-sidebar-resizing] {
+  cursor: col-resize;
+  user-select: none;
+}
+[data-sidebar-resizing] [data-slot='sidebar-gap'],
+[data-sidebar-resizing] [data-slot='sidebar-container'] {
+  transition: none;
+}

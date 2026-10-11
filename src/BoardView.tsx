@@ -1,0 +1,273 @@
+import { useState } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import type { QueueItem, Step, Thread } from './model';
+import { boardColumns, progressAt } from './progress';
+import { useHarness, useSpaceQueue, useSpaceThreads } from './store';
+import { ProviderMarks, ThreadStatusIcon, lineColor, stepLabel } from './ui';
+
+const ROW = 112;
+const LABEL_ANGLE = 28;
+const LABEL_CHARS = 24;
+const LABEL_OVERHANG = 56;
+const COL = 108;
+const X0 = 68;
+const LABEL_W = 'w-[168px] md:w-[248px]';
+
+interface Hovered {
+  thread: Thread;
+  step: Step;
+  x: number;
+  y: number;
+}
+
+export function BoardView() {
+  const { state, dispatch } = useHarness();
+  const threads = useSpaceThreads().filter((t) => t.status !== 'settled');
+  const queue = useSpaceQueue();
+  const [hovered, setHovered] = useState<Hovered | null>(null);
+  const layout = useBoardLayout(threads, queue);
+
+  if (threads.length === 0) return <EmptyBoard />;
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="flex min-h-0 flex-col">
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2 px-4 pt-5 pb-4 md:px-8 md:pt-8">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl font-semibold">Board</h1>
+          <p className="text-sm text-muted-foreground">
+            {threads.length} active threads · {layout.interchanges.length} shared {layout.interchanges.length === 1 ? 'step' : 'steps'}
+            {layout.pending.length > 0 && ` · ${layout.pending.length} overlap waiting on you`}
+          </p>
+        </div>
+        <BoardLegend />
+      </div>
+
+      <div className="flex min-w-0">
+        <ol className={`${LABEL_W} shrink-0 border-r border-border`}>
+          {threads.map((t) => (
+            <li key={t.id} style={{ height: ROW }}>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: t.id } })}
+                className="flex h-full w-full cursor-default flex-col justify-center gap-1 px-3 text-left hover:bg-accent/60 md:px-4"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span aria-hidden className="h-4 w-1 shrink-0 rounded-full" style={{ background: lineColor(t.line) }} />
+                  <span className="min-w-0 truncate text-sm font-medium">{t.title}</span>
+                </span>
+                <span className="flex items-center gap-2 pl-3 text-xs text-subtle-foreground">
+                  <ThreadStatusIcon status={t.status} />
+                  <ProviderMarks providers={t.providers} size={12} />
+                  <span className="tabular">{Math.round(progressAt(t, state.now, true).pct * 100)}%</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+
+        <div className="relative min-w-0 flex-1 overflow-x-auto" onPointerLeave={() => setHovered(null)}>
+          <svg width={layout.width} height={threads.length * ROW + LABEL_OVERHANG} className="block" role="img" aria-label="Metro map of active threads">
+            {layout.pending.map((p) => (
+              <g key={p.id} className="cursor-pointer" onClick={() => dispatch({ type: 'go', view: { kind: 'queue' } })}>
+                <path d={`M${p.x1} ${p.y1} C ${p.x1} ${(p.y1 + p.y2) / 2}, ${p.x2} ${(p.y1 + p.y2) / 2}, ${p.x2} ${p.y2}`} fill="none" stroke="var(--warning)" strokeWidth={2} strokeDasharray="4 4" />
+                <rect x={p.x1 - 84} y={p.y1 - 38} width={168} height={20} rx={6} fill="var(--popover)" stroke="var(--warning)" />
+                <text x={p.x1} y={p.y1 - 24} textAnchor="middle" className="fill-foreground text-xs font-medium">
+                  Overlap · decide in Queue
+                </text>
+              </g>
+            ))}
+
+            {threads.map((t, row) => (
+              <Line key={t.id} thread={t} row={row} cols={layout.cols} now={state.now} />
+            ))}
+
+            {layout.interchanges.map((ix) => (
+              <rect
+                key={ix.key}
+                x={ix.x - 13}
+                y={ix.y1 - 13}
+                width={26}
+                height={ix.y2 - ix.y1 + 26}
+                rx={13}
+                fill="var(--background)"
+                stroke="var(--foreground)"
+                strokeWidth={2}
+                strokeDasharray={ix.isRace ? '5 4' : undefined}
+              />
+            ))}
+
+            {threads.map((t, row) =>
+              visibleSteps(t).map((s) => (
+                <Station
+                  key={s.id}
+                  thread={t}
+                  step={s}
+                  x={X0 + layout.cols.get(s.id)! * COL}
+                  y={row * ROW + ROW / 2}
+                  isFlagged={layout.flagged.has(s.id)}
+                  onHover={setHovered}
+                  onOpen={() => dispatch({ type: 'go', view: { kind: 'thread', id: t.id } })}
+                />
+              )),
+            )}
+          </svg>
+          {hovered && <StationTooltip hovered={hovered} />}
+        </div>
+      </div>
+    </div>
+    </ScrollArea>
+  );
+}
+
+function visibleSteps(t: Thread) {
+  return t.steps.filter((s) => s.status !== 'dropped');
+}
+
+function useBoardLayout(threads: Thread[], queue: QueueItem[]) {
+  const lines = threads.map(visibleSteps);
+  const cols = boardColumns(lines);
+  const rowOf = new Map(threads.map((t, i) => [t.id, i]));
+  const yOf = (threadId: string) => rowOf.get(threadId)! * ROW + ROW / 2;
+
+  const groups = new Map<string, { x: number; ys: number[]; isRace: boolean }>();
+  threads.forEach((t, row) =>
+    visibleSteps(t).forEach((s) => {
+      if (!s.sharedKey) return;
+      const g = groups.get(s.sharedKey) ?? { x: X0 + cols.get(s.id)! * COL, ys: [], isRace: false };
+      g.ys.push(row * ROW + ROW / 2);
+      g.isRace ||= s.link?.mode === 'race';
+      groups.set(s.sharedKey, g);
+    }),
+  );
+  const interchanges = [...groups.entries()].filter(([, g]) => g.ys.length > 1).map(([key, g]) => ({ key, x: g.x, y1: Math.min(...g.ys), y2: Math.max(...g.ys), isRace: g.isRace }));
+
+  const pending = queue
+    .filter((q) => q.overlap && rowOf.has(q.overlap.threadId) && rowOf.has(q.overlap.otherThreadId))
+    .map((q) => ({
+      id: q.id,
+      x1: X0 + (cols.get(q.overlap!.otherStepId) ?? 0) * COL,
+      y1: yOf(q.overlap!.otherThreadId),
+      x2: X0 + (cols.get(q.overlap!.stepId) ?? 0) * COL,
+      y2: yOf(q.overlap!.threadId),
+    }));
+  const flagged = new Set(queue.flatMap((q) => (q.overlap ? [q.overlap.stepId, q.overlap.otherStepId] : [])));
+  const maxCol = Math.max(0, ...cols.values());
+  return { cols, interchanges, pending, flagged, width: X0 + maxCol * COL + 200 };
+}
+
+function Line({ thread, row, cols, now }: { thread: Thread; row: number; cols: Map<string, number>; now: number }) {
+  const steps = visibleSteps(thread);
+  if (steps.length === 0) return null;
+  const y = row * ROW + ROW / 2;
+  const xs = steps.map((s) => X0 + cols.get(s.id)! * COL);
+  const first = xs[0];
+  const last = xs[xs.length - 1];
+  const progressX = first + (last - first + 40) * progressAt(thread, now, true).pct;
+  const color = lineColor(thread.line);
+
+  return (
+    <g>
+      <line x1={first} x2={last + 40} y1={y} y2={y} stroke={color} strokeOpacity={0.3} strokeWidth={6} strokeLinecap="round" />
+      <line x1={first} x2={Math.max(first, progressX)} y1={y} y2={y} stroke={color} strokeWidth={6} strokeLinecap="round" />
+      <line x1={last + 40} x2={last + 40} y1={y - 10} y2={y + 10} stroke={color} strokeWidth={4} strokeLinecap="round" />
+    </g>
+  );
+}
+
+function Station({ thread, step, x, y, isFlagged, onHover, onOpen }: { thread: Thread; step: Step; x: number; y: number; isFlagged: boolean; onHover: (h: Hovered | null) => void; onOpen: () => void }) {
+  const color = lineColor(thread.line);
+  const s = step.status;
+  const label = step.title.length > LABEL_CHARS ? `${step.title.slice(0, LABEL_CHARS - 1)}…` : step.title;
+
+  return (
+    <g
+      className="cursor-pointer"
+      tabIndex={0}
+      role="button"
+      aria-label={`${step.title}, ${stepLabel(s)}, in ${thread.title}`}
+      onPointerEnter={() => onHover({ thread, step, x, y })}
+      onFocus={() => onHover({ thread, step, x, y })}
+      onBlur={() => onHover(null)}
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+    >
+      <circle cx={x} cy={y} r={18} fill="transparent" />
+      {s === 'running' && <circle cx={x} cy={y} r={7} fill={color} className="station-pulse" />}
+      {isFlagged && <circle cx={x} cy={y} r={11} fill="none" stroke="var(--warning)" strokeWidth={2} />}
+      <circle
+        cx={x}
+        cy={y}
+        r={7}
+        fill={s === 'done' ? color : 'var(--background)'}
+        stroke={s === 'blocked' ? 'var(--warning)' : s === 'done' ? 'var(--background)' : color}
+        strokeWidth={s === 'done' ? 2 : 3}
+        strokeDasharray={s === 'waiting' ? '3 2' : undefined}
+      />
+      <text x={x + 4} y={y + 18} transform={`rotate(${LABEL_ANGLE} ${x + 4} ${y + 18})`} className={s === 'done' ? 'fill-subtle-foreground text-xs' : 'fill-muted-foreground text-xs'}>
+        {label}
+      </text>
+    </g>
+  );
+}
+
+function StationTooltip({ hovered }: { hovered: Hovered }) {
+  const { thread, step, x, y } = hovered;
+  return (
+    <div role="status" className="pointer-events-none absolute z-10 w-64 rounded-lg border border-border bg-background p-3 text-sm shadow-[var(--elev-popover)]" style={{ left: x + 18, top: y - 12 }}>
+      <div className="font-medium text-foreground">{step.title}</div>
+      <div className="text-xs text-subtle-foreground">
+        {stepLabel(step.status)} · {thread.title}
+      </div>
+      {!!step.note && <div className="mt-1.5 text-xs text-muted-foreground">{step.note}</div>}
+      {step.footprint.length > 0 && (
+        <ul className="mt-1.5 flex flex-col gap-0.5">
+          {step.footprint.map((f) => (
+            <li key={f} className="truncate font-mono text-xs text-muted-foreground">
+              {f}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function BoardLegend() {
+  return (
+    <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-subtle-foreground" aria-label="Legend">
+      <LegendItem label="Done">
+        <circle cx="8" cy="8" r="5" fill="var(--subtle-foreground)" />
+      </LegendItem>
+      <LegendItem label="Running">
+        <circle cx="8" cy="8" r="5" fill="var(--background)" stroke="var(--muted-foreground)" strokeWidth="2.5" />
+      </LegendItem>
+      <LegendItem label="Waiting on another line">
+        <circle cx="8" cy="8" r="5" fill="var(--background)" stroke="var(--muted-foreground)" strokeWidth="2" strokeDasharray="3 2" />
+      </LegendItem>
+      <LegendItem label="Shared step">
+        <rect x="3" y="1" width="10" height="14" rx="5" fill="var(--background)" stroke="var(--foreground)" strokeWidth="1.5" />
+      </LegendItem>
+    </ul>
+  );
+}
+
+function LegendItem({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <li className="flex items-center gap-1.5">
+      <svg width="16" height="16" aria-hidden>
+        {children}
+      </svg>
+      {label}
+    </li>
+  );
+}
+
+function EmptyBoard() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-1 p-8 text-center">
+      <div className="text-lg font-semibold">No active threads in this space</div>
+      <p className="text-sm text-muted-foreground">Start a thread and it shows up here as a line.</p>
+    </div>
+  );
+}
