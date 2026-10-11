@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from 'react';
-import { zoneAt, type View, type Zone } from './tree.ts';
+import { zoneAt, type Side, type View, type Zone } from './tree.ts';
 
 export interface DragSession {
   view: View;
   label: string;
   /** Sources that draw their own lifted copy (sidebar rows) skip the shared chip. */
   hasOwnGhost: boolean;
+  /** Sources that only ever open beside a split (Stage Manager cards) turn the replace zone into this side. */
+  centerAs?: Side;
   x: number;
   y: number;
   hit: { leafId: string; zone: Zone } | null;
@@ -19,12 +21,12 @@ function emit(next: DragSession | null) {
   for (const l of listeners) l();
 }
 
-export function startDrag(view: View, label: string, x: number, y: number, hasOwnGhost = false) {
-  emit({ view, label, hasOwnGhost, x, y, hit: hitLeaf(x, y) });
+export function startDrag(view: View, label: string, x: number, y: number, hasOwnGhost = false, centerAs?: Side) {
+  emit({ view, label, hasOwnGhost, centerAs, x, y, hit: hitLeaf(x, y, centerAs) });
 }
 
 export function moveDrag(x: number, y: number) {
-  if (session) emit({ ...session, x, y, hit: hitLeaf(x, y) });
+  if (session) emit({ ...session, x, y, hit: hitLeaf(x, y, session.centerAs) });
 }
 
 /** Ends the drag and returns where it landed on a split, if anywhere. */
@@ -45,10 +47,11 @@ export function useDragSession() {
 }
 
 /** Drag ghosts are `pointer-events: none`, so the topmost leaf under the pointer is the target. Tab strips and the sidebar are never targets. */
-function hitLeaf(x: number, y: number): DragSession['hit'] {
+function hitLeaf(x: number, y: number, centerAs?: Side): DragSession['hit'] {
   const els = document.elementsFromPoint(x, y);
   if (els.some((el) => el.closest('[role=tablist], [data-sidebar=sidebar]'))) return null;
   const leafEl = els.map((el) => el.closest<HTMLElement>('[data-leaf-id]')).find(Boolean);
   if (!leafEl) return null;
-  return { leafId: leafEl.dataset.leafId!, zone: zoneAt(leafEl.getBoundingClientRect(), x, y) };
+  const zone = zoneAt(leafEl.getBoundingClientRect(), x, y);
+  return { leafId: leafEl.dataset.leafId!, zone: zone === 'center' && centerAs ? centerAs : zone };
 }

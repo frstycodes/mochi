@@ -480,7 +480,7 @@ function useThreadRow(thread: Thread) {
   return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWatched: state.watched.includes(thread.id) };
 }
 
-function threadDetail(thread: Thread, question?: string) {
+export function threadDetail(thread: Thread, question?: string) {
   if (thread.status === 'needs-you') return question ?? 'Waiting on you';
   if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];

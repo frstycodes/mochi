@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { ArrowSwapHorizontal, ExitFullscreen, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
+import { ArrowSwapHorizontal, ArrowUp, CarouselH, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
+import { host } from '@/host';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,23 +15,31 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useHarness } from '../store';
 import { useSplit } from './SplitContext';
-import { PRESETS, PRESET_LABELS } from './tree';
+import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
 
-/** Per-split actions in a split's header: the layout menu and close. Renders nothing while only one split is open. */
+/** Per-split actions in a split's header: the Stage Manager toggle (first split only), the layout menu and close. */
 export function SplitControls() {
-  const { dispatch } = useHarness();
-  const { leafId, isMulti, isZoomed } = useSplit();
-  if (!isMulti) return null;
+  const { state, dispatch } = useHarness();
+  const { leafId, isMulti, isZoomed, isFirst } = useSplit();
+  if (!isMulti) return isFirst && <StageToggle />;
   const run = (action: Parameters<typeof dispatch>[0]) => {
     dispatch({ type: 'layout-focus', leafId });
     dispatch(action);
   };
+  const view = findLeaf(state.layouts[state.spaceId].root, leafId)?.view;
+  const tearOff = view?.kind === 'thread' ? () => {
+    void host.windows.open(`window/${view.id}`);
+    dispatch({ type: 'layout-close', leafId });
+  } : undefined;
 
   return (
     <>
+      {isFirst && <StageToggle />}
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -58,6 +67,12 @@ export function SplitControls() {
               Rotate this split
             </DropdownMenuItem>
             <PresetSubmenu />
+            {!!tearOff && (
+              <DropdownMenuItem onSelect={tearOff}>
+                <Export />
+                Move to a new window
+              </DropdownMenuItem>
+            )}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => dispatch({ type: 'layout-close', leafId })}>
@@ -75,6 +90,32 @@ export function SplitControls() {
         <TooltipContent>Close split</TooltipContent>
       </Tooltip>
     </>
+  );
+}
+
+function StageToggle() {
+  const { state, dispatch } = useHarness();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="Stage Manager" aria-pressed={state.isStage} onClick={() => dispatch({ type: 'stage-toggle' })} className={cn('text-muted-foreground', state.isStage && 'bg-accent text-foreground')}>
+          <CarouselH />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent className="flex items-center gap-2">
+        {state.isStage ? 'Leave Stage Manager' : 'Stage Manager'}
+        <KbdGroup>
+          <Kbd>Shift</Kbd>
+          <Kbd>Cmd</Kbd>
+          <Kbd>S</Kbd>
+        </KbdGroup>
+        <span className="text-subtle-foreground">All sessions</span>
+        <KbdGroup>
+          <Kbd>Cmd</Kbd>
+          <Kbd aria-label="Up arrow"><ArrowUp /></Kbd>
+        </KbdGroup>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

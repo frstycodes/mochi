@@ -29,7 +29,7 @@ function reducer(state: State, action: Action): State {
   return SLICES.reduce((s, slice) => slice(s, action), state);
 }
 
-const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
+export const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
 
 export function HarnessProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
