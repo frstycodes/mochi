@@ -199,9 +199,9 @@ Ranked by how much they help running many agents at once.
 - [ ] **Checkpoints / rewind**: restore files and transcript to any step boundary (the timeline scrubber already picks the moment).
 - [x] **Worktree manager**: one worktree per thread, disk usage, clean up settled ones, sync with base. Worktrees live in `~/.harness/worktrees/<repo>/<thread>`; GAP: threads carry a project name, not a folder, so every project still resolves to the app's cwd (`projectRoot` in `src/host/cwd.ts`).
 - [ ] **Handoff between agents**: move a thread or a single step from Claude to Codex (or back) with the goal and context summary.
-- [ ] **Command palette actions**, not just search: every action in the app reachable from Cmd K.
+- [x] **Command palette actions**, not just search: every action in the app reachable from Cmd K. Registry in `src/palette/actions.ts` (one entry per action, `when` rules hide actions that would do nothing); rewind / fork / handoff add theirs when they land.
 - [ ] **Thread forking**: fork at a message to try an alternative approach, then compare diffs and keep one (pairs with race).
-- [ ] **Review mode**: walk all threads in `review` one after another — diff, preview, approve / request changes — like an inbox.
+- [x] **Review mode**: walk all threads in `review` one after another — diff, preview, approve / request changes — like an inbox. From the sidebar, the Queue and Cmd K; J/K, Skip, Esc.
 - [ ] **Scheduled and background threads**: run nightly, on a PR event, or on a cron; land in the Queue when done.
 - [ ] **Shared / team spaces**: see teammates' threads on the metro board so overlaps catch cross-person duplication too.
 - [ ] **Session recording / replay** of a thread for demos and debugging.
