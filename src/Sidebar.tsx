@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, useTransform, type MotionValue } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, More, Pause, Play, Refresh, Route, Search, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,7 @@ import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
 import { useReviewEntry } from './review/useReviewMode';
-import { usePagedSwipe } from './usePagedSwipe';
+import { useSnapPager } from './useSnapPager';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
 import { ProgressRing, SpaceIcon } from './ui';
@@ -40,15 +39,17 @@ import { ProgressRing, SpaceIcon } from './ui';
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
   const index = SPACES.findIndex((s) => s.id === state.spaceId);
-  const swipe = usePagedSwipe({ index, count: SPACES.length, axis: 'x', onStep: (step) => dispatch({ type: 'space', id: SPACES[index + step].id }) });
+  const pager = useRef<HTMLDivElement>(null);
+  useSnapPager(pager, { axis: 'x', index, onSettle: (page) => dispatch({ type: 'space', id: SPACES[page].id }) });
 
   return (
-    <Sidebar onWheel={swipe.onWheel} collapsible={collapsible}>
+    <Sidebar collapsible={collapsible}>
       <SpaceHeader />
-      <SidebarContent ref={swipe.ref} className="relative overflow-x-hidden">
+      {/* Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility. */}
+      <SidebarContent ref={pager} style={{ scrollbarWidth: 'none' }} className="snap-x snap-mandatory flex-row gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain">
         {/* Every space stays mounted so neighbours show mid-swipe; window to index ± 1 if the space count grows. */}
         {SPACES.map((s, i) => (
-          <SpacePanel key={s.id} pos={swipe.pos} index={i} isCurrent={i === index}>
+          <SpacePanel key={s.id} isCurrent={i === index}>
             <SpaceNav spaceId={s.id} onSearch={onSearch} />
           </SpacePanel>
         ))}
@@ -119,12 +120,11 @@ function SpaceHeader() {
   );
 }
 
-function SpacePanel({ pos, index, isCurrent, children }: { pos: MotionValue<number>; index: number; isCurrent: boolean; children: ReactNode }) {
-  const x = useTransform(pos, (p) => `${(index - p) * 100}%`);
+function SpacePanel({ isCurrent, children }: { isCurrent: boolean; children: ReactNode }) {
   return (
-    <motion.div style={{ x }} inert={!isCurrent || undefined} className={cn(!isCurrent && 'absolute inset-x-0 top-0')}>
+    <div inert={!isCurrent || undefined} className="flex w-full shrink-0 snap-start snap-always flex-col gap-2 overflow-y-auto overscroll-y-contain">
       {children}
-    </motion.div>
+    </div>
   );
 }
 

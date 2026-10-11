@@ -1,5 +1,5 @@
 import { startTransition, useLayoutEffect, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
-import { motion, useMotionValue, useReducedMotion, useTransform, type MotionValue } from 'motion/react';
+import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { endDrag, moveDrag, startDrag } from '../layout/drag';
 import { findLeaf, leaves, type Side } from '../layout/tree';
@@ -11,7 +11,7 @@ import { Overview } from './Overview';
 import { SnapshotCard, type StripSide } from './SnapshotCard';
 import { useThreadSnapshots, type ThreadSnapshot } from './snapshot';
 import { useStageKeys } from './useStageKeys';
-import { usePagedSwipe } from '../usePagedSwipe';
+import { useSnapPager } from '../useSnapPager';
 import { useWindowSyncHost } from './windowSync';
 
 const CARD = { landscape: { w: 248, h: 176 }, portrait: { w: 248, h: 150 } };
@@ -19,7 +19,9 @@ const DRAG_SLOP_PX = 6;
 
 /**
  * The main area. Normally the split workspace; in Stage Manager mode the workspace (one session or a split group) sits centered at 88%
- * and the other pinned threads stick out of the edges as 3D cards. A swipe moves the center 1:1 like a canvas, one card per gesture at most.
+ * and the other pinned threads stick out of the edges as 3D cards. The scroller is a native one with one snap page per pinned thread
+ * (`snap-always`, so a gesture stops at the next one): the browser owns tracking and momentum, Motion only reads the offset to move the
+ * center 1:1 and pose the cards.
  */
 export function Stage() {
   const { state, dispatch } = useHarness();
@@ -27,20 +29,22 @@ export function Stage() {
   const reduce = !!useReducedMotion();
   const isStage = state.isStage;
   const isPortrait = state.orientation === 'column';
+  const axis = isPortrait ? 'y' : 'x';
   const slots = useStageSlots(state);
+  const scroller = useRef<HTMLDivElement>(null);
   const width = useMotionValue(0);
   const height = useMotionValue(0);
-  const open = (id: string) => startTransition(() => dispatch({ type: 'go', view: { kind: 'thread', id } }));
-  const openSlot = (i: number) => {
-    const id = slots.ids[i];
-    if (id && id !== CENTER) open(id);
+  const size = isPortrait ? height : width;
+  const { scrollX, scrollY } = useScroll({ container: scroller });
+  const pos = useTransform([isPortrait ? scrollY : scrollX, size], ([offset, page]: number[]) => (isStage && page ? offset / page : slots.center));
+  const open = (id: string | undefined) => {
+    if (id && id !== CENTER) startTransition(() => dispatch({ type: 'go', view: { kind: 'thread', id } }));
   };
-  const swipe = usePagedSwipe({ index: slots.center, count: slots.ids.length, axis: isPortrait ? 'y' : 'x', onStep: (step) => openSlot(slots.center + step) });
-
-  useStageKeys((step) => openSlot(slots.center + step));
+  useSnapPager(scroller, { axis, index: isStage ? slots.center : 0, onSettle: (page) => isStage && open(slots.ids[page]) });
+  useStageKeys((step) => open(slots.ids[slots.center + step]));
 
   useLayoutEffect(() => {
-    const el = swipe.ref.current;
+    const el = scroller.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
       width.set(el.clientWidth);
@@ -48,13 +52,28 @@ export function Stage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [swipe.ref, width, height]);
+  }, [width, height]);
 
-  const size = isPortrait ? height : width;
+  const scrollToSlot = (i: number) => scroller.current?.scrollTo({ [isPortrait ? 'top' : 'left']: i * size.get(), behavior: reduce ? 'instant' : 'smooth' });
+  const pages = isStage ? slots.ids.length : 1;
+
   return (
-    <div ref={swipe.ref} onWheel={isStage ? swipe.onWheel : undefined} data-stage={isStage || undefined} className={cn('relative flex h-full min-h-0 items-center justify-center overflow-hidden', isStage && 'bg-sidebar')}>
-      <CenterFrame isStage={isStage} isPortrait={isPortrait} isFlat={reduce} pos={swipe.pos} center={slots.center} size={size} />
-      {isStage && <EdgeCards slots={slots} pos={swipe.pos} size={size} isPortrait={isPortrait} isFlat={reduce} onOpen={openSlot} />}
+    <div className="relative h-full min-h-0 overflow-hidden">
+      <div
+        ref={scroller}
+        data-stage={isStage || undefined}
+        // Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility.
+        style={isStage ? { scrollbarWidth: 'none' } : undefined}
+        className={cn('h-full', isStage ? cn('overscroll-contain bg-sidebar', isPortrait ? 'snap-y snap-mandatory overflow-x-hidden overflow-y-auto' : 'snap-x snap-mandatory overflow-x-auto overflow-y-hidden') : 'overflow-hidden')}
+      >
+        <div className={cn('relative flex', isPortrait ? 'w-full flex-col' : 'h-full')} style={isPortrait ? { height: `${pages * 100}%` } : { width: `${pages * 100}%` }}>
+          {isStage && slots.ids.map((id, i) => <span key={`${id}:${i}`} aria-hidden className="absolute size-px snap-start snap-always" style={{ [isPortrait ? 'top' : 'left']: `${(i * 100) / pages}%` }} />)}
+          <div className="sticky top-0 left-0 flex shrink-0 items-center justify-center" style={isPortrait ? { width: '100%', height: `${100 / pages}%` } : { height: '100%', width: `${100 / pages}%` }}>
+            <CenterFrame isStage={isStage} isPortrait={isPortrait} isFlat={reduce} pos={pos} center={slots.center} size={size} />
+            {isStage && <EdgeCards slots={slots} pos={pos} size={size} isPortrait={isPortrait} isFlat={reduce} onOpen={scrollToSlot} />}
+          </div>
+        </div>
+      </div>
       {state.isOverview && <Overview />}
     </div>
   );
@@ -71,7 +90,7 @@ function CenterFrame({ isStage, isPortrait, isFlat, pos, center, size }: { isSta
   return (
     <motion.div
       style={{ transform, opacity }}
-      className={cn('min-h-0 min-w-0', isStage ? cn('isolate overflow-hidden rounded-xl bg-background ring-1 ring-border', isPortrait ? 'h-[88%] w-[calc(100%-24px)]' : 'h-[calc(100%-24px)] w-[88%]') : 'size-full')}
+      className={cn('min-h-0 min-w-0', isStage ? cn('isolate overflow-hidden rounded-xl border border-border bg-background', isPortrait ? 'h-[88%] w-[calc(100%-24px)]' : 'h-[calc(100%-24px)] w-[88%]') : 'size-full')}
     >
       <Workspace />
     </motion.div>
