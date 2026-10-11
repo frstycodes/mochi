@@ -9,11 +9,13 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 ### Panel shell
 - [x] Browser-style tab strip, `+` new tab, close, active chip
 - [x] Pop a Preview tab out to a PiP window
-- [ ] Drag tabs to reorder; drag a tab out of the pane to make a split (ties into §3)
-- [ ] Pop any tab kind out, not just Preview
-- [ ] Tabs persist per thread across reloads
-- [ ] Cmd 1–9 / Ctrl Tab to switch pane tabs; Cmd W closes the active one
-- [ ] New-tab page lists every tab kind plus detected ports and recent files
+- [x] Drag tabs to reorder (Alt ← / → from the keyboard)
+- [ ] Drag a tab out of the pane to make a split (ties into §3)
+- [x] Pop any tab kind out, not just Preview
+- [x] Tabs persist per thread across reloads
+- [x] Cmd 1–9 / Ctrl Tab to switch pane tabs; Cmd W closes the active one
+- [x] New-tab page lists every tab kind
+- [ ] New-tab page lists detected ports and recent files (needs `term`, `files`)
 
 ### Browser
 - [ ] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
