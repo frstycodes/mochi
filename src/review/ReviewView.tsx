@@ -100,7 +100,7 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
           </Fact>
           <Fact label="Pull requests">
             {thread.prs.length === 0 ? (
-              <span className="text-subtle-foreground">None yet. Push and open one from the diff.</span>
+              <span className="text-subtle-foreground">{thread.repo ? 'None yet. Push and open one from the diff.' : 'None. This chat has no project.'}</span>
             ) : (
               <ul className="flex flex-col gap-1">
                 {thread.prs.map((pr) => (
