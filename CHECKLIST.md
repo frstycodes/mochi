@@ -18,20 +18,20 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [ ] New-tab page lists detected ports and recent files (needs `term`, `files`)
 
 ### Browser
-- [ ] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
-- [ ] Address bar with history, back / forward / reload, hard reload, zoom
-- [ ] Multiple browser tabs per thread
-- [ ] Device emulation: preset sizes, custom size, rotate, DPR, touch
-- [ ] Light / dark `prefers-color-scheme` toggle, reduced-motion toggle
-- [ ] DevTools: console, network, elements (or open native DevTools)
-- [ ] Console errors surface as a badge on the tab and can be sent to the agent
-- [ ] Element picker: click an element, send its selector + screenshot + source location to the chat ("comment on page")
-- [ ] Screenshot / full-page screenshot / screen recording into the composer as an attachment
+- [x] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
+- [x] Address bar with history, back / forward / reload, hard reload, zoom
+- [x] Multiple browser tabs per thread
+- [x] Device emulation: preset sizes, custom size, rotate, DPR, touch
+- [x] Light / dark `prefers-color-scheme` toggle, reduced-motion toggle
+- [x] DevTools: console, network, elements (or open native DevTools)
+- [x] Console errors surface as a badge on the tab and can be sent to the agent
+- [x] Element picker: click an element, send its selector + screenshot + outerHTML to the composer ("comment on page"). GAP: source location needs a dev-server plugin (React owner stack / sourcemaps)
+- [x] Screenshot / full-page screenshot into the composer as an attachment. GAP: screen recording
 - [ ] Annotate a screenshot (draw, arrow, note) before sending
-- [ ] Agent driving indicator (already designed: "driving" state) with take-over / give-back
-- [ ] Per-space browser profiles (cookies, logins isolated like spaces' accounts)
-- [ ] Auto-reload on HMR / file change; keep scroll position
-- [ ] Before / after compare: same URL on base branch vs thread branch, side by side or slider
+- [x] Agent driving indicator (already designed: "driving" state) with take-over / give-back
+- [x] Per-space browser profiles (cookies, logins isolated like spaces' accounts)
+- [ ] Auto-reload on HMR / file change; keep scroll position (GAP: dev servers with HMR already reload; needs `fs` watch for the rest)
+- [ ] Before / after compare: same URL on base branch vs thread branch, side by side or slider (GAP: needs the `git` worktree manager to serve the base branch)
 
 ### Ports and previews
 - [ ] Detect listening ports from the thread's processes (lsof / netstat on the worktree's PIDs)
