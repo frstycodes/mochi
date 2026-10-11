@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Add, BranchDown, BranchUp, Code, Document, Edit, Global, Link, Maximize, More, Note, Pin, PinOff, Setting, type IconComponent } from 'reicon-react';
+import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, Link, Maximize, More, Note, Pin, PinOff, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextInputUsage, ContextOutputUsage, ContextTrigger } from '@/components/ai-elements/context';
 import { Badge } from '@/components/ui/badge';
@@ -10,14 +10,15 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import type { Source, Step, Thread } from './model';
+import { SPACES, type Source, type Step, type Thread } from './model';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
 import { GoalEditor } from './goals/GoalEditor';
 import { outcomeOf } from './goals/outcome';
 import { burnSeries, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
 import { summarize, type ToolVerb } from './summary';
-import { StepStatusIcon, lineColor } from './ui';
+import { ProviderMark, StepStatusIcon, lineColor } from './ui';
+import { planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
 
 const LIST_LIMIT = 3;
 
@@ -42,6 +43,9 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
             </span>
           </SummaryRow>
           <ContextRow thread={thread} />
+          <UsageRows thread={thread} />
+
+          <SpaceUsageSection thread={thread} />
 
           <Section label="Pull requests" empty={thread.prs.length === 0 ? 'No PRs linked yet' : undefined}>
             {thread.prs.map((pr) => (
@@ -199,6 +203,72 @@ function ContextRow({ thread }: { thread: Thread }) {
         </ContextContentBody>
       </ContextContent>
     </Context>
+  );
+}
+
+const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
+const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<PlanUsage['provider'], string>;
+
+function UsageRows({ thread }: { thread: Thread }) {
+  const { state } = useHarness();
+  const usage = threadUsage(thread);
+  const space = SPACES.find((s) => s.id === thread.spaceId)!;
+  const provider = thread.providers[0];
+  const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.accounts[provider], state.now);
+  const isStalling = thread.status === 'running' && plan.isWarning;
+
+  return (
+    <>
+      <SummaryRow icon={Coins} label="Tokens">
+        <span className="tabular type-caption text-subtle-foreground">
+          {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)} out
+        </span>
+      </SummaryRow>
+      <SummaryRow icon={DollarCircle} label="Est. cost">
+        <span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)}</span>
+      </SummaryRow>
+      {isStalling && <RateLimitWarning plan={plan} />}
+    </>
+  );
+}
+
+function RateLimitWarning({ plan }: { plan: PlanUsage }) {
+  const name = `${PROVIDER_NAMES[plan.provider]} ${plan.plan}`;
+  return (
+    <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
+      <TriangleWarning className="size-4 shrink-0" aria-hidden />
+      {plan.remaining === 0 ? `${name} limit reached; this agent stalls until the window resets.` : `${name} limit in about ${duration(Math.max(1, Math.round(plan.minutesLeft ?? 0)))} at this pace.`}
+    </p>
+  );
+}
+
+function SpaceUsageSection({ thread }: { thread: Thread }) {
+  const { state } = useHarness();
+  const space = SPACES.find((s) => s.id === thread.spaceId)!;
+  const usage = spaceUsage(state.threads, space, state.now);
+  return (
+    <Section label={`${space.name} usage`} action={<span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)} est.</span>}>
+      {usage.plans.map((p) => (
+        <PlanRow key={p.provider} plan={p} />
+      ))}
+    </Section>
+  );
+}
+
+function PlanRow({ plan }: { plan: PlanUsage }) {
+  const share = Math.min(1, plan.used / plan.limit);
+  return (
+    <div className="flex flex-col gap-1.5 px-2 py-1">
+      <div className="flex items-center gap-2.5 type-body">
+        <ProviderMark provider={plan.provider} size={16} />
+        <span className="min-w-0 flex-1 truncate">
+          {PROVIDER_NAMES[plan.provider]} <span className="text-subtle-foreground">· {plan.plan}</span>
+        </span>
+        <span className={cn('tabular type-caption', plan.isWarning ? 'text-warning' : 'text-subtle-foreground')}>{TOKENS.format(plan.remaining)} left</span>
+      </div>
+      <Progress value={share * 100} style={{ '--progress-color': plan.isWarning ? 'var(--warning)' : 'var(--muted-foreground)' } as CSSProperties} aria-label={`${PROVIDER_NAMES[plan.provider]} ${plan.plan} plan used`} />
+    </div>
   );
 }
 

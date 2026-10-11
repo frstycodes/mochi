@@ -1,8 +1,29 @@
-import type { NotifyHost } from '../types/notify.ts';
+import type { NotifyHost, NotifyPermission } from '../types/notify.ts';
 
+const listeners = new Set<(id: string) => void>();
+const permission = (): NotifyPermission => (typeof Notification === 'undefined' ? 'denied' : Notification.permission);
+
+// GAP: browsers have no dock badge; `navigator.setAppBadge` only works for installed PWAs, which the web build isn't.
 export const notify: NotifyHost = {
-  async show({ title, body }) {
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    new Notification(title, { body });
+  async show({ title, body, id }) {
+    if (permission() !== 'granted') return;
+    const n = new Notification(title, { body, tag: id });
+    n.onclick = () => {
+      window.focus();
+      n.close();
+      if (id) for (const l of listeners) l(id);
+    };
+  },
+  async setBadge() {},
+  async permission() {
+    return permission();
+  },
+  async requestPermission() {
+    if (typeof Notification === 'undefined') return 'denied';
+    return Notification.requestPermission();
+  },
+  onClick(listener) {
+    listeners.add(listener);
+    return () => void listeners.delete(listener);
   },
 };
