@@ -5,6 +5,7 @@ import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesStat
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
 import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState } from './threads.ts';
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
+import { initialNotifications, notificationsReducer, type NotificationsAction, type NotificationsState } from '../notify/slice.ts';
 
 export type { View } from './layout.ts';
 export type { OverlapMode } from './threads.ts';
@@ -15,13 +16,14 @@ export interface Snapshot {
   queue: QueueItem[];
 }
 
-export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState;
-export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | { type: 'reset' };
+export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & NotificationsState;
+export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | NotificationsAction | { type: 'reset' };
 
-const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer];
+// notificationsReducer diffs what the others changed, so it runs last.
+const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, notificationsReducer];
 
 function initialState(): State {
-  return { ...initialThreads(), ...initialQueue(), ...initialPanes(), ...initialLayout(), ...initialUi() };
+  return { ...initialThreads(), ...initialQueue(), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialNotifications() };
 }
 
 function reducer(state: State, action: Action): State {

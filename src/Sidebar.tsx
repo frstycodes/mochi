@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { PIN_SLOTS, SPACES, type PullRequest, type Thread } from './model';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
+import { NotificationBell } from './notify/NotificationBell';
 import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
@@ -163,6 +164,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
             />
             <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<Kbd className="hidden md:inline-flex">N</Kbd>} />
             <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length > 0 ? queue.length : undefined} />
+            <NotificationBell spaceId={spaceId} />
             <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
           </SidebarMenu>
         </SidebarGroupContent>
