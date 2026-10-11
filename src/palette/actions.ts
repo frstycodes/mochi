@@ -1,9 +1,10 @@
 import type { Dispatch } from 'react';
-import { Archive, Edit, Grid, Inbox, Maximize, Monitor, Moon, Pause, Pin, PinOff, Play, Refresh, Route, Sidebar, SidebarRight, Sun, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, Edit, Grid, History, Inbox, Layers, Maximize, Monitor, Moon, Pause, Pin, PinOff, Play, Refresh, Route, Routing, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import { SPACES, type Thread } from '../model';
 import { PANE_TABS } from '../pane/tabs';
+import { openRewind } from '../rewind/requests';
 import { togglePin } from '../reorder';
 import type { Action, State } from '../store';
 import { when, type ActionScope } from './when';
@@ -40,6 +41,9 @@ export const ACTIONS = [
   { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => dispatch({ type: 'unsettle', threadId: t.id })) },
   { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: 'Shift Cmd P', when: when.unpinned, run: onThread(pin) },
   { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, shortcut: 'Shift Cmd P', when: when.pinned, run: onThread(pin) },
+  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: onThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
+  { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: Routing, keywords: 'branch alternative', when: when.liveThread, run: onThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
+  { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: onThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },
 
   { id: 'pane-toggle', group: 'Side pane', title: 'Toggle side pane', icon: Sidebar, when: when.thread, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-toggle', threadId: t.id })) },
@@ -58,6 +62,8 @@ export const ACTIONS = [
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),
+  { id: 'layout-stage', group: 'Layout', title: 'Toggle Stage Manager', icon: Layers, shortcut: 'Shift Cmd S', run: ({ dispatch }) => dispatch({ type: 'stage-toggle' }) },
+  { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, shortcut: 'Cmd ↑', keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
   { id: 'layout-split', group: 'Layout', title: 'Split right', icon: Grid, shortcut: 'Cmd \\', run: ({ dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'new' } }) },
   { id: 'layout-rotate', group: 'Layout', title: 'Rotate the focused split', icon: Grid, when: when.splits, run: ({ dispatch }) => dispatch({ type: 'layout-rotate' }) },
   { id: 'layout-swap', group: 'Layout', title: 'Swap the focused split with the next', icon: Grid, when: when.splits, run: ({ dispatch }) => dispatch({ type: 'layout-swap' }) },
