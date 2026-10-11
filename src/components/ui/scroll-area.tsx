@@ -17,9 +17,10 @@ function ScrollArea({
       className={cn("relative", className)}
       {...props}
     >
+      {/* Radix wraps children in `display: table`, which grows to the widest unbreakable line and clips every row; block keeps them at the viewport width. Horizontal scroll areas would need it back. */}
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full scroll-fade-y rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
+        className="size-full scroll-fade-y [&>div]:!block rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
