@@ -7,7 +7,7 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind }
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   | { type: 'pane-close-tab'; threadId: string; tabId: string }
   | { type: 'pane-pop'; threadId: string; tabId: string; isPopped: boolean }
@@ -30,7 +30,7 @@ export function panesReducer(state: State, action: Action): State {
     case 'pane-open-tab': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       const existing = state.panes.find((p) => p.threadId === action.threadId) ?? newPane(action.threadId);
-      const tab: PaneTab = { id: nextTabId(existing.tabs), kind: action.kind, url: action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined };
+      const tab: PaneTab = { id: nextTabId(existing.tabs), kind: action.kind, url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined) };
       const tabs = existing.tabs.flatMap((t) => (t.kind !== 'new' ? [t] : t.id === existing.activeTab ? [tab] : []));
       const pane = { ...existing, isOpen: true, tabs: tabs.includes(tab) ? tabs : [...tabs, tab], activeTab: tab.id };
       return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
@@ -84,7 +84,7 @@ function newPane(threadId: string): Pane {
   return { threadId, isOpen: true, tabs: [{ id: 'tab-1', kind: 'new' }], activeTab: 'tab-1' };
 }
 
-function nextTabId(tabs: PaneTab[]) {
+export function nextTabId(tabs: PaneTab[]) {
   return `tab-${Math.max(0, ...tabs.map((t) => Number(t.id.split('-').pop()) || 0)) + 1}`;
 }
 
