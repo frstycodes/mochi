@@ -121,6 +121,17 @@
         "--strictPort"
       ],
       "port": 5249
+    },
+    {
+      "name": "harness-term",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5255",
+        "--strictPort"
+      ],
+      "port": 5255
     }
   ]
 }
