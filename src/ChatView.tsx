@@ -17,7 +17,7 @@ import { ProviderMark } from './ui';
 import { WorkspaceControls, WorkspaceNotes, useThreadWorkspace } from './git/WorkspacePicker';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu, useComposerHandoff } from './Composer';
 import { useSplit } from './layout/SplitContext';
-import { ThreadMinimap } from './ThreadMinimap';
+import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
 import { agentPhase, currentAction, pendingWork, type CurrentAction } from './agentPhase';
 import { chatRows, liveWorkIndex, type ChatRow } from './chat/rows';
@@ -79,7 +79,7 @@ export function ChatView({ thread }: { thread: Thread }) {
         </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         <SelectionPin threadId={thread.id} scope={messages} />
-        <ThreadMinimap items={outline(rows, pins)} className="absolute top-6 right-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
+        <ThreadMinimap items={outline(rows, pins)} className="absolute top-6 left-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
         <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />
       </Conversation>
       <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
@@ -140,19 +140,13 @@ function ChatRowView({ thread, row, isLive, action }: { thread: Thread; row: Cha
   );
 }
 
-/** One rail item per row; a row whose message (or a passage in it) is pinned carries its pins, shown in the tooltip. */
-function outline(rows: ChatRow[], pins: Pin[]) {
-  return rows.map((row) => {
-    const pinned = row.kind === 'message' ? pins.filter((p) => p.index === row.index) : [];
-    return { label: rowLabel(row), pins: pinned.map((p) => p.text || (row.kind === 'message' ? row.entry.text : '')) };
+/** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */
+function outline(rows: ChatRow[], pins: Pin[]): OutlineItem[] {
+  return rows.flatMap((row, rowIndex) => {
+    if (row.kind !== 'message' || row.entry.who !== 'you') return [];
+    const pinned = pins.filter((p) => p.index === row.index).map((p) => p.text || row.entry.text);
+    return [{ rowIndex, text: row.entry.text, time: clock(row.entry.at), pins: pinned }];
   });
-}
-
-function rowLabel(row: ChatRow) {
-  if (row.kind === 'work') return `${authorName(row.who)} work log (${row.entries.length})`;
-  if (row.kind === 'review') return `${authorName(row.review.provider)} second opinion`;
-  if (row.kind === 'event') return row.entry.detail ? `${row.entry.text}: ${row.entry.detail}` : row.entry.text;
-  return `${authorName(row.entry.who)}: ${row.entry.text}`;
 }
 
 /** Reading back through the chat folds the question tray away; returning to the latest message brings it back. */
