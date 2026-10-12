@@ -2,8 +2,8 @@ import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app, BrowserWindow } from 'electron';
 import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
-import { accountEnv, accountFor, type ClaudeAccount } from './account.ts';
-import { detectClaude, readSettings } from './install.ts';
+import { accountFor, type ClaudeAccount } from './account.ts';
+import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { approvalEvent, createMapper, permissionResult } from './map.ts';
 
 /**
@@ -103,16 +103,16 @@ async function launch(session: Session) {
   const { threadId, options } = session;
   const abort = new AbortController();
   try {
-    const settings = await readSettings();
-    const { apiKeyFor, defaultModel } = await config();
-    const base = accountEnv(session.account);
-    const install = await detectClaude(settings, base);
+    const { accountEnv, apiKeyFor, defaultModel, userPath } = await config();
+    const { configDir = null } = session.account;
+    const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
+    if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
+    const base = { ...accountEnv('claude', configDir), PATH: await userPath() };
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
     const key = options.useApiKey ? apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
-    const keyEnv = key ? { ...(base ?? process.env), ANTHROPIC_API_KEY: key } : undefined;
-    const env = keyEnv ?? base;
-    if (!install.loggedIn && !keyEnv) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
+    const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
+    if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     session.query = query({
@@ -125,7 +125,7 @@ async function launch(session: Session) {
         permissionMode: (options.permissionMode as PermissionMode | undefined) ?? 'default',
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
-        ...(env && { env }),
+        env,
         includePartialMessages: true,
         enableFileCheckpointing: true,
         abortController: abort,

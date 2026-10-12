@@ -6,7 +6,6 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
 import { CodexAdapter, reply } from './adapter.ts';
-import { setCodexPath } from './find.ts';
 import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
@@ -115,10 +114,9 @@ test('one app-server per account: threads route to their profile account and nev
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = path.join(home, 'codex');
   writeFileSync(fake, FAKE_CODEX, { mode: 0o755 });
-  setCodexPath(fake);
   const events: AgentEvent[] = [];
   const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, side: { id: 'work', configDir: path.join(home, 'work') }, home: { id: 'default' } };
-  const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId]);
+  const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
   try {
     for (const [threadId, spaceId] of [['a', 'work'], ['b', 'side'], ['c', 'home']]) await codex.start(threadId, { provider: 'codex', spaceId, cwd: home, prompt: 'hi' });
     await new Promise((r) => setTimeout(r, 200));
@@ -131,7 +129,6 @@ test('one app-server per account: threads route to their profile account and nev
     assert.deepEqual(ends, [['a', sessions.a], ['b', sessions.b], ['c', sessions.c]], 'every notification reaches the thread that started it');
   } finally {
     codex.dispose();
-    setCodexPath(undefined);
   }
 });
 

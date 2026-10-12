@@ -1,8 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
 import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
-import { accountEnv, accountFor as defaultAccountFor, type AccountFor, type CodexAccount } from './account.ts';
-import { findCodex } from './find.ts';
+import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 
@@ -49,10 +48,12 @@ export class CodexAdapter {
   private requests = new Map<string, Pending>();
   private emit: (event: AgentEvent) => void;
   private accountFor: AccountFor;
+  private findCodex: FindCodex;
 
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor) {
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex) {
     this.emit = emit;
     this.accountFor = accountFor;
+    this.findCodex = findCodex;
   }
 
   owns(threadId: string) {
@@ -113,6 +114,7 @@ export class CodexAdapter {
       notification: (method, params) => this.notification(server!, method, params),
       request: (id, method, params) => this.request(server!, id, method, params),
       exited: (message) => this.exited(server!, message),
+      findCodex: this.findCodex,
     });
     this.servers.set(account.id, server);
     return server;
@@ -204,6 +206,7 @@ interface ServerHooks {
   notification(method: string, params: unknown): void;
   request(id: RpcId, method: string, params: unknown): void;
   exited(message: string): void;
+  findCodex: FindCodex;
 }
 
 /** One account's `codex app-server` child, started lazily with that account's `CODEX_HOME`. */
@@ -248,7 +251,7 @@ class CodexServer {
     this.crashes = this.crashes.filter((at) => now - at < CRASH_WINDOW_MS);
     if (this.crashes.length) await new Promise((r) => setTimeout(r, Math.min(MAX_BACKOFF_MS, 1000 * 2 ** (this.crashes.length - 1))));
 
-    const install = await findCodex();
+    const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
     const child = spawn(install.path, ['app-server'], { cwd: os.homedir(), env: accountEnv(this.account, install.env), stdio: ['pipe', 'pipe', 'pipe'] });
     const gen = ++this.gen;
