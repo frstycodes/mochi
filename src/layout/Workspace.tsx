@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
 import type { Thread } from '../model';
 import { Edit, Inbox, Route } from 'reicon-react';
@@ -8,6 +9,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
 import { BoardView } from '../BoardView';
+import { HANDOFF_TRANSITION, isHandingOff } from '../Composer';
 import { NewThreadView } from '../NewThreadView';
 import { PANE_TABS, tabTitle } from '../pane/tabs';
 import { QueueView } from '../QueueView';
@@ -114,31 +116,47 @@ export function LeafView({ leaf, isMulti, isZoomed, isFirst }: { leaf: Leaf; isM
         onFocusCapture={() => isTabbing() && focus()}
         className={cn('relative h-full min-h-0 min-w-0 bg-background outline-none', isMulti && 'overflow-hidden rounded-xl border border-transparent', isMulti && isFocused && 'border-foreground/20')}
       >
-        <LeafContent view={leaf.view} />
+        <LeafContent leafId={leaf.id} view={leaf.view} />
         <DropZone leafId={leaf.id} />
       </section>
     </SplitContext.Provider>
   );
 }
 
-function LeafContent({ view }: { view: View }) {
+function LeafContent({ leafId, view }: { leafId: string; view: View }) {
   const { state } = useHarness();
   if (view.kind === 'tab') return <TabLeaf threadId={view.threadId} tabId={view.tabId} />;
-  if (view.kind === 'thread') {
-    const thread = state.threads.find((t) => t.id === view.id);
-    // Keyed: another thread is a fresh view, so its pane, summary and chat open in their own state instead of animating from the last thread's.
-    if (thread) return <ThreadView key={thread.id} thread={thread} />;
-  }
+  const thread = view.kind === 'thread' ? state.threads.find((t) => t.id === view.id) : undefined;
   // A thread or tab that no longer exists (deleted, or saved by a launch that showed demo data) opens a new thread.
   const kind = view.kind === 'board' || view.kind === 'queue' ? view.kind : 'new';
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <LeafBar>
-        {kind === 'board' ? <Route className="size-4 text-muted-foreground" /> : kind === 'new' ? <Edit className="size-4 text-muted-foreground" /> : <Inbox className="size-4 text-muted-foreground" />}
-        {kind === 'board' ? 'Board' : kind === 'new' ? 'New thread' : 'Queue'}
-      </LeafBar>
-      <div className="min-h-0 flex-1">{kind === 'board' ? <BoardView /> : kind === 'new' ? <NewThreadView /> : <QueueView />}</div>
-    </div>
+    <>
+      {/* Keyed: another thread is a fresh view, so its pane, summary and chat open in their own state instead of animating from the last thread's. */}
+      {!!thread && <ThreadView key={thread.id} thread={thread} />}
+      {/* Sending from a new thread fades its page out over the thread it started; every other switch is instant. */}
+      <AnimatePresence initial={false} custom={isHandingOff(leafId)}>
+        {!thread && (
+          <PageLeaf key={kind}>
+            <LeafBar>
+              {kind === 'board' ? <Route className="size-4 text-muted-foreground" /> : kind === 'new' ? <Edit className="size-4 text-muted-foreground" /> : <Inbox className="size-4 text-muted-foreground" />}
+              {kind === 'board' ? 'Board' : kind === 'new' ? 'New thread' : 'Queue'}
+            </LeafBar>
+            <div className="min-h-0 flex-1">{kind === 'board' ? <BoardView /> : kind === 'new' ? <NewThreadView /> : <QueueView />}</div>
+          </PageLeaf>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+const PAGE_EXIT = { leave: (isHandoff: boolean) => ({ opacity: 0, transition: isHandoff ? HANDOFF_TRANSITION : { duration: 0 } }) };
+
+function PageLeaf({ children }: { children: ReactNode }) {
+  const isPresent = useIsPresent();
+  return (
+    <motion.div variants={PAGE_EXIT} exit="leave" inert={!isPresent} data-exiting={!isPresent || undefined} className="absolute inset-0 flex min-h-0 flex-col">
+      {children}
+    </motion.div>
   );
 }
 

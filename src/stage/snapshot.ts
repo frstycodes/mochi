@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
 import { progressAt } from '../progress';
+import { isWorking } from '../agentPhase';
 import { threadDetail } from '../Sidebar';
 import { useHarness, type State } from '../store';
 
@@ -12,6 +13,7 @@ export interface ThreadSnapshot {
   status: ThreadStatus;
   pct: number;
   nowStep: string;
+  isWorking: boolean;
   lastMessage: { who: Author; text: string } | null;
   preview: { tabId: string; url: string } | null;
 }
@@ -45,6 +47,7 @@ function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
     status: thread.status,
     pct: Math.round(progressAt(thread, state.now, true).pct * 100) / 100,
     nowStep: threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title),
+    isWorking: isWorking(thread),
     lastMessage: last ? { who: last.who, text: last.text } : null,
     preview: tab ? { tabId: tab.id, url: tab.url ?? '' } : null,
   };

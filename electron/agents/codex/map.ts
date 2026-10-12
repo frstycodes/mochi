@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { AgentEvent, AgentPlanItem } from '../../../src/host/types/agent.ts';
+import type { AgentInfo, McpServer } from '../../../src/model.ts';
 import { MODEL_PRICES } from '../../../src/usage/model.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
@@ -80,10 +81,54 @@ export function mapNotification(method: string, params: unknown, s: ThreadState)
       const resetsAt = s.limits.resetsAt;
       return [{ threadId, type: 'limit', ...(resetsAt !== undefined && { resetsAt: new Date(resetsAt * 1000).toISOString() }) }, end];
     }
+    case 'mcpServer/startupStatus/updated': {
+      const status = STARTUP_STATUS[p.status as keyof typeof STARTUP_STATUS];
+      return typeof p.name === 'string' && status ? [{ threadId, type: 'info', info: { mcpServers: [{ name: p.name, status }] } }] : [];
+    }
     case 'serverRequest/resolved':
       return typeof p.requestId === 'string' || typeof p.requestId === 'number' ? [{ threadId, type: 'resolved', requestId: requestKey(s.account, p.requestId) }] : [];
   }
   return [];
+}
+
+/** What `thread/start` and `thread/resume` say about the session. Codex lists no built-in tools, so `tools` stays unset. */
+export function infoFromStart(result: unknown): AgentInfo {
+  const r = obj(result);
+  const approval = typeof r?.approvalPolicy === 'string' ? r.approvalPolicy : obj(r?.approvalPolicy) ? 'granular' : undefined;
+  const sandbox = obj(r?.sandbox)?.type;
+  const version = obj(r?.thread)?.cliVersion;
+  return {
+    ...(typeof r?.model === 'string' && { model: r.model }),
+    ...(typeof r?.cwd === 'string' && { cwd: r.cwd }),
+    ...(approval && { permissionMode: [approval, sandbox].filter((x) => typeof x === 'string').join(' · ') }),
+    ...(typeof version === 'string' && { version }),
+  };
+}
+
+/** Folds the replies to `mcpServerStatus/list`, `skills/list` and `plugin/installed`; a list whose call failed is left out. */
+export function infoFromLists(mcp: unknown, skills: unknown, plugins: unknown): AgentInfo {
+  const info: AgentInfo = {};
+  const servers = obj(mcp)?.data;
+  if (Array.isArray(servers))
+    info.mcpServers = servers.flatMap((x): McpServer[] => {
+      const o = obj(x);
+      if (typeof o?.name !== 'string') return [];
+      const status = CONNECTION_STATUS[o.runtimeStatus as keyof typeof CONNECTION_STATUS] ?? (o.authStatus === 'notLoggedIn' ? 'needs-auth' : 'pending');
+      return [{ name: o.name, status, toolCount: Object.keys(obj(o.tools) ?? {}).length }];
+    });
+  const entries = obj(skills)?.data;
+  if (Array.isArray(entries)) info.skills = [...new Set(entries.flatMap((e) => (Array.isArray(obj(e)?.skills) ? (obj(e)!.skills as unknown[]) : [])).flatMap((x) => (obj(x)?.enabled !== false && typeof obj(x)?.name === 'string' ? [obj(x)!.name as string] : [])))];
+  const marketplaces = obj(plugins)?.marketplaces;
+  if (Array.isArray(marketplaces))
+    info.plugins = marketplaces
+      .flatMap((m) => (Array.isArray(obj(m)?.plugins) ? (obj(m)!.plugins as unknown[]) : []))
+      .flatMap((x) => {
+        const o = obj(x);
+        if (!o?.installed || !o.enabled || typeof o.name !== 'string') return [];
+        const version = o.localVersion ?? o.version;
+        return [{ name: o.name, ...(typeof version === 'string' && { version }) }];
+      });
+  return info;
 }
 
 /** Server requests that become queue cards. Anything else gets a JSON-RPC error reply from the caller. */
@@ -106,7 +151,8 @@ export function mapRequest(method: string, params: unknown, requestId: string, s
       const o = obj(q);
       if (typeof o?.question !== 'string') return [];
       const options = Array.isArray(o.options) ? o.options.flatMap((x) => (typeof obj(x)?.label === 'string' ? [obj(x)!.label as string] : [])) : [];
-      return [{ text: o.question, options }];
+      // app-server's request_user_input has no multi-select flag; free text is always offered.
+      return [{ text: o.question, options, multiSelect: false }];
     });
     return questions.length ? { threadId, type: 'question', requestId, questions } : null;
   }
@@ -123,6 +169,8 @@ export function requestKey(account: string, id: string | number) {
 }
 
 const PLAN_STATUS = { pending: 'pending', inProgress: 'running', completed: 'done' } as const;
+const CONNECTION_STATUS = { notStarted: 'pending', starting: 'pending', connected: 'connected', authenticationRequired: 'needs-auth', failed: 'failed', cancelled: 'failed', disabled: 'disabled' } as const satisfies Record<string, McpServer['status']>;
+const STARTUP_STATUS = { starting: 'pending', ready: 'connected', failed: 'failed', cancelled: 'failed' } as const satisfies Record<string, McpServer['status']>;
 const TURN_STATUS = { completed: 'done', interrupted: 'interrupted', failed: 'failed' } as const;
 // TODO(codex): threads don't report their model yet, so every Codex token is priced as the default model; cached input is left out of the cost.
 const PRICE = MODEL_PRICES['gpt-5.5-codex'];

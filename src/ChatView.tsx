@@ -13,9 +13,11 @@ import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
 import { ProviderMark } from './ui';
-import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
+import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu, useComposerHandoff } from './Composer';
+import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap } from './ThreadMinimap';
-import { WorkLog } from './WorkLog';
+import { ChatMochi, WorkLog } from './WorkLog';
+import { agentPhase, pendingWork } from './agentPhase';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
@@ -29,6 +31,8 @@ import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
 import { parseSlash } from './chat/slash';
 import { SlashMenu, useSlashMenu } from './chat/SlashMenu';
+import { withReferences } from './chat/mentions';
+import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
@@ -50,19 +54,21 @@ export function ChatView({ thread }: { thread: Thread }) {
   const messages = useRef<HTMLDivElement>(null);
   const pins = useThreadPins(thread.id);
   usePinHighlights(messages, pins);
+  const handoff = useComposerHandoff(useSplit().leafId);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Instant while opening: a thread opens at its latest message, and a Stage swipe lands on the live view already where the preview was. */}
       <Conversation data-photo-scope initial="instant" resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
-          <ConversationContent className="mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6">
+          <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
                   <ChatRowView thread={thread} row={row} isLive={i === rows.length - 1 && isRunning} />
                 </div>
               ))}
+              <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
           </ConversationContent>
         </VizThreadProvider>
@@ -74,7 +80,7 @@ export function ChatView({ thread }: { thread: Thread }) {
       <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
         <PromptInputProvider key={thread.id}>
           <ImageDropTarget>
-            <Composer thread={thread} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} />
+            <Composer thread={thread} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
           </ImageDropTarget>
           <ComposerInbox threadId={thread.id} />
         </PromptInputProvider>
@@ -226,64 +232,85 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
   return null;
 }
 
-function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thread; decisions: QueueItem[]; isTrayOpen: boolean; onToggleTray: () => void }) {
-  const { dispatch } = useHarness();
+function Composer({
+  thread,
+  decisions,
+  isTrayOpen,
+  onToggleTray,
+  handoff,
+}: {
+  thread: Thread;
+  decisions: QueueItem[];
+  isTrayOpen: boolean;
+  onToggleTray: () => void;
+  handoff: ReturnType<typeof useComposerHandoff>;
+}) {
+  const { state, dispatch } = useHarness();
   const [isQueue, setIsQueue] = useState(false);
   const controls = controlsOf(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
-  const drift = useDriftGuard(thread);
+  const mention = useMentionMenu(thread);
+  const drift = useDriftGuard(thread, mention.clear);
   const slash = useSlashMenu();
+  const menuProps = mention.isOpen ? mention.textareaProps : slash.textareaProps;
   useSeedAttachment(thread.id === 'adm');
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
       <DriftCard guard={drift} thread={thread} />
       <LimitBanner thread={thread} />
-      <div className="relative">
-        <SlashMenu menu={slash} />
-        <ComposerCard className="in-data-image-over:border-ring">
-          {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-          <ComposerInput
-            controls={controls}
-            provider={provider}
-            isLocked={!!thread.live}
-            onControlsChange={setControls}
-            onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
-            submitLabel={isQueue ? 'Queue message' : 'Send'}
-            onSend={({ text, files }) => {
-              const trimmed = text.trim();
-              if (!trimmed && files.length === 0) return;
-              const command = parseSlash(trimmed);
-              if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
-              const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-              return drift.submit(withFiles, isQueue ? QUEUED_PREFIX : '');
-            }}
-            placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
-            {...slash.textareaProps}
-            onKeyDown={(e) => {
-              slash.textareaProps.onKeyDown(e);
-              if (e.key === MOD_KEY) setIsQueue(true);
-            }}
-            onKeyUp={(e) => e.key === MOD_KEY && setIsQueue(false)}
-            onBlur={() => setIsQueue(false)}
-          />
-        </ComposerCard>
-      </div>
-      <ComposerMeta>
-        <RunOnMenu />
-        <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
-        {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
-        <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
-          {isQueue ? (
-            'Queues after this turn'
-          ) : (
-            <>
-              <Shortcut keys={['mod']} /> to queue
-            </>
-          )}
-        </span>
-      </ComposerMeta>
+      <motion.div {...handoff.layout}>
+        <div className="relative">
+          <SlashMenu menu={slash} />
+          <MentionMenu menu={mention} />
+          <ComposerCard className="in-data-image-over:border-ring">
+            {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
+            <MentionChips menu={mention} />
+            <ComposerInput
+              controls={controls}
+              provider={provider}
+              isLocked={!!thread.live}
+              onControlsChange={setControls}
+              onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
+              submitLabel={isQueue ? 'Queue message' : 'Send'}
+              onSend={({ text, files }) => {
+                const trimmed = text.trim();
+                if (!trimmed && files.length === 0 && mention.mentions.length === 0) return;
+                const command = parseSlash(trimmed);
+                if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
+                const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
+                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads);
+                return drift.submit(shown, isQueue ? QUEUED_PREFIX : '', references);
+              }}
+              placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
+              autoFocus={handoff.isHandoff}
+              {...menuProps}
+              onKeyDown={(e) => {
+                mention.textareaProps.onKeyDown(e);
+                if (!e.isPropagationStopped()) slash.textareaProps.onKeyDown(e);
+                if (e.key === MOD_KEY) setIsQueue(true);
+              }}
+              onKeyUp={(e) => e.key === MOD_KEY && setIsQueue(false)}
+              onBlur={() => setIsQueue(false)}
+            />
+          </ComposerCard>
+        </div>
+        <ComposerMeta>
+          <RunOnMenu />
+          <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
+          {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
+          <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
+            {isQueue ? (
+              'Queues after this turn'
+            ) : (
+              <>
+                <Shortcut keys={['mod']} /> to queue
+              </>
+            )}
+          </span>
+        </ComposerMeta>
+      </motion.div>
     </div>
   );
 }

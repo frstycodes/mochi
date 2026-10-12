@@ -1,8 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 
 interface Live {
@@ -76,13 +76,13 @@ export class CodexAdapter {
       const rpc = await server.client();
       await server.requireLogin(rpc);
       await this.open(server, rpc, threadId, options);
-      await this.turn(threadId, options.prompt);
+      await this.turn(threadId, options.prompt, options.images);
     });
   }
 
-  async send(threadId: string, text: string) {
+  async send(threadId: string, text: string, images?: AgentImage[]) {
     if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
-    await this.report(threadId, () => this.turn(threadId, text));
+    await this.report(threadId, () => this.turn(threadId, text, images));
   }
 
   async interrupt(threadId: string) {
@@ -139,16 +139,28 @@ export class CodexAdapter {
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
+    this.emit({ threadId, type: 'info', info: infoFromStart(result) });
+    void this.discover(rpc, threadId, codexId, options.cwd);
   }
 
-  private async turn(threadId: string, text: string) {
+  /** Lists what the thread can reach. Best effort: the panel shows what came back, a failed call just leaves its list out. */
+  private async discover(rpc: RpcClient, threadId: string, codexId: string, cwd: string) {
+    const [mcp, skills, plugins] = await Promise.all([
+      rpc.request('mcpServerStatus/list', { threadId: codexId, detail: 'toolsAndAuthOnly' }).catch(() => null),
+      rpc.request('skills/list', { cwds: [cwd] }).catch(() => null),
+      rpc.request('plugin/installed', { cwds: [cwd] }).catch(() => null),
+    ]);
+    if (this.threads.get(threadId)?.codexId === codexId) this.emit({ threadId, type: 'info', info: infoFromLists(mcp, skills, plugins) });
+  }
+
+  private async turn(threadId: string, text: string, images: AgentImage[] = []) {
     let live = this.threads.get(threadId)!;
     const rpc = await live.server.client();
     if (live.gen !== live.server.gen) {
       await this.open(live.server, rpc, threadId, live.options);
       live = this.threads.get(threadId)!;
     }
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [{ type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null });
+    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
   }
@@ -296,7 +308,7 @@ class CodexServer {
 export function reply(pending: Pick<Pending, 'method' | 'questionIds'>, decision: AgentDecision): unknown {
   if (pending.method === 'item/tool/requestUserInput') {
     const answers = decision.kind === 'answer' ? decision.answers : [];
-    return { answers: Object.fromEntries(pending.questionIds.flatMap((id, i) => (answers[i] === undefined ? [] : [[id, { answers: [answers[i]] }]]))) };
+    return { answers: Object.fromEntries(pending.questionIds.flatMap((id, i) => (answers[i]?.length ? [[id, { answers: answers[i] }]] : []))) };
   }
   if (pending.method === 'mcpServer/elicitation/request') return decision.kind === 'allow' ? { action: 'accept', content: {}, _meta: null } : { action: 'decline', content: null, _meta: null };
   if (decision.kind === 'allow') return { decision: decision.forSession ? 'acceptForSession' : 'accept' };

@@ -1,4 +1,4 @@
-import type { AgentEvent } from '../host/types/agent.ts';
+import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Step, type StepStatus, type Thread } from '../model.ts';
 import { stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
@@ -33,6 +33,7 @@ export interface ThreadsState {
 export type ThreadsAction =
   | { type: 'tick' }
   | { type: 'agent'; event: AgentEvent }
+  | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
@@ -42,7 +43,8 @@ export type ThreadsAction =
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
   | { type: 'resume'; threadId: string; onApiKey?: boolean }
-  | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string }
+  /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). */
+  | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
@@ -93,6 +95,8 @@ function reduce(state: State, action: Action): State {
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
       return applyAgentEvent(state, action.event);
+    case 'agent-starting':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'trigger-overlap':
       return triggerOverlap(state);
     case 'settle':

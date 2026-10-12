@@ -22,6 +22,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PIN_SLOTS, type PullRequest, type Thread } from './model';
 import { useProfiles } from './profiles';
@@ -41,6 +42,7 @@ import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type Vie
 import { duration, progressAt } from './progress';
 import { openSettings } from './settings/open';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
+import { isWorking, workingLabel } from './agentPhase';
 import { Shortcut } from './Shortcut';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
@@ -502,9 +504,9 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
         </span>
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
-          <ProgressRing pct={row.pct} slot={thread.line} size={12} />
+          <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
           <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>
-          <span className="min-w-0 flex-1 truncate">{row.detail}</span>
+          {row.isWorking ? <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer> : <span className="min-w-0 flex-1 truncate">{row.detail}</span>}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           {!!pr && <PrBadge pr={pr} />}
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
@@ -540,7 +542,7 @@ function useThreadRow(thread: Thread) {
   const lastAt = thread.activity[thread.activity.length - 1]?.at ?? thread.startedAt;
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWatched: state.watched.includes(thread.id) };
+  return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {
@@ -548,6 +550,8 @@ export function threadDetail(thread: Thread, question?: string) {
   if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];
   if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : 'Ready for review';
+  // A live agent reports what it's doing; demo threads are told by their goal steps.
+  if (thread.live) return workingLabel(thread) ?? 'Idle';
   const step = thread.steps.find((s) => s.status === 'running') ?? thread.steps.find((s) => s.status === 'ready');
   return step?.title ?? 'Idle';
 }

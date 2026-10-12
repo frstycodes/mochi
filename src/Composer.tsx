@@ -1,4 +1,5 @@
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { useReducedMotionConfig } from 'motion/react';
 import { ArrowUp, BranchUp, Laptop, Mic, Monitor, Paperclip, ShieldCheck, Stop } from 'reicon-react';
 import { toast } from 'sonner';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
@@ -29,6 +30,34 @@ import type { Provider } from './model';
 import { EffortPicker, ModelPicker } from './ModelControls';
 import { ACCESS, type Access, type ModelOption, type ThreadControls } from './runtime/controls';
 import { getPrefs, type Prefs } from './settings/prefs';
+
+// Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
+// Each new thread page takes a fresh id, so nothing mounted later animates from a composer that already docked.
+const handoffs = new Map<string, string>();
+let nextHandoff = 0;
+export const HANDOFF_TRANSITION = { duration: 0.35, ease: [0.32, 0.72, 0, 1] } as const;
+
+export function newComposerLayoutId(leafId: string) {
+  return `composer-${leafId}-${nextHandoff++}`;
+}
+
+export function handOffComposer(leafId: string, layoutId: string) {
+  handoffs.set(leafId, layoutId);
+}
+
+export function isHandingOff(leafId: string) {
+  return handoffs.has(leafId);
+}
+
+/** The thread composer takes over the card only when it receives a handoff. Reduced motion: no move, the new thread page crossfades out. */
+export function useComposerHandoff(leafId: string) {
+  const reduce = useReducedMotionConfig();
+  const [layoutId] = useState(() => handoffs.get(leafId));
+  useEffect(() => {
+    handoffs.delete(leafId);
+  }, [leafId]);
+  return { isHandoff: !!layoutId, layout: { layoutId: reduce ? undefined : layoutId, layoutCrossfade: false, transition: HANDOFF_TRANSITION } };
+}
 
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {

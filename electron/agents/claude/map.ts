@@ -1,6 +1,7 @@
 import path from 'node:path';
-import type { PermissionResult, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerStatus, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../../../src/host/types/agent.ts';
+import type { AgentInfo, McpServer } from '../../../src/model.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
@@ -56,7 +57,9 @@ export function createMapper(threadId: string, cwd: string) {
     if ('parent_tool_use_id' in message && message.parent_tool_use_id) return [];
     switch (message.type) {
       case 'system':
-        return message.subtype === 'init' ? [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }] : [];
+        if (message.subtype === 'init') return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }];
+        if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name) } }];
+        return [];
       case 'stream_event': {
         const event = message.event;
         if (event.type === 'content_block_start') isNewBlock = event.content_block.type === 'text';
@@ -106,8 +109,8 @@ export function createMapper(threadId: string, cwd: string) {
 
 export function approvalEvent(threadId: string, requestId: string, toolName: string, input: Record<string, unknown>, title: string, detail: string): AgentEvent {
   if (toolName === 'AskUserQuestion') {
-    const questions = (input.questions ?? []) as { question: string; options: { label: string }[] }[];
-    return { threadId, type: 'question', requestId, questions: questions.map((q) => ({ text: q.question, options: q.options.map((o) => o.label) })) };
+    const questions = (input.questions ?? []) as { question: string; options: { label: string }[]; multiSelect?: boolean }[];
+    return { threadId, type: 'question', requestId, questions: questions.map((q) => ({ text: q.question, options: q.options.map((o) => o.label), multiSelect: !!q.multiSelect })) };
   }
   if (toolName === 'Bash') return { threadId, type: 'approval', requestId, kind: 'command', title, detail, code: String(input.command ?? '') };
   const file = input.file_path ?? input.notebook_path;
@@ -119,14 +122,45 @@ export function permissionResult(toolName: string, input: Record<string, unknown
   if (decision.kind === 'deny') return { behavior: 'deny', message: decision.message ?? 'The user declined this.' };
   if (decision.kind !== 'answer' || toolName !== 'AskUserQuestion') return { behavior: 'allow', updatedInput: input };
   const questions = (input.questions ?? []) as { question: string }[];
-  const answers = Object.fromEntries(questions.flatMap((q, i) => (decision.answers[i] === undefined ? [] : [[q.question, decision.answers[i]]])));
+  // The SDK types each answer as one string; the CLI itself joins multiple picks with ", ".
+  const answers = Object.fromEntries(questions.flatMap((q, i) => (decision.answers[i]?.length ? [[q.question, decision.answers[i].join(', ')]] : [])));
   return { behavior: 'allow', updatedInput: { ...input, answers } };
 }
+
+export function infoFromInit(init: SDKSystemMessage): AgentInfo {
+  const tools = init.tools ?? [];
+  return {
+    model: init.model,
+    cwd: init.cwd,
+    permissionMode: init.permissionMode,
+    version: init.claude_code_version,
+    tools: tools.filter((t) => !t.startsWith('mcp__')),
+    mcpServers: (init.mcp_servers ?? []).map((s) => ({ name: s.name, status: mcpStatus(s.status), toolCount: tools.filter((t) => t.startsWith(`mcp__${mcpToolPrefix(s.name)}__`)).length })),
+    skills: init.skills ?? [],
+    plugins: (init.plugins ?? []).map((p) => ({ name: p.name, ...(p.version && { version: p.version }) })),
+    slashCommands: init.slash_commands ?? [],
+  };
+}
+
+/** `query.mcpServerStatus()` after a turn: init reports servers still connecting as pending. */
+export function mcpServersFromStatus(list: McpServerStatus[]): McpServer[] {
+  return list.map((s) => ({ name: s.name, status: mcpStatus(s.status), ...(s.tools && { toolCount: s.tools.length }) }));
+}
+
+const MCP_STATUSES = new Set<string>(['connected', 'pending', 'needs-auth', 'failed', 'disabled'] satisfies McpServer['status'][]);
+const mcpStatus = (status: string) => (MCP_STATUSES.has(status) ? status : 'failed') as McpServer['status'];
+// Claude Code names an MCP tool `mcp__<server>__<tool>`, with characters outside [A-Za-z0-9_-] in the server name replaced by `_`.
+const mcpToolPrefix = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, '_');
 
 type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: boolean; content?: string | { type: string; text?: string }[] };
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 const STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
+
+/** Claude Code ships no plan tool under the SDK unless asked, and without TaskCreate/TaskUpdate a live thread never gets steps. */
+export function withPlanTools(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { ...env, CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
+}
 
 export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
   const todos = Array.isArray(input.todos) ? (input.todos as { content?: unknown; status?: unknown }[]) : [];
