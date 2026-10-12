@@ -9,6 +9,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/compon
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { SPACES, type Source, type Step, type Thread } from './model';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
@@ -37,15 +38,14 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
           <PanelHeader thread={thread} />
           {thread.status === 'settled' && <OutcomeSection thread={thread} />}
           <GoalSection thread={thread} />
+          <Separator className="mx-2 my-2 w-auto!" />
+          <RateLimitWarning thread={thread} />
           <SummaryRow icon={Edit} label="Changes" onClick={notYet}>
             <span className="tabular type-caption">
               <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span>
             </span>
           </SummaryRow>
           <ContextRow thread={thread} />
-          <UsageRows thread={thread} />
-
-          <SpaceUsageSection thread={thread} />
 
           <Section label="Pull requests" empty={thread.prs.length === 0 ? 'No PRs linked yet' : undefined}>
             {thread.prs.map((pr) => (
@@ -53,6 +53,20 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
                 <span className="tabular type-caption text-subtle-foreground">#{pr.number}</span>
               </SummaryRow>
             ))}
+          </Section>
+
+          <Section
+            label="Sources"
+            action={
+              <Button variant="ghost" size="icon-xs" aria-label="Add a source" onClick={notYet}>
+                <Add />
+              </Button>
+            }
+            empty={thread.sources.length === 0 ? 'No sources yet' : undefined}
+          >
+            <LimitedList items={thread.sources}>
+              {(source) => <SummaryRow key={source.label} icon={SOURCE_ICONS[source.kind]} label={source.label} onClick={notYet} />}
+            </LimitedList>
           </Section>
 
           <Section label="Skills used" empty={thread.skills.length === 0 ? 'No skills loaded' : undefined}>
@@ -73,19 +87,8 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
             ))}
           </Section>
 
-          <Section
-            label="Sources"
-            action={
-              <Button variant="ghost" size="icon-xs" aria-label="Add a source" onClick={notYet}>
-                <Add />
-              </Button>
-            }
-            empty={thread.sources.length === 0 ? 'No sources yet' : undefined}
-          >
-            <LimitedList items={thread.sources}>
-              {(source) => <SummaryRow key={source.label} icon={SOURCE_ICONS[source.kind]} label={source.label} onClick={notYet} />}
-            </LimitedList>
-          </Section>
+          <ThreadUsageSection thread={thread} />
+          <SpaceUsageSection thread={thread} />
         </div>
       </ScrollArea>
     </aside>
@@ -210,16 +213,10 @@ const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractio
 const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
 const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<PlanUsage['provider'], string>;
 
-function UsageRows({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
+function ThreadUsageSection({ thread }: { thread: Thread }) {
   const usage = threadUsage(thread);
-  const space = SPACES.find((s) => s.id === thread.spaceId)!;
-  const provider = thread.providers[0];
-  const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.accounts[provider], state.now);
-  const isStalling = thread.status === 'running' && plan.isWarning;
-
   return (
-    <>
+    <Section label="Thread usage">
       <SummaryRow icon={Coins} label="Tokens">
         <span className="tabular type-caption text-subtle-foreground">
           {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)} out
@@ -228,12 +225,17 @@ function UsageRows({ thread }: { thread: Thread }) {
       <SummaryRow icon={DollarCircle} label="Est. cost">
         <span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)}</span>
       </SummaryRow>
-      {isStalling && <RateLimitWarning plan={plan} />}
-    </>
+    </Section>
   );
 }
 
-function RateLimitWarning({ plan }: { plan: PlanUsage }) {
+function RateLimitWarning({ thread }: { thread: Thread }) {
+  const { state } = useHarness();
+  const space = SPACES.find((s) => s.id === thread.spaceId)!;
+  const provider = thread.providers[0];
+  const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.accounts[provider], state.now);
+  if (thread.status !== 'running' || !plan.isWarning) return null;
+
   const name = `${PROVIDER_NAMES[plan.provider]} ${plan.plan}`;
   return (
     <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
