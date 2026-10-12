@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextInputUsage, ContextOutputUsage, ContextTrigger } from '@/components/ai-elements/context';
 import { Badge } from '@/components/ui/badge';
@@ -26,8 +26,8 @@ import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from 
 
 const LIST_LIMIT = 3;
 
-const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global } satisfies Record<ToolVerb, IconComponent>;
-const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser' } satisfies Record<ToolVerb, string>;
+const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global, Search: GlobalSearch, Fetch: Global } satisfies Record<ToolVerb, IconComponent>;
+const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser', Search: 'Searched the web', Fetch: 'Read web pages' } satisfies Record<ToolVerb, string>;
 const SOURCE_ICONS = { link: Link, mcp: Setting, file: Document } satisfies Record<Source['kind'], IconComponent>;
 
 export function SummaryPanel({ thread, className }: { thread: Thread; className?: string }) {

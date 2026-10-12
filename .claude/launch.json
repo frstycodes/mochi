@@ -407,6 +407,28 @@
         "--strictPort"
       ],
       "port": 5429
+    },
+    {
+      "name": "mochi-web-search",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5419",
+        "--strictPort"
+      ],
+      "port": 5419
+    },
+    {
+      "name": "mochi-tools",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5397",
+        "--strictPort"
+      ],
+      "port": 5397
     }
   ]
 }

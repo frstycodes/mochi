@@ -24,6 +24,21 @@ export const browser: BrowserHost = {
   async clearData() {
     throw new Error('Browsing data lives in the desktop app');
   },
+  async snapshot() {
+    throw new Error('Driving the browser needs the desktop app');
+  },
+  async act() {
+    throw new Error('Driving the browser needs the desktop app');
+  },
+  async logs() {
+    return [];
+  },
+  async eval() {
+    throw new Error('Driving the browser needs the desktop app');
+  },
+  async waitFor() {
+    throw new Error('Driving the browser needs the desktop app');
+  },
   onEvent() {
     return () => {};
   },

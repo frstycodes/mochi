@@ -20,6 +20,8 @@ export interface Prefs {
   agent: 'claude' | 'codex';
   permissions: 'Ask first' | 'Auto edit' | 'Full access';
   runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
+  /** Off sends every message straight through: no local score, no classifier call. */
+  driftGuard: boolean;
   driftThreshold: number;
   branchFrom: 'current' | 'base';
   stepSize: 1 | 2 | 3;
@@ -33,7 +35,11 @@ export interface Prefs {
   simulator: string;
   /** Desktop only: show the fixture threads and profiles alongside your own (`showsDemoData`). */
   demoData: boolean;
+  /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): consequential calls always ask first. */
+  agentControl: AgentControl;
 }
+
+export type AgentControl = 'read' | 'reversible' | 'everything';
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
@@ -47,10 +53,11 @@ export const DEFAULT_PREFS: Prefs = {
   agent: 'claude',
   permissions: 'Auto edit',
   runsOn: 'This Mac',
+  driftGuard: true,
   driftThreshold: 0.15,
   branchFrom: 'current',
   stepSize: 2,
-  branchPrefix: 'feat/',
+  branchPrefix: 'mochi/',
   diffStyle: 'unified',
   terminalFontSize: 12,
   terminalScrollback: 5000,
@@ -58,6 +65,7 @@ export const DEFAULT_PREFS: Prefs = {
   searchEngine: 'duckduckgo',
   simulator: '',
   demoData: false,
+  agentControl: 'reversible',
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';

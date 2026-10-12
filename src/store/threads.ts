@@ -38,6 +38,9 @@ export type ThreadsAction =
   | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
+  | { type: 'rename'; threadId: string; title: string }
+  /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
+  | { type: 'delete'; threadIds: string[] }
   | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
@@ -108,6 +111,17 @@ function reduce(state: State, action: Action): State {
       };
     case 'unsettle':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: hasOpenWork(t) ? 'running' : 'review' })) };
+    case 'rename':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, title: action.title })) };
+    case 'delete': {
+      const gone = (id: string) => action.threadIds.includes(id);
+      return {
+        ...state,
+        threads: state.threads.filter((t) => !gone(t.id)),
+        checkpoints: Object.fromEntries(Object.entries(state.checkpoints).filter(([id]) => !gone(id))),
+        forks: Object.fromEntries(Object.entries(state.forks).filter(([id]) => !gone(id))),
+      };
+    }
     case 'create':
       return create(state, action);
     case 'send':
@@ -407,13 +421,13 @@ function tagSent(t: Thread, action: Extract<Action, { type: 'drift-verdict' }>, 
 }
 
 function applyDrift(t: Thread, text: string, drift: DriftKind, reason: string, now: number): Thread {
-  if (drift === 'off-goal') return log(t, { at: now, who: 'harness', kind: 'event', text: `Drift guard: sent off-goal, not counted toward the goal (${reason})` });
+  if (drift === 'off-goal') return log(t, { at: now, who: 'harness', kind: 'event', text: 'Sent off-goal · not counted', detail: reason });
   if (drift === 'on-goal') return t;
   const n = t.revisions.length + 1;
   const title = stepTitleFrom(text);
   const added: Step = { id: `${t.id}-d${n}`, title, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: 'you', revision: n };
   const withStep = { ...t, steps: [...t.steps, added], revisions: [...t.revisions, { n, at: now, label: 'Scope from your message', by: 'you' as const, diff: [`+ ${title}`] }] };
-  return log(withStep, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: +1 step "${title}" (${reason})` });
+  return log(withStep, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: +1 step "${title}"`, detail: reason });
 }
 
 /** Off-goal prompt to a new thread. A finished goal is settled first: its review stays queued while a PR is open, otherwise it resolves. */
@@ -433,7 +447,7 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
       queue: next.queue.filter((q) => q.threadId !== source.id || (hasOpenPr && q.kind === 'review')),
     };
   }
-  next = { ...next, threads: mapThread(next.threads, source.id, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: `Drift guard: moved "${short}" to a new thread` })) };
+  next = { ...next, threads: mapThread(next.threads, source.id, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: 'Moved to a new thread', detail: `"${short}"` })) };
   const branchFrom = action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
   return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live });
 }

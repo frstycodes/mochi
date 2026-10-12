@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
+import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
@@ -14,6 +14,7 @@ import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
 import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
 import { TerminalSection } from './terminal';
+import { ToolsSection } from './tools';
 
 export const SECTION_GROUPS = ['App', 'Agents', 'Workspace'] as const;
 
@@ -105,12 +106,21 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
+    id: 'tools',
+    group: 'Agents',
+    title: 'Mochi tools',
+    icon: ShieldCheck,
+    component: ToolsSection,
+    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only reversible confirm approve mcp control browser delete' }],
+  },
+  {
     id: 'goals',
     group: 'Agents',
     title: 'Goals and drift',
     icon: Compass,
     component: GoalsSection,
     settings: [
+      { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
       { id: 'driftThreshold', label: 'Drift sensitivity', keywords: 'off-goal threshold scope' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
       { id: 'stepSize', label: 'New step size', keywords: 'points progress eta small medium large' },
