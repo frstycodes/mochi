@@ -13,6 +13,7 @@ import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
 import { ProviderMark } from './ui';
+import { WorkspaceControls, WorkspaceNotes, useThreadWorkspace } from './git/WorkspacePicker';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu, useComposerHandoff } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap } from './ThreadMinimap';
@@ -258,6 +259,7 @@ function Composer({
   const { state, dispatch } = useHarness();
   const [isQueue, setIsQueue] = useState(false);
   const controls = controlsOf(thread);
+  const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const mention = useMentionMenu(thread);
@@ -309,7 +311,7 @@ function Composer({
         <ComposerMeta>
           <RunOnMenu />
           <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
-          {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
+          {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
           <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
             {isQueue ? (
               'Queues after this turn'
@@ -320,6 +322,7 @@ function Composer({
             )}
           </span>
         </ComposerMeta>
+        {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
     </div>
   );

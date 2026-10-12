@@ -8,8 +8,8 @@ export interface AgentStartOptions {
   spaceId: string;
   /** An absolute folder; null for a folderless chat, which main runs in a folder of its own under the app's data dir. */
   cwd: string | null;
-  /** Branch for the thread's own worktree of `cwd`, made by main before the agent starts; on failure (not a git repo) the agent runs in `cwd`. */
-  worktree?: string;
+  /** Where in `cwd` the agent works; unset runs it in `cwd` as is (restarts, folderless chats). */
+  workspace?: StartWorkspace;
   prompt: string;
   /** Sent with the first prompt. */
   images?: AgentImage[];
@@ -25,6 +25,8 @@ export interface AgentStartOptions {
 export type AgentEvent =
   /** Main made the thread's worktree and runs the agent there. */
   | { threadId: string; type: 'worktree'; path: string }
+  /** A project folder thread's agent runs on this branch of the project's checkout. */
+  | { threadId: string; type: 'branch'; branch: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }
@@ -41,6 +43,17 @@ export type AgentEvent =
   | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
+/**
+ * `worktree`: the thread's own worktree of `cwd` on `branch`, made by main before the agent starts (from `base`, or checking out
+ * an existing branch); not a git repo runs the agent in `cwd`. `folder`: `cwd` itself, switched to `branch` first when `isExisting`.
+ */
+export interface StartWorkspace {
+  mode: 'worktree' | 'folder';
+  branch: string;
+  base?: string;
+  isExisting?: boolean;
+}
+
 /** Base64 without the `data:` prefix. */
 export interface AgentImage {
   mediaType: 'image/jpeg' | 'image/png';
@@ -48,7 +61,7 @@ export interface AgentImage {
 }
 
 /** What an adapter gets once main has resolved and checked the folder. */
-export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'worktree'> & { cwd: string };
+export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'workspace'> & { cwd: string };
 
 /** You can always type your own answer too, so `options` may be empty. */
 export interface AgentQuestion {

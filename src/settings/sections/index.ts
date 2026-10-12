@@ -162,6 +162,7 @@ export const SETTINGS_SECTIONS = [
     component: GitSection,
     settings: [
       { id: 'worktreeRoot', label: 'Worktrees folder', keywords: 'worktree path directory' },
+      { id: 'workspaceMode', label: 'New threads work in', keywords: 'worktree project folder local checkout workspace' },
       { id: 'branchPrefix', label: 'Branch prefix', keywords: 'branch name' },
       { id: 'prDrafts', label: 'Open pull requests as drafts', keywords: 'pr github draft' },
       { id: 'diffStyle', label: 'Diffs', keywords: 'unified split side by side changes' },

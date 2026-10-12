@@ -26,7 +26,8 @@ export function forkThread(state: State, threadId: string, point: ForkPoint): St
     ...base,
     id,
     title: `${parent.title} (fork)`,
-    repo: parent.repo && { ...parent.repo, branch: `${parent.repo.branch}-fork-${state.seq}` },
+    // A fork always gets a worktree of its own, even off a project folder thread.
+    repo: parent.repo && { ...parent.repo, branch: `${parent.repo.branch}-fork-${state.seq}`, mode: undefined, isExisting: undefined },
     line: freeLine(state.threads.filter((t) => t.spaceId === parent.spaceId)),
     orbitSlot: undefined,
     status: base.status === 'settled' ? 'running' : base.status,

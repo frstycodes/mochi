@@ -4,13 +4,18 @@ import { CommitInput, DesktopOnly, FolderInput, SettingsChoice, SettingsGroup, S
 import { DEFAULT_PREFS, setPrefs, usePrefs } from '../prefs';
 
 export function GitSection() {
-  const { branchPrefix, diffStyle } = usePrefs();
+  const { branchPrefix, diffStyle, workspaceMode } = usePrefs();
   return (
     <div className="flex flex-col gap-8">
       <DesktopOnly what="The worktrees folder and draft pull requests only work in the Mochi desktop app.">
         <DesktopGitGroup />
       </DesktopOnly>
-      <SettingsGroup footer="A new thread in a project works on its own branch: this prefix, then the thread's id.">
+      <SettingsGroup footer="A new worktree keeps a thread's changes out of your checkout; the project folder works right in it, on its current branch. The new-thread composer changes it per thread. New branches are this prefix, then the prompt's first words.">
+        <SettingsRow
+          id="workspaceMode"
+          label="New threads work in"
+          control={<SettingsChoice id="workspaceMode" value={workspaceMode} options={WORKSPACE_MODES} onChange={(v) => setPrefs({ workspaceMode: v })} />}
+        />
         <SettingsRow
           id="branchPrefix"
           label="Branch prefix"
@@ -31,6 +36,11 @@ export function GitSection() {
     </div>
   );
 }
+
+export const WORKSPACE_MODES = [
+  { value: 'worktree', label: 'New worktree' },
+  { value: 'folder', label: 'Project folder' },
+] as const;
 
 export const DIFF_STYLES = [
   { value: 'unified', label: 'Unified' },

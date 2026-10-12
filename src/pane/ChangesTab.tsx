@@ -35,7 +35,7 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
   const [scope, setScope] = useState<DiffScope>('branch');
   const [stepId, setStepId] = useState(ALL_STEPS);
   const { diffStyle } = usePrefs();
-  const diffQuery = useGitDiff(cwd, scope);
+  const diffQuery = useGitDiff(cwd, scope, thread.repo?.base);
   const { run } = useGitAction(diffQuery.refresh);
   const { confirm, dialog } = useConfirm();
   const actions = useChangeActions({ thread, cwd, canStage: scope === 'uncommitted', diffStyle, run, confirm });
@@ -92,7 +92,7 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
             <RowHorizontal />
           </ToggleGroupItem>
         </ToggleGroup>
-        <WorktreeMenu cwd={cwd} diff={diff} run={run} confirm={confirm} />
+        <WorktreeMenu cwd={cwd} base={thread.repo?.base} diff={diff} run={run} confirm={confirm} />
       </div>
       {!!diffQuery.error && !diff && <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />}
       {diffQuery.isLoading && <ChangesSkeleton />}

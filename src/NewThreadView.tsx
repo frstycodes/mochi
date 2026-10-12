@@ -22,6 +22,8 @@ import { toast } from 'sonner';
 import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
 import { toWhen } from './schedule/form';
 import { describeTrigger } from './schedule/describe';
+import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from './git/WorkspacePicker';
+import type { WorkspaceDraft } from './git/workspace';
 
 const MATCH_THRESHOLD = 0.5;
 const MAX_SHORTCUTS = 3;
@@ -58,17 +60,29 @@ function NewThread() {
   };
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
+  const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const [dependOn, setDependOn] = useState<Match | null>(null);
   const [run, setRun] = useState<RunChoice>(RUN_NOW);
   const draft = textInput.value;
   const matches = useStepMatches(draft);
   const linked = dependOn && matches.some((m) => m.step.id === dependOn.step.id) ? dependOn : null;
+  const workspace = useWorkspace(project ?? '', workspaceDraft, setWorkspaceDraft, draft);
+
+  // Bases and branch names belong to one project.
+  const changeProject = (next: string | null) => {
+    setProject(next);
+    setWorkspaceDraft({ mode: workspaceDraft.mode });
+  };
 
   const start = ({ text, files }: PromptInputMessage) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     const title = files.length ? `${trimmed} (${files.length} attached)` : trimmed;
-    const create = { type: 'create', title, provider, project, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
+    if (project && workspace.error) {
+      toast.error(workspace.error);
+      return false;
+    }
+    const create = { type: 'create', title, provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
     if (run.mode === 'now') {
       handOffComposer(leafId, layoutId);
       return dispatch(create);
@@ -109,11 +123,13 @@ function NewThread() {
           />
         </ComposerCard>
         <ComposerMeta>
-          <ProjectPicker value={project} onChange={setProject} />
+          <ProjectPicker value={project} onChange={changeProject} />
+          {!!project && <WorkspaceControls workspace={workspace} />}
           <RunMenu value={run} onChange={setRun} />
           {!!project && <RunOnMenu />}
           {!!project && <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
+        {!!project && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
 
       <div className="flex flex-col gap-5 pt-4 pb-16">
@@ -139,10 +155,15 @@ function NewThread() {
           )}
         </AnimatePresence>
 
-        {matches.length === 0 && recentProjects.length > 1 && <ProjectShortcuts projects={recentProjects.slice(0, MAX_SHORTCUTS)} value={project} onChange={setProject} />}
+        {matches.length === 0 && recentProjects.length > 1 && <ProjectShortcuts projects={recentProjects.slice(0, MAX_SHORTCUTS)} value={project} onChange={changeProject} />}
       </div>
     </div>
   );
+}
+
+/** The draft with the branch spelled out: the generated name, or the folder's current branch. */
+function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
+  return { ...draft, branch };
 }
 
 function submitLabel(run: RunChoice, isLinked: boolean) {
