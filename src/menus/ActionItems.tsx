@@ -1,11 +1,12 @@
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuShortcut } from '@/components/ui/context-menu';
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ACTIONS, type PaletteAction } from '../palette/actions';
-import { scopeOf, splitByRule, type ScopeTarget } from '../palette/when';
+import { scopeOf, splitByRule, type ActionScope, type ScopeTarget } from '../palette/when';
 import { useActionContext, useActions } from '../palette/useActions';
 import { Shortcut } from '../Shortcut';
+import { ProviderMark } from '../ui';
 import { useReviewerChecks } from '../secondOpinion/reviewer';
 
 type Groups = readonly (readonly string[])[];
@@ -32,7 +33,8 @@ export function ActionItems({ target, groups, menu = 'context' }: { target: Scop
         {group.map((action) => {
           const title = action.label?.(scope) ?? action.title;
           const reason = action.disabledReason?.(scope);
-          return reason ? <SkippedItem key={action.id} menu={menu} action={action} title={title} reason={reason} /> : <ActionItem key={action.id} menu={menu} action={action} title={title} onSelect={() => run(action)} />;
+          const icon = <ActionIcon action={action} scope={scope} />;
+          return reason ? <SkippedItem key={action.id} menu={menu} icon={icon} title={title} reason={reason} /> : <ActionItem key={action.id} menu={menu} action={action} icon={icon} title={title} onSelect={() => run(action)} />;
         })}
       </Group>
     </Fragment>
@@ -64,7 +66,7 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
           <ContextMenuGroup>
             {group.map(({ action, many, skipped }) =>
               skipped.length > 0 ? (
-                <SkippedItem key={action.id} menu="context" action={action} title={many.title} reason={`${skipped.map((t) => t.title).join(', ')}: ${many.skipReason}`} />
+                <SkippedItem key={action.id} menu="context" icon={<action.icon />} title={many.title} reason={`${skipped.map((t) => t.title).join(', ')}: ${many.skipReason}`} />
               ) : (
                 <ContextMenuItem key={action.id} onSelect={() => many.run(threads, { ...base, scope: scopes[0] })}>
                   <action.icon />
@@ -80,13 +82,13 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
 }
 
 // Not Radix `disabled`: that drops the item from keyboard focus and pointer events, so its reason could never show.
-function SkippedItem({ menu, action, title, reason }: { menu: MenuKind; action: PaletteAction; title: string; reason: string }) {
+function SkippedItem({ menu, icon, title, reason }: { menu: MenuKind; icon: ReactNode; title: string; reason: string }) {
   const { Item, tooltipSide } = MENU_PARTS[menu];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Item aria-disabled onSelect={(e) => e.preventDefault()} className="opacity-50 focus:bg-transparent">
-          <action.icon />
+          {icon}
           {title}
         </Item>
       </TooltipTrigger>
@@ -97,11 +99,11 @@ function SkippedItem({ menu, action, title, reason }: { menu: MenuKind; action: 
   );
 }
 
-function ActionItem({ menu, action, title, onSelect }: { menu: MenuKind; action: PaletteAction; title: string; onSelect: () => void }) {
+function ActionItem({ menu, action, icon, title, onSelect }: { menu: MenuKind; action: PaletteAction; icon: ReactNode; title: string; onSelect: () => void }) {
   const { Item, Shortcut: ItemShortcut } = MENU_PARTS[menu];
   return (
     <Item onSelect={onSelect}>
-      <action.icon />
+      {icon}
       {title}
       {!!action.shortcut && (
         <ItemShortcut className="tracking-normal">
@@ -110,4 +112,11 @@ function ActionItem({ menu, action, title, onSelect }: { menu: MenuKind; action:
       )}
     </Item>
   );
+}
+
+/** The action's icon, or the mark of the agent it names for this target. */
+export function ActionIcon({ action, scope }: { action: PaletteAction; scope: ActionScope }) {
+  const provider = action.mark?.(scope);
+  if (provider) return <ProviderMark provider={provider} />;
+  return <action.icon />;
 }

@@ -8,6 +8,7 @@ import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTab, Thread } from './model';
 import { PANE_TABS, tabTitle } from './pane/tabs';
+import { isOverPinDrop, setPinned } from './pane/headerPins';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { useHarness } from './store';
 import { isMod } from './keys';
@@ -85,9 +86,10 @@ function TabStrip({ thread, tabs, active }: { thread: Thread; tabs: PaneTab[]; a
                   startDrag({ kind: 'tab', threadId: thread.id, tabId: tab.id }, title, info.point.x, info.point.y);
                 }}
                 onDrag={(_, info) => moveDrag(info.point.x, info.point.y)}
-                onDragEnd={() => {
+                onDragEnd={(_, info) => {
                   setDraggingId(null);
                   const landed = endDrag();
+                  if (isOverPinDrop(info.point.x, info.point.y)) return setPinned(tab.kind, true);
                   if (landed) dispatch({ type: 'layout-drop', ...landed });
                 }}
                 className={cn(

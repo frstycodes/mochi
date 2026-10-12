@@ -1,15 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
-import { BranchUp, SidebarRight } from 'reicon-react';
+import { motion } from 'motion/react';
+import { BranchUp, ChevronDown, Laptop, Monitor, SidebarLeft, SidebarRight } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { Pane, Thread } from './model';
+import type { Pane, PaneTabKind, Thread } from './model';
+import { DEVICES } from './Composer';
+import { PANE_TABS } from './pane/tabs';
+import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop } from './pane/headerPins';
+import { getPrefs, type Prefs } from './settings/prefs';
+import { Shortcut } from './Shortcut';
 import { AgentLoader } from './AgentLoader';
 import { agentPhase, isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
@@ -24,9 +42,9 @@ import { ActionItems } from './menus/ActionItems';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
-import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
+import { LIGHTS_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
-import { OverflowIcon, ProgressRing } from './ui';
+import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -39,6 +57,16 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
   const [isPaneTabOpen, setPaneTabOpen] = useState(false);
   const [isSummarySheetOpen, setSummarySheetOpen] = useState(false);
+  const isPaneShown = isWide ? isPaneOpen : isPaneTabOpen;
+
+  const showTab = (kind: PaneTabKind) => {
+    const tab = pane?.tabs.find((t) => t.kind === kind && !t.isPopped);
+    // pane-open-tab opens the pane itself; selecting an existing tab doesn't.
+    if (tab) dispatch({ type: 'pane-select-tab', threadId: thread.id, tabId: tab.id });
+    else dispatch({ type: 'pane-open-tab', threadId: thread.id, kind });
+    if (!isWide) setPaneTabOpen(true);
+    else if (tab && !isPaneOpen) dispatch({ type: 'pane-toggle', threadId: thread.id });
+  };
 
   // Narrow splits show the side pane as a tab in place of the chat instead of docking it.
   const body =
@@ -60,8 +88,10 @@ export function ThreadView({ thread }: { thread: Thread }) {
         thread={thread}
         isSummaryOpen={isWide ? summary.isShown : isSummarySheetOpen}
         onToggleSummary={isWide ? summary.toggle : () => setSummarySheetOpen((o) => !o)}
-        isPaneOpen={isWide ? isPaneOpen : isPaneTabOpen}
+        isPaneOpen={isPaneShown}
         onTogglePane={() => (isWide ? dispatch({ type: 'pane-toggle', threadId: thread.id }) : setPaneTabOpen((o) => !o))}
+        shownKind={isPaneShown && pane ? shownTab(pane)?.kind : undefined}
+        onShowTab={showTab}
       />
       {body}
       {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} />}
@@ -187,6 +217,12 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
   );
 }
 
+/** The side pane's active tab, as SidePane resolves it. */
+function shownTab(pane: Pane) {
+  const docked = pane.tabs.filter((t) => !t.isPopped);
+  return docked.find((t) => t.id === pane.activeTab) ?? docked[0];
+}
+
 function NoPaneYet({ thread }: { thread: Thread }) {
   const { dispatch } = useHarness();
   return (
@@ -202,26 +238,34 @@ function ThreadHeader({
   onToggleSummary,
   isPaneOpen,
   onTogglePane,
+  shownKind,
+  onShowTab,
 }: {
   thread: Thread;
   isSummaryOpen: boolean;
   onToggleSummary: () => void;
   isPaneOpen: boolean;
   onTogglePane: () => void;
+  /** The pane tab on screen right now, if the pane is shown. */
+  shownKind?: PaneTabKind;
+  onShowTab: (kind: PaneTabKind) => void;
 }) {
   const { state } = useHarness();
   const { isFirst, leafId } = useSplit();
   const { pct } = progressAt(thread, state.now, true);
-  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
+  const { hasTrigger, reservesLights } = useToggleSlot(isFirst);
+  const header = useRef<HTMLElement>(null);
+  const pinDrop = usePinDrop(header);
 
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
-      <header className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
+      <header ref={header} data-pin-drop className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3 transition-colors duration-150', reservesLights && LIGHTS_RESERVE, pinDrop.isOver && 'bg-accent/40')}>
         {hasTrigger && <SidebarTrigger className="-ml-1" />}
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
-        <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
+        <DeviceMenu />
+        <ThreadMenu thread={thread} />
         {!!thread.repo && (
-          <span className="hidden min-w-0 items-center gap-1 truncate font-mono type-caption text-subtle-foreground @2xl:flex">
+          <span className="hidden min-w-0 items-center gap-1 truncate type-caption text-subtle-foreground @2xl:flex">
             <BranchUp className="size-3.5 shrink-0" />
             {thread.repo.branch}
           </span>
@@ -241,34 +285,172 @@ function ThreadHeader({
           </TooltipTrigger>
           <TooltipContent>{isSummaryOpen ? 'Hide the summary' : 'Show the summary'}</TooltipContent>
         </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={isPaneOpen ? 'Hide the side pane' : 'Show the side pane'} aria-pressed={isPaneOpen} onClick={onTogglePane} className={cn('text-muted-foreground', isPaneOpen && 'bg-accent text-foreground')}>
-              <SidebarRight />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{isPaneOpen ? 'Hide the side pane' : 'Show the side pane'}</TooltipContent>
-        </Tooltip>
-        <ThreadMenu thread={thread} />
-        <RewindLayer thread={thread} />
         <SplitControls />
+        <HeaderPins shownKind={shownKind} onToggle={(kind) => (kind === shownKind ? onTogglePane() : onShowTab(kind))} drop={pinDrop} />
+        <ViewMenu isPaneOpen={isPaneOpen} onTogglePane={onTogglePane} />
+        <RewindLayer thread={thread} />
       </header>
     </TargetContextMenu>
   );
 }
 
-/** The same registry actions as the header's right-click menu, plus rewind's undo and fork comparisons. */
+// GAP: only This Mac runs anything; the choice isn't kept or sent to an agent.
+function DeviceMenu() {
+  const [device, setDevice] = useState(() => getPrefs().runsOn);
+  const Icon = device === 'Cloud sandbox' ? Monitor : Laptop;
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={`Runs on ${device}`} className="-mr-1 text-muted-foreground">
+              <Icon />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent className="flex-col items-start gap-0.5">
+          <span className="block font-medium">Runs on {device}</span>
+          <span className="block opacity-80">Choose where this thread's agent runs</span>
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="start" className="w-44">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Run on</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={device} onValueChange={(v) => setDevice(v as Prefs['runsOn'])}>
+            {DEVICES.map((d) => (
+              <DropdownMenuRadioItem key={d} value={d}>
+                {d}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** The title opens the thread's actions, like Claude's: the same registry actions as the header's right-click menu, plus rewind's undo and fork comparisons. */
 function ThreadMenu({ thread }: { thread: Thread }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Thread actions" className="text-muted-foreground">
-          <OverflowIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <h1 className="flex min-w-0">
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="min-w-0 shrink gap-1 px-1.5">
+            <span className="truncate type-title">{thread.title}</span>
+            <ChevronDown aria-hidden className="text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+      </h1>
+      <DropdownMenuContent align="start" className="w-60">
         <ActionItems target={{ threadId: thread.id }} groups={THREAD_ACTIONS_MENU} menu="dropdown" />
         <RewindMenuItems thread={thread} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Pinned side pane tabs; while a pane tab is dragged over the header, a slot shows where it lands. */
+function HeaderPins({ shownKind, onToggle, drop }: { shownKind?: PaneTabKind; onToggle: (kind: PaneTabKind) => void; drop: ReturnType<typeof usePinDrop> }) {
+  const pins = useHeaderPins();
+  return (
+    <div className="hidden items-center gap-0.5 @md:flex">
+      {pins.map((kind) => (
+        <PinnedTab key={kind} kind={kind} isShown={kind === shownKind} onToggle={() => onToggle(kind)} />
+      ))}
+      {drop.isDragging && <span aria-hidden className={cn('size-7 rounded-md border border-dashed border-foreground/25 transition-colors', drop.isOver && 'border-foreground/50 bg-accent')} />}
+    </div>
+  );
+}
+
+function PinnedTab({ kind, isShown, onToggle }: { kind: PaneTabKind; isShown: boolean; onToggle: () => void }) {
+  const { title, icon: Icon } = PANE_TABS[kind];
+  const [drag, setDrag] = useState<'idle' | 'inside' | 'outside'>('idle');
+  // Motion still fires click on the release that ends a drag.
+  const wasDragged = useRef(false);
+  const ref = useRef<HTMLDivElement>(null);
+  // A rect check, not hit-testing: the dragged icon is under the pointer and still inside the header's DOM.
+  const isInHeader = (x: number, y: number) => {
+    const header = ref.current?.closest('[data-pin-drop]');
+    return !!header && isInside(header, x, y);
+  };
+  return (
+    <motion.div
+      ref={ref}
+      drag
+      dragSnapToOrigin
+      onDragStart={() => {
+        wasDragged.current = true;
+        setDrag('inside');
+      }}
+      onDrag={(_, info) => setDrag(isInHeader(info.point.x, info.point.y) ? 'inside' : 'outside')}
+      onDragEnd={(_, info) => {
+        setDrag('idle');
+        if (!isInHeader(info.point.x, info.point.y)) setPinned(kind, false);
+      }}
+      whileDrag={{ scale: 1.1, zIndex: 50 }}
+      className={cn('rounded-md transition-opacity', drag !== 'idle' && 'bg-popover shadow-float', drag === 'outside' && 'opacity-50')}
+    >
+      <TooltipIconButton
+        label={title}
+        hint={isShown ? 'Hide the side pane. Drag off the header to unpin.' : `Open ${title} in the side pane. Drag off the header to unpin.`}
+        aria-pressed={isShown}
+        onClick={() => {
+          if (wasDragged.current) return void (wasDragged.current = false);
+          onToggle();
+        }}
+        className={cn('text-muted-foreground', isShown && 'bg-accent text-foreground')}
+      >
+        <Icon />
+      </TooltipIconButton>
+    </motion.div>
+  );
+}
+
+/** Layout toggles and header pins; thread actions live under the title. */
+function ViewMenu({ isPaneOpen, onTogglePane }: { isPaneOpen: boolean; onTogglePane: () => void }) {
+  const { state: sidebar, isMobile, toggleSidebar } = useSidebar();
+  const pins = useHeaderPins();
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="View options" className="text-muted-foreground">
+              <OverflowIcon vertical />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>View options</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuGroup>
+          {!isMobile && (
+            <DropdownMenuItem onSelect={toggleSidebar}>
+              <SidebarLeft />
+              {sidebar === 'expanded' ? 'Hide sidebar' : 'Show sidebar'}
+              <DropdownMenuShortcut>
+                <Shortcut keys={['mod', 'B']} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={onTogglePane}>
+            <SidebarRight />
+            {isPaneOpen ? 'Hide side pane' : 'Show side pane'}
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Pin to header</DropdownMenuLabel>
+          {PINNABLE_KINDS.map((kind) => {
+            const { title, icon: Icon } = PANE_TABS[kind];
+            return (
+              <DropdownMenuCheckboxItem key={kind} checked={pins.includes(kind)} onCheckedChange={(checked) => setPinned(kind, checked)} onSelect={(e) => e.preventDefault()}>
+                <Icon />
+                {title}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

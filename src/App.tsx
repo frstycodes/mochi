@@ -11,7 +11,6 @@ import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
-import { SidebarToggle } from './SidebarToggle';
 import { Stage } from './stage/Stage';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
@@ -99,7 +98,6 @@ function Shell() {
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
-      <SidebarToggle />
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
           {isSettingsOpen ? <SettingsPage /> : review.isOpen ? <ReviewView /> : <Stage />}

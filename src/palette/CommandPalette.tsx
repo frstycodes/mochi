@@ -5,6 +5,7 @@ import { StepStatusIcon, ThreadStatusIcon, lineColor } from '../ui';
 import { ACTION_GROUPS, type PaletteAction } from './actions';
 import type { ActionScope } from './when';
 import { useActions } from './useActions';
+import { ActionIcon } from '../menus/ActionItems';
 import { Shortcut } from '../Shortcut';
 import { useReviewerChecks } from '../secondOpinion/reviewer';
 
@@ -70,7 +71,7 @@ function ActionItem({ action, scope, onSelect }: { action: PaletteAction; scope:
   const reason = action.disabledReason?.(scope);
   return (
     <CommandItem value={`${title} ${action.keywords ?? ''}`} disabled={!!reason} onSelect={onSelect}>
-      <action.icon />
+      <ActionIcon action={action} scope={scope} />
       {reason ? (
         <span className="flex min-w-0 flex-col">
           {title}

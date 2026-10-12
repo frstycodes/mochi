@@ -1,12 +1,13 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
 import { threadCwd } from '../host/cwd';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
 import { PRESETS, PRESET_LABELS } from '../layout/tree';
-import type { Thread } from '../model';
+import type { Provider, Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
@@ -43,6 +44,8 @@ export interface PaletteAction {
   when?: (scope: ActionScope) => boolean;
   /** The title for this target, when it names something about it ("Ask Codex for a second opinion"). */
   label?: (scope: ActionScope) => string;
+  /** A provider's mark in place of `icon` for this target (the agent that would answer). */
+  mark?: (scope: ActionScope) => Provider;
   /** Shown but not runnable, with this reason, while it would fail (the other agent isn't signed in). */
   disabledReason?: (scope: ActionScope) => string | undefined;
   /** False while the thing it acts on doesn't exist at all (a profile slot past the last profile), so lists like Settings › Keyboard leave it out. */
@@ -69,7 +72,7 @@ export const ACTIONS = [
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
   { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
-  { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: Routing, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
+  { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   {
     id: 'thread-second-opinion',
@@ -79,6 +82,7 @@ export const ACTIONS = [
     keywords: 'review verdict claude codex other agent',
     when: (s) => when.liveThread(s) && when.repo(s),
     label: (s) => `Ask ${providerName(reviewerFor(s.thread!).provider)} for a second opinion`,
+    mark: (s) => reviewerFor(s.thread!).provider,
     disabledReason: (s) => reviewerFor(s.thread!).reason,
     run: onThread((t, { dispatch }) => askSecondOpinion(t, dispatch)),
   },

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronRight, ClipboardTick, History, Pause, Radio, Routing, TransferH } from 'reicon-react';
+import { ChevronRight, ClipboardTick, History, Pause, Radio, TransferH } from 'reicon-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { checkpointAt, checkpointPhrase } from './rewind/checkpoints';
 import { PROVIDER_NAME, stepOwner } from './rewind/handoff';
 import { openRewind } from './rewind/requests';
 import { useHarness } from './store';
-import { ProviderMark, SizeBadge, StepStatusIcon, lineColor, stepColor, stepLabel } from './ui';
+import { ForkIcon, ProviderMark, SizeBadge, StepStatusIcon, lineColor, stepColor, stepLabel } from './ui';
 
 export function GoalTimeline({ thread }: { thread: Thread }) {
   const { state } = useHarness();
@@ -275,7 +275,7 @@ function StepActions({ thread, step, status }: { thread: Thread; step: Step; sta
             <History />
           </StepAction>
           <StepAction label={`Fork from after "${step.title}"`} onClick={() => openRewind({ kind: 'fork', threadId: thread.id, point: { kind: 'checkpoint', n: checkpoint.n } })}>
-            <Routing />
+            <ForkIcon />
           </StepAction>
         </>
       )}
