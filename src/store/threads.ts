@@ -3,7 +3,7 @@ import { stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
-import { recordCheckpoints, rewind, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
+import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import { handoff } from '../rewind/handoff.ts';
 import type { Action, Snapshot, State } from './index.tsx';
@@ -38,6 +38,7 @@ export type ThreadsAction =
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
   | { type: 'rewind'; threadId: string; n: number }
+  | { type: 'rewind-message'; threadId: string; index: number }
   | { type: 'rewind-undo' }
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
@@ -98,6 +99,8 @@ function reduce(state: State, action: Action): State {
       return { ...state, ...action.snapshot };
     case 'rewind':
       return rewind(state, action.threadId, action.n);
+    case 'rewind-message':
+      return rewindToMessage(state, action.threadId, action.index);
     case 'rewind-undo':
       return undoRewind(state);
     case 'checkpoint-ref':

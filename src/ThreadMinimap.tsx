@@ -1,24 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
+import { Pin } from 'reicon-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-/** One tick per chat row down the chat's right edge; rows in view light up, clicking a tick jumps to its row. */
-export function ThreadMinimap({ labels, className }: { labels: string[]; className?: string }) {
+/** One tick per chat row down the chat's right edge; rows in view light up, pinned rows stand out, clicking a tick jumps to its row. */
+export function ThreadMinimap({ items, className }: { items: { label: string; pins: string[] }[]; className?: string }) {
   const { scrollRef } = useStickToBottomContext();
-  const inView = useRowsInView(scrollRef, labels.length);
-  if (labels.length < 2) return null;
+  const inView = useRowsInView(scrollRef, items.length);
+  if (items.length < 2) return null;
 
   const jump = (i: number) => scrollRef.current?.querySelector(`[data-chat-row="${i}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 
   return (
     <nav aria-label="Thread outline" className={cn('flex flex-col justify-center', className)}>
-      {labels.map((label, i) => (
+      {items.map(({ label, pins }, i) => (
         <Tooltip key={i}>
           <TooltipTrigger asChild>
             <button
               type="button"
-              aria-label={label}
+              aria-label={pins.length ? `Pinned: ${pins.join(' · ')}` : label}
               aria-current={inView.has(i) || undefined}
               onClick={() => jump(i)}
               className="group flex max-h-2.5 min-h-[3px] flex-1 cursor-default items-center justify-end px-2"
@@ -27,12 +28,22 @@ export function ThreadMinimap({ labels, className }: { labels: string[]; classNa
                 className={cn(
                   'h-0.5 w-2 rounded-full bg-subtle-foreground/50 transition-[width,background-color] duration-150 group-hover:w-3.5 group-hover:bg-foreground',
                   inView.has(i) && 'bg-foreground/80',
+                  pins.length > 0 && 'h-[3px] w-3 bg-foreground group-hover:w-4',
                 )}
               />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="left" className="max-w-64 truncate">
-            {label}
+          <TooltipContent side="left" className="max-w-64 flex-col items-start gap-0.5">
+            {pins.length > 0 ? (
+              pins.map((pin, j) => (
+                <span key={j} className="flex max-w-full items-center gap-1.5">
+                  <Pin className="size-3 shrink-0" aria-hidden />
+                  <span className="line-clamp-2">{pin}</span>
+                </span>
+              ))
+            ) : (
+              <span className="truncate">{label}</span>
+            )}
           </TooltipContent>
         </Tooltip>
       ))}

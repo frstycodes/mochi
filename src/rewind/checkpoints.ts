@@ -97,30 +97,63 @@ export function recordCheckpoints(prev: State, next: State): State {
 
 /** Puts the thread's steps, transcript and goal back to checkpoint `n` and drops later checkpoints and queue items; one undo is kept. */
 export function rewind(state: State, threadId: string, n: number): State {
-  const current = state.threads.find((t) => t.id === threadId);
   const list = state.checkpoints[threadId] ?? [];
   const index = list.findIndex((c) => c.n === n);
-  if (!current || index < 0) return state;
-  const cp = list[index];
-  const revision = cp.thread.revisions.length + 1;
+  if (index < 0) return state;
+  return restore(state, threadId, list[index].thread, index, checkpointPhrase(list[index]));
+}
+
+/**
+ * Back to just before the message at `index` in the thread's activity: the transcript stops before it, steps and goal are rebuilt for that moment,
+ * and the worktree's files come from the latest checkpoint at or before it (the closest saved files).
+ */
+export function rewindToMessage(state: State, threadId: string, index: number): State {
+  const current = state.threads.find((t) => t.id === threadId);
+  const entry = current?.activity[index];
+  const list = state.checkpoints[threadId] ?? [];
+  if (!current || !entry || list.length === 0) return state;
+  const cpIndex = list.indexOf(checkpointAt(list, entry.at));
+  // Times are whole minutes and a message often shares its minute with the step it added: rebuild from just before it. The transcript is cut by position.
+  const before = { ...threadAt(current, entry.at - 0.001), activity: current.activity.slice(0, index) };
+  return restore(state, threadId, before, cpIndex, `before "${excerpt(entry.text)}"`);
+}
+
+/** The point a message sits at for rewinding: its files come from this checkpoint. */
+export function checkpointForMessage(state: State, threadId: string, index: number) {
+  const entry = state.threads.find((t) => t.id === threadId)?.activity[index];
+  const list = state.checkpoints[threadId] ?? [];
+  return entry && list.length ? checkpointAt(list, entry.at) : undefined;
+}
+
+function restore(state: State, threadId: string, base: Thread, cpIndex: number, phrase: string): State {
+  const current = state.threads.find((t) => t.id === threadId);
+  const list = state.checkpoints[threadId] ?? [];
+  const cp = list[cpIndex];
+  if (!current || !cp) return state;
+  const revision = base.revisions.length + 1;
   const restored: Thread = {
-    ...cp.thread,
+    ...base,
     // Work resumes now: a step that was running at the checkpoint restarts its clock instead of claiming the hours since.
-    steps: cp.thread.steps.map((s) => (s.status === 'running' ? { ...s, startedAt: state.now } : s)),
+    steps: base.steps.map((s) => (s.status === 'running' ? { ...s, startedAt: state.now } : s)),
     title: current.title,
     line: current.line,
     orbitSlot: current.orbitSlot,
     providers: current.providers,
-    revisions: [...cp.thread.revisions, { n: revision, at: state.now, label: `Rewound to ${checkpointPhrase(cp)}`, by: 'you', diff: rewindDiff(current, cp.thread) }],
+    revisions: [...base.revisions, { n: revision, at: state.now, label: `Rewound to ${phrase}`, by: 'you', diff: rewindDiff(current, base) }],
   };
   const files = cp.ref ? 'files and transcript' : 'transcript';
   return {
     ...state,
-    threads: mapThread(state.threads, threadId, () => log(restored, { at: state.now, who: 'harness', kind: 'event', text: `Rewound ${files} to ${checkpointPhrase(cp)}` })),
-    checkpoints: { ...state.checkpoints, [threadId]: list.slice(0, index + 1) },
+    threads: mapThread(state.threads, threadId, () => log(restored, { at: state.now, who: 'harness', kind: 'event', text: `Rewound ${files} to ${phrase}` })),
+    checkpoints: { ...state.checkpoints, [threadId]: list.slice(0, cpIndex + 1) },
     queue: state.queue.filter((q) => q.threadId !== threadId || q.createdAt <= cp.at),
     rewindUndo: { threadId, thread: current, checkpoints: list, queue: state.queue.filter((q) => q.threadId === threadId), hasFiles: !!cp.ref },
   };
+}
+
+function excerpt(text: string) {
+  const line = text.replace(/\s+/g, ' ').trim();
+  return line.length > 40 ? `${line.slice(0, 39)}…` : line;
 }
 
 function rewindDiff(from: Thread, to: Thread) {

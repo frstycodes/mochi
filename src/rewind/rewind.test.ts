@@ -112,3 +112,17 @@ test('handoff moves one step or the whole thread and logs a revision, an event a
   assert.equal(t.steps.find((x) => x.id === 'rl1')!.owner, 'claude', 'finished steps keep who did them');
   assert.equal(t.steps.find((x) => x.id === 'rl6')!.owner, undefined, 'open steps follow the thread');
 });
+
+test('rewinding to a message drops it and everything after, keeps what came before, and undoes in one step', () => {
+  let s = base();
+  const before = thread(s, 'rl');
+  const index = before.activity.findIndex((a) => a.who === 'you' && a.text.startsWith('Also add per-key overrides'));
+  s = threadsReducer(s, { type: 'rewind-message', threadId: 'rl', index });
+  const rewound = thread(s, 'rl');
+  const kept = rewound.activity.slice(0, -1);
+  assert.deepEqual(kept, before.activity.slice(0, index), 'transcript stops right before the message');
+  assert.match(rewound.activity.at(-1)!.text, /^Rewound transcript to before "Also add per-key overrides/);
+  assert.ok(!rewound.steps.some((x) => x.id === 'rl7'), 'the step that message added is gone');
+  s = threadsReducer(s, { type: 'rewind-undo' });
+  assert.deepEqual(thread(s, 'rl').steps, before.steps);
+});

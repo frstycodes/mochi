@@ -493,3 +493,8 @@
 [data-sidebar-resizing] [data-slot='sidebar-container'] {
   transition: none;
 }
+
+/* Pinned passages in chat messages (CSS Custom Highlight API, src/chat/SelectionPin.tsx): a neutral highlighter, not a status colour. */
+::highlight(harness-pin) {
+  background-color: color-mix(in oklab, var(--foreground) 16%, transparent);
+}
