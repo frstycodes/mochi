@@ -33,8 +33,9 @@ import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
-import { parseSlash } from './chat/slash';
-import { SlashMenu, useSlashMenu } from './chat/SlashMenu';
+import { parseSlash, resolveToken, type SlashItem } from './chat/slash';
+import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
+import { SlashTokenText } from './chat/SlashToken';
 import { withReferences } from './chat/mentions';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { askInSideChat } from './sidechat/AskInSideChat';
@@ -61,6 +62,7 @@ export function ChatView({ thread }: { thread: Thread }) {
   const pins = useThreadPins(thread.id);
   usePinHighlights(messages, pins);
   const handoff = useComposerHandoff(useSplit().leafId);
+  const slashItems = useSlashItems(thread.providers[0], thread.spaceId, thread.agent);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -71,7 +73,7 @@ export function ChatView({ thread }: { thread: Thread }) {
             <div ref={messages} className="contents">
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
+                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
@@ -86,7 +88,7 @@ export function ChatView({ thread }: { thread: Thread }) {
       <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
         <PromptInputProvider key={thread.id}>
           <ImageDropTarget>
-            <Composer thread={thread} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
+            <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
           </ImageDropTarget>
           <ComposerInbox threadId={thread.id} />
         </PromptInputProvider>
@@ -110,7 +112,7 @@ function useComposerHeightVar() {
 }
 
 // isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ thread, row, isLive, action }: { thread: Thread; row: ChatRow; isLive: boolean; action?: CurrentAction }) {
+function ChatRowView({ thread, row, slashItems, isLive, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'subagent') {
@@ -134,9 +136,13 @@ function ChatRowView({ thread, row, isLive, action }: { thread: Thread; row: Cha
                 <span className="tabular">{clock(entry.at)}</span>
               </span>
             )}
-            <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
-              {entry.text}
-            </MessageResponse>
+            {isYou && resolveToken(entry.text, slashItems) ? (
+              <SlashTokenText text={entry.text} items={slashItems} />
+            ) : (
+              <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
+                {entry.text}
+              </MessageResponse>
+            )}
           </MessageContent>
         </Message>
         <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />
@@ -209,12 +215,14 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
 
 function Composer({
   thread,
+  slashItems,
   decisions,
   isTrayOpen,
   onToggleTray,
   handoff,
 }: {
   thread: Thread;
+  slashItems: SlashItem[];
   decisions: QueueItem[];
   isTrayOpen: boolean;
   onToggleTray: () => void;
@@ -228,7 +236,7 @@ function Composer({
   const provider = thread.providers[0];
   const mention = useMentionMenu(thread);
   const drift = useDriftGuard(thread, mention.clear);
-  const slash = useSlashMenu();
+  const slash = useSlashMenu(slashItems);
   const menuProps = mention.isOpen ? mention.textareaProps : slash.textareaProps;
   useSeedAttachment(thread.id === 'adm');
 
@@ -248,6 +256,7 @@ function Composer({
               provider={provider}
               isLocked={!!thread.live}
               onControlsChange={setControls}
+              slashItems={slashItems}
               onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
               submitLabel={isQueue ? 'Queue message' : 'Send'}
               onSend={({ text, files }) => {
@@ -256,7 +265,7 @@ function Composer({
                 const command = parseSlash(trimmed);
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
                 const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads);
+                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, !!resolveToken(trimmed, slashItems));
                 return drift.submit(shown, isQueue ? QUEUED_PREFIX : '', references);
               }}
               placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}

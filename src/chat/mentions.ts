@@ -40,17 +40,20 @@ export function mentionOptions(query: string, threads: Thread[], windows: AppWin
 /**
  * What the transcript shows (`text`: the references as `@title`, then your message) and what the agent gets (`prompt`:
  * each thread's digest and a note per screenshot ahead of your message, `images`: the screenshots in mention order).
+ * A message that runs a `/command` keeps it first in both, since the harness only reads a command at the very start.
  */
-export function withReferences(message: string, mentions: Mention[], threads: Thread[]) {
+export function withReferences(message: string, mentions: Mention[], threads: Thread[], isCommand = false) {
   if (mentions.length === 0) return { text: message, prompt: message, images: [] };
-  const text = `${mentions.map((m) => `@${m.title}`).join(' ')}\n\n${message}`;
+  const tags = mentions.map((m) => `@${m.title}`).join(' ');
+  const text = isCommand ? `${message}\n\n${tags}` : `${tags}\n\n${message}`;
   const context = mentions.map((m) => {
     if (m.kind === 'window') return `<window title="${attr(m.title)}">Screenshot of this window attached.</window>`;
     const thread = threads.find((t) => t.id === m.id);
     return thread ? threadDigest(thread) : `<thread title="${attr(m.title)}">No longer available.</thread>`;
   });
   const images = mentions.flatMap((m) => (m.kind === 'window' ? [m.image] : []));
-  return { text, prompt: `The user referenced these for context:\n\n${context.join('\n\n')}\n\n${message}`, images };
+  const preamble = `The user referenced these for context:\n\n${context.join('\n\n')}`;
+  return { text, prompt: isCommand ? `${message}\n\n${preamble}` : `${preamble}\n\n${message}`, images };
 }
 
 /** A compact transcript: the goal, where it stands, then the latest messages. Tool calls and events are left out. */

@@ -95,6 +95,17 @@ export interface AgentInfo {
   skills?: string[];
   plugins?: { name: string; version?: string }[];
   slashCommands?: string[];
+  /** Skills and custom or plugin commands `/name` runs, with what they say about themselves; the harness's built-ins left out. */
+  commands?: AgentCommand[];
+}
+
+export interface AgentCommand {
+  name: string;
+  description: string;
+  /** `<file> [--fix]`: what the command takes after its name. */
+  argumentHint?: string;
+  /** Codex: the skill's SKILL.md, which a turn names to run it. */
+  path?: string;
 }
 
 export interface McpServer {

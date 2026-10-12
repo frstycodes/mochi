@@ -1,8 +1,8 @@
 import path from 'node:path';
-import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
-import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
@@ -128,7 +128,7 @@ export function createMapper(threadId: string, cwd: string) {
       case 'system':
         if (message.subtype.startsWith('task_')) return mapTask(message);
         if (message.subtype === 'init') return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }];
-        if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name) } }];
+        if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name), commands: commandsFrom(message.commands) } }];
         return [];
       case 'stream_event': {
         const event = message.event;
@@ -214,6 +214,11 @@ export function infoFromInit(init: SDKSystemMessage): AgentInfo {
     plugins: (init.plugins ?? []).map((p) => ({ name: p.name, ...(p.version && { version: p.version }) })),
     slashCommands: init.slash_commands ?? [],
   };
+}
+
+/** `supportedCommands()` and `commands_changed`: the skills and custom, plugin and MCP commands, not Claude Code's own. */
+export function commandsFrom(list: SlashCommand[]): AgentCommand[] {
+  return list.filter((c) => !c.builtin).map((c) => ({ name: c.name, description: c.description, ...(c.argumentHint && { argumentHint: c.argumentHint }) }));
 }
 
 /** `query.mcpServerStatus()` after a turn: init reports servers still connecting as pending. */

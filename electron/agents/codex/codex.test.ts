@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
 import { CodexAdapter, reply } from './adapter.ts';
-import { codexModels, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits } from './map.ts';
+import { codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillInput, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
@@ -171,6 +171,7 @@ test('session info comes from thread/start and the MCP, skills and plugin lists'
   const plugins = { marketplaces: [{ name: 'm', plugins: [{ name: 'gh', installed: true, enabled: true, localVersion: '1.2.0', version: null }, { name: 'other', installed: false, enabled: false }] }] };
   assert.deepEqual(infoFromLists(mcp, skills, plugins), {
     mcpServers: [{ name: 'docs', status: 'connected', toolCount: 2 }, { name: 'linear', status: 'needs-auth', toolCount: 0 }],
+    commands: [{ name: 'ui', description: '' }],
     skills: ['ui'],
     plugins: [{ name: 'gh', version: '1.2.0' }],
   });
@@ -322,3 +323,29 @@ process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n'
   if (m.id !== undefined && !['initialize', 'account/read', 'thread/start', 'turn/start'].includes(m.method)) send({ id: m.id, result: {} });
 } });
 `;
+
+test('skills/list becomes / commands, and a message opening with one attaches its skill item', () => {
+  const reply = {
+    data: [
+      {
+        cwd: '/repo',
+        skills: [
+          { name: 'fix-lint', description: 'Long description', interface: { shortDescription: 'Fix lint' }, path: '/s/fix-lint/SKILL.md', enabled: true },
+          { name: 'off', description: 'Disabled', path: '/s/off/SKILL.md', enabled: false },
+          { name: 'plain', description: 'Plain one', path: '/s/plain/SKILL.md', enabled: true },
+        ],
+      },
+      { cwd: '/other', skills: [{ name: 'plain', description: 'Duplicate', path: '/x/SKILL.md', enabled: true }] },
+    ],
+  };
+  const commands = commandsFromSkills(reply);
+  assert.deepEqual(commands, [
+    { name: 'fix-lint', description: 'Fix lint', path: '/s/fix-lint/SKILL.md' },
+    { name: 'plain', description: 'Plain one', path: '/s/plain/SKILL.md' },
+  ]);
+  assert.deepEqual(skillInput('/fix-lint src/a.ts', commands), { type: 'skill', name: 'fix-lint', path: '/s/fix-lint/SKILL.md' });
+  assert.equal(skillInput('/off', commands), null);
+  assert.equal(skillInput('please /plain', commands), null);
+  assert.deepEqual(infoFromLists(null, reply, null).skills, ['fix-lint', 'plain']);
+  assert.deepEqual(commandsFromSkills(null), []);
+});
