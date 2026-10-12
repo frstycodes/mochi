@@ -26,6 +26,8 @@ import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
+import { controlsOf } from './runtime/controls';
+import { QUEUED_PREFIX } from './runtime/live';
 
 type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
@@ -221,7 +223,10 @@ function ScrollIntent({ onScrollUp, onReachBottom }: { onScrollUp: () => void; o
 }
 
 function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thread; decisions: QueueItem[]; isTrayOpen: boolean; onToggleTray: () => void }) {
+  const { dispatch } = useHarness();
   const [isQueue, setIsQueue] = useState(false);
+  const controls = controlsOf(thread);
+  const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const drift = useDriftGuard(thread);
   useSeedAttachment(thread.id === 'adm');
@@ -232,13 +237,16 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
       <ComposerCard className="in-data-image-over:border-ring">
         {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
         <ComposerInput
-          provider={provider}
+          controls={controls}
+          harness={thread.live && provider}
+          onControlsChange={setControls}
+          onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
           submitLabel={isQueue ? 'Queue message' : 'Send'}
           onSend={({ text, files }) => {
             const trimmed = text.trim();
             if (!trimmed && files.length === 0) return;
             const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-            return drift.submit(withFiles, isQueue ? 'Queued: ' : '');
+            return drift.submit(withFiles, isQueue ? QUEUED_PREFIX : '');
           }}
           placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
           onKeyDown={(e) => e.key === MOD_KEY && setIsQueue(true)}
@@ -248,7 +256,7 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
       </ComposerCard>
       <ComposerMeta>
         <RunOnMenu />
-        <PermissionsMenu />
+        <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
         {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
         <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
           {isQueue ? (

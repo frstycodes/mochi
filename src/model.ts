@@ -1,4 +1,5 @@
 import type { AccountId } from './host/types/settings.ts';
+import type { ThreadControls } from './runtime/controls.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
@@ -89,6 +90,19 @@ export interface Thread {
   settledAt?: number;
   drift?: { threshold: number; isMuted: boolean };
   session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
+  controls?: ThreadControls;
+  /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
+  live?: LiveRun;
+}
+
+export interface LiveRun {
+  isWorking: boolean;
+  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
+  limit?: { resetsAt?: string };
+  /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
+  isOnApiKey?: boolean;
+  /** Reported tokens per usage event, for the plan window. */
+  usage: { at: number; provider: Provider; tokens: number }[];
 }
 
 export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap';

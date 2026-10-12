@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon-react';
-import type { Provider, Step, Thread } from './model';
+import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { useHarness, useSpaceThreads } from './store';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
@@ -11,6 +11,9 @@ import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
+import { host } from './host';
+import { harnessOf } from './ModelControls';
+import { DEFAULT_CONTROLS, type ThreadControls } from './runtime/controls';
 
 const MATCH_THRESHOLD = 0.5;
 const EXAMPLES = ['Cache admin usage queries with a Redis client', 'Retry failed Stripe webhooks', 'Rate limit the search endpoint'];
@@ -34,7 +37,8 @@ export function NewThreadView() {
 function NewThread() {
   const { dispatch } = useHarness();
   const { textInput } = usePromptInputController();
-  const [provider, setProvider] = useState<Provider>('claude');
+  const [controls, setControls] = useState<ThreadControls>(DEFAULT_CONTROLS.claude);
+  const provider = harnessOf(controls.model);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
   const [dependOn, setDependOn] = useState<Match | null>(null);
@@ -46,7 +50,9 @@ function NewThread() {
     const trimmed = text.trim();
     if (!trimmed) return;
     const title = files.length ? `${trimmed} (${files.length} attached)` : trimmed;
-    dispatch({ type: 'create', title, provider, project, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
+    // GAP: a folderless chat has no cwd to run an agent in, so it stays on the demo adapter.
+    const isLive = host.isDesktop && !!project;
+    dispatch({ type: 'create', title, provider, project, controls, isLive, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
   };
 
   return (
@@ -56,8 +62,8 @@ function NewThread() {
         <ComposerCard>
           <ComposerInput
             autoFocus
-            provider={provider}
-            onModelChange={(m) => setProvider(m.harness)}
+            controls={controls}
+            onControlsChange={setControls}
             onSend={start}
             submitLabel={linked ? 'Start thread, linked' : 'Start thread'}
             placeholder={project ? `What should this thread get done in ${project}?` : 'Ask anything, no folder attached'}
@@ -67,7 +73,7 @@ function NewThread() {
         <ComposerMeta>
           <ProjectPicker value={project} onChange={setProject} />
           {!!project && <RunOnMenu />}
-          {!!project && <PermissionsMenu />}
+          {!!project && <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
       </div>
 

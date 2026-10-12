@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
+import { EFFORTS, type Effort } from './runtime/controls';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { useSpace } from './store';
 import { ProviderMark } from './ui';
@@ -28,29 +29,30 @@ const MODELS: ModelOption[] = [
   { id: 'gpt-5.5-mini', harness: 'codex', name: 'GPT-5.5 mini', note: 'Cheap and fast', context: '128K' },
 ];
 
+export function harnessOf(modelId: string): Provider {
+  return MODELS.find((m) => m.id === modelId)?.harness ?? 'claude';
+}
+
 const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Provider, string>;
 const DEFAULT_FAVORITES = ['opus-5.5', 'sonnet-5.5', 'gpt-5.5-codex'];
-const EFFORTS = ['Low', 'Medium', 'High', 'Extra high'] as const;
-type Effort = (typeof EFFORTS)[number];
 
-export function ModelPicker({ provider, onModelChange }: { provider: Provider; onModelChange?: (model: ModelOption) => void }) {
+/** `harness` limits the list to one provider: a live thread changes provider only through a handoff. */
+export function ModelPicker({ value, harness, onChange }: { value: string; harness?: Provider; onChange: (model: ModelOption) => void }) {
   const space = useSpace();
-  const [modelId, setModelId] = useState(() => MODELS.find((m) => m.harness === provider)!.id);
   const [favorites, setFavorites] = useState(DEFAULT_FAVORITES);
   const [isOpen, setOpen] = useState(false);
-  const model = MODELS.find((m) => m.id === modelId)!;
-  const docked = MODELS.filter((m) => favorites.includes(m.id) || m.id === modelId);
-  const select = (id: string) => {
-    setModelId(id);
-    onModelChange?.(MODELS.find((m) => m.id === id)!);
-  };
+  const harnesses = (Object.keys(HARNESSES) as Provider[]).filter((h) => !harness || h === harness);
+  const models = MODELS.filter((m) => harnesses.includes(m.harness));
+  const model = MODELS.find((m) => m.id === value) ?? models[0];
+  const docked = models.filter((m) => favorites.includes(m.id) || m.id === model.id);
+  const select = (id: string) => onChange(MODELS.find((m) => m.id === id)!);
   const toggleFavorite = (id: string) => setFavorites((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
 
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
       <ScrollDock
         label="Model"
-        value={modelId}
+        value={model.id}
         onChange={select}
         items={docked.map((m) => ({ value: m.id, label: m.name, icon: <ProviderMark provider={m.harness} size={18} /> }))}
       >
@@ -67,7 +69,7 @@ export function ModelPicker({ provider, onModelChange }: { provider: Provider; o
           <CommandInput placeholder="Search models" />
           <CommandList className="max-h-80">
             <CommandEmpty>No model matches.</CommandEmpty>
-            {(Object.keys(HARNESSES) as Provider[]).map((h) => (
+            {harnesses.map((h) => (
               <CommandGroup
                 key={h}
                 heading={
@@ -94,7 +96,7 @@ export function ModelPicker({ provider, onModelChange }: { provider: Provider; o
                       <span className="truncate type-caption text-subtle-foreground">{m.note}</span>
                     </span>
                     <span className="font-mono text-xs text-subtle-foreground tabular">{m.context}</span>
-                    <Check className={cn('size-4', m.id !== modelId && 'invisible')} />
+                    <Check className={cn('size-4', m.id !== model.id && 'invisible')} />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -125,8 +127,7 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
   );
 }
 
-export function EffortPicker() {
-  const [effort, setEffort] = useState<Effort>('High');
+export function EffortPicker({ value: effort, onChange: setEffort }: { value: Effort; onChange: (effort: Effort) => void }) {
   return (
     <DropdownMenu>
       <WheelStepper values={EFFORTS} value={effort} onChange={setEffort}>
