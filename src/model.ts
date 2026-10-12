@@ -150,7 +150,8 @@ export interface LiveRun {
   usage: { at: number; provider: Provider; tokens: number }[];
 }
 
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting';
+/** `run`: a scheduled or background run finished (`src/schedule`). */
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting' | 'run';
 
 export interface QueueItem {
   id: string;

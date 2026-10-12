@@ -18,6 +18,10 @@ import { host } from './host';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
 import type { Provider } from './model';
+import { toast } from 'sonner';
+import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
+import { toWhen } from './schedule/form';
+import { describeTrigger } from './schedule/describe';
 
 const MATCH_THRESHOLD = 0.5;
 const MAX_SHORTCUTS = 3;
@@ -55,6 +59,7 @@ function NewThread() {
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
   const [dependOn, setDependOn] = useState<Match | null>(null);
+  const [run, setRun] = useState<RunChoice>(RUN_NOW);
   const draft = textInput.value;
   const matches = useStepMatches(draft);
   const linked = dependOn && matches.some((m) => m.step.id === dependOn.step.id) ? dependOn : null;
@@ -63,13 +68,29 @@ function NewThread() {
     const trimmed = text.trim();
     if (!trimmed) return;
     const title = files.length ? `${trimmed} (${files.length} attached)` : trimmed;
-    handOffComposer(leafId, layoutId);
-    dispatch({ type: 'create', title, provider, project, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
+    const create = { type: 'create', title, provider, project, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
+    if (run.mode === 'now') {
+      handOffComposer(leafId, layoutId);
+      return dispatch(create);
+    }
+    if (run.mode === 'background') {
+      dispatch({ ...create, isBackground: true });
+      return void toast.success('Started in the background');
+    }
+    const result = toWhen(run.form);
+    if ('error' in result) {
+      toast.error(`Fix the schedule first: ${result.error}`);
+      // Keeps your text in the composer.
+      return false;
+    }
+    dispatch({ ...create, isBackground: true, schedule: { when: result.when, missed: run.form.missed } });
+    toast.success(`Scheduled: ${describeTrigger(result.when)}`);
+    setRun(RUN_NOW);
   };
 
   return (
     // Three rows, the composer in the middle: the greeting sits on top of it and duplicates open below it without moving it.
-    <div className="mx-auto grid min-h-full max-w-[720px] grid-rows-[1fr_auto_1fr] px-4 md:px-6">
+    <div className="mx-auto grid min-h-full max-w-[720px] grid-cols-1 grid-rows-[1fr_auto_1fr] px-4 md:px-6">
       <header className="flex flex-col items-center justify-end pt-10 pb-6 text-center">
         <h1 className="text-balance type-display">{greeting(new Date())}</h1>
       </header>
@@ -83,12 +104,13 @@ function NewThread() {
             provider={provider}
             onControlsChange={setControls}
             onSend={start}
-            submitLabel={linked ? 'Start thread, linked' : 'Start thread'}
+            submitLabel={submitLabel(run, !!linked)}
             placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
           />
         </ComposerCard>
         <ComposerMeta>
           <ProjectPicker value={project} onChange={setProject} />
+          <RunMenu value={run} onChange={setRun} />
           {!!project && <RunOnMenu />}
           {!!project && <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
@@ -121,6 +143,12 @@ function NewThread() {
       </div>
     </div>
   );
+}
+
+function submitLabel(run: RunChoice, isLinked: boolean) {
+  if (run.mode === 'trigger') return 'Schedule thread';
+  if (run.mode === 'background') return 'Start in background';
+  return isLinked ? 'Start thread, linked' : 'Start thread';
 }
 
 function greeting(now: Date) {

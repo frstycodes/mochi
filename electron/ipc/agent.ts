@@ -1,7 +1,7 @@
 import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
-import { app, BrowserWindow } from 'electron';
+import { app } from 'electron';
 import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentReviewEvent, AgentReviewRequest, AgentRunOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
@@ -15,6 +15,7 @@ import { ask as askAgent } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall } from '../mcp/server.ts';
+import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
 import { addWorktree } from './git.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
 
@@ -41,7 +42,7 @@ function images(value: unknown) {
 
 // Threads without a Claude or Codex session run on the renderer's demo adapter.
 const runtime = notImplemented('agent runtime');
-const broadcast = (event: AgentEvent) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('agent:onEvent', event));
+const broadcast = emitAgentEvent;
 // Codex review threads report like any thread; their events go to the review that owns them, never to the store.
 const reviewers = new Map<string, (event: AgentEvent) => void>();
 const codex = new CodexAdapter(
@@ -59,27 +60,13 @@ const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 
 export const agent = {
   async start(_sender, threadId, options) {
-    string(threadId, 'threadId', 256);
-    const o = record(options, 'options');
-    if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
-    string(o.spaceId, 'options.spaceId', 256);
-    string(o.prompt, 'options.prompt', 100_000);
-    for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
-    if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
-    if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
-    images(o.images);
-    const { worktree, ...rest } = o;
-    const folder = await agentFolder(threadId as string, o.cwd);
-    const cwd = worktree === undefined ? folder : await threadWorktree(threadId as string, folder, string(worktree, 'options.worktree', 255));
-    const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined)) } as unknown as AgentRunOptions;
-    if (o.provider === 'claude') return startClaude(threadId as string, run);
-    if (o.provider === 'codex') return codex.start(threadId as string, run);
-    return runtime();
+    return startAgent(threadId, options);
   },
   async send(_sender, threadId, text, pictures) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
     images(pictures);
+    markBusy(threadId as string);
     if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined);
     if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined);
     return runtime();
@@ -103,6 +90,7 @@ export const agent = {
   },
   async stop(_sender, threadId) {
     string(threadId, 'threadId', 256);
+    markIdle(threadId as string);
     if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.stop(threadId as string);
     return runtime();
@@ -190,6 +178,31 @@ export const agent = {
     return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },
 } satisfies Handlers<AgentHost>;
+
+/** Starts a thread's agent from options the renderer (or the scheduler) built; both go through the same checks. */
+export async function startAgent(threadId: unknown, options: unknown) {
+  string(threadId, 'threadId', 256);
+  const o = record(options, 'options');
+  if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
+  string(o.spaceId, 'options.spaceId', 256);
+  string(o.prompt, 'options.prompt', 100_000);
+  for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
+  if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
+  if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
+  images(o.images);
+  const { worktree, ...rest } = o;
+  const folder = await agentFolder(threadId as string, o.cwd);
+  const cwd = worktree === undefined ? folder : await threadWorktree(threadId as string, folder, string(worktree, 'options.worktree', 255));
+  markBusy(threadId as string);
+  try {
+    const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined)) } as unknown as AgentRunOptions;
+    if (o.provider === 'claude') return await startClaude(threadId as string, run);
+    return await codex.start(threadId as string, run);
+  } catch (error) {
+    markIdle(threadId as string);
+    throw error;
+  }
+}
 
 /** The model and effort a run sends: always an explicit model the account offers. A list that can't be read passes the choice through; the run then reports the provider's own error. */
 async function offered(provider: Provider, spaceId: string, model: string | undefined, effort: string | undefined) {

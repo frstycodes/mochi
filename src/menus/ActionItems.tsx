@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
 import { ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuShortcut } from '@/components/ui/context-menu';
+import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ACTIONS, type PaletteAction } from '../palette/actions';
 import { scopeOf, splitByRule, type ScopeTarget } from '../palette/when';
@@ -9,8 +10,16 @@ import { useReviewerChecks } from '../secondOpinion/reviewer';
 
 type Groups = readonly (readonly string[])[];
 
+/** The same items in a right-click menu or a dropdown (a header's ⋯). The tooltip side points away from where each menu opens. */
+const MENU_PARTS = {
+  context: { Group: ContextMenuGroup, Item: ContextMenuItem, Separator: ContextMenuSeparator, Shortcut: ContextMenuShortcut, tooltipSide: 'right' },
+  dropdown: { Group: DropdownMenuGroup, Item: DropdownMenuItem, Separator: DropdownMenuSeparator, Shortcut: DropdownMenuShortcut, tooltipSide: 'left' },
+} as const;
+type MenuKind = keyof typeof MENU_PARTS;
+
 /** Registry actions for one target as context menu items, in the given groups; unavailable ones drop out, empty groups and their separators too. */
-export function ActionItems({ target, groups }: { target: ScopeTarget; groups: Groups }) {
+export function ActionItems({ target, groups, menu = 'context' }: { target: ScopeTarget; groups: Groups; menu?: MenuKind }) {
+  const { Group, Separator } = MENU_PARTS[menu];
   const { actions, run, scope } = useActions(target);
   useReviewerChecks();
   // Action ids are plain strings: a typo would silently drop the item, so dev builds fail loudly instead.
@@ -18,14 +27,14 @@ export function ActionItems({ target, groups }: { target: ScopeTarget; groups: G
   const shown = groups.map((ids) => ids.flatMap((id) => actions.filter((a) => a.id === id))).filter((g) => g.length > 0);
   return shown.map((group, i) => (
     <Fragment key={group[0].id}>
-      {i > 0 && <ContextMenuSeparator />}
-      <ContextMenuGroup>
+      {i > 0 && <Separator />}
+      <Group>
         {group.map((action) => {
           const title = action.label?.(scope) ?? action.title;
           const reason = action.disabledReason?.(scope);
-          return reason ? <SkippedItem key={action.id} action={action} title={title} reason={reason} /> : <ActionItem key={action.id} action={action} title={title} onSelect={() => run(action)} />;
+          return reason ? <SkippedItem key={action.id} menu={menu} action={action} title={title} reason={reason} /> : <ActionItem key={action.id} menu={menu} action={action} title={title} onSelect={() => run(action)} />;
         })}
-      </ContextMenuGroup>
+      </Group>
     </Fragment>
   ));
 }
@@ -55,7 +64,7 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
           <ContextMenuGroup>
             {group.map(({ action, many, skipped }) =>
               skipped.length > 0 ? (
-                <SkippedItem key={action.id} action={action} title={many.title} reason={`${skipped.map((t) => t.title).join(', ')}: ${many.skipReason}`} />
+                <SkippedItem key={action.id} menu="context" action={action} title={many.title} reason={`${skipped.map((t) => t.title).join(', ')}: ${many.skipReason}`} />
               ) : (
                 <ContextMenuItem key={action.id} onSelect={() => many.run(threads, { ...base, scope: scopes[0] })}>
                   <action.icon />
@@ -71,32 +80,34 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
 }
 
 // Not Radix `disabled`: that drops the item from keyboard focus and pointer events, so its reason could never show.
-function SkippedItem({ action, title, reason }: { action: PaletteAction; title: string; reason: string }) {
+function SkippedItem({ menu, action, title, reason }: { menu: MenuKind; action: PaletteAction; title: string; reason: string }) {
+  const { Item, tooltipSide } = MENU_PARTS[menu];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <ContextMenuItem aria-disabled onSelect={(e) => e.preventDefault()} className="opacity-50 focus:bg-transparent">
+        <Item aria-disabled onSelect={(e) => e.preventDefault()} className="opacity-50 focus:bg-transparent">
           <action.icon />
           {title}
-        </ContextMenuItem>
+        </Item>
       </TooltipTrigger>
-      <TooltipContent side="right" className="max-w-64">
+      <TooltipContent side={tooltipSide} className="max-w-64">
         {reason}
       </TooltipContent>
     </Tooltip>
   );
 }
 
-function ActionItem({ action, title, onSelect }: { action: PaletteAction; title: string; onSelect: () => void }) {
+function ActionItem({ menu, action, title, onSelect }: { menu: MenuKind; action: PaletteAction; title: string; onSelect: () => void }) {
+  const { Item, Shortcut: ItemShortcut } = MENU_PARTS[menu];
   return (
-    <ContextMenuItem onSelect={onSelect}>
+    <Item onSelect={onSelect}>
       <action.icon />
       {title}
       {!!action.shortcut && (
-        <ContextMenuShortcut className="tracking-normal">
+        <ItemShortcut className="tracking-normal">
           <Shortcut keys={action.shortcut} />
-        </ContextMenuShortcut>
+        </ItemShortcut>
       )}
-    </ContextMenuItem>
+    </Item>
   );
 }

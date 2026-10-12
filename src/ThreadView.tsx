@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, BranchUp, SidebarRight, Undo } from 'reicon-react';
+import { BranchUp, SidebarRight } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -19,14 +19,13 @@ import { ChatView } from './ChatView';
 import { progressAt } from './progress';
 import { SidePane } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
-import { THREAD_HEADER_MENU } from './menus/menus';
+import { THREAD_ACTIONS_MENU, THREAD_HEADER_MENU } from './menus/menus';
+import { ActionItems } from './menus/ActionItems';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
-import { SecondOpinionItem } from './secondOpinion/SecondOpinionItem';
 import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
-import { useSettle } from './useSettle';
 import { OverflowIcon, ProgressRing } from './ui';
 
 const PANE_ANIMATION_MS = 260;
@@ -258,10 +257,8 @@ function ThreadHeader({
   );
 }
 
+/** The same registry actions as the header's right-click menu, plus rewind's undo and fork comparisons. */
 function ThreadMenu({ thread }: { thread: Thread }) {
-  const { repo } = thread;
-  const { isSettled, toggle: settle } = useSettle(thread);
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -270,20 +267,8 @@ function ThreadMenu({ thread }: { thread: Thread }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuGroup>
-          <SecondOpinionItem thread={thread} />
-          <DropdownMenuItem onSelect={settle}>
-            {isSettled ? <Undo /> : <Archive />}
-            {isSettled ? 'Move back to active' : 'Settle thread'}
-          </DropdownMenuItem>
-          {repo && (
-            <DropdownMenuItem onSelect={() => navigator.clipboard?.writeText(repo.branch).catch(() => undefined)}>
-              <BranchUp />
-              Copy branch name
-            </DropdownMenuItem>
-          )}
-          <RewindMenuItems thread={thread} />
-        </DropdownMenuGroup>
+        <ActionItems target={{ threadId: thread.id }} groups={THREAD_ACTIONS_MENU} menu="dropdown" />
+        <RewindMenuItems thread={thread} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

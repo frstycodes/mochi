@@ -66,6 +66,9 @@ One group per profile: name, icon, GitHub account, linked Claude and Codex accou
 
 Per profile, Instructions / MCP servers / Skills / Import rows (`src/settings/ProfileAgentConfig.tsx`) read and write the linked accounts' own files, so the tools load them natively: Claude `CLAUDE.md`, `.claude.json` `mcpServers` (`~/.claude.json` for the default account), `settings.json` `deniedMcpServers` / `skillOverrides`; Codex `AGENTS.md`, `config.toml` `[mcp_servers.*]` `enabled` and `[[skills.config]]` (formats in `src/settings/agentConfig.ts`). Every write is a diff to review, backed up to `~/.harness/backups/<time>/` and refused if the file changed since. Import copies from the other harness or another profile; secret-looking env, header, arg and URL values become `${VAR}` and the row shows "Needs VAR". An account shared by several profiles shares its config. GAP: project `.mcp.json` servers are listed read-only, Codex project config isn't read.
 
+### Schedules
+Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name, when it runs and the next run, the last run's outcome; Run now, Pause / Resume, Edit (the schedule dialog), Delete. Triggers live in main (`schedules.json` in userData, `electron/schedule/scheduler.ts`), so they fire with every window closed while Mochi runs. Done. Notifications for finished runs are the "Scheduled run finished" alert in Notifications.
+
 ### Git
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|

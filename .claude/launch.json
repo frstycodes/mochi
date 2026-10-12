@@ -429,6 +429,31 @@
         "--strictPort"
       ],
       "port": 5397
+    },
+    {
+      "name": "mochi-schedules",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5431",
+        "--strictPort"
+      ],
+      "port": 5431
+    },
+    {
+      "name": "mochi-schedules-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5433",
+        "--strictPort"
+      ],
+      "port": 5433,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-recursing-bohr-242ecd/d2867df4-fd42-4989-ad4e-db4ab8691fbf/scratchpad/mochi-userdata"
+      }
     }
   ]
 }
