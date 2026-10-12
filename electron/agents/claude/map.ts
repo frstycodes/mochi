@@ -3,6 +3,7 @@ import type { McpServerStatus, ModelInfo, PermissionResult, SDKMessage, SDKSyste
 import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import { describeApproval } from '../../../src/summary.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
@@ -186,6 +187,8 @@ export function approvalEvent(threadId: string, requestId: string, toolName: str
   if (toolName === 'Bash') return { threadId, type: 'approval', requestId, kind: 'command', title, detail, code: String(input.command ?? '') };
   const file = input.file_path ?? input.notebook_path;
   if (typeof file === 'string') return { threadId, type: 'approval', requestId, kind: 'edit', title, detail, code: file };
+  const sentence = describeApproval(toolName, input);
+  if (sentence) return { threadId, type: 'approval', requestId, kind: 'tool', title: sentence.charAt(0).toUpperCase() + sentence.slice(1), detail };
   return { threadId, type: 'approval', requestId, kind: 'tool', title, detail, code: JSON.stringify(input, null, 2).slice(0, 2000) };
 }
 

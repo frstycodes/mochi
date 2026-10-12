@@ -36,7 +36,8 @@ export interface ThreadsState {
 
 export type ThreadsAction =
   | { type: 'tick' }
-  | { type: 'agent'; event: AgentEvent }
+  /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
+  | { type: 'agent'; event: AgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
@@ -108,7 +109,7 @@ function reduce(state: State, action: Action): State {
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
-      return applyAgentEvent(state, action.event);
+      return stampNew(state, applyAgentEvent(state, action.event), action.event.threadId, action.ms);
     case 'agent-starting':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'trigger-overlap':
@@ -205,6 +206,12 @@ export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thre
 
 export function mapStep(thread: Thread, id: string, fn: (s: Step) => Step): Thread {
   return { ...thread, steps: thread.steps.map((s) => (s.id === id ? fn(s) : s)) };
+}
+
+function stampNew(before: State, after: State, threadId: string, ms?: number): State {
+  if (ms === undefined || after === before) return after;
+  const from = before.threads.find((t) => t.id === threadId)?.activity.length ?? 0;
+  return { ...after, threads: mapThread(after.threads, threadId, (t) => (t.activity.length > from ? { ...t, activity: t.activity.map((e, i) => (i >= from && e.ms === undefined ? { ...e, ms } : e)) } : t)) };
 }
 
 export function log(thread: Thread, entry: ActivityEntry): Thread {

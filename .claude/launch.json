@@ -456,6 +456,28 @@
       }
     },
     {
+      "name": "mochi-turn-accordion",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5471",
+        "--strictPort"
+      ],
+      "port": 5471
+    },
+    {
+      "name": "mochi-turn-accordion-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5473",
+        "--strictPort"
+      ],
+      "port": 5473
+    },
+    {
       "name": "mochi-agents",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
