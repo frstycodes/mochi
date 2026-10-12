@@ -18,6 +18,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
   const update = (fn: (t: Thread) => Thread): State => ({ ...state, threads: mapThread(state.threads, thread.id, fn) });
 
   switch (event.type) {
+    case 'worktree':
+      return update((t) => ({ ...t, live: t.live && { ...t.live, cwd: event.path } }));
     case 'session':
       return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId } }));
     case 'message':

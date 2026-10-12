@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, createMapper, permissionResult, planFromTodos } from './map.ts';
+import { approvalEvent, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
 import { FIXTURE } from './fixture.ts';
 
 const CWD = '/repo';
@@ -96,4 +96,8 @@ test('a rejected rate limit pauses the thread with its reset time; warnings pass
   assert.deepEqual(map(event('allowed_warning', 1_760_000_000)), []);
   assert.deepEqual(map(event('rejected', 1_760_000_000)), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z' }]);
   assert.deepEqual(map(event('rejected')), [{ threadId: 't1', type: 'limit' }]);
+});
+
+test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
+  assert.deepEqual(withPlanTools({ PATH: '/bin' }), { PATH: '/bin', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' });
 });
