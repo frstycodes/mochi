@@ -151,6 +151,7 @@ export interface Space {
   icon: SpaceIconName;
   /** GAP: demo plan names until usage reads the linked account's detected plan; empty for profiles made in Settings. */
   plans: Record<Provider, string>;
+  /** The gh login this profile's pull requests run as; empty means gh's active account. */
   github: string;
 }
 
@@ -161,9 +162,9 @@ export const NOW0 = 14 * 60 + 20;
 
 /** The profiles a fresh install starts with; `src/profiles.ts` holds the live list. */
 export const DEFAULT_SPACES: Space[] = [
-  { id: 'latitude', name: 'Latitude', icon: 'work', plans: { claude: 'Team', codex: 'Business' }, github: 'latitude-dev' },
-  { id: 'personal', name: 'Personal', icon: 'home', plans: { claude: 'Max', codex: 'Plus' }, github: 'frsty' },
-  { id: 'liane', name: 'Liane', icon: 'layers', plans: { claude: 'Max', codex: 'Plus' }, github: 'frsty' },
+  { id: 'latitude', name: 'Latitude', icon: 'work', plans: { claude: 'Team', codex: 'Business' }, github: '' },
+  { id: 'personal', name: 'Personal', icon: 'home', plans: { claude: 'Max', codex: 'Plus' }, github: '' },
+  { id: 'liane', name: 'Liane', icon: 'layers', plans: { claude: 'Max', codex: 'Plus' }, github: '' },
 ];
 
 function step(id: string, title: string, size: Size, footprint: string[], rest: Partial<Step> = {}): Step {

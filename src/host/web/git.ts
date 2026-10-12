@@ -116,6 +116,9 @@ export const git: GitHost = {
   async createPr() {
     return 'https://github.com/latitude-dev/latitude/pull/490';
   },
+  async ghAccounts() {
+    return [];
+  },
   async pr() {
     return {
       number: 490,

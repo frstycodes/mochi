@@ -62,7 +62,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 ## Workspace
 
 ### Profiles
-One group per profile: name, icon, GitHub account, linked Claude and Codex accounts, its own browser session (Clear browsing data). Add (up to 9, one per ⌥ digit) / remove (only an empty profile; undo toast). Profiles live in `src/profiles.ts` (localStorage, seeded from `DEFAULT_SPACES`). Done. GAP: the GitHub account is display only; `gh` still uses its own login.
+One group per profile: name, icon, GitHub account, linked Claude and Codex accounts, its own browser session (Clear browsing data). Add (up to 9, one per ⌥ digit) / remove (only an empty profile; undo toast). Profiles live in `src/profiles.ts` (localStorage, seeded from `DEFAULT_SPACES`). Done. The GitHub account picks one of gh's own logins (`gh auth status`); PR creation and status run gh with that login's token (`GH_TOKEN`, read from gh, never sent to the renderer). Empty = gh's active account. GAP: pushing still uses your git credentials (SSH key or credential helper); github.com only.
 
 ### Git
 | Setting | Control | Default | Status | Today |

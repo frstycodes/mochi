@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Add, Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { useConfirm } from '../../git/useConfirm';
+import { gitError } from '../../git/useGit';
+import type { GhAccount } from '../../host/types/git';
 import { host } from '../../host';
 import { SPACE_ICON_NAMES, type Space, type SpaceIconName } from '../../model';
 import { addProfile, getProfiles, MAX_PROFILES, removeProfile, updateProfile, useProfiles } from '../../profiles';
@@ -19,13 +22,14 @@ import { CommitInput, DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSel
 /** One group per profile: what it's called, how it looks in the sidebar, and what it signs in with. */
 export function ProfilesSection() {
   const profiles = useProfiles();
+  const gh = useGhAccounts();
   const { confirm, dialog } = useConfirm();
   return (
     <div className="flex flex-col gap-8">
       <p className="type-meta text-muted-foreground">Each profile is a space in the sidebar with its own threads, agent accounts and browser logins. Switch with the icons at the bottom of the sidebar.</p>
-      {!host.isDesktop && <DesktopOnlyNotice what="Linking agent accounts and clearing browsing data need the Mochi desktop app." />}
+      {!host.isDesktop && <DesktopOnlyNotice what="Choosing GitHub and agent accounts and clearing browsing data need the Mochi desktop app." />}
       {profiles.map((profile) => (
-        <ProfileGroup key={profile.id} profile={profile} isLast={profiles.length === 1} confirm={confirm} />
+        <ProfileGroup key={profile.id} profile={profile} isLast={profiles.length === 1} gh={gh} confirm={confirm} />
       ))}
       <AddProfileGroup isFull={profiles.length >= MAX_PROFILES} />
       {dialog}
@@ -33,7 +37,7 @@ export function ProfilesSection() {
   );
 }
 
-function ProfileGroup({ profile, isLast, confirm }: { profile: Space; isLast: boolean; confirm: ReturnType<typeof useConfirm>['confirm'] }) {
+function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast: boolean; gh: GhAccountsState; confirm: ReturnType<typeof useConfirm>['confirm'] }) {
   const { id } = profile;
   return (
     <SettingsGroup
@@ -51,17 +55,54 @@ function ProfileGroup({ profile, isLast, confirm }: { profile: Space; isLast: bo
         control={<CommitInput id={settingControlId(`${id}-name`)} value={profile.name} onCommit={(name) => name && updateProfile(id, { name })} />}
       />
       <SettingsRow id={`${id}-icon`} label="Icon" control={<IconPicker profile={profile} />} />
-      <SettingsRow
-        id={`${id}-github`}
-        label="GitHub account"
-        // GAP: only shown for now; pull requests open with whichever account `gh` is signed in as.
-        description="Pull requests still open as the account gh is signed in with."
-        control={<CommitInput id={settingControlId(`${id}-github`)} value={profile.github} placeholder="username" onCommit={(github) => updateProfile(id, { github })} className="font-mono placeholder:font-sans" />}
-      />
+      {host.isDesktop && <GitHubAccountRow profile={profile} gh={gh} />}
       {host.isDesktop && <AccountRows profile={profile} />}
       {host.isDesktop && <ClearBrowsingRow profile={profile} confirm={confirm} />}
       <RemoveProfileRow profile={profile} isLast={isLast} />
     </SettingsGroup>
+  );
+}
+
+type GhAccountsState = { accounts?: GhAccount[]; error?: string };
+
+/** gh's logins, read when the page opens and again when the window regains focus (after a `gh auth login` in a terminal). */
+function useGhAccounts(): GhAccountsState {
+  const [state, setState] = useState<GhAccountsState>({});
+  useEffect(() => {
+    if (!host.isDesktop) return;
+    const load = () => host.git.ghAccounts().then((accounts) => setState({ accounts }), (error: Error) => setState({ error: gitError(error) }));
+    load();
+    addEventListener('focus', load);
+    return () => removeEventListener('focus', load);
+  }, []);
+  return state;
+}
+
+// Radix Select can't hold '' (the profile's "use gh's active account").
+const ACTIVE = 'gh-active';
+
+function GitHubAccountRow({ profile, gh }: { profile: Space; gh: GhAccountsState }) {
+  const rowId = `${profile.id}-github`;
+  const working = gh.accounts?.filter((a) => a.isValid) ?? [];
+  const active = gh.accounts?.find((a) => a.isActive);
+  const isMissing = !!profile.github && !!gh.accounts && !working.some((a) => a.login === profile.github);
+  const options = [
+    { value: ACTIVE, label: active ? `Active account (${active.login})` : 'Active account' },
+    ...working.map((a) => ({ value: a.login, label: a.login })),
+    ...(isMissing ? [{ value: profile.github, label: `${profile.github} (signed out)` }] : []),
+  ];
+  const description = gh.error
+    ? `Couldn't ask gh for its logins: ${gh.error}`
+    : isMissing
+      ? `gh has no working login for ${profile.github}. Run gh auth login, then come back.`
+      : 'Pull requests from this profile’s threads open as this account. Add one with gh auth login.';
+  return (
+    <SettingsRow
+      id={rowId}
+      label="GitHub account"
+      description={<span className={cn(isMissing && 'text-warning')}>{description}</span>}
+      control={<SettingsSelect id={rowId} value={profile.github || ACTIVE} options={options} onChange={(v) => updateProfile(profile.id, { github: v === ACTIVE ? '' : v })} disabled={!gh.accounts} className="w-56" />}
+    />
   );
 }
 
