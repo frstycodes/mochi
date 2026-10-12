@@ -38,7 +38,8 @@ export function ChatView({ thread }: { thread: Thread }) {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <Conversation className="min-h-0 flex-1">
+      {/* Instant: a thread opens at its latest message, and a Stage swipe lands on the live view already where the preview was. */}
+      <Conversation initial="instant" className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
           <ConversationContent className="mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6">
             {rows.map((row, i) => (
