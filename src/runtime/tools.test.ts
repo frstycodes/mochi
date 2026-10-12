@@ -10,6 +10,7 @@ import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { sidechatReducer } from '../store/sidechat.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
+import { CLAUDE_FALLBACK_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
@@ -61,6 +62,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       waitFor: async (_id, until) => ({ isMet: until.text === 'Hello', waitedMs: 120 }),
     },
     cwdOf: () => '/repo/rl',
+    models: async () => CLAUDE_FALLBACK_MODELS,
     isDesktop: true,
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
@@ -102,6 +104,21 @@ test('auto tools never wait: creating and messaging threads run straight through
   await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
   assert.ok(t.thread(created.id));
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no widget was shown');
+});
+
+test('create_thread takes a model and effort at or below the default, and refuses dearer ones unless the setting allows', async () => {
+  const t = setup();
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', access: 'Auto' } });
+  const cheaper = await t.ok('create_thread', { prompt: 'Rename a variable', model: 'claude-haiku-5-5', effort: 'low' });
+  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', access: 'Auto' });
+  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-opus-5-5' }), /claude-opus-5-5 costs more/);
+  assert.match(await t.err('create_thread', { prompt: 'x', effort: 'max' }), /max effort costs more/);
+  assert.match(await t.err('create_thread', { prompt: 'x', model: 'gpt-9' }), /isn't offered/);
+  t.env.prefs.set({ threadModels: 'any' });
+  await t.ok('create_thread', { prompt: 'x', model: 'claude-opus-5-5', effort: 'max' });
+  t.env.prefs.set({ threadModels: 'default' });
+  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-haiku-5-5' }), /Always the default/);
+  await t.ok('create_thread', { prompt: 'no choice still works' });
 });
 
 test('a delete always waits on its widget, and Cancel leaves everything as it was', async () => {
