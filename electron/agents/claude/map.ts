@@ -128,6 +128,11 @@ type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: bo
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 const STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
 
+/** Claude Code ships no plan tool under the SDK unless asked, and without TaskCreate/TaskUpdate a live thread never gets steps. */
+export function withPlanTools(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { ...env, CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
+}
+
 export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
   const todos = Array.isArray(input.todos) ? (input.todos as { content?: unknown; status?: unknown }[]) : [];
   return todos.flatMap((t) => (typeof t.content === 'string' ? [{ title: t.content, status: STATUS[t.status as keyof typeof STATUS] ?? 'pending' }] : []));
