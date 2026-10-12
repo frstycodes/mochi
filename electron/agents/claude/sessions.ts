@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app, BrowserWindow } from 'electron';
 import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
+import { warmClaude } from './oneshot.ts';
 import { approvalEvent, createMapper, permissionResult } from './map.ts';
 
 /**
@@ -15,6 +17,8 @@ interface Session {
   threadId: string;
   options: AgentStartOptions;
   inbox: string[];
+  /** Every message handed to Claude Code, with the uuid `rewindFiles` takes. */
+  sent: { uuid: string; text: string }[];
   wake: EventEmitter;
   mapper: ReturnType<typeof createMapper>;
   query?: Query;
@@ -41,8 +45,9 @@ export async function startClaude(threadId: string, options: AgentStartOptions) 
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [options.prompt], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [options.prompt], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
   sessions.set(threadId, session);
+  void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
 }
 
@@ -73,6 +78,21 @@ export function stopClaude(threadId: string) {
   const queued = waiting.indexOf(session);
   if (queued >= 0) waiting.splice(queued, 1);
   release(session);
+}
+
+/**
+ * Rewinds Claude's file checkpoints to just before the latest sent message with this text, so its own view of the files
+ * matches the git checkpoint the renderer restores next. Only a live session can rewind; git refs stay the source of truth.
+ */
+// GAP: matched by text because activity entries carry no message id yet; pass the uuid once the entry stores it. Two
+// identical messages rewind to the later one.
+// GAP: not run against a real thread yet; whether Claude Code accepts our client uuids here is unverified.
+export async function rewindClaude(threadId: string, text: string) {
+  const session = sessions.get(threadId);
+  const uuid = session?.sent.findLast((m) => m.text === text)?.uuid;
+  if (!session?.query || !uuid) return;
+  const result = await session.query.rewindFiles(uuid);
+  if (!result.canRewind) console.warn(`Claude rewind skipped for ${threadId}: ${result.error ?? 'no checkpoint'}`);
 }
 
 export function resolveClaude(requestId: string, decision: AgentDecision) {
@@ -170,7 +190,9 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
   while (!signal.aborted) {
     const text = session.inbox.shift();
     if (text !== undefined) {
-      yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null };
+      const uuid = randomUUID();
+      session.sent.push({ uuid, text });
+      yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, uuid };
       continue;
     }
     try {

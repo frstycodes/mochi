@@ -52,6 +52,8 @@ export interface AgentAskEvent {
 
 /** What a side question sees of its thread: read-only, never written back. */
 export interface AgentAskContext {
+  /** The thread's profile, whose Claude account answers. */
+  spaceId: string;
   title: string;
   goal: string;
   steps: { title: string; status: string }[];
@@ -76,6 +78,10 @@ export interface AgentHost {
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
   /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
+  /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
+  rewindFiles(threadId: string, text: string): Promise<void>;
+  /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
+  warm(spaceId: string): Promise<void>;
 }
 
 export const agentMethods = {
@@ -88,4 +94,6 @@ export const agentMethods = {
   ask: 'invoke',
   onAskEvent: 'event',
   classify: 'invoke',
+  rewindFiles: 'invoke',
+  warm: 'invoke',
 } satisfies Manifest<AgentHost>;

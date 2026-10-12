@@ -1,15 +1,18 @@
 import { app, BrowserWindow } from 'electron';
 import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentStartOptions } from '../../src/host/types/agent.ts';
-import { localClassifier } from '../../src/drift.ts';
+import { classifyWithModel } from '../../src/drift.ts';
 import type { Thread } from '../../src/model.ts';
-import { chunks, mockAnswer } from '../../src/sidechat/mockAnswer.ts';
-import { hasClaudeSession, interruptClaude, resolveClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
+import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
+import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { notImplemented, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
 const PROVIDERS = ['claude', 'codex'];
 const DECISIONS = ['allow', 'deny', 'answer'];
+// The renderer caps quotes at 8000 chars and activity at 12 × 600; these bound what a renderer can make main send.
+const MAX_MESSAGE_CHARS = 20_000;
+const MAX_CONTEXT_CHARS = 50_000;
 
 // Threads without a Claude or Codex session run on the renderer's demo adapter.
 const runtime = notImplemented('agent runtime');
@@ -62,17 +65,38 @@ export const agent = {
     if (codex.owns(threadId as string)) return codex.stop(threadId as string);
     return runtime();
   },
+  async warm(_sender, spaceId) {
+    return warmClaude(string(spaceId, 'spaceId', 256));
+  },
+  async rewindFiles(_sender, threadId, text) {
+    string(threadId, 'threadId', 256);
+    string(text, 'text', 100_000);
+    if (hasClaudeSession(threadId as string)) return rewindClaude(threadId as string, text as string);
+  },
   async ask(sender, context, messages) {
-    record(context, 'context');
+    const c = record(context, 'context');
+    string(c.spaceId, 'context.spaceId', 256);
+    if (JSON.stringify(c).length > MAX_CONTEXT_CHARS) throw new TypeError(`context must be under ${MAX_CONTEXT_CHARS} chars`);
     if (!Array.isArray(messages) || messages.length > 200) throw new TypeError('messages must be an array of up to 200');
+    for (const m of messages) {
+      const message = record(m, 'message');
+      if (message.role !== 'user' && message.role !== 'assistant') throw new TypeError('message.role must be user or assistant');
+      string(message.text, 'message.text', MAX_MESSAGE_CHARS);
+    }
     const id = `ask-${++nextId}`;
     const send = (event: AgentAskEvent) => !sender.isDestroyed() && sender.send('agent:onAskEvent', event);
-    const parts = chunks(mockAnswer(context as unknown as AgentAskContext, messages as AgentAskMessage[]));
-    parts.forEach((text, i) => setTimeout(() => send({ id, type: 'text', text }), 200 + i * 25));
-    setTimeout(() => send({ id, type: 'done', text: '' }), 220 + parts.length * 25);
+    const abort = new AbortController();
+    sender.once('destroyed', () => abort.abort());
+    void (async () => {
+      try {
+        for await (const text of askClaude(c.spaceId as string, c as unknown as AgentAskContext, messages as AgentAskMessage[], abort)) send({ id, type: 'text', text });
+        send({ id, type: 'done', text: '' });
+      } catch (error) {
+        send({ id, type: 'error', text: error instanceof Error ? error.message : String(error) });
+      }
+    })();
     return { id };
   },
-  // GAP: R2 swaps in claude-haiku-5-5 with structured output; the local classifier answers until then.
   async classify(_sender, prompt, thread) {
     string(prompt, 'prompt', 20_000);
     const t = record(thread, 'thread');
@@ -85,6 +109,7 @@ export const agent = {
       string(step.status, 'step.status', 32);
       if (!Array.isArray(step.footprint) || step.footprint.some((f) => typeof f !== 'string')) throw new TypeError('step.footprint must be strings');
     }
-    return localClassifier(prompt as string, t as unknown as Thread);
+    string(t.spaceId, 'thread.spaceId', 256);
+    return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },
 } satisfies Handlers<AgentHost>;
