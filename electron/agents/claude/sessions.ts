@@ -1,0 +1,193 @@
+import { EventEmitter, once } from 'node:events';
+import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { app, BrowserWindow } from 'electron';
+import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
+import { apiKeyEnv, detectClaude, readSettings } from './install.ts';
+import { approvalEvent, createMapper, permissionResult } from './map.ts';
+
+/**
+ * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
+ * `maxConcurrent` are live, the rest wait in `waiting`. A session whose turn ended gives its process up when someone is
+ * waiting and comes back with `resume` on its next message.
+ */
+interface Session {
+  threadId: string;
+  options: AgentStartOptions;
+  inbox: string[];
+  wake: EventEmitter;
+  mapper: ReturnType<typeof createMapper>;
+  query?: Query;
+  abort?: AbortController;
+  sessionId?: string;
+  isBusy: boolean;
+}
+
+const sessions = new Map<string, Session>();
+const waiting: Session[] = [];
+const approvals = new Map<string, { threadId: string; toolName: string; input: Record<string, unknown>; resolve: (result: PermissionResult) => void }>();
+
+export const DEFAULT_MODEL = 'claude-opus-5-5';
+const DEFAULT_CAP = 6;
+const PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'plan', 'dontAsk', 'auto'];
+const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
+
+export async function startClaude(threadId: string, options: AgentStartOptions) {
+  if (options.permissionMode && !PERMISSION_MODES.includes(options.permissionMode as PermissionMode)) throw new TypeError(`permissionMode must be one of ${PERMISSION_MODES.join(', ')}`);
+  if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
+  stopClaude(threadId);
+  const session: Session = { threadId, options, inbox: [options.prompt], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
+  sessions.set(threadId, session);
+  await schedule(session);
+}
+
+export async function sendClaude(threadId: string, text: string) {
+  const session = sessions.get(threadId);
+  if (!session) throw new Error('No Claude session for this thread in this run of Harness; start it again with resume');
+  session.inbox.push(text);
+  session.isBusy = true;
+  if (session.query) session.wake.emit('push');
+  else if (!waiting.includes(session)) await schedule(session);
+}
+
+export async function interruptClaude(threadId: string) {
+  const session = sessions.get(threadId);
+  if (!session) return;
+  dropApprovals(threadId, 'Interrupted by the user');
+  const queued = waiting.indexOf(session);
+  if (queued >= 0) waiting.splice(queued, 1);
+  if (!session.query || !session.isBusy) return emit({ threadId, type: 'turn-end', status: 'interrupted' });
+  session.mapper.markInterrupting();
+  await session.query.interrupt();
+}
+
+export function stopClaude(threadId: string) {
+  const session = sessions.get(threadId);
+  if (!session) return;
+  sessions.delete(threadId);
+  const queued = waiting.indexOf(session);
+  if (queued >= 0) waiting.splice(queued, 1);
+  release(session);
+}
+
+export function resolveClaude(requestId: string, decision: AgentDecision) {
+  const pending = approvals.get(requestId);
+  if (!pending) return false;
+  approvals.delete(requestId);
+  pending.resolve(permissionResult(pending.toolName, pending.input, decision));
+  return true;
+}
+
+// Quitting closes every Claude Code process; their transcripts are already on disk, so each thread resumes from its
+// persisted session id when the user next sends. Nothing resumes on launch: that would spend the user's usage unasked.
+app.on('before-quit', () => {
+  for (const threadId of [...sessions.keys()]) stopClaude(threadId);
+});
+
+async function schedule(session: Session) {
+  const settings = await readSettings();
+  const live = [...sessions.values()].filter((s) => s.query).length;
+  if (live >= (settings.maxConcurrent ?? DEFAULT_CAP)) {
+    evictIdle() ? void launch(session) : waiting.push(session);
+    return;
+  }
+  void launch(session);
+}
+
+async function launch(session: Session) {
+  const { threadId, options } = session;
+  const abort = new AbortController();
+  try {
+    const settings = await readSettings();
+    const install = await detectClaude(settings);
+    const env = apiKeyEnv(settings);
+    if (!install.loggedIn && !env) throw new Error('Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
+    if (sessions.get(threadId) !== session) return;
+    session.abort = abort;
+    session.query = query({
+      prompt: inbox(session, abort.signal),
+      options: {
+        pathToClaudeCodeExecutable: install.path,
+        cwd: options.cwd,
+        model: options.model ?? DEFAULT_MODEL,
+        ...(options.effort && { effort: options.effort as EffortLevel }),
+        permissionMode: (options.permissionMode as PermissionMode | undefined) ?? 'default',
+        // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
+        ...(session.sessionId && { resume: session.sessionId }),
+        ...(env && { env }),
+        includePartialMessages: true,
+        enableFileCheckpointing: true,
+        abortController: abort,
+        canUseTool: approve(threadId),
+      },
+    });
+    for await (const message of session.query) {
+      if (message.type === 'system' && message.subtype === 'init') session.sessionId = message.session_id;
+      session.mapper.map(message).forEach(emit);
+      if (message.type !== 'result') continue;
+      session.isBusy = session.inbox.length > 0;
+      if (!session.isBusy && waiting.length) release(session);
+    }
+  } catch (error) {
+    if (!abort.signal.aborted) emit({ threadId, type: 'turn-end', status: 'failed', error: error instanceof Error ? error.message : String(error) });
+  } finally {
+    if (session.abort === abort) release(session);
+  }
+}
+
+/** Ends a session's process and hands its slot to the next waiting thread. The record stays for `send` unless stopped. */
+function release(session: Session) {
+  const { query: q, abort } = session;
+  session.query = undefined;
+  session.abort = undefined;
+  session.isBusy = false;
+  dropApprovals(session.threadId, 'The session ended');
+  abort?.abort();
+  q?.close();
+  if (!q) return;
+  const next = waiting.shift();
+  if (next) void launch(next);
+}
+
+function evictIdle() {
+  const idle = [...sessions.values()].find((s) => s.query && !s.isBusy);
+  if (idle) release(idle);
+  return !!idle;
+}
+
+async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDKUserMessage> {
+  while (!signal.aborted) {
+    const text = session.inbox.shift();
+    if (text !== undefined) {
+      yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null };
+      continue;
+    }
+    try {
+      await once(session.wake, 'push', { signal });
+    } catch {
+      return;
+    }
+  }
+}
+
+function approve(threadId: string): CanUseTool {
+  return (toolName, input, { signal, toolUseID, title, description, decisionReason }) =>
+    new Promise((resolve) => {
+      approvals.set(toolUseID, { threadId, toolName, input, resolve });
+      signal.addEventListener('abort', () => approvals.delete(toolUseID), { once: true });
+      emit(approvalEvent(threadId, toolUseID, toolName, input, title ?? toolName, description ?? decisionReason ?? ''));
+    });
+}
+
+function dropApprovals(threadId: string, message: string) {
+  for (const [id, pending] of approvals) {
+    if (pending.threadId !== threadId) continue;
+    approvals.delete(id);
+    pending.resolve({ behavior: 'deny', message, interrupt: true });
+  }
+}
+
+function emit(event: AgentEvent) {
+  for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('agent:onEvent', event);
+}
