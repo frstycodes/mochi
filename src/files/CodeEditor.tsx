@@ -14,7 +14,7 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 
-export default function CodeEditor({ path, value, line, onChange }: { path: string; value: string; line?: number; onChange: (text: string) => void }) {
+export default function CodeEditor({ path, value, line, readOnly, onChange }: { path: string; value: string; line?: number; readOnly?: boolean; onChange?: (text: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const onChangeRef = useRef(onChange);
@@ -31,7 +31,8 @@ export default function CodeEditor({ path, value, line, onChange }: { path: stri
           editorTheme,
           syntaxHighlighting(highlightStyle),
           lang ? lang() : [],
-          EditorView.updateListener.of((update) => update.docChanged && onChangeRef.current(update.state.doc.toString())),
+          readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
+          EditorView.updateListener.of((update) => update.docChanged && onChangeRef.current?.(update.state.doc.toString())),
         ],
       }),
     });
@@ -40,7 +41,7 @@ export default function CodeEditor({ path, value, line, onChange }: { path: stri
       const at = editor.state.doc.line(Math.min(line, editor.state.doc.lines)).from;
       editor.dispatch({ selection: { anchor: at }, effects: EditorView.scrollIntoView(at, { y: 'center' }) });
     }
-    editor.focus();
+    if (!readOnly) editor.focus();
     return () => editor.destroy();
     // A new path is a new document (fresh undo history); `value` changes are synced below without rebuilding.
   }, [path]);

@@ -11,11 +11,12 @@ import { ImageVisual } from './ImageVisual';
 import { SortableTable } from './SortableTable';
 import { VisualFrame, type VisualSource } from './VisualFrame';
 import { WidgetVisual } from './WidgetVisual';
+import { FileCode } from '../files/FileCode';
 
-/** Streamdown hooks for agent messages: fenced visuals plus table and image overrides. Widgets need a VizThreadProvider above. */
+/** Streamdown hooks for agent messages: fenced visuals plus table, image and file-path overrides. Widgets need a VizThreadProvider above. */
 export const VIZ_PLUGINS = { renderers: [{ language: [...VIZ_LANGUAGES], component: FenceVisual }] } satisfies PluginConfig;
 
-export const VIZ_COMPONENTS = { table: SortableTable, img: ImageVisual } satisfies Components;
+export const VIZ_COMPONENTS = { table: SortableTable, img: ImageVisual, inlineCode: FileCode } satisfies Components;
 
 type SanitizeSchema = { protocols?: Record<string, string[] | undefined> };
 const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, SanitizeSchema];

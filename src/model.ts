@@ -270,7 +270,7 @@ function adminDashboard(): Thread {
       { at: at(s, 9), who: 'you', kind: 'message', text: 'Good. Keep the endpoint paginated, some customers have thousands of keys.' },
       { at: at(s, 10), who: 'codex', kind: 'tool', text: 'Write apps/api/routes/admin/usage.ts  +18 −0' },
       { at: at(s, 24), who: 'codex', kind: 'tool', text: 'Run pnpm --filter api test usage' },
-      { at: at(s, 38), who: 'codex', kind: 'message', text: 'Endpoint is done and paginated by cursor. p95 is 140ms on the 10k-key seed database. Moving on to the charts page.' },
+      { at: at(s, 38), who: 'codex', kind: 'message', text: 'Endpoint is done and paginated by cursor. p95 is 140ms on the 10k-key seed database. Setup notes are in `README.md`, the page mounts from `src/App.tsx` and the scripts live in `package.json`. Moving on to the charts page.' },
       { at: at(s, 40), who: 'harness', kind: 'event', text: 'Finished "Usage query endpoint"' },
       { at: at(s, 44), who: 'codex', kind: 'tool', text: 'Edit apps/web/routes/admin/usage.tsx  +120 −4' },
     ],

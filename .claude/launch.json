@@ -319,6 +319,17 @@
         "--strictPort"
       ],
       "port": 5363
+    },
+    {
+      "name": "harness-viewer",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5365",
+        "--strictPort"
+      ],
+      "port": 5365
     }
   ]
 }

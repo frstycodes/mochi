@@ -130,7 +130,7 @@ function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; is
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
   return (
     <MessageContextMenu thread={thread} index={row.index}>
-      <div data-activity-index={row.index} className="group/row flex flex-col gap-1">
+      <div data-activity-index={row.index} data-file-scope className="group/row flex flex-col gap-1">
         <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
           <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
             {isAgent && row.showAuthor && (

@@ -2,6 +2,7 @@ import { useState, type ComponentProps, type ReactNode } from 'react';
 import { ArrowUp, BranchUp, Laptop, Mic, Monitor, Paperclip, ShieldCheck, Stop } from 'reicon-react';
 import { toast } from 'sonner';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
+import { openFiles, type ViewerFile } from './files/viewer';
 import { openPhotos } from './photo/photos';
 import {
   PromptInput,
@@ -117,10 +118,12 @@ function ComposerAttachments() {
       )}
       {others.length > 0 && (
         <Attachments variant="inline">
-          {others.map((f) => (
+          {others.map((f, i) => (
             <Attachment key={f.id} data={f} onRemove={() => remove(f.id)}>
-              <AttachmentPreview />
-              <AttachmentInfo className="type-caption" />
+              <button type="button" aria-label={`View ${f.filename ?? 'file'}`} onClick={() => openFiles({ files: others.map(toViewerFile), index: i })} className="flex min-w-0 cursor-pointer items-center gap-1.5">
+                <AttachmentPreview />
+                <AttachmentInfo className="type-caption" />
+              </button>
               <AttachmentRemove />
             </Attachment>
           ))}
@@ -131,6 +134,7 @@ function ComposerAttachments() {
 }
 
 const toPhoto = (f: { url?: string; filename?: string }) => ({ src: f.url ?? '', name: f.filename ?? 'Image' });
+const toViewerFile = (f: { url?: string; filename?: string; mediaType?: string }): ViewerFile => ({ source: 'attachment', name: f.filename ?? 'File', url: f.url ?? '', mediaType: f.mediaType });
 
 /** One line under the card for where and how the agent runs. The gradient fades the transcript scrolling under it. */
 export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {

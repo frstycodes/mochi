@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Global, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Eye, Global, TerminalSquare, X } from 'reicon-react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, entryPhase } from './AgentLoader';
@@ -11,6 +11,8 @@ import { PATCHES, RUNS, type RunResult } from './fixtures';
 import type { ActivityEntry } from './model';
 import { duration } from './progress';
 import { parseTool, type ToolCall } from './summary';
+import { openFromScope, useThreadFiles, type ThreadFiles } from './files/viewer';
+import { TooltipIconButton } from './ui';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
@@ -23,9 +25,10 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
   const failed = runs.filter((c) => (RUNS[c.target]?.exitCode ?? 0) !== 0).length;
   const minutes = Math.max(1, entries[entries.length - 1].at - entries[0].at);
   const current = calls[calls.length - 1];
+  const files = useThreadFiles();
 
   return (
-    <div className="-mx-2 flex flex-col">
+    <div data-file-scope className="-mx-2 flex flex-col">
       <button
         type="button"
         aria-expanded={isOpen}
@@ -63,7 +66,7 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
             e.kind === 'reasoning' ? (
               <ThoughtRow key={i} entry={e} />
             ) : (
-              <ToolRow key={i} call={parseTool(e.text)} isRunning={isLive && i === entries.length - 1} />
+              <ToolRow key={i} call={parseTool(e.text)} isRunning={isLive && i === entries.length - 1} files={files} />
             ),
           )}
         </ol>
@@ -100,7 +103,7 @@ function Expand({ isOpen, children }: { isOpen: boolean; children: ReactNode }) 
   );
 }
 
-function ToolRow({ call, isRunning }: { call: ToolCall; isRunning: boolean }) {
+function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolean; files: ThreadFiles | null }) {
   const [isOpen, setOpen] = useState(false);
   const patch = PATCHES[call.target];
   const run = RUNS[call.target];
@@ -118,20 +121,37 @@ function ToolRow({ call, isRunning }: { call: ToolCall; isRunning: boolean }) {
     </>
   );
 
+  const isFile = call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write';
+
   return (
-    <li className="flex flex-col">
-      {detail ? (
-        <button
-          type="button"
-          aria-expanded={isOpen}
-          onClick={() => setOpen((o) => !o)}
-          className="flex h-7 min-w-0 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta hover:bg-accent/60"
-        >
-          {row}
-        </button>
-      ) : (
-        <div className="flex h-7 min-w-0 items-center gap-2 px-2 type-meta">{row}</div>
-      )}
+    <li className="group/tool flex flex-col">
+      <div className="flex min-w-0 items-center gap-0.5">
+        {detail ? (
+          <button
+            type="button"
+            aria-expanded={isOpen}
+            onClick={() => setOpen((o) => !o)}
+            className="flex h-7 min-w-0 flex-1 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta hover:bg-accent/60"
+          >
+            {row}
+          </button>
+        ) : (
+          <div className="flex h-7 min-w-0 flex-1 items-center gap-2 px-2 type-meta">{row}</div>
+        )}
+        {/* Keeps the stats column aligned with the file rows' open button. */}
+        {!!files && !isFile && <span aria-hidden className="size-6 shrink-0" />}
+        {!!files && isFile && (
+          <TooltipIconButton
+            label="Open in viewer"
+            hint={call.target}
+            data-file-link={call.target}
+            onClick={(e) => openFromScope(e.currentTarget, files)}
+            className="opacity-0 group-hover/tool:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          >
+            <Eye />
+          </TooltipIconButton>
+        )}
+      </div>
       {!!detail && (
         <Expand isOpen={isOpen}>
           <div className="pt-1 pb-2">{detail}</div>
