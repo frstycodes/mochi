@@ -26,6 +26,7 @@ import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
+import { LimitBanner } from './chat/LimitBanner';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
 
@@ -234,6 +235,7 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
       <DriftCard guard={drift} thread={thread} />
+      <LimitBanner thread={thread} />
       <ComposerCard className="in-data-image-over:border-ring">
         {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
         <ComposerInput

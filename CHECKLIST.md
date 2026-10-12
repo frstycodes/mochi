@@ -234,4 +234,4 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [ ] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Mochi never handles credentials
 - [ ] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
 - [ ] Threads always run on their profile's account; never rotate to another account of the same provider
-- [ ] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider
+- [x] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider
