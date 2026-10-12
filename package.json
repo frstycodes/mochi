@@ -100,7 +100,14 @@
     "files": [
       "dist/**",
       "dist-electron/**",
-      "!node_modules/**"
+      "!node_modules/**",
+      "node_modules/node-pty/package.json",
+      "node_modules/node-pty/lib/*.js",
+      "node_modules/node-pty/prebuilds/darwin-*/*"
+    ],
+    "afterPack": "scripts/after-pack.mjs",
+    "asarUnpack": [
+      "node_modules/node-pty/prebuilds/**"
     ],
     "directories": {
       "output": "release"
