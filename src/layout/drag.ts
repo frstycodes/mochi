@@ -22,11 +22,11 @@ function emit(next: DragSession | null) {
 }
 
 export function startDrag(view: View, label: string, x: number, y: number, hasOwnGhost = false, centerAs?: Side) {
-  emit({ view, label, hasOwnGhost, centerAs, x, y, hit: hitLeaf(x, y, centerAs) });
+  emit({ view, label, hasOwnGhost, centerAs, x, y, hit: hitLeaf(x, y, view, centerAs) });
 }
 
 export function moveDrag(x: number, y: number) {
-  if (session) emit({ ...session, x, y, hit: hitLeaf(x, y, session.centerAs) });
+  if (session) emit({ ...session, x, y, hit: hitLeaf(x, y, session.view, session.centerAs) });
 }
 
 /** Ends the drag and returns where it landed on a split, if anywhere. */
@@ -46,10 +46,11 @@ export function useDragSession() {
   );
 }
 
-/** Drag ghosts are `pointer-events: none`, so the topmost leaf under the pointer is the target. Tab strips and the sidebar are never targets. */
-function hitLeaf(x: number, y: number, centerAs?: Side): DragSession['hit'] {
+/** Drag ghosts are `pointer-events: none`, so the topmost leaf under the pointer is the target. Tab strips and the sidebar are never targets, nor a thread header for a pane tab (it pins there instead). */
+function hitLeaf(x: number, y: number, view: View, centerAs?: Side): DragSession['hit'] {
   const els = document.elementsFromPoint(x, y);
-  if (els.some((el) => el.closest('[role=tablist], [data-sidebar=sidebar]'))) return null;
+  const blocked = view.kind === 'tab' ? '[role=tablist], [data-sidebar=sidebar], [data-pin-drop]' : '[role=tablist], [data-sidebar=sidebar]';
+  if (els.some((el) => el.closest(blocked))) return null;
   const leafEl = els.map((el) => el.closest<HTMLElement>('[data-leaf-id]')).find(Boolean);
   if (!leafEl) return null;
   const zone = zoneAt(leafEl.getBoundingClientRect(), x, y);

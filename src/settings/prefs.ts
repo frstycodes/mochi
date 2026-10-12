@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { PaneTabKind } from '../model.ts';
 import { effortId, modelId } from '../runtime/models.ts';
 
 /**
@@ -20,6 +21,8 @@ export interface Prefs {
   agent: 'claude' | 'codex';
   permissions: 'Ask first' | 'Auto edit' | 'Full access';
   runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
+  /** Side pane tabs pinned as icons in the thread header, in order. */
+  headerPins: PaneTabKind[];
   /** Off sends every message straight through: no local score, no classifier call. */
   driftGuard: boolean;
   driftThreshold: number;
@@ -53,6 +56,7 @@ export const DEFAULT_PREFS: Prefs = {
   agent: 'claude',
   permissions: 'Auto edit',
   runsOn: 'This Mac',
+  headerPins: ['browser', 'terminal'],
   driftGuard: true,
   driftThreshold: 0.15,
   branchFrom: 'current',

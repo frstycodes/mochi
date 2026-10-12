@@ -13,7 +13,7 @@ import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
 import { ProviderMark } from './ui';
-import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu, useComposerHandoff } from './Composer';
+import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, useComposerHandoff } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
@@ -307,7 +307,6 @@ function Composer({
           </ComposerCard>
         </div>
         <ComposerMeta>
-          <RunOnMenu />
           <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
           <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">

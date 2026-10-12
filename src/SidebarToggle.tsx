@@ -1,16 +1,9 @@
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/sidebar';
 
-/** One toggle for open and collapsed alike, fixed where the sidebar header has it, so it never jumps between the sidebar and the thread header. */
-export function SidebarToggle() {
-  const { isMobile } = useSidebar();
-  if (isMobile) return null;
-  return <SidebarTrigger className="app-no-drag fixed top-2.5 left-2 z-50 text-muted-foreground in-data-traffic-lights:left-22" />;
-}
-
-/** Phones carry their own trigger in the first split's header; on desktop that header only keeps the fixed toggle's spot clear while the sidebar is collapsed. */
+/** Phones carry a sidebar trigger in the first split's header; on desktop that header only clears the traffic lights while the sidebar is collapsed. Show/hide on desktop lives in the thread's ⋮ menu and the edge peek. */
 export function useToggleSlot(isFirst: boolean) {
   const { state, isMobile } = useSidebar();
-  return { hasTrigger: isFirst && isMobile, reservesToggle: isFirst && !isMobile && state === 'collapsed' };
+  return { hasTrigger: isFirst && isMobile, reservesLights: isFirst && !isMobile && state === 'collapsed' };
 }
 
-export const TOGGLE_RESERVE = 'pl-10 in-data-traffic-lights:pl-30';
+export const LIGHTS_RESERVE = 'in-data-traffic-lights:pl-20';

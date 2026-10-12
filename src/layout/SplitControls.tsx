@@ -17,7 +17,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
+import { LIGHTS_RESERVE, useToggleSlot } from '../SidebarToggle';
 import { useHarness } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
@@ -139,11 +139,11 @@ function PresetSubmenu() {
 /** Header for splits that aren't threads (Queue, Board, New thread, a dropped tab). Hidden for a lone split unless it must carry the sidebar toggle. */
 export function LeafBar({ children }: { children: ReactNode }) {
   const { isMulti, isFirst, leafId } = useSplit();
-  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
-  if (!isMulti && !hasTrigger && !reservesToggle) return null;
+  const { hasTrigger, reservesLights } = useToggleSlot(isFirst);
+  if (!isMulti && !hasTrigger && !reservesLights) return null;
   return (
     <TargetContextMenu target={{ leafId }} groups={SPLIT_MENU}>
-      <div className={cn('app-drag flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
+      <div className={cn('app-drag flex h-11 shrink-0 items-center gap-2 px-3', reservesLights && LIGHTS_RESERVE)}>
         {hasTrigger && <SidebarTrigger className="-ml-1" />}
         <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
         <SplitControls />
