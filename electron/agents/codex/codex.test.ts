@@ -6,7 +6,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
 import { CodexAdapter, reply } from './adapter.ts';
-import { codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits } from './map.ts';
+import { codexModels, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
@@ -261,4 +261,21 @@ test('webSearch items name the query on completion and carry pages as links', ()
   assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: done }, s), [{ threadId: 'h1', type: 'tool', id: 'w1', phase: 'end', text: 'Search token bucket', links: [{ url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket' }] }]);
   const opened = { type: 'webSearch', id: 'w2', query: '', action: { type: 'openPage', url: 'https://redis.io/docs/' }, results: null };
   assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: opened }, s), [{ threadId: 'h1', type: 'tool', id: 'w2', phase: 'end', text: 'Fetch https://redis.io/docs/', links: [{ url: 'https://redis.io/docs/' }] }]);
+});
+
+test('model/list maps to the picker: real ids, names, default flag and efforts; hidden models stay out', () => {
+  // Shape of a real 0.155.1 `model/list` result on a ChatGPT account, trimmed to two models plus a hidden one.
+  const result = {
+    data: [
+      { id: 'gpt-6-astra', model: 'gpt-6-astra', displayName: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', hidden: false, isDefault: true, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low', description: '' }, { reasoningEffort: 'ultra', description: '' }] },
+      { id: 'gpt-6-luna', model: 'gpt-6-luna', displayName: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', hidden: false, isDefault: false, defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: '' }] },
+      { id: 'internal', model: 'internal', displayName: 'Internal', description: '', hidden: true, isDefault: false, defaultReasoningEffort: 'low', supportedReasoningEfforts: [] },
+    ],
+    nextCursor: null,
+  };
+  assert.deepEqual(codexModels(result), [
+    { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: ['low', 'ultra'], defaultEffort: 'low', isDefault: true },
+    { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: ['medium'], defaultEffort: 'medium', isDefault: false },
+  ]);
+  assert.deepEqual(codexModels(null), []);
 });

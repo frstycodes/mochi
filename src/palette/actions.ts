@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
 import { threadCwd } from '../host/cwd';
@@ -12,6 +12,9 @@ import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
 import { openSettings } from '../settings/open';
 import { askInSideChat } from '../sidechat/AskInSideChat';
+import { askSecondOpinion } from '../secondOpinion/run';
+import { reviewerFor } from '../secondOpinion/reviewer';
+import { providerName } from '../secondOpinion/verdict';
 import { pinMany } from '../reorder';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
@@ -37,6 +40,10 @@ export interface PaletteAction {
   keywords?: string;
   shortcut?: Key[];
   when?: (scope: ActionScope) => boolean;
+  /** The title for this target, when it names something about it ("Ask Codex for a second opinion"). */
+  label?: (scope: ActionScope) => string;
+  /** Shown but not runnable, with this reason, while it would fail (the other agent isn't signed in). */
+  disabledReason?: (scope: ActionScope) => string | undefined;
   /** False while the thing it acts on doesn't exist at all (a profile slot past the last profile), so lists like Settings › Keyboard leave it out. */
   exists?: () => boolean;
   run: (ctx: ActionContext) => void;
@@ -61,6 +68,17 @@ export const ACTIONS = [
   { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: Routing, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
+  {
+    id: 'thread-second-opinion',
+    group: 'Thread',
+    title: 'Ask for a second opinion',
+    icon: Scale,
+    keywords: 'review verdict claude codex other agent',
+    when: (s) => when.liveThread(s) && when.repo(s),
+    label: (s) => `Ask ${providerName(reviewerFor(s.thread!).provider)} for a second opinion`,
+    disabledReason: (s) => reviewerFor(s.thread!).reason,
+    run: onThread((t, { dispatch }) => askSecondOpinion(t, dispatch)),
+  },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
   { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },

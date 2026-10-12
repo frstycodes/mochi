@@ -1,6 +1,6 @@
 import os from 'node:os';
 import * as sdk from '@anthropic-ai/claude-agent-sdk';
-import { query, type Options, type SDKMessage, type SpareProcess } from '@anthropic-ai/claude-agent-sdk';
+import { query, type Options, type SDKMessage, type SDKUserMessage, type SpareProcess } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentInstall } from '../../../src/host/types/settings.ts';
 import type { Thread } from '../../../src/model.ts';
@@ -40,6 +40,20 @@ export async function classifyClaude(prompt: string, thread: Thread, signal: Abo
     return JSON.parse(message.result.slice(message.result.indexOf('{'), message.result.lastIndexOf('}') + 1)) as unknown;
   }
   return null;
+}
+
+/** `supportedModels()` from the profile's account: a query whose prompt never arrives, closed once it answers. */
+export async function claudeSupportedModels(spaceId: string) {
+  const { options } = await runner(spaceId);
+  const idle = (async function* (): AsyncGenerator<SDKUserMessage> {
+    await new Promise(() => {});
+  })();
+  const q = query({ prompt: idle, options: { ...options, cwd: os.tmpdir() } });
+  try {
+    return await q.supportedModels();
+  } finally {
+    q.close();
+  }
 }
 
 /** Parks a Claude Code process for the profile's account, so its next side question or classify skips the startup. */

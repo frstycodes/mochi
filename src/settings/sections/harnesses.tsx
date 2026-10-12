@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Refresh, Trash3 } from 'reicon-react';
+import { ChevronDown, Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { toggleStar } from '../../ModelControls';
-import { EFFORTS, MODELS } from '../../runtime/controls';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ModelMenu, toggleStar, useModels } from '../../ModelControls';
+import { EFFORTS } from '../../runtime/controls';
+import { effortName, optionFor, type ModelOption } from '../../runtime/models';
+import { useSpace } from '../../store';
 import type { Provider } from '../../model';
 import { ProviderMark, TooltipIconButton } from '../../ui';
 import { defaultAccountId } from '../accounts';
@@ -31,36 +33,50 @@ export function HarnessesSection() {
 
 /** Across harnesses: the model chip's scroll dock shows starred models, and new threads start at this effort. */
 function ModelsGroup() {
-  const { starredModels, effort } = usePrefs();
+  const { effort } = usePrefs();
   return (
-    <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer.">
-      {MODELS.map((m) => (
-        <SettingsRow
-          key={m.id}
-          id={`starred-${m.id}`}
-          label={
-            <span className="flex items-center gap-2">
-              <ProviderMark provider={m.harness} size={14} />
-              {m.name}
-            </span>
-          }
-          description={m.note}
-          control={
-            <Switch
-              id={settingControlId(`starred-${m.id}`)}
-              aria-label={`Star ${m.name}`}
-              checked={starredModels.includes(m.id)}
-              onCheckedChange={() => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
-            />
-          }
-        />
-      ))}
+    <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer. The lists are this profile's accounts' own.">
+      <StarredModelsRow />
       <SettingsRow
         id="effort"
         label="Default effort"
-        control={<SettingsSelect id="effort" value={effort} options={EFFORTS.map((level) => ({ value: level, label: level }))} onChange={(v) => setPrefs({ effort: v })} />}
+        control={<SettingsSelect id="effort" value={effort} options={EFFORTS.map((level) => ({ value: level, label: effortName(level) }))} onChange={(v) => setPrefs({ effort: v })} />}
       />
     </SettingsGroup>
+  );
+}
+
+/** The two-level model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
+function StarredModelsRow() {
+  const { starredModels } = usePrefs();
+  const catalog = useModels(useSpace().id);
+  const models = HARNESS_IDS.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
+  const starred = models.filter((m) => starredModels.includes(m.id));
+  return (
+    <SettingsRow
+      id="starredModelsPicker"
+      label="Starred models"
+      description={starred.map((m) => m.name).join(', ') || 'None starred yet'}
+      control={
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button id={settingControlId('starredModelsPicker')} variant="outline" size="sm">
+              Choose models
+              <ChevronDown data-icon="inline-end" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 p-0">
+            <ModelMenu
+              models={models}
+              pending={HARNESS_IDS.filter((h) => !catalog[h])}
+              harnesses={HARNESS_IDS}
+              isChecked={(m) => starredModels.includes(m.id)}
+              onPick={(m) => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
+            />
+          </PopoverContent>
+        </Popover>
+      }
+    />
   );
 }
 
@@ -113,8 +129,20 @@ function HarnessSettings({ provider }: { provider: Provider }) {
             id={`${provider}Model`}
             label="Default model"
             description="New threads start on this model."
+            control={<ModelSelect id={`${provider}Model`} provider={provider} value={settings.harnesses[provider].model} onChange={(model) => void update({ harnesses: { [provider]: { model } } })} />}
+          />
+          <SettingsRow
+            id={`${provider}SecondOpinionModel`}
+            label="Second opinion model"
+            description={`What ${harness.name} reviews other threads on. Empty uses the default model.`}
             control={
-              <CommitInput id={settingControlId(`${provider}Model`)} value={settings.harnesses[provider].model} placeholder={harness.modelHint} onCommit={(model) => void update({ harnesses: { [provider]: { model } } })} />
+              <ModelSelect
+                id={`${provider}SecondOpinionModel`}
+                provider={provider}
+                emptyLabel="Default model"
+                value={settings.harnesses[provider].secondOpinionModel}
+                onChange={(secondOpinionModel) => void update({ harnesses: { [provider]: { secondOpinionModel } } })}
+              />
             }
           />
         </SettingsGroup>
@@ -124,6 +152,22 @@ function HarnessSettings({ provider }: { provider: Provider }) {
       {!!harness.apiKey && <ApiKeyGroup provider={provider} />}
     </section>
   );
+}
+
+// Radix Select reserves '': the account's own default gets a sentinel.
+const ACCOUNT_DEFAULT = 'account-default';
+
+/** The current profile's list for `provider`, its account default first; a saved model the account no longer offers stays listed as Unavailable. */
+function ModelSelect({ id, provider, value, emptyLabel, onChange }: { id: string; provider: Provider; value: string; emptyLabel?: string; onChange: (model: string) => void }) {
+  const models = useModels(useSpace().id)[provider];
+  const stored = optionFor(models, value, provider);
+  const fallback = optionFor(models, '', provider);
+  const options = [
+    { value: ACCOUNT_DEFAULT, label: emptyLabel ?? (models?.length ? `Account default (${fallback.name})` : 'Account default') },
+    ...(models ?? []).map((m) => ({ value: m.id, label: m.name })),
+    ...(value && !models?.some((m) => m.id === value) ? [{ value, label: stored.isUnavailable ? `${value} (Unavailable)` : value }] : []),
+  ];
+  return <SettingsSelect id={id} value={value || ACCOUNT_DEFAULT} options={options} onChange={(v) => onChange(v === ACCOUNT_DEFAULT ? '' : v)} className="w-56" />;
 }
 
 function ApiKeyGroup({ provider }: { provider: Provider }) {

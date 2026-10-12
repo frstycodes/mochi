@@ -16,7 +16,7 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
   let s = base();
   const [start] = calls(s, create);
   assert.equal(start.method, 'start');
-  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', worktree: `feat/${start.threadId}`, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
+  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', worktree: `mochi/${start.threadId}`, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
 
   s = run(s, create);
   const id = start.threadId;
@@ -54,18 +54,17 @@ test('a limit pauses the thread; resume sends on the same account, the API key c
   assert.equal(restart.method === 'start' && restart.options.provider, 'codex');
   assert.equal(restart.method === 'start' && restart.options.prompt, 'Goal: reply with ok');
   assert.equal(restart.method === 'start' && restart.options.resume, undefined, 'a Claude session id never resumes on Codex');
-  assert.equal(restart.method === 'start' && restart.options.model, undefined, 'the adapter picks the default model');
+  assert.equal(restart.method === 'start' && restart.options.model, undefined, "main sends the account's default model");
   const handed = run(s, handoff).threads.find((t) => t.id === id)!;
   assert.equal(handed.session, undefined);
   assert.equal(handed.live?.limit, undefined);
 });
 
-test("a new thread's model starts at the Settings default: listed ids show their catalog entry, others pass through as is", () => {
-  assert.equal(initialControls('claude', '').model, 'opus-5.5', "'' keeps the catalog default");
-  assert.equal(initialControls('claude', 'claude-sonnet-5-5').model, 'sonnet-5.5');
-  assert.equal(agentOptions(initialControls('claude', 'claude-sonnet-5-5'), 'claude').model, 'claude-sonnet-5-5');
-  assert.equal(agentOptions(initialControls('codex', 'gpt-6-codex'), 'codex').model, 'gpt-6-codex');
-  assert.equal(agentOptions(initialControls('codex', ''), 'codex').model, undefined, "Codex's own configured default");
+test("a new thread's model starts at the Settings default, old catalog ids read as provider ids", () => {
+  assert.equal(initialControls('claude', '').model, '', "'' is the account default, resolved in main");
+  assert.equal(agentOptions(initialControls('codex', ''), 'codex').model, undefined);
+  assert.equal(agentOptions(initialControls('codex', 'gpt-6-astra'), 'codex').model, 'gpt-6-astra');
+  assert.equal(initialControls('claude', 'sonnet-5.5').model, 'claude-sonnet-5-5');
 });
 
 test('a folderless chat starts with no folder (main makes one); a restart reuses the folder the agent first ran in', () => {
@@ -75,7 +74,7 @@ test('a folderless chat starts with no folder (main makes one); a restart reuses
 
   const s = run(base(), { type: 'create', title: 'hi', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
   const thread = s.threads.at(-1)!;
-  assert.deepEqual(thread.repo, { project: 'app', branch: `feat/${thread.id}`, path: '/Users/me/dev/app' });
+  assert.deepEqual(thread.repo, { project: 'app', branch: `mochi/${thread.id}`, path: '/Users/me/dev/app' });
   assert.equal(thread.live?.cwd, '/Users/me/dev/app');
   const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/dev/app');

@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react';
 import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
-import { MODELS } from '../../runtime/controls';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { BrowserSection } from './browser';
@@ -80,12 +79,13 @@ export const SETTINGS_SECTIONS = [
           { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check' },
           { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
           { id: `${id}Model`, label: `${name} default model`, keywords: 'model' },
+          { id: `${id}SecondOpinionModel`, label: `${name} second opinion model`, keywords: 'model review verdict' },
           { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
           { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },
           ...(apiKey ? [{ id: `${id}ApiKey`, label: apiKey.label, keywords: 'key billing keychain' }] : []),
         ];
       }),
-      { id: 'starredModels', label: 'Starred models', keywords: `favorite star dock ${MODELS.map((m) => m.name).join(' ')}` },
+      { id: 'starredModels', label: 'Starred models', keywords: 'favorite star dock model claude codex opus sonnet haiku gpt' },
       { id: 'effort', label: 'Default effort', keywords: 'reasoning thinking' },
     ],
   },
@@ -111,6 +111,7 @@ export const SETTINGS_SECTIONS = [
     icon: Compass,
     component: GoalsSection,
     settings: [
+      { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
       { id: 'driftThreshold', label: 'Drift sensitivity', keywords: 'off-goal threshold scope' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
       { id: 'stepSize', label: 'New step size', keywords: 'points progress eta small medium large' },

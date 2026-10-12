@@ -374,6 +374,28 @@
         "--strictPort"
       ],
       "port": 5419
+    },
+    {
+      "name": "mochi-second-opinion",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5411",
+        "--strictPort"
+      ],
+      "port": 5411
+    },
+    {
+      "name": "mochi-second-opinion-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5413",
+        "--strictPort"
+      ],
+      "port": 5413
     }
   ]
 }

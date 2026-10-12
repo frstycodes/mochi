@@ -5,7 +5,7 @@ import { threadCwd } from '../host/cwd';
 import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentAskModel } from '../host/types/agent';
 import { DEFAULT_SETTINGS, type SideChatModel } from '../host/types/settings';
 import type { Thread } from '../model';
-import { askModelOf, sideChatChoice } from '../runtime/controls';
+import { sideChatChoice } from '../runtime/controls';
 import { useHarness } from '../store';
 import { chatFor, questionText, type Quote, type SideMessage } from '../store/sidechat';
 
@@ -27,7 +27,7 @@ export function useSideChat(thread: Thread, tabId: string) {
     dispatch({ type: 'sidechat-ask', ...at, id, text });
     const stream = (chunk: string, isDone?: boolean) => dispatch({ type: 'sidechat-stream', ...at, id, text: chunk, isDone });
     try {
-      for await (const chunk of askAgent(threadContext(thread, await diffSummary(thread)), history, askModelOf(model))) stream(chunk);
+      for await (const chunk of askAgent(threadContext(thread, await diffSummary(thread)), history, model)) stream(chunk);
       stream('', true);
     } catch (error) {
       stream(`\n\n_Couldn't answer: ${error instanceof Error ? error.message : String(error)}_`, true);
@@ -54,7 +54,7 @@ export function useSideChat(thread: Thread, tabId: string) {
   };
 }
 
-/** Settings › Defaults' side chat model as the chip names it (null until read), and a setter that saves it. */
+/** Settings › Defaults' side chat model, old catalog ids read as the provider's own (null until read), and a setter that saves it. */
 export function useSideChatDefault() {
   const [model, setModel] = useState<SideChatModel | null>(null);
   useEffect(() => {

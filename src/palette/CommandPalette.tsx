@@ -3,12 +3,15 @@ import { profileById } from '../profiles';
 import { useHarness } from '../store';
 import { StepStatusIcon, ThreadStatusIcon, lineColor } from '../ui';
 import { ACTION_GROUPS, type PaletteAction } from './actions';
+import type { ActionScope } from './when';
 import { useActions } from './useActions';
 import { Shortcut } from '../Shortcut';
+import { useReviewerChecks } from '../secondOpinion/reviewer';
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { state, dispatch } = useHarness();
-  const { actions, run: runAction, review } = useActions();
+  const { actions, run: runAction, scope, review } = useActions();
+  useReviewerChecks();
   const liveSteps = useLiveSteps();
   const close = () => onOpenChange(false);
   const go = (threadId: string) => {
@@ -33,13 +36,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               {actions
                 .filter((a) => a.group === group)
                 .map((a) => (
-                  <CommandItem key={a.id} value={`${a.title} ${a.keywords ?? ''}`} onSelect={() => run(a)}>
-                    <a.icon />
-                    {a.title}
-                    {!!a.shortcut && <CommandShortcut className="tracking-normal">
-                        <Shortcut keys={a.shortcut} />
-                      </CommandShortcut>}
-                  </CommandItem>
+                  <ActionItem key={a.id} action={a} scope={scope} onSelect={() => run(a)} />
                 ))}
             </CommandGroup>
           ))}
@@ -64,6 +61,30 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         </CommandList>
       </Command>
     </CommandDialog>
+  );
+}
+
+/** An action under its title for this scope; one that would fail right now is disabled with its reason underneath. */
+function ActionItem({ action, scope, onSelect }: { action: PaletteAction; scope: ActionScope; onSelect: () => void }) {
+  const title = action.label?.(scope) ?? action.title;
+  const reason = action.disabledReason?.(scope);
+  return (
+    <CommandItem value={`${title} ${action.keywords ?? ''}`} disabled={!!reason} onSelect={onSelect}>
+      <action.icon />
+      {reason ? (
+        <span className="flex min-w-0 flex-col">
+          {title}
+          <span className="type-caption text-pretty text-muted-foreground">{reason}</span>
+        </span>
+      ) : (
+        title
+      )}
+      {!!action.shortcut && (
+        <CommandShortcut className="tracking-normal">
+          <Shortcut keys={action.shortcut} />
+        </CommandShortcut>
+      )}
+    </CommandItem>
   );
 }
 

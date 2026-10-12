@@ -147,4 +147,3 @@ Everything is composed from the shadcn primitives in `src/components/ui`. App co
 - reicon has no git branch, merge or pull-request glyphs; `BranchUp` / `BranchDown` stand in for them.
 - Changes, PR and source rows in the summary panel open nothing yet; in the real app they open tabs in a side pane like Codex's (Changes, browser, Terminal, Files, Side chat, plugins).
 - Trackpad haptics for the model and effort dock need the desktop shell (`NSHapticFeedbackManager`); browsers have no API for it, so the web build only vibrates on phones.
-- The model catalog is fake; the real one comes from each harness when it connects.

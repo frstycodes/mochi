@@ -18,6 +18,8 @@ import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
 import { agentPhase, pendingWork } from './agentPhase';
+import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
+import type { Review } from './secondOpinion/verdict';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
@@ -40,13 +42,17 @@ import { QUEUED_PREFIX } from './runtime/live';
 type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
   | { kind: 'event'; key: string; entry: ActivityEntry }
-  | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] };
+  | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
+  | { kind: 'review'; key: string; review: Review };
 
 export function ChatView({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const rows = useChatRows(thread.activity);
+  const rows = useChatRows(thread.activity, thread.reviews);
+  // A second opinion runs beside the agent: the agent's own newest row stays the live one.
+  const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
   const decisions = state.queue.filter((q) => q.threadId === thread.id);
-  const isRunning = thread.steps.some((s) => s.status === 'running');
+  // A live agent thread may have no planned steps; its turn is what's running.
+  const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
 
   const composer = useComposerHeightVar();
@@ -65,7 +71,7 @@ export function ChatView({ thread }: { thread: Thread }) {
             <div ref={messages} className="contents">
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} isLive={i === rows.length - 1 && isRunning} />
+                  <ChatRowView thread={thread} row={row} isLive={i === liveIndex && isRunning} />
                 </div>
               ))}
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
@@ -103,9 +109,11 @@ function useComposerHeightVar() {
   return ref;
 }
 
-function useChatRows(activity: ActivityEntry[]): ChatRow[] {
+function useChatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow[] {
   const rows: ChatRow[] = [];
+  const pushReviews = (at: number) => reviews.filter((r) => (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach((review) => rows.push({ kind: 'review', key: review.id, review }));
   activity.forEach((entry, i) => {
+    pushReviews(i);
     const key = `${entry.at}-${i}`;
     const last = rows[rows.length - 1];
     const isWork = entry.kind === 'tool' || entry.kind === 'reasoning';
@@ -115,23 +123,29 @@ function useChatRows(activity: ActivityEntry[]): ChatRow[] {
     }
     if (isWork) return rows.push({ kind: 'work', key, who: entry.who, entries: [entry] });
     if (entry.kind === 'event') return rows.push({ kind: 'event', key, entry });
-    const previous = [...rows].reverse().find((r) => r.kind !== 'event');
-    const previousWho = previous?.kind === 'work' ? previous.who : previous?.entry.who;
+    const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
+    const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
     rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
   });
+  pushReviews(activity.length);
   return rows;
 }
 
 // isLive: the newest row of a running thread, the one still being written.
 function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; isLive: boolean }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} isLive={isLive} />;
+  if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'event')
     return (
-      <p className="flex items-center gap-2 type-caption text-subtle-foreground">
-        <Flag className="size-3.5 shrink-0" />
-        {row.entry.text}
-        <span className="tabular">· {clock(row.entry.at)}</span>
-      </p>
+      <div className="flex gap-2 type-caption text-muted-foreground">
+        <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
+        <p className="min-w-0">
+          {row.entry.text}
+          {/* The separator travels with the time, so a wrap never leaves it dangling. */}
+          <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(row.entry.at)}</span>
+          {!!row.entry.detail && <span className="block text-subtle-foreground">{row.entry.detail}</span>}
+        </p>
+      </div>
     );
 
   const { entry } = row;
@@ -149,7 +163,6 @@ function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; is
                 <span className="tabular">{clock(entry.at)}</span>
               </span>
             )}
-            {/* GAP: the tick simulation never streams text; once the agent runtime does, isAnimating should follow the stream, not the row position. */}
             <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
               {entry.text}
             </MessageResponse>
@@ -171,7 +184,8 @@ function outline(rows: ChatRow[], pins: Pin[]) {
 
 function rowLabel(row: ChatRow) {
   if (row.kind === 'work') return `${authorName(row.who)} work log (${row.entries.length})`;
-  if (row.kind === 'event') return row.entry.text;
+  if (row.kind === 'review') return `${authorName(row.review.provider)} second opinion`;
+  if (row.kind === 'event') return row.entry.detail ? `${row.entry.text}: ${row.entry.detail}` : row.entry.text;
   return `${authorName(row.entry.who)}: ${row.entry.text}`;
 }
 

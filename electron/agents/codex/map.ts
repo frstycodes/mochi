@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentEvent, AgentPlanItem } from '../../../src/host/types/agent.ts';
+import type { AgentEvent, AgentModel, AgentPlanItem } from '../../../src/host/types/agent.ts';
 import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
 import { MODEL_PRICES } from '../../../src/usage/model.ts';
 
@@ -263,4 +263,16 @@ function relative(cwd: string, file: string) {
 
 function obj(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+/** One `model/list` page (app-server 0.155.1 `ModelListResponse`) as the picker lists it; hidden models stay out. */
+export function codexModels(result: unknown): AgentModel[] {
+  const data = (result as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return [];
+  return data.flatMap((m: Record<string, unknown>) => {
+    if (typeof m?.model !== 'string' || m.hidden === true) return [];
+    const efforts = Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts.flatMap((e: { reasoningEffort?: unknown }) => (typeof e?.reasoningEffort === 'string' ? [e.reasoningEffort] : [])) : [];
+    const defaultEffort = typeof m.defaultReasoningEffort === 'string' ? m.defaultReasoningEffort : undefined;
+    return [{ id: m.model, name: typeof m.displayName === 'string' ? m.displayName : m.model, description: typeof m.description === 'string' ? m.description : '', efforts, ...(defaultEffort && { defaultEffort }), isDefault: m.isDefault === true }];
+  });
 }

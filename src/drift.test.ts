@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { classifyWithModel, judgeDrift, judgeLocally, stepTitleFrom } from './drift.ts';
+import { classifyWithModel, judgeDrift, judgeLocally, setDriftClassifier, stepTitleFrom } from './drift.ts';
 import { seedThreads } from './model.ts';
+import { setPrefs } from './settings/prefs.ts';
 
 const rl = seedThreads().find((t) => t.id === 'rl')!;
 const kind = (prompt: string) => (judgeDrift(prompt, rl) as { kind: string }).kind;
@@ -44,4 +45,17 @@ test('classifyWithModel: the model settles ambiguous prompts, and any failure fa
   let calls = 0;
   assert.equal((await classifyWithModel('ok go', rl, async () => (calls++, null))).kind, 'on-goal');
   assert.equal(calls, 0, 'clear cases never reach the model');
+});
+
+test('drift guard off (Settings or the thread) passes every message through without a classifier call', () => {
+  let calls = 0;
+  setDriftClassifier(() => (calls++, { kind: 'off-goal', reason: 'r' }));
+  setPrefs({ driftGuard: false });
+  assert.deepEqual(judgeDrift('Fix the typo in the marketing landing page hero', rl), { kind: 'on-goal', reason: 'Drift guard is off' });
+  assert.equal(kind('Also return a Retry-After header on 429 responses'), 'on-goal');
+  setPrefs({ driftGuard: true });
+  assert.equal(kind('Also return a Retry-After header on 429 responses'), 'off-goal', 'back on, the ambiguous one reaches the classifier');
+  assert.equal(calls, 1);
+  assert.equal((judgeDrift('Fix the typo in the marketing landing page hero', { ...rl, drift: { threshold: 0.15, isMuted: true } }) as { kind: string }).kind, 'on-goal');
+  assert.equal(calls, 1);
 });

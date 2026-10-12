@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Check, ChevronDown, Star } from 'reicon-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ArrowLeft, ChevronDown, ChevronRight, Star } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
-import { EFFORTS, MODELS, settingsModel, type Effort, type ModelOption } from './runtime/controls';
+import type { AgentModel } from './host/types/agent';
+import { effortFor, effortName, optionFor, type ModelOption } from './runtime/models';
 import { setPrefs, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
@@ -20,19 +21,20 @@ const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Pro
 
 /**
  * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. `unavailable` greys out
- * a harness's models with the reason (not installed, signed out) and keeps them off the dock.
+ * a harness's models with the reason (not installed, signed out) and keeps them off the dock. The lists are the profile's
+ * accounts' own (`useModels`); a stored model the account no longer offers shows as Unavailable.
  */
 export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, onChange }: { id?: string; value: string; provider: Provider; isLocked?: boolean; unavailable?: Unavailable; onChange: (model: ModelOption) => void }) {
   const space = useSpace();
+  const catalog = useModels(space.id);
   const defaults = useDefaultModels();
   const favorites = usePrefs().starredModels;
   const [isOpen, setOpen] = useState(false);
   const harnesses = (Object.keys(HARNESSES) as Provider[]).filter((h) => !isLocked || h === provider);
-  const fromSettings = harnesses.flatMap((h) => (defaults?.[h] && !MODELS.some((m) => m.providerModel === defaults[h]) ? [settingsModel(defaults[h], h)] : []));
-  const listed = [...MODELS, ...fromSettings].filter((m) => harnesses.includes(m.harness));
-  const model = listed.find((m) => m.id === value) ?? settingsModel(value, provider);
-  const models = listed.some((m) => m.id === model.id) ? listed : [...listed, model];
-  const docked = models.filter((m) => m.id === model.id || (!unavailable[m.harness] && (favorites.includes(m.id) || fromSettings.includes(m))));
+  const listed = harnesses.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
+  const model = optionFor(catalog[provider], value, provider);
+  const models = listed.some((m) => m.harness === model.harness && m.id === model.id) ? listed : [...listed, model];
+  const docked = models.filter((m) => m === model || (m.harness === model.harness && m.id === model.id) || (!unavailable[m.harness] && !m.isUnavailable && (favorites.includes(m.id) || defaults?.[m.harness] === m.id)));
   const select = (id: string) => onChange(models.find((m) => m.id === id)!);
   const toggleFavorite = (id: string) => setPrefs({ starredModels: toggleStar(favorites, id) });
 
@@ -48,54 +50,172 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
           <Button id={id} variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground">
             <ProviderMark provider={model.harness} size={14} />
             {model.name}
+            {model.isUnavailable && <span className="type-caption text-warning">Unavailable</span>}
             <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
           </Button>
         </PopoverTrigger>
       </ScrollDock>
       <PopoverContent align="start" className="w-80 p-0">
-        <Command>
-          <CommandInput placeholder="Search models" />
-          <CommandList className="max-h-80">
-            <CommandEmpty>No model matches.</CommandEmpty>
-            {harnesses.map((h) => (
-              <CommandGroup
-                key={h}
-                heading={
-                  <span className="flex items-center gap-1.5">
-                    <ProviderMark provider={h} size={12} />
-                    {HARNESSES[h]}
-                    <span className="ml-auto font-normal text-subtle-foreground">{unavailable[h] ?? space.plans[h]}</span>
-                  </span>
-                }
-              >
-                {models.filter((m) => m.harness === h).map((m) => (
-                  <CommandItem
-                    key={m.id}
-                    value={`${HARNESSES[h]} ${m.name}`}
-                    disabled={!!unavailable[h]}
-                    onSelect={() => {
-                      select(m.id);
-                      setOpen(false);
-                    }}
-                    className="gap-2"
-                  >
-                    <FavoriteToggle isOn={favorites.includes(m.id)} name={m.name} onToggle={() => toggleFavorite(m.id)} />
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate">{m.name}</span>
-                      <span className="truncate type-caption text-subtle-foreground">{m.note}</span>
-                    </span>
-                    <span className="font-mono text-xs text-subtle-foreground tabular">{m.context}</span>
-                    <Check className={cn('size-4', m.id !== model.id && 'invisible')} />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
-          </CommandList>
+        <ModelMenu
+          models={models}
+          pending={harnesses.filter((h) => !catalog[h])}
+          harnesses={harnesses}
+          isChecked={(m) => m.harness === model.harness && m.id === model.id}
+          onPick={(m) => {
+            select(m.id);
+            setOpen(false);
+          }}
+          starred={favorites}
+          onToggleStar={(m) => toggleFavorite(m.id)}
+          unavailable={unavailable}
+        >
           <p className="px-3 py-2 type-caption text-subtle-foreground">Starred models show up when you scroll over the model button.</p>
-        </Command>
+        </ModelMenu>
       </PopoverContent>
     </Popover>
   );
+}
+
+/**
+ * Harnesses first (plus Starred, where stars apply), then one list's models; typing searches every harness at once, and
+ * Backspace in an empty search goes back. `pending`: harnesses whose list hasn't arrived yet.
+ */
+export function ModelMenu({
+  models,
+  pending,
+  harnesses,
+  isChecked,
+  onPick,
+  starred,
+  onToggleStar,
+  unavailable = {},
+  children,
+}: {
+  models: ModelOption[];
+  pending: Provider[];
+  harnesses: Provider[];
+  isChecked: (model: ModelOption) => boolean;
+  onPick: (model: ModelOption) => void;
+  starred?: string[];
+  onToggleStar?: (model: ModelOption) => void;
+  unavailable?: Unavailable;
+  children?: ReactNode;
+}) {
+  const space = useSpace();
+  const [page, setPage] = useState<Provider | 'starred' | null>(harnesses.length === 1 ? harnesses[0] : null);
+  const [search, setSearch] = useState('');
+  const canGoBack = !!page && harnesses.length > 1 && !search;
+  const shown = search ? harnesses : page && page !== 'starred' ? [page] : [];
+  const starredModels = models.filter((m) => starred?.includes(m.id));
+  const hasStarredPage = !!onToggleStar && starredModels.length > 0;
+  const isLoading = pending.length === harnesses.length;
+  const row = (m: ModelOption, hasMark?: boolean) => (
+    <ModelRow
+      key={`${m.harness}:${m.id}`}
+      model={m}
+      isChecked={isChecked(m)}
+      isDisabled={!!unavailable[m.harness] || !!m.isUnavailable}
+      onPick={onPick}
+      isStarred={!!starred?.includes(m.id)}
+      onToggleStar={onToggleStar}
+      hasMark={hasMark}
+    />
+  );
+
+  return (
+    <Command filter={matchesEvery}>
+      <CommandInput
+        value={search}
+        onValueChange={setSearch}
+        placeholder={page && !search ? `Search ${page === 'starred' ? 'starred' : HARNESSES[page]} models` : 'Search models'}
+        onKeyDown={(e) => {
+          if (e.key === 'Backspace' && canGoBack) setPage(null);
+        }}
+      />
+      {canGoBack && (
+        <button type="button" onClick={() => setPage(null)} className="mx-1 mt-1 flex items-center gap-1.5 rounded-md px-2 py-1 type-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+          <ArrowLeft aria-hidden className="size-3.5" />
+          All models
+        </button>
+      )}
+      <CommandList className="max-h-80">
+        <CommandEmpty>{isLoading ? 'Asking the harnesses for their models…' : page === 'starred' && !search ? 'Nothing starred anymore.' : 'No model matches.'}</CommandEmpty>
+        {page === 'starred' && !search && <CommandGroup>{starredModels.map((m) => row(m, true))}</CommandGroup>}
+        {!page && !search && (
+          <CommandGroup>
+            {hasStarredPage && (
+              <CommandItem value="Starred" onSelect={() => setPage('starred')} className="gap-2 [&>svg:last-child]:hidden">
+                {/* A span, not the svg itself: the item recolours its direct svg children when highlighted. */}
+                <span aria-hidden className="text-warning">
+                  <Star className="size-4 [&_*]:fill-current" />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">Starred</span>
+                  <span className="truncate type-caption text-subtle-foreground">{starredModels.map((m) => m.name).join(', ')}</span>
+                </span>
+                <ChevronRight aria-hidden className="text-subtle-foreground" />
+              </CommandItem>
+            )}
+            {harnesses.map((h) => (
+              <CommandItem key={h} value={HARNESSES[h]} onSelect={() => setPage(h)} className="gap-2 [&>svg:last-child]:hidden">
+                <ProviderMark provider={h} size={16} />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">{HARNESSES[h]}</span>
+                  <span className="truncate type-caption text-subtle-foreground">{harnessSummary(models.filter((m) => m.harness === h), isChecked, pending.includes(h))}</span>
+                </span>
+                <span className="type-caption text-subtle-foreground">{unavailable[h] ?? space.plans[h]}</span>
+                <ChevronRight aria-hidden className="text-subtle-foreground" />
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
+        {shown.map((h) => (
+          <CommandGroup key={h} heading={search ? <HarnessHeading harness={h} /> : undefined}>
+            {models.filter((m) => m.harness === h).map((m) => row(m))}
+          </CommandGroup>
+        ))}
+      </CommandList>
+      {children}
+    </Command>
+  );
+}
+
+function ModelRow({ model, isChecked, isDisabled, onPick, isStarred, onToggleStar, hasMark }: { model: ModelOption; isChecked: boolean; isDisabled: boolean; onPick: (model: ModelOption) => void; isStarred: boolean; onToggleStar?: (model: ModelOption) => void; hasMark?: boolean }) {
+  return (
+    <CommandItem value={`${HARNESSES[model.harness]} ${model.name} ${model.id}`} data-checked={isChecked} disabled={isDisabled} onSelect={() => onPick(model)} className="gap-2">
+      {!!onToggleStar && <FavoriteToggle isOn={isStarred} name={model.name} onToggle={() => onToggleStar(model)} />}
+      {hasMark && <ProviderMark provider={model.harness} size={14} />}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{model.name}</span>
+        <span className={cn('truncate type-caption', model.isUnavailable ? 'text-warning' : 'text-subtle-foreground')}>{model.description}</span>
+      </span>
+    </CommandItem>
+  );
+}
+
+// cmdk's default fuzzy match finds "luna" in "cLaUde soNnet 5.5"; every typed word must appear as written instead.
+function matchesEvery(value: string, search: string) {
+  const text = value.toLowerCase();
+  return search.toLowerCase().split(/\s+/).every((word) => text.includes(word)) ? 1 : 0;
+}
+
+function HarnessHeading({ harness }: { harness: Provider }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <ProviderMark provider={harness} size={12} />
+      {HARNESSES[harness]}
+    </span>
+  );
+}
+
+const MODEL_COUNT = new Intl.PluralRules('en');
+
+/** The checked models' names, else how many the harness offers. */
+function harnessSummary(models: ModelOption[], isChecked: (model: ModelOption) => boolean, isLoading: boolean) {
+  if (isLoading) return 'Loading models…';
+  const checked = models.filter(isChecked);
+  if (checked.length) return checked.map((m) => m.name).join(', ');
+  return `${models.length} ${MODEL_COUNT.select(models.length) === 'one' ? 'model' : 'models'}`;
 }
 
 /** Per harness, why its models can't be picked right now. */
@@ -125,6 +245,25 @@ export function useUnavailableHarnesses(spaceId: string) {
 function unavailableReason(install: AgentInstall) {
   if (!install.path) return 'Not installed';
   if (install.login.state === 'logged-out') return 'Signed out';
+}
+
+/** Each harness's models on the profile's account, from main (cached there per account); a harness missing until its list arrives, [] when it can't be read. */
+export function useModels(spaceId: string) {
+  const [models, setModels] = useState<Partial<Record<Provider, AgentModel[]>>>({});
+  useEffect(() => {
+    let isCurrent = true;
+    setModels({});
+    HARNESS_IDS.forEach((h) =>
+      host.agent.models(h, spaceId).then(
+        (list) => isCurrent && setModels((prev) => ({ ...prev, [h]: list })),
+        () => isCurrent && setModels((prev) => ({ ...prev, [h]: [] })),
+      ),
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [spaceId]);
+  return models;
 }
 
 export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
@@ -162,14 +301,21 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
   );
 }
 
-export function EffortPicker({ value: effort, onChange: setEffort }: { value: Effort; onChange: (effort: Effort) => void }) {
+/** Effort levels `model` takes, from its provider; hidden for a model that takes none. A chosen level the model lacks shows (and runs) as the model's default. */
+export function EffortPicker({ model, value, onChange: setEffort }: { model: AgentModel; value: string; onChange: (effort: string) => void }) {
+  const [isOpen, setOpen] = useState(false);
+  const { efforts } = model;
+  if (!efforts.length) return null;
+  const effort = effortFor(model, value);
+  const label = effort ? effortName(effort) : 'Default';
   return (
-    <DropdownMenu>
-      <WheelStepper values={EFFORTS} value={effort} onChange={setEffort}>
+    // Controlled: the stepper keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click.
+    <DropdownMenu open={isOpen} onOpenChange={setOpen}>
+      <WheelStepper values={efforts} value={effort ?? ''} onChange={setEffort} onTap={() => setOpen(true)}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground" aria-label={`Reasoning effort: ${effort}`}>
-            <EffortMeter level={EFFORTS.indexOf(effort) + 1} />
-            {effort}
+          <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground" aria-label={`Reasoning effort: ${label}`}>
+            <EffortMeter levels={efforts.length} level={effort ? efforts.indexOf(effort) + 1 : 0} />
+            {label}
             <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
           </Button>
         </DropdownMenuTrigger>
@@ -177,11 +323,11 @@ export function EffortPicker({ value: effort, onChange: setEffort }: { value: Ef
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Reasoning effort</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={effort} onValueChange={(v) => setEffort(v as Effort)}>
-            {EFFORTS.map((e, i) => (
+          <DropdownMenuRadioGroup value={effort ?? ''} onValueChange={setEffort}>
+            {efforts.map((e, i) => (
               <DropdownMenuRadioItem key={e} value={e} className="gap-2">
-                <EffortMeter level={i + 1} />
-                {e}
+                <EffortMeter levels={efforts.length} level={i + 1} />
+                {effortName(e)}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -191,11 +337,11 @@ export function EffortPicker({ value: effort, onChange: setEffort }: { value: Ef
   );
 }
 
-function EffortMeter({ level }: { level: number }) {
+function EffortMeter({ levels, level }: { levels: number; level: number }) {
   return (
     <span aria-hidden className="flex h-3 items-end gap-px">
-      {EFFORTS.map((_, i) => (
-        <span key={i} className={cn('w-[3px] rounded-full bg-current', i >= level && 'opacity-25')} style={{ height: `${40 + i * 20}%` }} />
+      {Array.from({ length: levels }, (_, i) => (
+        <span key={i} className={cn('w-[3px] rounded-full bg-current', i >= level && 'opacity-25')} style={{ height: `${40 + (i * 60) / Math.max(1, levels - 1)}%` }} />
       ))}
     </span>
   );

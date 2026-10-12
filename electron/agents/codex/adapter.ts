@@ -1,8 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { apiMessage, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, codexModels, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 
 interface Live {
@@ -30,6 +30,8 @@ const POLICIES: Record<string, { approvalPolicy: string; sandbox: string }> = {
   acceptEdits: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
   plan: { approvalPolicy: 'on-request', sandbox: 'read-only' },
   bypassPermissions: { approvalPolicy: 'never', sandbox: 'danger-full-access' },
+  /** Second opinions: nothing can write, and nothing asks; a command that needs more simply fails. */
+  review: { approvalPolicy: 'never', sandbox: 'read-only' },
 };
 /** Codex's plan tool is off unless configured; Harness maps its plans onto goal steps, so its threads always get it. Verified against 0.155.1: without it `turn/plan/updated` never fires. */
 const PLAN_TOOL = { 'tools.update_plan.enabled': true };
@@ -58,6 +60,8 @@ export class CodexAdapter {
   private servers = new Map<string, CodexServer>();
   private threads = new Map<string, Live>();
   private requests = new Map<string, Pending>();
+  /** Review threads answer every turn in this JSON schema. */
+  private schemas = new Map<string, unknown>();
   private emit: (event: AgentEvent) => void;
   private accountFor: AccountFor;
   private findCodex: FindCodex;
@@ -90,6 +94,12 @@ export class CodexAdapter {
     });
   }
 
+  /** A read-only review on its own Codex thread; its events go out under `threadId` like any thread's. Stop it when done. */
+  async review(threadId: string, options: AgentRunOptions, outputSchema: unknown) {
+    this.schemas.set(threadId, outputSchema);
+    await this.start(threadId, { ...options, permissionMode: 'review' });
+  }
+
   async send(threadId: string, text: string, images?: AgentImage[]) {
     if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
     await this.report(threadId, () => this.turn(threadId, text, images));
@@ -110,6 +120,7 @@ export class CodexAdapter {
   }
 
   async stop(threadId: string) {
+    this.schemas.delete(threadId);
     const live = this.threads.get(threadId);
     if (!live) return;
     await this.interrupt(threadId).catch(() => {});
@@ -143,6 +154,21 @@ export class CodexAdapter {
       server.asks.delete(codexId);
       void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
     }
+  }
+
+  /** Every page of the profile's account's `model/list`. Throws when logged out. */
+  async models(spaceId: string): Promise<AgentModel[]> {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    const models: AgentModel[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = (await rpc.request('model/list', { cursor })) as { nextCursor?: string | null };
+      models.push(...codexModels(page));
+      cursor = page?.nextCursor ?? null;
+    } while (cursor);
+    return models;
   }
 
   dispose() {
@@ -197,7 +223,7 @@ export class CodexAdapter {
       await this.open(live.server, rpc, threadId, live.options);
       live = this.threads.get(threadId)!;
     }
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null });
+    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
   }

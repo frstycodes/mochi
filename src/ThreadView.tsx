@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, BranchUp, Scale, SidebarRight, Undo } from 'reicon-react';
-import { toast } from 'sonner';
+import { Archive, BranchUp, SidebarRight, Undo } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,7 @@ import { THREAD_HEADER_MENU } from './menus/menus';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
+import { SecondOpinionItem } from './secondOpinion/SecondOpinionItem';
 import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
 import { useSettle } from './useSettle';
@@ -259,15 +259,8 @@ function ThreadHeader({
 }
 
 function ThreadMenu({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
   const { repo } = thread;
-  const other = thread.providers[0] === 'claude' ? 'Codex' : 'Claude';
   const { isSettled, toggle: settle } = useSettle(thread);
-
-  const secondOpinion = () => {
-    dispatch({ type: 'say', threadId: thread.id, entry: { who: 'harness', kind: 'event', text: `Sent the latest diff to ${other} for a second opinion` } });
-    toast(`Asked ${other} for a second opinion`, { description: 'Its review lands in this thread as a new run.' });
-  };
 
   return (
     <DropdownMenu>
@@ -278,10 +271,7 @@ function ThreadMenu({ thread }: { thread: Thread }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuGroup>
-          <DropdownMenuItem onSelect={secondOpinion}>
-            <Scale />
-            Ask {other} for a second opinion
-          </DropdownMenuItem>
+          <SecondOpinionItem thread={thread} />
           <DropdownMenuItem onSelect={settle}>
             {isSettled ? <Undo /> : <Archive />}
             {isSettled ? 'Move back to active' : 'Settle thread'}

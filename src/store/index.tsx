@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
+import { showsDemoData } from '../demoData.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
@@ -15,6 +16,7 @@ import { initialSideChat, saveSideChats, sidechatReducer, type SideChatAction, t
 import { getRestored, saveThreads, toSaved } from './persist.ts';
 import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState } from './threads.ts';
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
+import { reviewsReducer, type ReviewAction } from '../secondOpinion/slice.ts';
 import { initialNotifications, notificationsReducer, type NotificationsAction, type NotificationsState } from '../notify/slice.ts';
 
 export type { View } from './layout.ts';
@@ -27,10 +29,10 @@ export interface Snapshot {
 }
 
 export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState;
-export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | NotificationsAction | { type: 'reset' };
+export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | ReviewAction | NotificationsAction | { type: 'reset' };
 
 // notificationsReducer diffs what the others changed, so it runs last.
-const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, notificationsReducer];
+const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, reviewsReducer, notificationsReducer];
 
 function initialState(saved = getRestored()): State {
   return { ...initialThreads(saved), ...initialQueue(saved), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat(), ...initialNotifications() };
@@ -43,6 +45,8 @@ function reducer(state: State, action: Action): State {
 }
 
 setDriftClassifier((prompt, thread) => host.agent.classify(prompt, thread));
+
+const TICK_MS = showsDemoData() ? 1000 : 60_000;
 
 export const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
 
@@ -65,10 +69,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     // After the action: a new thread only exists once it has applied.
     for (const call of calls) if (call.method === 'start') apply({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
   }, []);
-  // The tick is the demo adapter's clock; real agents report through host.agent whether or not the demo is paused.
+  // The tick is the app's clock, one per minute of `now`: the demo runs it 60× fast, real threads at wall-clock speed.
+  // Real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {
     if (state.paused) return;
-    const id = setInterval(() => apply({ type: 'tick' }), 1000);
+    const id = setInterval(() => apply({ type: 'tick' }), TICK_MS);
     return () => clearInterval(id);
   }, [state.paused]);
   useEffect(
