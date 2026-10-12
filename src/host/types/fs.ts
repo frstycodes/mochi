@@ -16,6 +16,8 @@ export interface FsHost {
   reveal(root: string, path: string): Promise<void>;
   /** The OS folder picker, opened at `defaultPath` (`~` allowed); null when dismissed. The web build only learns the folder's name. */
   pickFolder(defaultPath?: string): Promise<string | null>;
+  /** The folder at `path` (`~` allowed) as an absolute path with its subfolders' names, hidden ones left out; null when it isn't a folder. */
+  folders(path: string): Promise<{ path: string; names: string[] } | null>;
 }
 
 export type FileContent = { kind: 'text'; text: string; mtimeMs: number } | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
@@ -41,4 +43,5 @@ export const fsMethods = {
   openIn: 'invoke',
   reveal: 'invoke',
   pickFolder: 'invoke',
+  folders: 'invoke',
 } satisfies Manifest<FsHost>;

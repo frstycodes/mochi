@@ -6,7 +6,8 @@ export interface AgentStartOptions {
   provider: Provider;
   /** The profile whose account for `provider` the thread runs on, for its whole life. */
   spaceId: string;
-  cwd: string;
+  /** An absolute folder; null for a folderless chat, which main runs in a folder of its own under the app's data dir. */
+  cwd: string | null;
   prompt: string;
   model?: string;
   effort?: string;
@@ -30,6 +31,9 @@ export type AgentEvent =
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
+
+/** What an adapter gets once main has resolved and checked the folder. */
+export type AgentRunOptions = Omit<AgentStartOptions, 'cwd'> & { cwd: string };
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
 export interface AgentPlanItem {

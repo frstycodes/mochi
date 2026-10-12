@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app, BrowserWindow } from 'electron';
-import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
@@ -15,7 +15,7 @@ import { approvalEvent, createMapper, permissionResult } from './map.ts';
  */
 interface Session {
   threadId: string;
-  options: AgentStartOptions;
+  options: AgentRunOptions;
   inbox: string[];
   /** Every message handed to Claude Code, with the uuid `rewindFiles` takes. */
   sent: { uuid: string; text: string }[];
@@ -40,7 +40,7 @@ const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
 
-export async function startClaude(threadId: string, options: AgentStartOptions) {
+export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.permissionMode && !PERMISSION_MODES.includes(options.permissionMode as PermissionMode)) throw new TypeError(`permissionMode must be one of ${PERMISSION_MODES.join(', ')}`);
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
   const account = await accountFor(options.spaceId, 'claude');

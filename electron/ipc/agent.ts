@@ -1,6 +1,8 @@
-import { isAbsolute } from 'node:path';
+import { mkdir, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentStartOptions } from '../../src/host/types/agent.ts';
+import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentRunOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
@@ -26,16 +28,14 @@ export const agent = {
     string(threadId, 'threadId', 256);
     const o = record(options, 'options');
     if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
-    string(o.cwd, 'options.cwd');
-    // A packaged app's cwd is `/`, so a relative folder would run the agent there. GAP: the renderer sends `.` until projects keep real paths.
-    if (app.isPackaged && !isAbsolute(o.cwd as string)) throw new TypeError('This thread has no project folder yet, so no agent was started.');
     string(o.spaceId, 'options.spaceId', 256);
     string(o.prompt, 'options.prompt', 100_000);
     for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
     if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
     if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
-    if (o.provider === 'claude') return startClaude(threadId as string, o as unknown as AgentStartOptions);
-    if (o.provider === 'codex') return codex.start(threadId as string, o as unknown as AgentStartOptions);
+    const run = { ...o, cwd: await agentFolder(threadId as string, o.cwd) } as unknown as AgentRunOptions;
+    if (o.provider === 'claude') return startClaude(threadId as string, run);
+    if (o.provider === 'codex') return codex.start(threadId as string, run);
     return runtime();
   },
   async send(_sender, threadId, text) {
@@ -116,3 +116,18 @@ export const agent = {
     return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },
 } satisfies Handlers<AgentHost>;
+
+/** The project folder, checked to exist; a folderless chat (null) gets its own folder, so the agent never runs in Mochi's cwd (`/` when packaged). */
+async function agentFolder(threadId: string, cwd: unknown) {
+  if (cwd === null) {
+    if (!/^[\w-]+$/.test(threadId)) throw new TypeError('threadId must be letters, digits, - or _');
+    const dir = join(homedir(), '.harness', 'chats', threadId);
+    await mkdir(dir, { recursive: true });
+    return dir;
+  }
+  const dir = string(cwd, 'options.cwd');
+  if (!isAbsolute(dir)) throw new TypeError(`The project folder must be an absolute path, not "${dir}"`);
+  const info = await stat(dir).catch(() => null);
+  if (!info?.isDirectory()) throw new Error(`The project folder ${dir} doesn't exist anymore`);
+  return dir;
+}

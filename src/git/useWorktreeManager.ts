@@ -22,8 +22,9 @@ export function useWorktreeManager() {
       if (known.current.has(thread.id)) continue;
       known.current.add(thread.id);
       const fork = state.forks[thread.id];
-      if (!thread.repo || worktreePath(thread.id) || (!host.isDesktop && !fork)) continue;
-      const created = fork ? forkWorktree(state.threads, thread, fork) : host.git.addWorktree(projectRoot(thread.repo.project), thread.id, thread.repo.branch);
+      const root = thread.repo && projectRoot(thread.repo);
+      if (!thread.repo || !root || worktreePath(thread.id) || (!host.isDesktop && !fork)) continue;
+      const created = fork ? forkWorktree(state.threads, thread, fork) : host.git.addWorktree(root, thread.id, thread.repo.branch);
       created
         .then((path) => setWorktreePath(thread.id, path))
         .catch((error: Error) => toast.error(`Could not create a worktree for "${thread.title}"`, { description: error.message }));

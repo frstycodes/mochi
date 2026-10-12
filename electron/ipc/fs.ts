@@ -1,5 +1,7 @@
 import { BrowserWindow, dialog, shell } from 'electron';
+import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import path from 'node:path';
 import { EDITORS, type Editor, type FsHost } from '../../src/host/types/fs.ts';
 import { installedEditors, openInEditor } from '../fs/editors.ts';
 import { readInside, unwatchRoot, watchRoot, writeInside } from '../fs/files.ts';
@@ -8,6 +10,7 @@ import { listFiles } from '../fs/list.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 const MAX_WRITE_CHARS = 5 * 1024 * 1024;
+const MAX_FOLDERS = 500;
 
 export const fs = {
   list: (_sender, root) => listFiles(string(root, 'root')),
@@ -37,5 +40,12 @@ export const fs = {
     const window = BrowserWindow.fromWebContents(sender);
     const { canceled, filePaths } = await (window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options));
     return canceled ? null : (filePaths[0] ?? null);
+  },
+  folders: async (_sender, at) => {
+    const dir = path.resolve(string(at, 'path').replace(/^~(?=\/|$)/, homedir()));
+    if (!(await stat(dir).catch(() => null))?.isDirectory()) return null;
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    const names = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
+    return { path: dir, names: names.sort((a, b) => a.localeCompare(b)).slice(0, MAX_FOLDERS) };
   },
 } satisfies Handlers<FsHost>;

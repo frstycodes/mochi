@@ -352,6 +352,17 @@
         "--strictPort"
       ],
       "port": 5373
+    },
+    {
+      "name": "mochi-real-data",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5381",
+        "--strictPort"
+      ],
+      "port": 5381
     }
   ]
 }

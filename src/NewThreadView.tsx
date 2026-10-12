@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
+import { projectName } from './projects';
 import { host } from './host';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
@@ -59,9 +60,7 @@ function NewThread() {
     const trimmed = text.trim();
     if (!trimmed) return;
     const title = files.length ? `${trimmed} (${files.length} attached)` : trimmed;
-    // GAP: a folderless chat has no cwd to run an agent in, so it stays on the demo adapter.
-    const isLive = host.isDesktop && !!project;
-    dispatch({ type: 'create', title, provider, project, controls, isLive, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
+    dispatch({ type: 'create', title, provider, project, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
   };
 
   return (
@@ -76,7 +75,7 @@ function NewThread() {
             onControlsChange={setControls}
             onSend={start}
             submitLabel={linked ? 'Start thread, linked' : 'Start thread'}
-            placeholder={project ? `What should this thread get done in ${project}?` : 'Ask anything, no folder attached'}
+            placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
             className="min-h-24"
           />
         </ComposerCard>

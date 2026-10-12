@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
@@ -13,7 +13,7 @@ interface Live {
   /** Server generation the thread was opened on; after a crash it is resumed on the new server before the next turn. */
   gen: number;
   turnId?: string;
-  options: AgentStartOptions;
+  options: AgentRunOptions;
 }
 
 interface Pending {
@@ -65,7 +65,7 @@ export class CodexAdapter {
   }
 
   /** Starts a thread on its profile's account, or resumes the one in `options.resume`, and sends the first prompt. Failures arrive as a failed turn, not a rejection. */
-  async start(threadId: string, options: AgentStartOptions) {
+  async start(threadId: string, options: AgentRunOptions) {
     await this.report(threadId, async () => {
       const server = this.threads.get(threadId)?.server ?? this.server(await this.accountFor(options.spaceId, 'codex'));
       const rpc = await server.client();
@@ -120,7 +120,7 @@ export class CodexAdapter {
     return server;
   }
 
-  private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentStartOptions) {
+  private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions) {
     this.forget(threadId);
     const params = { cwd: options.cwd, model: options.model ?? null, config: PLAN_TOOL, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume
