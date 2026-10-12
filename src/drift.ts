@@ -20,6 +20,8 @@ const SCOPE_CUES = /\b(also|another|additionally|extend|plus|as well|support for
 
 /** Score a prompt against everything the goal covers: the goal sentence, the title, open step titles and their files. */
 export function judgeDrift(prompt: string, thread: Thread): DriftVerdict | Promise<DriftVerdict> {
+  if (!getPrefs().driftGuard) return { kind: 'on-goal', reason: 'Drift guard is off' };
+  if (thread.drift?.isMuted) return { kind: 'on-goal', reason: 'Drift guard off for this thread' };
   return judgeLocally(prompt, thread) ?? classifyDrift(prompt, thread);
 }
 

@@ -49,6 +49,8 @@ export interface ActivityEntry {
   who: Author;
   kind: 'message' | 'tool' | 'event' | 'reasoning';
   text: string;
+  /** Events only: the why, shown muted under the label. */
+  detail?: string;
   seconds?: number;
   drift?: 'on-goal' | 'scope-add' | 'off-goal';
 }

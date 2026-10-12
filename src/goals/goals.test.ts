@@ -30,11 +30,14 @@ test('scope-add send adds a step as a new revision; off-goal send only marks the
   const scoped = threadsReducer(base(), { type: 'send', threadId: 'rl', text: 'Also return Retry-After', drift: 'scope-add', reason: 'r' }).threads.find((t) => t.id === 'rl')!;
   assert.equal(scoped.revisions.at(-1)!.n, 3);
   assert.equal(scoped.steps.at(-1)!.title, 'Return Retry-After');
-  assert.match(scoped.activity.at(-1)!.text, /^Goal v3: \+1 step/);
+  assert.deepEqual(pick(scoped.activity.at(-1)!), { text: 'Goal v3: +1 step "Return Retry-After"', detail: 'r' });
   const off = threadsReducer(base(), { type: 'send', threadId: 'rl', text: 'Fix the typo', drift: 'off-goal', reason: 'r' }).threads.find((t) => t.id === 'rl')!;
+  assert.deepEqual(pick(off.activity.at(-1)!), { text: 'Sent off-goal · not counted', detail: 'r' }, 'a short label, the reason apart');
   assert.equal(off.steps.length, 9);
   assert.equal(off.activity.at(-2)!.drift, 'off-goal');
 });
+
+const pick = ({ text, detail }: { text: string; detail?: string }) => ({ text, detail });
 
 test('a goal edit is one revision with a diff per change, and no change makes no revision', () => {
   const rl = initialThreads().threads.find((t) => t.id === 'rl')!;
