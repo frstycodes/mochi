@@ -297,6 +297,28 @@
         "--strictPort"
       ],
       "port": 5357
+    },
+    {
+      "name": "mochi-settings-sections",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5371",
+        "--strictPort"
+      ],
+      "port": 5371
+    },
+    {
+      "name": "mochi-settings-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5373",
+        "--strictPort"
+      ],
+      "port": 5373
     }
   ]
 }
