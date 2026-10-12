@@ -1,17 +1,18 @@
 {
   "name": "harness-proto",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
+  "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "vp dev",
+    "build": "tsc -b && vp build",
     "typecheck": "tsc -b && tsc -p electron",
     "test": "node --test 'src/**/*.test.ts' 'electron/**/*.test.ts'",
     "artifact": "pnpm build && node scripts/artifact.mjs",
-    "electron:dev": "vite --mode electron",
-    "electron:build": "tsc -b && tsc -p electron && vite build --mode electron && electron-builder --mac --dir"
+    "electron:dev": "vp dev --mode electron",
+    "electron:build": "tsc -b && tsc -p electron && vp build --mode electron && electron-builder --mac --dir"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.296",
@@ -88,9 +89,10 @@
     "electron-builder": "26.15.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4",
+    "vite": "catalog:",
     "vite-plugin-electron": "1.1.2",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite-plugin-singlefile": "^2.3.3",
+    "vite-plus": "catalog:"
   },
   "build": {
     "appId": "dev.mochi.app",
@@ -108,11 +110,5 @@
       "icon": "build/icon.icns",
       "identity": null
     }
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "node-pty"
-    ]
   }
 }
