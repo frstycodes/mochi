@@ -82,7 +82,7 @@ export function AskAboutFileRange({ threadId, path }: { threadId: string; path: 
   );
 }
 
-export function useAskInSideChat(threadId: string) {
+function useAskInSideChat(threadId: string) {
   const { dispatch } = useHarness();
   return (quote: Quote) => dispatch({ type: 'sidechat-open', threadId, quote: { ...quote, text: quote.text.slice(0, MAX_QUOTE_CHARS) } });
 }

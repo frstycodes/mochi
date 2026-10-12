@@ -2,7 +2,7 @@ import type { Action, State } from './index.tsx';
 import { panesReducer } from './panes.ts';
 import { threadsReducer } from './threads.ts';
 
-export type QuoteSource = 'diff' | 'terminal' | 'file' | 'message';
+export type QuoteSource = 'diff' | 'terminal' | 'file';
 
 export interface Quote {
   source: QuoteSource;
@@ -79,7 +79,7 @@ export function questionText(message: SideMessage) {
   return `${quoted}\n\n${message.text}`;
 }
 
-export const SOURCE_NAMES = { diff: 'Diff hunk', terminal: 'Terminal output', file: 'File range', message: 'Message' } satisfies Record<QuoteSource, string>;
+export const SOURCE_NAMES = { diff: 'Diff hunk', terminal: 'Terminal output', file: 'File range' } satisfies Record<QuoteSource, string>;
 
 export function saveSideChats(sidechats: SideChatState['sidechats']) {
   try {
