@@ -274,7 +274,7 @@ function Composer({
         </div>
         <ComposerMeta>
           <RunOnMenu />
-          <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
+          <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
           <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
             {isQueue ? (

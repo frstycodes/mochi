@@ -132,7 +132,7 @@ function NewThread() {
           {!!project && <WorkspaceControls workspace={workspace} />}
           <RunMenu value={run} onChange={setRun} />
           {!!project && <RunOnMenu />}
-          {!!project && <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+          {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
         {!!project && <WorkspaceNotes workspace={workspace} />}
       </motion.div>

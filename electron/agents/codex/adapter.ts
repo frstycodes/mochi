@@ -34,8 +34,11 @@ interface Pending {
 }
 
 // GAP: the composer's permission modes are Claude's names; these are the closest Codex policies. No mode keeps the user's own Codex config.
-const POLICIES: Record<string, { approvalPolicy: string; sandbox: string }> = {
-  default: { approvalPolicy: 'untrusted', sandbox: 'workspace-write' },
+export const POLICIES: Record<string, { approvalPolicy: string; sandbox: string; approvalsReviewer?: string }> = {
+  /** Not `untrusted`: 0.155.1 asked before every command, `cat` and `git status` too, since each arrives wrapped in `zsh -lc`. In the read-only sandbox reads run unasked and anything that writes or needs the network escalates to the user. */
+  default: { approvalPolicy: 'on-request', sandbox: 'read-only' },
+  /** Sandboxed work runs unasked; escalations (network, writes outside the workspace) go to Codex's own reviewer (`guardian_approval`, stable in 0.155.1), not the user. */
+  auto: { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'auto_review' },
   acceptEdits: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
   plan: { approvalPolicy: 'on-request', sandbox: 'read-only' },
   bypassPermissions: { approvalPolicy: 'never', sandbox: 'danger-full-access' },

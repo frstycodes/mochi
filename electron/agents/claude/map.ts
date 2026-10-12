@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { McpServerStatus, ModelInfo, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
@@ -294,4 +294,23 @@ export function claudeModels(infos: ModelInfo[]): AgentModel[] {
   const models = new Map<string, AgentModel>();
   for (const m of rows) if (!models.has(idOf(m))) models.set(idOf(m), { id: idOf(m), name: m.displayName, description: m.description, efforts: m.supportedEffortLevels ?? [], isDefault: idOf(m) === defaultId });
   return [...models.values()];
+}
+
+/**
+ * The modes a thread may start in, with the tools each pre-approves. Claude Code asks before WebSearch and WebFetch in
+ * every mode short of bypass (acceptEdits only covers file edits), so a search in Auto stopped the turn for approval.
+ */
+export const PERMISSION_MODES = {
+  default: ['WebSearch'],
+  acceptEdits: ['WebSearch', 'WebFetch'],
+  auto: ['WebSearch', 'WebFetch'],
+  plan: ['WebSearch'],
+  dontAsk: [],
+  bypassPermissions: [],
+} satisfies Record<PermissionMode, string[]>;
+
+/** The `query()` options for a mode; the caller adds its own `allowedTools` (Mochi's) to these. */
+export function permissionOptions(mode: PermissionMode) {
+  // The SDK refuses bypassPermissions without this opt-in; Full access is the user's explicit, confirmed choice in the composer.
+  return { permissionMode: mode, allowDangerouslySkipPermissions: mode === 'bypassPermissions', allowedTools: PERMISSION_MODES[mode] };
 }

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { accessOf, type SharedAccess } from '../runtime/access.ts';
 import { effortId, modelId } from '../runtime/models.ts';
 
 /**
@@ -18,7 +19,7 @@ export interface Prefs {
   /** A provider effort id; a model that doesn't take it runs its own default. */
   effort: string;
   agent: 'claude' | 'codex';
-  permissions: 'Ask first' | 'Auto edit' | 'Full access';
+  permissions: SharedAccess;
   runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
   /** Off sends every message straight through: no local score, no classifier call. */
   driftGuard: boolean;
@@ -54,7 +55,7 @@ export const DEFAULT_PREFS: Prefs = {
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
   effort: 'high',
   agent: 'claude',
-  permissions: 'Auto edit',
+  permissions: 'Auto',
   runsOn: 'This Mac',
   driftGuard: true,
   branchFrom: 'current',
@@ -129,7 +130,8 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
     if (Array.isArray(fallback) ? Array.isArray(value) && value.every((v) => typeof v === 'string') : typeof value === typeof fallback) next[key] = value;
   }
   const prefs = next as unknown as Prefs;
-  return { ...prefs, starredModels: prefs.starredModels.map(modelId), effort: effortId(prefs.effort) };
+  const access = accessOf(prefs.permissions);
+  return { ...prefs, starredModels: prefs.starredModels.map(modelId), effort: effortId(prefs.effort), permissions: access === 'Plan' ? 'Auto' : access };
 }
 
 function load(): Prefs {

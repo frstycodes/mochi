@@ -47,7 +47,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Agent | Claude Code / Codex | Claude Code | now | src/NewThreadView.tsx:37 |
-| Permissions | Ask first / Auto edit / Full access | Auto edit | now | src/Composer.tsx:136 |
+| Permissions | Manual / Auto / Full access (Plan too in Claude threads; per-harness meaning in `src/runtime/access.ts`) | Auto | now | src/Composer.tsx |
 | Runs on | This Mac / … | This Mac | now | src/Composer.tsx:137 |
 | Agents running at once | stepper 1–16 | 6 | R1 | RUNTIME.md:91 |
 | When a usage limit hits | Pause until reset (fixed copy; API key / handoff are per-thread choices) | — | R1 | RUNTIME.md Auth |

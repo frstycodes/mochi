@@ -47,7 +47,7 @@ test('options list other threads, then windows, by title', () => {
 });
 
 test('a thread reference becomes a digest and a window reference its screenshot, in the prompt the agent gets', () => {
-  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Ask first' } };
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Manual' } };
   let s = base();
   const id = calls(s, create)[0].threadId;
   s = threadsReducer(s, create);

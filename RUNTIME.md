@@ -71,7 +71,14 @@ Sizes for new steps default to 2 until the agent says otherwise. Progress, burn-
 
 ## Approvals
 
-- Claude: keep the `canUseTool` promise's resolver in a map keyed by `toolUseID`, emit `approval`, resolve when the queue card is answered; abort through the callback's `signal` if the turn is interrupted. It only fires when nothing earlier approved the call; to gate every call, use a `PreToolUse` hook (docs). The composer's permissions menu sets `permissionMode` (`default`, `acceptEdits`, `plan`, ...; docs).
+- Claude: keep the `canUseTool` promise's resolver in a map keyed by `toolUseID`, emit `approval`, resolve when the queue card is answered; abort through the callback's `signal` if the turn is interrupted. It only fires when nothing earlier approved the call; to gate every call, use a `PreToolUse` hook (docs). The composer's permissions menu sets `permissionMode` per harness (`PERMISSIONS` in `src/runtime/access.ts`):
+
+| Mode | Claude | Codex |
+|---|---|---|
+| Manual | `default`, WebSearch pre-allowed | `on-request` + `read-only` |
+| Auto | `auto` (classifier; falls back to `acceptEdits` where unavailable), WebSearch and WebFetch pre-allowed | `on-request` + `workspace-write`, `approvalsReviewer: auto_review` |
+| Full access | `bypassPermissions` + `allowDangerouslySkipPermissions` (Claude Code still asks before dangerous `rm`) | `never` + `danger-full-access` |
+| Plan | `plan` | not offered; runs as Manual |
 - Codex: answer the server request with `accept`, `acceptForSession`, `decline` or `cancel`. Interrupting a turn clears pending approvals and the server sends `serverRequest/resolved` (docs), which removes the queue card.
 - Queue ranking stays as is (`rankQueue` in `src/store/queue.ts`, verified: `steps × 2 + threads × 3`, +4 for overlaps); an approval blocks its thread's running step.
 

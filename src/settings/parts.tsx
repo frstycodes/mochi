@@ -177,7 +177,7 @@ export function SettingsSelect<T extends string>({
   onChange,
   className,
   ...props
-}: { id?: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; className?: string; 'aria-label'?: string; disabled?: boolean }) {
+}: { id?: string; value: T; options: readonly { value: T; label: string; className?: string }[]; onChange: (value: T) => void; className?: string; 'aria-label'?: string; disabled?: boolean }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as T)} disabled={props.disabled}>
       <SelectTrigger id={id && settingControlId(id)} aria-label={props['aria-label']} size="sm" className={cn('w-44', className)}>
@@ -195,11 +195,11 @@ export function SettingsSelect<T extends string>({
 }
 
 /** One of a few named values, as separate bordered toggles; the row's label names the group. */
-export function SettingsChoice<T extends string>({ id, value, options, onChange, ...props }: { id: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; 'aria-label'?: string }) {
+export function SettingsChoice<T extends string>({ id, value, options, onChange, ...props }: { id: string; value: T; options: readonly { value: T; label: string; className?: string }[]; onChange: (value: T) => void; 'aria-label'?: string }) {
   return (
     <ToggleGroup id={settingControlId(id)} aria-label={props['aria-label']} type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as T)}>
       {options.map((o) => (
-        <ToggleGroupItem key={o.value} value={o.value}>
+        <ToggleGroupItem key={o.value} value={o.value} className={o.className}>
           {o.label}
         </ToggleGroupItem>
       ))}
