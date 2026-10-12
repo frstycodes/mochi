@@ -2,21 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
-import type { AgentAskContext, AgentAskEvent, AgentAskMessage } from '../host/types/agent';
-import { DEFAULT_SETTINGS } from '../host/types/settings';
+import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentAskModel } from '../host/types/agent';
+import { DEFAULT_SETTINGS, type SideChatModel } from '../host/types/settings';
 import type { Thread } from '../model';
-import { claudeModelId, providerModelOf } from '../runtime/controls';
+import { askModelOf, sideChatChoice } from '../runtime/controls';
 import { useHarness } from '../store';
 import { chatFor, questionText, type Quote, type SideMessage } from '../store/sidechat';
 
 export function useSideChat(thread: Thread, tabId: string) {
-  useEffect(() => void host.agent.warm(thread.spaceId).catch(() => {}), [thread.spaceId]);
   const { state, dispatch } = useHarness();
   const chat = chatFor(state, thread.id, tabId);
   const at = { threadId: thread.id, tabId };
   const isStreaming = chat.messages.some((m) => m.isStreaming);
   const [defaultModel] = useSideChatDefault();
-  const model = chat.model ?? defaultModel ?? claudeModelId(DEFAULT_SETTINGS.sideChatModel);
+  const model = chat.model ?? defaultModel ?? sideChatChoice(DEFAULT_SETTINGS.sideChatModel);
+  // Codex has no spare process to park.
+  const isClaude = model.provider === 'claude';
+  useEffect(() => void (isClaude && host.agent.warm(thread.spaceId).catch(() => {})), [thread.spaceId, isClaude]);
 
   const ask = async (text: string) => {
     const id = `side-${Date.now()}`;
@@ -25,7 +27,7 @@ export function useSideChat(thread: Thread, tabId: string) {
     dispatch({ type: 'sidechat-ask', ...at, id, text });
     const stream = (chunk: string, isDone?: boolean) => dispatch({ type: 'sidechat-stream', ...at, id, text: chunk, isDone });
     try {
-      for await (const chunk of askAgent(threadContext(thread, await diffSummary(thread)), history, providerModelOf(model))) stream(chunk);
+      for await (const chunk of askAgent(threadContext(thread, await diffSummary(thread)), history, askModelOf(model))) stream(chunk);
       stream('', true);
     } catch (error) {
       stream(`\n\n_Couldn't answer: ${error instanceof Error ? error.message : String(error)}_`, true);
@@ -44,7 +46,7 @@ export function useSideChat(thread: Thread, tabId: string) {
     chat,
     isStreaming,
     model,
-    setModel: (id: string) => dispatch({ type: 'sidechat-model', ...at, model: id }),
+    setModel: (choice: SideChatModel) => dispatch({ type: 'sidechat-model', ...at, model: choice }),
     ask,
     setDraft: (quote?: Quote) => dispatch({ type: 'sidechat-draft', ...at, quote }),
     clear: () => dispatch({ type: 'sidechat-clear', ...at }),
@@ -52,22 +54,22 @@ export function useSideChat(thread: Thread, tabId: string) {
   };
 }
 
-/** Settings › Defaults' side chat model as a catalog id (null until read), and a setter that saves it. */
+/** Settings › Defaults' side chat model as the chip names it (null until read), and a setter that saves it. */
 export function useSideChatDefault() {
-  const [model, setModel] = useState<string | null>(null);
+  const [model, setModel] = useState<SideChatModel | null>(null);
   useEffect(() => {
     let isCurrent = true;
     host.settings.get().then(
-      (s) => isCurrent && setModel(claudeModelId(s.sideChatModel)),
+      (s) => isCurrent && setModel(sideChatChoice(s.sideChatModel)),
       () => {},
     );
     return () => {
       isCurrent = false;
     };
   }, []);
-  const save = (id: string) => {
-    setModel(id);
-    host.settings.set({ sideChatModel: providerModelOf(id) }).catch((error: Error) => toast.error('Side chat model not saved', { description: error.message }));
+  const save = (choice: SideChatModel) => {
+    setModel(choice);
+    host.settings.set({ sideChatModel: choice }).catch((error: Error) => toast.error('Side chat model not saved', { description: error.message }));
   };
   return [model, save] as const;
 }
@@ -102,7 +104,7 @@ async function diffSummary(thread: Thread): Promise<AgentAskContext['diff']> {
 }
 
 /** `host.agent.ask` answers through the shared event channel; this pulls out one answer's chunks as an async stream. */
-async function* askAgent(context: AgentAskContext, messages: AgentAskMessage[], model: string) {
+async function* askAgent(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel) {
   const pending: AgentAskEvent[] = [];
   let wake = () => {};
   const off = host.agent.onAskEvent((event) => {

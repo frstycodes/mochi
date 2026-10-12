@@ -6,7 +6,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ComposerCard } from '../Composer';
-import { ModelPicker } from '../ModelControls';
+import { ModelPicker, useUnavailableHarnesses } from '../ModelControls';
 import { useSideChat } from '../sidechat/useSideChat';
 import { useHarness } from '../store';
 import { SOURCE_NAMES, type Quote, type QuoteSource, type SideMessage } from '../store/sidechat';
@@ -17,6 +17,7 @@ import type { PaneTabProps } from './tabs';
 export function SideChatTab({ thread, tab }: PaneTabProps) {
   const { dispatch } = useHarness();
   const side = useSideChat(thread, tab.id);
+  const unavailable = useUnavailableHarnesses(thread.spaceId);
   const isEmpty = side.chat.messages.length === 0;
 
   return (
@@ -53,7 +54,7 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
             </PromptInputBody>
             <PromptInputFooter className="px-2 pb-2">
               <PromptInputTools>
-                <ModelPicker value={side.model} provider="claude" isLocked onChange={(m) => side.setModel(m.id)} />
+                <ModelPicker value={side.model.model} provider={side.model.provider} unavailable={unavailable} onChange={(m) => side.setModel({ provider: m.harness, model: m.id })} />
               </PromptInputTools>
               <PromptInputTools>
                 <PromptInputSubmit aria-label="Ask" disabled={side.isStreaming} className="rounded-full">

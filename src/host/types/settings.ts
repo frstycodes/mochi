@@ -31,8 +31,14 @@ export interface AgentSettings {
   worktreeRoot: string;
   shell: string;
   prDrafts: boolean;
-  /** Claude model id side chat starts on; each side chat can switch. */
-  sideChatModel: string;
+  /** The model new side chats start on, as the model chip names it; each side chat can switch, provider included. */
+  sideChatModel: SideChatModel;
+}
+
+export interface SideChatModel {
+  provider: Provider;
+  /** A model catalog id, or the harness's own id for one the catalog doesn't list. */
+  model: string;
 }
 
 /** What `set` takes: any top-level field, and per harness any of its fields. */
@@ -102,8 +108,14 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   worktreeRoot: '',
   shell: '',
   prDrafts: false,
-  sideChatModel: 'claude-sonnet-5-5',
+  sideChatModel: { provider: 'claude', model: 'claude-sonnet-5-5' },
 };
+
+/** Saved settings from before side chat could run on Codex held a bare Claude model id. */
+export function migrateSettings(saved: Record<string, unknown>): Partial<AgentSettings> {
+  const { sideChatModel } = saved;
+  return typeof sideChatModel === 'string' ? { ...saved, sideChatModel: { provider: 'claude', model: sideChatModel } } : saved;
+}
 
 /** Deep enough for this shape: harness entries merge field by field, so a patch never drops a sibling field. */
 export function mergeSettings(base: AgentSettings, patch: AgentSettingsPatch): AgentSettings {

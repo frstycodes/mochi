@@ -77,13 +77,19 @@ export interface AgentAskEvent {
 
 /** What a side question sees of its thread: read-only, never written back. */
 export interface AgentAskContext {
-  /** The thread's profile, whose Claude account answers. */
+  /** The thread's profile, whose account for the asked provider answers. */
   spaceId: string;
   title: string;
   goal: string;
   steps: { title: string; status: string }[];
   activity: { who: string; text: string }[];
   diff: { path: string; added: number; removed: number }[] | null;
+}
+
+/** Who answers a side question; `model` unset runs the harness's own default (Codex's catalog entries carry no real id). */
+export interface AgentAskModel {
+  provider: Provider;
+  model?: string;
 }
 
 export interface AgentAskMessage {
@@ -115,8 +121,8 @@ export interface AgentHost {
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
-  /** Streams the answer from Claude `model` as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
-  ask(context: AgentAskContext, messages: AgentAskMessage[], model: string): Promise<{ id: string }>;
+  /** Streams the answer from `model` on the profile's account as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
+  ask(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel): Promise<{ id: string }>;
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
   /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;

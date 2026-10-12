@@ -224,7 +224,7 @@ function mapUsage(usage: Record<string, unknown> | undefined, s: ThreadState): A
 }
 
 /** Upstream API errors arrive as their raw JSON body; show the message inside. */
-function apiMessage(message: string) {
+export function apiMessage(message: string) {
   try {
     const inner = obj(obj(JSON.parse(message))?.error)?.message;
     return typeof inner === 'string' ? inner : message;
