@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Briefcase, Home, Layers, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon } from 'reicon-react';
+import { Briefcase, Home, Layers, MoreH, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
@@ -155,4 +155,12 @@ export function TooltipIconButton({ label, hint, children, ...props }: { label: 
       </TooltipContent>
     </Tooltip>
   );
+}
+
+/**
+ * The overflow-menu icon: reicon MoreH, filled. `vertical` (⋮, reicon has no MoreV, so the same dots turned 90°) is for a menu that belongs
+ * to one item or card and for the end of an address bar; horizontal (⋯) is for app headers and toolbars.
+ */
+export function OverflowIcon({ vertical, className, ...props }: IconProps & { vertical?: boolean }) {
+  return <MoreH weight="Filled" className={cn(vertical && 'rotate-90', className)} {...props} />;
 }

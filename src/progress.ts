@@ -105,6 +105,16 @@ export function duration(minutes: number) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+/** "just now", "1 minute ago", "3 hours ago", "yesterday" for something `minutes` old. */
+export function timeAgo(minutes: number) {
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return RELATIVE.format(-Math.round(minutes), 'minute');
+  if (minutes < 24 * 60) return RELATIVE.format(-Math.round(minutes / 60), 'hour');
+  return RELATIVE.format(-Math.round(minutes / (24 * 60)), 'day');
+}
+
 const STOP = new Set(['the', 'and', 'for', 'with', 'into', 'add', 'from', 'that', 'this', 'per']);
 
 export function tokens(text: string) {

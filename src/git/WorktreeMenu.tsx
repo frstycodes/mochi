@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BranchDown, Broom, Copy, More } from 'reicon-react';
+import { BranchDown, Broom, Copy } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -9,6 +9,7 @@ import { useHarness } from '../store';
 import type { ConfirmRequest } from './useConfirm';
 import { gitError } from './useGit';
 import { setWorktreePath, worktreePath } from './worktrees';
+import { OverflowIcon } from '../ui';
 
 interface WorktreeMenuProps {
   cwd: string;
@@ -60,7 +61,7 @@ export function WorktreeMenu({ cwd, diff, run, confirm }: WorktreeMenuProps) {
     <DropdownMenu onOpenChange={(open) => open && bytes.refresh()}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label="Worktree actions" className="text-muted-foreground">
-          <More />
+          <OverflowIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">

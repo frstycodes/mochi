@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Step, Thread } from './model.ts';
-import { boardColumns, progressAt, similarity, statusAt } from './progress.ts';
+import { boardColumns, progressAt, similarity, statusAt, timeAgo } from './progress.ts';
 
 function step(id: string, rest: Partial<Step> = {}): Step {
   return { id, title: id, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: 0, addedBy: 'you', revision: 1, ...rest };
@@ -71,4 +71,12 @@ test('parseTool splits verb, target and an optional trailing diff', async () => 
   assert.deepEqual(parseTool('Edit apps/web/usage.tsx  +120 −4'), { verb: 'Edit', target: 'apps/web/usage.tsx', added: 120, removed: 4 });
   assert.deepEqual(parseTool('Run pnpm --filter api test usage'), { verb: 'Run', target: 'pnpm --filter api test usage' });
   assert.deepEqual(parseTool('git status'), { verb: 'Run', target: 'git status' });
+});
+
+test('timeAgo reads like a person would say it', () => {
+  assert.equal(timeAgo(0), 'just now');
+  assert.equal(timeAgo(1), '1 minute ago');
+  assert.equal(timeAgo(45), '45 minutes ago');
+  assert.equal(timeAgo(90), '2 hours ago');
+  assert.equal(timeAgo(26 * 60), 'yesterday');
 });

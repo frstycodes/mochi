@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, BranchUp, More, Scale, SidebarRight, Undo } from 'reicon-react';
+import { Archive, BranchUp, Scale, SidebarRight, Undo } from 'reicon-react';
 import { toast } from 'sonner';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +26,7 @@ import { SummaryPanel } from './SummaryPanel';
 import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
 import { useSettle } from './useSettle';
-import { ProgressRing, ThreadStatusIcon } from './ui';
+import { OverflowIcon, ProgressRing, ThreadStatusIcon } from './ui';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -142,11 +142,14 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
   const panel = useRef<PanelImperativeHandle | null>(null);
   const lastSize = useRef(DEFAULT_PANE_PCT);
   const [isAnimating, setAnimating] = useState(false);
+  const isMounted = useRef(false);
 
   useEffect(() => {
     const p = panel.current;
+    // Mounting (opening a thread, a Stage swipe landing) never animates the pane: the swiped-in preview already shows it at full size.
+    const isToggle = isMounted.current;
+    isMounted.current = true;
     if (!p || p.isCollapsed() === !isPaneOpen) return;
-    setAnimating(true);
     const target = `${lastSize.current}%`;
     if (isPaneOpen) {
       p.expand();
@@ -156,6 +159,8 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
       lastSize.current = p.getSize().asPercentage;
       p.collapse();
     }
+    if (!isToggle) return;
+    setAnimating(true);
     const t = window.setTimeout(() => setAnimating(false), PANE_ANIMATION_MS);
     return () => window.clearTimeout(t);
   }, [isPaneOpen]);
@@ -267,7 +272,7 @@ function ThreadMenu({ thread }: { thread: Thread }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label="Thread actions" className="text-muted-foreground">
-          <More />
+          <OverflowIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">

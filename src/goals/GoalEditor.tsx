@@ -124,6 +124,9 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
             <Slider aria-labelledby="drift-threshold" disabled={drift.isMuted} min={0.05} max={0.4} step={0.05} value={[drift.threshold]} onValueChange={([threshold]) => setDrift((d) => ({ ...d, threshold }))} className="flex-1" />
             <span className="w-10 text-right tabular type-caption text-subtle-foreground">{Math.round(drift.threshold * 100)}%</span>
           </div>
+          <p className={cn('type-caption text-subtle-foreground', drift.isMuted && 'opacity-50')}>
+            Asks when a message shares less than {Math.round(drift.threshold * 100)}% of its words with the goal, the thread title or an open step. Higher asks more often; short steering messages never ask.
+          </p>
         </section>
 
         <DialogFooter>

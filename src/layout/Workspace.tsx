@@ -126,7 +126,8 @@ function LeafContent({ view }: { view: View }) {
   if (view.kind === 'tab') return <TabLeaf threadId={view.threadId} tabId={view.tabId} />;
   if (view.kind === 'thread') {
     const thread = state.threads.find((t) => t.id === view.id);
-    if (thread) return <ThreadView thread={thread} />;
+    // Keyed: another thread is a fresh view, so its pane, summary and chat open in their own state instead of animating from the last thread's.
+    if (thread) return <ThreadView key={thread.id} thread={thread} />;
   }
   return (
     <div className="flex h-full min-h-0 flex-col">

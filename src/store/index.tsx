@@ -1,5 +1,8 @@
-import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
+import { setDriftClassifier } from '../drift.ts';
+import { host } from '../host/index.ts';
 import { SPACES, type QueueItem, type Thread } from '../model.ts';
+import { resolution } from '../runtime/apply.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
@@ -32,15 +35,28 @@ function reducer(state: State, action: Action): State {
   return SLICES.reduce((s, slice) => slice(s, action), state);
 }
 
+setDriftClassifier((prompt, thread) => host.agent.classify(prompt, thread));
+
 export const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
 
 export function HarnessProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const [state, apply] = useReducer(reducer, undefined, initialState);
+  const latest = useRef(state);
+  useEffect(() => {
+    latest.current = state;
+  }, [state]);
+  const dispatch = useCallback<Dispatch<Action>>((action) => {
+    const answer = resolution(latest.current, action);
+    if (answer) void host.agent.resolve(answer.requestId, answer.decision);
+    apply(action);
+  }, []);
+  // The tick is the demo adapter's clock; real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {
     if (state.paused) return;
-    const id = setInterval(() => dispatch({ type: 'tick' }), 1000);
+    const id = setInterval(() => apply({ type: 'tick' }), 1000);
     return () => clearInterval(id);
   }, [state.paused]);
+  useEffect(() => host.agent.onEvent((event) => apply({ type: 'agent', event })), []);
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);

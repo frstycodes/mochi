@@ -2,7 +2,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
-import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, More as MoreHorizontalIcon } from 'reicon-react'
+import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, MoreH as MoreHorizontalIcon } from 'reicon-react'
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -111,7 +111,7 @@ function PaginationEllipsis({
       )}
       {...props}
     >
-      <MoreHorizontalIcon
+      <MoreHorizontalIcon weight="Filled"
       />
       <span className="sr-only">More pages</span>
     </span>
