@@ -1,11 +1,11 @@
-import type { MouseEvent } from 'react';
+import type { Dispatch, MouseEvent } from 'react';
 import { MessageQuestion } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DiffFile, DiffHunk } from '../host/types/git';
-import { useHarness } from '../store';
+import { useHarness, type Action } from '../store';
 import type { Quote } from '../store/sidechat';
 import { DiffStat } from '../WorkLog';
 
@@ -80,6 +80,12 @@ export function AskAboutFileRange({ threadId, path }: { threadId: string; path: 
       <TooltipContent>Ask in side chat</TooltipContent>
     </Tooltip>
   );
+}
+
+/** `/side` and the palette: the thread's side chat opens and asks `question`, or waits with its input focused. */
+export function askInSideChat(dispatch: Dispatch<Action>, threadId: string, question = '') {
+  dispatch({ type: 'sidechat-open', threadId, ...(question && { ask: question }) });
+  if (!question) requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(`[data-sidechat-input="${CSS.escape(threadId)}"]`)?.focus());
 }
 
 function useAskInSideChat(threadId: string) {
