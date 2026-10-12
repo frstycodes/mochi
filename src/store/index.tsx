@@ -20,6 +20,9 @@ import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState }
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
 import { reviewsReducer, type ReviewAction } from '../secondOpinion/slice.ts';
 import { initialNotifications, notificationsReducer, type NotificationsAction, type NotificationsState } from '../notify/slice.ts';
+import { scheduleCalls } from '../schedule/calls.ts';
+import { scheduleReducer, type ScheduleAction } from '../schedule/slice.ts';
+import type { ScheduleEvent } from '../host/types/schedule.ts';
 
 export type { View } from './layout.ts';
 export type { OverlapMode } from './threads.ts';
@@ -31,10 +34,10 @@ export interface Snapshot {
 }
 
 export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState;
-export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | ReviewAction | NotificationsAction | { type: 'reset' } | { type: 'tool-undo'; undo: ToolUndo };
+export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | ReviewAction | NotificationsAction | ScheduleAction | { type: 'reset' } | { type: 'tool-undo'; undo: ToolUndo };
 
 // notificationsReducer diffs what the others changed, so it runs last.
-const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, reviewsReducer, notificationsReducer];
+const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, reviewsReducer, scheduleReducer, notificationsReducer];
 
 function initialState(saved = getRestored()): State {
   return { ...initialThreads(saved), ...initialQueue(saved), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat(), ...initialNotifications() };
@@ -63,7 +66,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     const before = latest.current;
     const answer = resolution(before, action);
     if (answer) void host.agent.resolve(answer.requestId, answer.decision);
-    const calls = agentCalls(before, action, () => reducer(before, action));
+    let after: State | undefined;
+    const next = () => (after ??= reducer(before, action));
+    const calls = agentCalls(before, action, next);
+    for (const input of scheduleCalls(before, action, next)) host.schedule.set(input).catch((error: unknown) => console.error('Saving the schedule failed', error));
+    // A deleted thread takes its trigger with it.
+    if (action.type === 'delete') for (const id of action.threadIds) host.schedule.remove(id).catch((error: unknown) => console.error('Removing the schedule failed', error));
     for (const call of calls) {
       // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
       callAgent(call).catch((error: unknown) => apply({ type: 'agent', event: failed(call.threadId, error) }));
@@ -87,6 +95,13 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
       }),
     [],
   );
+  useEffect(() => {
+    const onSchedule = (event: ScheduleEvent) => apply(event.type === 'agent' ? { type: 'agent', event: event.event } : { type: 'schedule-run', event });
+    const off = host.schedule.onEvent(onSchedule);
+    // What happened while no window was open: runs and their agent's events, in order.
+    void host.schedule.drain().then((events) => events.forEach(onSchedule), (error: unknown) => console.error('Reading scheduled runs failed', error));
+    return off;
+  }, []);
   useEffect(
     () =>
       host.agent.onToolCall((call) => {

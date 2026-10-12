@@ -35,6 +35,7 @@ import { NotificationBell } from './notify/NotificationBell';
 import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
+import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
@@ -516,6 +517,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
           )}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           {!!pr && <PrBadge pr={pr} />}
+          <NextRunBadge threadId={thread.id} />
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
         </span>
       </SidebarMenuButton>

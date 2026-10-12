@@ -195,9 +195,9 @@ export function SettingsSelect<T extends string>({
 }
 
 /** One of a few named values, as separate bordered toggles; the row's label names the group. */
-export function SettingsChoice<T extends string>({ id, value, options, onChange }: { id: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void }) {
+export function SettingsChoice<T extends string>({ id, value, options, onChange, ...props }: { id: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; 'aria-label'?: string }) {
   return (
-    <ToggleGroup id={settingControlId(id)} type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as T)}>
+    <ToggleGroup id={settingControlId(id)} aria-label={props['aria-label']} type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as T)}>
       {options.map((o) => (
         <ToggleGroupItem key={o.value} value={o.value}>
           {o.label}

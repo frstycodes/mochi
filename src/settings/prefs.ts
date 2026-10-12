@@ -45,7 +45,7 @@ export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
   projectsFolder: '~/dev',
   restoreLayout: true,
-  alertKinds: ['needs-you', 'review', 'ci', 'pr-review', 'overlap', 'race-lost'],
+  alertKinds: ['needs-you', 'review', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],

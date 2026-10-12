@@ -16,6 +16,8 @@ import { projectRef, repoFor } from '../projects.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 import { getRestored } from './persist.ts';
 import { showsDemoData } from '../demoData.ts';
+import type { TriggerDraft } from '../schedule/calls.ts';
+import { describeTrigger } from '../schedule/describe.ts';
 
 export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
 
@@ -41,7 +43,7 @@ export type ThreadsAction =
   | { type: 'rename'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
@@ -371,6 +373,11 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     controls: action.controls,
   };
   if (isLive) thread.live = { isWorking: true, usage: [], cwd: threadCwd(thread) ?? undefined };
+  // Detached: a message before the first run starts the agent the way a restored thread does.
+  if (isLive && action.schedule) {
+    thread.live = { ...thread.live!, isWorking: false, isDetached: true };
+    thread.activity.push({ at: now, who: 'harness', kind: 'event', text: `Scheduled: ${describeTrigger(action.schedule.when)}` });
+  }
   let threads = [...state.threads, thread];
   if (dep && depStep) {
     threads = mapThread(threads, dep.id, (t) =>

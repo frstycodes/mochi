@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BranchDown, BranchUp, CheckCircle, MessageQuestion, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, BranchDown, BranchUp, CheckCircle, Clock, MessageQuestion, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ const KIND = {
   review: { icon: BranchUp, label: 'Review' },
   ci: { icon: BranchUp, label: 'CI failed' },
   overlap: { icon: BranchDown, label: 'Overlap' },
+  run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Setting2, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
 
@@ -145,6 +146,11 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
           <ReviewActions item={item} />
         </CardFooter>
       )}
+      {item.kind === 'run' && (
+        <CardFooter className="gap-2">
+          <RunActions item={item} />
+        </CardFooter>
+      )}
     </Card>
   );
 }
@@ -238,6 +244,20 @@ function ReviewActions({ item }: { item: QueueItem }) {
       </Button>
       <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
         Open thread
+      </Button>
+    </>
+  );
+}
+
+function RunActions({ item }: { item: QueueItem }) {
+  const { dispatch } = useHarness();
+  const withUndo = useUndoable();
+  return (
+    <>
+      <Button onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>Open thread</Button>
+      <Button variant="outline" onClick={() => withUndo('Settled', () => dispatch({ type: 'answer', queueId: item.id }))}>
+        <Archive data-icon="inline-start" />
+        Settle
       </Button>
     </>
   );

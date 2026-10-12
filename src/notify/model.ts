@@ -1,6 +1,6 @@
 import type { QueueItem, Thread } from '../model.ts';
 
-export type NoticeKind = 'needs-you' | 'step-done' | 'review' | 'ci' | 'pr-review' | 'overlap' | 'race-lost';
+export type NoticeKind = 'needs-you' | 'step-done' | 'review' | 'ci' | 'pr-review' | 'overlap' | 'race-lost' | 'run';
 
 export interface Notice {
   id: string;
@@ -35,6 +35,7 @@ export const ALERT_KINDS = {
   'pr-review': 'Pull request review',
   overlap: 'File overlap',
   'race-lost': 'Race lost',
+  run: 'Scheduled run finished',
 } satisfies Partial<Record<NoticeKind, string>>;
 
 export const isAlertKind = (kind: NoticeKind): kind is keyof typeof ALERT_KINDS => kind in ALERT_KINDS;
@@ -77,6 +78,7 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
   for (const q of next.queue) {
     if (queued.has(q.id)) continue;
     if (q.kind === 'ci') add({ id: `ci-${q.id}`, kind: 'ci', threadId: q.threadId, queueId: q.id, title: q.title, body: q.detail });
+    if (q.kind === 'run') add({ id: `run-${q.id}`, kind: 'run', threadId: q.threadId, queueId: q.id, title: q.title, body: q.detail });
     if (q.kind === 'overlap') add({ id: `overlap-${q.id}`, kind: 'overlap', threadId: q.threadId, queueId: q.id, title: q.title, body: q.detail });
   }
   return notices;
