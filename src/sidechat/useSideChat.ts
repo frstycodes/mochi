@@ -44,6 +44,7 @@ const MAX_ENTRY_CHARS = 600;
 
 function threadContext(thread: Thread, diff: AgentAskContext['diff']): AgentAskContext {
   return {
+    spaceId: thread.spaceId,
     title: thread.title,
     goal: thread.goal,
     steps: thread.steps.map((s) => ({ title: s.title, status: s.status })),
