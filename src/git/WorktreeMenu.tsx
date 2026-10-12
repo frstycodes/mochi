@@ -13,19 +13,21 @@ import { OverflowIcon } from '../ui';
 
 interface WorktreeMenuProps {
   cwd: string;
+  /** The thread's chosen base; the default branch when unset. */
+  base?: string;
   diff: GitDiff | undefined;
   run: <T>(label: string, action: () => Promise<T>) => Promise<T | undefined>;
   confirm: (request: ConfirmRequest) => Promise<boolean>;
 }
 
 /** The thread's worktree: where it is, its size, sync with base, and cleanup of settled threads' worktrees. */
-export function WorktreeMenu({ cwd, diff, run, confirm }: WorktreeMenuProps) {
+export function WorktreeMenu({ cwd, base: chosenBase, diff, run, confirm }: WorktreeMenuProps) {
   const bytes = useDiskUsage(cwd);
   const settled = useSettledWorktrees();
-  const base = diff?.base ?? 'base';
+  const base = diff?.base ?? chosenBase ?? 'base';
 
   const sync = async () => {
-    const result = await run(`Sync with ${base}`, () => host.git.sync(cwd));
+    const result = await run(`Sync with ${base}`, () => host.git.sync(cwd, chosenBase));
     if (!result) return;
     if (result.conflicts.length) toast.warning(`Merged ${result.base} with conflicts`, { description: result.conflicts.join('\n') });
     else toast.success(`Up to date with ${result.base}`);

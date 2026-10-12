@@ -21,6 +21,11 @@ export const DIFF_STYLES = [
   { value: 'split', label: 'Split' },
 ] as const;
 
+export const WORKSPACE_MODES = [
+  { value: 'worktree', label: 'New worktree' },
+  { value: 'folder', label: 'Project folder' },
+] as const;
+
 export const BRANCH_FROM = [
   { value: 'current', label: 'Current branch' },
   { value: 'base', label: 'Base branch' },
@@ -40,6 +45,7 @@ export const AGENT_SETTINGS = {
   agent: { label: 'Agent', options: AGENTS },
   branchFrom: { label: 'Off-goal work branches from', options: BRANCH_FROM },
   diffStyle: { label: 'Diffs', options: DIFF_STYLES },
+  workspaceMode: { label: 'New threads work in', options: WORKSPACE_MODES },
   searchEngine: { label: 'Search engine', options: ENGINES },
   driftGuard: { label: 'Drift guard', options: SWITCH },
   restoreLayout: { label: 'Restore layout on launch', options: SWITCH },

@@ -26,6 +26,8 @@ export interface Prefs {
   branchFrom: 'current' | 'base';
   stepSize: 1 | 2 | 3;
   branchPrefix: string;
+  /** Where a new project thread works: its own worktree, or the project's checkout. */
+  workspaceMode: 'worktree' | 'folder';
   diffStyle: 'unified' | 'split';
   terminalFontSize: number;
   terminalScrollback: number;
@@ -60,6 +62,7 @@ export const DEFAULT_PREFS: Prefs = {
   branchFrom: 'current',
   stepSize: 2,
   branchPrefix: 'mochi/',
+  workspaceMode: 'worktree',
   diffStyle: 'unified',
   terminalFontSize: 12,
   terminalScrollback: 5000,

@@ -105,11 +105,26 @@ export interface PullRequest {
   title: string;
 }
 
+/**
+ * `project` is the folder's name; `path` its absolute path, unset for the web build's fixture projects. A thread works in its own
+ * worktree unless `mode` is `folder` (the project's own checkout, on `branch`). `base`: the branch a new worktree starts from and
+ * the Changes tab diffs against, the default branch when unset. `isExisting`: `branch` is used as it is, checked out in the
+ * worktree or switched to in the folder, instead of created.
+ */
+export interface Repo {
+  project: string;
+  branch: string;
+  path?: string;
+  mode?: 'folder';
+  base?: string;
+  isExisting?: boolean;
+}
+
 export interface Thread {
   id: string;
   spaceId: string;
-  /** null: a chat with no folder, so no files, branch or PRs. `project` is the folder's name; `path` its absolute path, unset for the web build's fixture projects. */
-  repo: { project: string; branch: string; path?: string } | null;
+  /** null: a chat with no folder, so no files, branch or PRs. */
+  repo: Repo | null;
   title: string;
   goal: string;
   providers: Provider[];
