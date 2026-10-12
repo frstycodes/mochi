@@ -1,8 +1,8 @@
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentAskContext, AgentAskMessage } from '../../../src/host/types/agent.ts';
 import type { Thread } from '../../../src/model.ts';
-import { accountEnv, accountFor } from './account.ts';
-import { detectClaude, readSettings, type ClaudeInstall } from './install.ts';
+import { accountEnv, accountFor, userPath } from '../config.ts';
+import { detectClaude, type ClaudeInstall } from './install.ts';
 
 const ASK_MODEL = 'claude-sonnet-5-5';
 const CLASSIFY_MODEL = 'claude-haiku-5-5';
@@ -40,20 +40,23 @@ export async function classifyClaude(prompt: string, thread: Thread, signal: Abo
 
 /** The user's own Claude Code on the profile's account; no tools, settings files or saved transcript. Throws a message the UI can show. */
 async function baseOptions(spaceId: string, abortController: AbortController): Promise<Options> {
-  const account = await accountFor(spaceId, 'claude');
-  const env = accountEnv(account);
-  const install = await detect(account.id, env);
-  if (!install.loggedIn) throw new Error('Claude Code is logged out. Run `claude auth login` in a terminal, then try again.');
-  return { pathToClaudeCodeExecutable: install.path, tools: [], settingSources: [], persistSession: false, abortController, ...(env && { env }) };
+  const { account, configDir, executable } = await accountFor(spaceId, 'claude');
+  if (!executable) throw new Error('Claude Code is not installed. Install it from https://code.claude.com, or set its path in Settings.');
+  // Not `agentEnv()`: it adds the stored API key, which only a thread the user explicitly switched to the key may use.
+  const env = { ...accountEnv('claude', configDir), PATH: await userPath() };
+  const install = await detect(account.id, executable, env);
+  if (!install.loggedIn) throw new Error(configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${configDir} claude auth login\` in a terminal, then try again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then try again.');
+  return { pathToClaudeCodeExecutable: install.path, tools: [], settingSources: [], persistSession: false, abortController, env };
 }
 
 // `detectClaude` spawns `claude` twice; a 4s classify budget can't pay that every time. Only logged-in results are kept.
 const detected = new Map<string, { at: number; install: ClaudeInstall }>();
 
-async function detect(accountId: string, env: ReturnType<typeof accountEnv>) {
-  const hit = detected.get(accountId);
+async function detect(accountId: string, executable: string, env: NodeJS.ProcessEnv) {
+  const key = `${accountId}\0${executable}`;
+  const hit = detected.get(key);
   if (hit && Date.now() - hit.at < DETECT_TTL_MS) return hit.install;
-  const install = await detectClaude(await readSettings(), env);
-  if (install.loggedIn) detected.set(accountId, { at: Date.now(), install });
+  const install = await detectClaude({ executablePath: executable }, env);
+  if (install.loggedIn) detected.set(key, { at: Date.now(), install });
   return install;
 }
