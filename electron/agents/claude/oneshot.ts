@@ -32,7 +32,7 @@ export async function classifyClaude(prompt: string, thread: Thread, signal: Abo
   const open = thread.steps.filter((s) => s.status !== 'done' && s.status !== 'dropped');
   const systemPrompt = 'Classify a message sent to a coding agent against its goal. on-goal: works toward the goal or an open step. scope-add: related, but asks for something the plan does not cover. off-goal: unrelated to the goal. reason: one short sentence.';
   const input = `Goal: ${thread.goal}\nTitle: ${thread.title}\nOpen steps:\n${open.map((s) => `- ${s.title}${s.footprint.length ? ` (${s.footprint.join(', ')})` : ''}`).join('\n') || '- none'}\n\nMessage: ${prompt}`;
-  for await (const message of query({ prompt: input, options: { ...(await baseOptions(thread.spaceId, abort)), model: CLASSIFY_MODEL, systemPrompt, outputFormat: { type: 'json_schema', schema: VERDICT_SCHEMA } } })) {
+  for await (const message of query({ prompt: input, options: { ...(await baseOptions(thread.spaceId, abort)), model: CLASSIFY_MODEL, systemPrompt, thinking: { type: 'disabled' }, outputFormat: { type: 'json_schema', schema: VERDICT_SCHEMA } } })) {
     if (message.type === 'result') return message.subtype === 'success' ? message.structured_output : null;
   }
   return null;
