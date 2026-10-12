@@ -7,6 +7,7 @@ import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
 import { oneLine } from './subagents.ts';
+import { DEFAULT_PREFS } from '../settings/prefs.ts';
 import { runTool, type ToolEnv } from './tools.ts';
 
 const reduce = (s: State, a: Action) => [threadsReducer, queueReducer, panesReducer].reduce((x, r) => r(x, a), s);
@@ -51,7 +52,8 @@ function setup() {
   const env = {
     getState: () => state,
     dispatch,
-    agentControl: () => 'reversible',
+    // The middle level: start and stop are `change` tools and must run without a card.
+    prefs: { get: () => ({ ...DEFAULT_PREFS, agentControl: 'changes' }), set: () => {} },
     toast: () => {},
     notify: () => {},
     isDesktop: true,
@@ -79,7 +81,7 @@ test('start_background_agent runs a session of its own, reports back into the th
   const [start] = calls;
   assert.equal(start.method === 'start' && start.threadId, session, 'its own session in host.agent, so the concurrency cap counts it');
   assert.equal(start.method === 'start' && start.options.cwd, '/wt/main', "worktree: same runs in the thread's worktree");
-  assert.equal(start.method === 'start' && start.options.worktree, undefined);
+  assert.equal(start.method === 'start' && start.options.workspace, undefined);
   assert.match(start.method === 'start' ? start.options.prompt : '', /^Load test the limiter\n\nYou are a background agent/);
 
   const pane = state().panes.find((p) => p.threadId === id)!;
@@ -168,8 +170,9 @@ test('start_background_agent runs a session of its own, reports back into the th
   );
 });
 
-test('a background agent in a worktree of its own gets a new branch from the project folder; stop ends it and its session', async () => {
+test("a background agent in a worktree of its own branches off the thread's branch; stop ends it and its session", async () => {
   const { id, tool, event, thread, calls } = setup();
+  const branch = thread().repo!.branch;
   await tool('start_background_agent', {
     prompt: 'Try the Redis approach',
     name: 'Redis spike',
@@ -177,7 +180,7 @@ test('a background agent in a worktree of its own gets a new branch from the pro
     provider: 'codex',
   });
   const [start] = calls;
-  assert.deepEqual(start.method === 'start' && [start.options.provider, start.options.cwd, start.options.worktree], ['codex', '/repo', `mochi/${id}-bg1`]);
+  assert.deepEqual(start.method === 'start' && [start.options.provider, start.options.cwd, start.options.workspace], ['codex', '/repo', { mode: 'worktree', branch: `${branch}-bg1`, base: branch }]);
   event({ threadId: `${id}--bg1`, type: 'worktree', path: '/wt/redis' });
   assert.equal(thread().subagents![0].cwd, '/wt/redis');
 

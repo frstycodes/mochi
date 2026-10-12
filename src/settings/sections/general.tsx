@@ -2,6 +2,7 @@ import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui/switch';
 import { FolderInput, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { DEFAULT_PREFS, setPrefs, usePrefs } from '../prefs';
+import { MOTION } from '../settingOptions';
 
 export function GeneralSection() {
   const { theme = 'system', setTheme } = useTheme();
@@ -32,8 +33,3 @@ const THEMES = [
   { value: 'system', label: 'System' },
 ] as const;
 
-export const MOTION = [
-  { value: 'system', label: 'System' },
-  { value: 'on', label: 'On' },
-  { value: 'off', label: 'Off' },
-] as const;

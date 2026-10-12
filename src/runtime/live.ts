@@ -1,6 +1,7 @@
 import { projectRoot, threadCwd } from '../host/cwd.ts';
-import type { AgentImage, AgentStartOptions } from '../host/types/agent.ts';
+import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import type { Provider, Thread } from '../model.ts';
+import { startWorkspace } from '../git/workspace.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
@@ -26,7 +27,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'sidechat-promote':
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { worktree: t.repo?.branch }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { workspace: startWorkspace(t.repo) }));
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
@@ -55,8 +56,9 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const cwd = agent.hasOwnWorktree ? threadCwdRoot(thread) : runFolder(thread);
       if (cwd === undefined) return [];
       const controls = agent.provider === thread.providers[0] ? controlsOf(thread) : DEFAULT_CONTROLS[agent.provider];
-      const worktree = agent.hasOwnWorktree && thread.repo ? { worktree: `${thread.repo.branch}-${agent.id}` } : {};
-      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider), ...(agent.model && { model: agent.model }), ...worktree };
+      // Its own worktree branches off the thread's branch, so it starts from the thread's work.
+      const workspace: StartWorkspace | undefined = agent.hasOwnWorktree && thread.repo ? { mode: 'worktree', branch: `${thread.repo.branch}-${agent.id}`, base: thread.repo.branch } : undefined;
+      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider), ...(agent.model && { model: agent.model }), ...(workspace && { workspace }) };
       return [{ method: 'start', threadId: backgroundSession(thread.id, agent.id), options }];
     }
     case 'bg-stop': {
@@ -84,18 +86,18 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'worktree' | 'images'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'workspace' | 'images'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
 }
 
-/** How the scheduler starts this thread's agent: as a first start would, in the thread's worktree. Undefined when it can't run. */
+/** How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder. Undefined when it can't run. */
 export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'> | undefined {
   const cwd = runFolder(thread);
   const provider = thread.session?.provider ?? thread.providers[0];
   if (cwd === undefined) return;
-  return { provider, spaceId: thread.spaceId, cwd, worktree: thread.repo?.branch, ...agentOptions(controlsOf(thread), provider) };
+  return { provider, spaceId: thread.spaceId, cwd, workspace: startWorkspace(thread.repo), ...agentOptions(controlsOf(thread), provider) };
 }
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */

@@ -96,7 +96,7 @@ async function diffSummary(thread: Thread): Promise<AgentAskContext['diff']> {
   const cwd = threadCwd(thread);
   if (!cwd) return null;
   try {
-    const diff = await host.git.diff(cwd, 'branch');
+    const diff = await host.git.diff(cwd, 'branch', thread.repo?.base);
     return diff.files.map((f) => ({ path: f.path, added: f.added, removed: f.removed }));
   } catch {
     return null;

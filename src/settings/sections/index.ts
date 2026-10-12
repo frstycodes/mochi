@@ -112,7 +112,7 @@ export const SETTINGS_SECTIONS = [
     title: 'Mochi tools',
     icon: ShieldCheck,
     component: ToolsSection,
-    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only reversible confirm approve mcp control browser delete' }],
+    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' }],
   },
   {
     id: 'goals',
@@ -162,6 +162,7 @@ export const SETTINGS_SECTIONS = [
     component: GitSection,
     settings: [
       { id: 'worktreeRoot', label: 'Worktrees folder', keywords: 'worktree path directory' },
+      { id: 'workspaceMode', label: 'New threads work in', keywords: 'worktree project folder local checkout workspace' },
       { id: 'branchPrefix', label: 'Branch prefix', keywords: 'branch name' },
       { id: 'prDrafts', label: 'Open pull requests as drafts', keywords: 'pr github draft' },
       { id: 'diffStyle', label: 'Diffs', keywords: 'unified split side by side changes' },

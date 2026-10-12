@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
-import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
+import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -494,6 +494,8 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             <>
               <ProjectAvatar name={thread.repo.project} />
               <span className="shrink-0">{thread.repo.project}</span>
+              {/* A worktree is the default; working in the project's own checkout is worth a glance. */}
+              {thread.repo.mode === 'folder' && <Folder className="size-3.5 shrink-0" aria-label="In the project folder" />}
               <span className="min-w-0 truncate">{thread.repo.branch}</span>
             </>
           ) : (

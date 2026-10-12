@@ -21,6 +21,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
   switch (event.type) {
     case 'worktree':
       return update((t) => ({ ...t, live: t.live && { ...t.live, cwd: event.path } }));
+    case 'branch':
+      return update((t) => ({ ...t, repo: t.repo && { ...t.repo, branch: event.branch } }));
     case 'session':
       return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId }, agent: {} }));
     case 'info':

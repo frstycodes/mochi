@@ -14,6 +14,7 @@ import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { projectRef, repoFor } from '../projects.ts';
+import { branchName, repoWorkspace, type WorkspaceDraft } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 import { getRestored } from './persist.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -44,7 +45,9 @@ export type ThreadsAction =
   | { type: 'rename'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft }
+  /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
+  | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
@@ -131,6 +134,8 @@ function reduce(state: State, action: Action): State {
     }
     case 'create':
       return create(state, action);
+    case 'workspace':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, '', t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':
       return send(state, action);
     case 'controls':
@@ -367,7 +372,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   const thread: Thread = {
     id,
     spaceId: state.spaceId,
-    repo: action.project ? repoFor(action.project, `${getPrefs().branchPrefix}${id}`) : null,
+    repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, branchName(getPrefs().branchPrefix, '', id)) : null,
     title: action.title.length > 48 ? `${action.title.slice(0, 47)}…` : action.title,
     goal: action.title,
     providers: [action.provider],
@@ -399,6 +404,12 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     );
   }
   return { ...state, threads, seq: state.seq + 1, views: action.isBackground ? state.views : { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
+}
+
+/** `fallback` names the branch when the draft doesn't: a project folder thread is on whatever branch the folder is. */
+function withWorkspace(repo: NonNullable<Thread['repo']>, draft: WorkspaceDraft, fallback: string): NonNullable<Thread['repo']> {
+  const { project, path } = repo;
+  return { project, ...(path && { path }), branch: draft.branch || fallback, ...repoWorkspace(draft) };
 }
 
 /** Done goes through `completeStep`, so links and acceptance resolve the same as when a plan finishes it. */
@@ -471,7 +482,9 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   }
   next = { ...next, threads: mapThread(next.threads, source.id, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: 'Moved to a new thread', detail: `"${short}"` })) };
   const branchFrom = action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
-  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live });
+  // Branching off the current branch is a new worktree from it; off the base, the default.
+  const workspace: WorkspaceDraft | undefined = source.repo && action.branchFrom === 'current' ? { mode: 'worktree', base: source.repo.branch } : undefined;
+  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live, workspace });
 }
 
 /** A whole-thread handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */

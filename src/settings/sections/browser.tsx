@@ -2,10 +2,10 @@ import { Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
-import { SEARCH_ENGINES } from '../../browser/url';
 import { useSimulators } from '../../sim/useSimulators';
 import { SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
-import { setPrefs, usePrefs, type Prefs } from '../prefs';
+import { setPrefs, usePrefs } from '../prefs';
+import { ENGINES } from '../settingOptions';
 
 export function BrowserSection() {
   const { searchEngine } = usePrefs();
@@ -41,7 +41,6 @@ export function BrowserSection() {
 
 const PAGES = new Intl.PluralRules('en');
 
-export const ENGINES = (Object.keys(SEARCH_ENGINES) as Prefs['searchEngine'][]).map((id) => ({ value: id, label: SEARCH_ENGINES[id].name }));
 
 // Radix Select can't hold '' (the pref's "first booted"), so the choice uses its own value for it.
 const FIRST_BOOTED = 'first-booted';

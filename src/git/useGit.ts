@@ -6,9 +6,9 @@ import type { DiffScope } from '../host/types/git.ts';
 const DIFF_POLL_MS = 4000;
 const PR_POLL_MS = 30_000;
 
-/** The worktree's diff, re-read on an interval and on window focus while the agent keeps editing. */
-export function useGitDiff(cwd: string, scope: DiffScope) {
-  return usePolled(useCallback(() => host.git.diff(cwd, scope), [cwd, scope]), DIFF_POLL_MS);
+/** The worktree's diff (against `base`, the thread's chosen base), re-read on an interval and on window focus while the agent keeps editing. */
+export function useGitDiff(cwd: string, scope: DiffScope, base?: string) {
+  return usePolled(useCallback(() => host.git.diff(cwd, scope, base), [cwd, scope, base]), DIFF_POLL_MS);
 }
 
 /** `githubUser` is the thread's profile GitHub account; gh's active account when undefined. */

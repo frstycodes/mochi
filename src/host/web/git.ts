@@ -88,6 +88,19 @@ const FORK = [
   '',
 ].join('\n');
 
+const DAY = 86_400_000;
+const FIXTURE_BRANCHES = [
+  ['main', 0],
+  ['feat/admin-usage', 0.2],
+  ['feat/api-rate-limits', 0.5],
+  ['fix/checkout-e2e', 1.5],
+  ['feat/better-auth-session-rotation-and-device-trust-for-enterprise-sso', 3],
+  ['origin/release/2026-10', 4],
+  ['origin/feat/onboarding-emails', 9],
+] as const;
+// Same rule as `git check-ref-format --branch` for what people actually type.
+const BAD_REF = /(^[-/.])|([/.]$)|\.\.|\/\/|@\{|[\s~^:?*[\\\x00-\x1f\x7f]|\.lock(\/|$)|^@$/;
+
 export const git: GitHost = {
   async status() {
     return {
@@ -134,6 +147,22 @@ export const git: GitHost = {
   },
   async sync() {
     return { base: 'origin/main', conflicts: [] };
+  },
+  async branches(root) {
+    // One fixture project has uncommitted changes, so the project folder warning and the refused switch can be seen.
+    const isDirty = root.endsWith('latitude');
+    const now = Date.now();
+    return {
+      current: 'main',
+      defaultBranch: 'main',
+      isDirty,
+      branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.harness/worktrees/latitude/adm' : undefined })),
+    };
+  },
+  async branchNameError(_root, name) {
+    if (!name.trim()) return 'Name the branch';
+    if (BAD_REF.test(name)) return `"${name}" isn't a valid branch name`;
+    return FIXTURE_BRANCHES.some(([b]) => b === name) ? `A branch named ${name} already exists` : null;
   },
   async addWorktree(_root, threadId) {
     return `~/.harness/worktrees/demo/${threadId}`;
