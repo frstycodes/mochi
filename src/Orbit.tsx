@@ -7,6 +7,7 @@ import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
 import { ProviderMark, ProgressRing, lineColor } from './ui';
+import { isWorking } from './agentPhase';
 
 const R_IN = 92;
 const R_OUT = 188;
@@ -259,7 +260,7 @@ function ThreadPeek({ thread, now }: { thread: Thread; now: number }) {
     <>
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
-        <ProgressRing pct={pct} slot={thread.line} size={18} />
+        <ProgressRing pct={pct} slot={thread.line} size={18} isWorking={isWorking(thread)} />
         <span className="tabular font-medium text-foreground">{Math.round(pct * 100)}%</span>
         <span className="truncate text-muted-foreground">{running ? running.title : 'Nothing running'}</span>
       </div>

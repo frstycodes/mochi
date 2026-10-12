@@ -96,6 +96,8 @@ export interface Thread {
 
 export interface LiveRun {
   isWorking: boolean;
+  /** Mochi launched this agent and it hasn't reported anything yet. */
+  starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
   cwd?: string;
   /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */

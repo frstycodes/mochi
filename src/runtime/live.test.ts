@@ -80,3 +80,12 @@ test('a folderless chat starts with no folder (main makes one); a restart reuses
   const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/dev/app');
 });
+
+test('a started agent reads as starting until its first event, so a sent message never looks stuck', () => {
+  let s = run(base(), { type: 'create', title: 'reply with ok', provider: 'codex', project: 'harness', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'agent-starting', threadId: id, provider: 'codex' });
+  assert.equal(s.threads.at(-1)!.live?.starting, 'codex');
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'codex', sessionId: 'sess-1' });
+  assert.equal(s.threads.at(-1)!.live?.starting, undefined);
+});

@@ -46,7 +46,7 @@ export function parseSaved(json: string | null): Saved | null {
 }
 
 function restoreThread(thread: Thread, now: number): Thread {
-  const live = { ...thread.live!, isWorking: false, isDetached: true };
+  const live = { ...thread.live!, isWorking: false, isDetached: true, starting: undefined };
   if (!thread.live!.isWorking) return { ...thread, live };
   return { ...thread, live, activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
 }
