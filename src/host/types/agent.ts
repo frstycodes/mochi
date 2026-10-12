@@ -4,6 +4,8 @@ import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
   provider: Provider;
+  /** The profile whose account for `provider` the thread runs on, for its whole life. */
+  spaceId: string;
   cwd: string;
   prompt: string;
   model?: string;
@@ -22,6 +24,7 @@ export type AgentEvent =
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
