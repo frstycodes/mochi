@@ -77,6 +77,8 @@ function listening() {
     const server = createServer(async (req, res) => {
       const match = req.url?.match(/^\/mcp\/(\w+)\/([\w-]+)$/);
       if (!match || match[1] !== SECRET) return void res.writeHead(404).end();
+      // Codex sends no Origin; a browser page always does, so this keeps web pages off the port even if they learn the URL.
+      if (req.headers.origin !== undefined) return void res.writeHead(403).end();
       const mcp = new McpServer({ name: SERVER, version: '1.0.0' });
       for (const t of TOOLS) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
