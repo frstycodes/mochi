@@ -8,7 +8,7 @@ import { PromptInputProvider, usePromptInputController } from '@/components/ai-e
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, isMochiCard, type ActivityEntry, type Author, type Provider, type QueueItem, type Thread } from './model';
+import { authorName, isMochiCard, type Provider, type QueueItem, type Thread } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
@@ -19,9 +19,9 @@ import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
-import { agentPhase, pendingWork } from './agentPhase';
+import { agentPhase, currentAction, pendingWork, type CurrentAction } from './agentPhase';
+import { chatRows, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
-import type { Review } from './secondOpinion/verdict';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
@@ -41,17 +41,13 @@ import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
 
-type ChatRow =
-  | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
-  | { kind: 'event'; key: string; entry: ActivityEntry }
-  | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
-  | { kind: 'review'; key: string; review: Review };
-
 export function ChatView({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const rows = useChatRows(thread.activity, thread.reviews);
+  const rows = chatRows(thread.activity, thread.reviews);
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
+  const liveWork = liveWorkIndex(rows);
+  const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
   const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q));
   // A live agent thread may have no planned steps; its turn is what's running.
@@ -74,7 +70,7 @@ export function ChatView({ thread }: { thread: Thread }) {
             <div ref={messages} className="contents">
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} isLive={i === liveIndex && isRunning} />
+                  <ChatRowView thread={thread} row={row} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
@@ -112,31 +108,9 @@ function useComposerHeightVar() {
   return ref;
 }
 
-function useChatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow[] {
-  const rows: ChatRow[] = [];
-  const pushReviews = (at: number) => reviews.filter((r) => (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach((review) => rows.push({ kind: 'review', key: review.id, review }));
-  activity.forEach((entry, i) => {
-    pushReviews(i);
-    const key = `${entry.at}-${i}`;
-    const last = rows[rows.length - 1];
-    const isWork = entry.kind === 'tool' || entry.kind === 'reasoning';
-    if (isWork && last?.kind === 'work' && last.who === entry.who) {
-      last.entries.push(entry);
-      return;
-    }
-    if (isWork) return rows.push({ kind: 'work', key, who: entry.who, entries: [entry] });
-    if (entry.kind === 'event') return rows.push({ kind: 'event', key, entry });
-    const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
-    const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
-    rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
-  });
-  pushReviews(activity.length);
-  return rows;
-}
-
 // isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; isLive: boolean }) {
-  if (row.kind === 'work') return <WorkLog entries={row.entries} isLive={isLive} />;
+function ChatRowView({ thread, row, isLive, action }: { thread: Thread; row: ChatRow; isLive: boolean; action?: CurrentAction }) {
+  if (row.kind === 'work') return <WorkLog entries={row.entries} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
