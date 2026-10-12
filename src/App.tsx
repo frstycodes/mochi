@@ -16,6 +16,10 @@ import { CommandPalette } from './palette/CommandPalette';
 import { useGlobalKeys } from './palette/useGlobalKeys';
 import { ReviewModeProvider, useReviewMode } from './review/useReviewMode';
 import { ReviewView } from './review/ReviewView';
+import { useSettingsRoute } from './settings/open';
+import { SettingsPage } from './settings/SettingsPage';
+import { SettingsSidebar } from './settings/SettingsSidebar';
+import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useWorktreeManager } from './git/useWorktreeManager';
@@ -63,15 +67,23 @@ function Shell() {
   useOverlapToasts();
   useWorktreeManager();
   const review = useReviewMode();
+  const isSettingsOpen = !!useSettingsRoute();
+  useSettingsShortcut();
 
   return (
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
-      <AppSidebar onSearch={() => setSearchOpen(true)} width={sidebarWidth} onResize={setSidebarWidth} />
-      <SidebarPeek onSearch={() => setSearchOpen(true)} />
+      {isSettingsOpen ? (
+        <SettingsSidebar width={sidebarWidth} onResize={setSidebarWidth} />
+      ) : (
+        <>
+          <AppSidebar onSearch={() => setSearchOpen(true)} width={sidebarWidth} onResize={setSidebarWidth} />
+          <SidebarPeek onSearch={() => setSearchOpen(true)} />
+        </>
+      )}
       <SidebarToggle />
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {review.isOpen ? <ReviewView /> : <Stage />}
+          {isSettingsOpen ? <SettingsPage /> : review.isOpen ? <ReviewView /> : <Stage />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />

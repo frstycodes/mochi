@@ -233,7 +233,7 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const space = SPACES.find((s) => s.id === thread.spaceId)!;
   const provider = thread.providers[0];
-  const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.accounts[provider], state.now);
+  const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.plans[provider], state.now);
   if (thread.status !== 'running' || !plan.isWarning) return null;
 
   const name = `${PROVIDER_NAMES[plan.provider]} ${plan.plan}`;

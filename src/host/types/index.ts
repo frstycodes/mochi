@@ -6,6 +6,7 @@ import type { Manifest } from './manifest.ts';
 import { notifyMethods, type NotifyHost } from './notify.ts';
 import { portsMethods, type PortsHost } from './ports.ts';
 import { ptyMethods, type PtyHost } from './pty.ts';
+import { settingsMethods, type SettingsHost } from './settings.ts';
 import { simMethods, type SimHost } from './sim.ts';
 import { windowsMethods, type WindowsHost } from './windows.ts';
 
@@ -19,6 +20,7 @@ export interface HostBridge {
   notify: NotifyHost;
   windows: WindowsHost;
   agent: AgentHost;
+  settings: SettingsHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -34,4 +36,5 @@ export const manifest = {
   notify: notifyMethods,
   windows: windowsMethods,
   agent: agentMethods,
+  settings: settingsMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

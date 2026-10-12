@@ -5,6 +5,7 @@ import { git as desktopGit } from './desktop/git.ts';
 import { notify as desktopNotify } from './desktop/notify.ts';
 import { ports as desktopPorts } from './desktop/ports.ts';
 import { pty as desktopPty } from './desktop/pty.ts';
+import { settings as desktopSettings } from './desktop/settings.ts';
 import { sim as desktopSim } from './desktop/sim.ts';
 import { windows as desktopWindows } from './desktop/windows.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
@@ -15,6 +16,7 @@ import { git as webGit } from './web/git.ts';
 import { notify as webNotify } from './web/notify.ts';
 import { ports as webPorts } from './web/ports.ts';
 import { pty as webPty } from './web/pty.ts';
+import { settings as webSettings } from './web/settings.ts';
 import { sim as webSim } from './web/sim.ts';
 import { windows as webWindows } from './web/windows.ts';
 
@@ -34,6 +36,7 @@ export const registry: Registry = {
   notify: { web: webNotify, desktop: desktopNotify },
   windows: { web: webWindows, desktop: desktopWindows },
   agent: { web: webAgent, desktop: desktopAgent },
+  settings: { web: webSettings, desktop: desktopSettings },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -51,4 +54,5 @@ export const host = {
   notify: pick('notify'),
   windows: pick('windows'),
   agent: pick('agent'),
+  settings: pick('settings'),
 } satisfies HostBridge & { isDesktop: boolean };

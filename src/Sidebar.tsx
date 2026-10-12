@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
-import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Sun, TaskSquare, Undo } from 'reicon-react';
+import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -37,6 +37,7 @@ import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
+import { openSettings } from './settings/open';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { Shortcut } from './Shortcut';
 
@@ -117,7 +118,7 @@ function SpaceHeader() {
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">
-          {space.profile} profile · Claude {space.accounts.claude} · Codex {space.accounts.codex} · GitHub {space.accounts.github}
+          {space.profile} profile · Claude {space.plans.claude} · Codex {space.plans.codex} · GitHub {space.github}
         </TooltipContent>
       </Tooltip>
     </SidebarHeader>
@@ -588,11 +589,16 @@ function DemoMenu({ paused }: { paused: boolean }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Prototype controls" className="text-muted-foreground">
+        <Button variant="ghost" size="icon-sm" aria-label="Settings and prototype controls" className="text-muted-foreground">
           <OverflowIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="end" className="w-56">
+        <DropdownMenuItem onSelect={() => openSettings()}>
+          <Setting2 />
+          Settings
+          <Shortcut keys={['mod', ',']} className="ml-auto" />
+        </DropdownMenuItem>
         <DropdownMenuGroup>
           <DropdownMenuLabel>Prototype</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>

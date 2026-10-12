@@ -15,7 +15,7 @@ export const MODEL_PRICES = {
 // GAP: threads don't record which model they run, so each provider's default stands in.
 export const DEFAULT_MODEL = { claude: 'opus-5.5', codex: 'gpt-5.5-codex' } satisfies Record<Provider, ModelId>;
 
-/** Tokens per rolling window by plan name (`Space.accounts`). TODO(notify): made up; neither provider publishes token budgets, the real remaining figure comes from rate-limit headers via `host.agent`. */
+/** Tokens per rolling window by plan name (`Space.plans`). TODO(notify): made up; neither provider publishes token budgets, the real remaining figure comes from rate-limit headers via `host.agent`. */
 export const PLAN_LIMITS: Record<string, number> = {
   Plus: 600_000,
   Max: 3_000_000,
@@ -66,7 +66,7 @@ export function threadUsage(thread: Thread): Usage {
 export function spaceUsage(threads: Thread[], space: Space, now: number) {
   const own = threads.filter((t) => t.spaceId === space.id);
   const total = own.map(threadUsage).reduce((sum, u) => ({ input: sum.input + u.input, output: sum.output + u.output, costUsd: sum.costUsd + u.costUsd }), { input: 0, output: 0, costUsd: 0 });
-  const plans = (['claude', 'codex'] as const).map((p) => planUsage(own, p, space.accounts[p], now));
+  const plans = (['claude', 'codex'] as const).map((p) => planUsage(own, p, space.plans[p], now));
   return { ...total, plans };
 }
 
