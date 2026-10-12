@@ -32,6 +32,7 @@ import { SidePane } from '../SidePane';
 import { AppSidebar } from '../Sidebar';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
+import { ReviewModeProvider } from '../review/useReviewMode';
 import { HarnessProvider, useHarness } from '../store';
 import { ProgressRing, ProviderMark, StepStatusIcon, ThreadStatusIcon, lineColor, stepLabel } from '../ui';
 import { ColorPair } from './color-pair';
@@ -61,23 +62,25 @@ const SECTIONS = [
 export function DesignPage() {
   return (
     <HarnessProvider>
-      <ScrollArea className="h-full">
-        <DesignHeader />
-        <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
-          <Overview />
-          <Foundations />
-          <Actions />
-          <InputsSection />
-          <NavigationSection />
-          <Display />
-          <DataSection />
-          <Feedback />
-          <OverlaysSection />
-          <Conversation />
-          <Recipes />
-          <Rules />
-        </main>
-      </ScrollArea>
+      <ReviewModeProvider>
+        <ScrollArea className="h-full">
+          <DesignHeader />
+          <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
+            <Overview />
+            <Foundations />
+            <Actions />
+            <InputsSection />
+            <NavigationSection />
+            <Display />
+            <DataSection />
+            <Feedback />
+            <OverlaysSection />
+            <Conversation />
+            <Recipes />
+            <Rules />
+          </main>
+        </ScrollArea>
+      </ReviewModeProvider>
       <Orbit />
       <Toaster position="bottom-right" />
     </HarnessProvider>
