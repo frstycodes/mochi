@@ -109,6 +109,15 @@ test('usage events move the context meter and accumulate on a live session', () 
   assert.ok(Math.abs(rl.session!.usage!.costUsd! - 0.03) < 1e-9);
 });
 
+test('info merges into the thread, MCP servers by name, and a new session starts it over', () => {
+  let s = base();
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'info', info: { model: 'm', mcpServers: [{ name: 'a', status: 'pending', toolCount: 2 }, { name: 'b', status: 'connected' }] } });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'info', info: { skills: ['ui'], mcpServers: [{ name: 'a', status: 'connected' }] } });
+  assert.deepEqual(thread(s, 'rl').agent, { model: 'm', skills: ['ui'], mcpServers: [{ name: 'a', status: 'connected', toolCount: 2 }, { name: 'b', status: 'connected' }] });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'session', provider: 'claude', sessionId: 'sess-2' });
+  assert.deepEqual(thread(s, 'rl').agent, {});
+});
+
 test('the demo adapter raises the overlap at the scripted minute, as the tick did', () => {
   let s = tick(base(), SCRIPT.overlapAt - NOW0 - 1);
   assert.ok(!s.queue.some((q) => q.kind === 'overlap'));

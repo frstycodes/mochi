@@ -6,7 +6,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
 import { CodexAdapter, reply } from './adapter.ts';
-import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits } from './map.ts';
+import { codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
@@ -143,6 +143,23 @@ process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n'
   if (m.method === 'turn/start') { send({ id: m.id, result: { turn: { id: 'u' + n } } }); send({ method: 'item/completed', params: { threadId: m.params.threadId, item: { type: 'agentMessage', id: 'm' + Math.random(), text: JSON.stringify({ thread: m.params.threadId }) } } }); }
 } });
 `;
+
+test('session info comes from thread/start and the MCP, skills and plugin lists', () => {
+  const start = JSON.parse(fixture('plan').split('\n')[0]).result;
+  assert.deepEqual(infoFromStart(start), { model: 'gpt-6-luna', cwd: '/tmp/scratch', permissionMode: 'untrusted · workspaceWrite', version: '0.155.1' });
+  const mcp = { data: [{ name: 'docs', runtimeStatus: 'connected', tools: { search: {}, read: {} }, authStatus: 'unsupported' }, { name: 'linear', runtimeStatus: null, tools: {}, authStatus: 'notLoggedIn' }], nextCursor: null };
+  const skills = { data: [{ cwd: '/r', skills: [{ name: 'ui', enabled: true }, { name: 'off', enabled: false }, { name: 'ui', enabled: true }], errors: [] }] };
+  const plugins = { marketplaces: [{ name: 'm', plugins: [{ name: 'gh', installed: true, enabled: true, localVersion: '1.2.0', version: null }, { name: 'other', installed: false, enabled: false }] }] };
+  assert.deepEqual(infoFromLists(mcp, skills, plugins), {
+    mcpServers: [{ name: 'docs', status: 'connected', toolCount: 2 }, { name: 'linear', status: 'needs-auth', toolCount: 0 }],
+    skills: ['ui'],
+    plugins: [{ name: 'gh', version: '1.2.0' }],
+  });
+  assert.deepEqual(infoFromLists(null, null, null), {});
+  assert.deepEqual(mapNotification('mcpServer/startupStatus/updated', { threadId: 'c1', name: 'docs', status: 'ready', error: null, failureReason: null }, threadState('h1', '/r')), [
+    { threadId: 'h1', type: 'info', info: { mcpServers: [{ name: 'docs', status: 'connected' }] } },
+  ]);
+});
 
 test('malformed params map to nothing; foreign server requests are left for an error reply', () => {
   const s = threadState('h1', '/x');

@@ -11,9 +11,9 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   const events = FIXTURE.flatMap((m) => map(m as SDKMessage));
   assert.deepEqual(
     events.map((e) => e.type),
-    ['session', 'message', 'message', 'tool', 'plan', 'tool', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
+    ['session', 'info', 'message', 'message', 'tool', 'plan', 'tool', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
   );
-  const [, first, second] = events;
+  const [, , first, second] = events;
   assert.deepEqual([first, second], [
     { threadId: 't1', type: 'message', text: 'Adding', isDelta: false },
     { threadId: 't1', type: 'message', text: ' a test.', isDelta: true },
@@ -25,6 +25,53 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   const usage = events.find((e) => e.type === 'usage');
   assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
+});
+
+test('init lists tools, MCP servers with their tool counts, skills, plugins and slash commands', () => {
+  const { map } = createMapper('t1', CWD);
+  const init = {
+    type: 'system',
+    subtype: 'init',
+    session_id: 'sess-1',
+    parent_tool_use_id: null,
+    cwd: '/repo',
+    model: 'claude-opus-5-5',
+    permissionMode: 'acceptEdits',
+    claude_code_version: '2.3.0',
+    tools: ['Bash', 'Read', 'mcp__github__create_pr', 'mcp__github__list_prs', 'mcp__my_docs__search'],
+    mcp_servers: [
+      { name: 'github', status: 'connected' },
+      { name: 'my.docs', status: 'pending' },
+      { name: 'odd', status: 'something-new' },
+    ],
+    skills: ['ui', 'run'],
+    plugins: [{ name: 'ponytail', path: '/p', version: '4.7.0' }, { name: 'bare', path: '/b' }],
+    slash_commands: ['compact', 'ui'],
+  } as unknown as SDKMessage;
+  assert.deepEqual(map(init), [
+    { threadId: 't1', type: 'session', provider: 'claude', sessionId: 'sess-1' },
+    {
+      threadId: 't1',
+      type: 'info',
+      info: {
+        model: 'claude-opus-5-5',
+        cwd: '/repo',
+        permissionMode: 'acceptEdits',
+        version: '2.3.0',
+        tools: ['Bash', 'Read'],
+        mcpServers: [
+          { name: 'github', status: 'connected', toolCount: 2 },
+          { name: 'my.docs', status: 'pending', toolCount: 1 },
+          { name: 'odd', status: 'failed', toolCount: 0 },
+        ],
+        skills: ['ui', 'run'],
+        plugins: [{ name: 'ponytail', version: '4.7.0' }, { name: 'bare' }],
+        slashCommands: ['compact', 'ui'],
+      },
+    },
+  ]);
+  const changed = { type: 'system', subtype: 'commands_changed', commands: [{ name: 'review', description: '', argumentHint: '' }] } as unknown as SDKMessage;
+  assert.deepEqual(map(changed), [{ threadId: 't1', type: 'info', info: { slashCommands: ['review'] } }]);
 });
 
 test('usage after a second result is the difference from the first, since results carry running totals', () => {

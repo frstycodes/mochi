@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { Provider, Size, Thread } from '../../model.ts';
+import type { AgentInfo, Provider, Size, Thread } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
@@ -24,6 +24,8 @@ export type AgentEvent =
   /** Main made the thread's worktree and runs the agent there. */
   | { threadId: string; type: 'worktree'; path: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
+  /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
+  | { threadId: string; type: 'info'; info: AgentInfo }
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
   | { threadId: string; type: 'reasoning'; text: string }
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number }
