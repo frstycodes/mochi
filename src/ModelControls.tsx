@@ -74,7 +74,7 @@ export function ModelPicker({ provider, onModelChange }: { provider: Provider; o
                   <span className="flex items-center gap-1.5">
                     <ProviderMark provider={h} size={12} />
                     {HARNESSES[h]}
-                    <span className="ml-auto font-normal text-subtle-foreground">{space.accounts[h]}</span>
+                    <span className="ml-auto font-normal text-subtle-foreground">{space.plans[h]}</span>
                   </span>
                 }
               >

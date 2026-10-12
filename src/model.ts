@@ -1,3 +1,4 @@
+import type { AccountId } from './host/types/settings.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
@@ -148,7 +149,11 @@ export interface Space {
   name: string;
   icon: SpaceIconName;
   profile: string;
-  accounts: { claude: string; codex: string; github: string };
+  /** Which Claude Code / Codex account this profile runs on; unset = that provider's default account. Changed in Settings, stored by the desktop host. */
+  accounts: { claude?: AccountId; codex?: AccountId };
+  /** GAP: demo plan names until usage reads the linked account's detected plan. */
+  plans: Record<Provider, string>;
+  github: string;
 }
 
 // Orbit's outer ring keeps slots 0, 4 and 6 for Queue, Board and New thread; pinned threads take the rest, in order.
@@ -157,9 +162,9 @@ export const PIN_SLOTS = [1, 2, 3, 5, 7];
 export const NOW0 = 14 * 60 + 20;
 
 export const SPACES = [
-  { id: 'latitude', name: 'Latitude', icon: 'work', profile: 'work', accounts: { claude: 'Team', codex: 'Business', github: 'latitude-dev' } },
-  { id: 'personal', name: 'Personal', icon: 'home', profile: 'personal', accounts: { claude: 'Max', codex: 'Plus', github: 'frsty' } },
-  { id: 'liane', name: 'Liane', icon: 'layers', profile: 'liane', accounts: { claude: 'Max', codex: 'Plus', github: 'frsty' } },
+  { id: 'latitude', name: 'Latitude', icon: 'work', profile: 'work', accounts: {}, plans: { claude: 'Team', codex: 'Business' }, github: 'latitude-dev' },
+  { id: 'personal', name: 'Personal', icon: 'home', profile: 'personal', accounts: {}, plans: { claude: 'Max', codex: 'Plus' }, github: 'frsty' },
+  { id: 'liane', name: 'Liane', icon: 'layers', profile: 'liane', accounts: {}, plans: { claude: 'Max', codex: 'Plus' }, github: 'frsty' },
 ] satisfies Space[];
 
 function step(id: string, title: string, size: Size, footprint: string[], rest: Partial<Step> = {}): Step {
