@@ -20,6 +20,8 @@ export interface Prefs {
   agent: 'claude' | 'codex';
   permissions: 'Ask first' | 'Auto edit' | 'Full access';
   runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
+  /** Off sends every message straight through: no local score, no classifier call. */
+  driftGuard: boolean;
   driftThreshold: number;
   branchFrom: 'current' | 'base';
   stepSize: 1 | 2 | 3;
@@ -47,6 +49,7 @@ export const DEFAULT_PREFS: Prefs = {
   agent: 'claude',
   permissions: 'Auto edit',
   runsOn: 'This Mac',
+  driftGuard: true,
   driftThreshold: 0.15,
   branchFrom: 'current',
   stepSize: 2,

@@ -1,12 +1,16 @@
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { setPrefs, usePrefs } from '../prefs';
 
 export function GoalsSection() {
-  const { driftThreshold, branchFrom, stepSize } = usePrefs();
+  const { driftGuard, driftThreshold, branchFrom, stepSize } = usePrefs();
   const percent = Math.round(driftThreshold * 100);
   return (
     <div className="flex flex-col gap-8">
+      <SettingsGroup footer="Checks each message against the thread's goal and asks before an off-goal one goes out. Off sends every message straight through. A thread can still turn it off for itself from its goal editor.">
+        <SettingsRow id="driftGuard" label="Drift guard" control={<Switch id={settingControlId('driftGuard')} checked={driftGuard} onCheckedChange={(on) => setPrefs({ driftGuard: on })} />} />
+      </SettingsGroup>
       <SettingsGroup footer="A prompt that shares less than this with the goal and its open steps counts as off-goal. Higher catches more. A thread's own setting, from its goal editor, wins.">
         <SettingsRow
           id="driftThreshold"
@@ -19,6 +23,7 @@ export function GoalsSection() {
                 min={5}
                 max={40}
                 step={1}
+                disabled={!driftGuard}
                 value={[percent]}
                 onValueChange={([v]) => setPrefs({ driftThreshold: v / 100 })}
                 className="flex-1"
