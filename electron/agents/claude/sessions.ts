@@ -5,6 +5,7 @@ import { app, BrowserWindow } from 'electron';
 import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
+import { warmClaude } from './oneshot.ts';
 import { approvalEvent, createMapper, permissionResult } from './map.ts';
 
 /**
@@ -46,6 +47,7 @@ export async function startClaude(threadId: string, options: AgentStartOptions) 
   stopClaude(threadId);
   const session: Session = { threadId, options, account, inbox: [options.prompt], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
   sessions.set(threadId, session);
+  void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
 }
 
@@ -82,8 +84,9 @@ export function stopClaude(threadId: string) {
  * Rewinds Claude's file checkpoints to just before the latest sent message with this text, so its own view of the files
  * matches the git checkpoint the renderer restores next. Only a live session can rewind; git refs stay the source of truth.
  */
-// GAP: matched by text because activity entries carry no message id yet; once feat/live-threads stores the uuid on
-// the entry, pass it instead. Two identical messages rewind to the later one.
+// GAP: matched by text because activity entries carry no message id yet; pass the uuid once the entry stores it. Two
+// identical messages rewind to the later one.
+// GAP: not run against a real thread yet; whether Claude Code accepts our client uuids here is unverified.
 export async function rewindClaude(threadId: string, text: string) {
   const session = sessions.get(threadId);
   const uuid = session?.sent.findLast((m) => m.text === text)?.uuid;

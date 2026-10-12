@@ -80,6 +80,8 @@ export interface AgentHost {
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
   rewindFiles(threadId: string, text: string): Promise<void>;
+  /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
+  warm(spaceId: string): Promise<void>;
 }
 
 export const agentMethods = {
@@ -93,4 +95,5 @@ export const agentMethods = {
   onAskEvent: 'event',
   classify: 'invoke',
   rewindFiles: 'invoke',
+  warm: 'invoke',
 } satisfies Manifest<AgentHost>;

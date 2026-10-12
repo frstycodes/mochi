@@ -38,4 +38,5 @@ export const agent: AgentHost = {
     return localClassifier(prompt, thread);
   },
   async rewindFiles() {},
+  async warm() {},
 };

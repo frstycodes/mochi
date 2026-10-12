@@ -2,7 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentStartOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Thread } from '../../src/model.ts';
-import { askClaude, classifyClaude } from '../agents/claude/oneshot.ts';
+import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { notImplemented, record, string, type Handlers } from './handlers.ts';
@@ -64,6 +64,9 @@ export const agent = {
     if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.stop(threadId as string);
     return runtime();
+  },
+  async warm(_sender, spaceId) {
+    return warmClaude(string(spaceId, 'spaceId', 256));
   },
   async rewindFiles(_sender, threadId, text) {
     string(threadId, 'threadId', 256);
