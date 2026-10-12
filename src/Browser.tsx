@@ -35,7 +35,7 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
       <BrowserToolbar thread={thread} pageId={pageId} page={page} onPopOut={() => dispatch({ type: 'pane-pop', threadId: thread.id, tabId: tab.id, isPopped: true })} />
       {page.device !== RESPONSIVE && <DeviceBar pageId={pageId} page={page} />}
       {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} />}
-      <div className="mx-2 mb-2 min-h-0 flex-1">
+      <div className="min-h-0 flex-1">
         <PageSurface thread={thread} pageId={pageId} page={page} isDriving={isDriving && !page.hasTakenOver} />
       </div>
     </div>
@@ -192,8 +192,8 @@ function PoppedPage({ thread, tab, isDriving }: { thread: Thread; tab: PaneTab; 
   const page = usePage(pageId, initialUrl(tab));
   // The native view swallows the pointer, so on desktop the hover controls get a strip of their own above it.
   return (
-    <div className={cn('h-full', host.isDesktop && 'bg-sidebar pt-10')}>
-      <PageSurface thread={thread} pageId={pageId} page={page} isDriving={isDriving && !page.hasTakenOver} className="rounded-none ring-0" />
+    <div className={cn('h-full rounded-[inherit]', host.isDesktop && 'bg-sidebar pt-10')}>
+      <PageSurface thread={thread} pageId={pageId} page={page} isDriving={isDriving && !page.hasTakenOver} className="rounded-[inherit]" />
     </div>
   );
 }

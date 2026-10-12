@@ -77,7 +77,7 @@ function oneOf<T extends string>(value: unknown, options: T[], name: string): T 
 
 function rect(value: unknown): BrowserBounds {
   const r = record(value, 'bounds');
-  return { x: number(r.x, 'x', -1e5, 1e5), y: number(r.y, 'y', -1e5, 1e5), width: number(r.width, 'width', 0, 1e5), height: number(r.height, 'height', 0, 1e5) };
+  return { x: number(r.x, 'x', -1e5, 1e5), y: number(r.y, 'y', -1e5, 1e5), width: number(r.width, 'width', 0, 1e5), height: number(r.height, 'height', 0, 1e5), radius: number(r.radius, 'radius', 0, 100) };
 }
 
 function emulationOf(value: unknown): BrowserEmulation {

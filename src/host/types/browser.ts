@@ -5,6 +5,8 @@ export interface BrowserBounds {
   y: number;
   width: number;
   height: number;
+  /** Corner radius in px for the native view, which can't follow CSS clipping. */
+  radius: number;
 }
 
 export interface BrowserEmulation {

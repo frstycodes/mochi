@@ -25,7 +25,7 @@ export function PageSurface({ thread, pageId, page, isDriving, className }: { th
   useEffect(() => void ensureView(pageId, thread.spaceId), [pageId, thread.spaceId]);
 
   return (
-    <div ref={frameRef} className={cn('relative h-full overflow-hidden rounded-xl bg-background ring-1 ring-border', isDriving && 'ring-2 ring-foreground/25', !!device && 'bg-muted/40', className)}>
+    <div ref={frameRef} className={cn('relative h-full overflow-hidden bg-background', isDriving && 'ring-2 ring-foreground/25 ring-inset', !!device && 'bg-muted/40', className)}>
       {page.error && <PageError error={page.error} onRetry={() => page.hostId && host.browser.command(page.hostId, 'reload')} />}
       {!host.isDesktop && size.w > 0 && (
         <div
@@ -108,7 +108,7 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
       const r = el.getBoundingClientRect();
       const isHidden = !!page.error || r.width < 1 || r.height < 1 || isCovered(el);
       const fit = device ? fitDevice({ width: r.width, height: r.height }, device, page.isRotated) : null;
-      const bounds = isHidden ? null : fit ? { x: r.x + fit.x, y: r.y + fit.y, width: fit.width, height: fit.height } : { x: r.x, y: r.y, width: r.width, height: r.height };
+      const bounds = isHidden ? null : fit ? { x: r.x + fit.x, y: r.y + fit.y, width: fit.width, height: fit.height, radius: DEVICE_RADIUS } : { x: r.x, y: r.y, width: r.width, height: r.height, radius: roundRadius(el) };
       const zoom = page.zoom;
       const next = JSON.stringify([bounds, zoom]);
       if (next === last) return;
@@ -146,4 +146,14 @@ export function useSize(ref: RefObject<HTMLElement | null>) {
     return () => ro.disconnect();
   }, [ref]);
   return size;
+}
+
+// Round fallback of the device frame's `rounded-lg`.
+const DEVICE_RADIUS = 12;
+
+/** The frame's CSS radius as a round corner: native views can't draw squircles, and a squircle at the scaled radius looks like a round one at radius / --corner-scale. */
+function roundRadius(el: HTMLElement) {
+  const radius = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+  const scale = CSS.supports('corner-shape', 'squircle') ? parseFloat(getComputedStyle(el).getPropertyValue('--corner-scale')) || 1 : 1;
+  return radius / scale;
 }

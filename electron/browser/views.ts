@@ -13,8 +13,6 @@ interface Entry {
 }
 
 const DEVTOOLS_SHARE = 0.45;
-// Round fallback of the pane frame's `rounded-xl`; native views can't follow the squircle.
-const RADIUS = 12;
 // net::ERR_ABORTED: a navigation replaced by another one, not a failure.
 const ERR_ABORTED = -3;
 // Isolated world for the picker so the page can't see or tamper with it.
@@ -47,7 +45,6 @@ export function createView(owner: WebContents, url: string, spaceId: string) {
   const entry: Entry = { view, win, owner, bounds: null, zoom: 1, devtools: null, error: null };
   views.set(id, entry);
   view.setVisible(false);
-  view.setBorderRadius(RADIUS);
   win.contentView.addChildView(view);
   wire(id, entry);
   win.once('closed', () => views.delete(id));
@@ -204,6 +201,7 @@ function layout({ view, devtools, bounds }: Entry) {
   view.setVisible(!!bounds);
   devtools?.setVisible(!!bounds);
   if (!bounds) return;
+  view.setBorderRadius(Math.round(bounds.radius));
   const r = round(bounds);
   if (!devtools) return view.setBounds(r);
   const tools = Math.round(r.height * DEVTOOLS_SHARE);
