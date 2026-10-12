@@ -32,6 +32,7 @@ import { SidePane } from '../SidePane';
 import { AppSidebar } from '../Sidebar';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
+import { SplitContext } from '../layout/SplitContext';
 import { ReviewModeProvider } from '../review/useReviewMode';
 import { HarnessProvider, useHarness } from '../store';
 import { ProgressRing, ProviderMark, StepStatusIcon, ThreadStatusIcon, lineColor, stepLabel } from '../ui';
@@ -558,7 +559,9 @@ function Conversation() {
   return (
     <Section id="conversation" title="Conversation" intro="AI Elements on live demo data: messages, reasoning, the tool-call chain, inline decisions and the prompt input. Reasoning and tool chains collapse like Codex's work log.">
       <div className="flex h-[620px] flex-col overflow-hidden rounded-xl border">
-        <ChatView thread={adm} />
+        <SplitContext.Provider value={{ leafId: 'design', isFocused: false, isMulti: false, isZoomed: false, isFirst: false, isWide: true }}>
+          <ChatView thread={adm} />
+        </SplitContext.Provider>
       </div>
       <Grid>
         <Block title="Questionnaire" use="How agents ask you things: one choice, number keys, then send.">

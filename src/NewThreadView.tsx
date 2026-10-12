@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon-react';
+import { Folder, BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { getPrefs } from './settings/prefs';
@@ -10,17 +10,17 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
-import { ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
+import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, RunOnMenu, handOffComposer, newComposerLayoutId } from './Composer';
+import { useSplit } from './layout/SplitContext';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
-import { showsDemoData } from './demoData';
 import { host } from './host';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
 import type { Provider } from './model';
 
 const MATCH_THRESHOLD = 0.5;
-const EXAMPLES = ['Cache admin usage queries with a Redis client', 'Retry failed Stripe webhooks', 'Rate limit the search endpoint'];
+const MAX_SHORTCUTS = 3;
 
 interface Match {
   thread: Thread;
@@ -30,7 +30,7 @@ interface Match {
 
 export function NewThreadView() {
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:h-full">
       <PromptInputProvider>
         <NewThread />
       </PromptInputProvider>
@@ -40,6 +40,8 @@ export function NewThreadView() {
 
 function NewThread() {
   const { dispatch } = useHarness();
+  const { leafId } = useSplit();
+  const [layoutId] = useState(() => newComposerLayoutId(leafId));
   const { textInput } = usePromptInputController();
   const [provider, setProvider] = useState<Provider>(() => getPrefs().agent);
   const defaults = useDefaultModels();
@@ -61,13 +63,19 @@ function NewThread() {
     const trimmed = text.trim();
     if (!trimmed) return;
     const title = files.length ? `${trimmed} (${files.length} attached)` : trimmed;
+    handOffComposer(leafId, layoutId);
     dispatch({ type: 'create', title, provider, project, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
   };
 
   return (
-    <div className="mx-auto flex max-w-[720px] flex-col gap-5 px-4 pt-8 pb-16 md:px-6 md:pt-16">
-      <h1 className="type-heading">New thread</h1>
-      <div>
+    // Three rows, the composer in the middle: the greeting sits on top of it and duplicates open below it without moving it.
+    <div className="mx-auto grid min-h-full max-w-[720px] grid-rows-[1fr_auto_1fr] px-4 md:px-6">
+      <header className="flex flex-col items-center justify-end pt-10 pb-6 text-center">
+        <h1 className="text-balance type-display">{greeting(new Date())}</h1>
+      </header>
+
+      {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. */}
+      <motion.div layoutId={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
         <ComposerCard>
           <ComposerInput
             autoFocus
@@ -77,7 +85,6 @@ function NewThread() {
             onSend={start}
             submitLabel={linked ? 'Start thread, linked' : 'Start thread'}
             placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
-            className="min-h-24"
           />
         </ComposerCard>
         <ComposerMeta>
@@ -85,42 +92,61 @@ function NewThread() {
           {!!project && <RunOnMenu />}
           {!!project && <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
+      </motion.div>
+
+      <div className="flex flex-col gap-5 pt-4 pb-16">
+        <AnimatePresence initial={false}>
+          {matches.length > 0 && (
+            <motion.section
+              aria-label="Possible duplicates"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
+              className="flex flex-col gap-2"
+            >
+              <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <TriangleAlert className="size-4 text-warning" />
+                Some of this is already planned
+              </p>
+              {matches.map((m) => (
+                <MatchRow key={m.step.id} match={m} isLinked={linked?.step.id === m.step.id} onToggle={() => setDependOn(linked?.step.id === m.step.id ? null : m)} />
+              ))}
+              <p className="text-xs text-subtle-foreground">Link a step and this thread waits for it instead of building it again. You can still start without linking.</p>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {matches.length === 0 && recentProjects.length > 1 && <ProjectShortcuts projects={recentProjects.slice(0, MAX_SHORTCUTS)} value={project} onChange={setProject} />}
       </div>
+    </div>
+  );
+}
 
-      <AnimatePresence initial={false}>
-        {matches.length > 0 && (
-          <motion.section
-            aria-label="Possible duplicates"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
-            className="flex flex-col gap-2"
-          >
-            <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <TriangleAlert className="size-4 text-warning" />
-              Some of this is already planned
-            </p>
-            {matches.map((m) => (
-              <MatchRow key={m.step.id} match={m} isLinked={linked?.step.id === m.step.id} onToggle={() => setDependOn(linked?.step.id === m.step.id ? null : m)} />
-            ))}
-            <p className="text-xs text-subtle-foreground">Link a step and this thread waits for it instead of building it again. You can still start without linking.</p>
-          </motion.section>
-        )}
-      </AnimatePresence>
+function greeting(now: Date) {
+  const hour = now.getHours();
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
-      {!draft && showsDemoData() && (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-subtle-foreground">Try one of these to see duplicate detection</p>
-          <div className="flex flex-wrap gap-2">
-            {EXAMPLES.map((e) => (
-              <Button key={e} variant="outline" className="h-7 text-xs font-normal" onClick={() => textInput.setInput(e)}>
-                {e}
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
+/** The latest projects one click away; the picker in the meta row holds the rest. */
+function ProjectShortcuts({ projects, value, onChange }: { projects: string[]; value: string | null; onChange: (project: string) => void }) {
+  return (
+    <div role="group" aria-label="Recent projects" className="flex flex-wrap justify-center gap-2">
+      {projects.map((p) => (
+        <Button
+          key={p}
+          variant="outline"
+          size="sm"
+          aria-pressed={p === value}
+          onClick={() => onChange(p)}
+          className="rounded-full font-normal text-muted-foreground aria-pressed:border-foreground/40 aria-pressed:bg-muted aria-pressed:text-foreground dark:aria-pressed:bg-input"
+        >
+          <Folder />
+          {projectName(p)}
+        </Button>
+      ))}
     </div>
   );
 }
