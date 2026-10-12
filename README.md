@@ -51,7 +51,7 @@ src/host/     typed bridge to the main process, with web mocks
 src/store/    state slices: threads, queue, panes, layout, ui
 src/pane/     side pane tabs
 src/runtime/  agent adapters (demo today; Claude Agent SDK and Codex app-server next)
-src/goals/    goal model, progress, pace
+src/goals/    goal editing, templates, drift guard
 ```
 
 ## Docs
