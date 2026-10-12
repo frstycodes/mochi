@@ -1,15 +1,20 @@
-import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentHost } from '../../src/host/types/agent.ts';
+import { app, BrowserWindow } from 'electron';
+import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentStartOptions } from '../../src/host/types/agent.ts';
 import { localClassifier } from '../../src/drift.ts';
 import type { Thread } from '../../src/model.ts';
 import { chunks, mockAnswer } from '../../src/sidechat/mockAnswer.ts';
+import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { notImplemented, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
 const PROVIDERS = ['claude', 'codex'];
 const DECISIONS = ['allow', 'deny', 'answer'];
 
-// GAP: the Claude and Codex adapters land in wave R1 (RUNTIME.md); until then every call validates and refuses.
+// GAP: the Claude adapter lands in wave R1 (RUNTIME.md); until then its calls validate and refuse.
 const runtime = notImplemented('agent runtime');
+const broadcast = (event: AgentEvent) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('agent:onEvent', event));
+const codex = new CodexAdapter(broadcast);
+app.on('will-quit', () => codex.dispose());
 
 export const agent = {
   async start(_sender, threadId, options) {
@@ -19,15 +24,18 @@ export const agent = {
     string(o.cwd, 'options.cwd');
     string(o.prompt, 'options.prompt', 100_000);
     for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
+    if (o.provider === 'codex') return codex.start(threadId as string, o as unknown as AgentStartOptions);
     return runtime();
   },
   async send(_sender, threadId, text) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
+    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string);
     return runtime();
   },
   async interrupt(_sender, threadId) {
     string(threadId, 'threadId', 256);
+    if (codex.owns(threadId as string)) return codex.interrupt(threadId as string);
     return runtime();
   },
   async resolve(_sender, requestId, decision) {
@@ -35,10 +43,13 @@ export const agent = {
     const d = record(decision, 'decision');
     if (!DECISIONS.includes(d.kind as string)) throw new TypeError('decision.kind must be allow, deny or answer');
     if (d.kind === 'answer' && (!Array.isArray(d.answers) || d.answers.some((a) => typeof a !== 'string'))) throw new TypeError('decision.answers must be strings');
+    for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
+    if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d as unknown as AgentDecision);
     return runtime();
   },
   async stop(_sender, threadId) {
     string(threadId, 'threadId', 256);
+    if (codex.owns(threadId as string)) return codex.stop(threadId as string);
     return runtime();
   },
   async ask(sender, context, messages) {
