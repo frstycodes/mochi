@@ -19,5 +19,8 @@ export const SPLIT_MENU = [
   ['layout-close'],
 ] as const;
 
+/** The open thread's own actions, without Open: its header ⋯ menu. */
+export const THREAD_ACTIONS_MENU = THREAD_MENU.slice(1);
+
 /** A thread split's header: the thread first (it is already open), then the split. */
-export const THREAD_HEADER_MENU = [...THREAD_MENU.slice(1), ...SPLIT_MENU];
+export const THREAD_HEADER_MENU = [...THREAD_ACTIONS_MENU, ...SPLIT_MENU];

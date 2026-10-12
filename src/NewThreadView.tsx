@@ -90,7 +90,7 @@ function NewThread() {
 
   return (
     // Three rows, the composer in the middle: the greeting sits on top of it and duplicates open below it without moving it.
-    <div className="mx-auto grid min-h-full max-w-[720px] grid-rows-[1fr_auto_1fr] px-4 md:px-6">
+    <div className="mx-auto grid min-h-full max-w-[720px] grid-cols-1 grid-rows-[1fr_auto_1fr] px-4 md:px-6">
       <header className="flex flex-col items-center justify-end pt-10 pb-6 text-center">
         <h1 className="text-balance type-display">{greeting(new Date())}</h1>
       </header>

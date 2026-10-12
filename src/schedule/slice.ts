@@ -42,7 +42,8 @@ export function runOutcome(run: ScheduleRun) {
 }
 
 function runDetail(run: ScheduleRun) {
-  const took = run.endedAt ? Math.max(1, Math.round((run.endedAt - run.startedAt) / 60_000)) : null;
-  const parts = [run.reason, took && `ran ${took} min`, run.error, run.resetsAt && `resumes after ${new Date(run.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`];
+  const ms = run.endedAt ? run.endedAt - run.startedAt : null;
+  const took = ms === null ? null : ms < 60_000 ? 'ran under a minute' : `ran ${Math.round(ms / 60_000)} min`;
+  const parts = [run.reason, took, run.error, run.resetsAt && `resumes after ${new Date(run.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`];
   return parts.filter(Boolean).join(' · ');
 }
