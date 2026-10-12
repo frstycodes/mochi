@@ -128,7 +128,7 @@ export const git = {
     return Number((await run('du', top, ['-sk', top])).split('\t')[0]) * 1024;
   },
 
-  // Checkpoints and rewind only run in a Harness worktree: resetting a branch is never done to the user's own checkout.
+  // Checkpoints and rewind only run in a Mochi worktree: resetting a branch is never done to the user's own checkout.
   async checkpoint(_sender, cwd, threadId, n) {
     const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
     const ref = checkpointRef(string(threadId, 'threadId', 64), integer(n, 'n', 0, 1_000_000));

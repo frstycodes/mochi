@@ -1,5 +1,5 @@
 ---
-name: Harness
+name: Mochi
 version: 0.1 (draft for sign-off)
 base: shadcn/ui (radix-nova), AI Elements for agent UI, reicon-react icons, Tailwind v4
 references: Linear (density, restraint, crisp hairlines), Raycast (floating windows, glass only over content, keyboard first), Codex (summary panel, collapsed work log)
@@ -39,7 +39,7 @@ elevation: { flat: canvas sidebar side pane, hairline: cards (1px ring), popover
 motion: { press: 100-160ms, popover: 150-200ms ease-out, window snap: spring stiffness 420 damping 36, hover-intent: open 160ms close 240ms }
 ---
 
-# Harness design system
+# Mochi design system
 
 ## Overview
 
@@ -105,7 +105,7 @@ Icons are reicon-react, outline weight, 16px in controls and 14px in dense rows.
 Everything is composed from the shadcn primitives in `src/components/ui`. App components add behaviour, not styling.
 
 - **Thread row**: a three-line card like T3 Code. Top: a letter avatar for the project, project name, branch (mono), and time since the last activity, which a Settle button (Reactivate for settled threads) replaces on hover. Middle: the title. Bottom: a 12px progress ring in the thread's line color, the percentage, the step in flight (or the question it waits on, the PR ready for review), the latest PR number (green while open), and an amber dot when it needs you. Inactive rows are muted; the active row is the full-strength one.
-- **Chat**: AI Elements `Conversation` and `Message`. An agent's name and time show once per run of its messages. Harness events are a muted line with a flag icon, no separator rules.
+- **Chat**: AI Elements `Conversation` and `Message`. An agent's name and time show once per run of its messages. Mochi events are a muted line with a flag icon, no separator rules.
 - **Work log**: tool calls and reasoning between two messages collapse into one row, "Worked for 14m", followed by edited-file icons, `+x −y` and a command count (failed runs in red). While live, the row shows the agent loader and shimmers what the agent is doing ("Editing usage.tsx"), one quick 1.1s sweep then a 1.2s rest; expanded output and diffs use an inside `border`, never an outside ring, because the expand container clips. The shimmer band is the foreground color, so it reads bright in dark mode. Expanded rows: file-type icon (`@react-symbols/icons`), verb, path with the directory dimmed and the file name bright, `+x −y` and GitHub's five-block change bar. Edits expand to a syntax-highlighted diff (`@pierre/diffs`, Pierre themes); commands expand to their output with pass and fail lines colored and an exit badge.
 - **Composer**: the star of the thread, and the one glass surface in the main view: it floats over the bottom of the transcript (messages scroll under it, the transcript pads itself by the composer's measured height) with a translucent fill, 20px backdrop blur, a hairline edge and float shadow; solid under reduced transparency. The tray, attachments and input share that one tone, with no inner fills or footer strips. A soft fade behind the meta row keeps it readable over scrolling text. A 24px-radius card holding, top to bottom: the question tray, attachment previews (image thumbnails, file chips), the textarea, and a footer with attach, model, reasoning effort, dictate and a round send button. Under it: where it runs (This Mac, Studio, Cloud sandbox), permissions, branch, and the Cmd-to-queue hint. 16px text on phones.
 - **Model and effort pickers**: the model picker is a searchable popover grouped by harness (Claude Code, Codex) with each account plan, a star per model, a one-line note and context size. Hover either chip and scroll in any direction: a 3D carousel of free-floating tiles (no container) rises from it. The strip tracks the scroll 1:1 and moves with your fingers, the centre tile is lifted and enlarged, side tiles turn toward it and fall back in depth, each tile crossing the centre is a detent that selects it, and letting go snaps to the nearest one with a critically damped spring. Starred models only for the model chip.

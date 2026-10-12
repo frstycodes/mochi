@@ -39,7 +39,7 @@ function Waiting() {
       <EmptyHeader>
         <Spinner />
         <EmptyTitle>Connecting to the main window</EmptyTitle>
-        <EmptyDescription>This window shows a thread from the main Harness window. Keep that one open.</EmptyDescription>
+        <EmptyDescription>This window shows a thread from the main Mochi window. Keep that one open.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

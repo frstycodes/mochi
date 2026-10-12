@@ -35,6 +35,6 @@ export function inside(top: string, file: string) {
 
 export function insideWorktreeRoot(path: string) {
   const abs = resolve(path);
-  if (!abs.startsWith(WORKTREE_ROOT + sep)) throw new Error(`${path} is not a Harness worktree`);
+  if (!abs.startsWith(WORKTREE_ROOT + sep)) throw new Error(`${path} is not a Mochi worktree`);
   return abs;
 }

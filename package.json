@@ -90,8 +90,8 @@
     "vite-plugin-singlefile": "^2.3.3"
   },
   "build": {
-    "appId": "dev.harness.app",
-    "productName": "Harness",
+    "appId": "dev.mochi.app",
+    "productName": "Mochi",
     "files": [
       "dist/**",
       "dist-electron/**",
@@ -102,6 +102,7 @@
     },
     "mac": {
       "target": "dir",
+      "icon": "build/icon.icns",
       "identity": null
     }
   },
