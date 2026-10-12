@@ -2,7 +2,7 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { app } from 'electron';
-import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentReviewEvent, AgentReviewRequest, AgentRunOptions } from '../../src/host/types/agent.ts';
+import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentReviewEvent, AgentReviewRequest, AgentRunOptions, StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
@@ -17,6 +17,8 @@ import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall } from '../mcp/server.ts';
 import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
 import { addWorktree } from './git.ts';
+import { switchBranch } from '../git/branches.ts';
+import { runGit, topLevel } from '../git/run.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -190,9 +192,9 @@ export async function startAgent(threadId: unknown, options: unknown) {
   if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
   if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
   images(o.images);
-  const { worktree, ...rest } = o;
+  const { workspace, worktree, ...rest } = o;
   const folder = await agentFolder(threadId as string, o.cwd);
-  const cwd = worktree === undefined ? folder : await threadWorktree(threadId as string, folder, string(worktree, 'options.worktree', 255));
+  const cwd = await workspaceFolder(threadId as string, folder, startWorkspace(workspace, worktree));
   markBusy(threadId as string);
   try {
     const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined)) } as unknown as AgentRunOptions;
@@ -254,14 +256,41 @@ async function agentFolder(threadId: string, cwd: unknown) {
   return dir;
 }
 
-/** Runs a project thread in its own worktree, so the panes and the agent see the same files; a folder that isn't a git repo runs the agent in place. */
-async function threadWorktree(threadId: string, root: string, branch: string) {
-  const path = await addWorktree(root, threadId, branch).catch((error: Error) => {
-    console.warn(`No worktree for ${threadId} in ${root}, running there: ${error.message}`);
-    return null;
-  });
-  if (path) broadcast({ threadId, type: 'worktree', path });
-  return path ?? root;
+/** Checks `options.workspace`; a trigger saved before workspaces carries `worktree: <branch>` instead. */
+export function startWorkspace(value: unknown, legacyWorktree?: unknown): StartWorkspace | undefined {
+  if (value === undefined) return legacyWorktree === undefined ? undefined : { mode: 'worktree', branch: string(legacyWorktree, 'options.worktree', 255) };
+  const w = record(value, 'options.workspace');
+  if (w.mode !== 'worktree' && w.mode !== 'folder') throw new TypeError('options.workspace.mode must be worktree or folder');
+  if (w.isExisting !== undefined && typeof w.isExisting !== 'boolean') throw new TypeError('options.workspace.isExisting must be a boolean');
+  return { mode: w.mode, branch: string(w.branch, 'options.workspace.branch', 255), base: w.base === undefined ? undefined : string(w.base, 'options.workspace.base', 255), isExisting: w.isExisting as boolean | undefined };
+}
+
+/**
+ * The folder the agent runs in. A worktree thread gets its own worktree, so the panes and the agent see the same files (a folder
+ * that isn't a git repo runs the agent in place, but a refused existing branch fails the start). A project folder thread runs in
+ * the project's checkout, switched to its branch first when it chose one; a dirty checkout refuses the switch.
+ */
+async function workspaceFolder(threadId: string, root: string, workspace: StartWorkspace | undefined) {
+  if (!workspace) return root;
+  if (workspace.mode === 'folder') {
+    const top = await topLevel(root).catch(() => null);
+    if (!top) return root;
+    if (workspace.isExisting) await switchBranch(top, workspace.branch);
+    const branch = (await runGit(top, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] })).trim();
+    if (branch) broadcast({ threadId, type: 'branch', branch });
+    return root;
+  }
+  const isRepo = await topLevel(root).then(
+    () => true,
+    () => false,
+  );
+  if (!isRepo) {
+    console.warn(`No worktree for ${threadId}: ${root} isn't a git repo, running there`);
+    return root;
+  }
+  const path = await addWorktree(root, threadId, workspace.branch, workspace);
+  broadcast({ threadId, type: 'worktree', path });
+  return path;
 }
 
 function imageOf(value: unknown) {

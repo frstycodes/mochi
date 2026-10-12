@@ -29,7 +29,9 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): Cha
       return rows.push(turn);
     }
     if (entry.kind === 'event') {
-      if (turn && isMidWork) return turn.entries.push(entry);
+      if (turn && isMidWork && !entry.card) return turn.entries.push(entry);
+      // Mochi's widgets (a delete or settings approval) stay in view: the turn continues in a new accordion after one.
+      if (entry.card) turn = undefined;
       return rows.push({ kind: 'event', key, entry });
     }
     if (entry.who === 'you') turn = undefined;

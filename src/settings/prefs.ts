@@ -26,6 +26,8 @@ export interface Prefs {
   branchFrom: 'current' | 'base';
   stepSize: 1 | 2 | 3;
   branchPrefix: string;
+  /** Where a new project thread works: its own worktree, or the project's checkout. */
+  workspaceMode: 'worktree' | 'folder';
   diffStyle: 'unified' | 'split';
   terminalFontSize: number;
   terminalScrollback: number;
@@ -35,11 +37,13 @@ export interface Prefs {
   simulator: string;
   /** Desktop only: show the fixture threads and profiles alongside your own (`showsDemoData`). */
   demoData: boolean;
-  /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): consequential calls always ask first. */
+  /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): deletes and settings always ask first. */
   agentControl: AgentControl;
 }
 
-export type AgentControl = 'read' | 'reversible' | 'everything';
+export const AGENT_CONTROLS = ['read', 'changes', 'everything'] as const;
+
+export type AgentControl = (typeof AGENT_CONTROLS)[number];
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
@@ -58,6 +62,7 @@ export const DEFAULT_PREFS: Prefs = {
   branchFrom: 'current',
   stepSize: 2,
   branchPrefix: 'mochi/',
+  workspaceMode: 'worktree',
   diffStyle: 'unified',
   terminalFontSize: 12,
   terminalScrollback: 5000,
@@ -65,7 +70,7 @@ export const DEFAULT_PREFS: Prefs = {
   searchEngine: 'duckduckgo',
   simulator: '',
   demoData: false,
-  agentControl: 'reversible',
+  agentControl: 'everything',
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';
@@ -118,6 +123,8 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) saved = parsed as Record<string, unknown>;
   } catch {}
   if (saved.branchFrom === undefined && legacyBranchFrom === 'base') saved.branchFrom = 'base';
+  // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
+  if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];

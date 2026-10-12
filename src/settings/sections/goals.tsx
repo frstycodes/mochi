@@ -2,6 +2,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { setPrefs, usePrefs } from '../prefs';
+import { BRANCH_FROM } from '../settingOptions';
 
 export function GoalsSection() {
   const { driftGuard, driftThreshold, branchFrom, stepSize } = usePrefs();
@@ -49,10 +50,6 @@ export function GoalsSection() {
   );
 }
 
-export const BRANCH_FROM = [
-  { value: 'current', label: 'Current branch' },
-  { value: 'base', label: 'Base branch' },
-] as const;
 
 const STEP_SIZES = [
   { value: '1', label: 'S' },

@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Flag } from 'reicon-react';
+import { ChevronDown, ChevronUp } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, type Provider, type QueueItem, type Thread } from './model';
+import { authorName, isMochiCard, type Provider, type QueueItem, type Thread } from './model';
+import { CardEntry, EventLine } from './chat/MochiWidget';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
 import { ProviderMark } from './ui';
+import { WorkspaceControls, WorkspaceNotes, useThreadWorkspace } from './git/WorkspacePicker';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu, useComposerHandoff } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap } from './ThreadMinimap';
@@ -46,7 +48,8 @@ export function ChatView({ thread }: { thread: Thread }) {
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
   const liveWork = liveWorkIndex(rows);
   const action = currentAction(thread);
-  const decisions = state.queue.filter((q) => q.threadId === thread.id);
+  // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
+  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q));
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
@@ -109,18 +112,7 @@ function useComposerHeightVar() {
 function ChatRowView({ thread, row, isLive, action }: { thread: Thread; row: ChatRow; isLive: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
-  if (row.kind === 'event')
-    return (
-      <div className="flex gap-2 type-caption text-muted-foreground">
-        <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
-        <p className="min-w-0">
-          {row.entry.text}
-          {/* The separator travels with the time, so a wrap never leaves it dangling. */}
-          <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(row.entry.at)}</span>
-          {!!row.entry.detail && <span className="block text-subtle-foreground">{row.entry.detail}</span>}
-        </p>
-      </div>
-    );
+  if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
   const { entry } = row;
   const isYou = entry.who === 'you';
@@ -232,6 +224,7 @@ function Composer({
   const { state, dispatch } = useHarness();
   const [isQueue, setIsQueue] = useState(false);
   const controls = controlsOf(thread);
+  const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const mention = useMentionMenu(thread);
@@ -283,7 +276,7 @@ function Composer({
         <ComposerMeta>
           <RunOnMenu />
           <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
-          {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
+          {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
           <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
             {isQueue ? (
               'Queues after this turn'
@@ -294,6 +287,7 @@ function Composer({
             )}
           </span>
         </ComposerMeta>
+        {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
     </div>
   );

@@ -35,6 +35,16 @@ test('a turn folds every tool call, approval and harness event into one work row
   );
 });
 
+test("Mochi's approval widgets stay their own row mid-turn; the turn's later work starts a new accordion", () => {
+  const card: ActivityEntry = { ...e('event', 'harness', 'Delete thread'), card: { id: 'c1', isOpen: true } };
+  assert.deepEqual(shape([e('message', 'you', 'clean up'), e('tool', 'claude', 'Read a.ts'), card, e('tool', 'claude', 'Run pnpm test')]), [
+    'clean up',
+    'work(Read a.ts)',
+    'Delete thread',
+    'work(Run pnpm test)',
+  ]);
+});
+
 test('the live work row is the newest one, unless you spoke after it', () => {
   const rows = chatRows([e('message', 'you', 'go'), e('tool', 'claude', 'Run a'), e('message', 'claude', 'ok')]);
   assert.equal(liveWorkIndex(rows), 1);
