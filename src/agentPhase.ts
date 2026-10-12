@@ -3,7 +3,7 @@ import type { ActivityEntry, Thread } from './model.ts';
 import { HARNESSES } from './settings/harnesses.ts';
 import { parseTool, toolVerb, type ToolCall, type ToolVerb } from './summary.ts';
 
-const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse' } satisfies Record<ToolVerb, AgentPhase>;
+const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse' } satisfies Record<ToolVerb, AgentPhase>;
 
 export const PHASE_LABELS = { idle: 'Idle', start: 'Starting', think: 'Thinking', read: 'Reading', edit: 'Editing', run: 'Running', browse: 'Browsing', wait: 'Waiting on you' } satisfies Record<AgentPhase, string>;
 
@@ -47,7 +47,25 @@ export function workingLabel(thread: Thread): string | undefined {
   return PHASE_LABELS.think;
 }
 
+/** One line: a multi-line command keeps its first line and an ellipsis; the width is left to CSS truncation. */
 export function toolLabel(call: ToolCall) {
   const name = call.target.split('/').pop();
-  return { Read: `Reading ${name}`, Edit: `Editing ${name}`, Write: `Writing ${name}`, Run: `Running ${call.target}`, Browser: 'Using the browser' }[call.verb];
+  const [command, ...more] = call.target.split('\n');
+  return {
+    Read: `Reading ${name}`,
+    Edit: `Editing ${name}`,
+    Write: `Writing ${name}`,
+    Run: `Running ${command}${more.length ? '…' : ''}`,
+    Browser: 'Using the browser',
+    Search: `Searching ${call.target}`,
+    Fetch: `Reading ${hostname(call.target)}`,
+  }[call.verb];
+}
+
+export function hostname(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }

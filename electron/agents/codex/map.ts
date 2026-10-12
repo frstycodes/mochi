@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { AgentEvent, AgentModel, AgentPlanItem } from '../../../src/host/types/agent.ts';
-import type { AgentInfo, McpServer } from '../../../src/model.ts';
+import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
 import { MODEL_PRICES } from '../../../src/usage/model.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
@@ -200,10 +200,30 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
     }
     case 'mcpToolCall':
       return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `${item.server}: ${item.tool}` }] : [];
-    case 'webSearch':
-      return [{ threadId, type: 'tool', id, phase, text: typeof item.query === 'string' && item.query ? `Search the web: ${item.query}` : 'Search the web' }];
+    case 'webSearch': {
+      const { text, links } = webSearch(item);
+      return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && links.length > 0 && { links }) }];
+    }
   }
   return [];
+}
+
+/**
+ * A `webSearch` item (codex 0.155.1 `WebSearchItem`): `action` says whether it searched or opened a page, and the query
+ * often arrives only on completion. `results` is opaque JSON the protocol passes through from standalone search.
+ */
+export function webSearch(item: Record<string, unknown>): { text: string; links: WebLink[] } {
+  const action = obj(item.action);
+  const url = typeof action?.url === 'string' ? action.url : undefined;
+  if (url && (action?.type === 'openPage' || action?.type === 'findInPage')) return { text: `Fetch ${url}`, links: [{ url }] };
+  const queries = Array.isArray(action?.queries) ? action.queries.filter((q) => typeof q === 'string') : [];
+  const query = [item.query, action?.query, queries.join(', ')].find((q) => typeof q === 'string' && q) as string | undefined;
+  // The protocol types `results` as opaque JSON; a live run (0.155.1) sent `{ type: 'text_result', url, title, domain, snippet, ref_id }`.
+  const links = (Array.isArray(item.results) ? item.results : []).flatMap((r) => {
+    const hit = obj(r);
+    return typeof hit?.url === 'string' ? [{ url: hit.url, ...(typeof hit.title === 'string' && hit.title && { title: hit.title }) }] : [];
+  });
+  return { text: query ? `Search ${query}` : 'Search the web', links };
 }
 
 function mapUsage(usage: Record<string, unknown> | undefined, s: ThreadState): AgentEvent[] {
