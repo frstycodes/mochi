@@ -66,9 +66,22 @@ function accountName(value: unknown) {
   return name;
 }
 
+/** Empty (use the default), absolute, or under `~/`. */
+function absolutePath(value: unknown, name: string) {
+  const path = string(value, name).trim();
+  if (path && !isAbsolute(path) && path !== '~' && !path.startsWith('~/')) throw new TypeError('The path must be absolute or start with ~/');
+  return path;
+}
+
 function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
   const patch: AgentSettingsPatch = {};
   if (p.concurrency !== undefined) patch.concurrency = integer(p.concurrency, 'concurrency', CONCURRENCY_RANGE.min, CONCURRENCY_RANGE.max);
+  if (p.worktreeRoot !== undefined) patch.worktreeRoot = absolutePath(p.worktreeRoot, 'worktreeRoot');
+  if (p.shell !== undefined) patch.shell = absolutePath(p.shell, 'shell');
+  if (p.prDrafts !== undefined) {
+    if (typeof p.prDrafts !== 'boolean') throw new TypeError('prDrafts must be true or false');
+    patch.prDrafts = p.prDrafts;
+  }
   if (p.harnesses === undefined) return patch;
   patch.harnesses = {};
   for (const [id, value] of Object.entries(record(p.harnesses, 'harnesses'))) {

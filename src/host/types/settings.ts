@@ -24,16 +24,17 @@ export interface HarnessSettings {
   model: string;
 }
 
+/** Everything the main process reads. Empty strings mean "not set": the built-in worktrees folder, the user's `$SHELL`. */
 export interface AgentSettings {
   concurrency: number;
   harnesses: Record<Provider, HarnessSettings>;
+  worktreeRoot: string;
+  shell: string;
+  prDrafts: boolean;
 }
 
 /** What `set` takes: any top-level field, and per harness any of its fields. */
-export interface AgentSettingsPatch {
-  concurrency?: number;
-  harnesses?: Partial<Record<Provider, Partial<HarnessSettings>>>;
-}
+export type AgentSettingsPatch = Partial<Omit<AgentSettings, 'harnesses'>> & { harnesses?: Partial<Record<Provider, Partial<HarnessSettings>>> };
 
 /** The renderer only ever learns whether a key is stored and its last four characters. */
 export interface ApiKeyState {
@@ -96,13 +97,17 @@ export const settingsMethods = {
 export const DEFAULT_SETTINGS: AgentSettings = {
   concurrency: 6,
   harnesses: Object.fromEntries(HARNESS_IDS.map((id) => [id, { path: '', model: HARNESSES[id].defaultModel }])) as AgentSettings['harnesses'],
+  worktreeRoot: '',
+  shell: '',
+  prDrafts: false,
 };
 
 /** Deep enough for this shape: harness entries merge field by field, so a patch never drops a sibling field. */
 export function mergeSettings(base: AgentSettings, patch: AgentSettingsPatch): AgentSettings {
   const harnesses = { ...base.harnesses };
   for (const id of HARNESS_IDS) if (patch.harnesses?.[id]) harnesses[id] = { ...harnesses[id], ...patch.harnesses[id] };
-  return { concurrency: patch.concurrency ?? base.concurrency, harnesses };
+  const { harnesses: _, ...rest } = patch;
+  return { ...base, ...rest, harnesses };
 }
 
 export const CONCURRENCY_RANGE = { min: 1, max: 16 } as const;

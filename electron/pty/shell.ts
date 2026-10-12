@@ -1,4 +1,5 @@
 import { app } from 'electron';
+import { terminalShell } from '../agents/config.ts';
 import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -25,7 +26,7 @@ autoload -Uz add-zle-hook-widget && add-zle-hook-widget line-init __harness_line
 let zdotdir: string | undefined;
 
 export function shellLaunch(): { file: string; args: string[]; env: Record<string, string> } {
-  const file = process.env.SHELL || '/bin/zsh';
+  const file = terminalShell();
   if (path.basename(file) !== 'zsh') return { file, args: ['-l'], env: {} };
   zdotdir ??= writeZshRc();
   return { file, args: ['-l'], env: { ZDOTDIR: zdotdir, HARNESS_ZDOTDIR: zdotdir, HARNESS_USER_ZDOTDIR: process.env.ZDOTDIR ?? process.env.HOME ?? '' } };

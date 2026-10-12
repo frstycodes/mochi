@@ -7,19 +7,19 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import { EFFORTS, MODELS, settingsModel, type Effort, type ModelOption } from './runtime/controls';
+import { setPrefs, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
 import { useSpace } from './store';
 import { ProviderMark } from './ui';
 
 const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Provider, string>;
-const DEFAULT_FAVORITES = ['opus-5.5', 'sonnet-5.5', 'gpt-5.5-codex'];
 
 /** `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. */
 export function ModelPicker({ value, provider, isLocked, onChange }: { value: string; provider: Provider; isLocked?: boolean; onChange: (model: ModelOption) => void }) {
   const space = useSpace();
   const defaults = useDefaultModels();
-  const [favorites, setFavorites] = useState(DEFAULT_FAVORITES);
+  const favorites = usePrefs().starredModels;
   const [isOpen, setOpen] = useState(false);
   const harnesses = (Object.keys(HARNESSES) as Provider[]).filter((h) => !isLocked || h === provider);
   const fromSettings = harnesses.flatMap((h) => (defaults?.[h] && !MODELS.some((m) => m.providerModel === defaults[h]) ? [settingsModel(defaults[h], h)] : []));
@@ -28,7 +28,7 @@ export function ModelPicker({ value, provider, isLocked, onChange }: { value: st
   const models = listed.some((m) => m.id === model.id) ? listed : [...listed, model];
   const docked = models.filter((m) => favorites.includes(m.id) || m.id === model.id || fromSettings.includes(m));
   const select = (id: string) => onChange(models.find((m) => m.id === id)!);
-  const toggleFavorite = (id: string) => setFavorites((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
+  const toggleFavorite = (id: string) => setPrefs({ starredModels: toggleStar(favorites, id) });
 
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
@@ -91,6 +91,7 @@ export function ModelPicker({ value, provider, isLocked, onChange }: { value: st
   );
 }
 
+export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
 /** Each harness's default model from Settings ('' = the harness's own); null until read. */
 export function useDefaultModels() {
   const [models, setModels] = useState<Record<Provider, string> | null>(null);

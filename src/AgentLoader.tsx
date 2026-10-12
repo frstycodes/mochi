@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from 'react';
-import { useAnimationFrame, useReducedMotion } from 'motion/react';
+import { useAnimationFrame, useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { blendDots, DOTS, oneHot, PHASES, SHADES, shadePaths, stepWeights, type AgentPhase } from './agentShape';
 import type { ActivityEntry, Thread } from './model';
@@ -25,7 +25,7 @@ export function entryPhase(entry?: ActivityEntry): AgentPhase {
 
 /** One set of dots, shaded by depth, that rearranges into a different form per phase and keeps moving in that phase's rhythm. */
 export function AgentLoader({ phase, className }: { phase: AgentPhase; className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig();
   return (
     <svg viewBox="0 0 16 16" role="img" aria-label={PHASE_LABELS[phase]} className={cn('size-4 shrink-0', className)} fill="currentColor">
       {reduce ? <Shades paths={shadePaths(blendDots(oneHot(phase), 0))} /> : <MorphingShades phase={phase} />}

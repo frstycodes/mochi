@@ -1,4 +1,3 @@
-import type { AccountId } from './host/types/settings.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 export type Provider = 'claude' | 'codex';
@@ -156,17 +155,17 @@ export function seedPanes(): Pane[] {
   ];
 }
 
-export type SpaceIconName = 'work' | 'home' | 'layers';
+export const SPACE_ICON_NAMES = ['work', 'home', 'layers', 'code', 'book', 'rocket', 'coffee', 'star'] as const;
+export type SpaceIconName = (typeof SPACE_ICON_NAMES)[number];
 
+/** A profile. Its Claude Code and Codex accounts are linked by id in the desktop host (`AccountLinks`), not stored here. */
 export interface Space {
   id: string;
   name: string;
   icon: SpaceIconName;
-  profile: string;
-  /** Which Claude Code / Codex account this profile runs on; unset = that provider's default account. Changed in Settings, stored by the desktop host. */
-  accounts: { claude?: AccountId; codex?: AccountId };
-  /** GAP: demo plan names until usage reads the linked account's detected plan. */
+  /** GAP: demo plan names until usage reads the linked account's detected plan; empty for profiles made in Settings. */
   plans: Record<Provider, string>;
+  /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */
   github: string;
 }
 
@@ -175,11 +174,12 @@ export const PIN_SLOTS = [1, 2, 3, 5, 7];
 
 export const NOW0 = 14 * 60 + 20;
 
-export const SPACES = [
-  { id: 'latitude', name: 'Latitude', icon: 'work', profile: 'work', accounts: {}, plans: { claude: 'Team', codex: 'Business' }, github: 'latitude-dev' },
-  { id: 'personal', name: 'Personal', icon: 'home', profile: 'personal', accounts: {}, plans: { claude: 'Max', codex: 'Plus' }, github: 'frsty' },
-  { id: 'liane', name: 'Liane', icon: 'layers', profile: 'liane', accounts: {}, plans: { claude: 'Max', codex: 'Plus' }, github: 'frsty' },
-] satisfies Space[];
+/** The profiles a fresh install starts with; `src/profiles.ts` holds the live list. */
+export const DEFAULT_SPACES: Space[] = [
+  { id: 'latitude', name: 'Latitude', icon: 'work', plans: { claude: 'Team', codex: 'Business' }, github: '' },
+  { id: 'personal', name: 'Personal', icon: 'home', plans: { claude: 'Max', codex: 'Plus' }, github: '' },
+  { id: 'liane', name: 'Liane', icon: 'layers', plans: { claude: 'Max', codex: 'Plus' }, github: '' },
+];
 
 function step(id: string, title: string, size: Size, footprint: string[], rest: Partial<Step> = {}): Step {
   return { id, title, size, status: 'ready', progress: 0, footprint, addedAt: 0, addedBy: 'harness', revision: 1, ...rest };

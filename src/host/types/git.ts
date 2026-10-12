@@ -75,6 +75,16 @@ export interface SyncResult {
   conflicts: string[];
 }
 
+export interface GhAccount {
+  /** github.com, a GitHub Enterprise Cloud `*.ghe.com` host, or an Enterprise Server host. */
+  host: string;
+  login: string;
+  /** The account gh uses on its host when no login is named. */
+  isActive: boolean;
+  /** False when gh holds a login whose token stopped working; `gh auth login` fixes it. */
+  isValid: boolean;
+}
+
 export interface GitHost {
   status(cwd: string): Promise<GitStatus>;
   diff(cwd: string, scope: DiffScope): Promise<GitDiff>;
@@ -82,9 +92,13 @@ export interface GitHost {
   unstage(cwd: string, target: ChangeTarget): Promise<void>;
   revert(cwd: string, target: ChangeTarget): Promise<void>;
   commit(cwd: string, message: string): Promise<string>;
-  push(cwd: string): Promise<void>;
-  createPr(cwd: string, pr: { title: string; body: string }): Promise<string>;
-  pr(cwd: string): Promise<PrInfo | null>;
+  /** With `githubUser`, pushes over HTTPS as that account (the profile's GitHub account); without, with your own git credentials. */
+  push(cwd: string, githubUser?: string): Promise<void>;
+  /** `githubUser` (`login` on github.com, `host/login` elsewhere) runs gh as the profile's GitHub account; omitted, gh's active account. */
+  createPr(cwd: string, pr: { title: string; body: string }, githubUser?: string): Promise<string>;
+  pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
+  /** gh's logins on every host it knows, for picking a profile's account. Never carries tokens. */
+  ghAccounts(): Promise<GhAccount[]>;
   sync(cwd: string): Promise<SyncResult>;
   addWorktree(root: string, threadId: string, branch: string): Promise<string>;
   worktrees(root: string): Promise<Worktree[]>;
@@ -108,6 +122,7 @@ export const gitMethods = {
   push: 'invoke',
   createPr: 'invoke',
   pr: 'invoke',
+  ghAccounts: 'invoke',
   sync: 'invoke',
   addWorktree: 'invoke',
   worktrees: 'invoke',

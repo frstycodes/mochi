@@ -54,6 +54,15 @@ export function useAddressHistory() {
   return useSyncExternalStore(subscribe, () => history);
 }
 
+/** Replaces the address bar's history (empty to clear it); returns what was there, for an undo. */
+export function replaceAddressHistory(next: string[]) {
+  const previous = history;
+  history = next;
+  saveHistory(history);
+  listeners.forEach((l) => l());
+  return previous;
+}
+
 export function updatePage(key: string, patch: Partial<Page>) {
   const page = pages.get(key);
   if (!page) return;

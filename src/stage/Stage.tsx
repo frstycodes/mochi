@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
-import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
+import { motion, useMotionValue, useReducedMotionConfig, useScroll, useTransform, type MotionValue } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { endDrag, moveDrag, startDrag } from '../layout/drag';
 import { findLeaf, leaves, type Side } from '../layout/tree';
@@ -28,7 +28,7 @@ const DRAG_SLOP_PX = 6;
 export function Stage() {
   const { state, dispatch } = useHarness();
   useWindowSyncHost();
-  const reduce = !!useReducedMotion();
+  const reduce = !!useReducedMotionConfig();
   const isStage = state.isStage;
   const isPortrait = state.orientation === 'column';
   const axis = isPortrait ? 'y' : 'x';

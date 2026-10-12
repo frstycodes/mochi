@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -278,27 +278,37 @@ export function DeviceBar({ pageId, page }: { pageId: string; page: Page }) {
 
   return (
     <div className="flex h-9 shrink-0 items-center gap-1.5 overflow-x-auto px-3 type-caption text-muted-foreground" style={{ scrollbarWidth: 'none' }}>
-      <NativeSelect size="sm" aria-label="Device" value={page.device} onChange={(e) => updatePage(pageId, { device: e.target.value })} className="shrink-0">
-        {DEVICES.map((d) => (
-          <NativeSelectOption key={d.id} value={d.id}>
-            {d.label}
-          </NativeSelectOption>
-        ))}
-        <NativeSelectOption value="custom">Custom</NativeSelectOption>
-      </NativeSelect>
+      <Select value={page.device} onValueChange={(device) => updatePage(pageId, { device })}>
+        <SelectTrigger size="sm" aria-label="Device" className="shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {DEVICES.map((d) => (
+            <SelectItem key={d.id} value={d.id}>
+              {d.label}
+            </SelectItem>
+          ))}
+          <SelectItem value="custom">Custom</SelectItem>
+        </SelectContent>
+      </Select>
       <SideInput label="Width" value={page.isRotated ? size.height : size.width} onChange={(v) => setSide(page.isRotated ? 'height' : 'width', v)} />
       <X aria-hidden className="size-3 shrink-0" />
       <SideInput label="Height" value={page.isRotated ? size.width : size.height} onChange={(v) => setSide(page.isRotated ? 'width' : 'height', v)} />
       <IconAction label="Rotate" pressed={page.isRotated} onClick={() => updatePage(pageId, { isRotated: !page.isRotated })}>
         <PhoneRotate />
       </IconAction>
-      <NativeSelect size="sm" aria-label="Device pixel ratio" value={page.dpr} onChange={(e) => updatePage(pageId, { dpr: Number(e.target.value) })} className="shrink-0">
-        {DPRS.map((dpr) => (
-          <NativeSelectOption key={dpr} value={dpr}>
-            {dpr ? `DPR ${dpr}` : 'DPR auto'}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+      <Select value={String(page.dpr)} onValueChange={(dpr) => updatePage(pageId, { dpr: Number(dpr) })}>
+        <SelectTrigger size="sm" aria-label="Device pixel ratio" className="shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {DPRS.map((dpr) => (
+            <SelectItem key={dpr} value={String(dpr)}>
+              {dpr ? `DPR ${dpr}` : 'DPR auto'}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Button variant="ghost" size="sm" aria-pressed={page.touch} onClick={() => updatePage(pageId, { touch: !page.touch })} className={cn('h-7 shrink-0 rounded-full', page.touch && 'bg-accent text-foreground')}>
         Touch
       </Button>

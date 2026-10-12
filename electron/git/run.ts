@@ -1,18 +1,22 @@
 import { execFile } from 'node:child_process';
-import { homedir } from 'node:os';
-import { join, relative, resolve, sep } from 'node:path';
-
-/** Every thread worktree lives here, never inside the project, so the project's own `git status` stays clean. */
-export const WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
+import { relative, resolve, sep } from 'node:path';
 
 // GAP: a Finder-launched app gets launchd's PATH, which lacks Homebrew; `gh` then fails with ENOENT. Fine under `pnpm electron:dev`.
 const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
 
-/** execFile, never a shell: args go to the binary verbatim. `okCodes` lists non-zero exits that still carry a result. */
-export function run(cmd: 'git' | 'gh' | 'du', cwd: string, args: string[], { input, okCodes = [0], env }: { input?: string; okCodes?: number[]; env?: Record<string, string> } = {}) {
+/**
+ * execFile, never a shell: args go to the binary verbatim. `okCodes` lists non-zero exits that still carry a result;
+ * `stderr` resolves with what went to stderr instead, for tools that print their report there (`gh auth status`).
+ */
+export function run(
+  cmd: 'git' | 'gh' | 'du',
+  cwd: string,
+  args: string[],
+  { input, okCodes = [0], env, stderr: wantsStderr }: { input?: string; okCodes?: number[]; env?: Record<string, string>; stderr?: boolean } = {},
+) {
   return new Promise<string>((done, fail) => {
     const child = execFile(cmd, args, { cwd, env: { ...ENV, ...env }, maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (!error || (typeof error.code === 'number' && okCodes.includes(error.code))) return done(stdout);
+      if (!error || (typeof error.code === 'number' && okCodes.includes(error.code))) return done(wantsStderr ? stderr : stdout);
       fail(new Error(stderr.trim() || error.message));
     });
     if (input !== undefined) child.stdin?.end(input);
@@ -31,10 +35,4 @@ export function inside(top: string, file: string) {
   const abs = resolve(top, file);
   if (!abs.startsWith(top + sep)) throw new Error(`${file} is outside the worktree`);
   return relative(top, abs);
-}
-
-export function insideWorktreeRoot(path: string) {
-  const abs = resolve(path);
-  if (!abs.startsWith(WORKTREE_ROOT + sep)) throw new Error(`${path} is not a Mochi worktree`);
-  return abs;
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { setPrefs, usePrefs } from '../settings/prefs';
 import { Danger, Document, Folder, RowHorizontal, RowVertical } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -33,7 +34,7 @@ const ALL_STEPS = 'all';
 function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
   const [scope, setScope] = useState<DiffScope>('branch');
   const [stepId, setStepId] = useState(ALL_STEPS);
-  const [diffStyle, setDiffStyle] = useState<DiffStyle>('unified');
+  const { diffStyle } = usePrefs();
   const diffQuery = useGitDiff(cwd, scope);
   const { run } = useGitAction(diffQuery.refresh);
   const { confirm, dialog } = useConfirm();
@@ -83,7 +84,7 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
           </span>
         )}
         <AskAboutHunk threadId={thread.id} files={files} />
-        <ToggleGroup type="single" size="sm" value={diffStyle} onValueChange={(v) => v && setDiffStyle(v as DiffStyle)} aria-label="Diff layout">
+        <ToggleGroup type="single" size="sm" value={diffStyle} onValueChange={(v) => v && setPrefs({ diffStyle: v as DiffStyle })} aria-label="Diff layout">
           <ToggleGroupItem value="unified" aria-label="Unified diff">
             <RowVertical />
           </ToggleGroupItem>

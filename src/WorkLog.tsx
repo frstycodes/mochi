@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
@@ -10,6 +10,7 @@ import { AgentLoader, entryPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
 import type { ActivityEntry } from './model';
 import { duration } from './progress';
+import { usePrefs } from './settings/prefs';
 import { parseTool, type ToolCall } from './summary';
 import { openFromScope, useThreadFiles, type ThreadFiles } from './files/viewer';
 import { TooltipIconButton } from './ui';
@@ -85,7 +86,7 @@ function sum(calls: ToolCall[], key: 'added' | 'removed') {
 }
 
 function Expand({ isOpen, children }: { isOpen: boolean; children: ReactNode }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig();
   return (
     <AnimatePresence initial={false}>
       {isOpen && (
@@ -234,12 +235,13 @@ function seconds(ms: number) {
 
 function DiffView({ patch }: { patch: string }) {
   const { resolvedTheme } = useTheme();
+  const { diffStyle } = usePrefs();
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
       <PatchDiff
         patch={patch}
         disableWorkerPool
-        options={{ diffStyle: 'unified', disableFileHeader: true, overflow: 'scroll', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
+        options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
         style={{ '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties}
         className="max-h-80 overflow-auto"
       />

@@ -56,6 +56,8 @@ export interface BrowserHost {
   /** Resolves when the user clicks an element in the page; `null` when they press Escape or `cancelPick` runs. */
   pick(id: string): Promise<PickedElement | null>;
   cancelPick(id: string): Promise<void>;
+  /** Clears a profile's cookies, logins, storage and cache (`persist:space-<spaceId>`); open pages stay open but are signed out. */
+  clearData(spaceId: string): Promise<void>;
   onEvent(listener: (event: BrowserEvent) => void): () => void;
 }
 
@@ -71,5 +73,6 @@ export const browserMethods = {
   capture: 'invoke',
   pick: 'invoke',
   cancelPick: 'invoke',
+  clearData: 'invoke',
   onEvent: 'event',
 } satisfies Manifest<BrowserHost>;

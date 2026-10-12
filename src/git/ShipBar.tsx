@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { host } from '../host';
 import type { CheckState, GitDiff, PrCheck, PrInfo } from '../host/types/git';
 import type { Thread } from '../model';
+import { useProfiles } from '../profiles';
 import type { ConfirmRequest } from './useConfirm';
 import { usePr } from './useGit';
 import { isMod } from '../keys';
@@ -24,7 +25,8 @@ interface ShipBarProps {
 export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarProps) {
   const [message, setMessage] = useState('');
   const [isChecksOpen, setChecksOpen] = useState(false);
-  const prQuery = usePr(cwd);
+  const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
+  const prQuery = usePr(cwd, githubUser);
   const pr = prQuery.data;
   const stagedCount = diff.files.filter((f) => f.staged).length;
 
@@ -38,24 +40,24 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   const push = async () => {
     const ok = await confirm({
       title: `Push ${diff.branch}?`,
-      description: `Your commits go to origin/${diff.branch}, where everyone with access to the repository can see them.`,
+      description: `Your commits go to origin/${diff.branch}${githubUser ? `, pushed as ${githubUser}` : ''}, where everyone with access to the repository can see them.`,
       confirm: 'Push branch',
       cancel: 'Not now',
     });
     if (!ok) return;
-    await run('Push', () => host.git.push(cwd));
+    await run('Push', () => host.git.push(cwd, githubUser));
     await prQuery.refresh();
   };
 
   const createPr = async () => {
     const ok = await confirm({
       title: 'Open a pull request?',
-      description: `"${thread.title}" from ${diff.branch} into ${diff.base.replace(/^origin\//, '')}. GitHub notifies the repository's watchers.`,
+      description: `"${thread.title}" from ${diff.branch} into ${diff.base.replace(/^origin\//, '')}${githubUser ? `, opened as ${githubUser}` : ''}. GitHub notifies the repository's watchers.`,
       confirm: 'Create pull request',
       cancel: 'Not now',
     });
     if (!ok) return;
-    const url = await run('Create pull request', () => host.git.createPr(cwd, { title: thread.title, body: thread.goal }));
+    const url = await run('Create pull request', () => host.git.createPr(cwd, { title: thread.title, body: thread.goal }, githubUser));
     if (url) toast.success('Pull request opened', { description: url });
     await prQuery.refresh();
   };

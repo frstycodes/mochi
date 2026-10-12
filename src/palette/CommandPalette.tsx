@@ -1,5 +1,5 @@
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@/components/ui/command';
-import { SPACES } from '../model';
+import { profileById } from '../profiles';
 import { useHarness } from '../store';
 import { StepStatusIcon, ThreadStatusIcon, lineColor } from '../ui';
 import { ACTION_GROUPS, type PaletteAction } from './actions';
@@ -48,7 +48,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               <CommandItem key={t.id} value={`${t.title} ${t.repo?.branch ?? ''} ${t.id}`} onSelect={() => go(t.id)}>
                 <ThreadStatusIcon status={t.status} />
                 <span className="truncate">{t.title}</span>
-                <CommandShortcut className="tracking-normal">{SPACES.find((s) => s.id === t.spaceId)?.name}</CommandShortcut>
+                <CommandShortcut className="tracking-normal">{profileById(t.spaceId).name}</CommandShortcut>
               </CommandItem>
             ))}
           </CommandGroup>

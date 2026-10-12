@@ -37,9 +37,11 @@ export type SideChatAction =
   | { type: 'sidechat-ask'; threadId: string; tabId: string; id: string; text: string }
   | { type: 'sidechat-stream'; threadId: string; tabId: string; id: string; text: string; isDone?: boolean }
   | { type: 'sidechat-clear'; threadId: string; tabId: string }
+  /** Every side chat at once: Settings › Data clears them and its undo puts them back. */
+  | { type: 'sidechat-replace'; sidechats: SideChatState['sidechats'] }
   | { type: 'sidechat-promote'; threadId: string; tabId: string; id: string; to: 'message' | 'thread' };
 
-const STORAGE_KEY = 'harness.sidechat.v1';
+export const SIDECHAT_STORAGE_KEY = 'harness.sidechat.v1';
 const EMPTY: SideChat = { messages: [] };
 
 export function initialSideChat(saved = loadSideChats()): SideChatState {
@@ -61,6 +63,8 @@ export function sidechatReducer(state: State, action: Action): State {
       return patchMessage(state, action, (m) => ({ ...m, text: m.text + action.text, isStreaming: !action.isDone }));
     case 'sidechat-clear':
       return patchChat(state, action.threadId, action.tabId, () => EMPTY);
+    case 'sidechat-replace':
+      return { ...state, sidechats: action.sidechats };
     case 'sidechat-promote':
       return promote(state, action);
     default:
@@ -83,7 +87,7 @@ export const SOURCE_NAMES = { diff: 'Diff hunk', terminal: 'Terminal output', fi
 
 export function saveSideChats(sidechats: SideChatState['sidechats']) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sidechats));
+    localStorage.setItem(SIDECHAT_STORAGE_KEY, JSON.stringify(sidechats));
   } catch {
     // Storage blocked (private window, artifact sandbox): side chats last for the session.
   }
@@ -91,7 +95,7 @@ export function saveSideChats(sidechats: SideChatState['sidechats']) {
 
 function loadSideChats(): SideChatState['sidechats'] {
   try {
-    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
+    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(SIDECHAT_STORAGE_KEY);
     const saved: SideChatState['sidechats'] = raw ? JSON.parse(raw) : {};
     // A reload cuts any answer mid-stream; its listener is gone, so it would spin forever.
     return mapChats(saved, (c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, isStreaming: false })) }));

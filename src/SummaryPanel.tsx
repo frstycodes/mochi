@@ -11,7 +11,8 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { SPACES, type Source, type Step, type Thread } from './model';
+import type { Source, Step, Thread } from './model';
+import { profileById } from './profiles';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
 import { GoalEditor } from './goals/GoalEditor';
 import { outcomeOf } from './goals/outcome';
@@ -231,7 +232,7 @@ function ThreadUsageSection({ thread }: { thread: Thread }) {
 
 function RateLimitWarning({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const space = SPACES.find((s) => s.id === thread.spaceId)!;
+  const space = profileById(thread.spaceId);
   const provider = thread.providers[0];
   const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.plans[provider], state.now);
   if (thread.status !== 'running' || !plan.isWarning) return null;
@@ -247,7 +248,7 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
 
 function SpaceUsageSection({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const space = SPACES.find((s) => s.id === thread.spaceId)!;
+  const space = profileById(thread.spaceId);
   const usage = spaceUsage(state.threads, space, state.now);
   return (
     <Section label={`${space.name} usage`} action={<span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)} est.</span>}>

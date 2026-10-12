@@ -21,6 +21,8 @@ import {
   type View,
   type Zone,
 } from '../layout/tree.ts';
+import { getProfiles } from '../profiles.ts';
+import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from './index.tsx';
 
 export type { View };
@@ -60,12 +62,15 @@ export type LayoutAction =
 
 const STORAGE_KEY = 'harness.layouts.v1';
 
-const DEFAULT_VIEWS = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } } satisfies Record<string, View>;
+// The built-in profiles open on their demo work; a profile added in Settings opens on a new thread.
+const DEFAULT_VIEWS: Record<string, View> = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } };
+const NEW_THREAD: View = { kind: 'new' };
 
 export function initialLayout(saved: Pick<Saved, 'layouts' | 'watched'> & Partial<Saved> = loadLayouts()): LayoutState {
   const orientation = typeof window === 'undefined' ? 'row' : window.innerWidth >= window.innerHeight ? 'row' : 'column';
-  const layouts = Object.fromEntries(Object.entries(DEFAULT_VIEWS).map(([id, view]) => [id, saved.layouts[id] ?? singleLayout(view, orientation)]));
-  return { spaceId: 'latitude', views: mirror(layouts), layouts, orientation, watched: saved.watched, isStage: false, isOverview: false, isNeedsYouNear: saved.isNeedsYouNear ?? false };
+  const profiles = getProfiles();
+  const layouts = Object.fromEntries(profiles.map(({ id }) => [id, saved.layouts[id] ?? singleLayout(DEFAULT_VIEWS[id] ?? NEW_THREAD, orientation)]));
+  return { spaceId: profiles[0].id, views: mirror(layouts), layouts, orientation, watched: saved.watched, isStage: false, isOverview: false, isNeedsYouNear: saved.isNeedsYouNear ?? false };
 }
 
 export function layoutReducer(state: State, action: Action): State {
@@ -88,7 +93,8 @@ function reduce(state: State, action: Action): State {
       return { ...set(openView(state.layouts[spaceId], view), spaceId), spaceId };
     }
     case 'space':
-      return { ...state, spaceId: action.id };
+      if (state.layouts[action.id]) return { ...state, spaceId: action.id };
+      return { ...set(singleLayout(NEW_THREAD, state.orientation), action.id), spaceId: action.id };
     case 'layout-split': {
       const existing = action.view.kind !== 'new' && leaves(layout.root).find((l) => sameView(l.view, action.view));
       if (existing) return set({ ...layout, focusId: existing.id, zoomId: layout.zoomId && existing.id });
@@ -222,7 +228,8 @@ export function saveLayouts(state: Saved) {
 function loadLayouts(): Saved {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-    const layouts = Object.fromEntries(Object.entries(raw?.layouts ?? {}).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
+    const saved = getPrefs().restoreLayout ? (raw?.layouts ?? {}) : {};
+    const layouts = Object.fromEntries(Object.entries(saved).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
     return { layouts, watched: Array.isArray(raw?.watched) ? raw.watched : [], isNeedsYouNear: raw?.isNeedsYouNear === true };
   } catch {
     return { layouts: {}, watched: [], isNeedsYouNear: false };

@@ -27,6 +27,27 @@
     @slot;
   }
 }
+/* Settings › General › Reduce motion: `data-reduce-motion` on <html> overrides the OS setting either way. */
+@custom-variant motion-reduce {
+  @media (prefers-reduced-motion: reduce) {
+    &:where(:root:not([data-reduce-motion='off']) *) {
+      @slot;
+    }
+  }
+  &:where(:root[data-reduce-motion='on'] *) {
+    @slot;
+  }
+}
+@custom-variant motion-safe {
+  @media (prefers-reduced-motion: no-preference) {
+    &:where(:root:not([data-reduce-motion='on']) *) {
+      @slot;
+    }
+  }
+  &:where(:root[data-reduce-motion='off'] *) {
+    @slot;
+  }
+}
 @custom-variant focus-visible (&:focus-visible, &[data-preview~="focus"]);
 @custom-variant active (&:active, &[data-preview~="active"]);
 
@@ -369,10 +390,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pulse::after,
-  .station-pulse {
+  :root:not([data-reduce-motion='off']) .pulse::after,
+  :root:not([data-reduce-motion='off']) .station-pulse {
     animation: none;
   }
+}
+:root[data-reduce-motion='on'] .pulse::after,
+:root[data-reduce-motion='on'] .station-pulse {
+  animation: none;
 }
 
 /* The composer floats over the transcript, so messages scroll under it. */
@@ -431,9 +456,12 @@
   animation: skeleton-sheen 2s -1s infinite linear;
 }
 @media (prefers-reduced-motion: reduce) {
-  .skeleton-sheen {
+  :root:not([data-reduce-motion='off']) .skeleton-sheen {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
+}
+:root[data-reduce-motion='on'] .skeleton-sheen {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* The soft blurred patch behind the PiP's hover controls, like Codex: blur that fades out from the corner. */
@@ -449,9 +477,12 @@
   transition: flex-grow 260ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-  .pane-animating [data-panel] {
+  :root:not([data-reduce-motion='off']) .pane-animating [data-panel] {
     transition: none;
   }
+}
+:root[data-reduce-motion='on'] .pane-animating [data-panel] {
+  transition: none;
 }
 
 /* Native scrollers (chat, sidebar) match ScrollArea: thin, and visible only while scrolling. useIdleScrollbars sets data-scrolling. */

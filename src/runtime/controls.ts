@@ -1,4 +1,5 @@
 import type { Provider, Thread } from '../model.ts';
+import { getPrefs } from '../settings/prefs.ts';
 
 export const EFFORTS = ['Low', 'Medium', 'High', 'Extra high'] as const;
 export type Effort = (typeof EFFORTS)[number];
@@ -48,11 +49,16 @@ export function controlsOf(thread: Thread): ThreadControls {
   return thread.controls ?? DEFAULT_CONTROLS[thread.providers[0]];
 }
 
-/** A new thread's controls. `defaultModel` is the Settings default ('' = the harness's own), shown as its catalog entry when it has one. */
+/**
+ * A new thread's controls: effort and permissions from Settings › Harnesses and › Defaults for new threads. `defaultModel`
+ * is the harness's Settings default ('' = the harness's own), shown as its catalog entry when it has one.
+ */
 export function initialControls(provider: Provider, defaultModel: string): ThreadControls {
-  if (!defaultModel) return DEFAULT_CONTROLS[provider];
+  const { effort, permissions } = getPrefs();
+  const controls = { ...DEFAULT_CONTROLS[provider], effort, access: permissions };
+  if (!defaultModel) return controls;
   const listed = MODELS.find((m) => m.harness === provider && m.providerModel === defaultModel);
-  return { ...DEFAULT_CONTROLS[provider], model: listed?.id ?? defaultModel };
+  return { ...controls, model: listed?.id ?? defaultModel };
 }
 
 const EFFORT_LEVELS = { Low: 'low', Medium: 'medium', High: 'high', 'Extra high': 'xhigh' } satisfies Record<Effort, string>;

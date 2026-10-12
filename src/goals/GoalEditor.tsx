@@ -12,7 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { DEFAULT_THRESHOLD } from '../drift';
+import { driftThreshold } from '../drift';
+import { getPrefs } from '../settings/prefs';
 import type { Size, Thread } from '../model';
 import { useHarness } from '../store';
 import { StepStatusIcon, TooltipIconButton } from '../ui';
@@ -24,15 +25,15 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
   const { state, dispatch } = useHarness();
   const { draft, setGoal, updateStep, moveStep, addSteps } = useGoalDraft(thread);
   const [newTitle, setNewTitle] = useState('');
-  const [drift, setDrift] = useState(thread.drift ?? { threshold: DEFAULT_THRESHOLD, isMuted: false });
+  const [drift, setDrift] = useState(thread.drift ?? { threshold: driftThreshold(thread), isMuted: false });
   const hasEdits = applyDraft(thread, draft, state.now) !== thread;
-  const hasDriftEdits = drift.threshold !== (thread.drift?.threshold ?? DEFAULT_THRESHOLD) || drift.isMuted !== !!thread.drift?.isMuted;
+  const hasDriftEdits = drift.threshold !== driftThreshold(thread) || drift.isMuted !== !!thread.drift?.isMuted;
   const nextVersion = thread.revisions.length + 1;
   const templates = templatesFor(thread.spaceId);
 
   const add = () => {
     if (!newTitle.trim()) return;
-    addSteps([{ title: newTitle.trim(), size: 1, gate: false }]);
+    addSteps([{ title: newTitle.trim(), size: getPrefs().stepSize, gate: false }]);
     setNewTitle('');
   };
 

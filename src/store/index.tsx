@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
-import { SPACES, type QueueItem, type Thread } from '../model.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
+import type { QueueItem, Thread } from '../model.ts';
+import { useProfiles } from '../profiles.ts';
 import { resolution } from '../runtime/apply.ts';
 import { agentCalls, type AgentCall } from '../runtime/live.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
@@ -95,14 +96,18 @@ export function useHarness() {
   return ctx;
 }
 
+const NEW_VIEW = { kind: 'new' } as const;
+
 export function useSpace() {
   const { state } = useHarness();
-  return SPACES.find((s) => s.id === state.spaceId)!;
+  const profiles = useProfiles();
+  return profiles.find((p) => p.id === state.spaceId) ?? profiles[0];
 }
 
 export function useView(spaceId?: string) {
   const { state } = useHarness();
-  return state.views[spaceId ?? state.spaceId];
+  // A profile added in Settings gets its layout on first visit; until then it shows a new thread.
+  return state.views[spaceId ?? state.spaceId] ?? NEW_VIEW;
 }
 
 export function useThread(id: string) {

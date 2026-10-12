@@ -1,5 +1,6 @@
 import type { Thread } from './model.ts';
 import { similarity, tokens } from './progress.ts';
+import { getPrefs } from './settings/prefs.ts';
 
 export type DriftKind = 'on-goal' | 'scope-add' | 'off-goal';
 
@@ -10,8 +11,8 @@ export interface DriftVerdict {
 
 export type DriftClassifier = (prompt: string, thread: Thread) => DriftVerdict | Promise<DriftVerdict>;
 
-/** Below this score a prompt is off-goal without asking the classifier. Per thread in `thread.drift.threshold`. */
-export const DEFAULT_THRESHOLD = 0.15;
+/** Below this score a prompt is off-goal without asking the classifier: the thread's own threshold, else Settings › Goals and drift. */
+export const driftThreshold = (thread: Thread) => thread.drift?.threshold ?? getPrefs().driftThreshold;
 const ON_GOAL = 0.5;
 const ALREADY_PLANNED = 0.8;
 const MIN_TOKENS = 2;
@@ -26,7 +27,7 @@ export function judgeDrift(prompt: string, thread: Thread): DriftVerdict | Promi
 export function judgeLocally(prompt: string, thread: Thread): DriftVerdict | null {
   if (tokens(prompt).size < MIN_TOKENS) return { kind: 'on-goal', reason: 'Short steering message' };
   const { score, best } = scoreDrift(prompt, thread);
-  if (score < (thread.drift?.threshold ?? DEFAULT_THRESHOLD)) return { kind: 'off-goal', reason: 'Shares nothing with the goal or its open steps' };
+  if (score < driftThreshold(thread)) return { kind: 'off-goal', reason: 'Shares nothing with the goal or its open steps' };
   if (SCOPE_CUES.test(prompt)) return null;
   if (score >= ON_GOAL) return { kind: 'on-goal', reason: `Matches "${best}"` };
   return null;

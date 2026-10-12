@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { access, constants } from 'node:fs/promises';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 import { DEFAULT_SETTINGS, mergeSettings, type Account, type AccountId, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ApiKeyState } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/settings/accounts.ts';
@@ -17,14 +17,42 @@ import { HARNESSES } from '../../src/settings/harnesses.ts';
 interface Stored extends AgentSettings, AccountsState {
   /** `safeStorage` ciphertext, base64, per harness. Decrypted only by `apiKeyFor()`, never written in clear or sent to the renderer. */
   apiKeys: Partial<Record<Provider, string>>;
+  /** Folders used as the worktree root before the current one: their worktrees stay Mochi's for checkpoints, rewind and cleanup. */
+  pastWorktreeRoots: string[];
 }
+
+const DEFAULT_WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
 
 const listeners = new Set<(settings: AgentSettings) => void>();
 let stored: Stored | undefined;
 
 export function agentSettings(): AgentSettings {
-  const { concurrency, harnesses } = load();
-  return { concurrency, harnesses };
+  const { concurrency, harnesses, worktreeRoot, shell, prDrafts } = load();
+  return { concurrency, harnesses, worktreeRoot, shell, prDrafts };
+}
+
+/** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.harness/worktrees`. */
+export function worktreeRoot(): string {
+  const root = expandHome(load().worktreeRoot);
+  return root ? resolve(root) : DEFAULT_WORKTREE_ROOT;
+}
+
+/** The current root first, then every earlier one, so moving the folder never orphans existing worktrees. */
+export function worktreeRoots(): string[] {
+  return [...new Set([worktreeRoot(), ...load().pastWorktreeRoots, DEFAULT_WORKTREE_ROOT])];
+}
+
+/** The terminal's shell: the user's choice, else `$SHELL`. */
+export function terminalShell(): string {
+  return expandHome(load().shell) || process.env.SHELL || '/bin/zsh';
+}
+
+export function prDrafts(): boolean {
+  return load().prDrafts;
+}
+
+function expandHome(path: string) {
+  return path === '~' || path.startsWith('~/') ? join(homedir(), path.slice(1)) : path;
 }
 
 export function accountsState(): AccountsState {
@@ -96,7 +124,9 @@ export function onAgentSettingsChange(listener: (settings: AgentSettings) => voi
 }
 
 export function updateAgentSettings(patch: AgentSettingsPatch): AgentSettings {
-  save({ ...load(), ...mergeSettings(load(), patch) });
+  const previousRoot = worktreeRoot();
+  const next = { ...load(), ...mergeSettings(load(), patch) };
+  save({ ...next, pastWorktreeRoots: [...new Set([previousRoot, ...next.pastWorktreeRoots])] });
   return agentSettings();
 }
 
@@ -173,7 +203,7 @@ function load(): Stored {
   // Merged per harness, so a harness added to the registry later gets its defaults; default accounts always exist.
   const settings = mergeSettings(DEFAULT_SETTINGS, saved);
   const accounts = [...DEFAULT_ACCOUNTS.filter((d) => !saved.accounts?.some((a) => a.id === d.id)), ...(saved.accounts ?? [])];
-  stored = { ...settings, accounts, links: saved.links ?? {}, apiKeys: saved.apiKeys ?? {} };
+  stored = { ...settings, accounts, links: saved.links ?? {}, apiKeys: saved.apiKeys ?? {}, pastWorktreeRoots: saved.pastWorktreeRoots ?? [] };
   return stored;
 }
 

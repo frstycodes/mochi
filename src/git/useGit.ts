@@ -11,8 +11,9 @@ export function useGitDiff(cwd: string, scope: DiffScope) {
   return usePolled(useCallback(() => host.git.diff(cwd, scope), [cwd, scope]), DIFF_POLL_MS);
 }
 
-export function usePr(cwd: string) {
-  return usePolled(useCallback(() => host.git.pr(cwd), [cwd]), PR_POLL_MS);
+/** `githubUser` is the thread's profile GitHub account; gh's active account when undefined. */
+export function usePr(cwd: string, githubUser?: string) {
+  return usePolled(useCallback(() => host.git.pr(cwd, githubUser), [cwd, githubUser]), PR_POLL_MS);
 }
 
 function usePolled<T>(load: () => Promise<T>, interval: number) {

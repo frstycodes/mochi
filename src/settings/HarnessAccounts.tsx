@@ -3,16 +3,15 @@ import { Add, Edit, Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Account } from '../host/types/settings';
-import { SPACES, type Provider } from '../model';
+import type { Provider } from '../model';
+import { useProfiles } from '../profiles';
 import { OverflowIcon, SpaceIcon, TooltipIconButton } from '../ui';
 import { linkedAccountId, profilesUsing, signInCommand } from './accounts';
 import { useAgentSettings } from './AgentSettings';
 import { HARNESSES } from './harnesses';
-import { CommitInput, LoginBadge, SettingsGroup, SettingsRow, SignInSteps, settingControlId } from './parts';
+import { CommitInput, LoginBadge, SettingsGroup, SettingsRow, SettingsSelect, SignInSteps } from './parts';
 
-const SPACE_IDS = SPACES.map((s) => s.id);
 const LIST = new Intl.ListFormat('en', { type: 'conjunction' });
 
 /** A harness's logins, each in its own config folder, plus adding one. */
@@ -23,7 +22,7 @@ export function AccountsGroup({ provider }: { provider: Provider }) {
     <SettingsGroup
       id={`${provider}Accounts`}
       title="Accounts"
-      footer={`Each account is its own ${HARNESSES[provider].name} login in its own folder. You sign in from a terminal; Harness never sees the credentials.`}
+      footer={`Each account is its own ${HARNESSES[provider].name} login in its own folder. You sign in from a terminal; Mochi never sees the credentials.`}
     >
       {own.map((account) => (
         <AccountRow key={account.id} account={account} />
@@ -37,7 +36,8 @@ function AccountRow({ account }: { account: Account }) {
   const { installs, check, accounts, renameAccount, removeAccount } = useAgentSettings();
   const [isRenaming, setRenaming] = useState(false);
   const install = installs[account.id];
-  const usedBy = profilesUsing(accounts?.links ?? {}, SPACE_IDS, account).map((id) => SPACES.find((s) => s.id === id)!.name);
+  const profiles = useProfiles();
+  const usedBy = profilesUsing(accounts?.links ?? {}, profiles.map((p) => p.id), account).map((id) => profiles.find((p) => p.id === id)!.name);
   const removeBlock = !account.configDir ? 'The default account stays' : usedBy.length ? `Used by ${LIST.format(usedBy)}; switch ${usedBy.length > 1 ? 'them' : 'it'} to another account first` : undefined;
 
   return (
@@ -129,9 +129,10 @@ function AddAccountRow({ provider }: { provider: Provider }) {
 export function ProfilesGroup({ provider }: { provider: Provider }) {
   const { accounts, linkAccount } = useAgentSettings();
   const own = accounts?.accounts.filter((a) => a.provider === provider) ?? [];
+  const profiles = useProfiles();
   return (
     <SettingsGroup id={`${provider}Profiles`} title="Profiles" footer={`Every thread in a profile runs ${HARNESSES[provider].name} on that profile's account, and never switches to another one.`}>
-      {SPACES.map((space) => {
+      {profiles.map((space) => {
         const id = `${provider}-${space.id}`;
         return (
           <SettingsRow
@@ -144,18 +145,12 @@ export function ProfilesGroup({ provider }: { provider: Provider }) {
               </span>
             }
             control={
-              <Select value={linkedAccountId(accounts?.links ?? {}, space.id, provider)} onValueChange={(accountId) => void linkAccount(space.id, provider, accountId)}>
-                <SelectTrigger id={settingControlId(id)} size="sm" className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {own.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SettingsSelect
+                id={id}
+                value={linkedAccountId(accounts?.links ?? {}, space.id, provider)}
+                options={own.map((a) => ({ value: a.id, label: a.name }))}
+                onChange={(accountId) => void linkAccount(space.id, provider, accountId)}
+              />
             }
           />
         );

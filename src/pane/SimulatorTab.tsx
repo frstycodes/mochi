@@ -19,6 +19,7 @@ import { useBuild } from '@/sim/useBuild';
 import { useCapture } from '@/sim/useCapture';
 import { useDeviceSettings } from '@/sim/useDeviceSettings';
 import { message, useSimulators } from '@/sim/useSimulators';
+import { usePrefs } from '@/settings/prefs';
 import { useSimStream } from '@/sim/useSimStream';
 import { toast } from 'sonner';
 import type { PaneTabProps } from './tabs';
@@ -26,7 +27,8 @@ import type { PaneTabProps } from './tabs';
 export function SimulatorTab({ thread }: PaneTabProps) {
   const { simulators, error, refresh } = useSimulators();
   const [pickedUdid, setPickedUdid] = useState<string | null>(null);
-  const device = simulators?.find((s) => s.udid === pickedUdid) ?? simulators?.find((s) => s.state === 'Booted') ?? simulators?.[0] ?? null;
+  const { simulator } = usePrefs();
+  const device = simulators?.find((s) => s.udid === (pickedUdid ?? simulator)) ?? simulators?.find((s) => s.state === 'Booted') ?? simulators?.[0] ?? null;
   const isBooted = device?.state === 'Booted';
   const stream = useSimStream(isBooted ? device.udid : null);
   const settings = useDeviceSettings(isBooted ? device.udid : null);

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { parseDiff, parseStatus, parseWorktrees } from './parse.ts';
+import { parseDiff, parseGhAuthStatus, parseStatus, parseWorktrees } from './parse.ts';
 
 const DIFF = [
   'diff --git a/src/a.ts b/src/a.ts',
@@ -108,4 +108,31 @@ test('parseWorktrees reads branches and detached heads', () => {
     { path: '/repo', head: 'abc', branch: 'main' },
     { path: '/wt/one', head: 'def', branch: null },
   ]);
+});
+
+test('parseGhAuthStatus reads every host\'s logins, which one is active and which still work', () => {
+  // Shape of gh 2.78's stderr, tokens masked the way gh prints them.
+  const text = `github.com
+  ✓ Logged in to github.com account octo (keyring)
+  - Active account: false
+  - Token: gho_************************************
+
+  X Failed to log in to github.com account stale_user (keyring)
+  - Active account: false
+  - The token in keyring is invalid.
+
+  ✓ Logged in to github.com account work-bot (keyring)
+  - Active account: true
+
+ghe.example.com
+  ✓ Logged in to ghe.example.com account enterprise (keyring)
+  - Active account: true
+`;
+  assert.deepEqual(parseGhAuthStatus(text), [
+    { host: 'github.com', login: 'octo', isActive: false, isValid: true },
+    { host: 'github.com', login: 'stale_user', isActive: false, isValid: false },
+    { host: 'github.com', login: 'work-bot', isActive: true, isValid: true },
+    { host: 'ghe.example.com', login: 'enterprise', isActive: true, isValid: true },
+  ]);
+  assert.deepEqual(parseGhAuthStatus('You are not logged into any GitHub hosts. To log in, run: gh auth login'), []);
 });

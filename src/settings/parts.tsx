@@ -4,8 +4,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { host } from '../host';
 import { TooltipIconButton } from '../ui';
 import type { InstallState } from './AgentSettings';
 
@@ -33,7 +37,7 @@ export function SettingsRow({ id, label, description, control, children }: { id?
       data-setting-id={id}
       className="relative flex flex-col gap-2.5 px-3.5 py-2.5 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-3.5 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent"
     >
-      <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 *:not-first:shrink-0">
         <div className="min-w-40 flex-1">
           {id ? (
             <label htmlFor={settingControlId(id)} className="block type-body">
@@ -52,6 +56,9 @@ export function SettingsRow({ id, label, description, control, children }: { id?
 }
 
 export const settingControlId = (id: string) => `setting-${id}`;
+
+// An undo needs time to reach for, so its toast outlasts a plain one.
+export const UNDO_MS = 8000;
 
 export function LoginBadge({ install }: { install: InstallState | undefined }) {
   if (!install || install === 'checking')
@@ -128,15 +135,74 @@ export function CommitInput({ value, onCommit, className, ...props }: { value: s
   );
 }
 
-export function DesktopOnlyNotice() {
+/** A folder path: typed (saved on blur or Enter) or picked with the OS folder picker, which only the desktop app can open. */
+export function FolderInput({ id, value, placeholder, onCommit }: { id: string; value: string; placeholder: string; onCommit: (path: string) => void }) {
+  const browse = () =>
+    host.fs.pickFolder(value || placeholder).then(
+      (path) => path && onCommit(path),
+      (error: Error) => toast.error('Could not open the folder picker', { description: error.message }),
+    );
+  return (
+    <div className="flex w-full items-center gap-2 sm:w-auto">
+      <CommitInput id={settingControlId(id)} value={value} placeholder={placeholder} onCommit={onCommit} className="flex-1 font-mono placeholder:font-mono sm:w-60 sm:flex-none" />
+      {host.isDesktop && (
+        <Button variant="outline" size="sm" onClick={() => void browse()}>
+          Browse
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Rows the main process reads; the web build says why they're missing instead. `what` is a sentence naming what needs the desktop app. */
+export function DesktopOnly({ what, children }: { what: ReactNode; children: ReactNode }) {
+  return host.isDesktop ? children : <DesktopOnlyNotice what={what} />;
+}
+
+export function DesktopOnlyNotice({ what }: { what: ReactNode }) {
   return (
     <Alert>
       <InfoCircle />
       <AlertTitle>Needs the desktop app</AlertTitle>
-      <AlertDescription>
-        Detecting your agent harnesses and their accounts, storing an API key and the concurrency limit only work in the Harness desktop app. Here, threads run on the demo agents, so everything else
-        keeps working.
-      </AlertDescription>
+      <AlertDescription>{what} Here, threads run on the demo agents, so everything else keeps working.</AlertDescription>
     </Alert>
+  );
+}
+
+/** A choice from a list too long for toggles. Radix Select, never a native one; `value` can't be empty (Radix reserves '' for "nothing chosen"). */
+export function SettingsSelect<T extends string>({
+  id,
+  value,
+  options,
+  onChange,
+  className,
+  ...props
+}: { id?: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; className?: string; 'aria-label'?: string; disabled?: boolean }) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as T)} disabled={props.disabled}>
+      <SelectTrigger id={id && settingControlId(id)} aria-label={props['aria-label']} size="sm" className={cn('w-44', className)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="end">
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** One of a few named values, as separate bordered toggles; the row's label names the group. */
+export function SettingsChoice<T extends string>({ id, value, options, onChange }: { id: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void }) {
+  return (
+    <ToggleGroup id={settingControlId(id)} type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as T)}>
+      {options.map((o) => (
+        <ToggleGroupItem key={o.value} value={o.value}>
+          {o.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }

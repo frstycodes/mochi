@@ -2,11 +2,10 @@ import { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { host } from '../host';
 import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
 import { AgentSettingsProvider } from './AgentSettings';
 import { closeSettings, useSettingsRoute, type SettingsRoute } from './open';
-import { DesktopOnlyNotice } from './parts';
+import { prefersReducedMotion } from './prefs';
 import { SETTINGS_SECTIONS } from './sections';
 
 /** The content column while settings are open: one section, scrolling on its own. */
@@ -27,7 +26,7 @@ export function SettingsPage() {
           <h1 className="truncate type-title">{section.title}</h1>
         </header>
         <ScrollArea type="scroll" className="min-h-0">
-          <div className="mx-auto w-full max-w-2xl px-4 pt-2 pb-12 md:px-6">{!host.isDesktop && section.needsDesktop ? <DesktopOnlyNotice /> : <Section />}</div>
+          <div className="mx-auto w-full max-w-2xl px-4 pt-2 pb-12 md:px-6"><Section /></div>
         </ScrollArea>
       </div>
     </AgentSettingsProvider>
@@ -64,7 +63,7 @@ function useFlashSetting(route: SettingsRoute | null) {
         if (performance.now() - startedAt < 2000) frame = requestAnimationFrame(find);
         return;
       }
-      const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const smooth = !prefersReducedMotion();
       row.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' });
       row.dataset.flash = '';
       timer = window.setTimeout(() => delete row.dataset.flash, FLASH_MS);

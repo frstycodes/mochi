@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import { EffortPicker, ModelPicker } from './ModelControls';
 import { ACCESS, type Access, type ModelOption, type ThreadControls } from './runtime/controls';
+import { getPrefs, type Prefs } from './settings/prefs';
 
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
@@ -149,11 +150,11 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
-const DEVICES = ['This Mac', 'Studio', 'Cloud sandbox'];
+export const DEVICES = ['This Mac', 'Studio', 'Cloud sandbox'] as const satisfies Prefs['runsOn'][];
 
 // GAP: only This Mac runs anything; the choice isn't kept or sent to an agent.
 export function RunOnMenu() {
-  const [device, setDevice] = useState(DEVICES[0]);
+  const [device, setDevice] = useState<string>(() => getPrefs().runsOn);
   return <MetaMenu icon={device === 'Cloud sandbox' ? <Monitor /> : <Laptop />} label="Run on" value={device} options={DEVICES} onChange={setDevice} />;
 }
 

@@ -3,14 +3,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Briefcase, Home, Layers, MoreH, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
+import { Book, Briefcase, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
   return `var(--chart-${slot})`;
 }
 
-const SPACE_ICONS = { work: Briefcase, home: Home, layers: Layers } satisfies Record<SpaceIconName, LucideIcon>;
+export const SPACE_ICONS = { work: Briefcase, home: Home, layers: Layers, code: Code, book: Book, rocket: Rocket, coffee: Coffee, star: Star } satisfies Record<SpaceIconName, LucideIcon>;
 
 export function SpaceIcon({ space, className }: { space: Space; className?: string }) {
   const Icon = SPACE_ICONS[space.icon];

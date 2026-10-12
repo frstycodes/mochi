@@ -27,8 +27,19 @@ export interface Burst {
   notices: Notice[];
 }
 
-/** Kinds worth interrupting for: an OS notification or toast. Step-done only lands in the center. */
-export const ALERT_KINDS = new Set<NoticeKind>(['needs-you', 'review', 'ci', 'pr-review', 'overlap', 'race-lost']);
+/** Kinds worth interrupting for: an OS notification or toast, each switchable in Settings › Notifications. Step-done only lands in the center. */
+export const ALERT_KINDS = {
+  'needs-you': 'Needs you',
+  review: 'Ready for review',
+  ci: 'CI failed',
+  'pr-review': 'Pull request review',
+  overlap: 'File overlap',
+  'race-lost': 'Race lost',
+} satisfies Partial<Record<NoticeKind, string>>;
+
+export const isAlertKind = (kind: NoticeKind): kind is keyof typeof ALERT_KINDS => kind in ALERT_KINDS;
+
+export const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
 const BURST_MINUTES = 3;
 
