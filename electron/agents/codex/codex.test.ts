@@ -257,7 +257,7 @@ test('webSearch items name the query on completion and carry pages as links', ()
   const s = threadState('h1', '/repo');
   const started = { type: 'webSearch', id: 'w1', query: '', action: null, results: null };
   assert.deepEqual(mapNotification('item/started', { threadId: 't', item: started }, s), [{ threadId: 'h1', type: 'tool', id: 'w1', phase: 'start', text: 'Search the web' }]);
-  const done = { ...started, query: 'token bucket', action: { type: 'search', query: 'token bucket' }, results: [{ url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket' }, { snippet: 'no url' }] };
+  const done = { ...started, query: 'token bucket', action: { type: 'search', query: 'token bucket' }, results: [{ type: 'text_result', domain: 'en.wikipedia.org', ref_id: 'turn0search12', snippet: 'A token bucket…', title: 'Token bucket', url: 'https://en.wikipedia.org/wiki/Token_bucket' }, { type: 'image_result' }] };
   assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: done }, s), [{ threadId: 'h1', type: 'tool', id: 'w1', phase: 'end', text: 'Search token bucket', links: [{ url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket' }] }]);
   const opened = { type: 'webSearch', id: 'w2', query: '', action: { type: 'openPage', url: 'https://redis.io/docs/' }, results: null };
   assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: opened }, s), [{ threadId: 'h1', type: 'tool', id: 'w2', phase: 'end', text: 'Fetch https://redis.io/docs/', links: [{ url: 'https://redis.io/docs/' }] }]);

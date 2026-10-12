@@ -218,7 +218,7 @@ export function webSearch(item: Record<string, unknown>): { text: string; links:
   if (url && (action?.type === 'openPage' || action?.type === 'findInPage')) return { text: `Fetch ${url}`, links: [{ url }] };
   const queries = Array.isArray(action?.queries) ? action.queries.filter((q) => typeof q === 'string') : [];
   const query = [item.query, action?.query, queries.join(', ')].find((q) => typeof q === 'string' && q) as string | undefined;
-  // GAP: no result shape is documented; take any entry carrying a `url`, and its `title` when it has one.
+  // The protocol types `results` as opaque JSON; a live run (0.155.1) sent `{ type: 'text_result', url, title, domain, snippet, ref_id }`.
   const links = (Array.isArray(item.results) ? item.results : []).flatMap((r) => {
     const hit = obj(r);
     return typeof hit?.url === 'string' ? [{ url: hit.url, ...(typeof hit.title === 'string' && hit.title && { title: hit.title }) }] : [];
