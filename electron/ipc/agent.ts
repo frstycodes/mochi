@@ -22,6 +22,7 @@ export const agent = {
     const o = record(options, 'options');
     if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
     string(o.cwd, 'options.cwd');
+    string(o.spaceId, 'options.spaceId', 256);
     string(o.prompt, 'options.prompt', 100_000);
     for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
     if (o.provider === 'codex') return codex.start(threadId as string, o as unknown as AgentStartOptions);

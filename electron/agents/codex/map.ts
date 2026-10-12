@@ -12,12 +12,29 @@ export interface ThreadState {
   changes: Map<string, string[]>;
   /** Last cumulative token totals; usage events carry the difference because the store adds them up. Null after a resume, when the history's totals aren't ours to count again. */
   total: Totals | null;
+  /** The Codex account the thread runs on; it prefixes request ids so answers route back to that account's server. */
+  account: string;
+  /** Shared by every thread on the account: rate limits are account-wide and arrive without a thread id. */
+  limits: AccountLimits;
 }
 
 type Totals = { input: number; cached: number; output: number };
 
-export function threadState(threadId: string, cwd: string, isResumed = false): ThreadState {
-  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, cached: 0, output: 0 } };
+/** When the account's most-used rate-limit window resets, in unix seconds. */
+export interface AccountLimits {
+  resetsAt?: number;
+}
+
+export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits } = {}): ThreadState {
+  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, cached: 0, output: 0 }, account, limits };
+}
+
+/** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
+export function updateLimits(limits: AccountLimits, params: unknown) {
+  const snapshot = obj(obj(params)?.rateLimits);
+  const windows = [obj(snapshot?.primary), obj(snapshot?.secondary)].filter((w) => typeof w?.usedPercent === 'number' && typeof w.resetsAt === 'number');
+  const binding = windows.sort((a, b) => (b!.usedPercent as number) - (a!.usedPercent as number))[0];
+  if (binding) limits.resetsAt = binding.resetsAt as number;
 }
 
 /** The Codex thread a notification or server request belongs to, if any. */
@@ -56,11 +73,15 @@ export function mapNotification(method: string, params: unknown, s: ThreadState)
       const turn = obj(p.turn);
       const status = TURN_STATUS[turn?.status as keyof typeof TURN_STATUS];
       if (!status) return [];
-      const error = obj(turn?.error)?.message;
-      return [{ threadId, type: 'turn-end', status, ...(typeof error === 'string' && { error: apiMessage(error) }) }];
+      const error = obj(turn?.error);
+      const end: AgentEvent = { threadId, type: 'turn-end', status, ...(typeof error?.message === 'string' && { error: apiMessage(error.message) }) };
+      // The thread waits on the same account until the reset; moving it to another account is never automatic.
+      if (error?.codexErrorInfo !== 'usageLimitExceeded') return [end];
+      const resetsAt = s.limits.resetsAt;
+      return [{ threadId, type: 'limit', ...(resetsAt !== undefined && { resetsAt: new Date(resetsAt * 1000).toISOString() }) }, end];
     }
     case 'serverRequest/resolved':
-      return typeof p.requestId === 'string' || typeof p.requestId === 'number' ? [{ threadId, type: 'resolved', requestId: requestKey(p.requestId) }] : [];
+      return typeof p.requestId === 'string' || typeof p.requestId === 'number' ? [{ threadId, type: 'resolved', requestId: requestKey(s.account, p.requestId) }] : [];
   }
   return [];
 }
@@ -92,9 +113,9 @@ export function mapRequest(method: string, params: unknown, requestId: string, s
   return null;
 }
 
-/** Harness-side id for a Codex server request: prefixed so the IPC layer can route `resolve` back to this adapter. */
-export function requestKey(id: string | number) {
-  return `codex:${typeof id}:${id}`;
+/** Harness-side id for a Codex server request: prefixed so the IPC layer can route `resolve` back to this adapter and account. */
+export function requestKey(account: string, id: string | number) {
+  return `codex:${account}:${typeof id}:${id}`;
 }
 
 const PLAN_STATUS = { pending: 'pending', inProgress: 'running', completed: 'done' } as const;

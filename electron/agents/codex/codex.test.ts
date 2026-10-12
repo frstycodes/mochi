@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
-import { reply } from './adapter.ts';
-import { codexThreadId, mapNotification, mapRequest, requestKey, threadState } from './map.ts';
+import { CodexAdapter, reply } from './adapter.ts';
+import { setCodexPath } from './find.ts';
+import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
@@ -20,7 +23,7 @@ function replay(name: string) {
   const rpc = new RpcClient(input, output, {
     onNotification: (method, params) => events.push(...mapNotification(method, params, s)),
     onRequest: (id, method, params) => {
-      const event = mapRequest(method, params, requestKey(id), s);
+      const event = mapRequest(method, params, requestKey('default', id), s);
       if (event) events.push(event);
       else unhandled.push(method);
     },
@@ -52,8 +55,8 @@ test('a real turn maps to streamed messages, a plan, a command, an approval and 
   assert.deepEqual(tools.map((t) => [t.phase, t.text, t.exitCode]), [['start', "/bin/zsh -lc 'touch c.txt'", undefined], ['end', "/bin/zsh -lc 'touch c.txt'", 0]]);
 
   const approval = events.find((e) => e.type === 'approval')!;
-  assert.deepEqual(approval, { threadId: 'h1', type: 'approval', requestId: 'codex:number:0', kind: 'command', title: 'Run a command', detail: 'In /tmp/scratch', code: "/bin/zsh -lc 'touch c.txt'" });
-  assert.deepEqual(events.find((e) => e.type === 'resolved'), { threadId: 'h1', type: 'resolved', requestId: 'codex:number:0' });
+  assert.deepEqual(approval, { threadId: 'h1', type: 'approval', requestId: 'codex:default:number:0', kind: 'command', title: 'Run a command', detail: 'In /tmp/scratch', code: "/bin/zsh -lc 'touch c.txt'" });
+  assert.deepEqual(events.find((e) => e.type === 'resolved'), { threadId: 'h1', type: 'resolved', requestId: 'codex:default:number:0' });
 
   const usage = events.filter((e) => e.type === 'usage');
   assert.deepEqual(usage.map((u) => [u.inputTokens, u.outputTokens]), [[21292, 164], [42776 - 21292, 209 - 164], [64329 - 42776, 214 - 209]], 'usage carries per-update differences, since the store sums them');
@@ -88,11 +91,61 @@ test('file changes report paths relative to the worktree and name them on the ap
 });
 
 test('after a resume only the reported request counts, not the whole history', () => {
-  const s = threadState('h1', '/x', true);
+  const s = threadState('h1', '/x', { isResumed: true });
   const tokenUsage = { total: { inputTokens: 90_000, cachedInputTokens: 0, outputTokens: 900, totalTokens: 90_900 }, last: { inputTokens: 1000, cachedInputTokens: 0, outputTokens: 10, totalTokens: 1010 }, modelContextWindow: null };
   const [u] = mapNotification('thread/tokenUsage/updated', { threadId: 't', tokenUsage }, s);
   assert.deepEqual(u.type === 'usage' && [u.inputTokens, u.outputTokens, u.contextMax], [1000, 10, undefined]);
 });
+
+test('a usage limit pauses the thread with the account-wide reset time, then ends the turn', () => {
+  const limits = {};
+  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } });
+  updateLimits(limits, { rateLimits: { primary: null, secondary: null } });
+  const s = threadState('h1', '/x', { limits });
+  const turn = { id: 'u', status: 'failed', error: { message: 'You hit your usage limit.', codexErrorInfo: 'usageLimitExceeded' } };
+  assert.deepEqual(mapNotification('turn/completed', { threadId: 't', turn }, s), [
+    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z' },
+    { threadId: 'h1', type: 'turn-end', status: 'failed', error: 'You hit your usage limit.' },
+  ]);
+  const other = mapNotification('turn/completed', { threadId: 't', turn: { ...turn, error: { message: 'x', codexErrorInfo: 'serverOverloaded' } } }, s);
+  assert.deepEqual(other.map((e) => e.type), ['turn-end']);
+});
+
+test('one app-server per account: threads route to their profile account and never share a server', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = path.join(home, 'codex');
+  writeFileSync(fake, FAKE_CODEX, { mode: 0o755 });
+  setCodexPath(fake);
+  const events: AgentEvent[] = [];
+  const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, side: { id: 'work', configDir: path.join(home, 'work') }, home: { id: 'default' } };
+  const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId]);
+  try {
+    for (const [threadId, spaceId] of [['a', 'work'], ['b', 'side'], ['c', 'home']]) await codex.start(threadId, { provider: 'codex', spaceId, cwd: home, prompt: 'hi' });
+    await new Promise((r) => setTimeout(r, 200));
+    const sessions = Object.fromEntries(events.flatMap((e) => (e.type === 'session' ? [[e.threadId, e.sessionId]] : [])));
+    const [a, b, c] = ['a', 'b', 'c'].map((t) => JSON.parse(sessions[t]));
+    assert.equal(a.pid, b.pid, 'two profiles sharing an account share its server');
+    assert.notEqual(a.pid, c.pid, 'another account gets its own server');
+    assert.deepEqual([a.home, c.home], [path.join(home, 'work'), null]);
+    const ends = events.filter((e) => e.type === 'message').map((e) => [e.threadId, e.type === 'message' && JSON.parse(e.text).thread]);
+    assert.deepEqual(ends, [['a', sessions.a], ['b', sessions.b], ['c', sessions.c]], 'every notification reaches the thread that started it');
+  } finally {
+    codex.dispose();
+    setCodexPath(undefined);
+  }
+});
+
+/** A stand-in `codex` speaking just enough app-server: thread ids carry its pid and CODEX_HOME, each turn echoes its thread. */
+const FAKE_CODEX = `#!/usr/bin/env node
+let n = 0, buf = '';
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+  if (m.method === 'initialize') send({ id: m.id, result: {} });
+  if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
+  if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: JSON.stringify({ pid: process.pid, home: process.env.CODEX_HOME ?? null, n: ++n }) } } });
+  if (m.method === 'turn/start') { send({ id: m.id, result: { turn: { id: 'u' + n } } }); send({ method: 'item/completed', params: { threadId: m.params.threadId, item: { type: 'agentMessage', id: 'm' + Math.random(), text: JSON.stringify({ thread: m.params.threadId }) } } }); }
+} });
+`;
 
 test('malformed params map to nothing; foreign server requests are left for an error reply', () => {
   const s = threadState('h1', '/x');
