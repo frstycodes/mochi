@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Folder, BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
-import { getPrefs } from './settings/prefs';
+import { getPrefs, setPrefs } from './settings/prefs';
 import { useHarness, useSpaceThreads } from './store';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
@@ -66,7 +66,12 @@ function NewThread() {
   const draft = textInput.value;
   const matches = useStepMatches(draft);
   const linked = dependOn && matches.some((m) => m.step.id === dependOn.step.id) ? dependOn : null;
-  const workspace = useWorkspace(project ?? '', workspaceDraft, setWorkspaceDraft, draft);
+  // The worktree checkbox remembers your last choice for the next new thread.
+  const changeWorkspace = (next: WorkspaceDraft) => {
+    if (next.mode !== workspaceDraft.mode) setPrefs({ workspaceMode: next.mode });
+    setWorkspaceDraft(next);
+  };
+  const workspace = useWorkspace(project ?? '', workspaceDraft, changeWorkspace, draft);
 
   // Bases and branch names belong to one project.
   const changeProject = (next: string | null) => {

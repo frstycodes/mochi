@@ -10,7 +10,7 @@ export function GitSection() {
       <DesktopOnly what="The worktrees folder and draft pull requests only work in the Mochi desktop app.">
         <DesktopGitGroup />
       </DesktopOnly>
-      <SettingsGroup footer="A new worktree keeps a thread's changes out of your checkout; the project folder works right in it, on its current branch. The new-thread composer changes it per thread. New branches are this prefix, then the prompt's first words.">
+      <SettingsGroup footer="A new worktree keeps a thread's changes out of your checkout; the project folder works right in it, on its current branch. The worktree checkbox in the new-thread composer changes it too, and keeps your last choice. New branches are this prefix, then the prompt's first words.">
         <SettingsRow
           id="workspaceMode"
           label="New threads work in"

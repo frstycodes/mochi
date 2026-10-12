@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useState } from 'react';
-import { BranchUp, ChevronDown, Folder, Layers, Warning } from 'reicon-react';
+import { BranchUp, ChevronDown, Warning } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -14,7 +14,7 @@ import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
 import { getPrefs } from '../settings/prefs';
 import { useHarness } from '../store';
-import { branchName, isUnstarted, uniqueBranch, type WorkspaceDraft, type WorkspaceMode } from './workspace';
+import { branchName, isUnstarted, uniqueBranch, type WorkspaceDraft } from './workspace';
 
 const NAME_CHECK_MS = 250;
 
@@ -56,48 +56,25 @@ export function useThreadWorkspace(thread: Thread): Workspace | null {
   return isOpen ? workspace : null;
 }
 
-/** The meta row's workspace chips: where the thread works, then its branch. */
+/** The meta row's workspace controls: worktree or project folder, then its branch. */
 export function WorkspaceControls({ workspace }: { workspace: Workspace }) {
   return (
     <>
-      <WorkspaceMenu workspace={workspace} />
+      <WorktreeCheckbox workspace={workspace} />
       {!workspace.branches.error && <BranchPicker workspace={workspace} />}
     </>
   );
 }
 
-const MODES = [
-  { value: 'worktree', label: 'New worktree', icon: Layers, description: 'An isolated copy on its own branch; your checkout stays as it is' },
-  { value: 'folder', label: 'Project folder', icon: Folder, description: 'Right in your checkout, on its current branch' },
-] as const satisfies readonly { value: WorkspaceMode; label: string; description: string; icon: unknown }[];
-
-function WorkspaceMenu({ workspace }: { workspace: Workspace }) {
+/** Claude Code's worktree checkbox: checked, its own worktree; unchecked, the project folder. One click, no menu. */
+function WorktreeCheckbox({ workspace }: { workspace: Workspace }) {
   const { draft, onChange } = workspace;
-  const mode = MODES.find((m) => m.value === draft.mode) ?? MODES[0];
+  const id = useId();
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="xs" className="text-subtle-foreground hover:text-foreground" aria-label={`Works in: ${mode.label}`}>
-          <mode.icon />
-          {mode.label}
-          <ChevronDown data-icon="inline-end" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
-        <DropdownMenuLabel>Works in</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={draft.mode} onValueChange={(v) => onChange({ mode: v as WorkspaceMode })}>
-          {MODES.map((m) => (
-            <DropdownMenuRadioItem key={m.value} value={m.value} className="items-start">
-              <m.icon className="mt-0.5" />
-              <span className="flex min-w-0 flex-col">
-                {m.label}
-                <span className="type-caption text-subtle-foreground">{m.description}</span>
-              </span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <label htmlFor={id} className="flex h-6 cursor-pointer items-center gap-1.5 rounded-full px-2 font-medium text-subtle-foreground transition-colors select-none hover:text-foreground has-data-checked:text-foreground">
+      <Checkbox id={id} checked={draft.mode === 'worktree'} onCheckedChange={(on) => onChange({ mode: on ? 'worktree' : 'folder' })} className="size-3.5 border-current [&_svg]:size-3!" />
+      Worktree
+    </label>
   );
 }
 
