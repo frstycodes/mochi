@@ -12,8 +12,9 @@ import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { host } from './host';
-import { harnessOf } from './ModelControls';
-import { DEFAULT_CONTROLS, type ThreadControls } from './runtime/controls';
+import { useDefaultModels } from './ModelControls';
+import { initialControls, type ThreadControls } from './runtime/controls';
+import type { Provider } from './model';
 
 const MATCH_THRESHOLD = 0.5;
 const EXAMPLES = ['Cache admin usage queries with a Redis client', 'Retry failed Stripe webhooks', 'Rate limit the search endpoint'];
@@ -37,8 +38,15 @@ export function NewThreadView() {
 function NewThread() {
   const { dispatch } = useHarness();
   const { textInput } = usePromptInputController();
-  const [controls, setControls] = useState<ThreadControls>(DEFAULT_CONTROLS.claude);
-  const provider = harnessOf(controls.model);
+  const [provider, setProvider] = useState<Provider>('claude');
+  const defaults = useDefaultModels();
+  // The Settings default model until you pick one here.
+  const [picked, setPicked] = useState<ThreadControls | null>(null);
+  const controls = picked ?? initialControls(provider, defaults?.[provider] ?? '');
+  const setControls = (next: ThreadControls, model?: { harness: Provider }) => {
+    if (model) setProvider(model.harness);
+    setPicked(next);
+  };
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
   const [dependOn, setDependOn] = useState<Match | null>(null);
@@ -63,6 +71,7 @@ function NewThread() {
           <ComposerInput
             autoFocus
             controls={controls}
+            provider={provider}
             onControlsChange={setControls}
             onSend={start}
             submitLabel={linked ? 'Start thread, linked' : 'Start thread'}

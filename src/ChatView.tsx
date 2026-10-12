@@ -240,7 +240,8 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
         {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
         <ComposerInput
           controls={controls}
-          harness={thread.live && provider}
+          provider={provider}
+          isLocked={!!thread.live}
           onControlsChange={setControls}
           onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
           submitLabel={isQueue ? 'Queue message' : 'Send'}

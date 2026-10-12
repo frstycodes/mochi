@@ -4,6 +4,7 @@ import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { applyAgentEvent } from './apply.ts';
+import { agentOptions, initialControls } from './controls.ts';
 import { agentCalls, CONTINUE_PROMPT } from './live.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
@@ -53,7 +54,16 @@ test('a limit pauses the thread; resume sends on the same account, the API key c
   assert.equal(restart.method === 'start' && restart.options.provider, 'codex');
   assert.equal(restart.method === 'start' && restart.options.prompt, 'Goal: reply with ok');
   assert.equal(restart.method === 'start' && restart.options.resume, undefined, 'a Claude session id never resumes on Codex');
+  assert.equal(restart.method === 'start' && restart.options.model, undefined, 'the adapter picks the default model');
   const handed = run(s, handoff).threads.find((t) => t.id === id)!;
   assert.equal(handed.session, undefined);
   assert.equal(handed.live?.limit, undefined);
+});
+
+test("a new thread's model starts at the Settings default: listed ids show their catalog entry, others pass through as is", () => {
+  assert.equal(initialControls('claude', '').model, 'opus-5.5', "'' keeps the catalog default");
+  assert.equal(initialControls('claude', 'claude-sonnet-5-5').model, 'sonnet-5.5');
+  assert.equal(agentOptions(initialControls('claude', 'claude-sonnet-5-5'), 'claude').model, 'claude-sonnet-5-5');
+  assert.equal(agentOptions(initialControls('codex', 'gpt-6-codex'), 'codex').model, 'gpt-6-codex');
+  assert.equal(agentOptions(initialControls('codex', ''), 'codex').model, undefined, "Codex's own configured default");
 });

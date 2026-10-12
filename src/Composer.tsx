@@ -26,7 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import { EffortPicker, ModelPicker } from './ModelControls';
-import { ACCESS, type Access, type ThreadControls } from './runtime/controls';
+import { ACCESS, type Access, type ModelOption, type ThreadControls } from './runtime/controls';
 
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
@@ -39,9 +39,10 @@ export function ComposerCard({ className, children, ...props }: ComponentProps<'
 
 type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSubmit'> & {
   controls: ThreadControls;
-  /** Limits the model list to one provider. */
-  harness?: Provider;
-  onControlsChange: (controls: ThreadControls) => void;
+  provider: Provider;
+  /** Keeps the model list to `provider`. */
+  isLocked?: boolean;
+  onControlsChange: (controls: ThreadControls, model?: ModelOption) => void;
   /** Return `false` to hold the message: the text stays in the input, as with the drift guard's card. */
   onSend: (message: PromptInputMessage) => void | boolean;
   /** Set while the agent works: the send button becomes Stop. */
@@ -49,7 +50,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSu
   submitLabel?: string;
 };
 
-export function ComposerInput({ controls, harness, onControlsChange, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
   return (
     <PromptInput multiple globalDrop className="[&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent" onSubmit={(message) => hold(onSend(message))}>
       <ComposerAttachments />
@@ -67,7 +68,7 @@ export function ComposerInput({ controls, harness, onControlsChange, onSend, onS
               <PromptInputActionAddScreenshot />
             </PromptInputActionMenuContent>
           </PromptInputActionMenu>
-          <ModelPicker value={controls.model} harness={harness} onChange={(m) => onControlsChange({ ...controls, model: m.id })} />
+          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
           <EffortPicker value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
         </PromptInputTools>
         <PromptInputTools>
