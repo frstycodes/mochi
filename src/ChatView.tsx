@@ -23,6 +23,7 @@ import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { Shortcut } from './Shortcut';
 import { MOD_KEY } from './keys';
 import { MessageActions } from './chat/MessageActions';
+import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 
@@ -125,24 +126,26 @@ function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; is
   const isYou = entry.who === 'you';
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
   return (
-    <div data-activity-index={row.index} className="group/row flex flex-col gap-1">
-      <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
-        <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
-          {isAgent && row.showAuthor && (
-            <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
-              <ProviderMark provider={entry.who as Provider} size={14} />
-              {authorName(entry.who)}
-              <span className="tabular">{clock(entry.at)}</span>
-            </span>
-          )}
-          {/* GAP: the tick simulation never streams text; once the agent runtime does, isAnimating should follow the stream, not the row position. */}
-          <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
-            {entry.text}
-          </MessageResponse>
-        </MessageContent>
-      </Message>
-      <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />
-    </div>
+    <MessageContextMenu thread={thread} index={row.index}>
+      <div data-activity-index={row.index} className="group/row flex flex-col gap-1">
+        <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
+          <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
+            {isAgent && row.showAuthor && (
+              <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
+                <ProviderMark provider={entry.who as Provider} size={14} />
+                {authorName(entry.who)}
+                <span className="tabular">{clock(entry.at)}</span>
+              </span>
+            )}
+            {/* GAP: the tick simulation never streams text; once the agent runtime does, isAnimating should follow the stream, not the row position. */}
+            <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
+              {entry.text}
+            </MessageResponse>
+          </MessageContent>
+        </Message>
+        <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />
+      </div>
+    </MessageContextMenu>
   );
 }
 
