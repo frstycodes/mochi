@@ -66,7 +66,9 @@ async function runner(spaceId: string): Promise<Runner> {
   // Not `agentEnv()`: it adds the stored API key, which only a thread the user explicitly switched to the key may use.
   const PATH = await userPath();
   const env = { ...accountEnv('claude', configDir), PATH };
-  const options: Options = { pathToClaudeCodeExecutable: install.path, env, tools: [], settingSources: [], persistSession: false, includePartialMessages: true, thinking: { type: 'disabled' }, systemPrompt: BASE_PROMPT };
+  // `tools: []` drops only the built-in tools; `strictMcpConfig` also drops the account's MCP servers and claude.ai
+  // connectors, which otherwise put their tools (~40–100k tokens) on every request.
+  const options: Options = { pathToClaudeCodeExecutable: install.path, env, tools: [], strictMcpConfig: true, settingSources: [], persistSession: false, includePartialMessages: true, thinking: { type: 'disabled' }, systemPrompt: BASE_PROMPT };
   // Not the whole `env`: the SDK writes CLAUDE_AGENT_SDK_VERSION into `process.env` on every query and prewarm, so a
   // key over the env changes after the first one and the parked process would never match.
   return { accountId: account.id, key: JSON.stringify([install.path, configDir, PATH]), options };
