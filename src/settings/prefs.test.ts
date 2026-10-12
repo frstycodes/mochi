@@ -48,3 +48,11 @@ test("new threads' branches start with mochi/ by default and follow the Branch p
   setPrefs({ branchPrefix: 'me/' });
   assert.match(branchOf(), /^me\//);
 });
+
+test('agent control: the old Reversible default becomes Everything (deletes and settings still ask); unknown values fall back', async () => {
+
+  assert.equal(parsePrefs(JSON.stringify({ agentControl: 'reversible' })).agentControl, 'everything');
+  assert.equal(parsePrefs(JSON.stringify({ agentControl: 'yolo' })).agentControl, 'everything');
+  assert.equal(parsePrefs(JSON.stringify({ agentControl: 'read' })).agentControl, 'read');
+  assert.equal(parsePrefs(JSON.stringify({ agentControl: 'changes' })).agentControl, 'changes');
+});
