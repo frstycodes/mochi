@@ -6,6 +6,7 @@ import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
+import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
@@ -69,7 +70,11 @@ export type ThreadsAction =
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
   | { type: 'fork-keep'; keepId: string; dropId: string }
-  | { type: 'handoff'; threadId: string; stepId?: string; to: Provider; summary: string };
+  | { type: 'handoff'; threadId: string; stepId?: string; to: Provider; summary: string }
+  /** A Mochi background agent for the thread (`start_background_agent`); `agentCalls` starts its session. */
+  | { type: 'bg-start'; threadId: string; agent: BackgroundStart }
+  /** Stops a subagent: a Mochi one ends here, a native one when its harness reports it stopped. */
+  | { type: 'bg-stop'; threadId: string; subagentId: string };
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
 export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
@@ -182,6 +187,15 @@ function reduce(state: State, action: Action): State {
       return forkThread(state, action.threadId, action.point);
     case 'fork-keep':
       return keepFork(state, action.keepId, action.dropId);
+    case 'bg-start':
+      return startBackground(state, action.threadId, action.agent);
+    case 'bg-stop': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      const subagent = thread?.subagents?.find((s) => s.id === action.subagentId);
+      // A native agent of a live harness ends when the harness reports it stopped.
+      if (!subagent || (subagent.origin === 'native' && thread?.live && !thread.live.isDetached)) return state;
+      return applyAgentEvent(state, { threadId: action.threadId, type: 'subagent', id: subagent.id, phase: 'end', status: 'stopped' });
+    }
     case 'handoff':
       return handoffLive(handoff(state, action.threadId, action.stepId, action.to, action.summary), action);
     default:
@@ -434,7 +448,8 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
   return {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
-      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
+      // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
+      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
       const goaled = setGoalFrom(said, action.text, now);
       return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
     }),

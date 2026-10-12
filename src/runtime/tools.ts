@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Page } from '../browser/pages.ts';
 import type { AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type StepStatus, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
@@ -523,7 +523,35 @@ const SETTING_SPECS = {
   },
 } satisfies Partial<Specs>;
 
-const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...SETTING_SPECS, ...BROWSER_TOOLS } satisfies Specs;
+const AGENT_SPECS = {
+  start_background_agent: {
+    run: ({ state, caller, args, dispatch }) => {
+      if (!caller.live) throw new Error('Background agents run only in a live desktop thread.');
+      if (args.worktree === 'new' && !caller.repo) throw new Error('This chat has no project, so there is no repository to make a worktree in. Use worktree: same.');
+      const id = `bg${(caller.subagents ?? []).filter((s) => s.origin === 'mochi').length + 1}`;
+      const agent = { id, name: args.name.trim(), prompt: args.prompt.trim(), provider: providerOf(args.provider, caller), hasOwnWorktree: args.worktree === 'new', ...(args.model && { model: args.model }) };
+      dispatch({ type: 'bg-start', threadId: caller.id, agent });
+      const started = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === id);
+      if (!started) throw new Error('The background agent did not start');
+      return { changed: `started background agent "${agent.name}"`, result: agentOf(started), isFinal: true };
+    },
+  },
+  list_background_agents: {
+    run: ({ caller, args, env }) => ({ result: { agents: (caller.subagents ?? []).filter((s) => !args.status || s.status === args.status).map((s) => agentOf(s, env.now?.() ?? Date.now())) } }),
+  },
+  stop_background_agent: {
+    run: ({ state, caller, args, dispatch }) => {
+      const subagent = caller.subagents?.find((s) => s.id === args.id);
+      if (!subagent) throw new Error(`No agent ${args.id} in this thread; ids come from list_background_agents`);
+      if (subagent.status !== 'running') throw new Error(`"${subagent.name}" already ${subagent.status === 'done' ? 'finished' : subagent.status}`);
+      dispatch({ type: 'bg-stop', threadId: caller.id, subagentId: subagent.id });
+      const after = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === subagent.id);
+      return { changed: `stopped background agent "${subagent.name}"`, result: agentOf(after ?? subagent), isFinal: true };
+    },
+  },
+} satisfies Partial<Specs>;
+
+const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...SETTING_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS } satisfies Specs;
 
 // {HELPERS}
 
@@ -577,6 +605,10 @@ const capitalize = (s: string) => s[0].toUpperCase() + s.slice(1);
 const asObject = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? v : { result: v });
 
 const fail = (text: string): AgentToolResult => ({ text, isError: true });
+
+function agentOf(s: Subagent, now = Date.now()) {
+  return { id: s.id, name: s.name, status: s.status, origin: s.origin, provider: s.provider, tokens: s.tokens, elapsedSeconds: Math.round(((s.endedAt ?? now) - s.startedAt) / 1000), ...(s.result && { result: s.result.slice(0, 4000) }), ...(s.error && { error: s.error }) };
+}
 
 function goalOf(thread: Thread) {
   return { threadId: thread.id, title: thread.title, goal: thread.goal, status: thread.status, steps: thread.steps.map(stepOf) };

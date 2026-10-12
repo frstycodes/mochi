@@ -258,7 +258,7 @@ export function Expand({ isOpen, children }: { isOpen: boolean; children: ReactN
   );
 }
 
-function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolean; files: ThreadFiles | null }) {
+export function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolean; files: ThreadFiles | null }) {
   const [isOpen, setOpen] = useState(false);
   const patch = PATCHES[call.target];
   const run = RUNS[call.target];
@@ -391,7 +391,7 @@ function seconds(ms: number) {
   return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-function DiffView({ patch }: { patch: string }) {
+export function DiffView({ patch }: { patch: string }) {
   const { resolvedTheme } = useTheme();
   const { diffStyle } = usePrefs();
   return (

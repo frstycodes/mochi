@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
-import { Add, Code, Edit, Folder, Global, MessageAdd, Mobile, Plug, type IconComponent } from 'reicon-react';
+import { Add, Code, Edit, Folder, Global, Hierarchy, MessageAdd, Mobile, Plug, type IconComponent } from 'reicon-react';
 import type { Pane, PaneTab, PaneTabKind, Thread } from '../model';
+import { AgentsTab } from './AgentsTab';
 import { BrowserTab } from './BrowserTab';
 import { ChangesTab } from './ChangesTab';
 import { FilesTab } from './FilesTab';
@@ -24,6 +25,7 @@ export const PANE_TABS = {
   simulator: { title: 'Simulator', icon: Mobile, component: SimulatorTab },
   ports: { title: 'Ports', icon: Plug, component: PortsTab },
   sidechat: { title: 'Side chat', icon: MessageAdd, component: SideChatTab },
+  agents: { title: 'Agents', icon: Hierarchy, component: AgentsTab },
   new: { title: 'New tab', icon: Add, component: NewTab },
 } satisfies Record<PaneTabKind, { title: string; icon: IconComponent; component: ComponentType<PaneTabProps> }>;
 

@@ -50,3 +50,9 @@ test('the live work row is the newest one, unless you spoke after it', () => {
   assert.equal(liveWorkIndex(rows), 1);
   assert.equal(liveWorkIndex(chatRows([e('message', 'you', 'go'), e('tool', 'claude', 'Run a'), e('message', 'you', 'more')])), -1);
 });
+
+test('a subagent is its own row where it started, and the turn goes on in a new accordion after it', () => {
+  const agent: ActivityEntry = { ...e('subagent', 'claude', 'Load test'), subagentId: 'toolu_1' };
+  assert.deepEqual(shape([e('message', 'you', 'go'), e('tool', 'claude', 'Read a.ts'), agent, e('tool', 'claude', 'Edit a.ts')]), ['go', 'work(Read a.ts)', 'Load test', 'work(Edit a.ts)']);
+  assert.deepEqual(chatRows([agent]).map((r) => r.kind), ['subagent']);
+});

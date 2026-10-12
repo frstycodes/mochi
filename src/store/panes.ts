@@ -1,6 +1,7 @@
 import { PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { showsDemoData } from '../demoData.ts';
+import { runningBackground } from '../runtime/subagents.ts';
 
 export interface PanesState {
   panes: Pane[];
@@ -15,7 +16,9 @@ export type PanesAction =
   | { type: 'pane-restore'; pane: Pane }
   | { type: 'pane-pop'; threadId: string; tabId: string; isPopped: boolean }
   | { type: 'pane-reorder'; threadId: string; order: string[] }
-  | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> };
+  | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> }
+  /** The thread's Agents tab, selected, with this agent expanded. */
+  | { type: 'pane-show-agent'; threadId: string; subagentId: string };
 
 const STORAGE_KEY = 'harness.panes.v1';
 
@@ -68,6 +71,24 @@ export function panesReducer(state: State, action: Action): State {
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, tabs: reorderTabs(p.tabs, action.order) })) };
     case 'delete':
       return { ...state, panes: state.panes.filter((p) => !action.threadIds.includes(p.threadId)) };
+    case 'pane-show-agent': {
+      const pane = state.panes.find((p) => p.threadId === action.threadId);
+      const tab = pane?.tabs.find((t) => t.kind === 'agents');
+      const opened = tab ? state : panesReducer(state, { type: 'pane-open-tab', threadId: action.threadId, kind: 'agents' });
+      const id = tab?.id ?? opened.panes.find((p) => p.threadId === action.threadId)!.activeTab;
+      return { ...opened, panes: mapPane(opened.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: id, tabs: p.tabs.map((t) => (t.id === id ? { ...t, isPopped: false, agentId: action.subagentId } : t)) })) };
+    }
+    case 'agent':
+    case 'bg-start': {
+      const threadId = action.type === 'agent' ? action.event.threadId : action.threadId;
+      const isStart = action.type === 'bg-start' || (action.event.type === 'subagent' && (action.event.phase === 'start' || action.event.isBackground === true));
+      return isStart ? withAgentsTab(state, threadId) : state;
+    }
+    case 'tick': {
+      // Demo threads report inside the tick: an agent started this minute logged its row at `now`.
+      const started = state.threads.filter((t) => t.activity.some((a) => a.kind === 'subagent' && a.at === state.now));
+      return started.reduce((s, t) => withAgentsTab(s, t.id), state);
+    }
     case 'pane-update-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, tabs: p.tabs.map((t) => (t.id === action.tabId ? { ...t, ...action.patch } : t)) })) };
     default:
@@ -91,6 +112,20 @@ function loadPanes(): Pane[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * The first background agent of a thread adds its Agents tab: the pane opens if it was closed, but whatever tab you were
+ * on stays in front. Runs after the threads slice, so the agent is already counted.
+ */
+function withAgentsTab(state: State, threadId: string): State {
+  const thread = state.threads.find((t) => t.id === threadId);
+  const pane = state.panes.find((p) => p.threadId === threadId);
+  if (!thread || runningBackground(thread) !== 1 || pane?.tabs.some((t) => t.kind === 'agents')) return state;
+  const tab: PaneTab = { id: nextTabId(pane?.tabs ?? []), kind: 'agents' };
+  const tabs = [...(pane?.tabs ?? []).filter((t) => t.kind !== 'new'), tab];
+  const front = tabs.find((t) => t.id === pane?.activeTab && !t.isPopped) ?? tab;
+  return { ...state, panes: [...state.panes.filter((p) => p.threadId !== threadId), { threadId, isOpen: true, tabs, activeTab: front.id }] };
 }
 
 function newPane(threadId: string): Pane {

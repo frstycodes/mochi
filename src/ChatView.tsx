@@ -40,6 +40,7 @@ import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
+import { SubagentRow } from './agents/SubagentRow';
 
 export function ChatView({ thread }: { thread: Thread }) {
   const { state } = useHarness();
@@ -112,6 +113,10 @@ function useComposerHeightVar() {
 function ChatRowView({ thread, row, isLive, action }: { thread: Thread; row: ChatRow; isLive: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
+  if (row.kind === 'subagent') {
+    const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
+    return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
+  }
   if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
   const { entry } = row;

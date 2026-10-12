@@ -1,4 +1,4 @@
-import type { AgentQuestion } from './host/types/agent.ts';
+import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
@@ -47,7 +47,7 @@ export interface Revision {
 export interface ActivityEntry {
   at: number;
   who: Author;
-  kind: 'message' | 'tool' | 'event' | 'reasoning';
+  kind: 'message' | 'tool' | 'event' | 'reasoning' | 'subagent';
   text: string;
   /** Events only: the why, shown muted under the label. */
   detail?: string;
@@ -58,6 +58,8 @@ export interface ActivityEntry {
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
+  /** `subagent` entries: the row in `Thread.subagents` this one shows, where it was started. */
+  subagentId?: string;
   /** Wall-clock milliseconds, stamped on live agents' entries; `at` is the app clock's minute. */
   ms?: number;
 }
@@ -152,6 +154,44 @@ export interface Thread {
   live?: LiveRun;
   /** Second opinions from the other provider, oldest first. */
   reviews?: Review[];
+  /** Agents this thread's agent started, oldest first. */
+  subagents?: Subagent[];
+}
+
+/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a Mochi background agent (`start_background_agent`). */
+export interface Subagent {
+  id: string;
+  /** `mochi`: a background agent Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
+  origin: 'native' | 'mochi';
+  provider: Provider;
+  name: string;
+  prompt?: string;
+  model?: string;
+  toolId?: string;
+  isBackground: boolean;
+  status: SubagentStatus;
+  /** Wall-clock ms, for elapsed time. */
+  startedAt: number;
+  endedAt?: number;
+  tokens: number;
+  activity?: string;
+  steps: SubagentStep[];
+  message?: string;
+  result?: string;
+  error?: string;
+  /** Mochi agents: their session's thread id in `host.agent`. */
+  sessionId?: string;
+  /** Mochi agents: the folder they run in, and whether it is a worktree of their own (else the parent's, shared). */
+  cwd?: string;
+  hasOwnWorktree?: boolean;
+}
+
+export interface SubagentStep {
+  id: string;
+  text: string;
+  isDone: boolean;
+  files?: string[];
+  exitCode?: number;
 }
 
 export interface LiveRun {
@@ -166,6 +206,8 @@ export interface LiveRun {
   isDetached?: boolean;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
+  /** Background agents' reports, sent to the agent ahead of your next message. */
+  notes?: string[];
   /** Reported tokens per usage event, for the plan window. */
   usage: { at: number; provider: Provider; tokens: number }[];
 }
@@ -212,7 +254,7 @@ export function answerText(answers: string[][]) {
   return answers.filter((a) => a.length).map((a) => a.join(', ')).join(' · ');
 }
 
-export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'new'] as const;
+export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'new'] as const;
 export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
 export interface PaneTab {
@@ -222,6 +264,8 @@ export interface PaneTab {
   url?: string;
   file?: { path: string; line?: number };
   isPopped?: boolean;
+  /** Agents tabs: the agent shown expanded, picked from the chat's "Open". */
+  agentId?: string;
 }
 
 export interface Pane {

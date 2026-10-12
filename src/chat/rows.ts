@@ -5,7 +5,9 @@ export type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
   | { kind: 'event'; key: string; entry: ActivityEntry }
   | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
-  | { kind: 'review'; key: string; review: Review };
+  | { kind: 'review'; key: string; review: Review }
+  /** A subagent where it was started (`entry.subagentId`). */
+  | { kind: 'subagent'; key: string; entry: ActivityEntry };
 
 /**
  * One work row per turn (your message to the next): every tool call and reasoning of the turn, plus the events logged
@@ -27,6 +29,11 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): Cha
       if (turn) return turn.entries.push(entry);
       turn = { kind: 'work', key, who: entry.who, entries: [entry] };
       return rows.push(turn);
+    }
+    // A subagent's row stays in view like a Mochi widget: the turn goes on in a new accordion after it.
+    if (entry.kind === 'subagent') {
+      turn = undefined;
+      return rows.push({ kind: 'subagent', key, entry });
     }
     if (entry.kind === 'event') {
       if (turn && isMidWork && !entry.card) return turn.entries.push(entry);

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -193,4 +194,33 @@ test('supportedModels() lists each model once by its wire id, the default row ma
     { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], isDefault: true },
     { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], isDefault: false },
   ]);
+});
+
+test('a background Agent call becomes a subagent with its own steps, tokens and result, out of the parent log (real 2.1.296 trace)', () => {
+  const trace = readFileSync(new URL('./fixtures/subagent.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as SDKMessage);
+  const mapper = createMapper('t1', '/tmp/scratch');
+  const events = trace.flatMap(mapper.map);
+  const id = 'toolu_016eg9L6pu9B97dXqe5vUWok';
+  const subagent = events.filter((e) => e.type === 'subagent');
+  assert.ok(subagent.every((e) => e.id === id && e.threadId === 't1'));
+  assert.deepEqual(subagent[0], { threadId: 't1', type: 'subagent', id, phase: 'start', toolId: id, name: 'Echo hi', prompt: 'Run `echo hi` with Bash and reply with its output only.', isBackground: true });
+  assert.deepEqual(subagent.flatMap((e) => (e.step ? [[e.step.phase, e.step.text, e.step.exitCode]] : [])), [['start', 'Run echo hi', undefined], ['end', 'Run echo hi', 0]]);
+  assert.ok(subagent.some((e) => e.phase === 'progress' && e.model === 'claude-haiku-5-5'), 'the launch receipt names the model');
+  assert.ok(subagent.some((e) => e.activity === 'Running Print hi via echo' && e.tokens === 22021));
+  assert.deepEqual(subagent.filter((e) => e.phase === 'end'), [{ threadId: 't1', type: 'subagent', id, phase: 'end', status: 'done', result: 'hi', tokens: 24873 }]);
+  assert.equal(mapper.taskOf(id), 'a169bf8f299bdb8d4', 'stopTask gets the task id Claude Code registered');
+  assert.deepEqual(events.filter((e) => e.type === 'tool'), [], "neither the Agent call nor the subagent's Bash land in the parent's work log");
+  assert.deepEqual(events.filter((e) => e.type === 'turn-end').length, 2, 'the background report starts a turn of its own');
+});
+
+test('a foreground Agent call ends with its answer from the tool result; a failed one with the error', () => {
+  const { map } = createMapper('t1', CWD);
+  const base = { parent_tool_use_id: null, session_id: 's', uuid: 'u' };
+  map({ ...base, type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'a1', name: 'Agent', input: { description: 'Find usages', prompt: 'grep', run_in_background: false } }] } } as unknown as SDKMessage);
+  const done = map({ ...base, type: 'user', tool_use_result: { status: 'completed', agentId: 'x', content: [{ type: 'text', text: 'Found 3' }], totalTokens: 900, totalToolUseCount: 2, totalDurationMs: 10, usage: {}, prompt: 'grep', resolvedModel: 'claude-haiku-5-5' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a1', content: 'Found 3' }] } } as unknown as SDKMessage);
+  assert.deepEqual(done, [{ threadId: 't1', type: 'subagent', id: 'a1', phase: 'end', status: 'done', result: 'Found 3', tokens: 900, model: 'claude-haiku-5-5' }]);
+  map({ ...base, type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'a2', name: 'Task', input: { description: 'Broken' } }] } } as unknown as SDKMessage);
+  const failed = map({ ...base, type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a2', content: 'Agent type not found', is_error: true }] } } as unknown as SDKMessage);
+  assert.deepEqual(failed, [{ threadId: 't1', type: 'subagent', id: 'a2', phase: 'end', status: 'failed', error: 'Agent type not found' }]);
+  assert.deepEqual(map({ ...base, parent_tool_use_id: 'unknown', type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'x' }] } } as unknown as SDKMessage), [], 'traffic from an agent we never saw start is dropped');
 });

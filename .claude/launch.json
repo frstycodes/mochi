@@ -476,6 +476,31 @@
         "--strictPort"
       ],
       "port": 5473
+    },
+    {
+      "name": "mochi-agents",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5441",
+        "--strictPort"
+      ],
+      "port": 5441
+    },
+    {
+      "name": "mochi-agents-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5443",
+        "--strictPort"
+      ],
+      "port": 5443,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-festive-gauss-02abb9/85d15694-fc1c-4e47-b798-b15f22ed90fb/scratchpad/mochi-userdata"
+      }
     }
   ]
 }

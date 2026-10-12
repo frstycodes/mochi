@@ -98,6 +98,14 @@ export async function rewindClaude(threadId: string, text: string) {
   if (!result.canRewind) console.warn(`Claude rewind skipped for ${threadId}: ${result.error ?? 'no checkpoint'}`);
 }
 
+/** Stops one subagent (Agent tool task) of a live session; Claude Code then reports it `stopped`. */
+export async function stopClaudeSubagent(threadId: string, subagentId: string) {
+  const session = sessions.get(threadId);
+  const taskId = session?.mapper.taskOf(subagentId);
+  if (!session?.query || !taskId) throw new Error('That subagent is not running in a live Claude session');
+  await session.query.stopTask(taskId);
+}
+
 export function resolveClaude(requestId: string, decision: AgentDecision) {
   const pending = approvals.get(requestId);
   if (!pending) return false;

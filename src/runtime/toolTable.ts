@@ -103,6 +103,26 @@ export const TOOL_TABLE = {
     description: 'Close out a goal: drops every open step with your reason and settles the thread. Use when the goal is met or no longer wanted. Not your own thread.',
     shape: { threadId: otherThread, reason: z.string().min(1) },
   },
+  // {AGENTS}
+  start_background_agent: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Start a background agent that works on its own while you keep going: in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new). It runs on this profile's account and counts toward the concurrency cap. When it finishes, its report comes to you with the user's next message. For work that needs no answer from you mid-way; for a quick lookup use your own subagents.",
+    shape: {
+      prompt: z.string().min(1).max(20_000).describe('The whole task: it sees nothing of this conversation'),
+      name: z.string().min(1).max(60).describe('A few words the user sees, like "Fix flaky checkout test"'),
+      worktree: z.enum(['same', 'new']).optional(),
+      provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
+      model: z.string().optional().describe("A model id the account offers; defaults to this thread's"),
+    },
+  },
+  list_background_agents: {
+    tier: 'read',
+    description: "List this thread's subagents and background agents: id, name, status, origin (mochi: started with start_background_agent; native: your own), tokens, elapsed, and the result of finished ones.",
+    shape: { status: z.enum(['running', 'done', 'failed', 'stopped']).optional() },
+  },
+  stop_background_agent: { tier: 'change', quiet: true, description: 'Stop one of your running background agents (ids from list_background_agents). Its partial work stays in its worktree.', shape: { id: z.string() } },
   // {BROWSER}
   browser_tabs: { tier: 'read', description: "List your thread's browser tabs in the side pane: tabId, url, title, loading, active.", shape: {} },
   browser_open: {
