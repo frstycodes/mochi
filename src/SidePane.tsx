@@ -4,6 +4,7 @@ import { Add, Pip, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTab, Thread } from './model';
 import { PANE_TABS, tabTitle } from './pane/tabs';
@@ -48,7 +49,9 @@ function TabStrip({ thread, tabs, active }: { thread: Thread; tabs: PaneTab[]; a
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    listRef.current?.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const list = listRef.current;
+    const tab = list?.querySelector('[aria-selected=true]');
+    if (list && tab) revealIn(list, tab);
   }, [active?.id]);
   const order = tabs.map((t) => t.id);
   const reorder = (next: string[]) => dispatch({ type: 'pane-reorder', threadId: thread.id, order: next });

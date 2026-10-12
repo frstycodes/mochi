@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
 
 /** One tick per chat row down the chat's right edge; rows in view light up, clicking a tick jumps to its row. */
@@ -9,7 +10,11 @@ export function ThreadMinimap({ labels, className }: { labels: string[]; classNa
   const inView = useRowsInView(scrollRef, labels.length);
   if (labels.length < 2) return null;
 
-  const jump = (i: number) => scrollRef.current?.querySelector(`[data-chat-row="${i}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const jump = (i: number) => {
+    const chat = scrollRef.current;
+    const row = chat?.querySelector(`[data-chat-row="${i}"]`);
+    if (chat && row) revealIn(chat, row, { align: 'start', behavior: 'smooth' });
+  };
 
   return (
     <nav aria-label="Thread outline" className={cn('flex flex-col justify-center', className)}>
