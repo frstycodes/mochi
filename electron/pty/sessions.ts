@@ -16,7 +16,7 @@ export function spawnSession(owner: WebContents, { cwd, cols, rows, command, por
     cwd,
     cols,
     rows,
-    env: { ...process.env, ...env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Harness', ...(port && { PORT: String(port) }), ...(command && hasZshHooks && { HARNESS_COMMAND: command }) },
+    env: { ...process.env, ...env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Mochi', ...(port && { PORT: String(port) }), ...(command && hasZshHooks && { HARNESS_COMMAND: command }) },
   });
   const id = `pty-${++nextId}`;
   sessions.set(id, { pty, owner });

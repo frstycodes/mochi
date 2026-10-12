@@ -167,7 +167,7 @@ function NotifySettings() {
           </NativeSelect>
         </div>
       )}
-      <p className="type-caption text-subtle-foreground">{quiet.isOn ? 'No alerts or toasts in these hours; the list still fills.' : 'Alerts arrive while Harness is in the background.'}</p>
+      <p className="type-caption text-subtle-foreground">{quiet.isOn ? 'No alerts or toasts in these hours; the list still fills.' : 'Alerts arrive while Mochi is in the background.'}</p>
       {!host.isDesktop && <BrowserPermission />}
     </div>
   );

@@ -261,7 +261,7 @@ function BuildLog({ lines, isBuilding, onClose }: { lines: string[]; isBuilding:
 function MockNotice() {
   return (
     <Alert className="mx-2 w-auto">
-      <AlertDescription>Mock device. The live simulator needs the Harness desktop app on a Mac with Xcode.</AlertDescription>
+      <AlertDescription>Mock device. The live simulator needs the Mochi desktop app on a Mac with Xcode.</AlertDescription>
     </Alert>
   );
 }

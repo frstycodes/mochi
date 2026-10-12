@@ -89,7 +89,7 @@ function DesignHeader() {
   return (
     <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur-xl">
       <div className="mx-auto flex h-12 max-w-[1120px] items-center gap-4 px-4 md:px-8">
-        <span className="type-title">Harness</span>
+        <span className="type-title">Mochi</span>
         <Badge variant="secondary" className="hidden sm:inline-flex">
           Design system v0.1
         </Badge>
@@ -125,7 +125,7 @@ function DesignHeader() {
 function Overview() {
   return (
     <section className="flex flex-col gap-3">
-      <h1 className="type-display">Harness design system</h1>
+      <h1 className="type-display">Mochi design system</h1>
       <p className="max-w-[62ch] type-prose text-muted-foreground">
         Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and reicon, themed from DESIGN.md. Dark first, cool neutrals, squircle corners, hairline separation.
       </p>
@@ -572,7 +572,7 @@ function Conversation() {
             </QuestionnaireActions>
           </Questionnaire>
         </Block>
-        <Block title="Event marker" use="Harness events you would scroll back to: finished steps, goal revisions, overlaps.">
+        <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, overlaps.">
           <Marker variant="separator">
             <MarkerContent className="type-caption">Goal v2: +1 step "Per-key overrides"</MarkerContent>
           </Marker>

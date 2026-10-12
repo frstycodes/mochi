@@ -14,7 +14,7 @@ export const isTrustedUrl = (url: string) =>
 
 const routed = new Map<string, BrowserWindow>();
 
-/** A torn-off window: focuses the one already showing `route`, otherwise opens it on a display with no Harness window yet, one per monitor. */
+/** A torn-off window: focuses the one already showing `route`, otherwise opens it on a display with no Mochi window yet, one per monitor. */
 export function openRoute(route: string) {
   const existing = routed.get(route);
   if (existing && !existing.isDestroyed()) return existing.focus();

@@ -164,7 +164,7 @@ function rowLabel(row: ChatRow) {
 }
 
 function authorName(who: Author) {
-  return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Harness' }[who];
+  return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Mochi' }[who];
 }
 
 /** Reading back through the chat folds the question tray away; returning to the latest message brings it back. */

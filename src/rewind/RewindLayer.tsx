@@ -128,7 +128,7 @@ function PointDialog({ thread, mode, initial, onClose }: { thread: Thread; mode:
               <PointGroup title="Messages">
                 {messages.map(({ entry, index }) => (
                   <PointOption key={index} value={pointValue({ kind: 'message', index })} at={entry.at}>
-                    <span className="shrink-0 text-subtle-foreground">{entry.who === 'you' ? 'You' : entry.who === 'harness' ? 'Harness' : PROVIDER_NAME[entry.who]}</span>
+                    <span className="shrink-0 text-subtle-foreground">{entry.who === 'you' ? 'You' : entry.who === 'harness' ? 'Mochi' : PROVIDER_NAME[entry.who]}</span>
                     <span className="min-w-0 truncate">{entry.text.split('\n')[0]}</span>
                   </PointOption>
                 ))}

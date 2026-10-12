@@ -275,6 +275,17 @@
         "--strictPort"
       ],
       "port": 5345
+    },
+    {
+      "name": "harness-rename",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5353",
+        "--strictPort"
+      ],
+      "port": 5353
     }
   ]
 }

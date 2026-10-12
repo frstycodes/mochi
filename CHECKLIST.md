@@ -1,4 +1,4 @@
-# Harness checklist
+# Mochi checklist
 
 Status: `[x]` shipped in the prototype, `[ ]` to build. Goal items marked shipped were read from `src/store.tsx`, `src/progress.ts`, `src/model.ts` and `DESIGN.md`.
 
@@ -222,7 +222,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [ ] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). Copy, download and fullscreen done; side-pane tab and PiP wait for a visual tab kind in the pane registry
 - [x] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
 - [x] Theme-aware: re-render on light / dark switch; contrast checked in both (colours come from the theme tokens; no separate contrast measurement)
-- [x] Harness-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
+- [x] Mochi-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
 
 ## 8. Viewers
 
@@ -231,7 +231,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 
 ## 9. Accounts and limits
 
-- [ ] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Harness never handles credentials
+- [ ] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Mochi never handles credentials
 - [ ] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
 - [ ] Threads always run on their profile's account; never rotate to another account of the same provider
 - [ ] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider

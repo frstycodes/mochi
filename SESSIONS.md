@@ -17,7 +17,7 @@ Decided: Electron desktop shell; the web build (Vite single file / artifact) kee
 
 - **Host bridge** `src/host/`: `host.<namespace>` typed API. In Electron it calls `window.harnessHost` (preload, `contextBridge`) → `ipcMain` handlers in `electron/ipc/<namespace>.ts`. In the web build each namespace has a mock in `src/host/web/<namespace>.ts`. `host.isDesktop` tells the UI which one it got. Namespaces: `pty`, `git`, `fs`, `ports`, `sim`, `browser`, `notify`, `windows`, `agent`.
 - **Pane tab registry** `src/pane/tabs.ts`: `PaneTabKind` → `{ title, icon, component }`; each kind lives in `src/pane/<Kind>Tab.tsx`. Kinds: `browser`, `changes`, `terminal`, `files`, `simulator`, `ports`, `sidechat`, `new`.
-- **Store slices** `src/store/`: `threads` (goal, steps, revisions, tick sim), `queue`, `panes`, `layout`, `ui`. Root reducer composes slices; `useHarness()` and the existing selectors keep their signatures.
+- **Store slices** `src/store/`: `threads` (goal, steps, revisions, tick sim), `queue`, `panes`, `layout`, `ui`. Root reducer composes slices; `useMochi()` and the existing selectors keep their signatures.
 
 ## Wave 0: foundation (2 sessions, parallel)
 
