@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, Link, Maximize, More, Note, Pin, PinOff, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, Link, Maximize, Note, Pin, PinOff, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextInputUsage, ContextOutputUsage, ContextTrigger } from '@/components/ai-elements/context';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,7 @@ import { outcomeOf } from './goals/outcome';
 import { burnSeries, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
 import { summarize, type ToolVerb } from './summary';
-import { ProviderMark, StepStatusIcon, lineColor } from './ui';
+import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon } from './ui';
 import { planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
 
 const LIST_LIMIT = 3;
@@ -110,7 +110,7 @@ function PanelHeader({ thread }: { thread: Thread }) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-xs" aria-label="Summary options">
-            <More />
+            <OverflowIcon />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

@@ -1,4 +1,3 @@
-import { More } from 'reicon-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -23,6 +22,7 @@ import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitl
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Block, Grid, Section } from '../layout';
+import { OverflowIcon } from '../../ui';
 
 export function OverlaysSection() {
   return (
@@ -67,7 +67,7 @@ export function OverlaysSection() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" aria-label="Thread options">
-                  <More />
+                  <OverflowIcon />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">

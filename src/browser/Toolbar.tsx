@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, More, PhoneRotate, Pip, Refresh, TriangleWarning, X } from 'reicon-react';
+import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Pip, Refresh, TriangleWarning, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -31,6 +31,7 @@ import { DEVICES, RESPONSIVE } from './devices';
 import { deviceSize, isDemoUrl } from './PageSurface';
 import { updatePage, useAddressHistory, type Page } from './pages';
 import { displayUrl, normalizeUrl } from './url';
+import { OverflowIcon } from '../ui';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const DPRS = [0, 1, 2, 3];
@@ -217,7 +218,7 @@ function MoreMenu({ pageId, page, onHardReload }: { pageId: string; page: Page; 
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label="More">
-              <More />
+              <OverflowIcon />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

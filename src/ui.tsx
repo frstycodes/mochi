@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Briefcase, Home, Layers, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon } from 'reicon-react';
+import { Briefcase, Home, Layers, MoreH, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
@@ -155,4 +155,9 @@ export function TooltipIconButton({ label, hint, children, ...props }: { label: 
       </TooltipContent>
     </Tooltip>
   );
+}
+
+/** The "•••" on every overflow menu: reicon MoreH, filled. */
+export function OverflowIcon(props: IconProps) {
+  return <MoreH weight="Filled" {...props} />;
 }

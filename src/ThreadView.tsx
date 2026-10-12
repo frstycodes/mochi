@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Archive, BranchUp, More, Scale, SidebarRight, Undo } from 'reicon-react';
+import { Archive, BranchUp, Scale, SidebarRight, Undo } from 'reicon-react';
 import { toast } from 'sonner';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +24,7 @@ import { SummaryPanel } from './SummaryPanel';
 import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
 import { useSettle } from './useSettle';
-import { ProgressRing, ThreadStatusIcon } from './ui';
+import { OverflowIcon, ProgressRing, ThreadStatusIcon } from './ui';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -263,7 +263,7 @@ function ThreadMenu({ thread }: { thread: Thread }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label="Thread actions" className="text-muted-foreground">
-          <More />
+          <OverflowIcon />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
