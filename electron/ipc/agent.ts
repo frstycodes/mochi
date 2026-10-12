@@ -4,11 +4,13 @@ import { isAbsolute, join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentRunOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
-import type { Thread } from '../../src/model.ts';
+import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { ask as askAgent } from '../agents/ask.ts';
+import { models } from '../agents/models.ts';
+import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall } from '../mcp/server.ts';
 import { addWorktree } from './git.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
@@ -55,7 +57,7 @@ export const agent = {
     const { worktree, ...rest } = o;
     const folder = await agentFolder(threadId as string, o.cwd);
     const cwd = worktree === undefined ? folder : await threadWorktree(threadId as string, folder, string(worktree, 'options.worktree', 255));
-    const run = { ...rest, cwd } as unknown as AgentRunOptions;
+    const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined)) } as unknown as AgentRunOptions;
     if (o.provider === 'claude') return startClaude(threadId as string, run);
     if (o.provider === 'codex') return codex.start(threadId as string, run);
     return runtime();
@@ -94,6 +96,10 @@ export const agent = {
   async warm(_sender, spaceId) {
     return warmClaude(string(spaceId, 'spaceId', 256));
   },
+  async models(_sender, provider, spaceId) {
+    if (!PROVIDERS.includes(provider as string)) throw new TypeError('provider must be claude or codex');
+    return models(codex, provider as Provider, string(spaceId, 'spaceId', 256));
+  },
   async rewindFiles(_sender, threadId, text) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
@@ -118,7 +124,8 @@ export const agent = {
     sender.once('destroyed', () => abort.abort());
     void (async () => {
       try {
-        for await (const text of askAgent(ASKERS, c as unknown as AgentAskContext, messages as AgentAskMessage[], m as unknown as AgentAskModel, abort)) send({ id, type: 'text', text });
+        const { model } = await offered(m.provider as Provider, c.spaceId as string, m.model as string | undefined, undefined);
+        for await (const text of askAgent(ASKERS, c as unknown as AgentAskContext, messages as AgentAskMessage[], { provider: m.provider, model } as AgentAskModel, abort)) send({ id, type: 'text', text });
         send({ id, type: 'done', text: '' });
       } catch (error) {
         send({ id, type: 'error', text: error instanceof Error ? error.message : String(error) });
@@ -149,6 +156,11 @@ export const agent = {
     return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },
 } satisfies Handlers<AgentHost>;
+
+/** The model and effort a run sends: always an explicit model the account offers. A list that can't be read passes the choice through; the run then reports the provider's own error. */
+async function offered(provider: Provider, spaceId: string, model: string | undefined, effort: string | undefined) {
+  return resolveRun(await models(codex, provider, spaceId).catch(() => []), model, effort);
+}
 
 /** The project folder, checked to exist; a folderless chat (null) gets its own folder, so the agent never runs in Mochi's cwd (`/` when packaged). */
 async function agentFolder(threadId: string, cwd: unknown) {

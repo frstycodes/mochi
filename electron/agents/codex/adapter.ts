@@ -1,8 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { apiMessage, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, codexModels, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 
 interface Live {
@@ -143,6 +143,21 @@ export class CodexAdapter {
       server.asks.delete(codexId);
       void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
     }
+  }
+
+  /** Every page of the profile's account's `model/list`. Throws when logged out. */
+  async models(spaceId: string): Promise<AgentModel[]> {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    const models: AgentModel[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = (await rpc.request('model/list', { cursor })) as { nextCursor?: string | null };
+      models.push(...codexModels(page));
+      cursor = page?.nextCursor ?? null;
+    } while (cursor);
+    return models;
   }
 
   dispose() {

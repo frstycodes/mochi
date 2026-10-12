@@ -86,10 +86,23 @@ export interface AgentAskContext {
   diff: { path: string; added: number; removed: number }[] | null;
 }
 
-/** Who answers a side question; `model` unset runs the harness's own default (Codex's catalog entries carry no real id). */
+/** Who answers a side question; `model` unset, or one the account doesn't offer, runs the account's default model. */
 export interface AgentAskModel {
   provider: Provider;
   model?: string;
+}
+
+/** One model a provider offers an account, from the provider's own list (Claude Agent SDK `supportedModels()`, Codex `model/list`). */
+export interface AgentModel {
+  /** The provider's own model id, sent as-is. */
+  id: string;
+  name: string;
+  description: string;
+  /** Provider effort ids (`low` … `max`, Codex's `ultra`); empty when the model takes none. */
+  efforts: string[];
+  /** The provider's default effort for this model; unset leaves it to the harness. */
+  defaultEffort?: string;
+  isDefault: boolean;
 }
 
 export interface AgentAskMessage {
@@ -130,6 +143,8 @@ export interface AgentHost {
   rewindFiles(threadId: string, text: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
   warm(spaceId: string): Promise<void>;
+  /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
+  models(provider: Provider, spaceId: string): Promise<AgentModel[]>;
   onToolCall(listener: (call: AgentToolCall) => void): () => void;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
 }
@@ -146,6 +161,7 @@ export const agentMethods = {
   classify: 'invoke',
   rewindFiles: 'invoke',
   warm: 'invoke',
+  models: 'invoke',
   onToolCall: 'event',
   toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;

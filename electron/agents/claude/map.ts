@@ -1,6 +1,6 @@
 import path from 'node:path';
-import type { McpServerStatus, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentPlanItem } from '../../../src/host/types/agent.ts';
+import type { McpServerStatus, ModelInfo, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem } from '../../../src/host/types/agent.ts';
 import type { AgentInfo, McpServer } from '../../../src/model.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
@@ -185,3 +185,17 @@ function exitCode(block: ToolResultBlock) {
 const resetTime = (value: number) => new Date(value < 1e12 ? value * 1000 : value).toISOString();
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+
+/**
+ * `supportedModels()` as the picker lists it: by the wire id each row resolves to, so an alias row (`opus`) and a saved
+ * explicit id are the same model. The `default` row only marks which model is the account's default.
+ */
+export function claudeModels(infos: ModelInfo[]): AgentModel[] {
+  const idOf = (m: ModelInfo) => m.resolvedModel ?? m.value;
+  const defaultRow = infos.find((m) => m.value === 'default');
+  const rows = infos.filter((m) => m !== defaultRow);
+  const defaultId = defaultRow ? idOf(defaultRow) : rows[0] && idOf(rows[0]);
+  const models = new Map<string, AgentModel>();
+  for (const m of rows) if (!models.has(idOf(m))) models.set(idOf(m), { id: idOf(m), name: m.displayName, description: m.description, efforts: m.supportedEffortLevels ?? [], isDefault: idOf(m) === defaultId });
+  return [...models.values()];
+}

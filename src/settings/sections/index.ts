@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react';
 import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
-import { MODELS } from '../../runtime/controls';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { BrowserSection } from './browser';
@@ -85,7 +84,7 @@ export const SETTINGS_SECTIONS = [
           ...(apiKey ? [{ id: `${id}ApiKey`, label: apiKey.label, keywords: 'key billing keychain' }] : []),
         ];
       }),
-      { id: 'starredModels', label: 'Starred models', keywords: `favorite star dock ${MODELS.map((m) => m.name).join(' ')}` },
+      { id: 'starredModels', label: 'Starred models', keywords: 'favorite star dock model claude codex opus sonnet haiku gpt' },
       { id: 'effort', label: 'Default effort', keywords: 'reasoning thinking' },
     ],
   },

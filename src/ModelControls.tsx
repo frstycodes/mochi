@@ -6,7 +6,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
-import { EFFORTS, MODELS, settingsModel, type Effort, type ModelOption } from './runtime/controls';
+import type { AgentModel } from './host/types/agent';
+import { effortFor, effortName, optionFor, type ModelOption } from './runtime/models';
 import { setPrefs, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
@@ -20,19 +21,20 @@ const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Pro
 
 /**
  * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. `unavailable` greys out
- * a harness's models with the reason (not installed, signed out) and keeps them off the dock.
+ * a harness's models with the reason (not installed, signed out) and keeps them off the dock. The lists are the profile's
+ * accounts' own (`useModels`); a stored model the account no longer offers shows as Unavailable.
  */
 export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, onChange }: { id?: string; value: string; provider: Provider; isLocked?: boolean; unavailable?: Unavailable; onChange: (model: ModelOption) => void }) {
   const space = useSpace();
+  const catalog = useModels(space.id);
   const defaults = useDefaultModels();
   const favorites = usePrefs().starredModels;
   const [isOpen, setOpen] = useState(false);
   const harnesses = (Object.keys(HARNESSES) as Provider[]).filter((h) => !isLocked || h === provider);
-  const fromSettings = harnesses.flatMap((h) => (defaults?.[h] && !MODELS.some((m) => m.providerModel === defaults[h]) ? [settingsModel(defaults[h], h)] : []));
-  const listed = [...MODELS, ...fromSettings].filter((m) => harnesses.includes(m.harness));
-  const model = listed.find((m) => m.id === value) ?? settingsModel(value, provider);
-  const models = listed.some((m) => m.id === model.id) ? listed : [...listed, model];
-  const docked = models.filter((m) => m.id === model.id || (!unavailable[m.harness] && (favorites.includes(m.id) || fromSettings.includes(m))));
+  const listed = harnesses.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
+  const model = optionFor(catalog[provider], value, provider);
+  const models = listed.some((m) => m.harness === model.harness && m.id === model.id) ? listed : [...listed, model];
+  const docked = models.filter((m) => m === model || (m.harness === model.harness && m.id === model.id) || (!unavailable[m.harness] && !m.isUnavailable && (favorites.includes(m.id) || defaults?.[m.harness] === m.id)));
   const select = (id: string) => onChange(models.find((m) => m.id === id)!);
   const toggleFavorite = (id: string) => setPrefs({ starredModels: toggleStar(favorites, id) });
 
@@ -48,6 +50,7 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
           <Button id={id} variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground">
             <ProviderMark provider={model.harness} size={14} />
             {model.name}
+            {model.isUnavailable && <span className="type-caption text-warning">Unavailable</span>}
             <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
           </Button>
         </PopoverTrigger>
@@ -70,9 +73,9 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
               >
                 {models.filter((m) => m.harness === h).map((m) => (
                   <CommandItem
-                    key={m.id}
+                    key={`${h}:${m.id}`}
                     value={`${HARNESSES[h]} ${m.name}`}
-                    disabled={!!unavailable[h]}
+                    disabled={!!unavailable[h] || m.isUnavailable}
                     onSelect={() => {
                       select(m.id);
                       setOpen(false);
@@ -82,9 +85,8 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
                     <FavoriteToggle isOn={favorites.includes(m.id)} name={m.name} onToggle={() => toggleFavorite(m.id)} />
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate">{m.name}</span>
-                      <span className="truncate type-caption text-subtle-foreground">{m.note}</span>
+                      <span className={cn('truncate type-caption', m.isUnavailable ? 'text-warning' : 'text-subtle-foreground')}>{m.description}</span>
                     </span>
-                    <span className="font-mono text-xs text-subtle-foreground tabular">{m.context}</span>
                     <Check className={cn('size-4', m.id !== model.id && 'invisible')} />
                   </CommandItem>
                 ))}
@@ -127,6 +129,25 @@ function unavailableReason(install: AgentInstall) {
   if (install.login.state === 'logged-out') return 'Signed out';
 }
 
+/** Each harness's models on the profile's account, from main (cached there per account); a harness missing until its list arrives, [] when it can't be read. */
+export function useModels(spaceId: string) {
+  const [models, setModels] = useState<Partial<Record<Provider, AgentModel[]>>>({});
+  useEffect(() => {
+    let isCurrent = true;
+    setModels({});
+    HARNESS_IDS.forEach((h) =>
+      host.agent.models(h, spaceId).then(
+        (list) => isCurrent && setModels((prev) => ({ ...prev, [h]: list })),
+        () => isCurrent && setModels((prev) => ({ ...prev, [h]: [] })),
+      ),
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [spaceId]);
+  return models;
+}
+
 export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
 /** Each harness's default model from Settings ('' = the harness's own); null until read. */
 export function useDefaultModels() {
@@ -162,14 +183,19 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
   );
 }
 
-export function EffortPicker({ value: effort, onChange: setEffort }: { value: Effort; onChange: (effort: Effort) => void }) {
+/** Effort levels `model` takes, from its provider; hidden for a model that takes none. A chosen level the model lacks shows (and runs) as the model's default. */
+export function EffortPicker({ model, value, onChange: setEffort }: { model: AgentModel; value: string; onChange: (effort: string) => void }) {
+  const { efforts } = model;
+  if (!efforts.length) return null;
+  const effort = effortFor(model, value);
+  const label = effort ? effortName(effort) : 'Default';
   return (
     <DropdownMenu>
-      <WheelStepper values={EFFORTS} value={effort} onChange={setEffort}>
+      <WheelStepper values={efforts} value={effort ?? ''} onChange={setEffort}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground" aria-label={`Reasoning effort: ${effort}`}>
-            <EffortMeter level={EFFORTS.indexOf(effort) + 1} />
-            {effort}
+          <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground" aria-label={`Reasoning effort: ${label}`}>
+            <EffortMeter levels={efforts.length} level={effort ? efforts.indexOf(effort) + 1 : 0} />
+            {label}
             <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
           </Button>
         </DropdownMenuTrigger>
@@ -177,11 +203,11 @@ export function EffortPicker({ value: effort, onChange: setEffort }: { value: Ef
       <DropdownMenuContent align="start" className="w-48">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Reasoning effort</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={effort} onValueChange={(v) => setEffort(v as Effort)}>
-            {EFFORTS.map((e, i) => (
+          <DropdownMenuRadioGroup value={effort ?? ''} onValueChange={setEffort}>
+            {efforts.map((e, i) => (
               <DropdownMenuRadioItem key={e} value={e} className="gap-2">
-                <EffortMeter level={i + 1} />
-                {e}
+                <EffortMeter levels={efforts.length} level={i + 1} />
+                {effortName(e)}
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
@@ -191,11 +217,11 @@ export function EffortPicker({ value: effort, onChange: setEffort }: { value: Ef
   );
 }
 
-function EffortMeter({ level }: { level: number }) {
+function EffortMeter({ levels, level }: { levels: number; level: number }) {
   return (
     <span aria-hidden className="flex h-3 items-end gap-px">
-      {EFFORTS.map((_, i) => (
-        <span key={i} className={cn('w-[3px] rounded-full bg-current', i >= level && 'opacity-25')} style={{ height: `${40 + i * 20}%` }} />
+      {Array.from({ length: levels }, (_, i) => (
+        <span key={i} className={cn('w-[3px] rounded-full bg-current', i >= level && 'opacity-25')} style={{ height: `${40 + (i * 60) / Math.max(1, levels - 1)}%` }} />
       ))}
     </span>
   );

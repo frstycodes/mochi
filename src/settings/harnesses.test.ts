@@ -13,7 +13,7 @@ test('every harness gets defaults and a default account from the registry', () =
 
 test('a patch merges per harness field and keeps everything else', () => {
   const next = mergeSettings(DEFAULT_SETTINGS, { harnesses: { claude: { path: '/opt/claude' } } });
-  assert.deepEqual(next.harnesses.claude, { path: '/opt/claude', model: 'claude-opus-5-5' });
+  assert.deepEqual(next.harnesses.claude, { path: '/opt/claude', model: '' });
   assert.deepEqual(next.harnesses.codex, DEFAULT_SETTINGS.harnesses.codex);
   assert.equal(next.concurrency, 6);
   assert.equal(mergeSettings(next, { concurrency: 3 }).harnesses.claude.path, '/opt/claude');
