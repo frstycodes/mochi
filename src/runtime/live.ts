@@ -18,7 +18,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'sidechat-promote':
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { worktree: t.repo?.branch }));
     case 'send':
       return isLive(state, action.threadId) ? [{ method: 'send', threadId: action.threadId, text: action.text.replace(QUEUED_PREFIX, '') }] : [];
     case 'resume': {
@@ -44,7 +44,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'worktree'>): AgentCall[] {
   // A project with no folder on disk can't run; a folderless chat runs in a folder main makes for it.
   const cwd = thread.live?.cwd ?? threadCwd(thread);
   if (thread.repo && !cwd) return [];

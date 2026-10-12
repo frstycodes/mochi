@@ -10,6 +10,7 @@ import { setWorktreePath, worktreePath } from './worktrees.ts';
 
 /**
  * Creates a worktree for every thread with a folder created while the app runs; seeded fixture threads keep the project root.
+ * A live thread's worktree is made by main in `agent.start`, so the agent starts in it.
  * A fork's worktree starts from its parent's checkpoint, so forks get one in the web build too (from the mock).
  */
 export function useWorktreeManager() {
@@ -23,7 +24,7 @@ export function useWorktreeManager() {
       known.current.add(thread.id);
       const fork = state.forks[thread.id];
       const root = thread.repo && projectRoot(thread.repo);
-      if (!thread.repo || !root || worktreePath(thread.id) || (!host.isDesktop && !fork)) continue;
+      if (!thread.repo || !root || (thread.live && !fork) || worktreePath(thread.id) || (!host.isDesktop && !fork)) continue;
       const created = fork ? forkWorktree(state.threads, thread, fork) : host.git.addWorktree(root, thread.id, thread.repo.branch);
       created
         .then((path) => setWorktreePath(thread.id, path))

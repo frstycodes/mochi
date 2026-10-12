@@ -5,6 +5,7 @@ import type { AgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution } from '../runtime/apply.ts';
+import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, type AgentCall } from '../runtime/live.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
@@ -64,7 +65,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     const id = setInterval(() => apply({ type: 'tick' }), 1000);
     return () => clearInterval(id);
   }, [state.paused]);
-  useEffect(() => host.agent.onEvent((event) => apply({ type: 'agent', event })), []);
+  useEffect(
+    () =>
+      host.agent.onEvent((event) => {
+        if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
+        apply({ type: 'agent', event });
+      }),
+    [],
+  );
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);

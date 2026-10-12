@@ -8,6 +8,8 @@ export interface AgentStartOptions {
   spaceId: string;
   /** An absolute folder; null for a folderless chat, which main runs in a folder of its own under the app's data dir. */
   cwd: string | null;
+  /** Branch for the thread's own worktree of `cwd`, made by main before the agent starts; on failure (not a git repo) the agent runs in `cwd`. */
+  worktree?: string;
   prompt: string;
   model?: string;
   effort?: string;
@@ -19,6 +21,8 @@ export interface AgentStartOptions {
 }
 
 export type AgentEvent =
+  /** Main made the thread's worktree and runs the agent there. */
+  | { threadId: string; type: 'worktree'; path: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
   | { threadId: string; type: 'reasoning'; text: string }
@@ -33,7 +37,7 @@ export type AgentEvent =
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** What an adapter gets once main has resolved and checked the folder. */
-export type AgentRunOptions = Omit<AgentStartOptions, 'cwd'> & { cwd: string };
+export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'worktree'> & { cwd: string };
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
 export interface AgentPlanItem {
