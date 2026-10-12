@@ -1,6 +1,6 @@
 import { useTheme } from 'next-themes';
 import { Switch } from '@/components/ui/switch';
-import { CommitInput, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { FolderInput, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { DEFAULT_PREFS, setPrefs, usePrefs } from '../prefs';
 
 export function GeneralSection() {
@@ -16,7 +16,7 @@ export function GeneralSection() {
         <SettingsRow
           id="projectsFolder"
           label="Projects folder"
-          control={<CommitInput id={settingControlId('projectsFolder')} value={projectsFolder} placeholder={DEFAULT_PREFS.projectsFolder} onCommit={(path) => setPrefs({ projectsFolder: path || DEFAULT_PREFS.projectsFolder })} />}
+          control={<FolderInput id="projectsFolder" value={projectsFolder} placeholder={DEFAULT_PREFS.projectsFolder} onCommit={(path) => setPrefs({ projectsFolder: path || DEFAULT_PREFS.projectsFolder })} />}
         />
       </SettingsGroup>
       <SettingsGroup footer="Off: every launch opens each space on its default view.">

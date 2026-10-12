@@ -1,4 +1,5 @@
-import { shell } from 'electron';
+import { BrowserWindow, dialog, shell } from 'electron';
+import { homedir } from 'node:os';
 import { EDITORS, type Editor, type FsHost } from '../../src/host/types/fs.ts';
 import { installedEditors, openInEditor } from '../fs/editors.ts';
 import { readInside, unwatchRoot, watchRoot, writeInside } from '../fs/files.ts';
@@ -29,5 +30,12 @@ export const fs = {
   reveal: async (_sender, root, path) => {
     const rel = string(path, 'path');
     shell.showItemInFolder(rel ? await resolveInside(string(root, 'root'), rel) : await resolveRoot(string(root, 'root')));
+  },
+  pickFolder: async (sender, defaultPath) => {
+    const start = defaultPath === undefined ? undefined : string(defaultPath, 'defaultPath').replace(/^~(?=\/|$)/, homedir());
+    const options = { defaultPath: start ?? homedir(), properties: ['openDirectory', 'createDirectory'] } satisfies Electron.OpenDialogOptions;
+    const window = BrowserWindow.fromWebContents(sender);
+    const { canceled, filePaths } = await (window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options));
+    return canceled ? null : (filePaths[0] ?? null);
   },
 } satisfies Handlers<FsHost>;

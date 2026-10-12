@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { host } from '../host';
 import { TooltipIconButton } from '../ui';
@@ -130,6 +131,25 @@ export function CommitInput({ value, onCommit, className, ...props }: { value: s
       className={cn('w-full sm:w-60', className)}
       {...props}
     />
+  );
+}
+
+/** A folder path: typed (saved on blur or Enter) or picked with the OS folder picker, which only the desktop app can open. */
+export function FolderInput({ id, value, placeholder, onCommit }: { id: string; value: string; placeholder: string; onCommit: (path: string) => void }) {
+  const browse = () =>
+    host.fs.pickFolder(value || placeholder).then(
+      (path) => path && onCommit(path),
+      (error: Error) => toast.error('Could not open the folder picker', { description: error.message }),
+    );
+  return (
+    <div className="flex w-full items-center gap-2 sm:w-auto">
+      <CommitInput id={settingControlId(id)} value={value} placeholder={placeholder} onCommit={onCommit} className="flex-1 font-mono placeholder:font-mono sm:w-60 sm:flex-none" />
+      {host.isDesktop && (
+        <Button variant="outline" size="sm" onClick={() => void browse()}>
+          Browse
+        </Button>
+      )}
+    </div>
   );
 }
 

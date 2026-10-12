@@ -1,6 +1,6 @@
 import { Switch } from '@/components/ui/switch';
 import { useAgentSettings } from '../AgentSettings';
-import { CommitInput, DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { CommitInput, DesktopOnly, FolderInput, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { DEFAULT_PREFS, setPrefs, usePrefs } from '../prefs';
 
 export function GitSection() {
@@ -46,13 +46,7 @@ function DesktopGitGroup() {
         id="worktreeRoot"
         label="Worktrees folder"
         control={
-          <CommitInput
-            id={settingControlId('worktreeRoot')}
-            value={settings.worktreeRoot}
-            placeholder="~/.harness/worktrees"
-            onCommit={(worktreeRoot) => void update({ worktreeRoot })}
-            className="font-mono placeholder:font-mono"
-          />
+<FolderInput id="worktreeRoot" value={settings.worktreeRoot} placeholder="~/.harness/worktrees" onCommit={(worktreeRoot) => void update({ worktreeRoot })} />
         }
       />
       <SettingsRow id="prDrafts" label="Open pull requests as drafts" control={<Switch id={settingControlId('prDrafts')} checked={settings.prDrafts} onCheckedChange={(prDrafts) => void update({ prDrafts })} />} />

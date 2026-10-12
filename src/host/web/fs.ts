@@ -46,4 +46,14 @@ export const fs: FsHost = {
   async reveal() {
     throw new Error('Revealing files needs the desktop app');
   },
+  // GAP: the File System Access API never exposes a path, only the folder's name.
+  async pickFolder() {
+    const picker = (window as Window & { showDirectoryPicker?: () => Promise<{ name: string }> }).showDirectoryPicker;
+    if (!picker) throw new Error('This browser has no folder picker. Type the path instead.');
+    try {
+      return (await picker()).name;
+    } catch {
+      return null;
+    }
+  },
 };

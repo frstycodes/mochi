@@ -14,6 +14,8 @@ export interface FsHost {
   openIn(editor: Editor, root: string, path: string, line?: number): Promise<void>;
   /** Selects `path` in Finder (Explorer, the file manager); an empty `path` reveals `root` itself. */
   reveal(root: string, path: string): Promise<void>;
+  /** The OS folder picker, opened at `defaultPath` (`~` allowed); null when dismissed. The web build only learns the folder's name. */
+  pickFolder(defaultPath?: string): Promise<string | null>;
 }
 
 export type FileContent = { kind: 'text'; text: string; mtimeMs: number } | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
@@ -38,4 +40,5 @@ export const fsMethods = {
   editors: 'invoke',
   openIn: 'invoke',
   reveal: 'invoke',
+  pickFolder: 'invoke',
 } satisfies Manifest<FsHost>;

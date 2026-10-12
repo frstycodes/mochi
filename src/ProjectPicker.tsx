@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { host } from './host';
 import { getPrefs } from './settings/prefs';
 import { useSpaceThreads } from './store';
 
@@ -168,14 +169,9 @@ function resolvePath(path: string) {
   return { dir, matches, folder: isFolder ? { path: full, name } : null };
 }
 
-type DirectoryPicker = () => Promise<{ name: string }>;
-
-async function browseNative(onChoose: (project: string) => void) {
-  const w = window as Window & { showDirectoryPicker?: DirectoryPicker };
-  if (!w.showDirectoryPicker) return toast('This browser has no folder picker. Type the path instead.');
-  try {
-    onChoose((await w.showDirectoryPicker()).name);
-  } catch {
-    // Dismissed the picker.
-  }
+function browseNative(onChoose: (project: string) => void) {
+  host.fs.pickFolder(getPrefs().projectsFolder).then(
+    (path) => path && onChoose(path),
+    (error: Error) => toast(error.message),
+  );
 }
