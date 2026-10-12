@@ -21,6 +21,8 @@ export type AgentEvent =
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
+  /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
+  | { threadId: string; type: 'resolved'; requestId: string }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
@@ -33,7 +35,8 @@ export interface AgentPlanItem {
   files?: string[];
 }
 
-export type AgentDecision = { kind: 'allow' } | { kind: 'deny'; message?: string } | { kind: 'answer'; answers: string[] };
+/** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. */
+export type AgentDecision = { kind: 'allow'; forSession?: boolean } | { kind: 'deny'; message?: string; interrupt?: boolean } | { kind: 'answer'; answers: string[] };
 
 /** Side chat's answer stream, separate from thread events: `id` is the one `ask` returned. */
 export interface AgentAskEvent {

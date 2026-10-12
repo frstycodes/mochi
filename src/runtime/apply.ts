@@ -42,6 +42,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         'Waiting on your answer',
       );
     }
+    case 'resolved':
+      return withdraw(state, thread, `q-${event.requestId}`);
     case 'usage':
       return update((t) => ({
         ...t,
@@ -200,6 +202,24 @@ function waitOnYou(state: State, thread: Thread, item: Omit<QueueItem, 'threadId
     queue: [...state.queue, { ...item, threadId: thread.id, blocks: { steps: ready + 1, threads: 1 }, createdAt: now }],
     threads: mapThread(state.threads, thread.id, (t) =>
       log({ ...t, status: 'needs-you', steps: t.steps.map((s) => (s.status === 'running' ? { ...s, status: 'blocked', note } : s)) }, { at: now, who: 'harness', kind: 'event', text: `Waiting on you: ${item.title}` }),
+    ),
+  };
+}
+
+/** The agent took a request back; the step it blocked resumes, as when you answer it. */
+function withdraw(state: State, thread: Thread, queueId: string): State {
+  const item = state.queue.find((q) => q.id === queueId);
+  if (!item) return state;
+  const now = state.now;
+  const isWaiting = state.queue.some((q) => q.id !== queueId && q.threadId === thread.id && (q.kind === 'approval' || q.kind === 'question'));
+  return {
+    ...state,
+    queue: state.queue.filter((q) => q.id !== queueId),
+    threads: mapThread(state.threads, thread.id, (t) =>
+      log(
+        isWaiting ? t : { ...t, status: 'running', steps: t.steps.map((s) => (s.status === 'blocked' ? { ...s, status: 'running', note: undefined } : s)) },
+        { at: now, who: 'harness', kind: 'event', text: `Withdrawn by the agent: ${item.title}` },
+      ),
     ),
   };
 }
