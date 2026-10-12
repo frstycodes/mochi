@@ -100,6 +100,8 @@ export interface LiveRun {
   cwd?: string;
   /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
   limit?: { resetsAt?: string };
+  /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
+  isDetached?: boolean;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
   /** Reported tokens per usage event, for the plan window. */

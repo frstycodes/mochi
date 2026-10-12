@@ -1,5 +1,6 @@
 import { PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind } from '../model.ts';
 import type { Action, State } from './index.tsx';
+import { showsDemoData } from '../demoData.ts';
 
 export interface PanesState {
   panes: Pane[];
@@ -20,7 +21,8 @@ const STORAGE_KEY = 'harness.panes.v1';
 
 export function initialPanes(saved = loadPanes()): PanesState {
   const savedIds = new Set(saved.map((p) => p.threadId));
-  return { panes: [...seedPanes().filter((p) => !savedIds.has(p.threadId)), ...saved] };
+  const demo = showsDemoData() ? seedPanes() : [];
+  return { panes: [...demo.filter((p) => !savedIds.has(p.threadId)), ...saved] };
 }
 
 export function panesReducer(state: State, action: Action): State {

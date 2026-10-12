@@ -10,6 +10,7 @@ import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } fro
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
 import { initialSideChat, saveSideChats, sidechatReducer, type SideChatAction, type SideChatState } from './sidechat.ts';
+import { getRestored, saveThreads, toSaved } from './persist.ts';
 import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState } from './threads.ts';
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
 import { initialNotifications, notificationsReducer, type NotificationsAction, type NotificationsState } from '../notify/slice.ts';
@@ -29,12 +30,13 @@ export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | 
 // notificationsReducer diffs what the others changed, so it runs last.
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, notificationsReducer];
 
-function initialState(): State {
-  return { ...initialThreads(), ...initialQueue(), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat(), ...initialNotifications() };
+function initialState(saved = getRestored()): State {
+  return { ...initialThreads(saved), ...initialQueue(saved), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat(), ...initialNotifications() };
 }
 
 function reducer(state: State, action: Action): State {
-  if (action.type === 'reset') return { ...initialState(), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }), ...initialSideChat({}) };
+  // Resetting the demo keeps your own threads as they are.
+  if (action.type === 'reset') return { ...initialState(toSaved(state)), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }), ...initialSideChat({}) };
   return SLICES.reduce((s, slice) => slice(s, action), state);
 }
 
@@ -69,6 +71,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     savePanes(state.panes);
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
+  useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
 }
 

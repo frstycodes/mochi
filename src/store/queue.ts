@@ -1,5 +1,7 @@
 import { seedQueue, type QueueItem } from '../model.ts';
 import type { Action, State } from './index.tsx';
+import { getRestored } from './persist.ts';
+import { showsDemoData } from '../demoData.ts';
 import { hasOpenWork, log, mapStep, mapThread } from './threads.ts';
 
 export interface QueueState {
@@ -8,8 +10,8 @@ export interface QueueState {
 
 export type QueueAction = { type: 'answer'; queueId: string; choice?: string };
 
-export function initialQueue(): QueueState {
-  return { queue: seedQueue() };
+export function initialQueue(saved = getRestored(), isDemo = showsDemoData()): QueueState {
+  return { queue: [...(isDemo ? seedQueue() : []), ...(saved?.queue ?? [])] };
 }
 
 export function queueReducer(state: State, action: Action): State {

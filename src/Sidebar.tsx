@@ -36,6 +36,7 @@ import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
+import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
 import { openSettings } from './settings/open';
@@ -602,21 +603,23 @@ function DemoMenu({ paused }: { paused: boolean }) {
           Settings
           <Shortcut keys={['mod', ',']} className="ml-auto" />
         </DropdownMenuItem>
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Prototype</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
-            {paused ? <Play /> : <Pause />}
-            {paused ? 'Resume simulation' : 'Pause simulation'}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => dispatch({ type: 'trigger-overlap' })}>
-            <Flash />
-            Trigger an overlap
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
-            <Refresh />
-            Reset demo
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
+        {showsDemoData() && (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Prototype</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
+              {paused ? <Play /> : <Pause />}
+              {paused ? 'Resume simulation' : 'Pause simulation'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => dispatch({ type: 'trigger-overlap' })}>
+              <Flash />
+              Trigger an overlap
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
+              <Refresh />
+              Reset demo
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal text-subtle-foreground">Hold Option, or long-press, for Orbit</DropdownMenuLabel>
         </DropdownMenuGroup>

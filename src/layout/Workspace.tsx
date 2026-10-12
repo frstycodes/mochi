@@ -129,13 +129,15 @@ function LeafContent({ view }: { view: View }) {
     // Keyed: another thread is a fresh view, so its pane, summary and chat open in their own state instead of animating from the last thread's.
     if (thread) return <ThreadView key={thread.id} thread={thread} />;
   }
+  // A thread or tab that no longer exists (deleted, or saved by a launch that showed demo data) opens a new thread.
+  const kind = view.kind === 'board' || view.kind === 'queue' ? view.kind : 'new';
   return (
     <div className="flex h-full min-h-0 flex-col">
       <LeafBar>
-        {view.kind === 'board' ? <Route className="size-4 text-muted-foreground" /> : view.kind === 'new' ? <Edit className="size-4 text-muted-foreground" /> : <Inbox className="size-4 text-muted-foreground" />}
-        {view.kind === 'board' ? 'Board' : view.kind === 'new' ? 'New thread' : 'Queue'}
+        {kind === 'board' ? <Route className="size-4 text-muted-foreground" /> : kind === 'new' ? <Edit className="size-4 text-muted-foreground" /> : <Inbox className="size-4 text-muted-foreground" />}
+        {kind === 'board' ? 'Board' : kind === 'new' ? 'New thread' : 'Queue'}
       </LeafBar>
-      <div className="min-h-0 flex-1">{view.kind === 'board' ? <BoardView /> : view.kind === 'new' ? <NewThreadView /> : <QueueView />}</div>
+      <div className="min-h-0 flex-1">{kind === 'board' ? <BoardView /> : kind === 'new' ? <NewThreadView /> : <QueueView />}</div>
     </div>
   );
 }

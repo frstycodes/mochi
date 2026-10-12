@@ -19,25 +19,30 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
         .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal));
-    case 'send':
-      return isLive(state, action.threadId) ? [{ method: 'send', threadId: action.threadId, text: action.text.replace(QUEUED_PREFIX, '') }] : [];
+    case 'send': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      const text = action.text.replace(QUEUED_PREFIX, '');
+      if (!thread?.live) return [];
+      return thread.live.isDetached ? reattach(thread, text) : [{ method: 'send', threadId: thread.id, text }];
+    }
     case 'resume': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
+      if (thread.live.isDetached) return reattach(thread, CONTINUE_PROMPT, action.onApiKey);
       if (!action.onApiKey) return [{ method: 'send', threadId: thread.id, text: CONTINUE_PROMPT }];
       // Restarts the same session on the key: same account folder, so `resume` finds its transcript.
       return start(thread, thread.providers[0], controlsOf(thread), CONTINUE_PROMPT, { resume: thread.session?.id, useApiKey: true });
     }
     case 'interrupt':
-      return isLive(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+      return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
     case 'settle':
-      return isLive(state, action.threadId) ? [{ method: 'stop', threadId: action.threadId }] : [];
+      return hasAgent(state, action.threadId) ? [{ method: 'stop', threadId: action.threadId }] : [];
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (action.stepId || !thread?.live || thread.providers[0] === action.to) return [];
       // No model: the adapter picks the Settings default (Claude) or the harness's own (Codex).
-      return [{ method: 'stop', threadId: thread.id }, ...start(thread, action.to, DEFAULT_CONTROLS[action.to], action.summary, { model: undefined })];
+      return [...(thread.live.isDetached ? [] : [{ method: 'stop' as const, threadId: thread.id }]), ...start(thread, action.to, DEFAULT_CONTROLS[action.to], action.summary, { model: undefined })];
     }
     default:
       return [];
@@ -51,6 +56,14 @@ function start(thread: Thread, provider: Provider, controls: ThreadControls, pro
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd: cwd ?? null, prompt, ...agentOptions(controls, provider), ...extra } }];
 }
 
-function isLive(state: State, threadId: string) {
-  return !!state.threads.find((t) => t.id === threadId)?.live;
+/** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */
+function reattach(thread: Thread, prompt: string, onApiKey?: boolean) {
+  const provider = thread.session?.provider ?? thread.providers[0];
+  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined });
+}
+
+/** A live thread whose agent runs in this launch of Mochi. */
+function hasAgent(state: State, threadId: string) {
+  const live = state.threads.find((t) => t.id === threadId)?.live;
+  return !!live && !live.isDetached;
 }
