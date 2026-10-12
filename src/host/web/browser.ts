@@ -21,6 +21,9 @@ export const browser: BrowserHost = {
     return null;
   },
   async cancelPick() {},
+  async clearData() {
+    throw new Error('Browsing data lives in the desktop app');
+  },
   onEvent() {
     return () => {};
   },

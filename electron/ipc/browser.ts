@@ -1,5 +1,5 @@
 import type { BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
-import { cancelPick, captureView, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom } from '../browser/views.ts';
+import { cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom } from '../browser/views.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 const COMMANDS = ['back', 'forward', 'reload', 'hard-reload', 'stop'] satisfies BrowserCommand[];
@@ -39,6 +39,9 @@ export const browser = {
   },
   async cancelPick(sender, id) {
     await cancelPick(sender, viewId(id));
+  },
+  async clearData(_sender, id) {
+    await clearSpaceData(spaceId(id));
   },
 } satisfies Handlers<BrowserHost>;
 

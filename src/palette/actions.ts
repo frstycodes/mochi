@@ -6,7 +6,8 @@ import { threadCwd } from '../host/cwd';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
 import { PRESETS, PRESET_LABELS } from '../layout/tree';
-import { SPACES, type Thread } from '../model';
+import type { Thread } from '../model';
+import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
 import { openSettings } from '../settings/open';
@@ -35,6 +36,8 @@ export interface PaletteAction {
   keywords?: string;
   shortcut?: Key[];
   when?: (scope: ActionScope) => boolean;
+  /** False while the thing it acts on doesn't exist at all (a profile slot past the last profile), so lists like Settings › Keyboard leave it out. */
+  exists?: () => boolean;
   run: (ctx: ActionContext) => void;
   /** Bulk menus over a multi-selection: the same action on several threads with one toast. Actions without it stay out of bulk menus. */
   many?: { title: string; skipReason: string; run: (threads: Thread[], ctx: ActionContext) => void };
@@ -96,7 +99,19 @@ export const ACTIONS = [
   { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
   { id: 'layout-close', group: 'Layout', title: 'Close split', icon: X, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-close', leafId: scope.leafId }) },
 
-  ...SPACES.map((space, i) => ({ id: `space-${space.id}`, group: 'Space', title: `Switch to ${space.name}`, icon: Monitor, shortcut: ['nav', String(i + 1)], when: when.otherSpace(space.id), run: ({ dispatch }) => dispatch({ type: 'space', id: space.id }) }) satisfies PaletteAction),
+  // One per ⌥ digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
+  ...Array.from({ length: MAX_PROFILES }, (_, i) => ({
+    id: `space-${i + 1}`,
+    group: 'Space',
+    get title() {
+      return `Switch to ${getProfiles()[i]?.name ?? `profile ${i + 1}`}`;
+    },
+    icon: Monitor,
+    shortcut: ['nav', String(i + 1)],
+    exists: () => i < getProfiles().length,
+    when: (scope: ActionScope) => i < getProfiles().length && when.otherSpace(getProfiles()[i].id)(scope),
+    run: ({ dispatch }: ActionContext) => dispatch({ type: 'space', id: getProfiles()[i].id }),
+  }) satisfies PaletteAction),
 
   { id: 'theme-light', group: 'Appearance', title: 'Light theme', icon: Sun, run: ({ setTheme }) => setTheme('light') },
   { id: 'theme-dark', group: 'Appearance', title: 'Dark theme', icon: Moon, run: ({ setTheme }) => setTheme('dark') },

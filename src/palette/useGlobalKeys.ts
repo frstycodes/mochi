@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { SPACES } from '../model';
+import { getProfiles } from '../profiles';
 import { useHarness } from '../store';
 import { isMod, isNav } from '../keys';
 
@@ -13,9 +13,10 @@ export function useGlobalKeys(onPalette: () => void) {
         onPalette();
         return;
       }
-      if (isNav(e) && /^Digit[1-3]$/.test(e.code)) {
+      const profile = isNav(e) && /^Digit[1-9]$/.test(e.code) ? getProfiles()[Number(e.code.slice(5)) - 1] : undefined;
+      if (profile) {
         e.preventDefault();
-        dispatch({ type: 'space', id: SPACES[Number(e.code.slice(5)) - 1].id });
+        dispatch({ type: 'space', id: profile.id });
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;

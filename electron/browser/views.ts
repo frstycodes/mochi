@@ -221,6 +221,11 @@ async function debuggerFor(wc: WebContents) {
   return wc.debugger;
 }
 
+export async function clearSpaceData(spaceId: string) {
+  const ses = session.fromPartition(`persist:space-${spaceId}`);
+  await Promise.all([ses.clearStorageData(), ses.clearCache(), ses.clearAuthCache()]);
+}
+
 function harden(partition: string) {
   if (hardenedSessions.has(partition)) return;
   hardenedSessions.add(partition);

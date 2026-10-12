@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
-import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
+import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
+import { getProfiles } from '../../profiles';
 import { MODELS } from '../../ModelControls';
-import { SPACES } from '../../model';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { BrowserSection } from './browser';
@@ -13,6 +13,7 @@ import { GoalsSection } from './goals';
 import { HarnessesSection } from './harnesses';
 import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
 import { NotificationsSection } from './notifications';
+import { ProfilesSection } from './profiles';
 import { TerminalSection } from './terminal';
 
 export const SECTION_GROUPS = ['App', 'Agents', 'Workspace'] as const;
@@ -27,7 +28,7 @@ export interface SettingsSection {
   settings: { id: string; label: string; keywords?: string }[];
 }
 
-/** The settings page in sidebar order (SETTINGS.md). Profiles joins once spaces are editable data instead of `SPACES`. */
+/** The settings page in sidebar order (SETTINGS.md). */
 export const SETTINGS_SECTIONS = [
   {
     id: 'general',
@@ -62,7 +63,9 @@ export const SETTINGS_SECTIONS = [
     title: 'Keyboard',
     icon: Keyboard,
     component: KeyboardSection,
-    settings: SHORTCUTS.map((a) => ({ id: shortcutSettingId(a), label: a.title, keywords: `shortcut key ${a.keywords ?? ''}` })),
+    get settings() {
+      return SHORTCUTS.filter((a) => a.exists?.() ?? true).map((a) => ({ id: shortcutSettingId(a), label: a.title, keywords: `shortcut key ${a.keywords ?? ''}` }));
+    },
   },
   {
     id: 'harnesses',
@@ -78,7 +81,7 @@ export const SETTINGS_SECTIONS = [
           { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
           { id: `${id}Model`, label: `${name} default model`, keywords: 'model' },
           { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
-          { id: `${id}Profiles`, label: `${name} account per profile`, keywords: `space link ${SPACES.map((s) => s.name).join(' ')}` },
+          { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },
           ...(apiKey ? [{ id: `${id}ApiKey`, label: apiKey.label, keywords: 'key billing keychain' }] : []),
         ];
       }),
@@ -111,6 +114,25 @@ export const SETTINGS_SECTIONS = [
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
       { id: 'stepSize', label: 'New step size', keywords: 'points progress eta small medium large' },
     ],
+  },
+  {
+    id: 'profiles',
+    group: 'Workspace',
+    title: 'Profiles',
+    icon: People,
+    component: ProfilesSection,
+    // A getter: the rows follow the profiles, so search finds "Personal GitHub account" right after a rename.
+    get settings() {
+      return [
+        ...getProfiles().flatMap(({ id, name }) => [
+          { id: `${id}-name`, label: `${name} name`, keywords: 'profile space rename' },
+          { id: `${id}-icon`, label: `${name} icon`, keywords: 'profile space symbol' },
+          { id: `${id}-github`, label: `${name} GitHub account`, keywords: 'profile gh user' },
+          { id: `${id}-browsing`, label: `${name} browsing data`, keywords: 'profile cookies logins clear browser' },
+        ]),
+        { id: 'addProfile', label: 'Add profile', keywords: 'new space' },
+      ];
+    },
   },
   {
     id: 'git',

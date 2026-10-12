@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
@@ -155,13 +156,41 @@ export function FolderInput({ id, value, placeholder, onCommit }: { id: string; 
 
 /** Rows the main process reads; the web build says why they're missing instead. `what` is a sentence naming what needs the desktop app. */
 export function DesktopOnly({ what, children }: { what: ReactNode; children: ReactNode }) {
-  if (host.isDesktop) return children;
+  return host.isDesktop ? children : <DesktopOnlyNotice what={what} />;
+}
+
+export function DesktopOnlyNotice({ what }: { what: ReactNode }) {
   return (
     <Alert>
       <InfoCircle />
       <AlertTitle>Needs the desktop app</AlertTitle>
       <AlertDescription>{what} Here, threads run on the demo agents, so everything else keeps working.</AlertDescription>
     </Alert>
+  );
+}
+
+/** A choice from a list too long for toggles. Radix Select, never a native one; `value` can't be empty (Radix reserves '' for "nothing chosen"). */
+export function SettingsSelect<T extends string>({
+  id,
+  value,
+  options,
+  onChange,
+  className,
+  ...props
+}: { id?: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void; className?: string; 'aria-label'?: string; disabled?: boolean }) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as T)} disabled={props.disabled}>
+      <SelectTrigger id={id && settingControlId(id)} aria-label={props['aria-label']} size="sm" className={cn('w-44', className)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="end">
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

@@ -62,7 +62,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 ## Workspace
 
 ### Profiles
-One row per profile: icon, name (editable), linked Claude and Codex accounts, GitHub account, its own browser session (Clear browsing data). Add / remove profile. Today: hardcoded `SPACES` in src/model.ts:159. now (data), accounts R1.
+One group per profile: name, icon, GitHub account, linked Claude and Codex accounts, its own browser session (Clear browsing data). Add (up to 9, one per ⌥ digit) / remove (only an empty profile; undo toast). Profiles live in `src/profiles.ts` (localStorage, seeded from `DEFAULT_SPACES`). Done. GAP: the GitHub account is display only; `gh` still uses its own login.
 
 ### Git
 | Setting | Control | Default | Status | Today |

@@ -23,7 +23,8 @@ import {
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { PIN_SLOTS, SPACES, type PullRequest, type Thread } from './model';
+import { PIN_SLOTS, type PullRequest, type Thread } from './model';
+import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
@@ -43,9 +44,10 @@ import { Shortcut } from './Shortcut';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
-  const index = SPACES.findIndex((s) => s.id === state.spaceId);
+  const profiles = useProfiles();
+  const index = profiles.findIndex((s) => s.id === state.spaceId);
   const pager = useRef<HTMLDivElement>(null);
-  useSnapPager(pager, { axis: 'x', index, onSettle: (page) => dispatch({ type: 'space', id: SPACES[page].id }) });
+  useSnapPager(pager, { axis: 'x', index, onSettle: (page) => dispatch({ type: 'space', id: profiles[page].id }) });
 
   return (
     <Sidebar collapsible={collapsible}>
@@ -53,7 +55,7 @@ export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearc
       {/* Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility. */}
       <SidebarContent ref={pager} style={{ scrollbarWidth: 'none' }} className="snap-x snap-mandatory flex-row gap-0 overflow-x-auto overflow-y-hidden overscroll-x-contain">
         {/* Every space stays mounted so neighbours show mid-swipe; window to index ± 1 if the space count grows. */}
-        {SPACES.map((s, i) => (
+        {profiles.map((s, i) => (
           <SpacePanel key={s.id} isCurrent={i === index}>
             <SpaceNav spaceId={s.id} onSearch={onSearch} />
           </SpacePanel>
@@ -118,7 +120,7 @@ function SpaceHeader() {
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">
-          {space.profile} profile · Claude {space.plans.claude} · Codex {space.plans.codex} · GitHub {space.github}
+          {[space.plans.claude && `Claude ${space.plans.claude}`, space.plans.codex && `Codex ${space.plans.codex}`, space.github && `GitHub ${space.github}`].filter(Boolean).join(' · ') || `${space.name} profile`}
         </TooltipContent>
       </Tooltip>
     </SidebarHeader>
@@ -551,10 +553,11 @@ export function threadDetail(thread: Thread, question?: string) {
 
 function SpaceFooter() {
   const { state, dispatch } = useHarness();
+  const profiles = useProfiles();
   return (
     <SidebarFooter className="flex-row items-center gap-1 px-2 py-2">
       <div role="radiogroup" aria-label="Space" className="flex items-center gap-0.5">
-        {SPACES.map((s, i) => {
+        {profiles.map((s, i) => {
           const isCurrent = s.id === state.spaceId;
           return (
             <Tooltip key={s.id}>
