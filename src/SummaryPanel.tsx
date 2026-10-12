@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, Link, Maximize, Note, Pin, PinOff, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextInputUsage, ContextOutputUsage, ContextTrigger } from '@/components/ai-elements/context';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,8 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import type { Source, Step, Thread } from './model';
+import type { AgentInfo, McpServer, Provider, Source, Step, Thread } from './model';
+import { HARNESSES } from './settings/harnesses';
 import { profileById } from './profiles';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
 import { GoalEditor } from './goals/GoalEditor';
@@ -87,6 +88,8 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
               </SummaryRow>
             ))}
           </Section>
+
+          {!!thread.agent && !!thread.session && <AgentSections agent={thread.agent} provider={thread.session.provider} />}
 
           <ThreadUsageSection thread={thread} />
           <SpaceUsageSection thread={thread} />
@@ -195,7 +198,7 @@ function ContextRow({ thread }: { thread: Thread }) {
             <ItemContent>
               <ItemTitle className="font-normal">Context</ItemTitle>
             </ItemContent>
-            <ItemActions className="tabular type-caption text-subtle-foreground">{Math.round((used / max) * 100)}%</ItemActions>
+            <ItemActions className="tabular type-caption text-subtle-foreground">{max ? `${Math.round((used / max) * 100)}%` : TOKENS.format(used)}</ItemActions>
           </button>
         </Item>
       </ContextTrigger>
@@ -207,6 +210,110 @@ function ContextRow({ thread }: { thread: Thread }) {
         </ContextContentBody>
       </ContextContent>
     </Context>
+  );
+}
+
+const CHIP_LIMIT = 12;
+// Claude permission modes, then Codex approval policies and sandboxes, which arrive joined as `<policy> · <sandbox>`.
+const PERMISSION_LABELS: Record<string, string> = {
+  default: 'Ask before edits',
+  acceptEdits: 'Accept edits',
+  plan: 'Plan only',
+  bypassPermissions: 'Bypass permissions',
+  dontAsk: "Don't ask",
+  auto: 'Auto',
+  untrusted: 'Ask for untrusted',
+  'on-request': 'Ask on request',
+  never: 'Never ask',
+  granular: 'Custom approvals',
+  workspaceWrite: 'workspace write',
+  readOnly: 'read only',
+  dangerFullAccess: 'full access',
+  externalSandbox: 'external sandbox',
+};
+const permissionLabel = (mode: string) => mode.split(' · ').map((part) => PERMISSION_LABELS[part] ?? part).join(', ');
+const MCP_STATUS_LABELS = { connected: '', pending: 'Connecting', 'needs-auth': 'Needs sign-in', failed: 'Failed', disabled: 'Disabled' } satisfies Record<McpServer['status'], string>;
+const MCP_STATUS_CLASSES = { connected: '', pending: 'text-subtle-foreground', 'needs-auth': 'text-warning', failed: 'text-destructive', disabled: 'text-subtle-foreground' } satisfies Record<McpServer['status'], string>;
+
+/** What the live agent reported at session start; a list the agent didn't report is left out rather than shown empty. */
+function AgentSections({ agent, provider }: { agent: AgentInfo; provider: Provider }) {
+  const plugins = agent.plugins ?? [];
+  return (
+    <>
+      <Section label="Session">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-1 type-meta">
+          <SessionField label="Model" value={agent.model} />
+          <SessionField label="Permissions" value={agent.permissionMode && permissionLabel(agent.permissionMode)} />
+          <SessionField label={HARNESSES[provider].name} value={agent.version} />
+          <SessionField label="Folder" value={agent.cwd} />
+        </dl>
+      </Section>
+
+      {!!agent.mcpServers && (
+        <Section label={`MCP servers · ${agent.mcpServers.length}`} empty={agent.mcpServers.length === 0 ? 'No MCP servers configured' : undefined}>
+          <LimitedList items={agent.mcpServers}>
+            {(server) => (
+              <SummaryRow key={server.name} icon={Server} label={server.name}>
+                <span className={cn('tabular type-caption', MCP_STATUS_CLASSES[server.status] || 'text-subtle-foreground')}>
+                  {MCP_STATUS_LABELS[server.status] || (server.toolCount === undefined ? 'Connected' : `${server.toolCount} tools`)}
+                </span>
+              </SummaryRow>
+            )}
+          </LimitedList>
+        </Section>
+      )}
+
+      {!!agent.plugins && (
+        <Section label={`Plugins · ${plugins.length}`} empty={plugins.length === 0 ? 'No plugins installed' : undefined}>
+          <LimitedList items={plugins}>
+            {(plugin) => (
+              <SummaryRow key={plugin.name} icon={PuzzlePiece} label={plugin.name}>
+                {!!plugin.version && <span className="tabular type-caption text-subtle-foreground">{plugin.version}</span>}
+              </SummaryRow>
+            )}
+          </LimitedList>
+        </Section>
+      )}
+
+      {!!agent.skills && <ChipSection label="Skills available" items={agent.skills} empty="No skills found" />}
+      {!!agent.slashCommands && <ChipSection label="Slash commands" items={agent.slashCommands.map((c) => `/${c}`)} empty="No slash commands" />}
+      {!!agent.tools && <ChipSection label="Tools available" items={agent.tools} empty="No tools reported" />}
+    </>
+  );
+}
+
+function SessionField({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
+  return (
+    <>
+      <dt className="text-subtle-foreground">{label}</dt>
+      <dd className="min-w-0 text-right [overflow-wrap:anywhere]">{value}</dd>
+    </>
+  );
+}
+
+function ChipSection({ label, items, empty }: { label: string; items: string[]; empty: string }) {
+  const [isOpen, setOpen] = useState(false);
+  const shown = isOpen ? items : items.slice(0, CHIP_LIMIT);
+  return (
+    <Section label={`${label} · ${items.length}`} empty={items.length === 0 ? empty : undefined}>
+      <ul className="flex flex-wrap gap-1 px-2 py-1">
+        {shown.map((item) => (
+          <li key={item} className="max-w-full">
+            <Badge variant="outline" className="h-auto max-w-full font-normal whitespace-normal text-muted-foreground [overflow-wrap:anywhere]">
+              {item}
+            </Badge>
+          </li>
+        ))}
+        {items.length > CHIP_LIMIT && (
+          <li>
+            <Button variant="ghost" size="xs" className="h-5 text-subtle-foreground" onClick={() => setOpen((o) => !o)}>
+              {isOpen ? 'Show less' : `+${items.length - CHIP_LIMIT} more`}
+            </Button>
+          </li>
+        )}
+      </ul>
+    </Section>
   );
 }
 

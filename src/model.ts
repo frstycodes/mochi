@@ -1,3 +1,4 @@
+import type { AgentQuestion } from './host/types/agent.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 export type Provider = 'claude' | 'codex';
@@ -61,6 +62,26 @@ export interface Source {
   label: string;
 }
 
+/** What the agent reports about its session: what it can reach, not what it used. Fields can arrive separately (Codex lists them after start), so each is optional. */
+export interface AgentInfo {
+  model?: string;
+  cwd?: string;
+  /** In the agent's own terms: Claude's permission mode, Codex's approval policy and sandbox. */
+  permissionMode?: string;
+  version?: string;
+  tools?: string[];
+  mcpServers?: McpServer[];
+  skills?: string[];
+  plugins?: { name: string; version?: string }[];
+  slashCommands?: string[];
+}
+
+export interface McpServer {
+  name: string;
+  status: 'connected' | 'pending' | 'needs-auth' | 'failed' | 'disabled';
+  toolCount?: number;
+}
+
 export interface PullRequest {
   number: number;
   state: 'open' | 'merged' | 'draft';
@@ -90,12 +111,16 @@ export interface Thread {
   drift?: { threshold: number; isMuted: boolean };
   session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
   controls?: ThreadControls;
+  /** From the live agent's session start; reset each time a session (re)starts. */
+  agent?: AgentInfo;
   /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
   live?: LiveRun;
 }
 
 export interface LiveRun {
   isWorking: boolean;
+  /** Mochi launched this agent and it hasn't reported anything yet. */
+  starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
   cwd?: string;
   /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
@@ -118,10 +143,20 @@ export interface QueueItem {
   detail: string;
   code?: string;
   blocks: { steps: number; threads: number };
-  choices?: { id: string; label: string }[];
+  questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
   requestId?: string;
   createdAt: number;
+}
+
+/** The options of a lone single-choice question, the only kind a number key can answer. */
+export function singleChoice(item: QueueItem) {
+  const [question, ...rest] = item.questions ?? [];
+  return question && !rest.length && !question.multiSelect && question.options.length ? question.options : null;
+}
+
+export function answerText(answers: string[][]) {
+  return answers.filter((a) => a.length).map((a) => a.join(', ')).join(' · ');
 }
 
 export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'new'] as const;
@@ -461,11 +496,11 @@ export function seedQueue(): QueueItem[] {
       id: 'q-question',
       kind: 'question',
       threadId: 'e2e',
-      title: 'Stub Stripe webhooks or record fixtures?',
+      title: 'Answer 2 questions',
       detail: 'The flake is the webhook landing after the success page asserts. Stubbing is faster; recorded fixtures catch payload changes.',
-      choices: [
-        { id: 'stub', label: 'Stub webhooks' },
-        { id: 'record', label: 'Record fixtures' },
+      questions: [
+        { text: 'Stub Stripe webhooks or record fixtures?', options: ['Stub webhooks', 'Record fixtures'], multiSelect: false },
+        { text: 'Which checkout flows should the e2e suite cover?', options: ['One-time payment', 'Subscription', 'Refund', '3-D Secure'], multiSelect: true },
       ],
       blocks: { steps: 2, threads: 1 },
       createdAt: NOW0 - 17,

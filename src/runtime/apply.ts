@@ -1,5 +1,5 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
-import type { Provider, QueueItem, Step, Thread } from '../model.ts';
+import type { AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { similarity } from '../progress.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -7,6 +7,10 @@ import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/thr
 
 /** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
+  // Any word from the agent means it's up.
+  if (state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
+    state = { ...state, threads: mapThread(state.threads, event.threadId, (t) => ({ ...t, live: { ...t.live!, starting: undefined } })) };
+  }
   const thread = state.threads.find((t) => t.id === event.threadId);
   if (!thread) return state;
   const now = state.now;
@@ -14,8 +18,12 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
   const update = (fn: (t: Thread) => Thread): State => ({ ...state, threads: mapThread(state.threads, thread.id, fn) });
 
   switch (event.type) {
+    case 'worktree':
+      return update((t) => ({ ...t, live: t.live && { ...t.live, cwd: event.path } }));
     case 'session':
-      return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId } }));
+      return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId }, agent: {} }));
+    case 'info':
+      return update((t) => ({ ...t, agent: mergeInfo(t.agent, event.info) }));
     case 'message':
       return update((t) => {
         const last = t.activity.at(-1);
@@ -33,15 +41,10 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'approval':
       return waitOnYou(state, thread, { id: `q-${event.requestId}`, kind: 'approval', title: event.title, detail: event.detail, code: event.code, requestId: event.requestId }, 'Paused for your approval');
     case 'question': {
-      // GAP: a queue item holds one choice list, so only the first question shows; the rest wait for a multi-question card.
-      const [first] = event.questions;
-      const more = event.questions.length - 1;
-      return waitOnYou(
-        state,
-        thread,
-        { id: `q-${event.requestId}`, kind: 'question', title: first.text, detail: more ? `${more} more question${more === 1 ? '' : 's'} after this one.` : '', choices: first.options.map((label, i) => ({ id: String(i), label })), requestId: event.requestId },
-        'Waiting on your answer',
-      );
+      const { questions } = event;
+      if (!questions.length) return state;
+      const title = questions.length === 1 ? questions[0].text : `Answer ${questions.length} questions`;
+      return waitOnYou(state, thread, { id: `q-${event.requestId}`, kind: 'question', title, detail: '', questions, requestId: event.requestId }, 'Waiting on your answer');
     }
     case 'resolved':
       return withdraw(state, thread, `q-${event.requestId}`);
@@ -70,8 +73,7 @@ export function resolution(state: State, action: Action): { requestId: string; d
   if (!item?.requestId) return null;
   if (!state.threads.find((t) => t.id === item.threadId)?.session) return null;
   if (item.kind !== 'question') return { requestId: item.requestId, decision: { kind: 'allow' } };
-  const label = item.choices?.find((c) => c.id === action.choice)?.label;
-  return { requestId: item.requestId, decision: { kind: 'answer', answers: label ? [label] : [] } };
+  return { requestId: item.requestId, decision: { kind: 'answer', answers: action.answers ?? [] } };
 }
 
 const MATCH = 0.6;
@@ -242,6 +244,13 @@ function endTurn(state: State, thread: Thread, event: Extract<AgentEvent, { type
 /** Who speaks for a thread right now: its live session, else the owner of the step in flight, else its first provider. */
 function actor(thread: Thread): Provider {
   return thread.session?.provider ?? thread.steps.find((s) => s.status === 'running')?.owner ?? thread.providers[0];
+}
+
+function mergeInfo(info: AgentInfo = {}, update: AgentInfo): AgentInfo {
+  if (!update.mcpServers) return { ...info, ...update };
+  const servers = new Map((info.mcpServers ?? []).map((s) => [s.name, s]));
+  for (const s of update.mcpServers) servers.set(s.name, { ...servers.get(s.name), ...s });
+  return { ...info, ...update, mcpServers: [...servers.values()] };
 }
 
 const NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<Provider, string>;

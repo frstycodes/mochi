@@ -8,6 +8,7 @@ import type { Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
+import { addWorktree } from './git.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -48,7 +49,10 @@ export const agent = {
     if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
     if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
     images(o.images);
-    const run = { ...o, cwd: await agentFolder(threadId as string, o.cwd) } as unknown as AgentRunOptions;
+    const { worktree, ...rest } = o;
+    const folder = await agentFolder(threadId as string, o.cwd);
+    const cwd = worktree === undefined ? folder : await threadWorktree(threadId as string, folder, string(worktree, 'options.worktree', 255));
+    const run = { ...rest, cwd } as unknown as AgentRunOptions;
     if (o.provider === 'claude') return startClaude(threadId as string, run);
     if (o.provider === 'codex') return codex.start(threadId as string, run);
     return runtime();
@@ -147,4 +151,14 @@ async function agentFolder(threadId: string, cwd: unknown) {
   const info = await stat(dir).catch(() => null);
   if (!info?.isDirectory()) throw new Error(`The project folder ${dir} doesn't exist anymore`);
   return dir;
+}
+
+/** Runs a project thread in its own worktree, so the panes and the agent see the same files; a folder that isn't a git repo runs the agent in place. */
+async function threadWorktree(threadId: string, root: string, branch: string) {
+  const path = await addWorktree(root, threadId, branch).catch((error: Error) => {
+    console.warn(`No worktree for ${threadId} in ${root}, running there: ${error.message}`);
+    return null;
+  });
+  if (path) broadcast({ threadId, type: 'worktree', path });
+  return path ?? root;
 }

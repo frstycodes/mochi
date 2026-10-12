@@ -5,6 +5,7 @@ import type { AgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution } from '../runtime/apply.ts';
+import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, type AgentCall } from '../runtime/live.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
@@ -54,11 +55,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     const before = latest.current;
     const answer = resolution(before, action);
     if (answer) void host.agent.resolve(answer.requestId, answer.decision);
-    for (const call of agentCalls(before, action, () => reducer(before, action))) {
+    const calls = agentCalls(before, action, () => reducer(before, action));
+    for (const call of calls) {
       // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
       callAgent(call).catch((error: unknown) => apply({ type: 'agent', event: failed(call.threadId, error) }));
     }
     apply(action);
+    // After the action: a new thread only exists once it has applied.
+    for (const call of calls) if (call.method === 'start') apply({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
   }, []);
   // The tick is the demo adapter's clock; real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {
@@ -66,7 +70,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     const id = setInterval(() => apply({ type: 'tick' }), 1000);
     return () => clearInterval(id);
   }, [state.paused]);
-  useEffect(() => host.agent.onEvent((event) => apply({ type: 'agent', event })), []);
+  useEffect(
+    () =>
+      host.agent.onEvent((event) => {
+        if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
+        apply({ type: 'agent', event });
+      }),
+    [],
+  );
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);

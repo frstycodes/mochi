@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { BranchDown as GitMerge, BranchUp as GitPullRequest, Inbox, MessageQuestion as MessageCircleQuestion, Route, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
-import type { QueueItem, QueueKind, Thread } from './model';
+import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { progressAt } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
 import { ProviderMark, ProgressRing, lineColor } from './ui';
+import { isWorking } from './agentPhase';
 
 const R_IN = 92;
 const R_OUT = 188;
@@ -58,9 +59,13 @@ export function Orbit() {
       if (mode) dispatch({ type: 'overlap', queueId: item.id, mode });
       return true;
     }
-    const choice = item.choices?.[digit - 1];
-    if (item.choices && !choice) return true;
-    if (digit === 1 || choice) dispatch({ type: 'answer', queueId: item.id, choice: choice?.id });
+    if (item.kind === 'question') {
+      const options = singleChoice(item);
+      if (!options) return (answered.current = false);
+      if (options[digit - 1]) dispatch({ type: 'answer', queueId: item.id, answers: [[options[digit - 1]]] });
+      return true;
+    }
+    if (digit === 1) dispatch({ type: 'answer', queueId: item.id });
     return true;
   };
 
@@ -233,7 +238,7 @@ function Peek({ item, center, now }: { item: OrbitItem; center: { x: number; y: 
 }
 
 function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
-  const choices = item.kind === 'overlap' ? ['Link', 'Extract', 'Race', 'Keep both'] : (item.choices?.map((c) => c.label) ?? [item.kind === 'review' ? 'Approve and merge' : 'Approve']);
+  const choices = item.kind === 'overlap' ? ['Link', 'Extract', 'Race', 'Keep both'] : item.kind === 'question' ? (singleChoice(item) ?? []) : [item.kind === 'review' ? 'Approve and merge' : 'Approve'];
   return (
     <>
       <PeekHeader thread={thread} />
@@ -246,7 +251,7 @@ function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
           </li>
         ))}
       </ul>
-      <div className="text-xs text-subtle-foreground">Press a number to answer without leaving this screen</div>
+      <div className="text-xs text-subtle-foreground">{choices.length ? 'Press a number to answer without leaving this screen' : 'Open the queue to answer'}</div>
     </>
   );
 }
@@ -259,7 +264,7 @@ function ThreadPeek({ thread, now }: { thread: Thread; now: number }) {
     <>
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
-        <ProgressRing pct={pct} slot={thread.line} size={18} />
+        <ProgressRing pct={pct} slot={thread.line} size={18} isWorking={isWorking(thread)} />
         <span className="tabular font-medium text-foreground">{Math.round(pct * 100)}%</span>
         <span className="truncate text-muted-foreground">{running ? running.title : 'Nothing running'}</span>
       </div>

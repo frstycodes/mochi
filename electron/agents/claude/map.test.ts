@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, createMapper, permissionResult, planFromTodos } from './map.ts';
+import { approvalEvent, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
 import { FIXTURE } from './fixture.ts';
 
 const CWD = '/repo';
@@ -11,9 +11,9 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   const events = FIXTURE.flatMap((m) => map(m as SDKMessage));
   assert.deepEqual(
     events.map((e) => e.type),
-    ['session', 'message', 'message', 'tool', 'plan', 'tool', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
+    ['session', 'info', 'message', 'message', 'tool', 'plan', 'tool', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
   );
-  const [, first, second] = events;
+  const [, , first, second] = events;
   assert.deepEqual([first, second], [
     { threadId: 't1', type: 'message', text: 'Adding', isDelta: false },
     { threadId: 't1', type: 'message', text: ' a test.', isDelta: true },
@@ -25,6 +25,53 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   const usage = events.find((e) => e.type === 'usage');
   assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
+});
+
+test('init lists tools, MCP servers with their tool counts, skills, plugins and slash commands', () => {
+  const { map } = createMapper('t1', CWD);
+  const init = {
+    type: 'system',
+    subtype: 'init',
+    session_id: 'sess-1',
+    parent_tool_use_id: null,
+    cwd: '/repo',
+    model: 'claude-opus-5-5',
+    permissionMode: 'acceptEdits',
+    claude_code_version: '2.3.0',
+    tools: ['Bash', 'Read', 'mcp__github__create_pr', 'mcp__github__list_prs', 'mcp__my_docs__search'],
+    mcp_servers: [
+      { name: 'github', status: 'connected' },
+      { name: 'my.docs', status: 'pending' },
+      { name: 'odd', status: 'something-new' },
+    ],
+    skills: ['ui', 'run'],
+    plugins: [{ name: 'ponytail', path: '/p', version: '4.7.0' }, { name: 'bare', path: '/b' }],
+    slash_commands: ['compact', 'ui'],
+  } as unknown as SDKMessage;
+  assert.deepEqual(map(init), [
+    { threadId: 't1', type: 'session', provider: 'claude', sessionId: 'sess-1' },
+    {
+      threadId: 't1',
+      type: 'info',
+      info: {
+        model: 'claude-opus-5-5',
+        cwd: '/repo',
+        permissionMode: 'acceptEdits',
+        version: '2.3.0',
+        tools: ['Bash', 'Read'],
+        mcpServers: [
+          { name: 'github', status: 'connected', toolCount: 2 },
+          { name: 'my.docs', status: 'pending', toolCount: 1 },
+          { name: 'odd', status: 'failed', toolCount: 0 },
+        ],
+        skills: ['ui', 'run'],
+        plugins: [{ name: 'ponytail', version: '4.7.0' }, { name: 'bare' }],
+        slashCommands: ['compact', 'ui'],
+      },
+    },
+  ]);
+  const changed = { type: 'system', subtype: 'commands_changed', commands: [{ name: 'review', description: '', argumentHint: '' }] } as unknown as SDKMessage;
+  assert.deepEqual(map(changed), [{ threadId: 't1', type: 'info', info: { slashCommands: ['review'] } }]);
 });
 
 test('usage after a second result is the difference from the first, since results carry running totals', () => {
@@ -79,8 +126,25 @@ test('subagent messages are skipped', () => {
 
 test('AskUserQuestion becomes a question and its answers go back keyed by question text', () => {
   const input = { questions: [{ question: 'Which db?', header: 'DB', multiSelect: false, options: [{ label: 'Postgres', description: '' }, { label: 'SQLite', description: '' }] }] };
-  assert.deepEqual(approvalEvent('t1', 'r1', 'AskUserQuestion', input, '', ''), { threadId: 't1', type: 'question', requestId: 'r1', questions: [{ text: 'Which db?', options: ['Postgres', 'SQLite'] }] });
-  assert.deepEqual(permissionResult('AskUserQuestion', input, { kind: 'answer', answers: ['SQLite'] }), { behavior: 'allow', updatedInput: { ...input, answers: { 'Which db?': 'SQLite' } } });
+  assert.deepEqual(approvalEvent('t1', 'r1', 'AskUserQuestion', input, '', ''), { threadId: 't1', type: 'question', requestId: 'r1', questions: [{ text: 'Which db?', options: ['Postgres', 'SQLite'], multiSelect: false }] });
+  assert.deepEqual(permissionResult('AskUserQuestion', input, { kind: 'answer', answers: [['SQLite']] }), { behavior: 'allow', updatedInput: { ...input, answers: { 'Which db?': 'SQLite' } } });
+});
+
+test('AskUserQuestion: a multi-select answer with your own text goes back as one comma-joined string; a skipped question is left out', () => {
+  const input = {
+    questions: [
+      { question: 'Which flows?', header: 'Flows', multiSelect: true, options: [{ label: 'Checkout', description: '' }, { label: 'Refund', description: '' }] },
+      { question: 'Which db?', header: 'DB', multiSelect: false, options: [{ label: 'Postgres', description: '' }, { label: 'SQLite', description: '' }] },
+    ],
+  };
+  assert.deepEqual(
+    (approvalEvent('t1', 'r1', 'AskUserQuestion', input, '', '') as { questions: unknown }).questions,
+    [{ text: 'Which flows?', options: ['Checkout', 'Refund'], multiSelect: true }, { text: 'Which db?', options: ['Postgres', 'SQLite'], multiSelect: false }],
+  );
+  assert.deepEqual(permissionResult('AskUserQuestion', input, { kind: 'answer', answers: [['Checkout', 'Refund', 'Gift cards too'], []] }), {
+    behavior: 'allow',
+    updatedInput: { ...input, answers: { 'Which flows?': 'Checkout, Refund, Gift cards too' } },
+  });
 });
 
 test('approvals: Bash is a command, file tools are edits, deny carries a message', () => {
@@ -96,4 +160,8 @@ test('a rejected rate limit pauses the thread with its reset time; warnings pass
   assert.deepEqual(map(event('allowed_warning', 1_760_000_000)), []);
   assert.deepEqual(map(event('rejected', 1_760_000_000)), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z' }]);
   assert.deepEqual(map(event('rejected')), [{ threadId: 't1', type: 'limit' }]);
+});
+
+test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
+  assert.deepEqual(withPlanTools({ PATH: '/bin' }), { PATH: '/bin', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' });
 });

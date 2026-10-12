@@ -11,7 +11,8 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, Thread } from './model';
-import { AgentLoader, agentPhase } from './AgentLoader';
+import { AgentLoader } from './AgentLoader';
+import { agentPhase, isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
@@ -26,7 +27,7 @@ import { SummaryPanel } from './SummaryPanel';
 import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
 import { useSettle } from './useSettle';
-import { OverflowIcon, ProgressRing, ThreadStatusIcon } from './ui';
+import { OverflowIcon, ProgressRing } from './ui';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -218,7 +219,7 @@ function ThreadHeader({
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
       <header className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
         {hasTrigger && <SidebarTrigger className="-ml-1" />}
-        {thread.status === 'running' ? <AgentLoader phase={agentPhase(thread)} className="text-muted-foreground" /> : <ThreadStatusIcon status={thread.status} />}
+        <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
         {!!thread.repo && (
           <span className="hidden min-w-0 items-center gap-1 truncate font-mono type-caption text-subtle-foreground @2xl:flex">
@@ -235,7 +236,7 @@ function ThreadHeader({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
-              <ProgressRing pct={pct} slot={thread.line} size={14} />
+              <ProgressRing pct={pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
               <span className="tabular">{Math.round(pct * 100)}%</span>
             </Button>
           </TooltipTrigger>
