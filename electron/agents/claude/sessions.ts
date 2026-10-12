@@ -3,12 +3,12 @@ import { query, type CanUseTool, type EffortLevel, type PermissionMode, type Per
 import { app, BrowserWindow } from 'electron';
 import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor, type ClaudeAccount } from './account.ts';
-import { apiKeyEnv, detectClaude, readSettings } from './install.ts';
+import { detectClaude, readSettings } from './install.ts';
 import { approvalEvent, createMapper, permissionResult } from './map.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
- * `maxConcurrent` are live, the rest wait in `waiting`. A session whose turn ended gives its process up when someone is
+ * the concurrency cap are live, the rest wait in `waiting`. A session whose turn ended gives its process up when someone is
  * waiting and comes back with `resume` on its next message.
  */
 interface Session {
@@ -90,9 +90,9 @@ app.on('before-quit', () => {
 });
 
 async function schedule(session: Session) {
-  const settings = await readSettings();
+  const cap = (await config()).concurrencyCap() || DEFAULT_CAP;
   const live = [...sessions.values()].filter((s) => s.query).length;
-  if (live >= (settings.maxConcurrent ?? DEFAULT_CAP)) {
+  if (live >= cap) {
     evictIdle() ? void launch(session) : waiting.push(session);
     return;
   }
@@ -104,10 +104,13 @@ async function launch(session: Session) {
   const abort = new AbortController();
   try {
     const settings = await readSettings();
+    const { apiKeyFor, defaultModel } = await config();
     const base = accountEnv(session.account);
     const install = await detectClaude(settings, base);
-    // GAP: the API key is a global setting; RUNTIME.md wants it chosen per thread, explicitly, when its account hits a limit.
-    const keyEnv = apiKeyEnv(settings, base);
+    // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
+    const key = options.useApiKey ? apiKeyFor('claude') : undefined;
+    if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
+    const keyEnv = key ? { ...(base ?? process.env), ANTHROPIC_API_KEY: key } : undefined;
     const env = keyEnv ?? base;
     if (!install.loggedIn && !keyEnv) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
     if (sessions.get(threadId) !== session) return;
@@ -117,7 +120,7 @@ async function launch(session: Session) {
       options: {
         pathToClaudeCodeExecutable: install.path,
         cwd: options.cwd,
-        model: options.model ?? DEFAULT_MODEL,
+        model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
         permissionMode: (options.permissionMode as PermissionMode | undefined) ?? 'default',
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
@@ -194,6 +197,9 @@ function dropApprovals(threadId: string, message: string) {
     pending.resolve({ behavior: 'deny', message, interrupt: true });
   }
 }
+
+// Imported lazily: config.ts loads Electron, which the adapters' node tests don't have.
+const config = () => import('../config.ts');
 
 function emit(event: AgentEvent) {
   for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('agent:onEvent', event);

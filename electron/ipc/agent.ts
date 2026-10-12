@@ -26,6 +26,8 @@ export const agent = {
     string(o.spaceId, 'options.spaceId', 256);
     string(o.prompt, 'options.prompt', 100_000);
     for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
+    if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
+    if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
     if (o.provider === 'claude') return startClaude(threadId as string, o as unknown as AgentStartOptions);
     if (o.provider === 'codex') return codex.start(threadId as string, o as unknown as AgentStartOptions);
     return runtime();

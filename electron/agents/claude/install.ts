@@ -3,19 +3,16 @@ import { access, constants, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { app, safeStorage } from 'electron';
+import { app } from 'electron';
 
 const run = promisify(execFile);
 
 /**
  * Harness settings the Claude adapter reads, from `<userData>/agent-settings.json` (the settings session writes it):
- * `{ "claude": { "executablePath"?: string, "useApiKey"?: boolean, "apiKey"?: <safeStorage-encrypted, base64>, "maxConcurrent"?: number } }`.
+ * `{ "claude": { "executablePath"?: string } }`. The API key, cap and default model come from `electron/agents/config.ts`.
  */
 export interface ClaudeSettings {
   executablePath?: string;
-  useApiKey?: boolean;
-  apiKey?: string;
-  maxConcurrent?: number;
 }
 
 export interface ClaudeInstall {
@@ -59,13 +56,6 @@ export async function detectClaude(settings: ClaudeSettings, env?: NodeJS.Proces
   const [{ stdout: version }, statusJson] = await Promise.all([run(file, ['--version'], { timeout: 15_000 }), status]);
   const auth = JSON.parse(statusJson) as { loggedIn?: boolean; authMethod?: string };
   return { path: file, version: version.trim(), loggedIn: !!auth.loggedIn, authMethod: auth.authMethod ?? 'none' };
-}
-
-/** The env override for the API-key option only: an `ANTHROPIC_API_KEY` moves billing off the user's subscription, so it is never set otherwise. */
-export function apiKeyEnv(settings: ClaudeSettings, base: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> | undefined {
-  if (!settings.useApiKey || !settings.apiKey) return undefined;
-  // `env` replaces the child environment, so PATH, HOME and the rest must be spread in.
-  return { ...base, ANTHROPIC_API_KEY: safeStorage.decryptString(Buffer.from(settings.apiKey, 'base64')) };
 }
 
 async function isExecutable(file: string) {
