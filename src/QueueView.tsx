@@ -179,10 +179,13 @@ function ApprovalRequest({ item }: { item: QueueItem }) {
   const withUndo = useUndoable();
   return (
     <Confirmation approval={{ id: item.id }} state="approval-requested">
-      <ConfirmationTitle className="flex flex-col gap-2">
-        <span>The agent wants to run:</span>
-        {!!item.code && <code className="block overflow-x-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption">{item.code}</code>}
-      </ConfirmationTitle>
+      {/* A described request (a web search) says what it does in the card's title; only raw code needs repeating. */}
+      {!!item.code && (
+        <ConfirmationTitle className="flex flex-col gap-2">
+          <span>The agent wants to run:</span>
+          <code className="block overflow-x-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption">{item.code}</code>
+        </ConfirmationTitle>
+      )}
       <ConfirmationRequest>
         <ConfirmationActions>
           <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>

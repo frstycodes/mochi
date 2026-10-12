@@ -91,7 +91,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     () =>
       host.agent.onEvent((event) => {
         if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
-        apply({ type: 'agent', event });
+        apply({ type: 'agent', event, ms: Date.now() });
       }),
     [],
   );

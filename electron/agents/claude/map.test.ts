@@ -150,6 +150,7 @@ test('AskUserQuestion: a multi-select answer with your own text goes back as one
 test('approvals: Bash is a command, file tools are edits, deny carries a message', () => {
   assert.deepEqual(approvalEvent('t1', 'r', 'Bash', { command: 'rm -rf dist' }, 'Run rm', ''), { threadId: 't1', type: 'approval', requestId: 'r', kind: 'command', title: 'Run rm', detail: '', code: 'rm -rf dist' });
   assert.deepEqual(approvalEvent('t1', 'r', 'Write', { file_path: '/repo/a.ts' }, 'Write a.ts', 'why'), { threadId: 't1', type: 'approval', requestId: 'r', kind: 'edit', title: 'Write a.ts', detail: 'why', code: '/repo/a.ts' });
+  assert.deepEqual(approvalEvent('t1', 'r', 'WebSearch', { query: 'EX271UZ review', allowed_domains: ['rtings.com', 'tftcentral.co.uk', 'a.com'] }, 'WebSearch', ''), { threadId: 't1', type: 'approval', requestId: 'r', kind: 'tool', title: 'Search the web for “EX271UZ review” on rtings.com, tftcentral.co.uk +1 more', detail: '' });
   assert.deepEqual(permissionResult('Bash', { command: 'ls' }, { kind: 'deny' }), { behavior: 'deny', message: 'The user declined this.' });
   assert.deepEqual(permissionResult('Bash', { command: 'ls' }, { kind: 'allow' }), { behavior: 'allow', updatedInput: { command: 'ls' } });
 });
