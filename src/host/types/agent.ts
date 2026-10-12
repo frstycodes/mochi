@@ -1,13 +1,44 @@
+import type { DriftVerdict } from '../../drift.ts';
+import type { Provider, Size, Thread } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
+  provider: Provider;
   cwd: string;
   prompt: string;
+  model?: string;
+  effort?: string;
+  permissionMode?: string;
+  /** Provider session id from an earlier `session` event. */
+  resume?: string;
 }
 
-export interface AgentEvent {
+export type AgentEvent =
+  | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
+  | { threadId: string; type: 'message'; text: string; isDelta: boolean }
+  | { threadId: string; type: 'reasoning'; text: string }
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number }
+  | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
+  | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
+  | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
+  | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
+
+/** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
+export interface AgentPlanItem {
+  title: string;
+  status: 'pending' | 'running' | 'done';
+  progress?: number;
+  size?: Size;
+  files?: string[];
+}
+
+export type AgentDecision = { kind: 'allow' } | { kind: 'deny'; message?: string } | { kind: 'answer'; answers: string[] };
+
+/** Side chat's answer stream, separate from thread events: `id` is the one `ask` returned. */
+export interface AgentAskEvent {
   id: string;
-  type: 'text' | 'tool' | 'done' | 'error';
+  type: 'text' | 'done' | 'error';
   text: string;
 }
 
@@ -26,14 +57,27 @@ export interface AgentAskMessage {
 }
 
 export interface AgentHost {
-  start(options: AgentStartOptions): Promise<{ id: string }>;
-  /** Streams the answer as `text` events on `onEvent` under the returned id, then one `done` (or `error`). */
-  ask(context: AgentAskContext, messages: AgentAskMessage[]): Promise<{ id: string }>;
+  start(threadId: string, options: AgentStartOptions): Promise<void>;
+  send(threadId: string, text: string): Promise<void>;
+  interrupt(threadId: string): Promise<void>;
+  resolve(requestId: string, decision: AgentDecision): Promise<void>;
+  stop(threadId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
+  /** Streams the answer as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
+  ask(context: AgentAskContext, messages: AgentAskMessage[]): Promise<{ id: string }>;
+  onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
+  /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
+  classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
 }
 
 export const agentMethods = {
   start: 'invoke',
-  ask: 'invoke',
+  send: 'invoke',
+  interrupt: 'invoke',
+  resolve: 'invoke',
+  stop: 'invoke',
   onEvent: 'event',
+  ask: 'invoke',
+  onAskEvent: 'event',
+  classify: 'invoke',
 } satisfies Manifest<AgentHost>;
