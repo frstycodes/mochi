@@ -6,9 +6,11 @@ export interface ClaudeAccount {
 
 export type AccountFor = (spaceId: string, provider: 'claude') => Promise<ClaudeAccount>;
 
-// GAP: `accountFor` from `electron/agents/config.ts` (session `settings`) replaces this once it lands; until then every
-// profile runs on the default install's login.
-export const accountFor: AccountFor = async () => ({ id: 'default' });
+export const accountFor: AccountFor = async (spaceId, provider) => {
+  // Imported lazily: config.ts loads Electron, which the adapters' node tests don't have.
+  const { account, configDir } = await (await import('../config.ts')).accountFor(spaceId, provider);
+  return { id: account.id, configDir: configDir ?? undefined };
+};
 
 /** The child environment for an account, or none for the default one (the SDK then inherits `process.env` as is). */
 export function accountEnv(account: ClaudeAccount): Record<string, string | undefined> | undefined {

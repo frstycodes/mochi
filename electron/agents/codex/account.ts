@@ -6,9 +6,11 @@ export interface CodexAccount {
 
 export type AccountFor = (spaceId: string, provider: 'codex') => Promise<CodexAccount>;
 
-// GAP: `accountFor` from `electron/agents/config.ts` (session `settings`) replaces this once it lands; until then every
-// profile runs on the default install's login.
-export const accountFor: AccountFor = async () => ({ id: 'default' });
+export const accountFor: AccountFor = async (spaceId, provider) => {
+  // Imported lazily: config.ts loads Electron, which the adapters' node tests don't have.
+  const { account, configDir } = await (await import('../config.ts')).accountFor(spaceId, provider);
+  return { id: account.id, configDir: configDir ?? undefined };
+};
 
 /** `codex` reads its login, config and thread rollouts from `CODEX_HOME` (verified: an empty one reports logged out). */
 export function accountEnv(account: CodexAccount, env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
