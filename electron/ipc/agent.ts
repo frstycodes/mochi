@@ -9,7 +9,7 @@ import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { addWorktree } from './git.ts';
-import { notImplemented, record, string, type Handlers } from './handlers.ts';
+import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
 const PROVIDERS = ['claude', 'codex'];
@@ -80,7 +80,8 @@ export const agent = {
     string(text, 'text', 100_000);
     if (hasClaudeSession(threadId as string)) return rewindClaude(threadId as string, text as string);
   },
-  async ask(sender, context, messages) {
+  async ask(sender, context, messages, model) {
+    string(model, 'model', MAX_MODEL_CHARS);
     const c = record(context, 'context');
     string(c.spaceId, 'context.spaceId', 256);
     if (JSON.stringify(c).length > MAX_CONTEXT_CHARS) throw new TypeError(`context must be under ${MAX_CONTEXT_CHARS} chars`);
@@ -96,7 +97,7 @@ export const agent = {
     sender.once('destroyed', () => abort.abort());
     void (async () => {
       try {
-        for await (const text of askClaude(c.spaceId as string, c as unknown as AgentAskContext, messages as AgentAskMessage[], abort)) send({ id, type: 'text', text });
+        for await (const text of askClaude(c.spaceId as string, c as unknown as AgentAskContext, messages as AgentAskMessage[], model as string, abort)) send({ id, type: 'text', text });
         send({ id, type: 'done', text: '' });
       } catch (error) {
         send({ id, type: 'error', text: error instanceof Error ? error.message : String(error) });

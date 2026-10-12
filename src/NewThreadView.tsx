@@ -13,6 +13,7 @@ import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
+import { showsDemoData } from './demoData';
 import { host } from './host';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
@@ -108,7 +109,7 @@ function NewThread() {
         )}
       </AnimatePresence>
 
-      {!draft && (
+      {!draft && showsDemoData() && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-subtle-foreground">Try one of these to see duplicate detection</p>
           <div className="flex flex-wrap gap-2">

@@ -27,6 +27,9 @@ import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
+import { parseSlash } from './chat/slash';
+import { SlashMenu, useSlashMenu } from './chat/SlashMenu';
+import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
 
@@ -230,33 +233,43 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const drift = useDriftGuard(thread);
+  const slash = useSlashMenu();
   useSeedAttachment(thread.id === 'adm');
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
       <DriftCard guard={drift} thread={thread} />
       <LimitBanner thread={thread} />
-      <ComposerCard className="in-data-image-over:border-ring">
-        {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-        <ComposerInput
-          controls={controls}
-          provider={provider}
-          isLocked={!!thread.live}
-          onControlsChange={setControls}
-          onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
-          submitLabel={isQueue ? 'Queue message' : 'Send'}
-          onSend={({ text, files }) => {
-            const trimmed = text.trim();
-            if (!trimmed && files.length === 0) return;
-            const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-            return drift.submit(withFiles, isQueue ? QUEUED_PREFIX : '');
-          }}
-          placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
-          onKeyDown={(e) => e.key === MOD_KEY && setIsQueue(true)}
-          onKeyUp={(e) => e.key === MOD_KEY && setIsQueue(false)}
-          onBlur={() => setIsQueue(false)}
-        />
-      </ComposerCard>
+      <div className="relative">
+        <SlashMenu menu={slash} />
+        <ComposerCard className="in-data-image-over:border-ring">
+          {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
+          <ComposerInput
+            controls={controls}
+            provider={provider}
+            isLocked={!!thread.live}
+            onControlsChange={setControls}
+            onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
+            submitLabel={isQueue ? 'Queue message' : 'Send'}
+            onSend={({ text, files }) => {
+              const trimmed = text.trim();
+              if (!trimmed && files.length === 0) return;
+              const command = parseSlash(trimmed);
+              if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
+              const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
+              return drift.submit(withFiles, isQueue ? QUEUED_PREFIX : '');
+            }}
+            placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
+            {...slash.textareaProps}
+            onKeyDown={(e) => {
+              slash.textareaProps.onKeyDown(e);
+              if (e.key === MOD_KEY) setIsQueue(true);
+            }}
+            onKeyUp={(e) => e.key === MOD_KEY && setIsQueue(false)}
+            onBlur={() => setIsQueue(false)}
+          />
+        </ComposerCard>
+      </div>
       <ComposerMeta>
         <RunOnMenu />
         <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />

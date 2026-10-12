@@ -6,6 +6,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ComposerCard } from '../Composer';
+import { ModelPicker } from '../ModelControls';
 import { useSideChat } from '../sidechat/useSideChat';
 import { useHarness } from '../store';
 import { SOURCE_NAMES, type Quote, type QuoteSource, type SideMessage } from '../store/sidechat';
@@ -48,9 +49,12 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
               </PromptInputHeader>
             )}
             <PromptInputBody>
-              <PromptInputTextarea autoFocus={!!side.chat.draft} placeholder={side.chat.draft ? 'Ask about this selection' : 'Ask about this thread'} className="min-h-10 px-4 pt-3 type-prose max-md:text-base" />
+              <PromptInputTextarea data-sidechat-input={thread.id} autoFocus={!!side.chat.draft} placeholder={side.chat.draft ? 'Ask about this selection' : 'Ask about this thread'} className="min-h-10 px-4 pt-3 type-prose max-md:text-base" />
             </PromptInputBody>
-            <PromptInputFooter className="justify-end px-2 pb-2">
+            <PromptInputFooter className="px-2 pb-2">
+              <PromptInputTools>
+                <ModelPicker value={side.model} provider="claude" isLocked onChange={(m) => side.setModel(m.id)} />
+              </PromptInputTools>
               <PromptInputTools>
                 <PromptInputSubmit aria-label="Ask" disabled={side.isStreaming} className="rounded-full">
                   <ArrowUp className="size-4" />

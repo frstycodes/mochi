@@ -28,6 +28,8 @@ export interface Prefs {
   searchEngine: 'duckduckgo' | 'google' | 'bing' | 'kagi';
   /** A simulator udid; empty picks the first booted one. */
   simulator: string;
+  /** Desktop only: show the fixture threads and profiles alongside your own (`showsDemoData`). */
+  demoData: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -52,6 +54,7 @@ export const DEFAULT_PREFS: Prefs = {
   restoreTerminals: true,
   searchEngine: 'duckduckgo',
   simulator: '',
+  demoData: false,
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';

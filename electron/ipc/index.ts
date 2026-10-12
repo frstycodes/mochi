@@ -3,6 +3,7 @@ import { manifest, type HostBridge, type Namespace } from '../../src/host/types/
 import type { Handlers } from './handlers.ts';
 import { agent } from './agent.ts';
 import { browser } from './browser.ts';
+import { data } from './data.ts';
 import { fs } from './fs.ts';
 import { git } from './git.ts';
 import { notify } from './notify.ts';
@@ -12,7 +13,7 @@ import { settings } from './settings.ts';
 import { sim } from './sim.ts';
 import { windows } from './windows.ts';
 
-const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings } satisfies {
+const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data } satisfies {
   [K in Namespace]: Handlers<HostBridge[K]>;
 };
 

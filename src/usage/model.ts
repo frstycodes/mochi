@@ -66,8 +66,13 @@ export function threadUsage(thread: Thread): Usage {
 export function spaceUsage(threads: Thread[], space: Space, now: number) {
   const own = threads.filter((t) => t.spaceId === space.id);
   const total = own.map(threadUsage).reduce((sum, u) => ({ input: sum.input + u.input, output: sum.output + u.output, costUsd: sum.costUsd + u.costUsd }), { input: 0, output: 0, costUsd: 0 });
-  const plans = (['claude', 'codex'] as const).map((p) => planUsage(own, p, space.plans[p], now));
+  const plans = (['claude', 'codex'] as const).filter((p) => isKnownPlan(space.plans[p])).map((p) => planUsage(own, p, space.plans[p], now));
   return { ...total, plans };
+}
+
+/** GAP: plans are demo names until usage reads the linked account's detected plan, so a profile with none shows no plan meters or limit forecasts. */
+export function isKnownPlan(plan: string) {
+  return plan in PLAN_LIMITS;
 }
 
 export function planUsage(threads: Thread[], provider: Provider, plan: string, now: number): PlanUsage {

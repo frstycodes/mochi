@@ -14,6 +14,8 @@ import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { projectRef, repoFor } from '../projects.ts';
 import type { Action, Snapshot, State } from './index.tsx';
+import { getRestored } from './persist.ts';
+import { showsDemoData } from '../demoData.ts';
 
 export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
 
@@ -55,17 +57,26 @@ export type ThreadsAction =
   | { type: 'fork-keep'; keepId: string; dropId: string }
   | { type: 'handoff'; threadId: string; stepId?: string; to: Provider; summary: string };
 
-export function initialThreads(): ThreadsState {
-  const threads = seedThreads();
-  let checkpointSeq = 0;
+/** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
+export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
+  const demo = isDemo ? seedThreads() : [];
+  let checkpointSeq = saved?.checkpointSeq ?? 0;
   const checkpoints = Object.fromEntries(
-    threads.map((t) => {
+    demo.map((t) => {
       const list = seedCheckpoints(t, checkpointSeq);
       checkpointSeq += list.length;
       return [t.id, list];
     }),
   );
-  return { now: NOW0, threads, seq: 1, checkpoints, checkpointSeq, rewindUndo: null, forks: {} };
+  return {
+    now: Math.max(NOW0, saved?.now ?? 0),
+    threads: [...demo, ...(saved?.threads ?? [])],
+    seq: Math.max(1, saved?.seq ?? 0),
+    checkpoints: { ...checkpoints, ...saved?.checkpoints },
+    checkpointSeq,
+    rewindUndo: null,
+    forks: saved?.forks ?? {},
+  };
 }
 
 export function threadsReducer(state: State, action: Action): State {
@@ -103,7 +114,7 @@ function reduce(state: State, action: Action): State {
         threads: mapThread(state.threads, action.threadId, (t) =>
           t.live
             ? log(
-                { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
+                { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
                 { at: state.now, who: 'harness', kind: 'event', text: action.onApiKey ? 'Continuing on your API key, billed per use' : 'Resumed on the same account' },
               )
             : t,
@@ -357,7 +368,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
   return {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
-      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
+      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
       if (action.drift === 'off-goal') return log(said, { at: now, who: 'harness', kind: 'event', text: `Drift guard: sent off-goal, not counted toward the goal (${action.reason})` });
       if (action.drift === 'on-goal') return said;
       const n = t.revisions.length + 1;
@@ -396,7 +407,7 @@ function handoffLive(state: State, action: Extract<Action, { type: 'handoff' }>)
   return {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) =>
-      t.live && !action.stepId ? { ...t, status: 'running', session: undefined, controls: undefined, live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: undefined } } : t,
+      t.live && !action.stepId ? { ...t, status: 'running', session: undefined, controls: undefined, live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: undefined, isDetached: undefined } } : t,
     ),
   };
 }

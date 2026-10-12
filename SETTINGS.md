@@ -88,7 +88,7 @@ One group per profile: name, icon, GitHub account, linked Claude and Codex accou
 | Default simulator | device picker | first booted | now | src/pane/SimulatorTab.tsx:28 |
 
 ### Data
-Storage used, Clear pins / side chats / terminal history / everything (each with an undo toast where possible, a confirm only for "everything"). About: version, Electron/Chromium, links to RUNTIME and docs. now.
+Show demo data (desktop only, off by default; the web build and the artifact always show it): the fixture threads, queue and profiles next to your own, unsaved, applied with a reload. Storage used, Clear pins / side chats / terminal history / everything (each with an undo toast where possible, a confirm only for "everything"). About: version, Electron/Chromium, links to RUNTIME and docs. now.
 
 ## Not settings
 Internal caps and timings (patch size, poll intervals, animation durations, drift cut-offs, pin slots) stay constants. Usage budgets and prices come from the providers, not the user.

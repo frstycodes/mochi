@@ -1,8 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { AgentAskContext, AgentAskEvent, AgentAskMessage } from '../host/types/agent';
+import { DEFAULT_SETTINGS } from '../host/types/settings';
 import type { Thread } from '../model';
+import { claudeModelId, providerModelOf } from '../runtime/controls';
 import { useHarness } from '../store';
 import { chatFor, questionText, type Quote, type SideMessage } from '../store/sidechat';
 
@@ -12,6 +15,8 @@ export function useSideChat(thread: Thread, tabId: string) {
   const chat = chatFor(state, thread.id, tabId);
   const at = { threadId: thread.id, tabId };
   const isStreaming = chat.messages.some((m) => m.isStreaming);
+  const [defaultModel] = useSideChatDefault();
+  const model = chat.model ?? defaultModel ?? claudeModelId(DEFAULT_SETTINGS.sideChatModel);
 
   const ask = async (text: string) => {
     const id = `side-${Date.now()}`;
@@ -20,21 +25,51 @@ export function useSideChat(thread: Thread, tabId: string) {
     dispatch({ type: 'sidechat-ask', ...at, id, text });
     const stream = (chunk: string, isDone?: boolean) => dispatch({ type: 'sidechat-stream', ...at, id, text: chunk, isDone });
     try {
-      for await (const chunk of askAgent(threadContext(thread, await diffSummary(thread)), history)) stream(chunk);
+      for await (const chunk of askAgent(threadContext(thread, await diffSummary(thread)), history, providerModelOf(model))) stream(chunk);
       stream('', true);
     } catch (error) {
       stream(`\n\n_Couldn't answer: ${error instanceof Error ? error.message : String(error)}_`, true);
     }
   };
 
+  // A ref, not the reducer alone: StrictMode runs this effect twice before `sidechat-ask` clears `pending`.
+  const asked = useRef<string>(undefined);
+  useEffect(() => {
+    if (!chat.pending || asked.current === chat.pending || !(chat.model || defaultModel)) return;
+    asked.current = chat.pending;
+    void ask(chat.pending);
+  });
+
   return {
     chat,
     isStreaming,
+    model,
+    setModel: (id: string) => dispatch({ type: 'sidechat-model', ...at, model: id }),
     ask,
     setDraft: (quote?: Quote) => dispatch({ type: 'sidechat-draft', ...at, quote }),
     clear: () => dispatch({ type: 'sidechat-clear', ...at }),
     promote: (id: string, to: 'message' | 'thread') => dispatch({ type: 'sidechat-promote', ...at, id, to }),
   };
+}
+
+/** Settings › Defaults' side chat model as a catalog id (null until read), and a setter that saves it. */
+export function useSideChatDefault() {
+  const [model, setModel] = useState<string | null>(null);
+  useEffect(() => {
+    let isCurrent = true;
+    host.settings.get().then(
+      (s) => isCurrent && setModel(claudeModelId(s.sideChatModel)),
+      () => {},
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+  const save = (id: string) => {
+    setModel(id);
+    host.settings.set({ sideChatModel: providerModelOf(id) }).catch((error: Error) => toast.error('Side chat model not saved', { description: error.message }));
+  };
+  return [model, save] as const;
 }
 
 function toAgentMessage(message: SideMessage): AgentAskMessage {
@@ -67,7 +102,7 @@ async function diffSummary(thread: Thread): Promise<AgentAskContext['diff']> {
 }
 
 /** `host.agent.ask` answers through the shared event channel; this pulls out one answer's chunks as an async stream. */
-async function* askAgent(context: AgentAskContext, messages: AgentAskMessage[]) {
+async function* askAgent(context: AgentAskContext, messages: AgentAskMessage[], model: string) {
   const pending: AgentAskEvent[] = [];
   let wake = () => {};
   const off = host.agent.onAskEvent((event) => {
@@ -76,7 +111,7 @@ async function* askAgent(context: AgentAskContext, messages: AgentAskMessage[]) 
   });
   try {
     // Subscribed before asking: the first chunk can arrive before `ask` resolves.
-    const { id } = await host.agent.ask(context, messages);
+    const { id } = await host.agent.ask(context, messages, model);
     while (true) {
       const event = pending.shift();
       if (!event) {
