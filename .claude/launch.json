@@ -385,6 +385,28 @@
         "--strictPort"
       ],
       "port": 5413
+    },
+    {
+      "name": "mochi-schedules",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5431",
+        "--strictPort"
+      ],
+      "port": 5431
+    },
+    {
+      "name": "mochi-schedules-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5433",
+        "--strictPort"
+      ],
+      "port": 5433
     }
   ]
 }

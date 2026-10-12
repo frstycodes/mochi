@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import { app, BrowserWindow } from 'electron';
-import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import { app } from 'electron';
+import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
 import { approvalEvent, createMapper, mcpServersFromStatus, permissionResult, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
+import { emitAgentEvent } from '../events.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -227,9 +228,7 @@ function dropApprovals(threadId: string, message: string) {
 // Imported lazily: config.ts loads Electron, which the adapters' node tests don't have.
 const config = () => import('../config.ts');
 
-function emit(event: AgentEvent) {
-  for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('agent:onEvent', event);
-}
+const emit = emitAgentEvent;
 
 function userContent(text: string, images?: AgentImage[]): SDKUserMessage['message']['content'] {
   if (!images?.length) return text;

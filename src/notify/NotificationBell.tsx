@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, Clock, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -23,6 +23,7 @@ const KIND_ICONS = {
   'pr-review': { icon: BranchUp, className: 'text-muted-foreground' },
   overlap: { icon: TriangleWarning, className: 'text-warning' },
   'race-lost': { icon: Flash, className: 'text-muted-foreground' },
+  run: { icon: Clock, className: 'text-muted-foreground' },
 } satisfies Record<NoticeKind, { icon: IconComponent; className: string }>;
 
 export function NotificationBell({ spaceId }: { spaceId: string }) {

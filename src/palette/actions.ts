@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
 import { threadCwd } from '../host/cwd';
@@ -10,6 +10,7 @@ import type { Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
+import { openSchedule } from '../schedule/ScheduleDialog';
 import { openSettings } from '../settings/open';
 import { askInSideChat } from '../sidechat/AskInSideChat';
 import { askSecondOpinion } from '../secondOpinion/run';
@@ -65,6 +66,8 @@ export const ACTIONS = [
   { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => toggleSettle([t], dispatch)), many: { title: 'Reactivate threads', skipReason: 'not settled', run: (ts, { dispatch }) => toggleSettle(ts, dispatch) } },
   { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: ['mod', 'shift', 'P'], when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
   { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, shortcut: ['mod', 'shift', 'P'], when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
+  // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
+  { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
   { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: Routing, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },

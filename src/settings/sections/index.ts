@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
+import { BranchUp, Clock, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
@@ -13,6 +13,7 @@ import { HarnessesSection } from './harnesses';
 import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
 import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
+import { SchedulesSection } from './schedules';
 import { TerminalSection } from './terminal';
 
 export const SECTION_GROUPS = ['App', 'Agents', 'Workspace'] as const;
@@ -134,6 +135,14 @@ export const SETTINGS_SECTIONS = [
         { id: 'addProfile', label: 'Add profile', keywords: 'new space' },
       ];
     },
+  },
+  {
+    id: 'schedules',
+    group: 'Workspace',
+    title: 'Schedules',
+    icon: Clock,
+    component: SchedulesSection,
+    settings: [{ id: 'schedules', label: 'Scheduled and background threads', keywords: 'cron nightly trigger pull request pause resume run' }],
   },
   {
     id: 'git',

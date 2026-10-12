@@ -14,6 +14,9 @@ export type AgentCall = { method: 'start'; threadId: string; options: AgentStart
 export function agentCalls(state: State, action: Action, next: () => State): AgentCall[] {
   switch (action.type) {
     case 'create':
+      // A scheduled thread waits for its first run; main starts it then.
+      if (action.schedule) return [];
+    // falls through
     case 'drift-new-thread':
     case 'sidechat-promote':
       return next()
@@ -51,10 +54,24 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
 }
 
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'worktree' | 'images'>): AgentCall[] {
-  // A project with no folder on disk can't run; a folderless chat runs in a folder main makes for it.
+  const cwd = runFolder(thread);
+  if (cwd === undefined) return [];
+  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
+}
+
+/** How the scheduler starts this thread's agent: as a first start would, in the thread's worktree. Undefined when it can't run. */
+export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'> | undefined {
+  const cwd = runFolder(thread);
+  const provider = thread.session?.provider ?? thread.providers[0];
+  if (cwd === undefined) return;
+  return { provider, spaceId: thread.spaceId, cwd, worktree: thread.repo?.branch, ...agentOptions(controlsOf(thread), provider) };
+}
+
+/** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */
+function runFolder(thread: Thread) {
   const cwd = thread.live?.cwd ?? threadCwd(thread);
-  if (thread.repo && !cwd) return [];
-  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd: cwd ?? null, prompt, ...agentOptions(controls, provider), ...extra } }];
+  if (thread.repo && !cwd) return undefined;
+  return cwd ?? null;
 }
 
 /** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */

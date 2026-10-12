@@ -24,6 +24,7 @@ import { SettingsPage } from './settings/SettingsPage';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
+import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useWorktreeManager } from './git/useWorktreeManager';
 
@@ -46,6 +47,7 @@ export function App() {
               <Orbit />
               <PhotoViewer />
               <FileViewer />
+              <ScheduleLayer />
               <Toaster position="bottom-right" />
             </HarnessProvider>
           )}

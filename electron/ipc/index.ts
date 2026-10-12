@@ -9,11 +9,12 @@ import { git } from './git.ts';
 import { notify } from './notify.ts';
 import { ports } from './ports.ts';
 import { pty } from './pty.ts';
+import { schedule } from './schedule.ts';
 import { settings } from './settings.ts';
 import { sim } from './sim.ts';
 import { windows } from './windows.ts';
 
-const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data } satisfies {
+const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule } satisfies {
   [K in Namespace]: Handlers<HostBridge[K]>;
 };
 
