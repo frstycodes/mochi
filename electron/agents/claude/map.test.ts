@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
+import { approvalEvent, claudeModels, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
 import { FIXTURE } from './fixture.ts';
 
 const CWD = '/repo';
@@ -164,4 +164,18 @@ test('a rejected rate limit pauses the thread with its reset time; warnings pass
 
 test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
   assert.deepEqual(withPlanTools({ PATH: '/bin' }), { PATH: '/bin', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' });
+});
+
+test('supportedModels() lists each model once by its wire id, the default row marking the default', () => {
+  const effort = { supportsEffort: true, supportedEffortLevels: ['low', 'high'] as ('low' | 'high')[] };
+  const models = claudeModels([
+    { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', description: 'Opus 5.5', ...effort },
+    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Best for everyday, complex tasks', ...effort },
+    { value: 'claude-opus-5-5', displayName: 'Opus 5.5 (explicit)', description: '' },
+    { value: 'claude-haiku-4-5-20251001', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5', description: 'Fastest' },
+  ]);
+  assert.deepEqual(models, [
+    { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], isDefault: true },
+    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], isDefault: false },
+  ]);
 });

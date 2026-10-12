@@ -4,6 +4,7 @@ import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
 import { detect } from '../settings/detect.ts';
+import { noteLogin } from '../agents/models.ts';
 import { integer, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 export const settings = {
@@ -16,7 +17,9 @@ export const settings = {
   async detect(_sender, accountId) {
     const account = accountsState().accounts.find((a) => a.id === string(accountId, 'accountId', 128));
     if (!account) throw new Error('No such account');
-    return detect(account);
+    const install = await detect(account);
+    noteLogin(account.id, install.login);
+    return install;
   },
   async accounts() {
     return accountsState();

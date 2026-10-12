@@ -1,7 +1,8 @@
 import { localClassifier } from '../../drift.ts';
 import { demoReviewer } from '../../secondOpinion/demo.ts';
 import { chunks, mockAnswer } from '../../sidechat/mockAnswer.ts';
-import type { AgentAskEvent, AgentEvent, AgentHost } from '../types/agent.ts';
+import { CLAUDE_FALLBACK_MODELS } from '../../runtime/models.ts';
+import type { AgentAskEvent, AgentEvent, AgentHost, AgentModel } from '../types/agent.ts';
 
 const listeners = new Set<(event: AgentEvent) => void>();
 const askListeners = new Set<(event: AgentAskEvent) => void>();
@@ -44,4 +45,15 @@ export const agent: AgentHost = {
   onToolCall: () => () => {},
   async toolResult() {},
   async warm() {},
+  async models(provider) {
+    return provider === 'claude' ? CLAUDE_FALLBACK_MODELS : DEMO_CODEX_MODELS;
+  },
 };
+
+// GAP: demo data. The desktop build reads each account's real list from `codex app-server` (`model/list`).
+const CODEX_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const DEMO_CODEX_MODELS: AgentModel[] = [
+  { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: [...CODEX_EFFORTS, 'ultra'], defaultEffort: 'low', isDefault: true },
+  { id: 'gpt-6-sol', name: 'GPT-6-Sol', description: 'Previous generation workhorse model.', efforts: [...CODEX_EFFORTS, 'ultra'], defaultEffort: 'medium', isDefault: false },
+  { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: CODEX_EFFORTS, defaultEffort: 'medium', isDefault: false },
+];

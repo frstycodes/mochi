@@ -4,7 +4,7 @@ import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { detect } from '../settings/detect.ts';
 import { createMapper } from './claude/map.ts';
 import { DEFAULT_MODEL } from './claude/sessions.ts';
-import { accountEnv, accountFor, secondOpinionModel, userPath } from './config.ts';
+import { accountEnv, accountFor, userPath } from './config.ts';
 
 export type ReviewUpdate = { type: 'step'; text: string } | { type: 'done'; result: unknown };
 
@@ -15,7 +15,7 @@ const WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'Bash'];
 const MAX_TURNS = 40;
 
 /** A Claude second opinion on the profile's Claude account: read-only tools, no saved transcript, a JSON-schema verdict. */
-export async function* reviewClaude(request: AgentReviewRequest, abort: AbortController): AsyncGenerator<ReviewUpdate> {
+export async function* reviewClaude(request: AgentReviewRequest, abort: AbortController, model: string | undefined): AsyncGenerator<ReviewUpdate> {
   const { account, configDir } = await accountFor(request.spaceId, 'claude');
   const install = await detect(account);
   if (!install.path) throw new Error('Claude Code is not installed. Install it from https://code.claude.com, or set its path in Settings.');
@@ -28,7 +28,7 @@ export async function* reviewClaude(request: AgentReviewRequest, abort: AbortCon
       cwd: request.cwd,
       // Not `agentEnv()`: that adds the stored API key, which only a thread explicitly switched to it may use.
       env: { ...accountEnv('claude', configDir), PATH: await userPath() },
-      model: secondOpinionModel('claude') ?? DEFAULT_MODEL,
+      model: model ?? DEFAULT_MODEL,
       tools: READ_TOOLS,
       allowedTools: READ_TOOLS,
       disallowedTools: WRITE_TOOLS,
