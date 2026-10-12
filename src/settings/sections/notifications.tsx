@@ -1,9 +1,8 @@
 import { Button } from '@/components/ui/button';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Switch } from '@/components/ui/switch';
 import { ALERT_KINDS, hourLabel } from '../../notify/model';
 import { useHarness } from '../../store';
-import { SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { SettingsChoice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
 import { setPrefs, usePrefs } from '../prefs';
 
 export function NotificationsSection() {
@@ -40,7 +39,7 @@ const BADGE = [
   { value: 'off', label: 'Off' },
 ] as const;
 
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const HOURS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: hourLabel(h) }));
 
 function QuietHoursGroup() {
   const { state, dispatch } = useHarness();
@@ -51,21 +50,9 @@ function QuietHoursGroup() {
       <SettingsRow id="quietHours" label="Quiet hours" control={<Switch id={settingControlId('quietHours')} checked={quiet.isOn} onCheckedChange={(isOn) => setQuiet({ isOn })} />}>
         {quiet.isOn && (
           <div className="flex items-center gap-2 type-meta text-muted-foreground">
-            <NativeSelect size="sm" aria-label="Quiet from" value={quiet.start} onChange={(e) => setQuiet({ start: Number(e.target.value) })}>
-              {HOURS.map((h) => (
-                <NativeSelectOption key={h} value={h}>
-                  {hourLabel(h)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            <SettingsSelect aria-label="Quiet from" value={String(quiet.start)} options={HOURS} onChange={(h) => setQuiet({ start: Number(h) })} className="w-24" />
             to
-            <NativeSelect size="sm" aria-label="Quiet until" value={quiet.end} onChange={(e) => setQuiet({ end: Number(e.target.value) })}>
-              {HOURS.map((h) => (
-                <NativeSelectOption key={h} value={h}>
-                  {hourLabel(h)}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            <SettingsSelect aria-label="Quiet until" value={String(quiet.end)} options={HOURS} onChange={(h) => setQuiet({ end: Number(h) })} className="w-24" />
           </div>
         )}
       </SettingsRow>

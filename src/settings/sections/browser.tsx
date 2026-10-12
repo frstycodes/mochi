@@ -1,11 +1,10 @@
 import { Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
 import { SEARCH_ENGINES } from '../../browser/url';
 import { useSimulators } from '../../sim/useSimulators';
-import { SettingsGroup, SettingsRow, settingControlId, UNDO_MS } from '../parts';
+import { SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
 import { setPrefs, usePrefs, type Prefs } from '../prefs';
 
 export function BrowserSection() {
@@ -21,15 +20,7 @@ export function BrowserSection() {
         <SettingsRow
           id="searchEngine"
           label="Search engine"
-          control={
-            <NativeSelect id={settingControlId('searchEngine')} value={searchEngine} onChange={(e) => setPrefs({ searchEngine: e.target.value as Prefs['searchEngine'] })}>
-              {Object.entries(SEARCH_ENGINES).map(([id, { name }]) => (
-                <NativeSelectOption key={id} value={id}>
-                  {name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          }
+          control={<SettingsSelect id="searchEngine" value={searchEngine} options={ENGINES} onChange={(v) => setPrefs({ searchEngine: v })} />}
         />
         <SettingsRow
           id="addressHistory"
@@ -50,6 +41,11 @@ export function BrowserSection() {
 
 const PAGES = new Intl.PluralRules('en');
 
+const ENGINES = (Object.keys(SEARCH_ENGINES) as Prefs['searchEngine'][]).map((id) => ({ value: id, label: SEARCH_ENGINES[id].name }));
+
+// Radix Select can't hold '' (the pref's "first booted"), so the choice uses its own value for it.
+const FIRST_BOOTED = 'first-booted';
+
 function SimulatorGroup() {
   const { simulator } = usePrefs();
   const { simulators } = useSimulators();
@@ -61,14 +57,14 @@ function SimulatorGroup() {
         label="Default simulator"
         description={isMissing ? 'That simulator is gone, so the first booted one is used.' : undefined}
         control={
-          <NativeSelect id={settingControlId('simulator')} value={simulator} onChange={(e) => setPrefs({ simulator: e.target.value })} disabled={!simulators}>
-            <NativeSelectOption value="">First booted</NativeSelectOption>
-            {simulators?.map((s) => (
-              <NativeSelectOption key={s.udid} value={s.udid}>
-                {s.name} ({s.runtime})
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <SettingsSelect
+            id="simulator"
+            value={isMissing || !simulator ? FIRST_BOOTED : simulator}
+            options={[{ value: FIRST_BOOTED, label: 'First booted' }, ...(simulators ?? []).map((s) => ({ value: s.udid, label: `${s.name} (${s.runtime})` }))]}
+            onChange={(v) => setPrefs({ simulator: v === FIRST_BOOTED ? '' : v })}
+            disabled={!simulators}
+            className="w-56"
+          />
         }
       />
     </SettingsGroup>

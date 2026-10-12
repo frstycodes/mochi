@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldLabel } from '@/components/ui/field';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useWorktreePath } from '../git/worktrees';
 import { threadCwd } from '../host/cwd';
@@ -44,21 +44,25 @@ export function HandoffDialog({ thread, stepId, onClose }: { thread: Thread; ste
         </DialogHeader>
         <Field>
           <FieldLabel htmlFor="handoff-scope">What moves</FieldLabel>
-          <NativeSelect
-            id="handoff-scope"
+          <Select
             value={scope}
-            onChange={(e) => {
-              setScope(e.target.value);
+            onValueChange={(value) => {
+              setScope(value);
               setEdited(null);
             }}
           >
-            <NativeSelectOption value={THREAD}>Whole thread ({PROVIDER_NAME[thread.providers[0]]} now)</NativeSelectOption>
-            {openSteps.map((s) => (
-              <NativeSelectOption key={s.id} value={s.id}>
-                Step: {s.title} ({PROVIDER_NAME[stepOwner(thread, s)]} now)
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            <SelectTrigger id="handoff-scope" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={THREAD}>Whole thread ({PROVIDER_NAME[thread.providers[0]]} now)</SelectItem>
+              {openSteps.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  Step: {s.title} ({PROVIDER_NAME[stepOwner(thread, s)]} now)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field>
           <FieldLabel htmlFor="handoff-summary">Context summary</FieldLabel>

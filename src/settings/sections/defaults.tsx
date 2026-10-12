@@ -1,11 +1,10 @@
 import { Input } from '@/components/ui/input';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { ACCESS, DEVICES } from '../../Composer';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
-import { setPrefs, usePrefs, type Prefs } from '../prefs';
+import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
+import { setPrefs, usePrefs } from '../prefs';
 
 export function DefaultsSection() {
   const { agent, permissions, runsOn } = usePrefs();
@@ -21,15 +20,7 @@ export function DefaultsSection() {
         <SettingsRow
           id="runsOn"
           label="Runs on"
-          control={
-            <NativeSelect id={settingControlId('runsOn')} value={runsOn} onChange={(e) => setPrefs({ runsOn: e.target.value as Prefs['runsOn'] })}>
-              {DEVICES.map((d) => (
-                <NativeSelectOption key={d} value={d}>
-                  {d}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          }
+          control={<SettingsSelect id="runsOn" value={runsOn} options={DEVICES.map((d) => ({ value: d, label: d }))} onChange={(v) => setPrefs({ runsOn: v })} />}
         />
       </SettingsGroup>
       <DesktopOnly what="The concurrency limit only works in the Mochi desktop app.">

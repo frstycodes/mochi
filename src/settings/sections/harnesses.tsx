@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Switch } from '@/components/ui/switch';
 import { EFFORTS, MODELS, toggleStar } from '../../ModelControls';
 import type { Provider } from '../../model';
@@ -11,8 +10,8 @@ import { defaultAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
 import { AccountsGroup, ProfilesGroup } from '../HarnessAccounts';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { CommandLine, CommitInput, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
-import { setPrefs, usePrefs, type Prefs } from '../prefs';
+import { CommandLine, CommitInput, DesktopOnly, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
+import { setPrefs, usePrefs } from '../prefs';
 
 /** Every harness from the registry, one after another; nothing here names a specific harness. */
 export function HarnessesSection() {
@@ -58,15 +57,7 @@ function ModelsGroup() {
       <SettingsRow
         id="effort"
         label="Default effort"
-        control={
-          <NativeSelect id={settingControlId('effort')} value={effort} onChange={(e) => setPrefs({ effort: e.target.value as Prefs['effort'] })}>
-            {EFFORTS.map((level) => (
-              <NativeSelectOption key={level} value={level}>
-                {level}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        }
+        control={<SettingsSelect id="effort" value={effort} options={EFFORTS.map((level) => ({ value: level, label: level }))} onChange={(v) => setPrefs({ effort: v })} />}
       />
     </SettingsGroup>
   );
