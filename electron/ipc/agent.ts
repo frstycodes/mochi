@@ -9,6 +9,7 @@ import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { ask as askAgent } from '../agents/ask.ts';
+import { codexUrl, resolveToolCall } from '../mcp/server.ts';
 import { addWorktree } from './git.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
 
@@ -36,7 +37,7 @@ function images(value: unknown) {
 // Threads without a Claude or Codex session run on the renderer's demo adapter.
 const runtime = notImplemented('agent runtime');
 const broadcast = (event: AgentEvent) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('agent:onEvent', event));
-const codex = new CodexAdapter(broadcast);
+const codex = new CodexAdapter(broadcast, undefined, undefined, codexUrl);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 
@@ -124,6 +125,13 @@ export const agent = {
       }
     })();
     return { id };
+  },
+  async toolResult(_sender, id, result) {
+    string(id, 'id', 256);
+    const r = record(result, 'result');
+    string(r.text, 'result.text', MAX_CONTEXT_CHARS);
+    if (r.isError !== undefined && typeof r.isError !== 'boolean') throw new TypeError('result.isError must be a boolean');
+    resolveToolCall(id as string, { text: r.text as string, isError: r.isError as boolean | undefined });
   },
   async classify(_sender, prompt, thread) {
     string(prompt, 'prompt', 20_000);

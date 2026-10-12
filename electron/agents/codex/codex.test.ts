@@ -195,6 +195,16 @@ test('queue answers become the decisions app-server expects', () => {
   assert.deepEqual(reply(command, { kind: 'deny' }), { decision: 'decline' });
   assert.deepEqual(reply(command, { kind: 'deny', interrupt: true }), { decision: 'cancel' });
   assert.deepEqual(reply({ method: 'item/tool/requestUserInput', questionIds: ['q1', 'q2'] }, { kind: 'answer', answers: [['Redis', 'my own cache'], []] }), { answers: { q1: { answers: ['Redis', 'my own cache'] } } });
+  const elicitation = { method: 'mcpServer/elicitation/request', questionIds: [] };
+  assert.deepEqual(reply(elicitation, { kind: 'allow' }), { action: 'accept', content: {}, _meta: null });
+  assert.deepEqual(reply(elicitation, { kind: 'deny' }), { action: 'decline', content: null, _meta: null });
+});
+
+test('an MCP tool approval becomes a tool approval card', () => {
+  const s = threadState('h1', '/x');
+  const params = { threadId: 't', turnId: 'u', serverName: 'mochi', mode: 'form', _meta: null, message: 'Allow create_thread?', requestedSchema: { type: 'object', properties: {} } };
+  assert.deepEqual(mapRequest('mcpServer/elicitation/request', params, 'k', s), { threadId: 'h1', type: 'approval', requestId: 'k', kind: 'tool', title: 'Use mochi tool', detail: 'Allow create_thread?' });
+  assert.equal(mapRequest('mcpServer/elicitation/request', { ...params, mode: 'url' }, 'k', s), null);
 });
 
 test('rpc: line framing, id correlation out of order, errors, timeouts and invalid lines', async () => {

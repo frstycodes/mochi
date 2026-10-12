@@ -156,6 +156,10 @@ export function mapRequest(method: string, params: unknown, requestId: string, s
     });
     return questions.length ? { threadId, type: 'question', requestId, questions } : null;
   }
+  // How Codex asks before an MCP tool whose approval mode is `prompt` runs.
+  if (method === 'mcpServer/elicitation/request' && p.mode === 'form') {
+    return { threadId, type: 'approval', requestId, kind: 'tool', title: `Use ${typeof p.serverName === 'string' ? p.serverName : 'an MCP'} tool`, detail: typeof p.message === 'string' ? p.message : '' };
+  }
   return null;
 }
 

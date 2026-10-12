@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, Provider, Size, Thread } from '../../model.ts';
+import type { AgentInfo, Provider, Size, StepStatus, Thread } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
@@ -97,6 +97,23 @@ export interface AgentAskMessage {
   text: string;
 }
 
+/** The statuses an agent may set on a step through Mochi's tools. */
+export const STEP_STATUSES = ['ready', 'running', 'waiting', 'blocked', 'done', 'dropped'] as const satisfies readonly StepStatus[];
+
+/** A Mochi tool an agent called (`electron/mcp`); the renderer runs it on the store and answers with `toolResult`. */
+export interface AgentToolCall {
+  id: string;
+  threadId: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/** `text` goes back to the agent as the tool's result. */
+export interface AgentToolResult {
+  text: string;
+  isError?: boolean;
+}
+
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
   send(threadId: string, text: string, images?: AgentImage[]): Promise<void>;
@@ -113,6 +130,8 @@ export interface AgentHost {
   rewindFiles(threadId: string, text: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
   warm(spaceId: string): Promise<void>;
+  onToolCall(listener: (call: AgentToolCall) => void): () => void;
+  toolResult(id: string, result: AgentToolResult): Promise<void>;
 }
 
 export const agentMethods = {
@@ -127,4 +146,6 @@ export const agentMethods = {
   classify: 'invoke',
   rewindFiles: 'invoke',
   warm: 'invoke',
+  onToolCall: 'event',
+  toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;
