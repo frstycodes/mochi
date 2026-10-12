@@ -1,13 +1,16 @@
 import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem } from '../../../src/host/types/agent.ts';
-import type { WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
+import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import { describeApproval } from '../../../src/summary.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
   const tools = new Map<string, { name: string; input: Record<string, unknown> }>();
   const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
+  /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
+  const agents = new Map<string, { taskId?: string }>();
   const reported = { input: 0, output: 0, costUsd: 0 };
   let context = { used: 0, max: 0 };
   let isNewBlock = false;
@@ -15,8 +18,15 @@ export function createMapper(threadId: string, cwd: string) {
 
   const planFromTasks = (): AgentEvent => ({ threadId, type: 'plan', items: tasks.map(({ title, status }) => ({ title, status })) });
 
+  const subagent = (id: string, phase: AgentSubagentEvent['phase'], fields: Omit<AgentSubagentEvent, 'threadId' | 'type' | 'id' | 'phase'> = {}): AgentSubagentEvent => ({ threadId, type: 'subagent', id, phase, ...fields });
+
   function toolStart(id: string, name: string, input: Record<string, unknown>): AgentEvent[] {
     tools.set(id, { name, input });
+    if (AGENT_TOOLS.has(name)) {
+      agents.set(id, {});
+      const { description, prompt, model, run_in_background } = input as Partial<AgentInput>;
+      return [subagent(id, 'start', { toolId: id, name: description || 'Agent', ...(prompt && { prompt }), ...(model && { model }), isBackground: run_in_background === true })];
+    }
     const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input) };
     if (name === 'TodoWrite') return [start, { threadId, type: 'plan', items: planFromTodos(input) }];
     if (name !== 'TaskUpdate') return [start];
@@ -32,16 +42,73 @@ export function createMapper(threadId: string, cwd: string) {
     const tool = tools.get(block.tool_use_id);
     if (!tool) return [];
     tools.delete(block.tool_use_id);
-    const end: AgentEvent = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', text: describeTool(tool.name, tool.input) };
-    const file = tool.input.file_path ?? tool.input.notebook_path;
-    if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) end.files = [path.relative(cwd, path.resolve(cwd, file))];
-    if (tool.name === 'Bash') end.exitCode = exitCode(block);
+    if (AGENT_TOOLS.has(tool.name)) return agentEnd(block, result);
+    const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
     if (links) end.links = links;
     const task = (result as { task?: { id?: unknown } } | undefined)?.task;
     if (tool.name !== 'TaskCreate' || typeof task?.id !== 'string') return [end];
     tasks.push({ id: task.id, title: String(tool.input.subject ?? ''), status: 'pending' });
     return [end, planFromTasks()];
+  }
+
+  function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock) {
+    const outcome: { text: string; files?: string[]; exitCode?: number } = { text: describeTool(tool.name, tool.input) };
+    const file = tool.input.file_path ?? tool.input.notebook_path;
+    if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [path.relative(cwd, path.resolve(cwd, file))];
+    if (tool.name === 'Bash') outcome.exitCode = exitCode(block);
+    return outcome;
+  }
+
+  /** The Agent tool's own result: the whole answer for a foreground agent, a launch receipt for a background one (its end comes as `task_notification`). */
+  function agentEnd(block: ToolResultBlock, result: unknown): AgentEvent[] {
+    const id = block.tool_use_id;
+    if (block.is_error) return [subagent(id, 'end', { status: 'failed', error: resultText(block) })];
+    const output = result as AgentOutput | undefined;
+    if (output?.status === 'async_launched') return [subagent(id, 'progress', { isBackground: true, ...(output.resolvedModel && { model: output.resolvedModel }) })];
+    if (output?.status !== 'completed') return [];
+    return [subagent(id, 'end', { status: 'done', result: output.content.map((c) => c.text).join('\n'), tokens: output.totalTokens, ...(output.resolvedModel && { model: output.resolvedModel }) })];
+  }
+
+  /** A message from inside a subagent (`parent_tool_use_id` is its Agent call): its tool calls and text, as its own steps. */
+  function mapSubagent(id: string, message: SDKMessage): AgentEvent[] {
+    if (!agents.has(id)) return [];
+    if (message.type === 'assistant')
+      return message.message.content.flatMap((block): AgentEvent[] => {
+        if (block.type === 'text' && block.text) return [subagent(id, 'progress', { message: block.text })];
+        if (block.type !== 'tool_use') return [];
+        const input = block.input as Record<string, unknown>;
+        tools.set(block.id, { name: block.name, input });
+        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input) } })];
+      });
+    if (message.type !== 'user' || typeof message.message.content === 'string') return [];
+    return message.message.content.flatMap((block): AgentEvent[] => {
+      if (block.type !== 'tool_result') return [];
+      const result = block as ToolResultBlock;
+      const tool = tools.get(result.tool_use_id);
+      if (!tool) return [];
+      tools.delete(result.tool_use_id);
+      return [subagent(id, 'progress', { step: { id: result.tool_use_id, phase: 'end', ...toolOutcome(tool, result) } })];
+    });
+  }
+
+  /** Claude Code's task bookends for a subagent (`task_started` … `task_notification`), joined to its Agent call by `tool_use_id`. */
+  function mapTask(message: Extract<SDKMessage, { type: 'system' }>): AgentEvent[] {
+    if (message.subtype === 'task_updated') {
+      const id = [...agents].find(([, a]) => a.taskId === message.task_id)?.[0];
+      return id && message.patch.is_backgrounded !== undefined ? [subagent(id, 'progress', { isBackground: message.patch.is_backgrounded })] : [];
+    }
+    if (message.subtype !== 'task_started' && message.subtype !== 'task_progress' && message.subtype !== 'task_notification') return [];
+    const id = message.tool_use_id;
+    const agent = id && agents.get(id);
+    if (!id || !agent) return [];
+    if (message.subtype === 'task_started') {
+      agent.taskId = message.task_id;
+      return [subagent(id, 'progress', { ...(message.is_backgrounded !== undefined && { isBackground: message.is_backgrounded }) })];
+    }
+    if (message.subtype === 'task_progress') return [subagent(id, 'progress', { activity: message.summary ?? message.description, tokens: message.usage.total_tokens })];
+    const status = TASK_STATUS[message.status];
+    return [subagent(id, 'end', { status, ...(message.summary && { result: message.summary }), ...(message.usage && { tokens: message.usage.total_tokens }) })];
   }
 
   function usage(modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; contextWindow: number }>, costUsd: number): AgentEvent {
@@ -56,10 +123,10 @@ export function createMapper(threadId: string, cwd: string) {
   }
 
   function map(message: SDKMessage): AgentEvent[] {
-    // ponytail: subagent traffic (parent_tool_use_id set) is skipped; the Task tool's own start/end stands in for it.
-    if ('parent_tool_use_id' in message && message.parent_tool_use_id) return [];
+    if ('parent_tool_use_id' in message && message.parent_tool_use_id) return mapSubagent(message.parent_tool_use_id, message);
     switch (message.type) {
       case 'system':
+        if (message.subtype.startsWith('task_')) return mapTask(message);
         if (message.subtype === 'init') return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }];
         if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name) } }];
         return [];
@@ -104,6 +171,8 @@ export function createMapper(threadId: string, cwd: string) {
 
   return {
     map,
+    /** The task id `query.stopTask` takes for a subagent, once Claude Code has registered it. */
+    taskOf: (subagentId: string) => agents.get(subagentId)?.taskId,
     markInterrupting() {
       isInterrupting = true;
     },
@@ -118,6 +187,8 @@ export function approvalEvent(threadId: string, requestId: string, toolName: str
   if (toolName === 'Bash') return { threadId, type: 'approval', requestId, kind: 'command', title, detail, code: String(input.command ?? '') };
   const file = input.file_path ?? input.notebook_path;
   if (typeof file === 'string') return { threadId, type: 'approval', requestId, kind: 'edit', title, detail, code: file };
+  const sentence = describeApproval(toolName, input);
+  if (sentence) return { threadId, type: 'approval', requestId, kind: 'tool', title: sentence.charAt(0).toUpperCase() + sentence.slice(1), detail };
   return { threadId, type: 'approval', requestId, kind: 'tool', title, detail, code: JSON.stringify(input, null, 2).slice(0, 2000) };
 }
 
@@ -158,6 +229,9 @@ const mcpToolPrefix = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, '_');
 type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: boolean; content?: string | { type: string; text?: string }[] };
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
+// `Task` is the Agent tool's name in Claude Code before 2.1.
+const AGENT_TOOLS = new Set(['Agent', 'Task']);
+const TASK_STATUS = { completed: 'done', failed: 'failed', stopped: 'stopped' } as const;
 const STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
 
 /** Claude Code ships no plan tool under the SDK unless asked, and without TaskCreate/TaskUpdate a live thread never gets steps. */
@@ -192,11 +266,14 @@ export function webLinks(name: string, input: Record<string, unknown>, result: u
   return hits.filter((h) => typeof h?.url === 'string').map((h) => ({ url: h.url, ...(typeof h.title === 'string' && h.title && { title: h.title }) }));
 }
 
+function resultText(block: ToolResultBlock) {
+  return typeof block.content === 'string' ? block.content : (block.content ?? []).map((c) => c.text ?? '').join('\n');
+}
+
 // BashOutput carries no exit code; Claude Code marks a failed command `is_error` and puts "Exit code N" in the result text.
 function exitCode(block: ToolResultBlock) {
   if (!block.is_error) return 0;
-  const text = typeof block.content === 'string' ? block.content : (block.content ?? []).map((c) => c.text ?? '').join('\n');
-  const match = /Exit code (\d+)/.exec(text);
+  const match = /Exit code (\d+)/.exec(resultText(block));
   return match ? Number(match[1]) : 1;
 }
 

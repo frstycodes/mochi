@@ -20,6 +20,7 @@ import { GoalEditor } from './goals/GoalEditor';
 import { outcomeOf } from './goals/outcome';
 import { burnSeries, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
+import { hasGoal } from './drift';
 import { summarize, type ToolVerb } from './summary';
 import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon, TooltipIconButton } from './ui';
 import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
@@ -421,7 +422,7 @@ function GoalSection({ thread }: { thread: Thread }) {
               </Button>
             </PopoverTrigger>
           </div>
-          <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
+          {hasGoal(thread) ? <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p> : <p className="type-meta text-subtle-foreground">No goal yet. Your first real request sets it.</p>}
           <div className="flex items-end justify-between gap-2">
             <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
             <span className="tabular pb-1 type-caption text-subtle-foreground">

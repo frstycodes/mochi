@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
@@ -279,3 +280,45 @@ test('model/list maps to the picker: real ids, names, default flag and efforts; 
   ]);
   assert.deepEqual(codexModels(null), []);
 });
+
+test('a spawned agent becomes a subagent of its thread with its own steps, result and tokens (real 0.155.1 trace)', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = path.join(home, 'codex');
+  writeFileSync(fake, REPLAY_CODEX, { mode: 0o755 });
+  const events: AgentEvent[] = [];
+  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/subagent.jsonl', import.meta.url)) } }));
+  try {
+    await codex.start('h1', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'Spawn one sub-agent' });
+    for (let i = 0; i < 50 && !events.some((e) => e.type === 'turn-end'); i++) await new Promise((r) => setTimeout(r, 20));
+    const child = '01a1317e-8947-7c73-866e-ec3ce63a621b';
+    const subagent = events.filter((e) => e.type === 'subagent');
+    assert.ok(subagent.every((e) => e.threadId === 'h1' && e.id === child), 'the child reports as a subagent of the thread that spawned it');
+    assert.deepEqual(subagent[0], { threadId: 'h1', type: 'subagent', id: child, phase: 'start', toolId: 'call_03dd2329246e48cbaa23dd501478dcfa', name: 'echo hi', isBackground: true });
+    const steps = subagent.flatMap((e) => (e.step ? [[e.step.phase, e.step.text, e.step.exitCode]] : []));
+    assert.deepEqual(steps, [['start', "/bin/zsh -lc 'echo hi'", undefined], ['end', "/bin/zsh -lc 'echo hi'", 0]]);
+    assert.deepEqual(subagent.flatMap((e) => (e.message ? [e.message] : [])), ['hi']);
+    assert.equal(subagent.findLast((e) => e.tokens)?.tokens, 42727);
+    assert.deepEqual(subagent.filter((e) => e.phase === 'end').map((e) => e.status), ['done', 'done'], 'both the parent item and the child turn end it; the store keeps the first');
+    const childTools = events.filter((e) => e.type === 'tool' && e.text.includes('echo hi'));
+    assert.deepEqual(childTools, [], "the child's command stays out of the parent's work log");
+    const usage = events.filter((e) => e.type === 'usage' && e.contextUsed === undefined);
+    assert.ok(usage.length >= 1, "the child's spend counts toward the thread without moving its context meter");
+    assert.deepEqual(events.filter((e) => e.type === 'message').map((e) => e.type === 'message' && e.text), ['I’ll spawn one sub-agent and wait for its output.\n', 'done']);
+  } finally {
+    codex.dispose();
+  }
+});
+
+/** A stand-in `codex` that answers a turn by replaying a recorded trace (`FIXTURE`), under the recorded parent thread id. */
+const REPLAY_CODEX = `#!/usr/bin/env node
+const lines = require('fs').readFileSync(process.env.FIXTURE, 'utf8').split('\\n').filter(Boolean);
+let buf = '';
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+  if (m.method === 'initialize') send({ id: m.id, result: {} });
+  if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'chatgpt' }, requiresOpenaiAuth: true } });
+  if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: '01a1317e-69af-74d1-afc6-f77fec141215' } } });
+  if (m.method === 'turn/start') { send({ id: m.id, result: { turn: { id: 't' } } }); for (const l of lines) process.stdout.write(l + '\\n'); }
+  if (m.id !== undefined && !['initialize', 'account/read', 'thread/start', 'turn/start'].includes(m.method)) send({ id: m.id, result: {} });
+} });
+`;

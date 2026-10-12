@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck } from '../../src/host/types/git.ts';
+import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
 import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../git/checkpoints.ts';
 import { inside, run, runGit, topLevel } from '../git/run.ts';
+import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
@@ -22,10 +23,10 @@ export const git = {
     return { branch, files: parseStatus(porcelain) };
   },
 
-  async diff(_sender, cwd, scope) {
+  async diff(_sender, cwd, scope, chosenBase) {
     const top = await topLevel(string(cwd, 'cwd'));
     const which = oneOf(scope, SCOPES, 'scope');
-    const [branch, base] = await Promise.all([currentBranch(top), baseRef(top)]);
+    const [branch, base] = await Promise.all([currentBranch(top), chosenBase === undefined ? baseRef(top) : string(chosenBase, 'base', 255)]);
     const untracked = await untrackedDiffs(top);
     if (which === 'uncommitted') {
       const [staged, unstaged] = await Promise.all([runGit(top, ['diff', '--cached', ...DIFF_FLAGS]), runGit(top, ['diff', ...DIFF_FLAGS])]);
@@ -93,9 +94,9 @@ export const git = {
     return ghAccounts();
   },
 
-  async sync(_sender, cwd) {
+  async sync(_sender, cwd, chosenBase) {
     const top = await topLevel(string(cwd, 'cwd'));
-    const base = await baseRef(top);
+    const base = chosenBase === undefined ? await baseRef(top) : string(chosenBase, 'base', 255);
     if (base.startsWith('origin/')) await runGit(top, ['fetch', 'origin', base.slice('origin/'.length)]);
     try {
       await runGit(top, ['merge', '--no-edit', base]);
@@ -107,8 +108,16 @@ export const git = {
     }
   },
 
-  async addWorktree(_sender, root, threadId, branch) {
-    return addWorktree(string(root, 'root'), string(threadId, 'threadId', 64), string(branch, 'branch', 255));
+  async addWorktree(_sender, root, threadId, branch, options) {
+    return addWorktree(string(root, 'root'), string(threadId, 'threadId', 64), string(branch, 'branch', 255), worktreeOptions(options));
+  },
+
+  async branches(_sender, root) {
+    return listBranches(await topLevel(string(root, 'root')));
+  },
+
+  async branchNameError(_sender, root, name) {
+    return branchNameError(await topLevel(string(root, 'root')), string(name, 'name', 255));
   },
 
   async worktrees(_sender, root) {
@@ -161,17 +170,30 @@ export const git = {
   },
 } satisfies Handlers<GitHost>;
 
-/** The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. */
-export async function addWorktree(root: string, threadId: string, branch: string) {
+/**
+ * The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. A new branch starts at
+ * `base` (the default branch when unset); one that already exists (a restart after cleanup, or `isExisting`) is checked out,
+ * refused when another worktree has it.
+ */
+export async function addWorktree(root: string, threadId: string, branch: string, { base, isExisting }: WorktreeOptions = {}) {
   const top = await mainRepo(root);
   if (!/^[\w-]+$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
-  const name = (await runGit(top, ['check-ref-format', '--branch', branch])).trim();
   const dir = join(worktreeRoot(), basename(top), threadId);
   if (existsSync(dir)) return dir;
-  await mkdir(dirname(dir), { recursive: true });
+  const name = (await runGit(top, ['check-ref-format', '--branch', isExisting ? await localName(top, branch) : branch])).trim();
   const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
-  await runGit(top, exists ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, await baseRef(top)]);
+  if (exists || isExisting) await assertFreeBranch(top, name);
+  await mkdir(dirname(dir), { recursive: true });
+  // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.
+  await runGit(top, exists || isExisting ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, base ?? (await baseRef(top))]);
   return dir;
+}
+
+export function worktreeOptions(value: unknown): WorktreeOptions {
+  if (value === undefined) return {};
+  const o = record(value, 'options');
+  if (o.isExisting !== undefined && typeof o.isExisting !== 'boolean') throw new TypeError('options.isExisting must be a boolean');
+  return { base: o.base === undefined ? undefined : string(o.base, 'options.base', 255), isExisting: o.isExisting as boolean | undefined };
 }
 
 async function change(cwd: unknown, value: unknown) {
@@ -202,17 +224,6 @@ async function untrackedDiffs(top: string): Promise<DiffFile[]> {
 
 async function currentBranch(top: string) {
   return (await runGit(top, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'HEAD')).trim();
-}
-
-/** origin's default branch, else a local main or master, else HEAD. */
-async function baseRef(top: string) {
-  const remote = await runGit(top, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']).catch(() => '');
-  if (remote.trim()) return remote.trim();
-  for (const name of ['main', 'master']) {
-    const found = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] });
-    if (found.trim()) return name;
-  }
-  return 'HEAD';
 }
 
 // Worktrees share the main repo's common dir; worktree commands run from the main checkout.

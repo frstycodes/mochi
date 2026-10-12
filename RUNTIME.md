@@ -123,36 +123,55 @@ The agent in a thread controls Mochi through the `mochi` MCP server (`electron/m
 
 **Flow.** main → `agent:onToolCall` → `runTool` (`src/runtime/tools.ts`) checks scope and tier, runs the handler against the store (or `host.browser` for browser tools), logs it, answers through `agent.toolResult`. Both harnesses auto-approve every `mochi` tool (Claude `allowedTools`, Codex `default_tools_approval_mode = approve`): Mochi asks with its own card, so the user is never asked twice.
 
-**Tiers.**
+**Tiers.** Every tool runs without asking except deletes and settings (decision, 2026-10-13).
 
 | Tier | Runs | The user sees |
 |---|---|---|
 | read | always | nothing; the call shows in the work log |
-| reversible | when the setting allows it | the change, a toast with Undo, and a line in the calling thread ("Claude settled 2 threads") |
-| consequential | only after Approve, never automatically | an approval card in the Queue and the thread's composer tray saying exactly what happens ("Delete 'Fix flaky checkout e2e' and its worktree? This can't be undone"), Approve / Deny, options as checkboxes on the card |
+| change | when the setting allows it | the change, a line in the calling thread ("Claude settled 2 threads"), a toast with Undo where it can be put back (`create_thread`'s Undo stops and removes the new thread; a sent message has none) |
+| destructive | only after Delete, never automatically | a widget in the calling thread where the agent asked, naming exactly what goes (thread titles, worktree paths), Cancel / red Delete, options as checkboxes |
+| setting | only after Apply, never automatically | a settings widget in the thread: the setting's real control, read-only, current → proposed, the agent's reason, Keep current / Apply |
 
-Settings › Defaults for new threads › **Agents can change Mochi**: Read only / Reversible (default) / Everything with confirmation. A call above the setting fails with a reason the agent can relay, and the composer tray shows the same setting as an inline control (a `setting` card), so the user changes it where they are.
+Settings › Agents › **Agents can change Mochi**: Read only / Changes, never deletes or settings / Everything, asking before deletes and settings (default; the old Reversible default migrates to it). A call above the setting fails with a reason the agent can relay, and the thread shows that setting as a widget, so the user changes it where they are.
 
-- **Undo** restores the slices the call changed (threads one by one, panes, layouts) only where they still hold the call's result; anything changed since is kept, and the toast says so. Layout and own-goal bookkeeping (`set_step_status`, `add_step`, pane tabs) are reversible but quiet: logged, no toast, since they fire constantly.
+**Widgets.** A widget is a queue item plus an `event` entry in the caller's activity carrying `card: { id, isOpen }`; the transcript renders the live widget in that entry's place. Enter acts on the focused button only, Esc anywhere in the widget says no. Answered, `card-record` turns it into a one-line record ("Deleted \"X\"", "Kept Diffs: Unified", "Expired: …"). The Queue lists open widgets and its "Show in thread" scrolls to and focuses them; the composer tray keeps only the agent's own questions and approvals.
+
+- **Undo** restores the slices the call changed (threads one by one, panes, layouts) only where they still hold the call's result; anything changed since is kept, and the toast says so. Layout and own-goal bookkeeping (`set_step_status`, `add_step`, pane tabs) are changes but quiet: logged, no toast, since they fire constantly.
 - **Scope.** Every thread id is resolved in the caller's profile; another profile's thread is "not found". Browser tools only reach the caller's own pane tabs. An agent can't settle, delete or message its own thread.
-- **Approval lifetime.** Cards wait up to 30 minutes (`APPROVAL_TIMEOUT_MS`), the same limit main and both harnesses give a Mochi call (Claude `MCP_TOOL_TIMEOUT`, Codex `tool_timeout_sec`, both read in the installed binaries). After that the card is withdrawn and the agent gets "expired". Cards aren't persisted: after a restart nothing is waiting on them.
+- **Approval lifetime.** Widgets wait up to 30 minutes (`APPROVAL_TIMEOUT_MS`); main and both harnesses give every Mochi call a minute more (`MOCHI_TIMEOUT_MS`; Claude `MCP_TOOL_TIMEOUT`, Codex `tool_timeout_sec`), whatever its tier, since a change tool can stop mid-run on a browser escalation. After that the widget is withdrawn and the agent gets "expired". A reload or renderer crash fails every waiting call at once with "Mochi reloaded before it answered; nothing was done" (`electron/mcp/calls.ts`), and the widget's entry reads "Not answered before Mochi reloaded".
 - **Result.** Every write answers with what changed, as JSON (`{ changed: "Settled 2 threads", threads: [...] }`); errors say what to call instead.
 
 **Tools** (verb_noun; `threadId` defaults to the caller; plural `threadIds` where the sidebar has bulk actions).
 
-| Area | read | reversible | consequential |
+| Area | read | change | destructive / setting (asks) |
 |---|---|---|---|
-| Threads | `list_threads` (status, pinned, project), `get_thread` | `rename_thread`, `settle_thread`, `reactivate_thread`, `pin_thread`, `unpin_thread`, `reorder_threads` (before/after one, or the whole pinned order), `watch_thread` | `create_thread` (starts an agent), `send_to_thread`, `delete_thread` |
+| Threads | `list_threads` (status, pinned, project), `get_thread` | `rename_thread`, `settle_thread`, `reactivate_thread`, `pin_thread`, `unpin_thread`, `reorder_threads` (before/after one, or the whole pinned order), `watch_thread`, `create_thread` (starts an agent), `send_to_thread` | `delete_thread` |
 | Goals | `get_goal` | `set_step_status`, `add_step`, `edit_goal` (text, step criteria), `reorder_steps`, `drop_step`, `settle_goal` | |
-| Browser | `browser_tabs`, `browser_snapshot`, `browser_screenshot`, `browser_console`, `browser_wait_for` | `browser_open`, `browser_click`, `browser_hover`, `browser_type`, `browser_select`, `browser_drag`, `browser_upload` (worktree files), `browser_press`, `browser_scroll`, `browser_eval` (local pages), `browser_back`, `browser_forward`, `browser_reload`, `browser_set_device` | typing, Enter, or clicking a submit control on a non-local origin; `browser_eval` on a non-local origin (card shows the origin and the whole script: it runs with the user's session); `browser_upload` of a file outside the worktree |
+| Browser | `browser_tabs`, `browser_snapshot`, `browser_screenshot`, `browser_console`, `browser_wait_for` | `browser_open`, `browser_click`, `browser_hover`, `browser_type`, `browser_select`, `browser_drag`, `browser_upload` (worktree files), `browser_press`, `browser_scroll`, `browser_eval` (local pages), `browser_back`, `browser_forward`, `browser_reload`, `browser_set_device` | per call: typing, Enter, or clicking a submit control on a non-local origin; `browser_eval` on a non-local origin (the widget shows the origin and the whole script); `browser_upload` of a file outside the worktree |
 | Layout | | `open_pane_tab`, `focus_thread`, `split_with`, `close_pane`, `show_file`, `open_changes` | |
-| User | `show_setting` | `ask_side_chat`, `notify_user` (1 per thread per minute) | |
+| User | | `ask_side_chat`, `notify_user` (1 per thread per minute) | |
+| Settings | `get_settings` | | `update_setting(key, value, reason)`: prefs in `src/settings/settingOptions.ts`, validated against their options; never `agentControl` or `permissions` |
 
 **Delete** (`delete` action): stops the live agent, removes the thread with its queue items, pane, side chats, checkpoints, fork records, layout leaves and saved state; the card's "Also remove its worktree" checkbox runs `git worktree remove` after. Not undoable.
 
 **Browser.** `browser_snapshot` walks the page's DOM in an isolated world (the page can't see or touch it) and returns an indented role/name tree like Playwright's, with `[ref=eN]` on interactive elements; refs live in that world and reset on each snapshot. Clicks and keys go through CDP `Input.*` (trusted events); typing selects the field's text and inserts. While Mochi's window is on another Space the page is `hidden` and gets no hit testing, so a click falls back to a DOM `click()` and the result says it wasn't trusted; screenshots fall back from `capturePage` (empty or `UnknownVizError` there) to CDP `Page.captureScreenshot` (both seen in a production build, 2026-10-12). Local means `localhost`, `127.*`, `[::1]`, `0.0.0.0`, `*.localhost`, `*.test`, `about:`. Navigating to any other origin is allowed, logged, and toasts with Undo (= back). Tools act on a tab whose page is on screen: they select their tab in the pane, and fail with "focus_thread first" when the thread isn't showing, because a hidden native view has no size to render at. GAP: CDP coordinates are not checked against a zoomed or device-emulated page.
 
-**Widgets.** `show_setting(settingId, reason, suggested?)` puts a `setting` card in the composer tray with the real control for prefs-backed settings (enums and switches) and a deep link for the rest; Mochi's own blocked calls use the same card.
+
+## Subagents and background agents
+
+A thread's agent can start other agents. Their work is never flattened into the parent's log: each is one `subagent` event stream (`start` / `progress` / `end`, sparse fields: name, prompt, model, background, its own tool steps, latest message, running token total, result, error) folded into `Thread.subagents` (`src/runtime/subagents.ts`). Each is a Mochi of its own flavor and name (Matcha, Sakura, Ube, Mango, Soda, by start order in the thread). The chat shows each as one line where it started (`src/agents/SubagentRow.tsx`): live action, or its report's first line; clicking opens it in the side pane's **Agents** tab, which lists them with live logs, the full report, Send to thread, Stop and their diffs (`src/pane/AgentsTab.tsx`), and opens on its own (never taking the front tab) when a thread's first background agent starts. The sidebar card counts running background agents.
+
+| | Claude (Agent SDK 0.3.296, Claude Code 2.1.296) | Codex (app-server 0.155.1, `multi_agent` on by default) |
+|---|---|---|
+| start | `Agent` (or `Task`) `tool_use`: id = the tool call's id, `description`, `prompt`, `model`, `run_in_background` | `item/completed` `subAgentActivity` `kind: started`: id = `agentThreadId`, name from `agentPath`; v1 `collabAgentToolCall` `spawnAgent` → `receiverThreadIds` |
+| own steps | messages with `parent_tool_use_id` = that id (`tool_use` / `tool_result` / text) | notifications under the child's own thread id on the same connection (`item/*`, `thread/tokenUsage/updated`, `turn/*`) |
+| progress | `task_started` (task id, `is_backgrounded`), `task_progress` (`usage.total_tokens`, summary), `task_updated` | child `thread/tokenUsage/updated` `total.totalTokens`; the child's spend is added to the thread's usage |
+| end | `task_notification` (`completed` / `failed` / `stopped`, `summary`, usage); a foreground agent's `tool_result` (`AgentOutput` `completed`) | parent `subAgentActivity` `completed` / `interrupted`, child `turn/completed`; the first end wins |
+| stop | `query.stopTask(taskId)` | `turn/interrupt` on the child's thread and turn |
+
+All of the above verified with live runs on 2026-10-13 (tiny prompts, `electron/agents/*/fixtures/subagent.jsonl`). Claude Code starts a turn of its own when a background agent reports back; the mapper treats it as any turn. Codex child approvals route to the parent thread's queue.
+
+**Mochi background agents** (`start_background_agent`, `list_background_agents`, `stop_background_agent`): for work that should outlive the current turn. The tool adds a `mochi` subagent and starts it as a session of its own in `host.agent` (thread id `<thread>--<id>`), so it runs on the profile's account and, for Claude, counts toward the concurrency cap like any session (Codex has no cap yet). `worktree: same` runs it in the thread's worktree; `new` makes a worktree on `<branch>-<id>` branched off the thread's branch (`workspace.base`). Its events are folded into the parent as subagent events in the renderer (`fromBackground`): approvals and questions land on the parent's queue named after the agent, its spend counts toward the thread, its context doesn't. Its session stops after its first turn. On end it logs a line in the thread and leaves a note (`live.notes`) that goes to the thread's agent ahead of your next message; "Send to thread" sends it now. Start and stop are `change` tools (list is `read`), quiet: the chat row is their notice. A restart marks running agents stopped.
 
 ## Not verified yet (check before building on it)
 

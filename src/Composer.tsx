@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
-import { ArrowUp, BranchUp, ClipboardList, Hand, Laptop, Mic, Monitor, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
+import { ArrowUp, BranchUp, ClipboardList, Folder, Hand, Laptop, Mic, Monitor, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { toast } from 'sonner';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
@@ -26,7 +26,7 @@ import { AutoHeight } from '@/components/ui/auto-height';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { Provider } from './model';
+import type { Provider, Repo } from './model';
 import { EffortPicker, ModelPicker, useModels } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
@@ -77,7 +77,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSu
   /** Keeps the model list to `provider`. */
   isLocked?: boolean;
   onControlsChange: (controls: ThreadControls, model?: ModelOption) => void;
-  /** Return `false` to hold the message: the text stays in the input, as with the drift guard's card. */
+  /** Return `false` to hold the message: the text stays in the input. */
   onSend: (message: PromptInputMessage) => void | boolean;
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
@@ -170,12 +170,12 @@ function ComposerAttachments() {
 const toPhoto = (f: { url?: string; filename?: string }) => ({ src: f.url ?? '', name: f.filename ?? 'Image' });
 const toViewerFile = (f: { url?: string; filename?: string; mediaType?: string }): ViewerFile => ({ source: 'attachment', name: f.filename ?? 'File', url: f.url ?? '', mediaType: f.mediaType });
 
-/** One line under the card for where and how the agent runs. The gradient fades the transcript scrolling under it. */
+/** One line under the card for where and how the agent runs, wrapping on a phone. The gradient fades the transcript scrolling under it. */
 export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'relative flex h-8 items-center gap-1 px-1 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
+        'relative flex min-h-8 flex-wrap items-center gap-x-1 px-1 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
         className,
       )}
       {...props}
@@ -252,11 +252,13 @@ function AccessIcon({ access, className }: { access: Access; className?: string 
   return <Icon aria-hidden className={className} />;
 }
 
-export function BranchLabel({ branch }: { branch: string }) {
+/** Where a started thread works: its project folder or its own worktree, and the branch. */
+export function BranchLabel({ repo }: { repo: Repo }) {
+  const isFolder = repo.mode === 'folder';
   return (
-    <span className="flex min-w-0 items-center gap-1 px-1.5 font-mono">
-      <BranchUp className="size-3.5 shrink-0" />
-      <span className="truncate">{branch}</span>
+    <span className="flex min-w-0 items-center gap-1 px-1.5">
+      {isFolder ? <Folder className="size-3.5 shrink-0" aria-label="Project folder" /> : <BranchUp className="size-3.5 shrink-0" aria-label="Own worktree" />}
+      <span className="truncate">{repo.branch}</span>
     </span>
   );
 }

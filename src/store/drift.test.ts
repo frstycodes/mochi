@@ -32,3 +32,35 @@ test('a late verdict for a message that is already tagged changes nothing', () =
   s = run(s, { type: 'drift-verdict', threadId: id, text: 'fix the build', drift: 'off-goal', reason: 'late' });
   assert.equal(thread(s, id), before);
 });
+
+test('a thread started with a greeting takes its goal and title from the first concrete message', () => {
+  let s = run(demoState(), { type: 'create', title: 'hi', provider: 'claude', project: null, isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'send', threadId: id, text: 'thanks', drift: 'on-goal', reason: 'No goal yet' });
+  assert.equal(thread(s, id).goal, 'hi');
+  s = run(s, { type: 'send', threadId: id, text: 'fix the login bug on the signup page', drift: 'on-goal', reason: 'No goal yet' });
+  assert.equal(thread(s, id).goal, 'fix the login bug on the signup page');
+  assert.equal(thread(s, id).title, 'fix the login bug on the signup page');
+  assert.equal(thread(s, id).revisions.at(-1)!.label, 'Goal set from your message');
+  s = run(s, { type: 'send', threadId: id, text: 'and add a test for it', drift: 'on-goal', reason: 'r' });
+  assert.equal(thread(s, id).goal, 'fix the login bug on the signup page', 'set once');
+});
+
+test('a renamed thread keeps its title when the goal is set', () => {
+  let s = run(demoState(), { type: 'create', title: 'hey', provider: 'claude', project: null, isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'rename', threadId: id, title: 'Auth work' });
+  s = run(s, { type: 'send', threadId: id, text: 'migrate auth to Better Auth', drift: 'on-goal', reason: 'r' });
+  assert.equal(thread(s, id).title, 'Auth work');
+  assert.equal(thread(s, id).goal, 'migrate auth to Better Auth');
+});
+
+test('the second Keep here mutes the guard for that thread', () => {
+  let s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: null, isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'drift-keep', threadId: id });
+  assert.deepEqual(thread(s, id).drift, { isMuted: false, keeps: 1 });
+  s = run(s, { type: 'drift-keep', threadId: id });
+  assert.deepEqual(thread(s, id).drift, { isMuted: true, keeps: 2 });
+  assert.equal(thread(s, id).activity.at(-1)!.text, 'Drift guard off for this thread');
+});

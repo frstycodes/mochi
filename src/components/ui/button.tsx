@@ -17,6 +17,9 @@ const buttonVariants = cva(
           "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+        // Solid, for the one irreversible action on a confirmation. Dark's destructive token is too light for white text, so it's mixed down to keep 4.5:1.
+        danger:
+          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/30 dark:bg-[color-mix(in_oklch,var(--destructive),black_22%)] dark:hover:bg-[color-mix(in_oklch,var(--destructive),black_30%)]",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

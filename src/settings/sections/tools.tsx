@@ -1,22 +1,21 @@
 import { Badge } from '@/components/ui/badge';
-import { AGENT_CONTROL_LABELS } from '../../runtime/tools';
 import { TOOL_NAMES, tierOf, type Tier } from '../../runtime/toolTable';
+import { AGENT_CONTROL } from '../settingOptions';
 import { SettingsGroup, SettingsRow, SettingsSelect } from '../parts';
-import { setPrefs, usePrefs, type AgentControl } from '../prefs';
-
-export const AGENT_CONTROLS = (Object.keys(AGENT_CONTROL_LABELS) as AgentControl[]).map((value) => ({ value, label: AGENT_CONTROL_LABELS[value] }));
+import { setPrefs, usePrefs } from '../prefs';
 
 const TIER_COPY = {
   read: { title: 'Reads', body: 'Always allowed. They show in the work log.' },
-  reversible: { title: 'Changes you can undo', body: 'Run on their own, with a toast to undo and a line in the thread.' },
-  consequential: { title: 'Asks first', body: 'Wait until you approve them on a card, every time.' },
+  change: { title: 'Runs on its own', body: 'No asking: a line in the thread, and a toast with Undo where it can be put back. On sites outside your machine, typing, submitting, scripts and uploads from outside the worktree still ask.' },
+  destructive: { title: 'Asks before deleting', body: "Waits for you on a card in the thread naming exactly what goes, every time. Can't be undone." },
+  setting: { title: 'Asks before changing settings', body: 'Waits for you on a card in the thread showing the current and proposed value, every time.' },
 } satisfies Record<Tier, { title: string; body: string }>;
 
 /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools), and which tools each tier holds. */
 export function ToolsSection() {
   return (
     <div className="flex flex-col gap-8">
-      <SettingsGroup footer="Reads always work. Anything that asks first still waits for you on a card in the thread and the Queue.">
+      <SettingsGroup footer="Reads always work. Deletes and settings always wait for you in the thread; the Queue lists them too.">
         <AgentControlRow />
       </SettingsGroup>
       {(Object.keys(TIER_COPY) as Tier[]).map((tier) => (
@@ -39,9 +38,9 @@ export function AgentControlRow() {
   return (
     <SettingsRow
       id="agentControl"
-      label="Agents can change Mochi"
-      description="Threads, goals, panes and the in-app browser"
-      control={<SettingsSelect id="agentControl" value={agentControl} options={AGENT_CONTROLS} onChange={(v) => setPrefs({ agentControl: v })} className="w-56" />}
+      label={AGENT_CONTROL.label}
+      description="Threads, goals, panes, settings and the in-app browser"
+      control={<SettingsSelect id="agentControl" value={agentControl} options={AGENT_CONTROL.options} onChange={(v) => setPrefs({ agentControl: v })} className="w-56" />}
     />
   );
 }

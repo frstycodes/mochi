@@ -1,25 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Flag } from 'reicon-react';
+import { ChevronDown, ChevronUp } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, type ActivityEntry, type Author, type Provider, type QueueItem, type Thread } from './model';
+import { authorName, isMochiCard, type Provider, type QueueItem, type Thread } from './model';
+import { CardEntry, EventLine } from './chat/MochiWidget';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
 import { ProviderMark } from './ui';
+import { WorkspaceControls, WorkspaceNotes, useThreadWorkspace } from './git/WorkspacePicker';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu, useComposerHandoff } from './Composer';
 import { useSplit } from './layout/SplitContext';
-import { ThreadMinimap } from './ThreadMinimap';
+import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
-import { agentPhase, pendingWork } from './agentPhase';
+import { agentPhase, currentAction, pendingWork, type CurrentAction } from './agentPhase';
+import { chatRows, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
-import type { Review } from './secondOpinion/verdict';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
@@ -38,19 +40,17 @@ import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
-
-type ChatRow =
-  | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
-  | { kind: 'event'; key: string; entry: ActivityEntry }
-  | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
-  | { kind: 'review'; key: string; review: Review };
+import { SubagentRow } from './agents/SubagentRow';
 
 export function ChatView({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const rows = useChatRows(thread.activity, thread.reviews);
+  const rows = chatRows(thread.activity, thread.reviews);
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
-  const decisions = state.queue.filter((q) => q.threadId === thread.id);
+  const liveWork = liveWorkIndex(rows);
+  const action = currentAction(thread);
+  // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
+  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q));
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
@@ -71,7 +71,7 @@ export function ChatView({ thread }: { thread: Thread }) {
             <div ref={messages} className="contents">
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} isLive={i === liveIndex && isRunning} />
+                  <ChatRowView thread={thread} row={row} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
@@ -80,7 +80,7 @@ export function ChatView({ thread }: { thread: Thread }) {
         </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         <SelectionPin threadId={thread.id} scope={messages} />
-        <ThreadMinimap items={outline(rows, pins)} className="absolute top-6 right-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
+        <ThreadMinimap items={outline(rows, pins)} className="absolute top-6 left-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
         <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />
       </Conversation>
       <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
@@ -109,44 +109,15 @@ function useComposerHeightVar() {
   return ref;
 }
 
-function useChatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow[] {
-  const rows: ChatRow[] = [];
-  const pushReviews = (at: number) => reviews.filter((r) => (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach((review) => rows.push({ kind: 'review', key: review.id, review }));
-  activity.forEach((entry, i) => {
-    pushReviews(i);
-    const key = `${entry.at}-${i}`;
-    const last = rows[rows.length - 1];
-    const isWork = entry.kind === 'tool' || entry.kind === 'reasoning';
-    if (isWork && last?.kind === 'work' && last.who === entry.who) {
-      last.entries.push(entry);
-      return;
-    }
-    if (isWork) return rows.push({ kind: 'work', key, who: entry.who, entries: [entry] });
-    if (entry.kind === 'event') return rows.push({ kind: 'event', key, entry });
-    const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
-    const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
-    rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
-  });
-  pushReviews(activity.length);
-  return rows;
-}
-
 // isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; isLive: boolean }) {
-  if (row.kind === 'work') return <WorkLog entries={row.entries} isLive={isLive} />;
+function ChatRowView({ thread, row, isLive, action }: { thread: Thread; row: ChatRow; isLive: boolean; action?: CurrentAction }) {
+  if (row.kind === 'work') return <WorkLog entries={row.entries} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
-  if (row.kind === 'event')
-    return (
-      <div className="flex gap-2 type-caption text-muted-foreground">
-        <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
-        <p className="min-w-0">
-          {row.entry.text}
-          {/* The separator travels with the time, so a wrap never leaves it dangling. */}
-          <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(row.entry.at)}</span>
-          {!!row.entry.detail && <span className="block text-subtle-foreground">{row.entry.detail}</span>}
-        </p>
-      </div>
-    );
+  if (row.kind === 'subagent') {
+    const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
+    return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
+  }
+  if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
   const { entry } = row;
   const isYou = entry.who === 'you';
@@ -174,19 +145,13 @@ function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; is
   );
 }
 
-/** One rail item per row; a row whose message (or a passage in it) is pinned carries its pins, shown in the tooltip. */
-function outline(rows: ChatRow[], pins: Pin[]) {
-  return rows.map((row) => {
-    const pinned = row.kind === 'message' ? pins.filter((p) => p.index === row.index) : [];
-    return { label: rowLabel(row), pins: pinned.map((p) => p.text || (row.kind === 'message' ? row.entry.text : '')) };
+/** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */
+function outline(rows: ChatRow[], pins: Pin[]): OutlineItem[] {
+  return rows.flatMap((row, rowIndex) => {
+    if (row.kind !== 'message' || row.entry.who !== 'you') return [];
+    const pinned = pins.filter((p) => p.index === row.index).map((p) => p.text || row.entry.text);
+    return [{ rowIndex, text: row.entry.text, time: clock(row.entry.at), pins: pinned }];
   });
-}
-
-function rowLabel(row: ChatRow) {
-  if (row.kind === 'work') return `${authorName(row.who)} work log (${row.entries.length})`;
-  if (row.kind === 'review') return `${authorName(row.review.provider)} second opinion`;
-  if (row.kind === 'event') return row.entry.detail ? `${row.entry.text}: ${row.entry.detail}` : row.entry.text;
-  return `${authorName(row.entry.who)}: ${row.entry.text}`;
 }
 
 /** Reading back through the chat folds the question tray away; returning to the latest message brings it back. */
@@ -258,6 +223,7 @@ function Composer({
   const { state, dispatch } = useHarness();
   const [isQueue, setIsQueue] = useState(false);
   const controls = controlsOf(thread);
+  const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const mention = useMentionMenu(thread);
@@ -309,7 +275,7 @@ function Composer({
         <ComposerMeta>
           <RunOnMenu />
           <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
-          {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
+          {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
           <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
             {isQueue ? (
               'Queues after this turn'
@@ -320,6 +286,7 @@ function Composer({
             )}
           </span>
         </ComposerMeta>
+        {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
     </div>
   );

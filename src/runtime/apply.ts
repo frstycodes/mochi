@@ -4,6 +4,7 @@ import { similarity } from '../progress.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
+import { applySubagent, fromBackground } from './subagents.ts';
 
 /** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
@@ -12,7 +13,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     state = { ...state, threads: mapThread(state.threads, event.threadId, (t) => ({ ...t, live: { ...t.live!, starting: undefined } })) };
   }
   const thread = state.threads.find((t) => t.id === event.threadId);
-  if (!thread) return state;
+  if (!thread) return fromBackground(state, event, applyAgentEvent) ?? state;
   const now = state.now;
   const who = actor(thread);
   const update = (fn: (t: Thread) => Thread): State => ({ ...state, threads: mapThread(state.threads, thread.id, fn) });
@@ -20,6 +21,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
   switch (event.type) {
     case 'worktree':
       return update((t) => ({ ...t, live: t.live && { ...t.live, cwd: event.path } }));
+    case 'branch':
+      return update((t) => ({ ...t, repo: t.repo && { ...t.repo, branch: event.branch } }));
     case 'session':
       return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId }, agent: {} }));
     case 'info':
@@ -39,6 +42,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));
     case 'plan':
       return applyPlan(state, thread, event.items);
+    case 'subagent':
+      return applySubagent(state, thread, event, who);
     case 'approval':
       return waitOnYou(state, thread, { id: `q-${event.requestId}`, kind: 'approval', title: event.title, detail: event.detail, code: event.code, requestId: event.requestId }, 'Paused for your approval');
     case 'question': {

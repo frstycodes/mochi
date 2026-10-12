@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { singleLayout } from '../layout/tree.ts';
-import type { AgentControl } from '../settings/prefs.ts';
+import { DEFAULT_PREFS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
 import { panesReducer } from '../store/panes.ts';
@@ -11,8 +11,7 @@ import { initialQueue, queueReducer } from '../store/queue.ts';
 import { sidechatReducer } from '../store/sidechat.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
-import { TOOL_NAMES, type ToolName } from './toolTable.ts';
-import type { ToolUndo } from './undo.ts';
+import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
 
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidechatReducer];
@@ -32,18 +31,18 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     watched: [],
     sidechats: {},
   } as unknown as State;
-  const toasts: { text: string; undo?: ToolUndo }[] = [];
+  const toasts: { text: string; undo?: () => void }[] = [];
   const notices: string[] = [];
   const acts: BrowserAct[] = [];
   const commands: string[] = [];
   const removed: string[] = [];
   const evals: string[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
-  let control_ = control;
+  let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
   const env: ToolEnv = {
     getState: () => state,
     dispatch: (a) => void (state = reduce(state, a)),
-    agentControl: () => control_,
+    prefs: { get: () => prefs, set: (patch) => void (prefs = { ...prefs, ...patch }) },
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
     removeWorktree: async (id) => void removed.push(id),
@@ -78,7 +77,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   };
   const thread = (id: string) => state.threads.find((t) => t.id === id)!;
   const card = () => state.queue.find((q) => q.tool)!;
-  return { env, call, ok, err, thread, card, state: () => state, toasts, notices, acts, commands, removed, evals, pages, setControl: (c: AgentControl) => void (control_ = c) };
+  return { env, call, ok, err, thread, card, state: () => state, prefs: () => prefs, toasts, notices, acts, commands, removed, evals, pages };
 }
 
 let nextView = 0;
@@ -92,48 +91,111 @@ test('every tool in the table has a handler', async () => {
   for (const name of TOOL_NAMES) assert.doesNotMatch((await call(name, { __probe: true })).text, /No Mochi tool/, name);
 });
 
-test('a consequential tool never runs without approval: Deny leaves everything as it was', async () => {
+test('only deletes and settings ask; everything else runs without a widget', () => {
+  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_setting']);
+});
+
+test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
   const t = setup();
-  const pending = t.call('delete_thread', { threadIds: ['e2e'] });
-  assert.ok(t.thread('e2e'), 'nothing happens while the card waits');
-  assert.match(t.card().title, /Delete "Fix flaky checkout e2e"\?|Delete ".*"\?/);
+  const created = await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' });
+  await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new limits table' });
+  await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
+  assert.ok(t.thread(created.id));
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'no widget was shown');
+});
+
+test('a delete always waits on its widget, and Cancel leaves everything as it was', async () => {
+  const t = setup();
+  let isSettled = false;
+  const pending = t.call('delete_thread', { threadIds: ['e2e'] }).finally(() => (isSettled = true));
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(isSettled, false, 'still waiting');
+  assert.ok(t.thread('e2e'), 'nothing happens while the widget waits');
+  assert.match(t.card().title, /Delete "Fix flaky checkout e2e"\?/);
   assert.match(t.card().detail, /can't be undone/);
+  assert.equal(t.card().tool!.isDestructive, true);
   decideTool(t.card().tool!.callId, { isApproved: false });
   const r = await pending;
   assert.equal(r.isError, true);
   assert.match(r.text, /denied/);
-  assert.ok(t.thread('e2e'), 'denied: the thread stays');
-  assert.equal(t.state().queue.some((q) => q.tool), false, 'the card is gone');
-  assert.match(lastLog(t.thread('rl')), /^Denied: Delete/);
+  assert.ok(t.thread('e2e'), 'cancelled: the thread stays');
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'the widget is gone');
+  assert.deepEqual(t.thread('rl').activity.at(-1), { ...t.thread('rl').activity.at(-1), text: 'Kept "Fix flaky checkout e2e"', card: { id: t.thread('rl').activity.at(-1)!.card!.id, isOpen: false } });
 });
 
-test('read only blocks every write and shows the setting in the thread', async () => {
+test('the widget sits in the caller’s thread where it asked, and collapses to what happened', async () => {
+  const t = setup();
+  const pending = t.call('delete_thread', { threadIds: ['e2e'] });
+  const entry = t.thread('rl').activity.at(-1)!;
+  assert.deepEqual([entry.kind, entry.card], ['event', { id: t.card().id, isOpen: true }]);
+  decideTool(t.card().tool!.callId, { isApproved: true });
+  await pending;
+  assert.equal(lastLog(t.thread('rl')), 'Deleted "Fix flaky checkout e2e"');
+  assert.equal(t.thread('rl').activity.at(-1)!.card!.isOpen, false);
+  assert.equal(t.toasts.length, 0, 'you just answered it; no toast on top');
+});
+
+test('a setting change always waits, shows current and proposed, and Apply or Keep closes it with a record', async () => {
+  const t = setup();
+  const pending = t.call('update_setting', { key: 'diffStyle', value: 'split', reason: 'Split diffs read better for this refactor' });
+  assert.deepEqual(t.card().tool!.setting, { id: 'diffStyle', value: 'split' });
+  assert.equal(t.card().detail, 'Split diffs read better for this refactor');
+  assert.equal(t.prefs().diffStyle, 'unified', 'nothing changes while it waits');
+  decideTool(t.card().tool!.callId, { isApproved: true });
+  assert.equal(JSON.parse((await pending).text).changed, 'Set Diffs to Split');
+  assert.equal(t.prefs().diffStyle, 'split');
+  assert.equal(lastLog(t.thread('rl')), 'Set Diffs to Split');
+  const kept = t.call('update_setting', { key: 'driftGuard', value: 'false', reason: 'Too many prompts' });
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  assert.match((await kept).text, /denied/);
+  assert.equal(t.prefs().driftGuard, true);
+  assert.equal(lastLog(t.thread('rl')), 'Kept Drift guard: On');
+});
+
+test('update_setting validates the key and value before asking, and never touches agent control or permissions', async () => {
+  const t = setup();
+  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'sideways', reason: 'x' }), /allowed: unified, split/);
+  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'unified', reason: 'x' }), /already Unified/);
+  assert.match(await t.err('update_setting', { key: 'agentControl', value: 'everything', reason: 'x' }), /isn't a setting agents can change/);
+  assert.match(await t.err('update_setting', { key: 'permissions', value: 'Full access', reason: 'x' }), /isn't a setting agents can change/);
+  assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
+  const settings = await t.ok('get_settings');
+  assert.ok(settings.some((x: { key: string; value: string }) => x.key === 'diffStyle' && x.value === 'unified'));
+  assert.equal(settings.some((x: { key: string }) => x.key === 'agentControl' || x.key === 'permissions'), false);
+});
+
+test('read only blocks every write, settings included, and shows agent control in the thread once', async () => {
   const t = setup({ control: 'read' });
   const before = t.state().threads;
   assert.match(await t.err('settle_thread', { threadIds: ['adm'] }), /Read only/);
   assert.match(await t.err('browser_click', { ref: 'e1' }), /Read only/);
+  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'split', reason: 'x' }), /Read only/);
   assert.match(await t.err('delete_thread', { threadIds: ['e2e'] }), /Read only/);
-  assert.equal(t.state().threads, before, 'no thread changed');
-  const card = t.state().queue.find((q) => q.kind === 'setting')!;
-  assert.deepEqual(card.setting, { id: 'agentControl', suggested: 'everything' });
+  assert.equal(t.state().threads.filter((x) => x.id !== 'rl').every((x, i) => x === before.filter((y) => y.id !== 'rl')[i]), true, 'no other thread changed');
+  assert.equal(t.prefs().diffStyle, 'unified');
+  const cards = t.state().queue.filter((q) => q.kind === 'setting');
+  assert.equal(cards.length, 1, 'one widget, raised in place');
+  assert.deepEqual(cards[0].setting, { id: 'agentControl', suggested: 'everything' });
+  assert.equal(t.thread('rl').activity.filter((a) => a.card?.id === cards[0].id).length, 1);
   assert.ok((await t.ok('list_threads')).length > 0, 'reads still work');
 });
 
-test('reversible (the default) runs undoable changes but blocks consequential ones without asking', async () => {
-  const t = setup({ control: 'reversible' });
-  await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
-  assert.match(await t.err('create_thread', { prompt: 'x' }), /Everything, with confirmation/);
-  assert.equal(t.state().queue.some((q) => q.tool), false, 'no card was shown');
+test('changes runs everything that doesn’t ask, and blocks deletes and settings without showing their widget', async () => {
+  const t = setup({ control: 'changes' });
+  await t.ok('create_thread', { prompt: 'x' });
+  assert.match(await t.err('delete_thread', { threadIds: ['e2e'] }), /Everything, asking before deletes and settings/);
+  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'split', reason: 'x' }), /Everything/);
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'no tool widget was shown');
 });
 
-test('reversible calls log in the caller, toast with Undo, and Undo puts back only what still holds the result', async () => {
+test('changes log in the caller, toast with Undo, and Undo puts back only what still holds the result', async () => {
   const t = setup();
   const r = await t.ok('settle_thread', { threadIds: ['adm', 'e2e'] });
   assert.equal(r.changed, 'Settled 2 threads');
   assert.equal(lastLog(t.thread('rl')), 'Claude settled 2 threads');
   assert.equal(t.toasts.at(-1)!.text, 'Claude settled 2 threads');
   t.env.dispatch({ type: 'rename', threadId: 'e2e', title: 'Renamed since' });
-  t.env.dispatch({ type: 'tool-undo', undo: t.toasts.at(-1)!.undo! });
+  t.toasts.at(-1)!.undo!();
   assert.equal(t.thread('adm').status, 'running');
   assert.equal(t.thread('e2e').title, 'Renamed since', 'a later change survives the undo');
 });
@@ -223,31 +285,29 @@ test('watch_thread toggles only when needed', async () => {
   assert.deepEqual(t.state().watched, []);
 });
 
-test('create_thread asks, then creates in the same project without moving your view', async () => {
+test('create_thread creates in the same project without moving your view, and Undo removes it', async () => {
   const t = setup();
-  const pending = t.call('create_thread', { prompt: 'Add a rate limit dashboard', provider: 'codex' });
-  assert.match(t.card().title, /Start a new Codex thread/);
-  decideTool(t.card().tool!.callId, { isApproved: true });
-  const r = JSON.parse((await pending).text);
+  const r = await t.ok('create_thread', { prompt: 'Add a rate limit dashboard', provider: 'codex' });
   const created = t.thread(r.id);
   assert.deepEqual([created.goal, created.providers[0], created.repo?.project], ['Add a rate limit dashboard', 'codex', 'latitude']);
   assert.deepEqual(t.state().views, { latitude: { kind: 'thread', id: 'rl' } });
+  assert.equal(t.toasts.at(-1)!.text, 'Claude started "Add a rate limit dashboard"');
+  t.toasts.at(-1)!.undo!();
+  assert.equal(t.state().threads.some((x) => x.id === r.id), false);
 });
 
-test('send_to_thread asks, then sends into the other thread as a message from this one', async () => {
+test('send_to_thread sends into the other thread as a message from this one, with no Undo', async () => {
   const t = setup();
-  const pending = t.call('send_to_thread', { threadId: 'adm', text: 'Use the new limits table' });
-  assert.match(t.card().detail, /Use the new limits table/);
-  decideTool(t.card().tool!.callId, { isApproved: true });
-  await pending;
+  await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new limits table' });
   assert.ok(t.thread('adm').activity.some((a) => a.kind === 'message' && a.text.includes('Use the new limits table')));
+  assert.equal(t.toasts.at(-1)!.undo, undefined);
 });
 
 test('delete_thread with approval removes the thread everywhere, and the worktree only when ticked', async () => {
   const t = setup();
   t.env.dispatch({ type: 'watch-toggle', threadId: 'e2e' });
   const pending = t.call('delete_thread', { threadIds: ['e2e'] });
-  assert.deepEqual(t.card().tool!.options?.map((o) => o.id), ['removeWorktree']);
+  assert.deepEqual(t.card().tool!.options, [{ id: 'removeWorktree', label: 'Also remove its worktree: /repo/rl' }]);
   decideTool(t.card().tool!.callId, { isApproved: true, options: ['removeWorktree'] });
   const r = JSON.parse((await pending).text);
   assert.equal(t.state().threads.some((x) => x.id === 'e2e'), false);
@@ -375,13 +435,6 @@ test('notify_user notifies once a minute per thread', async () => {
   assert.deepEqual(t.notices, ['Tests are red', 'Green']);
 });
 
-test('show_setting puts a setting card in the thread', async () => {
-  const t = setup();
-  await t.ok('show_setting', { settingId: 'diffStyle', reason: 'Split diffs read better for this refactor', suggested: 'split' });
-  const card = t.state().queue.find((q) => q.kind === 'setting')!;
-  assert.deepEqual([card.threadId, card.title, card.setting], ['rl', 'Split diffs read better for this refactor', { id: 'diffStyle', suggested: 'split' }]);
-});
-
 // {BROWSER}
 
 test('browser_tabs lists only the caller’s browser tabs', async () => {
@@ -431,14 +484,14 @@ test('browser_click on a submit button on a non-local origin asks first', async 
   assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }]);
 });
 
-test('browser_type types locally, asks on other origins, and is blocked there under Reversible', async () => {
+test('browser_type types locally, asks on other origins, and is blocked there under Changes', async () => {
   const t = setup();
   await t.ok('browser_snapshot');
   await t.ok('browser_type', { ref: 'e2', text: 'me@example.com', submit: true });
   assert.deepEqual(t.acts, [{ kind: 'type', ref: 'e2', text: 'me@example.com' }, { kind: 'press', key: 'Enter' }]);
-  const remote = setup({ url: 'https://example.com/', control: 'reversible' });
+  const remote = setup({ url: 'https://example.com/', control: 'changes' });
   await remote.ok('browser_snapshot');
-  assert.match(await remote.err('browser_type', { ref: 'e2', text: 'x' }), /Everything, with confirmation/);
+  assert.match(await remote.err('browser_type', { ref: 'e2', text: 'x' }), /Everything, asking before deletes and settings/);
   assert.deepEqual(remote.acts, []);
 });
 
@@ -535,10 +588,10 @@ test('browser_eval on another origin needs approval and shows the whole script',
   assert.equal(JSON.parse((await again).text).value, '42');
 });
 
-test('browser_eval is blocked under Read only, and under Reversible on other origins', async () => {
+test('browser_eval is blocked under Read only, and under Changes on other origins', async () => {
   assert.match(await setup({ control: 'read' }).err('browser_eval', { script: '1' }), /Read only/);
-  const remote = setup({ url: 'https://example.com/', control: 'reversible' });
-  assert.match(await remote.err('browser_eval', { script: '1' }), /Everything, with confirmation/);
+  const remote = setup({ url: 'https://example.com/', control: 'changes' });
+  assert.match(await remote.err('browser_eval', { script: '1' }), /Everything, asking before deletes and settings/);
   assert.deepEqual(remote.evals, []);
 });
 
@@ -550,4 +603,12 @@ test('browser_eval passes the page error back and still logs the run', async () 
 
 test('names in the table are verb_noun', () => {
   for (const name of TOOL_NAMES) assert.match(name, /^[a-z]+(_[a-z]+)+$/, name satisfies ToolName);
+});
+
+test('widget ids carry a per-launch part, so a reload never reuses a saved entry’s id', async () => {
+  const t = setup();
+  const pending = t.call('delete_thread', { threadIds: ['e2e'] });
+  assert.match(t.card().id, /^q-tool-rl-[a-z0-9]+-\d+$/);
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  await pending;
 });
