@@ -134,10 +134,11 @@ export interface AgentToolCall {
   args: Record<string, unknown>;
 }
 
-/** `text` goes back to the agent as the tool's result. */
+/** `text` goes back to the agent as the tool's result; `image` (base64, no data: prefix) after it, for screenshots. */
 export interface AgentToolResult {
   text: string;
   isError?: boolean;
+  image?: { data: string; mimeType: 'image/png' };
 }
 
 export interface AgentHost {

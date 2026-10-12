@@ -38,6 +38,9 @@ export type ThreadsAction =
   | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
+  | { type: 'rename'; threadId: string; title: string }
+  /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
+  | { type: 'delete'; threadIds: string[] }
   | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
@@ -108,6 +111,17 @@ function reduce(state: State, action: Action): State {
       };
     case 'unsettle':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: hasOpenWork(t) ? 'running' : 'review' })) };
+    case 'rename':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, title: action.title })) };
+    case 'delete': {
+      const gone = (id: string) => action.threadIds.includes(id);
+      return {
+        ...state,
+        threads: state.threads.filter((t) => !gone(t.id)),
+        checkpoints: Object.fromEntries(Object.entries(state.checkpoints).filter(([id]) => !gone(id))),
+        forks: Object.fromEntries(Object.entries(state.forks).filter(([id]) => !gone(id))),
+      };
+    }
     case 'create':
       return create(state, action);
     case 'send':

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { BranchDown as GitMerge, BranchUp as GitPullRequest, Inbox, MessageQuestion as MessageCircleQuestion, Route, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
+import { BranchDown as GitMerge, BranchUp as GitPullRequest, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { progressAt } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
@@ -27,6 +27,7 @@ const QUEUE_ICONS = {
   review: GitPullRequest,
   ci: GitPullRequest,
   overlap: GitMerge,
+  setting: Setting2,
 } satisfies Record<QueueKind, LucideIcon>;
 
 export function Orbit() {
