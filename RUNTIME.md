@@ -15,9 +15,13 @@ Status labels: **verified** = read in this repo; **docs** = read in the vendor's
 
 ## Auth
 
-- **Claude: API key, not the user's subscription login.** The Agent SDK overview says third-party products may not offer claude.ai login or its rate limits and should use API-key auth ([docs](https://code.claude.com/docs/en/agent-sdk/overview.md)). The key is entered once in settings, stored with Electron `safeStorage` (OS keychain), and passed to the SDK through `options.env`. `env` **replaces** the child environment, so spread `process.env` into it or `PATH` disappears (docs). Exact env var name the SDK reads: not verified, check the Quickstart before building.
-- **Codex: its own account flow.** app-server exposes `account/read` and `account/login/start` with `chatgpt`, `chatgptDeviceCode` or `apiKey`; credentials live in `~/.codex/auth.json` or the keyring (docs). Whether an existing `codex login` is picked up with no extra step: not verified.
-- The space's `accounts` (`Space.accounts` in `src/model.ts`, verified) become real: each space maps to a Claude key and a Codex account. Until then, one of each, app-wide.
+**Harness never logs in to Claude or Codex, and never sees, stores or forwards their credentials.** It drives the user's own installed tools, which carry the user's own login, the same model as Conductor, Zed and T3 Code (decision, 2026-10-12).
+
+- **Claude: the user's installed Claude Code.** The Agent SDK runs the Claude Code binary; point it at the user's own `claude` (the SDK's executable-path option; Zed overrides it with `CLAUDE_CODE_EXECUTABLE`, docs) so it inherits whatever that install is logged in with: Pro/Max, Team, or an API key the user set up in Claude Code. Signing in or switching accounts happens in Claude Code itself (`claude auth login`, `/login`); Harness only reports which method is active (Claude Code's `/status` shows it) and links the user there. Don't pass `env` without spreading `process.env`: it **replaces** the child environment and would drop the user's credentials and `PATH` (docs).
+- **API key, optional:** for someone without Claude Code, a key entered in settings, stored with Electron `safeStorage`, passed as the environment Claude Code reads. Exact variable name: not verified, check the Quickstart. A set `ANTHROPIC_API_KEY` makes Claude Code bill the API instead of the subscription (Zed docs, Claude Code auth docs), so Harness never sets it unless the user chose this option, and says so in settings.
+- **Codex: the user's `codex login`.** One `codex app-server` started from the user's install, reading the user's own credentials (`~/.codex/auth.json` or the keyring). `account/read` reports the state; if logged out, Harness tells the user to run `codex login` rather than calling `account/login/start` itself. Whether app-server picks up an existing login with no extra step: not verified, check first.
+- **Distribution:** before shipping Harness to other people, re-check Anthropic's current legal page (the Agent SDK overview says products should use API keys unless approved; reports from October 2026 say the subscription rules were relaxed) and OpenAI's terms.
+- The space's `accounts` (`Space.accounts` in `src/model.ts`) become informational: which Claude Code / Codex login a space expects, compared with what the installs report. Per-space logins (separate config dirs) are a later step.
 
 ## Event contract
 
@@ -95,9 +99,9 @@ Same rules as SESSIONS.md (own files, worktree per session, typecheck + tests + 
 | Wave | Session | Owns |
 |---|---|---|
 | R0 | `contract`: grow `AgentHost`, move `tick` into a `demo` adapter, make the threads slice consume `AgentEvent`s (plan reconciliation, approvals and questions into the queue, usage) | `src/host/*/agent.ts`, `electron/ipc/agent.ts`, `src/store/threads.ts`, `src/runtime/**` |
-| R1 | `claude`: Agent SDK adapter, `safeStorage` key, permission modes, resume/fork, file checkpoints | `electron/agents/claude/**` |
-| R1 | `codex`: app-server process manager, JSON-RPC client, account login flow, approvals | `electron/agents/codex/**` |
-| R1 | `settings`: accounts per space (Claude key, Codex login), concurrency cap, default models | `src/settings/**` |
+| R1 | `claude`: Agent SDK adapter driving the user's installed Claude Code, optional `safeStorage` key, permission modes, resume/fork, file checkpoints | `electron/agents/claude/**` |
+| R1 | `codex`: app-server process manager from the user's install, JSON-RPC client, login state (never logs in itself), approvals | `electron/agents/codex/**` |
+| R1 | `settings`: which Claude Code / Codex installs and logins are detected, the optional API key, concurrency cap, default models | `src/settings/**` |
 | R2 | wire-ups: real side chat `ask`, drift `classify`, usage numbers, handoff, rewind through the SDK | the GAP sites listed above |
 
 Wave 3 of SESSIONS.md (scheduled threads, team spaces, replay, voice, mobile, settings sync) starts after R2.
