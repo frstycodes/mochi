@@ -430,7 +430,7 @@ function ThreadItem({ thread, isActive, onSelect }: { thread: Thread; isActive: 
             <>
               <ProjectAvatar name={thread.repo.project} />
               <span className="shrink-0">{thread.repo.project}</span>
-              <span className="min-w-0 truncate font-mono">{thread.repo.branch}</span>
+              <span className="min-w-0 truncate">{thread.repo.branch}</span>
             </>
           ) : (
             <>

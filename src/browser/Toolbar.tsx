@@ -108,7 +108,7 @@ function AddressBar({ pageId, page }: { pageId: string; page: Page }) {
         onBlur={() => setDraft(null)}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-        className="h-7 truncate rounded-full border-transparent bg-muted px-3 font-mono type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
+        className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
       />
       <datalist id={listId}>
         {history.map((url) => (
