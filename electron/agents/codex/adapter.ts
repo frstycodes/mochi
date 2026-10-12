@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { apiMessage, codexModels, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, childEvents, codexModels, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
@@ -17,6 +17,14 @@ interface Live {
   options: AgentRunOptions;
 }
 
+/** A Codex agent spawned by a thread's agent: its own Codex thread, reported as that thread's subagent. */
+interface Child {
+  parent: Live;
+  /** The child's own token totals; `threadId` is the parent's harness thread. */
+  state: ThreadState;
+  turnId?: string;
+}
+
 interface Pending {
   id: RpcId;
   server: CodexServer;
@@ -26,8 +34,11 @@ interface Pending {
 }
 
 // GAP: the composer's permission modes are Claude's names; these are the closest Codex policies. No mode keeps the user's own Codex config.
-const POLICIES: Record<string, { approvalPolicy: string; sandbox: string }> = {
-  default: { approvalPolicy: 'untrusted', sandbox: 'workspace-write' },
+export const POLICIES: Record<string, { approvalPolicy: string; sandbox: string; approvalsReviewer?: string }> = {
+  /** Not `untrusted`: 0.155.1 asked before every command, `cat` and `git status` too, since each arrives wrapped in `zsh -lc`. In the read-only sandbox reads run unasked and anything that writes or needs the network escalates to the user. */
+  default: { approvalPolicy: 'on-request', sandbox: 'read-only' },
+  /** Sandboxed work runs unasked; escalations (network, writes outside the workspace) go to Codex's own reviewer (`guardian_approval`, stable in 0.155.1), not the user. */
+  auto: { approvalPolicy: 'on-request', sandbox: 'workspace-write', approvalsReviewer: 'auto_review' },
   acceptEdits: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
   plan: { approvalPolicy: 'on-request', sandbox: 'read-only' },
   bypassPermissions: { approvalPolicy: 'never', sandbox: 'danger-full-access' },
@@ -114,6 +125,15 @@ export class CodexAdapter {
     const rpc = live?.server.rpc;
     if (!live?.turnId || !rpc || live.gen !== live.server.gen) return;
     await rpc.request('turn/interrupt', { threadId: live.codexId, turnId: live.turnId });
+  }
+
+  /** Interrupts a spawned agent's turn; it then reports `stopped`. */
+  async stopSubagent(threadId: string, subagentId: string) {
+    const live = this.threads.get(threadId);
+    const child = live?.server.children.get(subagentId);
+    const rpc = live?.server.rpc;
+    if (!child || child.parent !== live || !child.turnId || !rpc) throw new Error('That agent is not running');
+    await rpc.request('turn/interrupt', { threadId: subagentId, turnId: child.turnId });
   }
 
   async resolve(requestId: string, decision: AgentDecision) {
@@ -259,19 +279,28 @@ export class CodexAdapter {
     if (method === 'account/rateLimits/updated') return updateLimits(server.limits, params);
     const ask = server.asks.get(codexThreadId(params) ?? '');
     if (ask) return ask.notify(method, params);
+    const turnId = (params as { turn?: { id?: unknown } }).turn?.id;
+    const child = server.children.get(codexThreadId(params) ?? '');
+    if (child) {
+      if (method === 'turn/started' && typeof turnId === 'string') child.turnId = turnId;
+      if (method === 'turn/completed') child.turnId = undefined;
+      return childEvents(method, params, child.state, codexThreadId(params)!).forEach(this.emit);
+    }
     const live = server.byCodex.get(codexThreadId(params) ?? '');
     if (!live) return;
-    const turnId = (params as { turn?: { id?: unknown } }).turn?.id;
     if (method === 'turn/started' && typeof turnId === 'string') live.turnId = turnId;
     if (method === 'turn/completed') live.turnId = undefined;
     for (const event of mapNotification(method, params, live.state)) {
       if (event.type === 'resolved' && !this.requests.delete(event.requestId)) continue;
+      // Verified on 0.155.1: a spawned agent's notifications arrive on this connection under its own thread id.
+      if (event.type === 'subagent' && event.phase === 'start' && !server.children.has(event.id)) server.children.set(event.id, { parent: live, state: threadState(live.state.threadId, live.state.cwd, { account: server.account.id, limits: server.limits }) });
       this.emit(event);
     }
   }
 
   private request(server: CodexServer, id: RpcId, method: string, params: unknown) {
-    const live = server.byCodex.get(codexThreadId(params) ?? '');
+    // A spawned agent's approvals are its parent thread's to answer.
+    const live = server.byCodex.get(codexThreadId(params) ?? '') ?? server.children.get(codexThreadId(params) ?? '')?.parent;
     const requestId = requestKey(server.account.id, id);
     const event = live && mapRequest(method, params, requestId, live.state);
     if (!event) return server.rpc?.respondError(id, -32601, `Harness does not handle ${method}`);
@@ -286,6 +315,7 @@ export class CodexAdapter {
     if (!live) return;
     this.threads.delete(threadId);
     live.server.byCodex.delete(live.codexId);
+    for (const [id, child] of live.server.children) if (child.parent === live) live.server.children.delete(id);
     for (const [requestId, p] of this.requests) if (p.threadId === threadId) this.requests.delete(requestId);
   }
 }
@@ -303,6 +333,8 @@ class CodexServer {
   rpc?: RpcClient;
   gen = 0;
   byCodex = new Map<string, Live>();
+  /** Spawned agents by their Codex thread id. */
+  children = new Map<string, Child>();
   asks = new Map<string, Inbox>();
   limits: AccountLimits = {};
   private hooks: ServerHooks;

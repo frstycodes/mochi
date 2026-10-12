@@ -20,7 +20,7 @@ import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState }
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
 import { reviewsReducer, type ReviewAction } from '../secondOpinion/slice.ts';
 import { initialNotifications, notificationsReducer, type NotificationsAction, type NotificationsState } from '../notify/slice.ts';
-import { scheduleCalls } from '../schedule/calls.ts';
+import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
 import { scheduleReducer, type ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 
@@ -79,6 +79,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     apply(action);
     // After the action: a new thread only exists once it has applied.
     for (const call of calls) if (call.method === 'start') apply({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
+    if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
   }, []);
   // The tick is the app's clock, one per minute of `now`: the demo runs it 60× fast, real threads at wall-clock speed.
   // Real agents report through host.agent whether or not the demo is paused.
@@ -91,7 +92,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     () =>
       host.agent.onEvent((event) => {
         if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
-        apply({ type: 'agent', event });
+        apply({ type: 'agent', event, ms: Date.now() });
       }),
     [],
   );
@@ -132,6 +133,7 @@ function callAgent(call: AgentCall) {
   const run = () => {
     if (call.method === 'start') return host.agent.start(call.threadId, call.options);
     if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images);
+    if (call.method === 'stopSubagent') return host.agent.stopSubagent(call.threadId, call.subagentId);
     return host.agent[call.method](call.threadId);
   };
   const next = pending.then(run);
@@ -183,4 +185,12 @@ export function useSpaceQueue(spaceId?: string) {
 
 export function snapshot(state: State): Snapshot {
   return { threads: state.threads, queue: state.queue };
+}
+
+/** A scheduled thread's trigger keeps how main starts it; a new workspace before its first run replaces that. */
+async function retarget(thread: Thread | undefined) {
+  if (!thread) return;
+  const trigger = (await host.schedule.list()).find((t) => t.threadId === thread.id);
+  const input = trigger && triggerInput(thread, { when: trigger.when, missed: trigger.missed, name: trigger.name, prompt: trigger.prompt });
+  if (input) await host.schedule.set(input).catch((error: unknown) => console.error('Saving the schedule failed', error));
 }

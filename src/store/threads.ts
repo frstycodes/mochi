@@ -1,11 +1,12 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Step, type StepStatus, type Thread } from '../model.ts';
-import { stepTitleFrom, type DriftKind } from '../drift.ts';
+import { hasGoal, isConcrete, KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
+import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
@@ -13,6 +14,7 @@ import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { projectRef, repoFor } from '../projects.ts';
+import { branchName, repoWorkspace, type WorkspaceDraft } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 import { getRestored } from './persist.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -34,7 +36,8 @@ export interface ThreadsState {
 
 export type ThreadsAction =
   | { type: 'tick' }
-  | { type: 'agent'; event: AgentEvent }
+  /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
+  | { type: 'agent'; event: AgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
@@ -43,7 +46,9 @@ export type ThreadsAction =
   | { type: 'rename'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft }
+  /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
+  | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
@@ -52,7 +57,8 @@ export type ThreadsAction =
   | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
   | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
-  | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
+  | { type: 'drift-settings'; threadId: string; isMuted: boolean }
+  | { type: 'drift-keep'; threadId: string }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
@@ -64,7 +70,11 @@ export type ThreadsAction =
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
   | { type: 'fork-keep'; keepId: string; dropId: string }
-  | { type: 'handoff'; threadId: string; stepId?: string; to: Provider; summary: string };
+  | { type: 'handoff'; threadId: string; stepId?: string; to: Provider; summary: string }
+  /** A Mochi background agent for the thread (`start_background_agent`); `agentCalls` starts its session. */
+  | { type: 'bg-start'; threadId: string; agent: BackgroundStart }
+  /** Stops a subagent: a Mochi one ends here, a native one when its harness reports it stopped. */
+  | { type: 'bg-stop'; threadId: string; subagentId: string };
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
 export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
@@ -100,7 +110,7 @@ function reduce(state: State, action: Action): State {
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
-      return applyAgentEvent(state, action.event);
+      return stampNew(state, applyAgentEvent(state, action.event), action.event.threadId, action.ms);
     case 'agent-starting':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'trigger-overlap':
@@ -126,6 +136,8 @@ function reduce(state: State, action: Action): State {
     }
     case 'create':
       return create(state, action);
+    case 'workspace':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, '', t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':
       return send(state, action);
     case 'controls':
@@ -147,7 +159,9 @@ function reduce(state: State, action: Action): State {
     case 'drift-verdict':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => tagSent(t, action, state.now)) };
     case 'drift-settings':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { threshold: action.threshold, isMuted: action.isMuted } })) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { ...t.drift, isMuted: action.isMuted } })) };
+    case 'drift-keep':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => keepHere(t, state.now)) };
     case 'edit-goal':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now, action.by)) };
     case 'step-status':
@@ -173,6 +187,15 @@ function reduce(state: State, action: Action): State {
       return forkThread(state, action.threadId, action.point);
     case 'fork-keep':
       return keepFork(state, action.keepId, action.dropId);
+    case 'bg-start':
+      return startBackground(state, action.threadId, action.agent);
+    case 'bg-stop': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      const subagent = thread?.subagents?.find((s) => s.id === action.subagentId);
+      // A native agent of a live harness ends when the harness reports it stopped.
+      if (!subagent || (subagent.origin === 'native' && thread?.live && !thread.live.isDetached)) return state;
+      return applyAgentEvent(state, { threadId: action.threadId, type: 'subagent', id: subagent.id, phase: 'end', status: 'stopped' });
+    }
     case 'handoff':
       return handoffLive(handoff(state, action.threadId, action.stepId, action.to, action.summary), action);
     default:
@@ -186,6 +209,12 @@ export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thre
 
 export function mapStep(thread: Thread, id: string, fn: (s: Step) => Step): Thread {
   return { ...thread, steps: thread.steps.map((s) => (s.id === id ? fn(s) : s)) };
+}
+
+function stampNew(before: State, after: State, threadId: string, ms?: number): State {
+  if (ms === undefined || after === before) return after;
+  const from = before.threads.find((t) => t.id === threadId)?.activity.length ?? 0;
+  return { ...after, threads: mapThread(after.threads, threadId, (t) => (t.activity.length > from ? { ...t, activity: t.activity.map((e, i) => (i >= from && e.ms === undefined ? { ...e, ms } : e)) } : t)) };
 }
 
 export function log(thread: Thread, entry: ActivityEntry): Thread {
@@ -353,8 +382,8 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   const thread: Thread = {
     id,
     spaceId: state.spaceId,
-    repo: action.project ? repoFor(action.project, `${getPrefs().branchPrefix}${id}`) : null,
-    title: action.title.length > 48 ? `${action.title.slice(0, 47)}…` : action.title,
+    repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, branchName(getPrefs().branchPrefix, '', id)) : null,
+    title: titleFrom(action.title),
     goal: action.title,
     providers: [action.provider],
     status: 'running',
@@ -387,6 +416,12 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   return { ...state, threads, seq: state.seq + 1, views: action.isBackground ? state.views : { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
 }
 
+/** `fallback` names the branch when the draft doesn't: a project folder thread is on whatever branch the folder is. */
+function withWorkspace(repo: NonNullable<Thread['repo']>, draft: WorkspaceDraft, fallback: string): NonNullable<Thread['repo']> {
+  const { project, path } = repo;
+  return { project, ...(path && { path }), branch: draft.branch || fallback, ...repoWorkspace(draft) };
+}
+
 /** Done goes through `completeStep`, so links and acceptance resolve the same as when a plan finishes it. */
 function setStepStatus(state: State, action: Extract<Action, { type: 'step-status' }>): State {
   const { threadId, stepId, status, by } = action;
@@ -413,10 +448,30 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
   return {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
-      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
-      return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
+      // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
+      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
+      const goaled = setGoalFrom(said, action.text, now);
+      return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
     }),
   };
+}
+
+const titleFrom = (text: string) => (text.length > 48 ? `${text.slice(0, 47)}…` : text);
+
+/** A thread started with "hi" has no goal yet: the first concrete message becomes it, and the title too unless you renamed the thread. */
+function setGoalFrom(t: Thread, text: string, now: number): Thread {
+  if (hasGoal(t) || !isConcrete(text)) return t;
+  const n = t.revisions.length + 1;
+  const title = t.title === titleFrom(t.goal) ? titleFrom(text) : t.title;
+  const set = { ...t, goal: text, title, revisions: [...t.revisions, { n, at: now, label: 'Goal set from your message', by: 'you' as const, diff: [`~ Goal: "${t.goal}" → "${text}"`] }] };
+  return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: set from your message` });
+}
+
+function keepHere(t: Thread, now: number): Thread {
+  const keeps = (t.drift?.keeps ?? 0) + 1;
+  const isMuted = keeps >= KEEPS_TO_MUTE;
+  const kept = { ...t, drift: { ...t.drift, isMuted: !!t.drift?.isMuted || isMuted, keeps } };
+  return isMuted && !t.drift?.isMuted ? log(kept, { at: now, who: 'harness', kind: 'event', text: 'Drift guard off for this thread', detail: `You kept ${keeps} suggestions here` }) : kept;
 }
 
 /** A late verdict for a message sent while the classifier was out: the newest untagged message with that text. */
@@ -456,7 +511,9 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   }
   next = { ...next, threads: mapThread(next.threads, source.id, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: 'Moved to a new thread', detail: `"${short}"` })) };
   const branchFrom = action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
-  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live });
+  // Branching off the current branch is a new worktree from it; off the base, the default.
+  const workspace: WorkspaceDraft | undefined = source.repo && action.branchFrom === 'current' ? { mode: 'worktree', base: source.repo.branch } : undefined;
+  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live, workspace });
 }
 
 /** A whole-thread handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */

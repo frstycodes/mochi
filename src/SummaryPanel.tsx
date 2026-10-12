@@ -20,6 +20,7 @@ import { GoalEditor } from './goals/GoalEditor';
 import { outcomeOf } from './goals/outcome';
 import { burnSeries, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
+import { hasGoal } from './drift';
 import { summarize, type ToolVerb } from './summary';
 import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon, TooltipIconButton } from './ui';
 import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
@@ -232,6 +233,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   dangerFullAccess: 'full access',
   externalSandbox: 'external sandbox',
 };
+const isFullAccess = (mode?: string) => !!mode && /bypassPermissions|dangerFullAccess/.test(mode);
 const permissionLabel = (mode: string) => mode.split(' · ').map((part) => PERMISSION_LABELS[part] ?? part).join(', ');
 const MCP_STATUS_LABELS = { connected: '', pending: 'Connecting', 'needs-auth': 'Needs sign-in', failed: 'Failed', disabled: 'Disabled' } satisfies Record<McpServer['status'], string>;
 const MCP_STATUS_CLASSES = { connected: '', pending: 'text-subtle-foreground', 'needs-auth': 'text-warning', failed: 'text-destructive', disabled: 'text-subtle-foreground' } satisfies Record<McpServer['status'], string>;
@@ -249,7 +251,7 @@ function AgentSections({ agent, provider, spaceId }: { agent: AgentInfo; provide
       <Section label="Session">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-1 type-meta">
           <SessionField label="Model" value={agent.model} />
-          <SessionField label="Permissions" value={agent.permissionMode && permissionLabel(agent.permissionMode)} />
+          <SessionField label="Permissions" value={agent.permissionMode && permissionLabel(agent.permissionMode)} className={cn(isFullAccess(agent.permissionMode) && 'text-warning')} />
           <SessionField label={HARNESSES[provider].name} value={agent.version} />
           <SessionField label="Folder" value={agent.cwd} />
         </dl>
@@ -288,12 +290,12 @@ function AgentSections({ agent, provider, spaceId }: { agent: AgentInfo; provide
   );
 }
 
-function SessionField({ label, value }: { label: string; value?: string }) {
+function SessionField({ label, value, className }: { label: string; value?: string; className?: string }) {
   if (!value) return null;
   return (
     <>
       <dt className="text-subtle-foreground">{label}</dt>
-      <dd className="min-w-0 text-right [overflow-wrap:anywhere]">{value}</dd>
+      <dd className={cn('min-w-0 text-right [overflow-wrap:anywhere]', className)}>{value}</dd>
     </>
   );
 }
@@ -420,7 +422,7 @@ function GoalSection({ thread }: { thread: Thread }) {
               </Button>
             </PopoverTrigger>
           </div>
-          <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
+          {hasGoal(thread) ? <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p> : <p className="type-meta text-subtle-foreground">No goal yet. Your first real request sets it.</p>}
           <div className="flex items-end justify-between gap-2">
             <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
             <span className="tabular pb-1 type-caption text-subtle-foreground">

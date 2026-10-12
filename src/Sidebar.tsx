@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
-import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
+import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -45,6 +45,7 @@ import { duration, progressAt } from './progress';
 import { openSettings } from './settings/open';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
+import { runningBackground } from './runtime/subagents';
 import { Shortcut } from './Shortcut';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
@@ -493,6 +494,8 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             <>
               <ProjectAvatar name={thread.repo.project} />
               <span className="shrink-0">{thread.repo.project}</span>
+              {/* A worktree is the default; working in the project's own checkout is worth a glance. */}
+              {thread.repo.mode === 'folder' && <Folder className="size-3.5 shrink-0" aria-label="In the project folder" />}
               <span className="min-w-0 truncate">{thread.repo.branch}</span>
             </>
           ) : (
@@ -517,6 +520,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
           )}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           {!!pr && <PrBadge pr={pr} />}
+          <AgentsBadge thread={thread} />
           <NextRunBadge threadId={thread.id} />
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
         </span>
@@ -543,6 +547,21 @@ function PrBadge({ pr }: { pr: PullRequest }) {
     </span>
   );
 }
+
+/** How many background agents the thread has running; nothing when none do. */
+function AgentsBadge({ thread }: { thread: Thread }) {
+  const running = runningBackground(thread);
+  if (!running) return null;
+  const label = AGENTS_LABEL.select(running) === 'one' ? '1 background agent running' : `${running} background agents running`;
+  return (
+    <span aria-label={label} title={label} className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground">
+      <Hierarchy aria-hidden className="size-3" />
+      {running}
+    </span>
+  );
+}
+
+const AGENTS_LABEL = new Intl.PluralRules('en');
 
 /** What a thread row says under its title: the step in flight, or what it is waiting for. */
 function useThreadRow(thread: Thread) {

@@ -49,7 +49,8 @@ export function parseSaved(json: string | null): Saved | null {
 function restoreThread(thread: Thread, now: number): Thread {
   const live = { ...thread.live!, isWorking: false, isDetached: true, starting: undefined };
   const reviews = thread.reviews?.map((r) => (r.status === 'running' ? { ...r, status: 'failed' as const, error: 'Stopped when Mochi quit' } : r));
-  const restored = { ...thread, live, ...(reviews && { reviews }) };
+  const subagents = thread.subagents?.map((s) => (s.status === 'running' ? { ...s, status: 'stopped' as const, error: 'Stopped when Mochi quit', activity: undefined } : s));
+  const restored = { ...thread, live, ...(reviews && { reviews }), ...(subagents && { subagents }) };
   if (!thread.live!.isWorking) return restored;
   return { ...restored, activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
 }

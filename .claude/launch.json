@@ -454,6 +454,53 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-recursing-bohr-242ecd/d2867df4-fd42-4989-ad4e-db4ab8691fbf/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-turn-accordion",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5471",
+        "--strictPort"
+      ],
+      "port": 5471
+    },
+    {
+      "name": "mochi-turn-accordion-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5473",
+        "--strictPort"
+      ],
+      "port": 5473
+    },
+    {
+      "name": "mochi-agents",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5441",
+        "--strictPort"
+      ],
+      "port": 5441
+    },
+    {
+      "name": "mochi-agents-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5443",
+        "--strictPort"
+      ],
+      "port": 5443,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-festive-gauss-02abb9/85d15694-fc1c-4e47-b798-b15f22ed90fb/scratchpad/mochi-userdata"
+      }
     }
   ]
 }

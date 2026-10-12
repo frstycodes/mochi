@@ -8,8 +8,8 @@ export interface AgentStartOptions {
   spaceId: string;
   /** An absolute folder; null for a folderless chat, which main runs in a folder of its own under the app's data dir. */
   cwd: string | null;
-  /** Branch for the thread's own worktree of `cwd`, made by main before the agent starts; on failure (not a git repo) the agent runs in `cwd`. */
-  worktree?: string;
+  /** Where in `cwd` the agent works; unset runs it in `cwd` as is (restarts, folderless chats). */
+  workspace?: StartWorkspace;
   prompt: string;
   /** Sent with the first prompt. */
   images?: AgentImage[];
@@ -25,6 +25,8 @@ export interface AgentStartOptions {
 export type AgentEvent =
   /** Main made the thread's worktree and runs the agent there. */
   | { threadId: string; type: 'worktree'; path: string }
+  /** A project folder thread's agent runs on this branch of the project's checkout. */
+  | { threadId: string; type: 'branch'; branch: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }
@@ -33,6 +35,8 @@ export type AgentEvent =
   /** `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills the query in late). */
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number; links?: WebLink[] }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
+  /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
+  | AgentSubagentEvent
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
@@ -41,6 +45,51 @@ export type AgentEvent =
   | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
+export type SubagentStatus = 'running' | 'done' | 'failed' | 'stopped';
+
+export interface AgentSubagentEvent {
+  threadId: string;
+  type: 'subagent';
+  /** Claude: the Agent tool call's id; Codex: the spawned agent's thread id; Mochi: the background agent's id. */
+  id: string;
+  phase: 'start' | 'progress' | 'end';
+  /** The parent's tool call that started it. */
+  toolId?: string;
+  name?: string;
+  /** What it was asked to do. */
+  prompt?: string;
+  model?: string;
+  /** Runs on while the parent's turn goes on. */
+  isBackground?: boolean;
+  /** `end` only. */
+  status?: Exclude<SubagentStatus, 'running'>;
+  /** One line on what it is doing now. */
+  activity?: string;
+  /** One of its own tool calls. */
+  step?: { id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number };
+  /** Its latest message; `isDelta` appends to the one before. */
+  message?: string;
+  isDelta?: boolean;
+  /** Its final answer, `end` only; the latest message stands in when unset. */
+  result?: string;
+  /** Running total. */
+  tokens?: number;
+  error?: string;
+  /** The folder it works in, when not the parent's. */
+  cwd?: string;
+}
+
+/**
+ * `worktree`: the thread's own worktree of `cwd` on `branch`, made by main before the agent starts (from `base`, or checking out
+ * an existing branch); not a git repo runs the agent in `cwd`. `folder`: `cwd` itself, switched to `branch` first when `isExisting`.
+ */
+export interface StartWorkspace {
+  mode: 'worktree' | 'folder';
+  branch: string;
+  base?: string;
+  isExisting?: boolean;
+}
+
 /** Base64 without the `data:` prefix. */
 export interface AgentImage {
   mediaType: 'image/jpeg' | 'image/png';
@@ -48,7 +97,7 @@ export interface AgentImage {
 }
 
 /** What an adapter gets once main has resolved and checked the folder. */
-export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'worktree'> & { cwd: string };
+export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'workspace'> & { cwd: string };
 
 /** You can always type your own answer too, so `options` may be empty. */
 export interface AgentQuestion {
@@ -158,6 +207,8 @@ export interface AgentHost {
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
   rewindFiles(threadId: string, text: string): Promise<void>;
+  /** Stops one of a thread's native subagents (Claude task, Codex spawned agent); it ends with status `stopped`. */
+  stopSubagent(threadId: string, subagentId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
   warm(spaceId: string): Promise<void>;
   /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
@@ -179,6 +230,7 @@ export const agentMethods = {
   onReviewEvent: 'event',
   classify: 'invoke',
   rewindFiles: 'invoke',
+  stopSubagent: 'invoke',
   warm: 'invoke',
   models: 'invoke',
   onToolCall: 'event',

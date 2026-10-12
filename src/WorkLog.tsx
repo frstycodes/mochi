@@ -1,34 +1,34 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Eye, Global, GlobalSearch, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Eye, Flag, Global, TerminalSquare, X } from 'reicon-react';
+import { Spinner } from '@/components/ui/spinner';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
 import type { ActivityEntry } from './model';
-import { duration } from './progress';
+import { clock } from './progress';
 import { usePrefs } from './settings/prefs';
-import { parseTool, type ToolCall } from './summary';
-import { toolLabel } from './agentPhase';
+import { eventLine, isApprovalChatter, parseTool, turnSummary, type ToolCall } from './summary';
+import { hostname, type CurrentAction } from './agentPhase';
 import { openFromScope, useThreadFiles, type ThreadFiles } from './files/viewer';
 import { TooltipIconButton } from './ui';
-import { WebFetchRow, WebSearchRow } from './WebLinks';
+import { Favicon, WebFetchRow, WebSearchRow } from './WebLinks';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
-/** A run of tool calls and reasoning between two messages, collapsed to one line like Codex's "Worked for". */
-export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive: boolean }) {
+/** One agent turn's work, folded to a line like Claude's: while live the line names the current action and rolls to each new one; when the turn ends it settles into a summary. */
+export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?: CurrentAction }) {
   const [isOpen, setOpen] = useState(false);
+  const isLive = !!action;
   const calls = entries.filter((e) => e.kind === 'tool').map((e) => parseTool(e.text));
   const edits = calls.filter((c) => c.verb === 'Edit' || c.verb === 'Write');
-  const runs = calls.filter((c) => c.verb === 'Run');
-  const searches = calls.filter((c) => c.verb === 'Search').length;
-  const failed = runs.filter((c) => (RUNS[c.target]?.exitCode ?? 0) !== 0).length;
-  const minutes = Math.max(1, entries[entries.length - 1].at - entries[0].at);
-  const current = calls[calls.length - 1];
+  const failed = calls.filter((c) => c.verb === 'Run' && (RUNS[c.target]?.exitCode ?? 0) !== 0).length;
+  const lastTool = entries.findLastIndex((e) => e.kind === 'tool');
+  const title = action ? { key: `live:${action.label}`, value: action } : { key: 'done', value: turnSummary(entries) };
   const files = useThreadFiles();
 
   return (
@@ -39,42 +39,31 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
         onClick={() => setOpen((o) => !o)}
         className="group/log flex h-7 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground"
       >
-        <ChevronRight className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />
-        {isLive && current ? (
-          <span className="flex min-w-0" title={current.target}>
-            <Shimmer as="span" className="min-w-0 truncate">{toolLabel(current)}</Shimmer>
-          </span>
-        ) : (
-          <span className="shrink-0">Worked for {duration(minutes)}</span>
-        )}
-        <span className="flex shrink-0 items-center gap-3 text-subtle-foreground">
-          {edits.length > 0 && (
-            <span className="flex items-center gap-1.5">
-              <FileStack paths={edits.map((c) => c.target)} />
-              <DiffStat added={sum(edits, 'added')} removed={sum(edits, 'removed')} />
-            </span>
+        <LeadIcon state={action?.isWaiting ? 'waiting' : isLive ? 'live' : 'done'} isOpen={isOpen} />
+        <RollingTitle title={title} />
+        <AnimatePresence initial={false}>
+          {!isLive && (edits.length > 0 || failed > 0) && (
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: 0.12 }} className="flex shrink-0 items-center gap-3 text-subtle-foreground">
+              {edits.length > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <FileStack paths={edits.map((c) => c.target)} />
+                  <DiffStat added={sum(edits, 'added')} removed={sum(edits, 'removed')} />
+                </span>
+              )}
+              {failed > 0 && <span className="tabular text-destructive">{failed} failed</span>}
+            </motion.span>
           )}
-          {runs.length > 0 && (
-            <span className="flex items-center gap-1">
-              <TerminalSquare className="size-3.5" />
-              <span className="tabular">{runs.length}</span>
-            </span>
-          )}
-          {searches > 0 && (
-            <span className="flex items-center gap-1">
-              <GlobalSearch className="size-3.5" />
-              <span className="tabular">{searches}</span>
-            </span>
-          )}
-          {failed > 0 && <span className="tabular text-destructive">{failed} failed</span>}
-        </span>
+        </AnimatePresence>
       </button>
       <Expand isOpen={isOpen}>
         <ol className="flex flex-col gap-0.5 pt-0.5 pl-5">
           {entries.map((e, i) => {
             if (e.kind === 'reasoning') return <ThoughtRow key={i} entry={e} />;
+            // The live title says what it waits on; once answered, the call's own row is the record.
+            if (e.kind === 'event' && isApprovalChatter(e.text)) return null;
+            if (e.kind !== 'tool') return <EventRow key={i} entry={e} />;
             const call = parseTool(e.text);
-            const isRunning = isLive && i === entries.length - 1;
+            const isRunning = isLive && i === lastTool;
             if (call.verb === 'Search') return <WebSearchRow key={i} call={call} links={e.links} isRunning={isRunning} />;
             if (call.verb === 'Fetch') return <WebFetchRow key={i} call={call} links={e.links} isRunning={isRunning} />;
             return <ToolRow key={i} call={call} isRunning={isRunning} files={files} />;
@@ -82,6 +71,156 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
         </ol>
       </Expand>
     </div>
+  );
+}
+
+const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' } };
+
+/** The working spinner while live, the needs-you dot while paused on you (the chevron on hover for both, so it still reads as openable), the chevron once settled. */
+function LeadIcon({ state, isOpen }: { state: 'live' | 'waiting' | 'done'; isOpen: boolean }) {
+  const chevron = <ChevronRight className={cn('size-3.5 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />;
+  return (
+    <span className="grid size-3.5 shrink-0 place-items-center *:col-start-1 *:row-start-1">
+      <AnimatePresence initial={false}>
+        {state !== 'done' ? (
+          <motion.span key={state} {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center *:col-start-1 *:row-start-1">
+            {state === 'live' ? <Spinner className="size-3.5 text-muted-foreground group-hover/log:opacity-0" /> : <span aria-hidden className="size-1.5 rounded-full bg-warning group-hover/log:opacity-0" />}
+            <span className="opacity-0 group-hover/log:opacity-100">{chevron}</span>
+          </motion.span>
+        ) : (
+          <motion.span key="done" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center">
+            {chevron}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
+  );
+}
+
+type Title = { key: string; value: CurrentAction | string };
+
+// A title stays up at least this long, so a burst of fast calls still reads; changes inside it coalesce to the latest.
+const DWELL_MS = 400;
+const ROLL = { duration: 0.28, ease: [0.23, 1, 0.32, 1] } as const;
+const ROLL_OUT = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
+
+/** The title as a vertical text roll: the old line slides up and blurs out while the new one rises from below; the width follows. */
+function RollingTitle({ title }: { title: Title }) {
+  const reduce = useReducedMotionConfig();
+  const shown = useDwell(title, DWELL_MS);
+  const measure = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const el = measure.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.ceil(e.borderBoxSize[0].inlineSize)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const roll = reduce
+    ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: ROLL }, exit: { opacity: 0, transition: ROLL_OUT } }
+    : {
+        initial: { opacity: 0, transform: 'translateY(100%)', filter: 'blur(3px)' },
+        animate: { opacity: 1, transform: 'translateY(0%)', filter: 'blur(0px)', transition: ROLL },
+        exit: { opacity: 0, transform: 'translateY(-100%)', filter: 'blur(3px)', transition: ROLL_OUT },
+      };
+
+  return (
+    <motion.span
+      data-work-title
+      aria-live="polite"
+      initial={false}
+      animate={width === undefined ? undefined : { width }}
+      transition={reduce ? { duration: 0 } : ROLL}
+      className="relative flex h-5 min-w-0 shrink items-center overflow-hidden"
+    >
+      <span ref={measure} aria-hidden className="invisible absolute top-0 left-0 flex items-center gap-1.5 whitespace-nowrap">
+        <TitleContent value={shown.value} />
+      </span>
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.span key={shown.key} {...roll} className="flex h-5 max-w-full min-w-0 items-center gap-1.5 whitespace-nowrap">
+          <TitleContent value={shown.value} />
+        </motion.span>
+      </AnimatePresence>
+    </motion.span>
+  );
+}
+
+function TitleContent({ value }: { value: CurrentAction | string }) {
+  if (typeof value === 'string') return <span className="min-w-0 truncate">{value}</span>;
+  return (
+    <>
+      <ActionIcon action={value} />
+      {value.isWaiting ? (
+        <span className="min-w-0 truncate text-foreground">{value.label}</span>
+      ) : (
+        <Shimmer as="span" className="min-w-0 truncate">
+          {value.label}
+        </Shimmer>
+      )}
+    </>
+  );
+}
+
+const FAVICONS_SHOWN = 4;
+
+/** Favicons of the pages a search returned (stacked, each fading in as it arrives), the read page's, or the file's type icon. */
+function ActionIcon({ action }: { action: CurrentAction }) {
+  const { call, links = [] } = action;
+  if (!call) return null;
+  if (call.verb === 'Search' || call.verb === 'Fetch') {
+    const hosts = [...new Set((call.verb === 'Fetch' && !links.length ? [{ url: call.target }] : links).map((l) => hostname(l.url)))].slice(0, FAVICONS_SHOWN);
+    if (!hosts.length) return null;
+    return (
+      <span className="flex shrink-0 items-center">
+        <AnimatePresence initial={false}>
+          {hosts.map((host, i) => (
+            <motion.span key={host} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2, delay: i * 0.05 }} className={cn('rounded-full bg-background ring-2 ring-background', i > 0 && '-ml-1.5')}>
+              <Favicon host={host} />
+            </motion.span>
+          ))}
+        </AnimatePresence>
+      </span>
+    );
+  }
+  if (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-3.5 shrink-0" />;
+  return null;
+}
+
+/**
+ * The title on screen: a new key waits until the current one has been up `dwell` ms, then the latest pending one shows,
+ * so a burst never queues a backlog. The same key passes its fresh value straight through (favicons arriving).
+ */
+function useDwell(title: Title, dwell: number): Title {
+  const [shown, setShown] = useState(title);
+  const shownAt = useRef(0);
+  const latest = useRef(title);
+  latest.current = title;
+  useEffect(() => {
+    if (title.key === shown.key) return;
+    const show = () => {
+      shownAt.current = performance.now();
+      setShown(latest.current);
+    };
+    const wait = shownAt.current + dwell - performance.now();
+    if (wait <= 0) return show();
+    const t = window.setTimeout(show, wait);
+    return () => window.clearTimeout(t);
+  }, [title.key, shown.key, dwell]);
+  return title.key === shown.key ? title : shown;
+}
+
+/** A harness event inside the turn: a denied call, a goal change. */
+function EventRow({ entry }: { entry: ActivityEntry }) {
+  const line = eventLine(entry.text);
+  return (
+    <li className="flex min-h-7 items-start gap-2 px-2 py-1 type-meta">
+      {line.startsWith('Denied') ? <X className="mt-0.5 size-4 shrink-0 text-destructive" /> : <Flag className="mt-0.5 size-4 shrink-0 text-subtle-foreground" />}
+      <span className="min-w-0 text-pretty text-muted-foreground">
+        {line}
+        <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(entry.at)}</span>
+      </span>
+    </li>
   );
 }
 
@@ -119,7 +258,7 @@ export function Expand({ isOpen, children }: { isOpen: boolean; children: ReactN
   );
 }
 
-function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolean; files: ThreadFiles | null }) {
+export function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolean; files: ThreadFiles | null }) {
   const [isOpen, setOpen] = useState(false);
   const patch = PATCHES[call.target];
   const run = RUNS[call.target];
@@ -252,7 +391,7 @@ function seconds(ms: number) {
   return ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-function DiffView({ patch }: { patch: string }) {
+export function DiffView({ patch }: { patch: string }) {
   const { resolvedTheme } = useTheme();
   const { diffStyle } = usePrefs();
   return (

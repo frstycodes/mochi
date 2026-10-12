@@ -3,12 +3,14 @@ import { DEVICES } from '../../Composer';
 import { ModelPicker, useUnavailableHarnesses } from '../../ModelControls';
 import { useSpace } from '../../store';
 import { useSideChatDefault } from '../../sidechat/useSideChat';
-import { ACCESS } from '../../runtime/controls';
+import { SHARED_ACCESS } from '../../runtime/access';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
 import { useAgentSettings } from '../AgentSettings';
-import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
 import { setPrefs, usePrefs } from '../prefs';
+import { AGENTS } from '../settingOptions';
+
+const FULL_ACCESS_TOGGLE = 'text-warning hover:text-warning data-[state=on]:border-warning/60 data-[state=on]:bg-warning/12 data-[state=on]:text-warning dark:data-[state=on]:bg-warning/12';
 
 export function DefaultsSection() {
   const { agent, permissions, runsOn } = usePrefs();
@@ -19,7 +21,7 @@ export function DefaultsSection() {
         <SettingsRow
           id="permissions"
           label="Permissions"
-          control={<SettingsChoice id="permissions" value={permissions} options={ACCESS.map((a) => ({ value: a, label: a }))} onChange={(v) => setPrefs({ permissions: v })} />}
+          control={<SettingsChoice id="permissions" value={permissions} options={SHARED_ACCESS.map((a) => ({ value: a, label: a, className: a === 'Full access' ? FULL_ACCESS_TOGGLE : undefined }))} onChange={(v) => setPrefs({ permissions: v })} />}
         />
         <SettingsRow
           id="runsOn"
@@ -38,7 +40,6 @@ export function DefaultsSection() {
   );
 }
 
-export const AGENTS = HARNESS_IDS.map((id) => ({ value: id, label: HARNESSES[id].name }));
 
 function SideChatGroup() {
   const [model, setModel] = useSideChatDefault();

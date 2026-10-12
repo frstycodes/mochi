@@ -99,7 +99,7 @@ export const SETTINGS_SECTIONS = [
     component: DefaultsSection,
     settings: [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread' },
-      { id: 'permissions', label: 'Permissions', keywords: 'ask auto edit full access' },
+      { id: 'permissions', label: 'Permissions', keywords: 'manual ask auto edit full access bypass plan' },
       { id: 'runsOn', label: 'Runs on', keywords: 'device machine cloud sandbox' },
       { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
@@ -112,7 +112,7 @@ export const SETTINGS_SECTIONS = [
     title: 'Mochi tools',
     icon: ShieldCheck,
     component: ToolsSection,
-    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only reversible confirm approve mcp control browser delete' }],
+    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' }],
   },
   {
     id: 'goals',
@@ -122,7 +122,6 @@ export const SETTINGS_SECTIONS = [
     component: GoalsSection,
     settings: [
       { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
-      { id: 'driftThreshold', label: 'Drift sensitivity', keywords: 'off-goal threshold scope' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
       { id: 'stepSize', label: 'New step size', keywords: 'points progress eta small medium large' },
     ],
@@ -162,6 +161,7 @@ export const SETTINGS_SECTIONS = [
     component: GitSection,
     settings: [
       { id: 'worktreeRoot', label: 'Worktrees folder', keywords: 'worktree path directory' },
+      { id: 'workspaceMode', label: 'New threads work in', keywords: 'worktree project folder local checkout workspace' },
       { id: 'branchPrefix', label: 'Branch prefix', keywords: 'branch name' },
       { id: 'prDrafts', label: 'Open pull requests as drafts', keywords: 'pr github draft' },
       { id: 'diffStyle', label: 'Diffs', keywords: 'unified split side by side changes' },

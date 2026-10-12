@@ -86,17 +86,18 @@ export function HandoffDialog({ thread, stepId, onClose }: { thread: Thread; ste
 function useDiffStat(thread: Thread) {
   useWorktreePath(thread.id);
   const cwd = threadCwd(thread);
+  const base = thread.repo?.base;
   const [stat, setStat] = useState<DiffStat | null>(null);
   useEffect(() => {
     if (!cwd) return;
     let isCurrent = true;
-    host.git.diff(cwd, 'branch').then(
+    host.git.diff(cwd, 'branch', base).then(
       (d) => isCurrent && setStat({ files: d.files.length, added: d.files.reduce((n, f) => n + f.added, 0), removed: d.files.reduce((n, f) => n + f.removed, 0) }),
       () => undefined,
     );
     return () => {
       isCurrent = false;
     };
-  }, [cwd]);
+  }, [cwd, base]);
   return stat;
 }

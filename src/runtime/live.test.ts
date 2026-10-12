@@ -5,18 +5,21 @@ import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { applyAgentEvent } from './apply.ts';
 import { agentOptions, initialControls } from './controls.ts';
-import { agentCalls, CONTINUE_PROMPT } from './live.ts';
+import { agentCalls, CONTINUE_PROMPT, scheduledStart } from './live.ts';
+import { isUnstarted, type WorkspaceDraft } from '../git/workspace.ts';
+import { setWorktreePath } from '../git/worktrees.ts';
+import { threadCwd } from '../host/cwd.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const calls = (s: State, action: Action) => agentCalls(s, action, () => threadsReducer(s, action));
 const run = (s: State, action: Action) => threadsReducer(s, action);
 
 test('a live new thread starts its agent, follow-ups send, stop interrupts; demo threads never reach host.agent', () => {
-  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Ask first' } };
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Manual' } };
   let s = base();
   const [start] = calls(s, create);
   assert.equal(start.method, 'start');
-  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', worktree: `mochi/${start.threadId}`, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
+  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', workspace: { mode: 'worktree', branch: `mochi/${start.threadId}` }, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
 
   s = run(s, create);
   const id = start.threadId;
@@ -95,11 +98,46 @@ test("a project thread asks main for its worktree; once main reports it, restart
   let s = run(base(), create);
   const thread = s.threads.at(-1)!;
   assert.equal(start.method === 'start' && start.options.cwd, '/Users/me/dev/app');
-  assert.equal(start.method === 'start' && start.options.worktree, thread.repo!.branch);
+  assert.deepEqual(start.method === 'start' && start.options.workspace, { mode: 'worktree', branch: thread.repo!.branch });
 
   s = applyAgentEvent(s, { threadId: thread.id, type: 'worktree', path: '/Users/me/.harness/worktrees/app/t1' });
   assert.equal(s.threads.at(-1)!.live?.cwd, '/Users/me/.harness/worktrees/app/t1');
   const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/.harness/worktrees/app/t1');
-  assert.equal(restart.method === 'start' && restart.options.worktree, undefined, 'only the first start makes a worktree');
+  assert.equal(restart.method === 'start' && restart.options.workspace, undefined, 'only the first start makes a worktree');
+});
+
+test('workspace per mode: a new worktree from a chosen base, an existing branch checked out, a project folder that never gets a worktree', () => {
+  const project = '/Users/me/dev/app';
+  const startOf = (workspace: WorkspaceDraft) => {
+    const create: Action = { type: 'create', title: 'Fix the login bug!', provider: 'claude', project, isLive: true, workspace };
+    const [start] = calls(base(), create);
+    return { options: start.method === 'start' ? start.options : undefined, thread: run(base(), create).threads.at(-1)! };
+  };
+
+  const fresh = startOf({ mode: 'worktree', base: 'origin/release', branch: 'mochi/fix-the-login-bug' });
+  assert.deepEqual(fresh.options?.workspace, { mode: 'worktree', branch: 'mochi/fix-the-login-bug', base: 'origin/release' });
+  assert.equal(fresh.thread.repo?.base, 'origin/release', 'the Changes tab diffs against the chosen base');
+
+  const existing = startOf({ mode: 'worktree', base: 'main', branch: 'feat/x', isExisting: true });
+  assert.deepEqual(existing.options?.workspace, { mode: 'worktree', branch: 'feat/x', isExisting: true }, 'a checked-out branch has no base');
+
+  const folder = startOf({ mode: 'folder', branch: 'main' });
+  assert.deepEqual(folder.options?.workspace, { mode: 'folder', branch: 'main' });
+  assert.equal(folder.options?.cwd, project);
+  // Same thread id in each fresh state: a worktree path on record moves a worktree thread, never a project folder one.
+  setWorktreePath(folder.thread.id, '/Users/me/.harness/worktrees/app/t1');
+  assert.equal(threadCwd(fresh.thread, true), '/Users/me/.harness/worktrees/app/t1');
+  assert.equal(threadCwd(folder.thread, true), project);
+  setWorktreePath(folder.thread.id, null);
+
+  const switched = startOf({ mode: 'folder', branch: 'feat/y', isExisting: true });
+  assert.deepEqual(switched.options?.workspace, { mode: 'folder', branch: 'feat/y', isExisting: true });
+
+  const scheduled = run(base(), { type: 'create', title: 'nightly', provider: 'claude', project, isLive: true, workspace: { mode: 'folder', branch: 'main' }, schedule: { when: { kind: 'cron', cron: '0 2 * * *' }, missed: 'skip' } });
+  const thread = scheduled.threads.at(-1)!;
+  assert.equal(isUnstarted(thread), true);
+  assert.deepEqual(scheduledStart(thread)?.workspace, { mode: 'folder', branch: 'main' }, 'schedules run where the thread was set to');
+  const moved = run(scheduled, { type: 'workspace', threadId: thread.id, workspace: { mode: 'worktree', base: 'dev', branch: 'mochi/nightly' } });
+  assert.deepEqual(scheduledStart(moved.threads.at(-1)!)?.workspace, { mode: 'worktree', branch: 'mochi/nightly', base: 'dev' });
 });
