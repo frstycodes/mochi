@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Refresh, Trash3 } from 'reicon-react';
+import { ChevronDown, Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { toggleStar, useModels } from '../../ModelControls';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ModelMenu, toggleStar, useModels } from '../../ModelControls';
 import { EFFORTS } from '../../runtime/controls';
 import { effortName, optionFor, type ModelOption } from '../../runtime/models';
 import { useSpace } from '../../store';
@@ -33,38 +33,50 @@ export function HarnessesSection() {
 
 /** Across harnesses: the model chip's scroll dock shows starred models, and new threads start at this effort. */
 function ModelsGroup() {
-  const { starredModels, effort } = usePrefs();
-  const catalog = useModels(useSpace().id);
-  const models = HARNESS_IDS.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
+  const { effort } = usePrefs();
   return (
     <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer. The lists are this profile's accounts' own.">
-      {models.map((m) => (
-        <SettingsRow
-          key={`${m.harness}:${m.id}`}
-          id={`starred-${m.id}`}
-          label={
-            <span className="flex items-center gap-2">
-              <ProviderMark provider={m.harness} size={14} />
-              {m.name}
-            </span>
-          }
-          description={m.description}
-          control={
-            <Switch
-              id={settingControlId(`starred-${m.id}`)}
-              aria-label={`Star ${m.name}`}
-              checked={starredModels.includes(m.id)}
-              onCheckedChange={() => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
-            />
-          }
-        />
-      ))}
+      <StarredModelsRow />
       <SettingsRow
         id="effort"
         label="Default effort"
         control={<SettingsSelect id="effort" value={effort} options={EFFORTS.map((level) => ({ value: level, label: effortName(level) }))} onChange={(v) => setPrefs({ effort: v })} />}
       />
     </SettingsGroup>
+  );
+}
+
+/** The two-level model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
+function StarredModelsRow() {
+  const { starredModels } = usePrefs();
+  const catalog = useModels(useSpace().id);
+  const models = HARNESS_IDS.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
+  const starred = models.filter((m) => starredModels.includes(m.id));
+  return (
+    <SettingsRow
+      id="starredModelsPicker"
+      label="Starred models"
+      description={starred.map((m) => m.name).join(', ') || 'None starred yet'}
+      control={
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button id={settingControlId('starredModelsPicker')} variant="outline" size="sm">
+              Choose models
+              <ChevronDown data-icon="inline-end" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 p-0">
+            <ModelMenu
+              models={models}
+              pending={HARNESS_IDS.filter((h) => !catalog[h])}
+              harnesses={HARNESS_IDS}
+              isChecked={(m) => starredModels.includes(m.id)}
+              onPick={(m) => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
+            />
+          </PopoverContent>
+        </Popover>
+      }
+    />
   );
 }
 

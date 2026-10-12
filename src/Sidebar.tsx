@@ -38,6 +38,7 @@ import { useSettle } from './useSettle';
 import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
+import { haptic } from './haptic';
 import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
@@ -51,7 +52,7 @@ export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearc
   const profiles = useProfiles();
   const index = profiles.findIndex((s) => s.id === state.spaceId);
   const pager = useRef<HTMLDivElement>(null);
-  useSnapPager(pager, { axis: 'x', index, onSettle: (page) => dispatch({ type: 'space', id: profiles[page].id }) });
+  useSnapPager(pager, { axis: 'x', index, onSettle: (page) => dispatch({ type: 'space', id: profiles[page].id }), onCross: haptic });
 
   return (
     <Sidebar collapsible={collapsible}>

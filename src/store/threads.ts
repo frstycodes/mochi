@@ -45,8 +45,9 @@ export type ThreadsAction =
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
   | { type: 'resume'; threadId: string; onApiKey?: boolean }
-  /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). */
-  | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
+  /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers. */
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
+  | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
@@ -129,6 +130,8 @@ function reduce(state: State, action: Action): State {
       };
     case 'drift-new-thread':
       return driftNewThread(state, action);
+    case 'drift-verdict':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => tagSent(t, action, state.now)) };
     case 'drift-settings':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { threshold: action.threshold, isMuted: action.isMuted } })) };
     case 'edit-goal':
@@ -397,15 +400,27 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
       const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
-      if (action.drift === 'off-goal') return log(said, { at: now, who: 'harness', kind: 'event', text: `Drift guard: sent off-goal, not counted toward the goal (${action.reason})` });
-      if (action.drift === 'on-goal') return said;
-      const n = t.revisions.length + 1;
-      const title = stepTitleFrom(action.text);
-      const added: Step = { id: `${t.id}-d${n}`, title, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: 'you', revision: n };
-      const withStep = { ...said, steps: [...said.steps, added], revisions: [...said.revisions, { n, at: now, label: 'Scope from your message', by: 'you' as const, diff: [`+ ${title}`] }] };
-      return log(withStep, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: +1 step "${title}" (${action.reason})` });
+      return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
     }),
   };
+}
+
+/** A late verdict for a message sent while the classifier was out: the newest untagged message with that text. */
+function tagSent(t: Thread, action: Extract<Action, { type: 'drift-verdict' }>, now: number): Thread {
+  const i = t.activity.findLastIndex((e) => e.who === 'you' && e.kind === 'message' && !e.drift && e.text === action.text);
+  if (i < 0) return t;
+  const activity = t.activity.map((e, j) => (j === i ? { ...e, drift: action.drift } : e));
+  return applyDrift({ ...t, activity }, action.text, action.drift, action.reason, now);
+}
+
+function applyDrift(t: Thread, text: string, drift: DriftKind, reason: string, now: number): Thread {
+  if (drift === 'off-goal') return log(t, { at: now, who: 'harness', kind: 'event', text: `Drift guard: sent off-goal, not counted toward the goal (${reason})` });
+  if (drift === 'on-goal') return t;
+  const n = t.revisions.length + 1;
+  const title = stepTitleFrom(text);
+  const added: Step = { id: `${t.id}-d${n}`, title, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: 'you', revision: n };
+  const withStep = { ...t, steps: [...t.steps, added], revisions: [...t.revisions, { n, at: now, label: 'Scope from your message', by: 'you' as const, diff: [`+ ${title}`] }] };
+  return log(withStep, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: +1 step "${title}" (${reason})` });
 }
 
 /** Off-goal prompt to a new thread. A finished goal is settled first: its review stays queued while a PR is open, otherwise it resolves. */

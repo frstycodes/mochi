@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
+import { showsDemoData } from '../demoData.ts';
 import type { AgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
@@ -48,6 +49,8 @@ function reducer(state: State, action: Action): State {
 
 setDriftClassifier((prompt, thread) => host.agent.classify(prompt, thread));
 
+const TICK_MS = showsDemoData() ? 1000 : 60_000;
+
 export const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
 
 export function HarnessProvider({ children }: { children: ReactNode }) {
@@ -72,10 +75,11 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     // After the action: a new thread only exists once it has applied.
     for (const call of calls) if (call.method === 'start') apply({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
   }, []);
-  // The tick is the demo adapter's clock; real agents report through host.agent whether or not the demo is paused.
+  // The tick is the app's clock, one per minute of `now`: the demo runs it 60× fast, real threads at wall-clock speed.
+  // Real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {
     if (state.paused) return;
-    const id = setInterval(() => apply({ type: 'tick' }), 1000);
+    const id = setInterval(() => apply({ type: 'tick' }), TICK_MS);
     return () => clearInterval(id);
   }, [state.paused]);
   useEffect(
