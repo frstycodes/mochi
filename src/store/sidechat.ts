@@ -1,4 +1,5 @@
 import type { Action, State } from './index.tsx';
+import type { SideChatModel } from '../host/types/settings.ts';
 import { projectRef } from '../projects.ts';
 import { panesReducer } from './panes.ts';
 import { threadsReducer } from './threads.ts';
@@ -25,8 +26,8 @@ export interface SideChat {
   messages: SideMessage[];
   /** A selection waiting in the composer for its question. */
   draft?: Quote;
-  /** Catalog id of the Claude model answering; unset follows Settings › Defaults. */
-  model?: string;
+  /** The model answering, either provider; unset follows Settings › Defaults. */
+  model?: SideChatModel;
   /** A question `/side` sent from the thread's composer, asked as soon as the tab mounts. */
   pending?: string;
 }
@@ -38,7 +39,7 @@ export interface SideChatState {
 
 export type SideChatAction =
   | { type: 'sidechat-open'; threadId: string; quote?: Quote; ask?: string }
-  | { type: 'sidechat-model'; threadId: string; tabId: string; model: string }
+  | { type: 'sidechat-model'; threadId: string; tabId: string; model: SideChatModel }
   | { type: 'sidechat-draft'; threadId: string; tabId: string; quote?: Quote }
   | { type: 'sidechat-ask'; threadId: string; tabId: string; id: string; text: string }
   | { type: 'sidechat-stream'; threadId: string; tabId: string; id: string; text: string; isDone?: boolean }

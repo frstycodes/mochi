@@ -2,12 +2,13 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import type { AgentAskContext, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentRunOptions } from '../../src/host/types/agent.ts';
+import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentRunOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
+import { ask as askAgent } from '../agents/ask.ts';
 import { addWorktree } from './git.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
 
@@ -37,6 +38,7 @@ const runtime = notImplemented('agent runtime');
 const broadcast = (event: AgentEvent) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('agent:onEvent', event));
 const codex = new CodexAdapter(broadcast);
 app.on('will-quit', () => codex.dispose());
+const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 
 export const agent = {
   async start(_sender, threadId, options) {
@@ -97,7 +99,9 @@ export const agent = {
     if (hasClaudeSession(threadId as string)) return rewindClaude(threadId as string, text as string);
   },
   async ask(sender, context, messages, model) {
-    string(model, 'model', MAX_MODEL_CHARS);
+    const m = record(model, 'model');
+    if (!PROVIDERS.includes(m.provider as string)) throw new TypeError('model.provider must be claude or codex');
+    if (m.model !== undefined) string(m.model, 'model.model', MAX_MODEL_CHARS);
     const c = record(context, 'context');
     string(c.spaceId, 'context.spaceId', 256);
     if (JSON.stringify(c).length > MAX_CONTEXT_CHARS) throw new TypeError(`context must be under ${MAX_CONTEXT_CHARS} chars`);
@@ -113,7 +117,7 @@ export const agent = {
     sender.once('destroyed', () => abort.abort());
     void (async () => {
       try {
-        for await (const text of askClaude(c.spaceId as string, c as unknown as AgentAskContext, messages as AgentAskMessage[], model as string, abort)) send({ id, type: 'text', text });
+        for await (const text of askAgent(ASKERS, c as unknown as AgentAskContext, messages as AgentAskMessage[], m as unknown as AgentAskModel, abort)) send({ id, type: 'text', text });
         send({ id, type: 'done', text: '' });
       } catch (error) {
         send({ id, type: 'error', text: error instanceof Error ? error.message : String(error) });

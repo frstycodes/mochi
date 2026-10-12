@@ -83,8 +83,10 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
     patch.prDrafts = p.prDrafts;
   }
   if (p.sideChatModel !== undefined) {
-    patch.sideChatModel = string(p.sideChatModel, 'sideChatModel', MAX_MODEL_CHARS).trim();
-    if (!patch.sideChatModel) throw new TypeError('Pick a side chat model');
+    const side = record(p.sideChatModel, 'sideChatModel');
+    const model = string(side.model, 'sideChatModel.model', MAX_MODEL_CHARS).trim();
+    if (!model) throw new TypeError('Pick a side chat model');
+    patch.sideChatModel = { provider: validProvider(side.provider as string), model };
   }
   if (p.harnesses === undefined) return patch;
   patch.harnesses = {};

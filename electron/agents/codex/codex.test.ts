@@ -132,15 +132,33 @@ test('one app-server per account: threads route to their profile account and nev
   }
 });
 
+test('side chat asks on the profile account, streams once per delta, and says when that account is signed out', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = path.join(home, 'codex');
+  writeFileSync(fake, FAKE_CODEX, { mode: 0o755 });
+  const events: AgentEvent[] = [];
+  const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, out: { id: 'out', configDir: path.join(home, 'out') } };
+  const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
+  try {
+    const chunks = await collect(codex.ask('work', 'Thread context', 'User: why?', undefined, new AbortController()));
+    assert.equal(chunks.join(''), 'It reads User: why?', 'item/completed repeats a streamed message; it is not added twice');
+    assert.deepEqual(events, [], 'an ask never emits thread events');
+    await assert.rejects(collect(codex.ask('out', 'x', 'y', undefined, new AbortController())), /Codex is not logged in for this profile\. Run `CODEX_HOME=.*out codex login`/);
+  } finally {
+    codex.dispose();
+  }
+});
+
 /** A stand-in `codex` speaking just enough app-server: thread ids carry its pid and CODEX_HOME, each turn echoes its thread. */
 const FAKE_CODEX = `#!/usr/bin/env node
 let n = 0, buf = '';
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
 process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
   if (m.method === 'initialize') send({ id: m.id, result: {} });
-  if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
-  if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: JSON.stringify({ pid: process.pid, home: process.env.CODEX_HOME ?? null, n: ++n }) } } });
-  if (m.method === 'turn/start') { send({ id: m.id, result: { turn: { id: 'u' + n } } }); send({ method: 'item/completed', params: { threadId: m.params.threadId, item: { type: 'agentMessage', id: 'm' + Math.random(), text: JSON.stringify({ thread: m.params.threadId }) } } }); }
+  if (m.method === 'account/read') send({ id: m.id, result: process.env.CODEX_HOME?.endsWith('out') ? { account: null, requiresOpenaiAuth: true } : { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
+  if (m.method === 'thread/start') { send({ id: m.id, result: { thread: { id: JSON.stringify({ pid: process.pid, home: process.env.CODEX_HOME ?? null, n: ++n, ephemeral: !!m.params.ephemeral }) } } }); }
+  if (m.method === 'turn/start' && JSON.parse(m.params.threadId).ephemeral) { const threadId = m.params.threadId; send({ id: m.id, result: { turn: { id: 'u' + n } } }); for (const delta of ['It ', 'reads ', m.params.input.at(-1).text]) send({ method: 'item/agentMessage/delta', params: { threadId, turnId: 'u' + n, itemId: 'a', delta } }); send({ method: 'item/completed', params: { threadId, item: { type: 'agentMessage', id: 'a', text: 'dup' } } }); send({ method: 'turn/completed', params: { threadId, turn: { id: 'u' + n, status: 'completed' } } }); }
+  else if (m.method === 'turn/start') { send({ id: m.id, result: { turn: { id: 'u' + n } } }); send({ method: 'item/completed', params: { threadId: m.params.threadId, item: { type: 'agentMessage', id: 'm' + Math.random(), text: JSON.stringify({ thread: m.params.threadId }) } } }); }
 } });
 `;
 
@@ -217,3 +235,10 @@ test('parseMessage tells notifications, requests and responses apart', () => {
   assert.equal(parseMessage('{"id":1.5,"result":1}'), 'no method and no id');
   assert.equal(parseMessage('{"id":1}'), 'response without result or error');
 });
+
+// Array.fromAsync is past the TS lib target.
+async function collect<T>(items: AsyncIterable<T>) {
+  const out: T[] = [];
+  for await (const item of items) out.push(item);
+  return out;
+}

@@ -10,13 +10,19 @@ import { EFFORTS, MODELS, settingsModel, type Effort, type ModelOption } from '.
 import { setPrefs, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
+import type { AgentInstall } from './host/types/settings';
+import { linkedAccountId } from './settings/accounts';
+import { HARNESS_IDS } from './settings/harnesses';
 import { useSpace } from './store';
 import { ProviderMark } from './ui';
 
 const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Provider, string>;
 
-/** `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. */
-export function ModelPicker({ id, value, provider, isLocked, onChange }: { id?: string; value: string; provider: Provider; isLocked?: boolean; onChange: (model: ModelOption) => void }) {
+/**
+ * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. `unavailable` greys out
+ * a harness's models with the reason (not installed, signed out) and keeps them off the dock.
+ */
+export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, onChange }: { id?: string; value: string; provider: Provider; isLocked?: boolean; unavailable?: Unavailable; onChange: (model: ModelOption) => void }) {
   const space = useSpace();
   const defaults = useDefaultModels();
   const favorites = usePrefs().starredModels;
@@ -26,7 +32,7 @@ export function ModelPicker({ id, value, provider, isLocked, onChange }: { id?: 
   const listed = [...MODELS, ...fromSettings].filter((m) => harnesses.includes(m.harness));
   const model = listed.find((m) => m.id === value) ?? settingsModel(value, provider);
   const models = listed.some((m) => m.id === model.id) ? listed : [...listed, model];
-  const docked = models.filter((m) => favorites.includes(m.id) || m.id === model.id || fromSettings.includes(m));
+  const docked = models.filter((m) => m.id === model.id || (!unavailable[m.harness] && (favorites.includes(m.id) || fromSettings.includes(m))));
   const select = (id: string) => onChange(models.find((m) => m.id === id)!);
   const toggleFavorite = (id: string) => setPrefs({ starredModels: toggleStar(favorites, id) });
 
@@ -58,7 +64,7 @@ export function ModelPicker({ id, value, provider, isLocked, onChange }: { id?: 
                   <span className="flex items-center gap-1.5">
                     <ProviderMark provider={h} size={12} />
                     {HARNESSES[h]}
-                    <span className="ml-auto font-normal text-subtle-foreground">{space.plans[h]}</span>
+                    <span className="ml-auto font-normal text-subtle-foreground">{unavailable[h] ?? space.plans[h]}</span>
                   </span>
                 }
               >
@@ -66,6 +72,7 @@ export function ModelPicker({ id, value, provider, isLocked, onChange }: { id?: 
                   <CommandItem
                     key={m.id}
                     value={`${HARNESSES[h]} ${m.name}`}
+                    disabled={!!unavailable[h]}
                     onSelect={() => {
                       select(m.id);
                       setOpen(false);
@@ -89,6 +96,35 @@ export function ModelPicker({ id, value, provider, isLocked, onChange }: { id?: 
       </PopoverContent>
     </Popover>
   );
+}
+
+/** Per harness, why its models can't be picked right now. */
+export type Unavailable = Partial<Record<Provider, string>>;
+
+/** Harnesses the profile can't run: not installed, or its linked account signed out. Empty in the web build, which answers with a mock. */
+export function useUnavailableHarnesses(spaceId: string) {
+  const [unavailable, setUnavailable] = useState<Unavailable>({});
+  useEffect(() => {
+    if (!host.isDesktop) return;
+    let isCurrent = true;
+    void host.settings.accounts().then(({ links }) =>
+      HARNESS_IDS.forEach((h) =>
+        host.settings.detect(linkedAccountId(links, spaceId, h)).then(
+          (install) => isCurrent && setUnavailable((prev) => ({ ...prev, [h]: unavailableReason(install) })),
+          () => {},
+        ),
+      ),
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [spaceId]);
+  return unavailable;
+}
+
+function unavailableReason(install: AgentInstall) {
+  if (!install.path) return 'Not installed';
+  if (install.login.state === 'logged-out') return 'Signed out';
 }
 
 export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);

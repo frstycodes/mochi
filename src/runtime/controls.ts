@@ -1,3 +1,5 @@
+import type { AgentAskModel } from '../host/types/agent.ts';
+import type { SideChatModel } from '../host/types/settings.ts';
 import type { Provider, Thread } from '../model.ts';
 import { getPrefs } from '../settings/prefs.ts';
 
@@ -45,8 +47,16 @@ export function claudeModelId(providerModel: string) {
   return MODELS.find((m) => m.harness === 'claude' && m.providerModel === providerModel)?.id ?? providerModel;
 }
 
-export function providerModelOf(id: string) {
-  return MODELS.find((m) => m.id === id)?.providerModel ?? id;
+/** A side chat choice as the model chip names it; a Claude model saved by its own id reads back as its catalog entry. */
+export function sideChatChoice(choice: SideChatModel): SideChatModel {
+  return choice.provider === 'claude' ? { ...choice, model: claudeModelId(choice.model) } : choice;
+}
+
+/** What `host.agent.ask` takes for a chip choice: the catalog entry's harness and real id, else the id as the harness's own. */
+export function askModelOf(choice: SideChatModel): AgentAskModel {
+  const listed = MODELS.find((m) => m.id === choice.model);
+  if (!listed) return choice;
+  return listed.providerModel ? { provider: listed.harness, model: listed.providerModel } : { provider: listed.harness };
 }
 
 export const DEFAULT_CONTROLS = {

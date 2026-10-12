@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
 import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 
 interface Live {
@@ -33,6 +33,16 @@ const POLICIES: Record<string, { approvalPolicy: string; sandbox: string }> = {
 };
 /** Codex's plan tool is off unless configured; Harness maps its plans onto goal steps, so its threads always get it. Verified against 0.155.1: without it `turn/plan/updated` never fires. */
 const PLAN_TOOL = { 'tools.update_plan.enabled': true };
+/**
+ * Side chat's thread: nothing saved, nothing writable, nothing to approve, and the tool features the installed codex lists
+ * (`codex features list`, 0.155.1) switched off, so it only answers from the context it is given.
+ */
+const ASK_THREAD = {
+  ephemeral: true,
+  sandbox: 'read-only',
+  approvalPolicy: 'never',
+  config: Object.fromEntries(['shell_tool', 'unified_exec', 'apps', 'plugins', 'multi_agent', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'goals'].map((f) => [`features.${f}`, false])),
+};
 const NOT_FOUND = 'Codex is not installed or not on your PATH. Install it (`npm i -g @openai/codex`) or set its path in Settings.';
 const THREAD_TIMEOUT_MS = 120_000;
 const CRASH_WINDOW_MS = 60_000;
@@ -103,6 +113,33 @@ export class CodexAdapter {
     if (rpc && live.gen === live.server.gen) await rpc.request('thread/unsubscribe', { threadId: live.codexId }).catch(() => {});
   }
 
+  /**
+   * Side chat on the profile's Codex account: an ephemeral read-only thread on the account's app-server, its answer
+   * streamed as text deltas. Never touches a Mochi thread. Throws a message the side chat can show.
+   */
+  async *ask(spaceId: string, instructions: string, prompt: string, model: string | undefined, abort: AbortController): AsyncGenerator<string> {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    const result = await rpc.request('thread/start', { ...ASK_THREAD, cwd: os.tmpdir(), model: model ?? null, developerInstructions: instructions }, THREAD_TIMEOUT_MS);
+    const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
+    if (typeof codexId !== 'string') throw new Error('codex thread/start returned no thread id');
+    const answer = new Inbox();
+    server.asks.set(codexId, answer);
+    let turnId: string | undefined;
+    const stop = () => turnId && void rpc.request('turn/interrupt', { threadId: codexId, turnId }).catch(() => {});
+    abort.signal.addEventListener('abort', stop, { once: true });
+    try {
+      const turn = await rpc.request('turn/start', { threadId: codexId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
+      turnId = (turn as { turn?: { id?: unknown } })?.turn?.id as string | undefined;
+      yield* answer.drain(abort.signal);
+    } finally {
+      abort.signal.removeEventListener('abort', stop);
+      server.asks.delete(codexId);
+      void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
+    }
+  }
+
   dispose() {
     for (const server of this.servers.values()) server.dispose();
   }
@@ -169,6 +206,7 @@ export class CodexAdapter {
 
   /** Live turns on that account fail and its open cards go away; the next call restarts its server after a backoff. */
   private exited(server: CodexServer, message: string) {
+    for (const ask of server.asks.values()) ask.fail(message);
     for (const [requestId, p] of this.requests) {
       if (p.server !== server) continue;
       this.requests.delete(requestId);
@@ -183,6 +221,8 @@ export class CodexAdapter {
 
   private notification(server: CodexServer, method: string, params: unknown) {
     if (method === 'account/rateLimits/updated') return updateLimits(server.limits, params);
+    const ask = server.asks.get(codexThreadId(params) ?? '');
+    if (ask) return ask.notify(method, params);
     const live = server.byCodex.get(codexThreadId(params) ?? '');
     if (!live) return;
     const turnId = (params as { turn?: { id?: unknown } }).turn?.id;
@@ -227,6 +267,7 @@ class CodexServer {
   rpc?: RpcClient;
   gen = 0;
   byCodex = new Map<string, Live>();
+  asks = new Map<string, Inbox>();
   limits: AccountLimits = {};
   private hooks: ServerHooks;
   private child?: ChildProcessWithoutNullStreams;
@@ -295,6 +336,44 @@ class CodexServer {
     this.ready = undefined;
     this.gen++;
     this.hooks.exited(message);
+  }
+}
+
+/** One side chat answer: its thread's notifications in, text chunks out, ending at `turn/completed`. */
+class Inbox {
+  private chunks: string[] = [];
+  private streamed = new Set<string>();
+  private end?: { error?: string };
+  private wake = () => {};
+
+  notify(method: string, params: unknown) {
+    const p = params as { itemId?: unknown; delta?: unknown; item?: { type?: unknown; id?: unknown; text?: unknown }; turn?: { status?: unknown; error?: { message?: unknown } } };
+    if (method === 'item/agentMessage/delta' && typeof p.delta === 'string') {
+      this.streamed.add(String(p.itemId));
+      this.chunks.push(p.delta);
+    }
+    // A message that never streamed arrives whole.
+    if (method === 'item/completed' && p.item?.type === 'agentMessage' && typeof p.item.text === 'string' && !this.streamed.has(String(p.item.id))) this.chunks.push(p.item.text);
+    if (method === 'turn/completed') {
+      const error = p.turn?.error?.message;
+      this.end = p.turn?.status === 'failed' ? { error: typeof error === 'string' ? apiMessage(error) : 'Codex stopped without an answer' } : {};
+    }
+    this.wake();
+  }
+
+  fail(error: string) {
+    this.end = { error };
+    this.wake();
+  }
+
+  async *drain(signal: AbortSignal) {
+    const aborted = new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    while (!signal.aborted) {
+      if (this.chunks.length) yield this.chunks.splice(0).join('');
+      else if (this.end?.error) throw new Error(this.end.error);
+      else if (this.end) return;
+      else await Promise.race([new Promise<void>((resolve) => (this.wake = resolve)), aborted]);
+    }
   }
 }
 

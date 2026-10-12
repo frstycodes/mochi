@@ -4,7 +4,7 @@ import { access, constants } from 'node:fs/promises';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
-import { DEFAULT_SETTINGS, mergeSettings, type Account, type AccountId, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ApiKeyState } from '../../src/host/types/settings.ts';
+import { DEFAULT_SETTINGS, mergeSettings, migrateSettings, type Account, type AccountId, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ApiKeyState } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/settings/accounts.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
@@ -49,10 +49,6 @@ export function terminalShell(): string {
 
 export function prDrafts(): boolean {
   return load().prDrafts;
-}
-
-export function sideChatModel(): string {
-  return load().sideChatModel;
 }
 
 function expandHome(path: string) {
@@ -202,7 +198,7 @@ function load(): Stored {
   if (stored) return stored;
   let saved: Partial<Stored> = {};
   try {
-    saved = JSON.parse(readFileSync(file(), 'utf8'));
+    saved = migrateSettings(JSON.parse(readFileSync(file(), 'utf8'))) as Partial<Stored>;
   } catch {}
   // Merged per harness, so a harness added to the registry later gets its defaults; default accounts always exist.
   const settings = mergeSettings(DEFAULT_SETTINGS, saved);
