@@ -17,7 +17,6 @@ import {
   PromptInputFooter,
   PromptInputHeader,
   PromptInputSubmit,
-  PromptInputTextarea,
   PromptInputTools,
   usePromptInputAttachments,
   type PromptInputMessage,
@@ -33,6 +32,8 @@ import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
 import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import { getPrefs, type Prefs } from './settings/prefs';
+import type { SlashItem } from './chat/slash';
+import { TokenTextarea } from './chat/SlashToken';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
 // Each new thread page takes a fresh id, so nothing mounted later animates from a composer that already docked.
@@ -71,12 +72,14 @@ export function ComposerCard({ className, children, ...props }: ComponentProps<'
   );
 }
 
-type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSubmit'> & {
+type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | 'onSubmit'> & {
   controls: ThreadControls;
   provider: Provider;
   /** Keeps the model list to `provider`. */
   isLocked?: boolean;
   onControlsChange: (controls: ThreadControls, model?: ModelOption) => void;
+  /** `/` commands and skills a token in the text can resolve to. */
+  slashItems: SlashItem[];
   /** Return `false` to hold the message: the text stays in the input. */
   onSend: (message: PromptInputMessage) => void | boolean;
   /** Set while the agent works: the send button becomes Stop. */
@@ -84,13 +87,13 @@ type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSu
   submitLabel?: string;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
   const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
   return (
     <PromptInput multiple globalDrop onSubmit={(message) => hold(onSend(message))}>
       <ComposerAttachments />
       <PromptInputBody>
-        <PromptInputTextarea className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
+        <TokenTextarea items={slashItems} className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>

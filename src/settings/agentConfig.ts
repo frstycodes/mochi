@@ -36,6 +36,8 @@ export interface McpEntry {
 export interface SkillEntry {
   name: string;
   description: string;
+  /** `<file> [--fix]` from the front matter's `argument-hint`. */
+  argumentHint?: string;
   /** The skill's folder. */
   dir: string;
   enabled: boolean;
@@ -325,11 +327,12 @@ export function serverSummary(def: McpServerDef): string {
   return def.type === 'stdio' ? [def.command, ...(def.args ?? [])].join(' ') : (def.url ?? '');
 }
 
-/** `name` and `description` from a SKILL.md's front matter; the folder name when there is none. */
-export function skillMeta(skillMd: string, folderName: string): { name: string; description: string } {
+/** `name`, `description` and `argument-hint` from a SKILL.md's front matter; the folder name when there is none. */
+export function skillMeta(skillMd: string, folderName: string): { name: string; description: string; argumentHint?: string } {
   const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(skillMd)?.[1] ?? '';
   const field = (key: string) => new RegExp(`^${key}:\\s*(.*)$`, 'm').exec(front)?.[1].trim().replace(/^(['"])(.*)\1$/, '$2') ?? '';
-  return { name: field('name') || folderName, description: field('description') };
+  const argumentHint = field('argument-hint');
+  return { name: field('name') || folderName, description: field('description'), ...(argumentHint && { argumentHint }) };
 }
 
 // {HELPERS}

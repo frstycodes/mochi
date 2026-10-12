@@ -182,7 +182,9 @@ export function backgroundPrompt(start: BackgroundStart) {
 /** The notes a thread's agent gets ahead of the next message, then cleared; a note the message already carries ("Send to thread") isn't repeated. */
 export function withNotes(thread: Thread, text: string) {
   const notes = (thread.live?.notes ?? []).filter((n) => !text.includes(n));
-  return notes.length ? `${notes.join('\n\n')}\n\n${text}` : text;
+  if (!notes.length) return text;
+  // A `/command` only runs from the very start of the message.
+  return text.startsWith('/') ? `${text}\n\n${notes.join('\n\n')}` : `${notes.join('\n\n')}\n\n${text}`;
 }
 
 /** How a finished agent's report reads to the parent's agent. */

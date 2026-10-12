@@ -51,6 +51,7 @@ const DEMO_CONFIG: ProfileConfig = {
     ],
     skills: [
       { name: 'run', description: 'Launch and drive the app to see a change working', dir: '~/.claude/skills/run', enabled: true },
+      { name: 'fix-lint', description: 'Fix lint errors in a file and explain each change', argumentHint: '<file> [--fix]', dir: '~/.claude/skills/fix-lint', enabled: true },
       { name: 'ui', description: 'Learned taste plus craft defaults for any UI work', dir: '~/.claude/skills/ui', enabled: true },
       { name: 'deploy-preview', description: 'Ship the branch to a preview URL', dir: '~/.claude/skills/deploy-preview', enabled: false },
     ],

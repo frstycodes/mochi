@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
-import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
 import { MODEL_PRICES } from '../../../src/usage/model.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
@@ -116,8 +116,10 @@ export function infoFromLists(mcp: unknown, skills: unknown, plugins: unknown): 
       const status = CONNECTION_STATUS[o.runtimeStatus as keyof typeof CONNECTION_STATUS] ?? (o.authStatus === 'notLoggedIn' ? 'needs-auth' : 'pending');
       return [{ name: o.name, status, toolCount: Object.keys(obj(o.tools) ?? {}).length }];
     });
-  const entries = obj(skills)?.data;
-  if (Array.isArray(entries)) info.skills = [...new Set(entries.flatMap((e) => (Array.isArray(obj(e)?.skills) ? (obj(e)!.skills as unknown[]) : [])).flatMap((x) => (obj(x)?.enabled !== false && typeof obj(x)?.name === 'string' ? [obj(x)!.name as string] : [])))];
+  if (Array.isArray(obj(skills)?.data)) {
+    info.commands = commandsFromSkills(skills);
+    info.skills = info.commands.map((c) => c.name);
+  }
   const marketplaces = obj(plugins)?.marketplaces;
   if (Array.isArray(marketplaces))
     info.plugins = marketplaces
@@ -129,6 +131,31 @@ export function infoFromLists(mcp: unknown, skills: unknown, plugins: unknown): 
         return [{ name: o.name, ...(typeof version === 'string' && { version }) }];
       });
   return info;
+}
+
+/** The enabled skills in a `skills/list` reply, once each. Codex skills say nothing about their arguments. */
+export function commandsFromSkills(reply: unknown): AgentCommand[] {
+  const entries = obj(reply)?.data;
+  if (!Array.isArray(entries)) return [];
+  const byName = new Map<string, AgentCommand>();
+  for (const x of entries.flatMap((e) => (Array.isArray(obj(e)?.skills) ? (obj(e)!.skills as unknown[]) : []))) {
+    const o = obj(x);
+    if (!o || o.enabled === false || typeof o.name !== 'string' || byName.has(o.name)) continue;
+    const short = obj(o.interface)?.shortDescription ?? o.shortDescription;
+    const description = typeof short === 'string' ? short : typeof o.description === 'string' ? o.description : '';
+    byName.set(o.name, { name: o.name, description, ...(typeof o.path === 'string' && { path: o.path }) });
+  }
+  return [...byName.values()];
+}
+
+/**
+ * The `skill` input item that makes Codex load the skill a message opens with (`/name args`): app-server takes no slash
+ * commands in text, its TUI attaches the skill the same way. Null for a message that doesn't name one.
+ */
+export function skillInput(text: string, skills: AgentCommand[]) {
+  const name = /^\/(\S+)/.exec(text)?.[1];
+  const skill = name && skills.find((s) => s.name === name && s.path);
+  return skill ? { type: 'skill' as const, name: skill.name, path: skill.path! } : null;
 }
 
 /** Server requests that become queue cards. Anything else gets a JSON-RPC error reply from the caller. */

@@ -4,7 +4,8 @@ import { Folder, BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { getPrefs, setPrefs } from './settings/prefs';
-import { useHarness, useSpaceThreads } from './store';
+import { useHarness, useSpace, useSpaceThreads } from './store';
+import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -58,6 +59,9 @@ function NewThread() {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
+  // /side needs a thread to ask about.
+  const slashItems = useSlashItems(provider, useSpace().id).filter((i) => i.source !== 'mochi');
+  const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
@@ -116,17 +120,22 @@ function NewThread() {
 
       {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. */}
       <motion.div layoutId={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
-        <ComposerCard>
-          <ComposerInput
-            autoFocus
-            controls={controls}
-            provider={provider}
-            onControlsChange={setControls}
-            onSend={start}
-            submitLabel={submitLabel(run, !!linked)}
-            placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
-          />
-        </ComposerCard>
+        <div className="relative">
+          <SlashMenu menu={slash} />
+          <ComposerCard>
+            <ComposerInput
+              autoFocus
+              controls={controls}
+              provider={provider}
+              onControlsChange={setControls}
+              slashItems={slashItems}
+              {...slash.textareaProps}
+              onSend={start}
+              submitLabel={submitLabel(run, !!linked)}
+              placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
+            />
+          </ComposerCard>
+        </div>
         <ComposerMeta>
           <ProjectPicker value={project} onChange={changeProject} />
           {!!project && <WorkspaceControls workspace={workspace} />}

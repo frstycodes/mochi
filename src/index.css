@@ -75,6 +75,7 @@
   --destructive: oklch(0.56 0.2 25);
   --success: oklch(0.5 0.14 150);
   --warning: oklch(0.48 0.13 65);
+  --info: oklch(0.5 0.15 255);
   --border: oklch(0.25 0.02 285 / 0.1);
   --input: oklch(0.25 0.02 285 / 0.15);
   --ring: oklch(0.45 0.012 285);
@@ -125,6 +126,7 @@
     --destructive: oklch(0.68 0.18 25);
     --success: oklch(0.74 0.16 150);
     --warning: oklch(0.82 0.14 80);
+    --info: oklch(0.76 0.12 250);
     --border: oklch(0.95 0.01 285 / 0.08);
     --input: oklch(0.95 0.01 285 / 0.12);
     --ring: oklch(0.75 0.01 285);
@@ -165,6 +167,7 @@
   --destructive: oklch(0.68 0.18 25);
   --success: oklch(0.74 0.16 150);
   --warning: oklch(0.82 0.14 80);
+  --info: oklch(0.76 0.12 250);
   --border: oklch(0.95 0.01 285 / 0.08);
   --input: oklch(0.95 0.01 285 / 0.12);
   --ring: oklch(0.75 0.01 285);
@@ -210,6 +213,7 @@
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

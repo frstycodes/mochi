@@ -6,7 +6,7 @@ import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/ho
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
-import { approvalEvent, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, withPlanTools } from './map.ts';
+import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -168,7 +168,10 @@ async function launch(session: Session) {
       },
     });
     for await (const message of session.query) {
-      if (message.type === 'system' && message.subtype === 'init') session.sessionId = message.session_id;
+      if (message.type === 'system' && message.subtype === 'init') {
+        session.sessionId = message.session_id;
+        void session.query.supportedCommands().then((list) => emit({ threadId, type: 'info', info: { commands: commandsFrom(list) } }), () => {});
+      }
       // Auto mode depends on the plan, the model and fast mode; where Claude Code can't run it, edits fall back to acceptEdits rather than asking every time.
       if (message.type === 'system' && message.subtype === 'init' && mode === 'auto' && message.permissionMode !== 'auto') void session.query.setPermissionMode('acceptEdits').catch(() => {});
       session.mapper.map(message).forEach(emit);

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, claudeModels, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
+import { approvalEvent, claudeModels, commandsFrom, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
 import { FIXTURE } from './fixture.ts';
 
 const CWD = '/repo';
@@ -72,7 +72,7 @@ test('init lists tools, MCP servers with their tool counts, skills, plugins and 
     },
   ]);
   const changed = { type: 'system', subtype: 'commands_changed', commands: [{ name: 'review', description: '', argumentHint: '' }] } as unknown as SDKMessage;
-  assert.deepEqual(map(changed), [{ threadId: 't1', type: 'info', info: { slashCommands: ['review'] } }]);
+  assert.deepEqual(map(changed), [{ threadId: 't1', type: 'info', info: { slashCommands: ['review'], commands: [{ name: 'review', description: '' }] } }]);
 });
 
 test('usage after a second result is the difference from the first, since results carry running totals', () => {
@@ -223,4 +223,18 @@ test('a foreground Agent call ends with its answer from the tool result; a faile
   const failed = map({ ...base, type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a2', content: 'Agent type not found', is_error: true }] } } as unknown as SDKMessage);
   assert.deepEqual(failed, [{ threadId: 't1', type: 'subagent', id: 'a2', phase: 'end', status: 'failed', error: 'Agent type not found' }]);
   assert.deepEqual(map({ ...base, parent_tool_use_id: 'unknown', type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'x' }] } } as unknown as SDKMessage), [], 'traffic from an agent we never saw start is dropped');
+});
+
+test('commands keep skills and custom commands with their argument hints, not Claude Code built-ins', () => {
+  assert.deepEqual(
+    commandsFrom([
+      { name: 'compact', description: 'Compact the conversation', argumentHint: '', builtin: true },
+      { name: 'fix-lint', description: 'Fix lint', argumentHint: '<file> [--fix]' },
+      { name: 'review', description: 'Review', argumentHint: '' },
+    ]),
+    [
+      { name: 'fix-lint', description: 'Fix lint', argumentHint: '<file> [--fix]' },
+      { name: 'review', description: 'Review' },
+    ],
+  );
 });
