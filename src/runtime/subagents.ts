@@ -197,6 +197,16 @@ const VERDICT = {
   running: 'is running',
 } satisfies Record<Subagent['status'], string>;
 
+/** A report's first line as plain text: markdown marks and link targets dropped. */
+export function oneLine(text?: string) {
+  const line = text?.split('\n').find((l) => l.trim()) ?? '';
+  return line
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`~]+/g, '')
+    .replace(/^\s*(#+|[-+>]|\d+\.)\s+/, '')
+    .trim();
+}
+
 export const isRunning = (s: Subagent) => s.status === 'running';
 
 /** Background agents still running; foreground subagents end with their turn, so they don't count. */

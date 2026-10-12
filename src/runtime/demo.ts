@@ -90,7 +90,7 @@ function scriptAt(thread: Thread, now: number): { say: string[]; add: { at?: num
   return { say: [], add: [] };
 }
 
-/** Scripted subagents: one background agent on Claude's thread, one foreground subagent on Codex's. */
+/** Scripted subagents: two background agents on Claude's thread, one foreground subagent on Codex's. */
 const AGENTS = [
   {
     threadId: 'rl',
@@ -103,6 +103,18 @@ const AGENTS = [
     ticks: 45,
     steps: ['Read apps/api/middleware/ratelimit.ts', 'Write scripts/load/ratelimit.k6.js', 'Run k6 run scripts/load/ratelimit.k6.js --vus 200 --duration 2m', 'Read apps/api/middleware/__tests__/ratelimit.test.ts', 'Run pnpm --filter api test ratelimit'],
     result: 'p95 stays at 11ms under 1,200 rps. Free keys get 429s at 60/min as expected; Pro at 600/min. One gap: /search shares the global bucket, so a burst there starves other routes for the same key.',
+  },
+  {
+    threadId: 'rl',
+    id: 'demo-agent-docs',
+    name: 'Draft the limits doc',
+    prompt: 'Write docs/api/limits.md: the tiers, the RateLimit-* headers and how to ask for an override.',
+    model: 'claude-haiku-5-5',
+    isBackground: true,
+    at: NOW0 + 6,
+    ticks: 10,
+    steps: ['Read docs/api/limits.md', 'Edit docs/api/limits.md  +42 −3'],
+    result: '**Drafted** `docs/api/limits.md`: tiers table, the three RateLimit-* headers with examples, and an [override request](https://example.com/overrides) section.',
   },
   {
     threadId: 'adm',

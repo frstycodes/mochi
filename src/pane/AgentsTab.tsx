@@ -1,10 +1,17 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, Hierarchy, Stop } from 'reicon-react';
+import { ChevronRight, Hierarchy, Send2, Stop } from 'reicon-react';
+import { MessageResponse } from '@/components/ai-elements/message';
+import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
-import { SubagentActions, SubagentLine, SubagentMark, SubagentMeta, SubagentResult, SubagentSteps } from '../agents/parts';
+import { SubagentAvatar, SubagentLine, SubagentMeta, subagentPersona } from '../agents/parts';
+import { useThreadFiles } from '../files/viewer';
+import { reportOf } from '../runtime/subagents';
+import { parseTool } from '../summary';
+import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from '../viz/FenceVisual';
 import { useGitDiff } from '../git/useGit';
 import { useWorktreePath } from '../git/worktrees';
 import { threadCwd } from '../host/cwd';
@@ -13,7 +20,7 @@ import type { Subagent, Thread } from '../model';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
 import { VizThreadProvider } from '../viz/WidgetVisual';
-import { DiffStat, DiffView, Expand } from '../WorkLog';
+import { DiffStat, DiffView, Expand, ToolRow } from '../WorkLog';
 import type { PaneTabProps } from './tabs';
 
 /** Every agent this thread's agent started, running first, each with its live log, a stop button and what it changed. */
@@ -45,19 +52,23 @@ function AgentCard({ thread, subagent, isFocused }: { thread: Thread; subagent: 
   const { dispatch } = useHarness();
   const [isOpen, setOpen] = useState(isFocused || subagent.status === 'running');
   const isRunning = subagent.status === 'running';
+  const { flavor, name } = subagentPersona(thread, subagent);
+  const report = subagent.result ?? subagent.error;
+  const ref = useRevealOnFocus(isFocused);
   return (
-    <li data-file-scope className={cn('flex flex-col rounded-xl border bg-card', isFocused && 'border-foreground/20')}>
+    <li ref={ref} data-file-scope className={cn('flex flex-col rounded-xl border bg-card', isFocused && 'border-foreground/20')}>
       <div className="flex h-9 items-center gap-1 pr-1.5 pl-1">
         <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => !o)} className="flex h-7 min-w-0 flex-1 cursor-default items-center gap-2 rounded-lg px-1.5 text-left type-meta text-muted-foreground hover:bg-accent/60">
           <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />
-          <SubagentMark subagent={subagent} />
-          <span className="max-w-[55%] shrink-0 truncate text-foreground">{subagent.name}</span>
+          <SubagentAvatar flavor={flavor} subagent={subagent} />
+          <span className="shrink-0 text-foreground">{name}</span>
+          <span className="max-w-[40%] shrink-0 truncate text-subtle-foreground">{subagent.name}</span>
           <SubagentLine subagent={subagent} />
         </button>
         {isRunning && (
           <TooltipIconButton
             label="Stop agent"
-            hint={`Stops "${subagent.name}"; its work so far stays`}
+            hint={`Stops ${name}; its work so far stays`}
             size="icon-sm"
             variant="ghost"
             onClick={() =>
@@ -83,11 +94,16 @@ function AgentCard({ thread, subagent, isFocused }: { thread: Thread; subagent: 
           <Section title="Log">
             <SubagentSteps subagent={subagent} />
           </Section>
-          {!isRunning && (subagent.result || subagent.error) && (
+          {!isRunning && !!report && (
             <Section title={subagent.error ? 'Error' : 'Report'}>
-              <SubagentResult subagent={subagent} className="px-2" />
+              <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} className="px-2 type-meta text-muted-foreground">
+                {report}
+              </MessageResponse>
               <div className="px-2 pt-2">
-                <SubagentActions thread={thread} subagent={subagent} isOpenHidden />
+                <Button size="sm" variant="secondary" className="rounded-full" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: reportOf(subagent), reason: 'A subagent report you sent on' })}>
+                  <Send2 data-icon="inline-start" />
+                  Send to thread
+                </Button>
               </div>
             </Section>
           )}
@@ -95,6 +111,30 @@ function AgentCard({ thread, subagent, isFocused }: { thread: Thread; subagent: 
         </div>
       </Expand>
     </li>
+  );
+}
+
+/** "Open" from the chat lands on this card: scrolled into view inside the tab's own scroller only. */
+function useRevealOnFocus(isFocused: boolean) {
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    const scroller = el?.closest<HTMLElement>('[data-slot=scroll-area-viewport]');
+    if (isFocused && el && scroller) revealIn(scroller, el, { align: 'start' });
+  }, [isFocused]);
+  return ref;
+}
+
+/** Its own tool calls, as work log rows. */
+function SubagentSteps({ subagent }: { subagent: Subagent }) {
+  const files = useThreadFiles();
+  if (!subagent.steps.length) return <p className="px-2 py-1 type-meta text-subtle-foreground">{subagent.status === 'running' ? 'No tool calls yet' : 'No tool calls'}</p>;
+  return (
+    <ol className="flex flex-col gap-0.5">
+      {subagent.steps.map((step) => (
+        <ToolRow key={step.id} call={parseTool(step.text)} isRunning={!step.isDone && subagent.status === 'running'} files={files} />
+      ))}
+    </ol>
   );
 }
 

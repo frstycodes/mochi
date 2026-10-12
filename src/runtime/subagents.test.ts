@@ -6,6 +6,7 @@ import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
+import { oneLine } from './subagents.ts';
 import { runTool, type ToolEnv } from './tools.ts';
 
 const reduce = (s: State, a: Action) => [threadsReducer, queueReducer, panesReducer].reduce((x, r) => r(x, a), s);
@@ -282,4 +283,11 @@ test('native subagents: start logs one row where it began, progress fills its lo
   const s = thread().subagents![0];
   assert.deepEqual([s.status, s.tokens, s.result, s.steps[0].files], ['stopped', 4200, undefined, ['src/a.ts']]);
   assert.equal(thread().live?.notes, undefined, "a native agent reports to its own harness, not through Mochi's notes");
+});
+
+test("a report's one line drops markdown marks and link targets", () => {
+  assert.equal(oneLine('\n**Verified** the `EX271UZ`. [BenQ page](https://benq.com/x)\nmore'), 'Verified the EX271UZ. BenQ page');
+  assert.equal(oneLine('## Summary'), 'Summary');
+  assert.equal(oneLine('- first item'), 'first item');
+  assert.equal(oneLine(undefined), '');
 });
