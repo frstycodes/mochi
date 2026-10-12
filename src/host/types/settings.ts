@@ -1,5 +1,6 @@
 import type { Provider } from '../../model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../settings/harnesses.ts';
+import type { ConfigChange, McpEntry, SkillEntry } from '../../settings/agentConfig.ts';
 import type { Manifest } from './manifest.ts';
 
 /** What the user's own install reports. Never carries credentials, emails or key material: only method and plan names. */
@@ -89,6 +90,45 @@ export interface SettingsHost {
   apiKey(provider: Provider): Promise<ApiKeyState>;
   /** Pass null to remove the stored key. */
   setApiKey(provider: Provider, key: string | null): Promise<ApiKeyState>;
+  /** What each of the profile's accounts carries in its own config folder; `projectRoot` adds that project's `.mcp.json`. */
+  agentConfig(spaceId: string, projectRoot?: string): Promise<ProfileConfig>;
+  /** The file edits `changes` would make, for the user to review; nothing is written. */
+  previewConfig(spaceId: string, changes: ConfigChange[]): Promise<ConfigPreview>;
+  /** Writes what `previewConfig` showed, after backing the files up; refused when a file changed since (`befores` by path). */
+  applyConfig(spaceId: string, changes: ConfigChange[], befores: Record<string, string>): Promise<{ backupDir: string | null }>;
+  /** Starts one of the account's servers the way the tool would and lists its tools. */
+  testMcp(spaceId: string, provider: Provider, name: string): Promise<{ tools: string[] }>;
+}
+
+/** One account's instructions, servers and skills, as its tool will load them. */
+export interface ProviderConfig {
+  provider: Provider;
+  account: Account;
+  instructions: { path: string; text: string };
+  mcpServers: McpEntry[];
+  skills: SkillEntry[];
+  plugins: string[];
+  /** The project's own instructions file, when the project has one; the tool reads it next to the account's. */
+  projectInstructions: string | null;
+  /** A config file that couldn't be read; the lists then show what could be. */
+  error?: string;
+}
+
+export type ProfileConfig = Record<Provider, ProviderConfig>;
+
+export interface FileEdit {
+  path: string;
+  /** '' for a file that doesn't exist yet. */
+  before: string;
+  after: string;
+}
+
+export interface ConfigPreview {
+  edits: FileEdit[];
+  /** Skill folders copied whole. */
+  copies: { from: string; to: string }[];
+  /** What the user should know: secrets left out, servers skipped because the name is taken. */
+  notes: string[];
 }
 
 export const settingsMethods = {
@@ -102,6 +142,10 @@ export const settingsMethods = {
   linkAccount: 'invoke',
   apiKey: 'invoke',
   setApiKey: 'invoke',
+  agentConfig: 'invoke',
+  previewConfig: 'invoke',
+  applyConfig: 'invoke',
+  testMcp: 'invoke',
 } satisfies Manifest<SettingsHost>;
 
 export const DEFAULT_SETTINGS: AgentSettings = {

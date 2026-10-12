@@ -93,6 +93,6 @@ function fail(title: string) {
 }
 
 // Electron prefixes rejected invoke errors with "Error invoking remote method '<channel>': <Type>: ".
-function ipcMessage(error: Error) {
+export function ipcMessage(error: Error) {
   return error.message.replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, '');
 }

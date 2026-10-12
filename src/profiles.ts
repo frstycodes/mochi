@@ -42,7 +42,7 @@ export function addProfile(name: string): Space {
   return profile;
 }
 
-export function updateProfile(id: string, patch: Partial<Pick<Space, 'name' | 'icon' | 'github'>>) {
+export function updateProfile(id: string, patch: Partial<Pick<Space, 'name' | 'icon' | 'github' | 'syncInstructions'>>) {
   write(profiles.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 }
 

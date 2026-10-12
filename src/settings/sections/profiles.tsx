@@ -16,6 +16,7 @@ import { addProfile, getProfiles, MAX_PROFILES, removeProfile, updateProfile, us
 import { useHarness } from '../../store';
 import { SPACE_ICONS, SpaceIcon } from '../../ui';
 import { linkedAccountId } from '../accounts';
+import { AgentConfigRows } from '../ProfileAgentConfig';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { CommitInput, DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
@@ -58,6 +59,7 @@ function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast
       <SettingsRow id={`${id}-icon`} label="Icon" control={<IconPicker profile={profile} />} />
       {host.isDesktop && <GitHubAccountRow profile={profile} gh={gh} />}
       {host.isDesktop && <AccountRows profile={profile} />}
+      <AgentConfigRows profile={profile} />
       {host.isDesktop && <ClearBrowsingRow profile={profile} confirm={confirm} />}
       <RemoveProfileRow profile={profile} isLast={isLast} />
     </SettingsGroup>

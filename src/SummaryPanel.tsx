@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import type { AgentInfo, McpServer, Provider, Source, Step, Thread } from './model';
 import { HARNESSES } from './settings/harnesses';
+import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
 import { GoalEditor } from './goals/GoalEditor';
@@ -20,7 +21,7 @@ import { outcomeOf } from './goals/outcome';
 import { burnSeries, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
 import { summarize, type ToolVerb } from './summary';
-import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon } from './ui';
+import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon, TooltipIconButton } from './ui';
 import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
 
 const LIST_LIMIT = 3;
@@ -89,7 +90,7 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
             ))}
           </Section>
 
-          {!!thread.agent && !!thread.session && <AgentSections agent={thread.agent} provider={thread.session.provider} />}
+          {!!thread.agent && !!thread.session && <AgentSections agent={thread.agent} provider={thread.session.provider} spaceId={thread.spaceId} />}
 
           <ThreadUsageSection thread={thread} />
           <SpaceUsageSection thread={thread} />
@@ -236,8 +237,13 @@ const MCP_STATUS_LABELS = { connected: '', pending: 'Connecting', 'needs-auth': 
 const MCP_STATUS_CLASSES = { connected: '', pending: 'text-subtle-foreground', 'needs-auth': 'text-warning', failed: 'text-destructive', disabled: 'text-subtle-foreground' } satisfies Record<McpServer['status'], string>;
 
 /** What the live agent reported at session start; a list the agent didn't report is left out rather than shown empty. */
-function AgentSections({ agent, provider }: { agent: AgentInfo; provider: Provider }) {
+function AgentSections({ agent, provider, spaceId }: { agent: AgentInfo; provider: Provider; spaceId: string }) {
   const plugins = agent.plugins ?? [];
+  const manage = (part: 'mcp' | 'skills') => (
+    <TooltipIconButton label={part === 'mcp' ? 'Manage MCP servers' : 'Manage skills'} hint="Opens this profile's settings" className="size-6" onClick={() => openProfileConfig(spaceId, part, provider)}>
+      <Setting className="size-3.5" />
+    </TooltipIconButton>
+  );
   return (
     <>
       <Section label="Session">
@@ -250,7 +256,7 @@ function AgentSections({ agent, provider }: { agent: AgentInfo; provider: Provid
       </Section>
 
       {!!agent.mcpServers && (
-        <Section label={`MCP servers · ${agent.mcpServers.length}`} empty={agent.mcpServers.length === 0 ? 'No MCP servers configured' : undefined}>
+        <Section label={`MCP servers · ${agent.mcpServers.length}`} action={manage('mcp')} empty={agent.mcpServers.length === 0 ? 'No MCP servers configured' : undefined}>
           <LimitedList items={agent.mcpServers}>
             {(server) => (
               <SummaryRow key={server.name} icon={Server} label={server.name}>
@@ -275,7 +281,7 @@ function AgentSections({ agent, provider }: { agent: AgentInfo; provider: Provid
         </Section>
       )}
 
-      {!!agent.skills && <ChipSection label="Skills available" items={agent.skills} empty="No skills found" />}
+      {!!agent.skills && <ChipSection label="Skills available" items={agent.skills} empty="No skills found" action={manage('skills')} />}
       {!!agent.slashCommands && <ChipSection label="Slash commands" items={agent.slashCommands.map((c) => `/${c}`)} empty="No slash commands" />}
       {!!agent.tools && <ChipSection label="Tools available" items={agent.tools} empty="No tools reported" />}
     </>
@@ -292,11 +298,11 @@ function SessionField({ label, value }: { label: string; value?: string }) {
   );
 }
 
-function ChipSection({ label, items, empty }: { label: string; items: string[]; empty: string }) {
+function ChipSection({ label, items, empty, action }: { label: string; items: string[]; empty: string; action?: ReactNode }) {
   const [isOpen, setOpen] = useState(false);
   const shown = isOpen ? items : items.slice(0, CHIP_LIMIT);
   return (
-    <Section label={`${label} · ${items.length}`} empty={items.length === 0 ? empty : undefined}>
+    <Section label={`${label} · ${items.length}`} action={action} empty={items.length === 0 ? empty : undefined}>
       <ul className="flex flex-wrap gap-1 px-2 py-1">
         {shown.map((item) => (
           <li key={item} className="max-w-full">
