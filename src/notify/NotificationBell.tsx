@@ -45,7 +45,7 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
             <span>Notifications</span>
           </SidebarMenuButton>
         </PopoverTrigger>
-        <PopoverContent side="right" align="start" sideOffset={8} collisionPadding={8} className="w-88 gap-0 p-0">
+        <PopoverContent side="right" align="start" sideOffset={8} collisionPadding={8} className="max-h-(--radix-popover-content-available-height) w-88 gap-0 overflow-hidden p-0">
           <div className="flex items-center gap-1 py-2 pr-2 pl-3">
             <h2 className="flex-1 type-title">Notifications</h2>
             <Button variant="ghost" size="xs" disabled={unread === 0} onClick={() => dispatch({ type: 'notify-read', ids: notices.map((n) => n.id) })}>
@@ -58,7 +58,7 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
           {bursts.length === 0 ? (
             <NoNotices />
           ) : (
-            <ScrollArea type="scroll" className="max-h-96">
+            <ScrollArea type="scroll" className="flex min-h-0 flex-col *:data-[slot=scroll-area-viewport]:max-h-96">
               <div className="flex flex-col gap-0.5 px-1.5 pb-1.5">
                 {bursts.map((b) => (
                   <BurstRow key={b.id} burst={b} onJump={() => setOpen(false)} />
