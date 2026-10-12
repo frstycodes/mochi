@@ -78,12 +78,14 @@ Sizes for new steps default to 2 until the agent says otherwise. Progress, burn-
 ## Checkpoints, rewind, handoff
 
 - Rewind already snapshots thread state and git refs under `refs/harness/checkpoints/` (verified, `src/rewind/`). Claude adds real file rewind: `enableFileCheckpointing: true` + `query.rewindFiles(userMessageId)`; it tracks Write/Edit/NotebookEdit only, not Bash edits, and restores files, not the conversation (docs). Keep git refs as the source of truth and use the SDK rewind only to keep Claude's own view consistent. Codex: git refs only.
+- Built (`rewindClaude`, `electron/agents/claude/sessions.ts`): each sent message carries a uuid we generate; `rewindToMessage` calls `host.agent.rewindFiles` before the git restore. GAP: not verified against a real thread that edited a file; matched by message text until activity entries carry the uuid.
 - Handoff (`src/rewind/handoff.ts`, verified GAP) becomes: stop the current agent, start the other provider in the same worktree with the generated summary as its first prompt.
 
 ## Side chat, drift guard, usage
 
-- Side chat `ask`: a separate, read-only query — Claude Agent SDK with `allowedTools: []` and `permissionMode: 'plan'`, or the plain Anthropic SDK; it never touches the thread's session. Decide at build time; the plain SDK is lighter.
-- Drift classifier (`src/drift.ts`, verified GAP): `classify` in main with `claude-haiku-5-5`, structured output `{ verdict: 'on-goal' | 'scope-add' | 'off-goal', reason }`; the local `similarity()` pass still decides clear cases first.
+- Side chat `ask` (built, `electron/agents/claude/oneshot.ts`): an Agent SDK query on the profile's Claude account with `tools: []`, no settings files and no saved transcript (`claude-sonnet-5-5`); it never touches the thread's session.
+- Drift classifier (built): `classify` in main with `claude-haiku-5-5`, answering `{ verdict: 'on-goal' | 'scope-add' | 'off-goal', reason }` as JSON within 4s, else the local classifier (`classifyWithModel`, `src/drift.ts`). The local `similarity()` pass still decides clear cases first. Not `outputFormat`: it is fixed at prewarm and the spare is shared with side chat.
+- Startup: a cold Claude Code start costs ~3–5s, more than the 4s budget, so both share one SDK `prewarm()` spare per account (parked when a side chat opens, a Claude thread starts, and after every claim; closed after 10 min unused and on quit). `prewarm` is `@alpha`; without it both fall back to cold starts.
 - Usage: Claude reports cost; Codex reports tokens only, so Codex cost comes from a pricing constant marked TODO until checked against OpenAI's published prices.
 
 ## Concurrency and lifecycle

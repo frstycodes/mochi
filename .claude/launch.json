@@ -299,6 +299,39 @@
       "port": 5357
     },
     {
+      "name": "harness-live",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5361",
+        "--strictPort"
+      ],
+      "port": 5361
+    },
+    {
+      "name": "harness-live-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5363",
+        "--strictPort"
+      ],
+      "port": 5363
+    },
+    {
+      "name": "harness-viewer",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5365",
+        "--strictPort"
+      ],
+      "port": 5365
+    },
+    {
       "name": "mochi-settings-sections",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [

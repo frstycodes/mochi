@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { createRequestStore } from '@/lib/requestStore';
 import { download } from '../viz/exportVisual';
 
 export interface Photo {
@@ -11,23 +11,11 @@ export interface PhotoRequest {
   index: number;
 }
 
-let current: PhotoRequest | null = null;
-const listeners = new Set<() => void>();
+const store = createRequestStore<PhotoRequest>();
 
 /** Opens the viewer on `photos[index]`; the others are its gallery. `null` closes it. */
-export function openPhotos(request: PhotoRequest | null) {
-  current = request;
-  listeners.forEach((l) => l());
-}
-
-export function usePhotoRequest() {
-  return useSyncExternalStore(subscribe, () => current);
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-}
+export const openPhotos = store.open;
+export const usePhotoRequest = store.use;
 
 /** Every `img[data-photo]` in the same `[data-photo-scope]` (a thread's messages) is one gallery, in reading order. */
 export function openFromScope(img: HTMLImageElement) {

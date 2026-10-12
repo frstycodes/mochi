@@ -111,7 +111,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
 function SpaceHeader() {
   const space = useSpace();
   return (
-    <SidebarHeader className="h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-9.5 md:in-data-traffic-lights:pl-29.5">
+    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-9.5 md:in-data-traffic-lights:pl-29.5">
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex min-w-0 items-center gap-2 px-1">
@@ -497,7 +497,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             </>
           )}
           {/* While the Settle / Reactivate chip covers this slot, it widens to the chip's width so the branch truncates before the chip instead of under it. */}
-          <span className={cn('ml-auto shrink-0 tabular transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
+          <span className={cn('ml-auto shrink-0 tabular group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
         </span>
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
@@ -509,7 +509,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
         </span>
       </SidebarMenuButton>
-      <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar-accent px-1.5 type-caption [&>svg]:size-3.5">
+      <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] px-1.5 type-caption [&>svg]:size-3.5">
         {isSettled ? <Undo /> : <Archive />}
         {isSettled ? 'Reactivate' : 'Settle'}
       </SidebarMenuAction>

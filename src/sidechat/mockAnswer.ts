@@ -1,8 +1,6 @@
 import type { AgentAskContext, AgentAskMessage } from '../host/types/agent.ts';
 
-// GAP: canned answer for both the web build and the desktop stub. The real call belongs in electron/ipc/agent.ts `ask`:
-// one-shot Claude (`claude -p` / Messages API) or Codex (`codex exec`) with the context as a system prompt and no tools,
-// so a side question can never edit the worktree or the thread.
+// GAP: canned answer for the web build, which has no Claude Code to drive; desktop asks Claude in electron/ipc/agent.ts.
 export function mockAnswer(context: AgentAskContext, messages: AgentAskMessage[]) {
   const question = messages.findLast((m) => m.role === 'user')?.text ?? '';
   const quoted = question.match(/^> \*\*(.+?)\*\*/m)?.[1];

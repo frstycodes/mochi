@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { judgeDrift, judgeLocally, stepTitleFrom } from './drift.ts';
+import { classifyWithModel, judgeDrift, judgeLocally, stepTitleFrom } from './drift.ts';
 import { seedThreads } from './model.ts';
 
 const rl = seedThreads().find((t) => t.id === 'rl')!;
@@ -31,4 +31,17 @@ test('threshold is per thread', () => {
 
 test('step titles drop the cue word', () => {
   assert.equal(stepTitleFrom('also add a Retry-After header.'), 'A Retry-After header');
+});
+
+test('classifyWithModel: the model settles ambiguous prompts, and any failure falls back to the local classifier', async () => {
+  const prompt = 'Also return a Retry-After header on 429 responses';
+  const local = await classifyWithModel(prompt, rl, () => Promise.reject(new Error('unused')));
+  assert.equal(local.kind, 'scope-add');
+  assert.deepEqual(await classifyWithModel(prompt, rl, async () => ({ verdict: 'off-goal', reason: 'Unrelated' })), { kind: 'off-goal', reason: 'Unrelated' });
+  for (const model of [() => Promise.reject(new Error('logged out')), async () => ({ verdict: 'maybe', reason: 'x' }), async () => null, () => new Promise(() => {})]) {
+    assert.deepEqual(await classifyWithModel(prompt, rl, model, 20), local);
+  }
+  let calls = 0;
+  assert.equal((await classifyWithModel('ok go', rl, async () => (calls++, null))).kind, 'on-goal');
+  assert.equal(calls, 0, 'clear cases never reach the model');
 });

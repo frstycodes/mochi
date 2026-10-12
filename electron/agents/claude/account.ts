@@ -11,9 +11,3 @@ export const accountFor: AccountFor = async (spaceId, provider) => {
   const { account, configDir } = await (await import('../config.ts')).accountFor(spaceId, provider);
   return { id: account.id, configDir: configDir ?? undefined };
 };
-
-/** The child environment for an account, or none for the default one (the SDK then inherits `process.env` as is). */
-export function accountEnv(account: ClaudeAccount): Record<string, string | undefined> | undefined {
-  // `env` replaces the child environment, so PATH, HOME and the rest must be spread in.
-  return account.configDir ? { ...process.env, CLAUDE_CONFIG_DIR: account.configDir } : undefined;
-}

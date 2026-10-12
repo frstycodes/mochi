@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
+import type { AgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution } from '../runtime/apply.ts';
+import { agentCalls, type AgentCall } from '../runtime/live.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
@@ -47,8 +49,13 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     latest.current = state;
   }, [state]);
   const dispatch = useCallback<Dispatch<Action>>((action) => {
-    const answer = resolution(latest.current, action);
+    const before = latest.current;
+    const answer = resolution(before, action);
     if (answer) void host.agent.resolve(answer.requestId, answer.decision);
+    for (const call of agentCalls(before, action, () => reducer(before, action))) {
+      // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
+      callAgent(call).catch((error: unknown) => apply({ type: 'agent', event: failed(call.threadId, error) }));
+    }
     apply(action);
   }, []);
   // The tick is the demo adapter's clock; real agents report through host.agent whether or not the demo is paused.
@@ -63,6 +70,24 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
+}
+
+// Sequential: a handoff's stop must reach the old agent before the new one starts in the same thread.
+let pending: Promise<unknown> = Promise.resolve();
+
+function callAgent(call: AgentCall) {
+  const run = () => {
+    if (call.method === 'start') return host.agent.start(call.threadId, call.options);
+    if (call.method === 'send') return host.agent.send(call.threadId, call.text);
+    return host.agent[call.method](call.threadId);
+  };
+  const next = pending.then(run);
+  pending = next.catch(() => {});
+  return next;
+}
+
+function failed(threadId: string, error: unknown): AgentEvent {
+  return { threadId, type: 'turn-end', status: 'failed', error: error instanceof Error ? error.message : String(error) };
 }
 
 export function useHarness() {

@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input';
-import { ACCESS, DEVICES } from '../../Composer';
+import { DEVICES } from '../../Composer';
+import { ACCESS } from '../../runtime/controls';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';

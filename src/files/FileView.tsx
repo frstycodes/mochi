@@ -7,9 +7,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './editors';
-import { FilePreview, previewKind } from './previews';
+import { previewKind } from './kinds';
+import { FilePreview } from './previews';
 import { useOpenFile, type OpenFile } from './useFiles';
 import { isMod } from '../keys';
+import { TooltipIconButton } from '../ui';
 
 // Lazy so CodeMirror parses only when a file is first opened as source.
 const CodeEditor = lazy(() => import('./CodeEditor'));
@@ -89,7 +91,7 @@ function BinaryState() {
   );
 }
 
-function FilePath({ path }: { path: string }) {
+export function FilePath({ path }: { path: string }) {
   const slash = path.lastIndexOf('/');
   return (
     <span className="min-w-0 truncate font-mono type-meta" title={path}>
@@ -131,15 +133,15 @@ function ConflictDiff({ path, disk, mine }: { path: string; disk: string; mine: 
   );
 }
 
-function OpenInMenu({ root, path, line }: { root: string; path: string; line?: number }) {
+export function OpenInMenu({ root, path, line }: { root: string; path: string; line?: number }) {
   const editors = useInstalledEditors();
   if (editors.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="icon-sm" variant="ghost" aria-label="Open in editor">
+        <TooltipIconButton label="Open in editor" hint={editors.map((e) => EDITOR_NAMES[e]).join(', ')}>
           <Export />
-        </Button>
+        </TooltipIconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {editors.map((editor) => (

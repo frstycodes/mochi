@@ -21,7 +21,7 @@ export function SettingsPage() {
     <AgentSettingsProvider>
       {/* Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track. */}
       <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-        <header className={cn('flex h-11 items-center gap-2 px-4', reservesToggle && TOGGLE_RESERVE)}>
+        <header className={cn('app-drag flex h-11 items-center gap-2 px-4', reservesToggle && TOGGLE_RESERVE)}>
           {hasTrigger && <SidebarTrigger className="-ml-1 text-muted-foreground" />}
           <h1 className="truncate type-title">{section.title}</h1>
         </header>

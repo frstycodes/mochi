@@ -1,20 +1,24 @@
+import { randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app, BrowserWindow } from 'electron';
 import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
-import { accountEnv, accountFor, type ClaudeAccount } from './account.ts';
-import { apiKeyEnv, detectClaude, readSettings } from './install.ts';
+import { accountFor, type ClaudeAccount } from './account.ts';
+import { HARNESSES } from '../../../src/settings/harnesses.ts';
+import { warmClaude } from './oneshot.ts';
 import { approvalEvent, createMapper, permissionResult } from './map.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
- * `maxConcurrent` are live, the rest wait in `waiting`. A session whose turn ended gives its process up when someone is
+ * the concurrency cap are live, the rest wait in `waiting`. A session whose turn ended gives its process up when someone is
  * waiting and comes back with `resume` on its next message.
  */
 interface Session {
   threadId: string;
   options: AgentStartOptions;
   inbox: string[];
+  /** Every message handed to Claude Code, with the uuid `rewindFiles` takes. */
+  sent: { uuid: string; text: string }[];
   wake: EventEmitter;
   mapper: ReturnType<typeof createMapper>;
   query?: Query;
@@ -41,8 +45,9 @@ export async function startClaude(threadId: string, options: AgentStartOptions) 
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [options.prompt], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [options.prompt], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
   sessions.set(threadId, session);
+  void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
 }
 
@@ -75,6 +80,21 @@ export function stopClaude(threadId: string) {
   release(session);
 }
 
+/**
+ * Rewinds Claude's file checkpoints to just before the latest sent message with this text, so its own view of the files
+ * matches the git checkpoint the renderer restores next. Only a live session can rewind; git refs stay the source of truth.
+ */
+// GAP: matched by text because activity entries carry no message id yet; pass the uuid once the entry stores it. Two
+// identical messages rewind to the later one.
+// GAP: not run against a real thread yet; whether Claude Code accepts our client uuids here is unverified.
+export async function rewindClaude(threadId: string, text: string) {
+  const session = sessions.get(threadId);
+  const uuid = session?.sent.findLast((m) => m.text === text)?.uuid;
+  if (!session?.query || !uuid) return;
+  const result = await session.query.rewindFiles(uuid);
+  if (!result.canRewind) console.warn(`Claude rewind skipped for ${threadId}: ${result.error ?? 'no checkpoint'}`);
+}
+
 export function resolveClaude(requestId: string, decision: AgentDecision) {
   const pending = approvals.get(requestId);
   if (!pending) return false;
@@ -90,9 +110,9 @@ app.on('before-quit', () => {
 });
 
 async function schedule(session: Session) {
-  const settings = await readSettings();
+  const cap = (await config()).concurrencyCap() || DEFAULT_CAP;
   const live = [...sessions.values()].filter((s) => s.query).length;
-  if (live >= (settings.maxConcurrent ?? DEFAULT_CAP)) {
+  if (live >= cap) {
     evictIdle() ? void launch(session) : waiting.push(session);
     return;
   }
@@ -103,13 +123,16 @@ async function launch(session: Session) {
   const { threadId, options } = session;
   const abort = new AbortController();
   try {
-    const settings = await readSettings();
-    const base = accountEnv(session.account);
-    const install = await detectClaude(settings, base);
-    // GAP: the API key is a global setting; RUNTIME.md wants it chosen per thread, explicitly, when its account hits a limit.
-    const keyEnv = apiKeyEnv(settings, base);
-    const env = keyEnv ?? base;
-    if (!install.loggedIn && !keyEnv) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
+    const { accountEnv, apiKeyFor, defaultModel, userPath } = await config();
+    const { configDir = null } = session.account;
+    const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
+    if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
+    const base = { ...accountEnv('claude', configDir), PATH: await userPath() };
+    // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
+    const key = options.useApiKey ? apiKeyFor('claude') : undefined;
+    if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
+    const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
+    if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     session.query = query({
@@ -117,12 +140,12 @@ async function launch(session: Session) {
       options: {
         pathToClaudeCodeExecutable: install.path,
         cwd: options.cwd,
-        model: options.model ?? DEFAULT_MODEL,
+        model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
         permissionMode: (options.permissionMode as PermissionMode | undefined) ?? 'default',
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
-        ...(env && { env }),
+        env,
         includePartialMessages: true,
         enableFileCheckpointing: true,
         abortController: abort,
@@ -167,7 +190,9 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
   while (!signal.aborted) {
     const text = session.inbox.shift();
     if (text !== undefined) {
-      yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null };
+      const uuid = randomUUID();
+      session.sent.push({ uuid, text });
+      yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, uuid };
       continue;
     }
     try {
@@ -194,6 +219,9 @@ function dropApprovals(threadId: string, message: string) {
     pending.resolve({ behavior: 'deny', message, interrupt: true });
   }
 }
+
+// Imported lazily: config.ts loads Electron, which the adapters' node tests don't have.
+const config = () => import('../config.ts');
 
 function emit(event: AgentEvent) {
   for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('agent:onEvent', event);

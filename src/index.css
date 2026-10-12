@@ -309,6 +309,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Desktop title bar: `hiddenInset` leaves no native one, so the 44px headers drag the window. Gated on `data-traffic-lights`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them, and overlays that can sit over them, opt back out. */
+@utility app-drag {
+  :root[data-traffic-lights] & {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+}
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -327,6 +339,10 @@
     @apply bg-background text-foreground type-body;
     margin: 0;
     overflow: hidden;
+  }
+  :root[data-traffic-lights] .app-drag :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
+  :root[data-traffic-lights] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
+    @apply app-no-drag;
   }
 }
 

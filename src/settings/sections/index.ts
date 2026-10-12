@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
-import { MODELS } from '../../ModelControls';
+import { MODELS } from '../../runtime/controls';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { BrowserSection } from './browser';

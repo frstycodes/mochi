@@ -227,11 +227,11 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 ## 8. Viewers
 
 - [x] Photo viewer for chat images and composer attachments: full window, gallery per thread (or per composer) with filmstrip and ←/→, zoom at the pointer (pinch, Ctrl-scroll, double-click, +/−, 0 to fit), drag to pan, copy as PNG, download (`src/photo/`)
-- [ ] File viewer for attachments and files in chat (code, Markdown, PDF, CSV, JSON), reusing the Files tab's previews
+- [x] File viewer for attachments and files in chat (code, Markdown, PDF, CSV, JSON), reusing the Files tab's previews
 
 ## 9. Accounts and limits
 
 - [ ] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Mochi never handles credentials
 - [ ] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
 - [ ] Threads always run on their profile's account; never rotate to another account of the same provider
-- [ ] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider
+- [x] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider

@@ -8,6 +8,7 @@ import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
+import type { ThreadControls } from '../runtime/controls.ts';
 import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, Snapshot, State } from './index.tsx';
@@ -32,7 +33,11 @@ export type ThreadsAction =
   | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
-  | { type: 'create'; title: string; provider: Provider; project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string }
+  | { type: 'create'; title: string; provider: Provider; project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean }
+  | { type: 'controls'; threadId: string; controls: ThreadControls }
+  | { type: 'interrupt'; threadId: string }
+  /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
+  | { type: 'resume'; threadId: string; onApiKey?: boolean }
   | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
@@ -88,6 +93,20 @@ function reduce(state: State, action: Action): State {
       return create(state, action);
     case 'send':
       return send(state, action);
+    case 'controls':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, controls: action.controls })) };
+    case 'resume':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) =>
+          t.live
+            ? log(
+                { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
+                { at: state.now, who: 'harness', kind: 'event', text: action.onApiKey ? 'Continuing on your API key, billed per use' : 'Resumed on the same account' },
+              )
+            : t,
+        ),
+      };
     case 'drift-new-thread':
       return driftNewThread(state, action);
     case 'drift-settings':
@@ -116,7 +135,7 @@ function reduce(state: State, action: Action): State {
     case 'fork-keep':
       return keepFork(state, action.keepId, action.dropId);
     case 'handoff':
-      return handoff(state, action.threadId, action.stepId, action.to, action.summary);
+      return handoffLive(handoff(state, action.threadId, action.stepId, action.to, action.summary), action);
     default:
       return state;
   }
@@ -143,8 +162,7 @@ function tick(state: State): State {
   let next: State = { ...state, now: state.now + 1 };
   for (const { id } of state.threads) {
     const thread = next.threads.find((t) => t.id === id);
-    // GAP: a thread counts as demo until a real adapter reports a session; R1 decides which threads start a real agent.
-    if (thread && !thread.session) next = applyAgentEvents(next, demoEvents(thread, next.now));
+    if (thread && !thread.session && !thread.live) next = applyAgentEvents(next, demoEvents(thread, next.now));
   }
   return next;
 }
@@ -285,13 +303,13 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   const dep = action.dependOn && state.threads.find((t) => t.id === action.dependOn!.threadId);
   const depStep = dep?.steps.find((s) => s.id === action.dependOn!.stepId);
   const base = (sid: string, title: string, size: 1 | 2 | 3): Step => ({ id: sid, title, size, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: action.provider, revision: 1 });
+  const isLive = !!action.isLive && !!action.project;
+  // A live thread's own steps come from its agent's plan; the placeholders are for the demo adapter.
   const steps: Step[] = [
     ...(dep && depStep
       ? [{ ...base(`${id}-dep`, depStep.title, depStep.size), status: 'waiting' as const, sharedKey: `shared-${depStep.id}`, note: `Provided by "${dep.title}"`, link: { mode: 'provided-by' as const, threadId: dep.id, stepId: depStep.id } }]
       : []),
-    base(`${id}-1`, 'Read the code involved', 1),
-    base(`${id}-2`, 'Make the change', 2),
-    base(`${id}-3`, 'Add tests', 1),
+    ...(isLive ? [] : [base(`${id}-1`, 'Read the code involved', 1), base(`${id}-2`, 'Make the change', 2), base(`${id}-3`, 'Add tests', 1)]),
   ];
   const thread: Thread = {
     id,
@@ -312,7 +330,9 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     prs: [],
     skills: [],
     sources: [],
-    context: { used: 4_000, max: action.provider === 'codex' ? 272_000 : 200_000 },
+    context: { used: isLive ? 0 : 4_000, max: action.provider === 'codex' ? 272_000 : 200_000 },
+    controls: action.controls,
+    ...(isLive && { live: { isWorking: true, usage: [] } }),
   };
   let threads = [...state.threads, thread];
   if (dep && depStep) {
@@ -335,7 +355,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
   return {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
-      const said = log(t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
+      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
       if (action.drift === 'off-goal') return log(said, { at: now, who: 'harness', kind: 'event', text: `Drift guard: sent off-goal, not counted toward the goal (${action.reason})` });
       if (action.drift === 'on-goal') return said;
       const n = t.revisions.length + 1;
@@ -366,5 +386,15 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   }
   next = { ...next, threads: mapThread(next.threads, source.id, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: `Drift guard: moved "${short}" to a new thread` })) };
   const branchFrom = action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
-  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: source.repo?.project ?? null, branchFrom: source.repo ? branchFrom : undefined });
+  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: source.repo?.project ?? null, branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live });
+}
+
+/** A whole-thread handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */
+function handoffLive(state: State, action: Extract<Action, { type: 'handoff' }>): State {
+  return {
+    ...state,
+    threads: mapThread(state.threads, action.threadId, (t) =>
+      t.live && !action.stepId ? { ...t, status: 'running', session: undefined, controls: undefined, live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: undefined } } : t,
+    ),
+  };
 }

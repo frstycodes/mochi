@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { AgentAskContext, AgentAskEvent, AgentAskMessage } from '../host/types/agent';
@@ -6,6 +7,7 @@ import { useHarness } from '../store';
 import { chatFor, questionText, type Quote, type SideMessage } from '../store/sidechat';
 
 export function useSideChat(thread: Thread, tabId: string) {
+  useEffect(() => void host.agent.warm(thread.spaceId).catch(() => {}), [thread.spaceId]);
   const { state, dispatch } = useHarness();
   const chat = chatFor(state, thread.id, tabId);
   const at = { threadId: thread.id, tabId };
@@ -44,6 +46,7 @@ const MAX_ENTRY_CHARS = 600;
 
 function threadContext(thread: Thread, diff: AgentAskContext['diff']): AgentAskContext {
   return {
+    spaceId: thread.spaceId,
     title: thread.title,
     goal: thread.goal,
     steps: thread.steps.map((s) => ({ title: s.title, status: s.status })),

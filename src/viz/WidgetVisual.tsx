@@ -54,7 +54,7 @@ const VizThreadContext = createContext<string | null>(null);
 
 export const VizThreadProvider = VizThreadContext.Provider;
 
-function useVizThreadId() {
+export function useVizThreadId() {
   const id = useContext(VizThreadContext);
   if (!id) throw new Error('Widgets must render inside <VizThreadProvider>, which names the thread sendPrompt writes to');
   return id;

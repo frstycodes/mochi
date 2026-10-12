@@ -1,3 +1,5 @@
+<img src="build/icon.png" width="96" alt="">
+
 # Mochi
 
 A desktop workspace for running many coding agents at once. Give each thread a goal, let Claude Code and Codex work toward it in their own worktrees, and step in only when something needs you.

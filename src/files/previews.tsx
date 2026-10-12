@@ -1,27 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight } from 'reicon-react';
+import { ChevronRight, DocumentText } from 'reicon-react';
 import { MessageResponse } from '@/components/ai-elements/message';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { host } from '@/host';
 import { cn } from '@/lib/utils';
+import { parseCsv, type PreviewKind } from './kinds';
 
-export const PREVIEW_KINDS = {
-  image: /\.(png|jpe?g|gif|webp|avif|ico|bmp)$/i,
-  svg: /\.svg$/i,
-  pdf: /\.pdf$/i,
-  markdown: /\.(md|mdx|markdown)$/i,
-  json: /\.json$/i,
-} satisfies Record<string, RegExp>;
-
-export type PreviewKind = keyof typeof PREVIEW_KINDS;
-
-export function previewKind(path: string) {
-  return (Object.keys(PREVIEW_KINDS) as PreviewKind[]).find((kind) => PREVIEW_KINDS[kind].test(path)) ?? null;
-}
-
-/** Previews a file's content; text kinds (svg, markdown, json) get the current draft so edits show up live. */
+/** Previews a file's content; text kinds (svg, markdown, json, csv) get the current draft so edits show up live. */
 export function FilePreview({ kind, path, data }: { kind: PreviewKind; path: string; data: string | Uint8Array }) {
   if (kind === 'markdown') return <MarkdownPreview text={String(data)} />;
   if (kind === 'json') return <JsonPreview text={String(data)} />;
+  if (kind === 'csv') return <CsvPreview text={String(data)} delimiter={/\.tsv$/i.test(path) ? '\t' : ','} />;
   if (kind === 'pdf') return <PdfPreview data={data} />;
   return <ImagePreview data={data} type={kind === 'svg' ? 'image/svg+xml' : imageMime(path)} name={path} />;
 }
@@ -36,10 +27,65 @@ function ImagePreview({ data, type, name }: { data: string | Uint8Array; type: s
   );
 }
 
-// Chromium's built-in PDF viewer renders a blob: URL in the desktop app.
+// Chromium's built-in PDF viewer renders a blob: URL in the desktop app; on the web only browsers that ship a viewer can.
 function PdfPreview({ data }: { data: string | Uint8Array }) {
   const url = useObjectUrl(data, 'application/pdf');
+  if (!host.isDesktop && !navigator.pdfViewerEnabled) return <NoPdfViewerState />;
   return !!url && <iframe src={url} title="PDF preview" className="size-full border-0" />;
+}
+
+function NoPdfViewerState() {
+  return (
+    <Empty className="h-full">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <DocumentText />
+        </EmptyMedia>
+        <EmptyTitle>No PDF viewer here</EmptyTitle>
+        <EmptyDescription>This browser can't show PDFs inline. Download the file or open it in the desktop app.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+// ponytail: renders the first MAX_CSV_ROWS rows, virtualize if people need to scroll past that.
+const MAX_CSV_ROWS = 1000;
+
+// A plain <table>, not the shadcn Table: its overflow-x wrapper would become the sticky header's scroll container.
+function CsvPreview({ text, delimiter }: { text: string; delimiter: string }) {
+  const [head = [], ...rows] = useMemo(() => parseCsv(text, delimiter), [text, delimiter]);
+  const shown = rows.slice(0, MAX_CSV_ROWS);
+  return (
+    <div className="h-full overflow-auto">
+      <table className="w-max min-w-full border-separate border-spacing-0 type-meta tabular">
+        <TableHeader className="sticky top-0 z-10 bg-background [&_tr]:border-0">
+          <TableRow className="hover:bg-transparent">
+            {head.map((cell, i) => (
+              <TableHead key={i} className="h-8 px-3 shadow-[inset_0_-1px_0_var(--border)]">
+                {cell}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {shown.map((row, r) => (
+            <TableRow key={r} className="border-0">
+              {row.map((cell, c) => (
+                <TableCell key={c} className="max-w-80 truncate px-3 py-1" title={cell.length > 40 ? cell : undefined}>
+                  {cell}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </table>
+      {rows.length > MAX_CSV_ROWS && (
+        <p className="px-3 py-2 type-caption text-subtle-foreground">
+          Showing the first {MAX_CSV_ROWS.toLocaleString()} of {rows.length.toLocaleString()} rows
+        </p>
+      )}
+    </div>
+  );
 }
 
 function MarkdownPreview({ text }: { text: string }) {

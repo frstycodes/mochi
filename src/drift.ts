@@ -54,8 +54,24 @@ export const localClassifier: DriftClassifier = (prompt, thread) => {
   return { kind: 'on-goal', reason: `Close enough to "${best}"` };
 };
 
-// GAP: no model runtime yet. Once host.agent runs real agents, plug a small-model call in here with setDriftClassifier;
-// it gets the prompt, goal and open steps and must answer one DriftKind plus a one-line reason.
+const KINDS: DriftKind[] = ['on-goal', 'scope-add', 'off-goal'];
+const MODEL_TIMEOUT_MS = 4000;
+
+/** Clear cases locally; otherwise `model`'s `{ verdict, reason }` within the timeout, falling back to the local classifier on any failure. */
+export async function classifyWithModel(prompt: string, thread: Thread, model: (signal: AbortSignal) => Promise<unknown>, timeoutMs = MODEL_TIMEOUT_MS): Promise<DriftVerdict> {
+  const local = judgeLocally(prompt, thread);
+  if (local) return local;
+  const signal = AbortSignal.timeout(timeoutMs);
+  const timeout = new Promise<never>((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+  try {
+    const answer = (await Promise.race([model(signal), timeout])) as { verdict?: unknown; reason?: unknown } | null;
+    if (!KINDS.includes(answer?.verdict as DriftKind) || typeof answer?.reason !== 'string') throw new Error('Malformed verdict');
+    return { kind: answer!.verdict as DriftKind, reason: answer!.reason as string };
+  } catch {
+    return localClassifier(prompt, thread);
+  }
+}
+
 let classifier: DriftClassifier = localClassifier;
 
 export function setDriftClassifier(next: DriftClassifier) {

@@ -50,6 +50,8 @@ export function useRewindActions() {
     const checkpoint = checkpointForMessage(latest.current, thread.id, index);
     if (!entry || !checkpoint) return;
     const cwd = worktreePath(thread.id);
+    // Claude's own checkpoints first, so the git restore after it has the last word on the files.
+    if (entry.who === 'you') await host.agent.rewindFiles(thread.id, entry.text).catch((error) => console.warn('Claude file rewind failed', error));
     try {
       if (checkpoint.ref && cwd) await host.git.restoreCheckpoint(cwd, thread.id, checkpoint.n);
     } catch (error) {
