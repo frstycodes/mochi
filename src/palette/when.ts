@@ -64,6 +64,12 @@ export function available<T extends { id: string; when?: Rule }>(actions: readon
   return actions.filter((a) => !a.when || a.when(scope));
 }
 
+/** A bulk menu item over several targets: which scopes its rule allows and which it doesn't. Enabled only when `skipped` is empty. */
+export function splitByRule(rule: Rule | undefined, scopes: ActionScope[]) {
+  const applies = scopes.filter((s) => !rule || rule(s));
+  return { applies, skipped: scopes.filter((s) => !applies.includes(s)) };
+}
+
 const IS_DESKTOP = typeof window !== 'undefined' && !!window.harnessHost;
 
 export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_DESKTOP): ActionScope {

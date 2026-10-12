@@ -31,6 +31,18 @@ export function togglePin(threads: Thread[], spaceId: string, id: string) {
   return { pinned: [...pinned, id], unpinned: unpinned.filter((u) => u !== id) };
 }
 
+/** Bulk pin or unpin: the `reorder` lists after toggling each of `ids` in turn, so pins land in selection order. Null when Pinned would overflow. */
+export function pinMany(threads: Thread[], spaceId: string, ids: string[]) {
+  let current = threads;
+  let lists: { pinned: string[]; unpinned: string[] } | null = null;
+  for (const id of ids) {
+    lists = togglePin(current, spaceId, id);
+    if (!lists) return null;
+    current = reorderThreads(current, lists.pinned, lists.unpinned);
+  }
+  return lists;
+}
+
 /** Alt ↑/↓ over the combined list [...pinned, ...unpinned]: crossing the boundary pins or unpins. */
 export function stepPin(pinned: string[], unpinned: string[], id: string, step: 1 | -1) {
   const isPinned = pinned.includes(id);

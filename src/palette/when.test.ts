@@ -4,7 +4,7 @@ import { singleLayout, splitLeaf, type View } from '../layout/tree.ts';
 import type { Pane, QueueItem, Thread } from '../model.ts';
 import { reviewThreads, stepIndex } from '../review/order.ts';
 import type { State } from '../store/index.tsx';
-import { available, scopeOf, when } from './when.ts';
+import { available, scopeOf, splitByRule, when } from './when.ts';
 
 const thread = (id: string, patch: Partial<Thread> = {}) => ({ id, spaceId: 's', status: 'running', repo: { project: 'p', branch: 'b' }, ...patch }) as Thread;
 const review = (threadId: string, createdAt: number) => ({ id: `q-${threadId}`, kind: 'review', threadId, createdAt }) as QueueItem;
@@ -144,4 +144,14 @@ test('a split header targets that split and its thread; the focused split stays 
   assert.equal(scope.thread?.id, 'b');
   assert.equal(scope.isFocused, false);
   assert.equal(scopeOf(s).leafId, layout.focusId);
+});
+
+test('bulk: a rule splits the selected threads into those it applies to and those it skips', () => {
+  const s = state({ kind: 'thread', id: 'a' }, [thread('a', { orbitSlot: 1 }), thread('b'), thread('c', { status: 'settled' })]);
+  const scopes = ['a', 'b', 'c'].map((threadId) => scopeOf(s, { threadId }));
+  const ids = (list: { thread?: Thread }[]) => list.map((x) => x.thread?.id);
+  const pin = splitByRule(when.unpinned, scopes);
+  assert.deepEqual([ids(pin.applies), ids(pin.skipped)], [['b'], ['a', 'c']]);
+  assert.deepEqual(ids(splitByRule(when.liveThread, scopes).skipped), ['c']);
+  assert.deepEqual(splitByRule(undefined, scopes).skipped, []);
 });

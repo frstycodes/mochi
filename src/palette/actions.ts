@@ -9,7 +9,7 @@ import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import { SPACES, type Thread } from '../model';
 import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
-import { togglePin } from '../reorder';
+import { pinMany } from '../reorder';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
@@ -35,6 +35,8 @@ export interface PaletteAction {
   shortcut?: Key[];
   when?: (scope: ActionScope) => boolean;
   run: (ctx: ActionContext) => void;
+  /** Bulk menus over a multi-selection: the same action on several threads with one toast. Actions without it stay out of bulk menus. */
+  many?: { title: string; skipReason: string; run: (threads: Thread[], ctx: ActionContext) => void };
 }
 
 /** Every app action mod K and the context menus can run. A new feature adds one entry here; `when` hides it where it would do nothing, and `run` acts on `scope`, never on the focused split directly. */
@@ -45,17 +47,17 @@ export const ACTIONS = [
   { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, shortcut: ['N'], run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 
   { id: 'thread-open', group: 'Thread', title: 'Open thread', icon: ArrowRight, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'go', view: { kind: 'thread', id: t.id } })) },
-  { id: 'thread-open-split', group: 'Thread', title: 'Open in new split', icon: RowVertical, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'layout-split', view: { kind: 'thread', id: t.id } })) },
-  { id: 'thread-settle', group: 'Thread', title: 'Settle thread', icon: Archive, when: when.liveThread, run: onThread((t, { dispatch }) => toggleSettle(t, dispatch)) },
-  { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => toggleSettle(t, dispatch)) },
-  { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: ['mod', 'shift', 'P'], when: when.unpinned, run: onThread(pin) },
-  { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, shortcut: ['mod', 'shift', 'P'], when: when.pinned, run: onThread(pin) },
+  { id: 'thread-open-split', group: 'Thread', title: 'Open in new split', icon: RowVertical, when: when.unfocusedThread, run: onThread((t, ctx) => openSplits([t], ctx)), many: { title: 'Open each in a new split', skipReason: 'already open', run: openSplits } },
+  { id: 'thread-settle', group: 'Thread', title: 'Settle thread', icon: Archive, when: when.liveThread, run: onThread((t, { dispatch }) => toggleSettle([t], dispatch)), many: { title: 'Settle threads', skipReason: 'already settled', run: (ts, { dispatch }) => toggleSettle(ts, dispatch) } },
+  { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => toggleSettle([t], dispatch)), many: { title: 'Reactivate threads', skipReason: 'not settled', run: (ts, { dispatch }) => toggleSettle(ts, dispatch) } },
+  { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: ['mod', 'shift', 'P'], when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
+  { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, shortcut: ['mod', 'shift', 'P'], when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
   { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: Routing, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
-  { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread(watch) },
-  { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread(watch) },
-  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyText(t.repo!.branch, 'Copied branch name')) },
+  { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
+  { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
+  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
   { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },
 
@@ -122,10 +124,22 @@ function onTab(fn: (tab: PaneTab, thread: Thread, ctx: ActionContext) => void) {
   return (ctx: ActionContext) => ctx.scope.tab && ctx.scope.thread && fn(ctx.scope.tab, ctx.scope.thread, ctx);
 }
 
-function watch(thread: Thread, { state, dispatch }: ActionContext) {
-  dispatch({ type: 'watch-toggle', threadId: thread.id });
-  toast(state.watched.includes(thread.id) ? `Stopped watching ${thread.title}` : `Watching ${thread.title}`);
+function openSplits(threads: Thread[], ctx: ActionContext) {
+  threads.forEach((t) => ctx.dispatch({ type: 'layout-split', view: { kind: 'thread', id: t.id } }));
+  ctx.dispatch({ type: 'overview-toggle', isOpen: false });
 }
+
+function watch(threads: Thread[], { state, dispatch }: ActionContext) {
+  threads.forEach((t) => dispatch({ type: 'watch-toggle', threadId: t.id }));
+  const isStopping = state.watched.includes(threads[0].id);
+  toast(isStopping ? `Stopped watching ${named(threads)}` : `Watching ${named(threads)}`);
+}
+
+function copyBranches(threads: Thread[]) {
+  copyText(threads.map((t) => t.repo!.branch).join('\n'), threads.length === 1 ? 'Copied branch name' : `Copied ${threads.length} branch names`);
+}
+
+const named = (threads: Thread[]) => (threads.length === 1 ? threads[0].title : `${threads.length} threads`);
 
 /** Closes several tabs at once; their pane comes back whole from the undo toast. */
 function closeTabs(threadId: string, tabs: PaneTab[], { state, dispatch }: ActionContext) {
@@ -135,11 +149,11 @@ function closeTabs(threadId: string, tabs: PaneTab[], { state, dispatch }: Actio
   toast(tabs.length === 1 ? 'Closed 1 tab' : `Closed ${tabs.length} tabs`, { action: { label: 'Undo', onClick: () => dispatch({ type: 'pane-restore', pane: before }) } });
 }
 
-function pin(thread: Thread, { state, dispatch }: ActionContext) {
-  const lists = togglePin(state.threads, state.spaceId, thread.id);
+function pin(threads: Thread[], { state, dispatch }: ActionContext) {
+  const lists = pinMany(state.threads, state.spaceId, threads.map((t) => t.id));
   if (!lists) return toast('Pinned is full', { description: 'Orbit has five pin slots. Unpin a thread first.' });
   dispatch({ type: 'reorder', ...lists });
-  toast(lists.pinned.includes(thread.id) ? `Pinned ${thread.title}` : `Unpinned ${thread.title}`);
+  toast(lists.pinned.includes(threads[0].id) ? `Pinned ${named(threads)}` : `Unpinned ${named(threads)}`);
 }
 
 // Summary visibility is ThreadView-local state; pressing its header toggle avoids lifting it into the store.

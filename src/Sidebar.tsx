@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Sun, TaskSquare, Undo } from 'reicon-react';
@@ -26,8 +26,9 @@ import { cn } from '@/lib/utils';
 import { PIN_SLOTS, SPACES, type PullRequest, type Thread } from './model';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
-import { THREAD_MENU } from './menus/menus';
-import { TargetContextMenu } from './menus/TargetContextMenu';
+import { ThreadRowMenu } from './menus/ThreadRowMenu';
+import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
+import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
 import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
@@ -147,7 +148,16 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
   const active = activeThreads(threads, spaceId);
   const settled = threads.filter((t) => t.status === 'settled');
   const isActive = (t: Thread) => view.kind === 'thread' && view.id === t.id;
-  const row = (t: Thread) => <ThreadItem thread={t} isActive={isActive(t)} onSelect={() => go({ kind: 'thread', id: t.id })} />;
+  const order = [...pinned, ...active, ...settled].map((t) => t.id);
+  const selection = useThreadSelection(order, view.kind === 'thread' ? view.id : undefined);
+  const row = (t: Thread) => (
+    <ThreadItem
+      thread={t}
+      isActive={isActive(t)}
+      isSelected={selection.ids.includes(t.id)}
+      onSelect={(e) => selection.onClick(e, t.id) && go({ kind: 'thread', id: t.id })}
+    />
+  );
 
   return (
     <>
@@ -171,38 +181,72 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
         </SidebarGroupContent>
       </SidebarGroup>
 
-      <ThreadList pinned={pinned} active={active} row={row} />
+      {/* `contents` keeps the groups' own layout; it only collects Esc and Shift ↑/↓ from every thread row. */}
+      <div className="contents" onKeyDown={selection.onKeyDown}>
+        <ThreadList pinned={pinned} active={active} row={row} selectedIds={selection.ids} />
 
-      {settled.length > 0 && (
-        <Collapsible className="group/settled">
-          <SidebarGroup>
-            <SidebarGroupLabel asChild>
-              <CollapsibleTrigger className="hover:text-sidebar-foreground">
-                Settled
-                <span className="ml-1 tabular">{settled.length}</span>
-                <ChevronRight className="ml-auto size-3 transition-transform duration-150 group-data-[state=open]/settled:rotate-90" />
-              </CollapsibleTrigger>
-            </SidebarGroupLabel>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {settled.map((t) => (
-                    <TargetContextMenu key={t.id} target={{ threadId: t.id }} groups={THREAD_MENU}>
-                      <SidebarMenuItem>{row(t)}</SidebarMenuItem>
-                    </TargetContextMenu>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </SidebarGroup>
-        </Collapsible>
-      )}
+        {settled.length > 0 && (
+          <Collapsible className="group/settled">
+            <SidebarGroup>
+              <SidebarGroupLabel asChild>
+                <CollapsibleTrigger className="hover:text-sidebar-foreground">
+                  Settled
+                  <span className="ml-1 tabular">{settled.length}</span>
+                  <ChevronRight className="ml-auto size-3 transition-transform duration-150 group-data-[state=open]/settled:rotate-90" />
+                </CollapsibleTrigger>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {settled.map((t) => (
+                      <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
+                        <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
+                      </ThreadRowMenu>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
+        )}
+      </div>
     </>
   );
 }
 
+/**
+ * Finder-style selection over the space's thread rows: a plain click opens the thread and clears it, Shift-click selects a range
+ * from the anchor, mod-click adds or removes one, Shift ↑/↓ extends from the focused row, Esc clears.
+ */
+function useThreadSelection(order: string[], openId: string | undefined) {
+  const [selection, setSelection] = useState<Selection>({ ids: [], anchor: undefined });
+  const current = { ids: selection.ids.filter((id) => order.includes(id)), anchor: selection.anchor ?? openId };
+
+  /** True when the click should open the thread. */
+  const onClick = (e: ReactMouseEvent, id: string) => {
+    if (e.shiftKey) return void setSelection({ ids: selectRange(order, current.anchor, id), anchor: current.anchor });
+    if (isMod(e)) return void setSelection(toggleSelected(order, current, id));
+    setSelection({ ids: [], anchor: id });
+    return true;
+  };
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === 'Escape' && current.ids.length > 0) {
+      e.stopPropagation();
+      return setSelection({ ids: [], anchor: undefined });
+    }
+    const id = (e.target as HTMLElement).closest('[data-thread-row]')?.getAttribute('data-thread-row');
+    if (!id || !e.shiftKey || e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const next = extendSelection(order, { ids: current.ids, anchor: current.ids.length > 0 ? current.anchor : id }, id, e.key === 'ArrowUp' ? -1 : 1);
+    if (!next) return;
+    setSelection(next.selection);
+    e.currentTarget.querySelector<HTMLElement>(`[data-thread-row="${next.focusId}"] [data-sidebar=menu-button]`)?.focus();
+  };
+  return { ids: current.ids, onClick, onKeyDown };
+}
+
 /** Pinned and active threads, split by the Threads label. Drag a row across the label to pin or unpin, within a section to reorder, or out onto a split to open it there. Alt ↑/↓ does the same from the keyboard. */
-function ThreadList({ pinned, active, row }: { pinned: Thread[]; active: Thread[]; row: (t: Thread) => ReactNode }) {
+function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; active: Thread[]; row: (t: Thread) => ReactNode; selectedIds: string[] }) {
   const { dispatch } = useHarness();
   const listRef = useRef<HTMLUListElement>(null);
   const pinnedIds = pinned.map((t) => t.id);
@@ -220,9 +264,10 @@ function ThreadList({ pinned, active, row }: { pinned: Thread[]; active: Thread[
   const section = (threads: Thread[], isPinned: boolean) => {
     const rows = threads.filter((t) => t.id !== drag.state?.id).map((t, i) => {
       const item = (
-        <TargetContextMenu key={t.id} target={{ threadId: t.id }} groups={THREAD_MENU}>
+        <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selectedIds}>
           <SidebarMenuItem
             data-row-id={t.id}
+            data-thread-row={t.id}
             data-pinned={isPinned || undefined}
             onPointerDown={(e) => drag.onPointerDown(e, t)}
             onKeyDown={(e) => {
@@ -234,7 +279,7 @@ function ThreadList({ pinned, active, row }: { pinned: Thread[]; active: Thread[
           >
             {row(t)}
           </SidebarMenuItem>
-        </TargetContextMenu>
+        </ThreadRowMenu>
       );
       if (!isPinned) return item;
       return (
@@ -421,13 +466,20 @@ function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: Re
   );
 }
 
-function ThreadItem({ thread, isActive, onSelect }: { thread: Thread; isActive: boolean; onSelect: () => void }) {
+function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
   const pr = thread.prs[thread.prs.length - 1];
   return (
     <>
-      <SidebarMenuButton isActive={isActive} onClick={onSelect} tooltip={thread.title} className="h-auto flex-col items-stretch gap-1 py-2 group-has-data-[sidebar=menu-action]/menu-item:pr-2">
+      <SidebarMenuButton
+        isActive={isActive}
+        data-selected={isSelected || undefined}
+        aria-description={isSelected ? 'Selected' : undefined}
+        onClick={onSelect}
+        tooltip={thread.title}
+        className="h-auto flex-col items-stretch gap-1 py-2 group-has-data-[sidebar=menu-action]/menu-item:pr-2 data-selected:bg-sidebar-accent"
+      >
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
           {thread.repo ? (
             <>
