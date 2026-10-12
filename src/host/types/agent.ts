@@ -4,6 +4,8 @@ import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
   provider: Provider;
+  /** The profile whose account for `provider` the thread runs on, for its whole life. */
+  spaceId: string;
   cwd: string;
   prompt: string;
   model?: string;
@@ -24,6 +26,7 @@ export type AgentEvent =
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
   | { threadId: string; type: 'resolved'; requestId: string }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
