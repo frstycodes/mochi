@@ -75,6 +75,15 @@ test('an approval goes to the queue, blocks the running step, and its answer res
   assert.equal(thread(s, 'rl').steps.find((x) => x.id === 'rl5')!.status, 'running');
 });
 
+test('a request the agent withdraws leaves the queue and unblocks the step', () => {
+  let s = live(base(), 'rl');
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'approval', requestId: 'tool-8', kind: 'command', title: 'Run it', detail: '' });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'resolved', requestId: 'tool-8' });
+  assert.ok(!s.queue.some((q) => q.requestId === 'tool-8'));
+  assert.equal(thread(s, 'rl').steps.find((x) => x.id === 'rl5')!.status, 'running');
+  assert.equal(applyAgentEvent(s, { threadId: 'rl', type: 'resolved', requestId: 'tool-8' }), s, 'resolving an answered request is a no-op');
+});
+
 test('a question goes to the queue as choices and resolves with the picked label', () => {
   let s = live(base(), 'rl');
   s = applyAgentEvent(s, { threadId: 'rl', type: 'question', requestId: 'ask-1', questions: [{ text: 'Which store?', options: ['Redis', 'Postgres'] }] });
