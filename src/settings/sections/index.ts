@@ -80,6 +80,7 @@ export const SETTINGS_SECTIONS = [
           { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check' },
           { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
           { id: `${id}Model`, label: `${name} default model`, keywords: 'model' },
+          { id: `${id}SecondOpinionModel`, label: `${name} second opinion model`, keywords: 'model review verdict' },
           { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
           { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },
           ...(apiKey ? [{ id: `${id}ApiKey`, label: apiKey.label, keywords: 'key billing keychain' }] : []),

@@ -117,6 +117,19 @@ function HarnessSettings({ provider }: { provider: Provider }) {
               <CommitInput id={settingControlId(`${provider}Model`)} value={settings.harnesses[provider].model} placeholder={harness.modelHint} onCommit={(model) => void update({ harnesses: { [provider]: { model } } })} />
             }
           />
+          <SettingsRow
+            id={`${provider}SecondOpinionModel`}
+            label="Second opinion model"
+            description={`What ${harness.name} reviews other threads on. Empty uses the default model.`}
+            control={
+              <CommitInput
+                id={settingControlId(`${provider}SecondOpinionModel`)}
+                value={settings.harnesses[provider].secondOpinionModel}
+                placeholder="Default model"
+                onCommit={(secondOpinionModel) => void update({ harnesses: { [provider]: { secondOpinionModel } } })}
+              />
+            }
+          />
         </SettingsGroup>
       )}
       {!isMissing && <AccountsGroup provider={provider} />}

@@ -97,6 +97,18 @@ export interface AgentAskMessage {
   text: string;
 }
 
+/** A read-only second-opinion run on `provider`, in the thread's folder. The renderer builds the prompt and checks the verdict. */
+export interface AgentReviewRequest {
+  provider: Provider;
+  /** The thread's profile, whose account for `provider` reviews. */
+  spaceId: string;
+  cwd: string;
+  prompt: string;
+}
+
+/** A review's stream under the id `review` returned: what it is doing (`step`), then one `done` with its answer (structured output or text) or one `error`. */
+export type AgentReviewEvent = { id: string; type: 'step'; text: string } | { id: string; type: 'done'; result: unknown } | { id: string; type: 'error'; text: string };
+
 /** The statuses an agent may set on a step through Mochi's tools. */
 export const STEP_STATUSES = ['ready', 'running', 'waiting', 'blocked', 'done', 'dropped'] as const satisfies readonly StepStatus[];
 
@@ -124,6 +136,9 @@ export interface AgentHost {
   /** Streams the answer from `model` on the profile's account as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
   ask(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel): Promise<{ id: string }>;
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
+  /** Starts a review run beside the thread's agent, never touching its session. Events arrive on `onReviewEvent`. */
+  review(request: AgentReviewRequest): Promise<{ id: string }>;
+  onReviewEvent(listener: (event: AgentReviewEvent) => void): () => void;
   /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
@@ -143,6 +158,8 @@ export const agentMethods = {
   onEvent: 'event',
   ask: 'invoke',
   onAskEvent: 'event',
+  review: 'invoke',
+  onReviewEvent: 'event',
   classify: 'invoke',
   rewindFiles: 'invoke',
   warm: 'invoke',

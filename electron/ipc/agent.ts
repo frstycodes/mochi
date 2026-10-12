@@ -2,12 +2,15 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentRunOptions } from '../../src/host/types/agent.ts';
+import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentReviewEvent, AgentReviewRequest, AgentRunOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
+import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
+import { secondOpinionModel } from '../agents/config.ts';
+import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent } from '../agents/ask.ts';
 import { codexUrl, resolveToolCall } from '../mcp/server.ts';
 import { addWorktree } from './git.ts';
@@ -37,7 +40,18 @@ function images(value: unknown) {
 // Threads without a Claude or Codex session run on the renderer's demo adapter.
 const runtime = notImplemented('agent runtime');
 const broadcast = (event: AgentEvent) => BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('agent:onEvent', event));
-const codex = new CodexAdapter(broadcast, undefined, undefined, codexUrl);
+// Codex review threads report like any thread; their events go to the review that owns them, never to the store.
+const reviewers = new Map<string, (event: AgentEvent) => void>();
+const codex = new CodexAdapter(
+  (event) => {
+    const reviewer = reviewers.get(event.threadId);
+    if (reviewer) reviewer(event);
+    else broadcast(event);
+  },
+  undefined,
+  undefined,
+  codexUrl,
+);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 
@@ -126,6 +140,25 @@ export const agent = {
     })();
     return { id };
   },
+  async review(sender, request) {
+    const r = record(request, 'request');
+    if (!PROVIDERS.includes(r.provider as string)) throw new TypeError('request.provider must be claude or codex');
+    string(r.spaceId, 'request.spaceId', 256);
+    string(r.prompt, 'request.prompt', 100_000);
+    const run = { ...r, cwd: await agentFolder('review', string(r.cwd, 'request.cwd')) } as AgentReviewRequest;
+    const id = `review-${++nextId}`;
+    const send = (event: AgentReviewEvent) => !sender.isDestroyed() && sender.send('agent:onReviewEvent', event);
+    const abort = new AbortController();
+    sender.once('destroyed', () => abort.abort());
+    void (async () => {
+      try {
+        for await (const update of run.provider === 'claude' ? reviewClaude(run, abort) : reviewCodex(id, run, abort.signal)) send(update.type === 'step' ? { id, type: 'step', text: update.text } : { id, type: 'done', result: update.result });
+      } catch (error) {
+        send({ id, type: 'error', text: error instanceof Error ? error.message : String(error) });
+      }
+    })();
+    return { id };
+  },
   async toolResult(_sender, id, result) {
     string(id, 'id', 256);
     const r = record(result, 'result');
@@ -149,6 +182,36 @@ export const agent = {
     return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },
 } satisfies Handlers<AgentHost>;
+
+/** A Codex review on a thread of its own: tool starts become steps, the turn's last message is the answer. */
+async function* reviewCodex(id: string, request: AgentReviewRequest, signal: AbortSignal): AsyncGenerator<ReviewUpdate> {
+  const updates: (ReviewUpdate | Error)[] = [];
+  let wake = () => {};
+  let answer = '';
+  reviewers.set(id, (event) => {
+    if (event.type === 'message') answer = event.isDelta ? answer + event.text : event.text;
+    else if (event.type === 'tool' && event.phase === 'start') updates.push({ type: 'step', text: event.text });
+    else if (event.type === 'turn-end') updates.push(event.status === 'done' ? { type: 'done', result: answer } : new Error(event.error ?? `Codex review ${event.status}`));
+    wake();
+  });
+  signal.addEventListener('abort', () => wake(), { once: true });
+  try {
+    await codex.review(id, { provider: 'codex', spaceId: request.spaceId, cwd: request.cwd, prompt: request.prompt, model: secondOpinionModel('codex') }, VERDICT_SCHEMA);
+    while (!signal.aborted) {
+      const update = updates.shift();
+      if (!update) {
+        await new Promise<void>((resolve) => (wake = resolve));
+        continue;
+      }
+      if (update instanceof Error) throw update;
+      yield update;
+      if (update.type === 'done') return;
+    }
+  } finally {
+    reviewers.delete(id);
+    await codex.stop(id).catch(() => {});
+  }
+}
 
 /** The project folder, checked to exist; a folderless chat (null) gets its own folder, so the agent never runs in Mochi's cwd (`/` when packaged). */
 async function agentFolder(threadId: string, cwd: unknown) {

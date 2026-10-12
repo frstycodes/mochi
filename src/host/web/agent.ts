@@ -1,4 +1,5 @@
 import { localClassifier } from '../../drift.ts';
+import { demoReviewer } from '../../secondOpinion/demo.ts';
 import { chunks, mockAnswer } from '../../sidechat/mockAnswer.ts';
 import type { AgentAskEvent, AgentEvent, AgentHost } from '../types/agent.ts';
 
@@ -34,6 +35,7 @@ export const agent: AgentHost = {
     askListeners.add(listener);
     return () => askListeners.delete(listener);
   },
+  ...demoReviewer,
   async classify(prompt, thread) {
     return localClassifier(prompt, thread);
   },
