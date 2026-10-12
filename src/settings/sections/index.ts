@@ -99,6 +99,7 @@ export const SETTINGS_SECTIONS = [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread' },
       { id: 'permissions', label: 'Permissions', keywords: 'ask auto edit full access' },
       { id: 'runsOn', label: 'Runs on', keywords: 'device machine cloud sandbox' },
+      { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question sonnet opus haiku' },
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
     ],

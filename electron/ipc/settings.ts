@@ -4,7 +4,7 @@ import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
 import { detect } from '../settings/detect.ts';
-import { integer, record, string, type Handlers } from './handlers.ts';
+import { integer, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 export const settings = {
   async get() {
@@ -82,6 +82,10 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
     if (typeof p.prDrafts !== 'boolean') throw new TypeError('prDrafts must be true or false');
     patch.prDrafts = p.prDrafts;
   }
+  if (p.sideChatModel !== undefined) {
+    patch.sideChatModel = string(p.sideChatModel, 'sideChatModel', MAX_MODEL_CHARS).trim();
+    if (!patch.sideChatModel) throw new TypeError('Pick a side chat model');
+  }
   if (p.harnesses === undefined) return patch;
   patch.harnesses = {};
   for (const [id, value] of Object.entries(record(p.harnesses, 'harnesses'))) {
@@ -91,7 +95,7 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
       next.path = string(h.path, 'path').trim();
       if (next.path && !isAbsolute(next.path)) throw new TypeError('The path must be absolute');
     }
-    if (h.model !== undefined) next.model = string(h.model, 'model', 128).trim();
+    if (h.model !== undefined) next.model = string(h.model, 'model', MAX_MODEL_CHARS).trim();
     patch.harnesses[id as Provider] = next;
   }
   return patch;

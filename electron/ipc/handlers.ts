@@ -8,7 +8,9 @@ export type Handlers<T> = {
     : never;
 };
 
-export const notImplemented = (name: string) => async (): Promise<never> => {
+export const MAX_MODEL_CHARS = 128;
+
+export const notImplemented =(name: string) => async (): Promise<never> => {
   throw new Error(`${name} is not implemented yet`);
 };
 

@@ -77,8 +77,8 @@ export interface AgentHost {
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
-  /** Streams the answer as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
-  ask(context: AgentAskContext, messages: AgentAskMessage[]): Promise<{ id: string }>;
+  /** Streams the answer from Claude `model` as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
+  ask(context: AgentAskContext, messages: AgentAskMessage[], model: string): Promise<{ id: string }>;
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
   /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;

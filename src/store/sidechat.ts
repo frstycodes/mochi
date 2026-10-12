@@ -25,6 +25,10 @@ export interface SideChat {
   messages: SideMessage[];
   /** A selection waiting in the composer for its question. */
   draft?: Quote;
+  /** Catalog id of the Claude model answering; unset follows Settings › Defaults. */
+  model?: string;
+  /** A question `/side` sent from the thread's composer, asked as soon as the tab mounts. */
+  pending?: string;
 }
 
 /** threadId → pane tab id → chat. Lives beside the thread, never inside it, so asking can't touch goal, steps or activity. */
@@ -33,7 +37,8 @@ export interface SideChatState {
 }
 
 export type SideChatAction =
-  | { type: 'sidechat-open'; threadId: string; quote?: Quote }
+  | { type: 'sidechat-open'; threadId: string; quote?: Quote; ask?: string }
+  | { type: 'sidechat-model'; threadId: string; tabId: string; model: string }
   | { type: 'sidechat-draft'; threadId: string; tabId: string; quote?: Quote }
   | { type: 'sidechat-ask'; threadId: string; tabId: string; id: string; text: string }
   | { type: 'sidechat-stream'; threadId: string; tabId: string; id: string; text: string; isDone?: boolean }
@@ -52,18 +57,20 @@ export function initialSideChat(saved = loadSideChats()): SideChatState {
 export function sidechatReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'sidechat-open':
-      return open(state, action.threadId, action.quote);
+      return open(state, action.threadId, action.quote, action.ask);
+    case 'sidechat-model':
+      return patchChat(state, action.threadId, action.tabId, (c) => ({ ...c, model: action.model }));
     case 'sidechat-draft':
       return patchChat(state, action.threadId, action.tabId, (c) => ({ ...c, draft: action.quote }));
     case 'sidechat-ask': {
       const question: SideMessage = { id: `${action.id}-q`, role: 'user', text: action.text };
       const answer: SideMessage = { id: action.id, role: 'assistant', text: '', isStreaming: true };
-      return patchChat(state, action.threadId, action.tabId, (c) => ({ messages: [...c.messages, { ...question, quote: c.draft }, answer] }));
+      return patchChat(state, action.threadId, action.tabId, (c) => ({ model: c.model, messages: [...c.messages, { ...question, quote: c.draft }, answer] }));
     }
     case 'sidechat-stream':
       return patchMessage(state, action, (m) => ({ ...m, text: m.text + action.text, isStreaming: !action.isDone }));
     case 'sidechat-clear':
-      return patchChat(state, action.threadId, action.tabId, () => EMPTY);
+      return patchChat(state, action.threadId, action.tabId, (c) => ({ ...EMPTY, model: c.model }));
     case 'sidechat-replace':
       return { ...state, sidechats: action.sidechats };
     case 'sidechat-promote':
@@ -99,22 +106,22 @@ function loadSideChats(): SideChatState['sidechats'] {
     const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(SIDECHAT_STORAGE_KEY);
     const saved: SideChatState['sidechats'] = raw ? JSON.parse(raw) : {};
     // A reload cuts any answer mid-stream; its listener is gone, so it would spin forever.
-    return mapChats(saved, (c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, isStreaming: false })) }));
+    return mapChats(saved, ({ pending: _, ...c }) => ({ ...c, messages: c.messages.map((m) => ({ ...m, isStreaming: false })) }));
   } catch {
     return {};
   }
 }
 
-/** Reuses the thread's newest side chat tab, else opens one, and parks the quote in its composer. */
-function open(state: State, threadId: string, quote?: Quote): State {
+/** Reuses the thread's newest side chat tab, else opens one, and parks the quote in its composer or the question to ask. */
+function open(state: State, threadId: string, quote?: Quote, ask?: string): State {
   const existing = state.panes.find((p) => p.threadId === threadId)?.tabs.findLast((t) => t.kind === 'sidechat' && !t.isPopped);
   const next = existing
     ? panesReducer(state, { type: 'pane-select-tab', threadId, tabId: existing.id })
     : panesReducer(state, { type: 'pane-open-tab', threadId, kind: 'sidechat' });
   const opened = { ...next, panes: next.panes.map((p) => (p.threadId === threadId ? { ...p, isOpen: true } : p)) };
   const tabId = opened.panes.find((p) => p.threadId === threadId)!.activeTab;
-  if (!quote) return opened;
-  return patchChat(opened, threadId, tabId, (c) => ({ ...c, draft: quote }));
+  if (!quote && !ask) return opened;
+  return patchChat(opened, threadId, tabId, (c) => ({ ...c, ...(quote && { draft: quote }), ...(ask && { pending: ask }) }));
 }
 
 function promote(state: State, action: Extract<Action, { type: 'sidechat-promote' }>): State {

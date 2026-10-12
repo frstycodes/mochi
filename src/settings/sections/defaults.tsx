@@ -1,5 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { DEVICES } from '../../Composer';
+import { ModelPicker } from '../../ModelControls';
+import { useSideChatDefault } from '../../sidechat/useSideChat';
 import { ACCESS } from '../../runtime/controls';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
 import { useAgentSettings } from '../AgentSettings';
@@ -24,6 +26,7 @@ export function DefaultsSection() {
           control={<SettingsSelect id="runsOn" value={runsOn} options={DEVICES.map((d) => ({ value: d, label: d }))} onChange={(v) => setPrefs({ runsOn: v })} />}
         />
       </SettingsGroup>
+      <SideChatGroup />
       <DesktopOnly what="The concurrency limit only works in the Mochi desktop app.">
         <ConcurrencyGroup />
       </DesktopOnly>
@@ -35,6 +38,16 @@ export function DefaultsSection() {
 }
 
 const AGENTS = HARNESS_IDS.map((id) => ({ value: id, label: HARNESSES[id].name }));
+
+function SideChatGroup() {
+  const [model, setModel] = useSideChatDefault();
+  if (!model) return null;
+  return (
+    <SettingsGroup footer="New side chats answer on this model; the side chat's own model button can still change each one.">
+      <SettingsRow id="sideChatModel" label="Side chat model" control={<ModelPicker id={settingControlId('sideChatModel')} value={model} provider="claude" isLocked onChange={(m) => setModel(m.id)} />} />
+    </SettingsGroup>
+  );
+}
 
 function ConcurrencyGroup() {
   const { settings, update } = useAgentSettings();

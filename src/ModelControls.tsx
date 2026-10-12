@@ -16,7 +16,7 @@ import { ProviderMark } from './ui';
 const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Provider, string>;
 
 /** `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. */
-export function ModelPicker({ value, provider, isLocked, onChange }: { value: string; provider: Provider; isLocked?: boolean; onChange: (model: ModelOption) => void }) {
+export function ModelPicker({ id, value, provider, isLocked, onChange }: { id?: string; value: string; provider: Provider; isLocked?: boolean; onChange: (model: ModelOption) => void }) {
   const space = useSpace();
   const defaults = useDefaultModels();
   const favorites = usePrefs().starredModels;
@@ -39,7 +39,7 @@ export function ModelPicker({ value, provider, isLocked, onChange }: { value: st
         items={docked.map((m) => ({ value: m.id, label: m.name, icon: <ProviderMark provider={m.harness} size={18} /> }))}
       >
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground">
+          <Button id={id} variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground">
             <ProviderMark provider={model.harness} size={14} />
             {model.name}
             <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />

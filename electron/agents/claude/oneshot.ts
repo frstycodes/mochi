@@ -8,7 +8,6 @@ import type { Thread } from '../../../src/model.ts';
 import { detect } from '../../settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
 
-const ASK_MODEL = 'claude-sonnet-5-5';
 const CLASSIFY_MODEL = 'claude-haiku-5-5';
 const DETECT_TTL_MS = 5 * 60_000;
 const SPARE_IDLE_MS = 10 * 60_000;
@@ -19,10 +18,11 @@ const CLASSIFY_PROMPT =
   'Classify a message sent to a coding agent against its goal. on-goal: works toward the goal or an open step. scope-add: related, but asks for something the plan does not cover. off-goal: unrelated to the goal. Reply with only a JSON object {"verdict": "on-goal" | "scope-add" | "off-goal", "reason": "<one short sentence>"}, nothing else.';
 
 /** Side chat: a tool-less, unsaved query that never touches the thread's own session. Yields text deltas. */
-export async function* askClaude(spaceId: string, context: AgentAskContext, messages: AgentAskMessage[], abort: AbortController) {
+export async function* askClaude(spaceId: string, context: AgentAskContext, messages: AgentAskMessage[], model: string, abort: AbortController) {
   const prompt = messages.map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${m.text}`).join('\n\n');
   const instructions = `Answer side questions about a coding agent's thread from the context below, briefly, in Markdown.\n\n<thread>\n${JSON.stringify(context, null, 1)}\n</thread>`;
-  for await (const message of run(await runner(spaceId), prompt, ASK_MODEL, instructions, abort)) {
+  for await (const message of run(await runner(spaceId), prompt, model, instructions, abort)) {
+    if (message.type === 'system' && message.subtype === 'init') console.info(`side chat asked ${model}, session on ${message.model}`);
     if (message.type === 'stream_event' && message.event.type === 'content_block_delta' && message.event.delta.type === 'text_delta') yield message.event.delta.text;
     if (message.type === 'result' && message.subtype !== 'success') throw new Error(message.errors?.join('\n') || `Claude stopped: ${message.subtype}`);
   }
@@ -78,22 +78,28 @@ async function runner(spaceId: string): Promise<Runner> {
 async function* run(runner: Runner, prompt: string, model: string, instructions: string, abort: AbortController): AsyncGenerator<SDKMessage> {
   const spare = await take(runner);
   park(runner);
-  if (spare) {
-    try {
-      const claimed = spare.claim({ prompt, options: { cwd: os.tmpdir(), model, appendSystemPrompt: instructions } });
-      abort.signal.addEventListener('abort', () => claimed.close(), { once: true });
-      // `option_not_applied` means the prompt runs anyway; every other refusal answers with a `not_claimed` error result.
-      const isRefused = spare.claimed.then(() => false, (error: Error) => !error.message.startsWith('option_not_applied'));
-      for await (const message of claimed) {
-        if (message.type === 'result' && (await isRefused)) break;
-        yield message;
-      }
-      if (!(await isRefused)) return;
-    } catch (error) {
-      if (abort.signal.aborted) throw error;
-    }
-  }
+  const claimed = spare && (await claim(spare, prompt, model, instructions, abort));
+  if (claimed) return yield* claimed;
   yield* query({ prompt, options: { ...runner.options, cwd: os.tmpdir(), model, systemPrompt: `${BASE_PROMPT}\n\n${instructions}`, abortController: abort } });
+}
+
+/**
+ * The spare's Query once its claim took, else null for a cold start. `claimed` settles before the first token. Every
+ * rejection falls back, `option_not_applied` too: that one runs the prompt anyway, but on the spare's default model
+ * instead of the one asked for.
+ */
+async function claim(spare: SpareProcess, prompt: string, model: string, instructions: string, abort: AbortController) {
+  try {
+    const claimed = spare.claim({ prompt, options: { cwd: os.tmpdir(), model, appendSystemPrompt: instructions } });
+    abort.signal.addEventListener('abort', () => claimed.close(), { once: true });
+    return await spare.claimed.then(
+      () => claimed,
+      () => (claimed.close(), null),
+    );
+  } catch (error) {
+    if (abort.signal.aborted) throw error;
+    return null;
+  }
 }
 
 // At most one parked process per account (~250 MB each, SDK docs). It closes after SPARE_IDLE_MS unused, when it is

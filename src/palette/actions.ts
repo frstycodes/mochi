@@ -11,6 +11,7 @@ import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
 import { openSettings } from '../settings/open';
+import { askInSideChat } from '../sidechat/AskInSideChat';
 import { pinMany } from '../reorder';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
@@ -79,6 +80,7 @@ export const ACTIONS = [
         run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind })),
       }) satisfies PaletteAction,
   ),
+  { id: 'sidechat-ask', group: 'Side pane', title: 'Ask in side chat', icon: PANE_TABS.sidechat.icon, keywords: 'side question aside /side', when: when.thread, run: onThread((t, { dispatch }) => askInSideChat(dispatch, t.id)) },
   { id: 'tab-close', group: 'Side pane', title: 'Close tab', icon: X, shortcut: ['mod', 'W'], when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-close-tab', threadId: t.id, tabId: tab.id })) },
   { id: 'tab-close-others', group: 'Side pane', title: 'Close other tabs', icon: CloseSquare, when: when.otherTabs, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.filter((x) => x !== tab), ctx)) },
   { id: 'tab-close-right', group: 'Side pane', title: 'Close tabs to the right', icon: CloseSquare, when: when.tabsToRight, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.slice(ctx.scope.tabs.indexOf(tab) + 1), ctx)) },
