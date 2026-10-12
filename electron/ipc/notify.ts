@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Notification } from 'electron';
+import { playHaptic } from '../haptics/haptics.ts';
 import type { NotifyHost } from '../../src/host/types/notify.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
@@ -25,6 +26,9 @@ export const notify = {
   },
   async setBadge(_sender, count) {
     app.setBadgeCount(integer(count, 'count', 0, 9999));
+  },
+  async haptic() {
+    playHaptic();
   },
   async permission() {
     return Notification.isSupported() ? 'granted' : 'denied';

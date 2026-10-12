@@ -18,6 +18,8 @@ export interface NotifyHost {
   requestPermission(): Promise<NotifyPermission>;
   /** Fires after a click on a notification that carried an `id`, once the app window is focused. */
   onClick(listener: (id: string) => void): () => void;
+  /** One haptic tick on a Mac's Force Touch trackpad; a no-op where there's none. */
+  haptic(): Promise<void>;
 }
 
 export const notifyMethods = {
@@ -26,4 +28,5 @@ export const notifyMethods = {
   permission: 'invoke',
   requestPermission: 'invoke',
   onClick: 'event',
+  haptic: 'invoke',
 } satisfies Manifest<NotifyHost>;
