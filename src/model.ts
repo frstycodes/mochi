@@ -52,6 +52,10 @@ export interface ActivityEntry {
   drift?: 'on-goal' | 'scope-add' | 'off-goal';
 }
 
+export function authorName(who: Author) {
+  return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Mochi' }[who];
+}
+
 export interface SkillUse {
   name: string;
   uses: number;
@@ -133,7 +137,7 @@ export interface LiveRun {
   usage: { at: number; provider: Provider; tokens: number }[];
 }
 
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap';
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting';
 
 export interface QueueItem {
   id: string;
@@ -146,6 +150,10 @@ export interface QueueItem {
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
   requestId?: string;
+  /** A consequential Mochi tool call waiting on this card (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
+  tool?: { callId: string; options?: { id: string; label: string }[] };
+  /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
+  setting?: { id: string; suggested?: string };
   createdAt: number;
 }
 

@@ -4,6 +4,7 @@ import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
+import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 interface Live {
   codexId: string;
@@ -33,8 +34,11 @@ const POLICIES: Record<string, { approvalPolicy: string; sandbox: string }> = {
 };
 /** Codex's plan tool is off unless configured; Harness maps its plans onto goal steps, so its threads always get it. Verified against 0.155.1: without it `turn/plan/updated` never fires. */
 const PLAN_TOOL = { 'tools.update_plan.enabled': true };
-/** Mirrors Claude's `AUTO_ALLOWED` (`electron/mcp/server.ts`): goal bookkeeping runs unasked, starting an agent asks. Keys verified against 0.155.1's config schema. */
-const MOCHI_APPROVALS = { 'mcp_servers.mochi.default_tools_approval_mode': 'approve', 'mcp_servers.mochi.tools.create_thread.approval_mode': 'prompt' };
+/**
+ * Mirrors Claude's `AUTO_ALLOWED` (`electron/mcp/server.ts`): Mochi asks with its own card, so Codex never prompts, and a
+ * call may wait on that card as long as main does. `tool_timeout_sec` read in 0.155.1's binary; the approval key was verified against its config schema.
+ */
+const MOCHI_APPROVALS = { 'mcp_servers.mochi.default_tools_approval_mode': 'approve', 'mcp_servers.mochi.tool_timeout_sec': MOCHI_TIMEOUT_MS / 1000 };
 const NOT_FOUND = 'Codex is not installed or not on your PATH. Install it (`npm i -g @openai/codex`) or set its path in Settings.';
 const THREAD_TIMEOUT_MS = 120_000;
 const CRASH_WINDOW_MS = 60_000;

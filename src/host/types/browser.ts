@@ -34,6 +34,22 @@ export interface PickedElement {
   screenshot: string;
 }
 
+/** An agent's action on an element from its latest `snapshot` (Mochi's browser tools). */
+export type BrowserAct = { kind: 'click'; ref: string } | { kind: 'type'; ref: string; text: string } | { kind: 'press'; key: string } | { kind: 'scroll'; ref?: string; dx: number; dy: number };
+
+export interface BrowserSnapshot {
+  text: string;
+  /** What each `[ref=eN]` in `text` is, so the renderer can tell a submit button or a password field before acting. */
+  refs: Record<string, { role: string; name: string; isSubmit: boolean; isPassword: boolean }>;
+}
+
+export interface BrowserLog {
+  level: 'debug' | 'info' | 'warning' | 'error';
+  message: string;
+  source: string;
+  line: number;
+}
+
 export type BrowserEvent =
   | { id: string; type: 'state'; url: string; title: string; isLoading: boolean; canGoBack: boolean; canGoForward: boolean; error: string | null }
   | { id: string; type: 'console'; level: 'error' | 'warning'; message: string; source: string; line: number }
@@ -58,6 +74,12 @@ export interface BrowserHost {
   cancelPick(id: string): Promise<void>;
   /** Clears a profile's cookies, logins, storage and cache (`persist:space-<spaceId>`); open pages stay open but are signed out. */
   clearData(spaceId: string): Promise<void>;
+  /** The page as an accessibility-style tree with refs; replaces the refs of the previous snapshot. */
+  snapshot(id: string): Promise<BrowserSnapshot>;
+  /** Trusted input on a ref'd element (CDP). Resolves with a note on what happened, like the new scroll position. */
+  act(id: string, act: BrowserAct): Promise<{ note?: string }>;
+  /** The last console messages of every level, oldest first. */
+  logs(id: string): Promise<BrowserLog[]>;
   onEvent(listener: (event: BrowserEvent) => void): () => void;
 }
 
@@ -74,5 +96,8 @@ export const browserMethods = {
   pick: 'invoke',
   cancelPick: 'invoke',
   clearData: 'invoke',
+  snapshot: 'invoke',
+  act: 'invoke',
+  logs: 'invoke',
   onEvent: 'event',
 } satisfies Manifest<BrowserHost>;

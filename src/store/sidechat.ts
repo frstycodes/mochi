@@ -71,6 +71,8 @@ export function sidechatReducer(state: State, action: Action): State {
       return patchMessage(state, action, (m) => ({ ...m, text: m.text + action.text, isStreaming: !action.isDone }));
     case 'sidechat-clear':
       return patchChat(state, action.threadId, action.tabId, (c) => ({ ...EMPTY, model: c.model }));
+    case 'delete':
+      return { ...state, sidechats: Object.fromEntries(Object.entries(state.sidechats).filter(([id]) => !action.threadIds.includes(id))) };
     case 'sidechat-replace':
       return { ...state, sidechats: action.sidechats };
     case 'sidechat-promote':

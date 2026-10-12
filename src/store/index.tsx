@@ -8,6 +8,8 @@ import { resolution } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, type AgentCall } from '../runtime/live.ts';
 import { runTool } from '../runtime/tools.ts';
+import { toolEnv } from '../runtime/toolEnv.ts';
+import { applyUndo, type ToolUndo } from '../runtime/undo.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
@@ -27,7 +29,7 @@ export interface Snapshot {
 }
 
 export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState;
-export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | NotificationsAction | { type: 'reset' };
+export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | NotificationsAction | { type: 'reset' } | { type: 'tool-undo'; undo: ToolUndo };
 
 // notificationsReducer diffs what the others changed, so it runs last.
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, notificationsReducer];
@@ -38,6 +40,7 @@ function initialState(saved = getRestored()): State {
 
 function reducer(state: State, action: Action): State {
   // Resetting the demo keeps your own threads as they are.
+  if (action.type === 'tool-undo') return applyUndo(state, action.undo).state;
   if (action.type === 'reset') return { ...initialState(toSaved(state)), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }), ...initialSideChat({}) };
   return SLICES.reduce((s, slice) => slice(s, action), state);
 }
@@ -82,11 +85,15 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(
     () =>
       host.agent.onToolCall((call) => {
-        const { action, next, result } = runTool(latest.current, call, reducer);
-        if (action) dispatch(action);
-        // The next call can land before React renders this one; it must see this change.
-        latest.current = next;
-        void host.agent.toolResult(call.id, result);
+        const env = toolEnv(
+          () => latest.current,
+          (action) => {
+            dispatch(action);
+            // The next step of this call (or the next call) can run before React renders this one; it must see this change.
+            latest.current = reducer(latest.current, action);
+          },
+        );
+        void runTool(call, env).then((result) => host.agent.toolResult(call.id, result));
       }),
     [dispatch],
   );

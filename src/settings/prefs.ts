@@ -30,7 +30,11 @@ export interface Prefs {
   simulator: string;
   /** Desktop only: show the fixture threads and profiles alongside your own (`showsDemoData`). */
   demoData: boolean;
+  /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): consequential calls always ask first. */
+  agentControl: AgentControl;
 }
+
+export type AgentControl = 'read' | 'reversible' | 'everything';
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
@@ -55,6 +59,7 @@ export const DEFAULT_PREFS: Prefs = {
   searchEngine: 'duckduckgo',
   simulator: '',
   demoData: false,
+  agentControl: 'reversible',
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';

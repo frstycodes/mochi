@@ -66,6 +66,8 @@ export function panesReducer(state: State, action: Action): State {
       return { ...state, panes: mapPane(state.panes, action.pane.threadId, () => action.pane) };
     case 'pane-reorder':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, tabs: reorderTabs(p.tabs, action.order) })) };
+    case 'delete':
+      return { ...state, panes: state.panes.filter((p) => !action.threadIds.includes(p.threadId)) };
     case 'pane-update-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, tabs: p.tabs.map((t) => (t.id === action.tabId ? { ...t, ...action.patch } : t)) })) };
     default:

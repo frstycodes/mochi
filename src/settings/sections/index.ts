@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, TerminalSquare, type IconComponent } from 'reicon-react';
+import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { MODELS } from '../../runtime/controls';
 import { ALERT_KINDS } from '../../notify/model';
@@ -15,6 +15,7 @@ import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
 import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
 import { TerminalSection } from './terminal';
+import { ToolsSection } from './tools';
 
 export const SECTION_GROUPS = ['App', 'Agents', 'Workspace'] as const;
 
@@ -103,6 +104,14 @@ export const SETTINGS_SECTIONS = [
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
     ],
+  },
+  {
+    id: 'tools',
+    group: 'Agents',
+    title: 'Mochi tools',
+    icon: ShieldCheck,
+    component: ToolsSection,
+    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only reversible confirm approve mcp control browser delete' }],
   },
   {
     id: 'goals',

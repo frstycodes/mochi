@@ -44,7 +44,7 @@ export function GoalsSection() {
   );
 }
 
-const BRANCH_FROM = [
+export const BRANCH_FROM = [
   { value: 'current', label: 'Current branch' },
   { value: 'base', label: 'Base branch' },
 ] as const;

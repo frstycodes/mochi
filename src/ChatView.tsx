@@ -8,7 +8,7 @@ import { PromptInputProvider, usePromptInputController } from '@/components/ai-e
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import type { ActivityEntry, Author, Provider, QueueItem, Thread } from './model';
+import { authorName, type ActivityEntry, type Author, type Provider, type QueueItem, type Thread } from './model';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
@@ -173,10 +173,6 @@ function rowLabel(row: ChatRow) {
   if (row.kind === 'work') return `${authorName(row.who)} work log (${row.entries.length})`;
   if (row.kind === 'event') return row.entry.text;
   return `${authorName(row.entry.who)}: ${row.entry.text}`;
-}
-
-function authorName(who: Author) {
-  return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Mochi' }[who];
 }
 
 /** Reading back through the chat folds the question tray away; returning to the latest message brings it back. */

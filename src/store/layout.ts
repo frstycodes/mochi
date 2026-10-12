@@ -168,6 +168,8 @@ function reduce(state: State, action: Action): State {
     }
     case 'layout-aspect':
       return action.orientation === state.orientation ? state : { ...state, orientation: action.orientation };
+    case 'delete':
+      return { ...state, watched: state.watched.filter((id) => !action.threadIds.includes(id)), layouts: Object.fromEntries(Object.entries(state.layouts).map(([id, l]) => [id, withoutThreads(l, action.threadIds)])) };
     case 'watch-toggle': {
       const isWatched = state.watched.includes(action.threadId);
       return { ...state, watched: isWatched ? state.watched.filter((id) => id !== action.threadId) : [...state.watched, action.threadId] };
@@ -188,6 +190,13 @@ function openView(layout: SpaceLayout, view: View): SpaceLayout {
   const existing = leaves(layout.root).find((l) => sameView(l.view, view));
   if (existing) return { ...layout, focusId: existing.id, zoomId: layout.zoomId && existing.id };
   return { ...layout, root: setLeafView(layout.root, layout.focusId, view) };
+}
+
+/** Splits that showed a deleted thread (or one of its tabs) show a new thread instead. */
+function withoutThreads(layout: SpaceLayout, ids: string[]): SpaceLayout {
+  const shows = (v: View) => (v.kind === 'thread' && ids.includes(v.id)) || (v.kind === 'tab' && ids.includes(v.threadId));
+  const stale = leaves(layout.root).filter((l) => shows(l.view));
+  return stale.length ? { ...layout, root: stale.reduce((root, l) => setLeafView(root, l.id, NEW_THREAD), layout.root) } : layout;
 }
 
 /** Another slice (a new thread) wrote `views` directly: move that view into the focused leaf. */

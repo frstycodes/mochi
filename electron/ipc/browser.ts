@@ -1,5 +1,5 @@
-import type { BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
-import { cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom } from '../browser/views.ts';
+import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
+import { actOnView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 const COMMANDS = ['back', 'forward', 'reload', 'hard-reload', 'stop'] satisfies BrowserCommand[];
@@ -43,7 +43,30 @@ export const browser = {
   async clearData(_sender, id) {
     await clearSpaceData(spaceId(id));
   },
+  async snapshot(sender, id) {
+    return snapshotView(sender, viewId(id));
+  },
+  async act(sender, id, act) {
+    return actOnView(sender, viewId(id), actOf(act));
+  },
+  async logs(sender, id) {
+    return viewLogs(sender, viewId(id));
+  },
 } satisfies Handlers<BrowserHost>;
+
+function actOf(value: unknown): BrowserAct {
+  const a = record(value, 'act');
+  const ref = (v: unknown) => {
+    const s = string(v, 'ref', 16);
+    if (!/^e\d+$/.test(s)) throw new TypeError('ref must look like e12');
+    return s;
+  };
+  if (a.kind === 'click') return { kind: 'click', ref: ref(a.ref) };
+  if (a.kind === 'type') return { kind: 'type', ref: ref(a.ref), text: string(a.text, 'text', 20_000) };
+  if (a.kind === 'press') return { kind: 'press', key: string(a.key, 'key', 32) };
+  if (a.kind === 'scroll') return { kind: 'scroll', ref: a.ref === undefined ? undefined : ref(a.ref), dx: number(a.dx, 'dx', -1e5, 1e5), dy: number(a.dy, 'dy', -1e5, 1e5) };
+  throw new TypeError('act.kind must be click, type, press or scroll');
+}
 
 function url(value: unknown) {
   const s = string(value, 'url', 8192);

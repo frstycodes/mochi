@@ -63,6 +63,10 @@ export function replaceAddressHistory(next: string[]) {
   return previous;
 }
 
+export function getPage(key: string) {
+  return pages.get(key);
+}
+
 export function updatePage(key: string, patch: Partial<Page>) {
   const page = pages.get(key);
   if (!page) return;

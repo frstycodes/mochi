@@ -32,7 +32,7 @@ export function GitSection() {
   );
 }
 
-const DIFF_STYLES = [
+export const DIFF_STYLES = [
   { value: 'unified', label: 'Unified' },
   { value: 'split', label: 'Split' },
 ] as const;
