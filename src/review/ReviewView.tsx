@@ -51,7 +51,7 @@ export function ReviewView() {
 function ReviewHeader({ position, onClose }: { position?: string; onClose: () => void }) {
   const { state, isMobile } = useSidebar();
   return (
-    <div className="flex h-11 shrink-0 items-center gap-2 px-3">
+    <div className="app-drag flex h-11 shrink-0 items-center gap-2 px-3">
       {(isMobile || state === 'collapsed') && <SidebarTrigger className="-ml-1" />}
       <TaskSquare className="size-4 text-muted-foreground" />
       <span className="type-meta font-medium">Review</span>

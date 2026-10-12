@@ -109,7 +109,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
 function SpaceHeader() {
   const space = useSpace();
   return (
-    <SidebarHeader className="h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-9.5 md:in-data-traffic-lights:pl-29.5">
+    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-9.5 md:in-data-traffic-lights:pl-29.5">
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex min-w-0 items-center gap-2 px-1">

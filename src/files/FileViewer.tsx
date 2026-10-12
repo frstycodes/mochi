@@ -67,7 +67,7 @@ function FilePane({ file, position, onStep }: { file: ViewerFile; position?: str
 
   return (
     <>
-      <header className="flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
+      <header className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
         <FileIcon fileName={name} autoAssign aria-hidden className="size-4 shrink-0" />
         <DialogPrimitive.Title className="flex min-w-0 px-1 font-normal">
           <FilePath path={viewerPath(file)} />
