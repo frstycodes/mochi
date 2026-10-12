@@ -16,6 +16,7 @@ import { CommandPalette } from './palette/CommandPalette';
 import { useGlobalKeys } from './palette/useGlobalKeys';
 import { ReviewModeProvider, useReviewMode } from './review/useReviewMode';
 import { ReviewView } from './review/ReviewView';
+import { SettingsDialog } from './settings/SettingsDialog';
 import { HarnessProvider, useHarness } from './store';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useWorktreeManager } from './git/useWorktreeManager';
@@ -75,6 +76,7 @@ function Shell() {
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
+      <SettingsDialog />
     </SidebarProvider>
   );
 }

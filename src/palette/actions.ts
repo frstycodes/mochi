@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
 import { threadCwd } from '../host/cwd';
@@ -9,6 +9,7 @@ import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import { SPACES, type Thread } from '../model';
 import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
+import { openSettings } from '../settings/open';
 import { pinMany } from '../reorder';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
@@ -44,6 +45,7 @@ export const ACTIONS = [
   { id: 'go-queue', group: 'Go to', title: 'Queue', icon: Inbox, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'queue' } }) },
   { id: 'go-review', group: 'Go to', title: 'Review mode', icon: TaskSquare, keywords: 'inbox approve', when: when.reviews, run: ({ openReview }) => openReview() },
   { id: 'go-board', group: 'Go to', title: 'Board', icon: Route, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }) },
+  { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, keywords: 'agents claude codex login api key preferences', run: () => openSettings() },
   { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, shortcut: ['N'], run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 
   { id: 'thread-open', group: 'Thread', title: 'Open thread', icon: ArrowRight, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'go', view: { kind: 'thread', id: t.id } })) },
