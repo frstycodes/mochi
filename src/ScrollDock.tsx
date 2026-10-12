@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { haptic } from './haptic';
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotionConfig, useScroll, useTransform, type MotionValue } from 'motion/react';
 
 export interface DockItem<T> {
@@ -15,17 +16,57 @@ const CLOSE_AFTER_MS = 600;
 const LEAVE_RADIUS_PX = 120;
 const GESTURE_GAP_MS = 140;
 const STEP_PX = 32;
+const DRAG_START_PX = 4;
 // The fade is kept short so the scale, not the opacity, carries the motion; with one shared ease-out the scale was done before the dock was visible.
 const DOCK_IN = { opacity: { duration: 0.12, ease: 'linear' }, default: { type: 'spring', visualDuration: 0.3, bounce: 0.12 } } as const;
 const DOCK_OUT = { opacity: { duration: 0.18, ease: [0.4, 0, 0.2, 1] }, default: { duration: 0.18, ease: [0.77, 0, 0.175, 1] } } as const;
 
-// GAP: browsers expose no trackpad haptics. The desktop shell maps this to NSHapticFeedbackManager's alignment pattern; phones get a short vibration.
-function haptic() {
-  navigator.vibrate?.(6);
+/**
+ * Press and drag in any direction: past a few px the axis locks and `onMove` gets the distance along it, right and down positive.
+ * A drag swallows the click that follows. With `onTap`, the press itself never reaches the trigger (for menus that open on
+ * pointerdown) and a press without a drag calls `onTap` instead.
+ */
+function listenDrag(el: HTMLElement, handlers: { onStart: () => void; onMove: (distance: number, axis: 'x' | 'y') => void; onEnd: () => void; onTap?: () => void }) {
+  const onDown = (down: PointerEvent) => {
+    if (down.button !== 0 || down.pointerType === 'touch') return;
+    if (handlers.onTap) down.stopPropagation();
+    let axis: 'x' | 'y' | null = null;
+    const onMove = (e: PointerEvent) => {
+      const dx = e.clientX - down.clientX;
+      const dy = e.clientY - down.clientY;
+      if (!axis) {
+        if (Math.hypot(dx, dy) < DRAG_START_PX) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        // Only once it's a drag: captured from the press, the click would land on this wrapper instead of the trigger.
+        el.setPointerCapture(down.pointerId);
+        handlers.onStart();
+      }
+      handlers.onMove(axis === 'x' ? dx : dy, axis);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      if (!axis) return handlers.onTap?.();
+      handlers.onEnd();
+      const swallow = (e: Event) => {
+        e.stopPropagation();
+        e.preventDefault();
+      };
+      // Until the next press, not a timer: the click can arrive a task after pointerup.
+      window.addEventListener('click', swallow, { capture: true, once: true });
+      window.addEventListener('pointerdown', () => window.removeEventListener('click', swallow, { capture: true }), { capture: true, once: true });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
+  el.addEventListener('pointerdown', onDown, { capture: true });
+  return () => el.removeEventListener('pointerdown', onDown, { capture: true });
 }
 
 /**
- * Hover the trigger and scroll either way: a glass dock of icons rises from it. The icon row is a native scroller, so swipes and
+ * Hover the trigger and scroll either way, or press it and drag: a glass dock of icons rises from it. The icon row is a native scroller, so swipes and
  * momentum are the browser's own; Motion only reads the offset to magnify. The dock previews the item under the centre and the
  * trigger takes it when the dock closes, 600ms after scrolling stops or when the pointer leaves.
  */
@@ -49,9 +90,18 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
     let isShown = false;
     let axis: 'x' | 'y' = 'y';
     let lastT = -Infinity;
+    let isDragging = false;
+    const open = () => {
+      isShown = true;
+      previewRef.current = live.current.index;
+      setPreview(live.current.index);
+      const r = el.getBoundingClientRect();
+      setAnchor({ x: r.left + r.width / 2, bottom: window.innerHeight - r.top + 6 });
+    };
     const close = () => {
       window.clearTimeout(closeTimer);
       isShown = false;
+      isDragging = false;
       setAnchor(null);
       const { index: current, items: list, onChange: commit } = live.current;
       if (previewRef.current !== current) commit(list[previewRef.current].value);
@@ -71,18 +121,13 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
       if (isOnStrip && axis === 'x') return;
       e.preventDefault();
       if (live.current.items.length < 2) return;
-      if (!isShown) {
-        isShown = true;
-        previewRef.current = live.current.index;
-        setPreview(live.current.index);
-        const r = el.getBoundingClientRect();
-        return setAnchor({ x: r.left + r.width / 2, bottom: window.innerHeight - r.top + 6 });
-      }
+      if (!isShown) return open();
+      if (!strip) return;
       const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-      strip?.scrollBy({ left: (axis === 'x' ? e.deltaX : e.deltaY) * scale, behavior: 'instant' });
+      strip.scrollBy({ left: (axis === 'x' ? e.deltaX : e.deltaY) * scale, behavior: 'instant' });
     };
     const onMove = (e: PointerEvent) => {
-      if (!isShown) return;
+      if (!isShown || isDragging) return;
       const r = el.getBoundingClientRect();
       const dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right);
       const dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom);
@@ -93,10 +138,25 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
     // thread before the compositor may scroll, so swipes elsewhere (Stage, spaces) hitch whenever React is busy.
     el.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('pointermove', onMove);
+    let dragFrom = 0;
+    const stopDrag = listenDrag(el, {
+      onStart: () => {
+        if (live.current.items.length < 2) return;
+        window.clearTimeout(closeTimer);
+        isDragging = true;
+        dragFrom = live.current.index * SPACING;
+        if (!isShown) open();
+      },
+      // Horizontal drags the strip with the hand (left moves forward), like the trackpad swipe; vertical runs down = forward.
+      // `instant`: a smooth programmatic scroll would still be travelling when the release commits the item under the centre.
+      onMove: (distance, axis) => stripRef.current?.scrollTo({ left: dragFrom + (axis === 'x' ? -distance : distance), behavior: 'instant' }),
+      onEnd: () => isShown && close(),
+    });
     return () => {
       window.clearTimeout(closeTimer);
       el.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onMove);
+      stopDrag();
     };
   }, []);
 
@@ -117,7 +177,7 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
   };
 
   return (
-    <span ref={ref} className="relative inline-flex">
+    <span ref={ref} className="relative inline-flex *:cursor-ew-resize">
       {children}
       {createPortal(
         <AnimatePresence>
@@ -183,13 +243,13 @@ function DockTile({ pos, i, children }: { pos: MotionValue<number>; i: number; c
 }
 
 /**
- * Hover the trigger and scroll to step through `values` in place, for controls whose trigger already shows where you are (the effort
- * meter). 32px per step, at most one step per wheel event, so a notched mouse wheel moves one level per click.
+ * Hover the trigger and scroll, or press it and drag, to step through `values` in place, for controls whose trigger already shows
+ * where you are (the effort meter): one level per 32px, with a haptic tick each. A press without a drag calls `onTap`.
  */
-export function WheelStepper<T extends string>({ values, value, onChange, children }: { values: readonly T[]; value: T; onChange: (v: T) => void; children: ReactNode }) {
+export function WheelStepper<T extends string>({ values, value, onChange, onTap, children }: { values: readonly T[]; value: T; onChange: (v: T) => void; onTap: () => void; children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const live = useRef({ values, value, onChange });
-  live.current = { values, value, onChange };
+  const live = useRef({ values, value, onChange, onTap });
+  live.current = { values, value, onChange, onTap };
 
   useEffect(() => {
     const el = ref.current;
@@ -220,11 +280,28 @@ export function WheelStepper<T extends string>({ values, value, onChange, childr
       haptic();
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    let dragFrom = 0;
+    const stopDrag = listenDrag(el, {
+      onStart: () => (dragFrom = live.current.values.indexOf(live.current.value)),
+      onMove: (distance) => {
+        const { values: list, value: current, onChange: change } = live.current;
+        const next = list[Math.min(list.length - 1, Math.max(0, dragFrom + Math.trunc(distance / STEP_PX)))];
+        if (next === current) return;
+        live.current.value = next;
+        change(next);
+        haptic();
+      },
+      onEnd: () => {},
+      onTap: () => live.current.onTap(),
+    });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      stopDrag();
+    };
   }, []);
 
   return (
-    <span ref={ref} className="relative inline-flex">
+    <span ref={ref} className="relative inline-flex *:cursor-ew-resize">
       {children}
     </span>
   );
