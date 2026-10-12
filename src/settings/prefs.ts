@@ -50,7 +50,7 @@ export const DEFAULT_PREFS: Prefs = {
   driftThreshold: 0.15,
   branchFrom: 'current',
   stepSize: 2,
-  branchPrefix: 'feat/',
+  branchPrefix: 'mochi/',
   diffStyle: 'unified',
   terminalFontSize: 12,
   terminalScrollback: 5000,
