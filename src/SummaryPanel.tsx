@@ -110,7 +110,7 @@ function PanelHeader({ thread }: { thread: Thread }) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-xs" aria-label="Summary options">
-            <OverflowIcon />
+            <OverflowIcon vertical />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

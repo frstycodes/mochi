@@ -218,7 +218,7 @@ function MoreMenu({ pageId, page, onHardReload }: { pageId: string; page: Page; 
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label="More">
-              <OverflowIcon />
+              <OverflowIcon vertical />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

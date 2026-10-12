@@ -157,7 +157,10 @@ export function TooltipIconButton({ label, hint, children, ...props }: { label: 
   );
 }
 
-/** The "•••" on every overflow menu: reicon MoreH, filled. */
-export function OverflowIcon(props: IconProps) {
-  return <MoreH weight="Filled" {...props} />;
+/**
+ * The overflow-menu icon: reicon MoreH, filled. `vertical` (⋮, reicon has no MoreV, so the same dots turned 90°) is for a menu that belongs
+ * to one item or card and for the end of an address bar; horizontal (⋯) is for app headers and toolbars.
+ */
+export function OverflowIcon({ vertical, className, ...props }: IconProps & { vertical?: boolean }) {
+  return <MoreH weight="Filled" className={cn(vertical && 'rotate-90', className)} {...props} />;
 }
