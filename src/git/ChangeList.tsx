@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import type { ChangeKind, ChangeTarget, DiffFile, DiffHunk } from '../host/types/git';
 import { DiffStat } from '../WorkLog';
 import { fileKey, groupByDir, hunkCovers } from './files';
+import { isMod } from '../keys';
 
 export type DiffStyle = 'unified' | 'split';
 export type NoteSide = 'additions' | 'deletions';
@@ -234,7 +235,7 @@ function NoteCard({ note, actions }: { note: LineNote; actions: ChangeActions })
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send();
+          if (e.key === 'Enter' && isMod(e)) send();
           if (e.key === 'Escape') actions.dropNote(note);
         }}
         placeholder={`Note for ${actions.agentName} on line ${note.line}`}

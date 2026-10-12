@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowSwapHorizontal, ArrowUp, CarouselH, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
+import { ArrowSwapHorizontal, CarouselH, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { host } from '@/host';
 import {
@@ -15,13 +15,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
 import { useHarness } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
+import { Shortcut } from '../Shortcut';
 
 /** Per-split actions in a split's header: the Stage Manager toggle (first split only), the layout menu and close. */
 export function SplitControls() {
@@ -57,7 +57,9 @@ export function SplitControls() {
             <DropdownMenuItem onSelect={() => run({ type: 'layout-zoom' })}>
               {isZoomed ? <ExitFullscreen /> : <Fullscreen />}
               {isZoomed ? 'Show all splits' : 'Zoom this split'}
-              <DropdownMenuShortcut>Shift Cmd Enter</DropdownMenuShortcut>
+              <DropdownMenuShortcut>
+                <Shortcut keys={['mod', 'shift', 'Enter']} />
+              </DropdownMenuShortcut>
             </DropdownMenuItem>
             <DropdownMenuItem disabled={isZoomed} onSelect={() => run({ type: 'layout-swap', leafId })}>
               <ArrowSwapHorizontal />
@@ -105,16 +107,9 @@ function StageToggle() {
       </TooltipTrigger>
       <TooltipContent className="flex items-center gap-2">
         {state.isStage ? 'Leave Stage Manager' : 'Stage Manager'}
-        <KbdGroup>
-          <Kbd>Shift</Kbd>
-          <Kbd>Cmd</Kbd>
-          <Kbd>S</Kbd>
-        </KbdGroup>
+        <Shortcut keys={['mod', 'shift', 'S']} />
         <span className="text-subtle-foreground">All sessions</span>
-        <KbdGroup>
-          <Kbd>Cmd</Kbd>
-          <Kbd aria-label="Up arrow"><ArrowUp /></Kbd>
-        </KbdGroup>
+        <Shortcut keys={['mod', 'up']} />
       </TooltipContent>
     </Tooltip>
   );

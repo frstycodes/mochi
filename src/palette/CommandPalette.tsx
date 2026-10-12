@@ -6,6 +6,7 @@ import { useHarness } from '../store';
 import { StepStatusIcon, ThreadStatusIcon, lineColor } from '../ui';
 import { ACTIONS, ACTION_GROUPS, type ActionContext, type PaletteAction } from './actions';
 import { available, scopeOf } from './when';
+import { Shortcut } from '../Shortcut';
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { state, dispatch } = useHarness();
@@ -41,7 +42,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   <CommandItem key={a.id} value={`${a.title} ${a.keywords ?? ''}`} onSelect={() => run(a)}>
                     <a.icon />
                     {a.title}
-                    {!!a.shortcut && <CommandShortcut className="tracking-normal">{a.shortcut}</CommandShortcut>}
+                    {!!a.shortcut && <CommandShortcut className="tracking-normal">
+                        <Shortcut keys={a.shortcut} />
+                      </CommandShortcut>}
                   </CommandItem>
                 ))}
             </CommandGroup>

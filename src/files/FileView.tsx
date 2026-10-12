@@ -11,6 +11,7 @@ import { host } from '@/host';
 import type { Editor } from '@/host/types/fs';
 import { FilePreview, previewKind } from './previews';
 import { useOpenFile, type OpenFile } from './useFiles';
+import { isMod } from '../keys';
 
 // Lazy so CodeMirror parses only when a file is first opened as source.
 const CodeEditor = lazy(() => import('./CodeEditor'));
@@ -23,7 +24,7 @@ export function FileView({ root, path, line, toolbar }: { root: string; path: st
   const [isComparing, setIsComparing] = useState(false);
   const showsPreview = !!kind && (!hasSource || mode === 'preview');
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!(e.metaKey || e.ctrlKey) || e.key !== 's') return;
+    if (!isMod(e) || e.key !== 's') return;
     e.preventDefault();
     void file.save();
   };

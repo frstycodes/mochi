@@ -9,6 +9,7 @@ import type { CheckState, GitDiff, PrCheck, PrInfo } from '../host/types/git';
 import type { Thread } from '../model';
 import type { ConfirmRequest } from './useConfirm';
 import { usePr } from './useGit';
+import { isMod } from '../keys';
 
 interface ShipBarProps {
   thread: Thread;
@@ -72,7 +73,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
           <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.currentTarget.form?.requestSubmit()}
+            onKeyDown={(e) => e.key === 'Enter' && isMod(e) && e.currentTarget.form?.requestSubmit()}
             placeholder={stagedCount ? 'Commit message' : 'Stage changes to commit them'}
             aria-label="Commit message"
             className="min-h-14 resize-none text-sm"

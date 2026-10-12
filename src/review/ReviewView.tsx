@@ -19,6 +19,7 @@ import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
 import { useReviewMode } from './useReviewMode';
+import { isMod } from '../keys';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
 export function ReviewView() {
@@ -174,7 +175,7 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) e.currentTarget.form?.requestSubmit();
+            if (e.key === 'Enter' && isMod(e)) e.currentTarget.form?.requestSubmit();
             if (e.key === 'Escape') setRequesting(false);
           }}
           placeholder="What should the agent change?"

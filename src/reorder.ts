@@ -13,7 +13,7 @@ export function reorderThreads(threads: Thread[], pinned: string[], unpinned: st
   return threads.map((t) => (rank(t) >= 0 ? moved[i++] : t));
 }
 
-/** A space's pinned threads in pin order: the order behind Orbit slots, Cmd 1–9 and Stage Manager. */
+/** A space's pinned threads in pin order: the order behind Orbit slots, mod 1–9 and Stage Manager. */
 export function pinnedThreads(threads: Thread[], spaceId: string) {
   return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot !== undefined && t.status !== 'settled').sort((a, b) => a.orbitSlot! - b.orbitSlot!);
 }
@@ -22,7 +22,7 @@ export function activeThreads(threads: Thread[], spaceId: string) {
   return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot === undefined && t.status !== 'settled');
 }
 
-/** Cmd Shift P: the `reorder` lists that pin a thread at the end of Pinned, or unpin it to the top of Threads. Null when Pinned is full. */
+/** mod Shift P: the `reorder` lists that pin a thread at the end of Pinned, or unpin it to the top of Threads. Null when Pinned is full. */
 export function togglePin(threads: Thread[], spaceId: string, id: string) {
   const pinned = pinnedThreads(threads, spaceId).map((t) => t.id);
   const unpinned = activeThreads(threads, spaceId).map((t) => t.id);

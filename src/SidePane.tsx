@@ -9,6 +9,7 @@ import type { Pane, PaneTab, Thread } from './model';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { useHarness } from './store';
+import { isMod } from './keys';
 
 export function SidePane({ thread, pane }: { thread: Thread; pane: Pane }) {
   const docked = pane.tabs.filter((t) => !t.isPopped);
@@ -23,15 +24,15 @@ export function SidePane({ thread, pane }: { thread: Thread; pane: Pane }) {
   );
 }
 
-/** Cmd 1–9 (9 is the last tab), Ctrl Tab / Ctrl Shift Tab and Cmd W while focus is inside the pane. Cmd, not Ctrl, for digits: Ctrl 1–3 switches spaces. */
+/** mod 1–9 (9 is the last tab), Ctrl Tab / Ctrl Shift Tab and mod W while focus is inside the pane. mod, not Ctrl, for digits: nav 1–3 switches spaces. */
 function usePaneKeys(threadId: string, tabs: PaneTab[], active?: PaneTab) {
   const { dispatch } = useHarness();
   return (e: KeyboardEvent) => {
     const index = active ? tabs.indexOf(active) : -1;
     const select = (tab?: PaneTab) => tab && dispatch({ type: 'pane-select-tab', threadId, tabId: tab.id });
     if (e.ctrlKey && e.key === 'Tab') select(tabs.at((index + (e.shiftKey ? -1 : 1)) % tabs.length));
-    else if (e.metaKey && /^[1-9]$/.test(e.key)) select(e.key === '9' ? tabs.at(-1) : tabs[Number(e.key) - 1]);
-    else if (e.metaKey && e.key.toLowerCase() === 'w' && active) dispatch({ type: 'pane-close-tab', threadId, tabId: active.id });
+    else if (isMod(e) && /^[1-9]$/.test(e.key)) select(e.key === '9' ? tabs.at(-1) : tabs[Number(e.key) - 1]);
+    else if (isMod(e) && e.key.toLowerCase() === 'w' && active) dispatch({ type: 'pane-close-tab', threadId, tabId: active.id });
     else return;
     e.preventDefault();
     e.stopPropagation();

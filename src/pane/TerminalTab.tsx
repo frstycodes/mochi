@@ -13,6 +13,7 @@ import { addShell, closeSession, showSession, toggleSplit, type TerminalSession 
 import { useTerminals } from '../terminal/useTerminals';
 import { PlannedTab } from './PlannedTab';
 import type { PaneTabProps } from './tabs';
+import { isMod } from '../keys';
 
 export function TerminalTab({ thread, tab }: PaneTabProps) {
   const cwd = threadCwd(thread);
@@ -29,7 +30,7 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
   const isSplit = visible.length > 1;
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!e.metaKey || e.key.toLowerCase() !== 'f') return;
+    if (!isMod(e) || e.key.toLowerCase() !== 'f') return;
     e.preventDefault();
     setIsSearching(true);
   };

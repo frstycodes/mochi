@@ -5,7 +5,6 @@ import { ChevronDown, ChevronUp, Flag } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
-import { Kbd } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
@@ -21,6 +20,8 @@ import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisu
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
+import { Shortcut } from './Shortcut';
+import { MOD_KEY } from './keys';
 
 type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; showAuthor: boolean }
@@ -215,8 +216,8 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
             return drift.submit(withFiles, isQueue ? 'Queued: ' : '');
           }}
           placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
-          onKeyDown={(e) => e.key === 'Meta' && setIsQueue(true)}
-          onKeyUp={(e) => e.key === 'Meta' && setIsQueue(false)}
+          onKeyDown={(e) => e.key === MOD_KEY && setIsQueue(true)}
+          onKeyUp={(e) => e.key === MOD_KEY && setIsQueue(false)}
           onBlur={() => setIsQueue(false)}
         />
       </ComposerCard>
@@ -229,7 +230,7 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
             'Queues after this turn'
           ) : (
             <>
-              <Kbd>Cmd</Kbd> to queue
+              <Shortcut keys={['mod']} /> to queue
             </>
           )}
         </span>

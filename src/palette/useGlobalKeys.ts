@@ -1,18 +1,19 @@
 import { useEffect } from 'react';
 import { SPACES } from '../model';
 import { useHarness } from '../store';
+import { isMod, isNav } from '../keys';
 
-/** Cmd K toggles the palette, Ctrl 1–3 switches space, N starts a new thread. */
+/** mod K toggles the palette, nav 1–3 switches space, N starts a new thread (`src/keys.ts`). */
 export function useGlobalKeys(onPalette: () => void) {
   const { dispatch } = useHarness();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if (isMod(e) && e.key === 'k') {
         e.preventDefault();
         onPalette();
         return;
       }
-      if (e.ctrlKey && /^Digit[1-3]$/.test(e.code)) {
+      if (isNav(e) && /^Digit[1-3]$/.test(e.code)) {
         e.preventDefault();
         dispatch({ type: 'space', id: SPACES[Number(e.code.slice(5)) - 1].id });
         return;

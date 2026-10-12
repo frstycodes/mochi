@@ -5,7 +5,7 @@ import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Inbox, Mo
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { Kbd } from '@/components/ui/kbd';
 import {
   Sidebar,
   SidebarContent,
@@ -35,6 +35,7 @@ import { useSnapPager } from './useSnapPager';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
 import { ProgressRing, SpaceIcon } from './ui';
+import { Shortcut } from './Shortcut';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
@@ -156,10 +157,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               label="Search"
               onClick={onSearch}
               trailing={
-                <KbdGroup className="hidden md:inline-flex">
-                  <Kbd>Cmd</Kbd>
-                  <Kbd>K</Kbd>
-                </KbdGroup>
+                <Shortcut keys={['mod', 'K']} className="hidden md:inline-flex" />
               }
             />
             <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<Kbd className="hidden md:inline-flex">N</Kbd>} />
@@ -515,7 +513,7 @@ function SpaceFooter() {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                {s.name} <Kbd className="ml-1">Ctrl {i + 1}</Kbd>
+                {s.name} <Shortcut keys={['nav', String(i + 1)]} className="ml-1" />
               </TooltipContent>
             </Tooltip>
           );

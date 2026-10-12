@@ -2,12 +2,12 @@ import type { ReactNode } from 'react';
 import { Eye, EyeOff } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
 import { PANE_TABS } from '../pane/tabs';
 import { useHarness } from '../store';
 import { ProviderMark, ThreadStatusIcon } from '../ui';
+import { Shortcut } from '../Shortcut';
 
 const PEEK_OPEN_MS = 500;
 const PEEK_CLOSE_MS = 240;
@@ -28,10 +28,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
           <ThreadStatusIcon status={thread.status} />
           <span className="min-w-0 flex-1 truncate type-title">{thread.title}</span>
           {pinNumber <= 9 && (
-            <KbdGroup>
-              <Kbd>Cmd</Kbd>
-              <Kbd>{pinNumber}</Kbd>
-            </KbdGroup>
+            <Shortcut keys={['mod', String(pinNumber)]} />
           )}
         </div>
         <PreviewThumb thread={thread} />

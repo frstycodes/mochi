@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { Kbd } from '@/components/ui/kbd';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -42,6 +42,7 @@ import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
 import { StateMatrix, previewState } from './state-matrix';
+import { Shortcut } from '../Shortcut';
 
 const SECTIONS = [
   ['foundations', 'Foundations'],
@@ -129,7 +130,7 @@ function Overview() {
         Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and reicon, themed from DESIGN.md. Dark first, cool neutrals, squircle corners, hairline separation.
       </p>
       <p className="flex flex-wrap items-center gap-1.5 type-caption text-subtle-foreground">
-        Hold <Kbd>Option</Kbd> anywhere on this page to try Orbit.
+        Hold <Shortcut keys={['alt']} /> anywhere on this page to try Orbit.
       </p>
     </section>
   );
@@ -367,17 +368,11 @@ function Actions() {
         </Block>
         <Block title="Kbd" use="Every shortcut the UI mentions is shown as keys.">
           <div className="flex flex-wrap items-center gap-3 type-meta text-muted-foreground">
-            <KbdGroup>
-              <Kbd>Cmd</Kbd>
-              <Kbd>Enter</Kbd>
-            </KbdGroup>
+            <Shortcut keys={['mod', 'Enter']} />
             <Kbd>N</Kbd>
-            <KbdGroup>
-              <Kbd>Ctrl</Kbd>
-              <Kbd>1</Kbd>
-            </KbdGroup>
+            <Shortcut keys={['nav', '1']} />
             <span className="flex items-center gap-1.5">
-              Hold <Kbd>Option</Kbd> for Orbit
+              Hold <Shortcut keys={['alt']} /> for Orbit
             </span>
           </div>
         </Block>

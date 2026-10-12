@@ -2,7 +2,6 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import { Folder, Search, SidebarLeft } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Kbd } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FileTree } from '@/files/FileTree';
 import { FileView } from '@/files/FileView';
@@ -12,6 +11,8 @@ import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
 import { AskAboutFileRange } from '@/sidechat/AskInSideChat';
 import type { PaneTabProps } from './tabs';
+import { Shortcut } from '../Shortcut';
+import { isMod } from '../keys';
 
 // Narrower than this, the tree and the file don't both fit, so opening a file folds the tree away.
 const SIDE_BY_SIDE_MIN_WIDTH = 640;
@@ -33,7 +34,7 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
     if (container.current!.clientWidth < SIDE_BY_SIDE_MIN_WIDTH) setIsTreeOpen(false);
   };
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!(e.metaKey || e.ctrlKey) || e.key !== 'p') return;
+    if (!isMod(e) || e.key !== 'p') return;
     e.preventDefault();
     setIsQuickOpen(true);
   };
@@ -54,7 +55,7 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          Go to file <Kbd>⌘P</Kbd>
+          Go to file <Shortcut keys={['mod', 'P']} />
         </TooltipContent>
       </Tooltip>
       {!!selected && <AskAboutFileRange threadId={threadId} path={selected.path} />}
@@ -87,7 +88,7 @@ function NoFileState({ toolbar }: { toolbar: React.ReactNode }) {
         <EmptyHeader>
           <EmptyTitle>Pick a file</EmptyTitle>
           <EmptyDescription>
-            Choose one from the tree or press <Kbd>⌘P</Kbd> to search.
+            Choose one from the tree or press <Shortcut keys={['mod', 'P']} /> to search.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

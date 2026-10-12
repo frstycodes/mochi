@@ -244,7 +244,7 @@ function useIsWider(ref: RefObject<HTMLElement | null>, px: number) {
   return isWider;
 }
 
-/** Keyboard focus moves (Cmd [ ], Ctrl arrows, a preset) also move the caret into the newly focused split's composer. */
+/** Keyboard focus moves (mod [ ], nav arrows, a preset) also move the caret into the newly focused split's composer. */
 function useFocusFollows(ref: RefObject<HTMLElement | null>, isFocused: boolean) {
   const wasFocused = useRef(isFocused);
   useEffect(() => {
