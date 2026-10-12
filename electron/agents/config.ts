@@ -1,64 +1,93 @@
 import { app, safeStorage } from 'electron';
 import { execFile } from 'node:child_process';
 import { access, constants } from 'node:fs/promises';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { DEFAULT_SETTINGS, type AgentSettings, type ApiKeyState } from '../../src/host/types/settings.ts';
+import { DEFAULT_SETTINGS, mergeSettings, type Account, type AccountId, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ApiKeyState } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
+import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/settings/accounts.ts';
+import { HARNESSES } from '../../src/settings/harnesses.ts';
 
 /**
- * Agent settings shared by the settings UI and the Claude / Codex adapters. Main process only.
+ * Agent settings shared by the settings UI and the harness adapters. Main process only.
  * Adapters read through the getters; only `electron/ipc/settings.ts` writes.
  */
 
-interface Stored extends AgentSettings {
-  /** `safeStorage` ciphertext, base64. Decrypted only by `anthropicApiKey()`, never written in clear or sent to the renderer. */
-  apiKey?: string;
+interface Stored extends AgentSettings, AccountsState {
+  /** `safeStorage` ciphertext, base64, per harness. Decrypted only by `apiKeyFor()`, never written in clear or sent to the renderer. */
+  apiKeys: Partial<Record<Provider, string>>;
 }
 
-const EXECUTABLES = { claude: 'claude', codex: 'codex' } satisfies Record<Provider, string>;
 const listeners = new Set<(settings: AgentSettings) => void>();
 let stored: Stored | undefined;
 
 export function agentSettings(): AgentSettings {
-  const { apiKey: _, ...settings } = load();
-  return settings;
+  const { concurrency, harnesses } = load();
+  return { concurrency, harnesses };
+}
+
+export function accountsState(): AccountsState {
+  const { accounts, links } = load();
+  return { accounts, links };
+}
+
+/**
+ * The account a profile (space) runs a provider on, and how to start that tool for it. Every thread of the profile uses
+ * exactly this account: nothing picks another account of the same provider (RUNTIME.md, Auth).
+ */
+export async function accountFor(spaceId: string, provider: Provider): Promise<{ account: Account; configDir: string | null; executable: string | null }> {
+  const { accounts, links } = load();
+  const id = linkedAccountId(links, spaceId, provider);
+  const account = accounts.find((a) => a.id === id) ?? DEFAULT_ACCOUNTS.find((a) => a.provider === provider)!;
+  return { account, configDir: account.configDir, executable: await resolveExecutable(provider) };
 }
 
 export function concurrencyCap(): number {
   return load().concurrency;
 }
 
-/** undefined → let the tool use its own configured default. */
+/** undefined → let the harness use its own configured default. */
 export function defaultModel(provider: Provider): string | undefined {
-  return (provider === 'claude' ? load().claudeModel : load().codexModel) || undefined;
+  return load().harnesses[provider].model || undefined;
 }
 
-/** The key the user chose to store in Harness, or undefined. Set it only as `ANTHROPIC_API_KEY` in a Claude child's env (see `agentEnv`). */
-export function anthropicApiKey(): string | undefined {
-  const { apiKey } = load();
-  if (!apiKey || !safeStorage.isEncryptionAvailable()) return undefined;
-  return safeStorage.decryptString(Buffer.from(apiKey, 'base64'));
+/** The key the user stored for this harness, or undefined. Only ever set as the harness's own variable in its child env (see `agentEnv`). */
+export function apiKeyFor(provider: Provider): string | undefined {
+  const cipher = load().apiKeys[provider];
+  if (!cipher || !safeStorage.isEncryptionAvailable()) return undefined;
+  return safeStorage.decryptString(Buffer.from(cipher, 'base64'));
 }
 
-/** The user's override, else the first `claude` / `codex` on the user's login-shell PATH; null when neither exists. */
+/** The user's override, else the first matching executable on the user's login-shell PATH; null when neither exists. */
 export async function resolveExecutable(provider: Provider): Promise<string | null> {
-  const override = provider === 'claude' ? load().claudePath : load().codexPath;
+  const override = load().harnesses[provider].path;
   if (override) return override;
-  const names = process.platform === 'win32' ? [`${EXECUTABLES[provider]}.exe`, `${EXECUTABLES[provider]}.cmd`] : [EXECUTABLES[provider]];
+  const { executable } = HARNESSES[provider];
+  const names = process.platform === 'win32' ? [`${executable}.exe`, `${executable}.cmd`] : [executable];
   for (const dir of (await userPath()).split(delimiter))
     for (const name of names) if (await isExecutable(join(dir, name))) return join(dir, name);
   return null;
 }
 
 /**
- * Environment for a Claude or Codex child: the full `process.env` (replacing it would drop the tools' own credentials),
- * the user's login-shell PATH (apps opened from Finder get a bare PATH, and `codex` is a node script that needs `node`),
- * and `ANTHROPIC_API_KEY` for Claude only when the user stored one in Harness, which makes Claude Code bill the API.
+ * Environment for a harness child of this profile: the full `process.env` (replacing it would drop the tools' own
+ * credentials), the user's login-shell PATH (apps opened from Finder get a bare PATH, and `codex` is a node script that
+ * needs `node`), the profile's account folder (`CLAUDE_CONFIG_DIR` / `CODEX_HOME`), and the harness's API key variable
+ * (`ANTHROPIC_API_KEY`) only when the user stored one in Harness, which bills the API whatever account is signed in.
  */
-export async function agentEnv(provider: Provider): Promise<NodeJS.ProcessEnv> {
-  const key = provider === 'claude' ? anthropicApiKey() : undefined;
-  return { ...process.env, PATH: await userPath(), ...(key && { ANTHROPIC_API_KEY: key }) };
+export async function agentEnv(provider: Provider, spaceId: string): Promise<NodeJS.ProcessEnv> {
+  const { configDir } = await accountFor(spaceId, provider);
+  const keyEnv = HARNESSES[provider].apiKey?.env;
+  const key = keyEnv && apiKeyFor(provider);
+  return { ...accountEnv(provider, configDir), PATH: await userPath(), ...(keyEnv && key && { [keyEnv]: key }) };
+}
+
+/** `process.env` pointed at an account's folder; an inherited folder variable is dropped for the default account. */
+export function accountEnv(provider: Provider, configDir: string | null): NodeJS.ProcessEnv {
+  const variable = HARNESSES[provider].configDirEnv;
+  const { [variable]: _, ...env } = process.env;
+  return configDir ? { ...env, [variable]: configDir } : env;
 }
 
 export function onAgentSettingsChange(listener: (settings: AgentSettings) => void): () => void {
@@ -66,20 +95,51 @@ export function onAgentSettingsChange(listener: (settings: AgentSettings) => voi
   return () => void listeners.delete(listener);
 }
 
-export function updateAgentSettings(patch: Partial<AgentSettings>): AgentSettings {
-  save({ ...load(), ...patch });
+export function updateAgentSettings(patch: AgentSettingsPatch): AgentSettings {
+  save({ ...load(), ...mergeSettings(load(), patch) });
   return agentSettings();
 }
 
-export function apiKeyState(): ApiKeyState {
-  const key = anthropicApiKey();
+export function addAccount(provider: Provider, name: string): AccountsState {
+  const stored = load();
+  const id = newAccountId(provider, name, stored.accounts.map((a) => a.id));
+  const configDir = join(homedir(), '.harness', 'accounts', id);
+  mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  save({ ...stored, accounts: [...stored.accounts, { id, provider, name, configDir }] });
+  return accountsState();
+}
+
+export function renameAccount(id: AccountId, name: string): AccountsState {
+  const stored = load();
+  if (!stored.accounts.some((a) => a.id === id)) throw new Error('No such account');
+  save({ ...stored, accounts: stored.accounts.map((a) => (a.id === id ? { ...a, name } : a)) });
+  return accountsState();
+}
+
+export function removeAccount(id: AccountId): AccountsState {
+  const stored = load();
+  if (DEFAULT_ACCOUNTS.some((a) => a.id === id)) throw new Error('The default account cannot be removed');
+  if (Object.values(stored.links).some((l) => Object.values(l).includes(id))) throw new Error('A profile still uses this account. Link that profile to another account first');
+  save({ ...stored, accounts: stored.accounts.filter((a) => a.id !== id) });
+  return accountsState();
+}
+
+export function linkAccount(spaceId: string, provider: Provider, id: AccountId): AccountsState {
+  const stored = load();
+  if (stored.accounts.find((a) => a.id === id)?.provider !== provider) throw new Error(`No ${provider} account ${id}`);
+  save({ ...stored, links: { ...stored.links, [spaceId]: { ...stored.links[spaceId], [provider]: id } } });
+  return accountsState();
+}
+
+export function apiKeyState(provider: Provider): ApiKeyState {
+  const key = apiKeyFor(provider);
   return { isSet: !!key, last4: key?.slice(-4), canStore: safeStorage.isEncryptionAvailable() };
 }
 
-export function setAnthropicApiKey(key: string | null) {
+export function setApiKey(provider: Provider, key: string | null) {
   if (key !== null && !safeStorage.isEncryptionAvailable()) throw new Error('The OS keychain is not available, so the key cannot be stored safely');
-  const { apiKey: _, ...rest } = load();
-  save(key === null ? rest : { ...rest, apiKey: safeStorage.encryptString(key).toString('base64') });
+  const { [provider]: _, ...apiKeys } = load().apiKeys;
+  save({ ...load(), apiKeys: key === null ? apiKeys : { ...apiKeys, [provider]: safeStorage.encryptString(key).toString('base64') } });
 }
 
 let pathLookup: Promise<string> | undefined;
@@ -106,12 +166,15 @@ function readLoginShellPath(): Promise<string> {
 
 function load(): Stored {
   if (stored) return stored;
+  let saved: Partial<Stored> = {};
   try {
-    stored = { ...DEFAULT_SETTINGS, ...JSON.parse(readFileSync(file(), 'utf8')) };
-  } catch {
-    stored = { ...DEFAULT_SETTINGS };
-  }
-  return stored!;
+    saved = JSON.parse(readFileSync(file(), 'utf8'));
+  } catch {}
+  // Merged per harness, so a harness added to the registry later gets its defaults; default accounts always exist.
+  const settings = mergeSettings(DEFAULT_SETTINGS, saved);
+  const accounts = [...DEFAULT_ACCOUNTS.filter((d) => !saved.accounts?.some((a) => a.id === d.id)), ...(saved.accounts ?? [])];
+  stored = { ...settings, accounts, links: saved.links ?? {}, apiKeys: saved.apiKeys ?? {} };
+  return stored;
 }
 
 function save(next: Stored) {

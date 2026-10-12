@@ -41,12 +41,6 @@ export function parseCodexAccount(result: unknown): AgentLogin {
   return { state: 'logged-in', method, plan: typeof planType === 'string' ? titleCase(planType) : undefined };
 }
 
-/** Whether the plan a space expects (`Space.accounts`) is the one the install reports. Undefined when there's nothing to compare. */
-export function planMatches(expected: string, login: AgentLogin): boolean | undefined {
-  if (login.state !== 'logged-in' || !login.plan) return undefined;
-  return login.plan.toLowerCase() === expected.toLowerCase();
-}
-
 function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -1,23 +1,27 @@
 import { execFile, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import type { AgentInstall, AgentLogin } from '../../src/host/types/settings.ts';
+import type { Account, AgentInstall, AgentLogin } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { parseClaudeAuth, parseCodexAccount, parseVersion } from '../../src/settings/parse.ts';
-import { resolveExecutable, userPath } from '../agents/config.ts';
+import { accountEnv, resolveExecutable, userPath } from '../agents/config.ts';
 
 const TIMEOUT_MS = 10_000;
 
-/** Asks the user's own install what it is logged in with. Reads no credential files; parses only what the tools print. */
-export async function detect(provider: Provider): Promise<AgentInstall> {
+/** Asks the user's own install what this account's folder is logged in with. Reads no credential files; parses only what the tools print. */
+export async function detect(account: Account): Promise<AgentInstall> {
+  const { provider, id: accountId } = account;
   const path = await resolveExecutable(provider);
-  if (!path) return { provider, path: null, version: null, login: { state: 'unknown', reason: 'Not installed' } };
-  // Without Harness's own API key: this reports the install's login, not what Harness adds on top.
-  const env = { ...process.env, PATH: await userPath() };
+  if (!path) return { provider, accountId, path: null, version: null, login: { state: 'unknown', reason: 'Not installed' } };
+  // Without Harness's own API key: this reports the account's login, not what Harness adds on top.
+  const env = { ...accountEnv(provider, account.configDir), PATH: await userPath() };
   const version = await run(path, ['--version'], env);
-  if (version.error) return { provider, path, version: null, login: { state: 'unknown', reason: version.error } };
-  const login = provider === 'claude' ? await claudeLogin(path, env) : await codexLogin(path, env);
-  return { provider, path, version: parseVersion(version.stdout), login };
+  if (version.error) return { provider, accountId, path, version: null, login: { state: 'unknown', reason: version.error } };
+  const login = await LOGIN_CHECKS[provider](path, env);
+  return { provider, accountId, path, version: parseVersion(version.stdout), login };
 }
+
+/** How each harness reports its login: the one per-harness piece of code a new registry entry needs. */
+const LOGIN_CHECKS: Record<Provider, (path: string, env: NodeJS.ProcessEnv) => Promise<AgentLogin>> = { claude: claudeLogin, codex: codexLogin };
 
 async function claudeLogin(path: string, env: NodeJS.ProcessEnv): Promise<AgentLogin> {
   // Exits 1 when logged out but still prints the JSON.

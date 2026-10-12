@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseClaudeAuth, parseCodexAccount, parseVersion, planMatches } from './parse.ts';
+import { parseClaudeAuth, parseCodexAccount, parseVersion } from './parse.ts';
 
 // CLAUDE_LOGGED_OUT and CODEX_PLUS are real output (Claude Code 2.1.296, codex-cli 0.155.1), emails replaced.
 // GAP: the logged-in Claude fixtures are built from the field names in Claude Code 2.1.296's `auth status` source, not captured runs.
@@ -43,10 +43,4 @@ test('codex account/read', () => {
   assert.deepEqual(parseCodexAccount({ account: null, requiresOpenaiAuth: false }), { state: 'logged-in', method: 'No login needed' });
   assert.equal(parseCodexAccount('nope').state, 'unknown');
   assert.doesNotMatch(JSON.stringify(parseCodexAccount(CODEX_PLUS)), /example\.com/);
-});
-
-test('space plan comparison', () => {
-  assert.equal(planMatches('Plus', parseCodexAccount(CODEX_PLUS)), true);
-  assert.equal(planMatches('Business', parseCodexAccount(CODEX_PLUS)), false);
-  assert.equal(planMatches('Max', { state: 'logged-out' }), undefined);
 });
