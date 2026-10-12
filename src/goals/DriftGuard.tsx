@@ -39,7 +39,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     onSent?.();
   };
   const tag = (text: string, drift: DriftKind, reason: string) => dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift, reason });
-  const logEvent = (text: string) => dispatch({ type: 'say', threadId: thread.id, entry: { who: 'harness', kind: 'event', text: `Drift guard: ${text}` } });
+  const logEvent = (text: string, detail?: string) => dispatch({ type: 'say', threadId: thread.id, entry: { who: 'harness', kind: 'event', text, detail } });
   const close = () => {
     setPending(null);
     // A sent message already left the input, which may hold the next one by now.
@@ -81,9 +81,9 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     close();
   };
 
-  const continueHere = () => pending && resolve('off-goal', `${pending.verdict.reason}; you chose ${pending.isSent ? 'Keep here' : 'Continue here'}`);
+  const continueHere = () => pending && resolve('off-goal', `${pending.verdict.reason}. You chose ${pending.isSent ? 'Keep here' : 'Continue here'}`);
 
-  const addToGoal = () => resolve('scope-add', 'you chose Add to goal');
+  const addToGoal = () => resolve('scope-add', 'You chose Add to goal');
 
   const newThread = () => {
     if (!pending) return;
@@ -109,13 +109,13 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const dismiss = () => {
     if (!pending) return;
     if (pending.isSent) return continueHere();
-    logEvent(`"${pending.prompt.slice(0, 40)}" looked off-goal, dismissed`);
+    logEvent('Off-goal warning dismissed', `"${pending.prompt.slice(0, 40)}"`);
     setPending(null);
   };
 
   const mute = () => {
     dispatch({ type: 'drift-settings', threadId: thread.id, threshold: driftThreshold(thread), isMuted: true });
-    logEvent('turned off for this thread');
+    logEvent('Drift guard off for this thread');
     continueHere();
   };
 
