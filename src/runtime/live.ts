@@ -1,14 +1,19 @@
-import { threadCwd } from '../host/cwd.ts';
+import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions } from '../host/types/agent.ts';
 import type { Provider, Thread } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
+import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
 /** The composer marks a held-key message with this in the transcript; the agent gets the message without it. */
 export const QUEUED_PREFIX = 'Queued: ';
 
-export type AgentCall = { method: 'start'; threadId: string; options: AgentStartOptions } | { method: 'send'; threadId: string; text: string; images?: AgentImage[] } | { method: 'interrupt' | 'stop'; threadId: string };
+export type AgentCall =
+  | { method: 'start'; threadId: string; options: AgentStartOptions }
+  | { method: 'send'; threadId: string; text: string; images?: AgentImage[] }
+  | { method: 'interrupt' | 'stop'; threadId: string }
+  | { method: 'stopSubagent'; threadId: string; subagentId: string };
 
 /** The `host.agent` calls an action makes for live threads; demo threads make none. `next` is the state after the action. */
 export function agentCalls(state: State, action: Action, next: () => State): AgentCall[] {
@@ -24,9 +29,9 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
         .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { worktree: t.repo?.branch }));
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
-      const text = action.prompt ?? action.text.replace(QUEUED_PREFIX, '');
-      const images = action.images?.length ? { images: action.images } : {};
       if (!thread?.live) return [];
+      const text = withNotes(thread, action.prompt ?? action.text.replace(QUEUED_PREFIX, ''));
+      const images = action.images?.length ? { images: action.images } : {};
       return thread.live.isDetached ? reattach(thread, text, undefined, images.images) : [{ method: 'send', threadId: thread.id, text, ...images }];
     }
     case 'resume': {
@@ -40,9 +45,33 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'interrupt':
       return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
     case 'settle':
-      return hasAgent(state, action.threadId) ? [{ method: 'stop', threadId: action.threadId }] : [];
+      return [...(hasAgent(state, action.threadId) ? [{ method: 'stop' as const, threadId: action.threadId }] : []), ...stopBackground(state, [action.threadId])];
     case 'delete':
-      return action.threadIds.filter((id) => hasAgent(state, id)).map((threadId) => ({ method: 'stop' as const, threadId }));
+      return [...action.threadIds.filter((id) => hasAgent(state, id)).map((threadId) => ({ method: 'stop' as const, threadId })), ...stopBackground(state, action.threadIds)];
+    case 'bg-start': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      if (!thread?.live) return [];
+      const { agent } = action;
+      const cwd = agent.hasOwnWorktree ? threadCwdRoot(thread) : runFolder(thread);
+      if (cwd === undefined) return [];
+      const controls = agent.provider === thread.providers[0] ? controlsOf(thread) : DEFAULT_CONTROLS[agent.provider];
+      const worktree = agent.hasOwnWorktree && thread.repo ? { worktree: `${thread.repo.branch}-${agent.id}` } : {};
+      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider), ...(agent.model && { model: agent.model }), ...worktree };
+      return [{ method: 'start', threadId: backgroundSession(thread.id, agent.id), options }];
+    }
+    case 'bg-stop': {
+      const subagent = state.threads.find((t) => t.id === action.threadId)?.subagents?.find((s) => s.id === action.subagentId);
+      if (!subagent || !isRunning(subagent)) return [];
+      if (subagent.sessionId) return [{ method: 'stop', threadId: subagent.sessionId }];
+      return hasAgent(state, action.threadId) ? [{ method: 'stopSubagent', threadId: action.threadId, subagentId: subagent.id }] : [];
+    }
+    case 'agent': {
+      // A background agent's session ends with its first turn: the report is in, nobody will send it more.
+      const { event } = action;
+      if (event.type !== 'turn-end' && event.type !== 'limit') return [];
+      const isBackground = state.threads.some((t) => t.subagents?.some((s) => s.sessionId === event.threadId && isRunning(s)));
+      return isBackground ? [{ method: 'stop', threadId: event.threadId }] : [];
+    }
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.
       const thread = state.threads.find((t) => t.id === action.threadId);
@@ -80,6 +109,16 @@ function runFolder(thread: Thread) {
 function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[]) {
   const provider = thread.session?.provider ?? thread.providers[0];
   return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }) });
+}
+
+/** Mochi background agents of these threads that are still running. */
+function stopBackground(state: State, threadIds: string[]): AgentCall[] {
+  return state.threads.filter((t) => threadIds.includes(t.id)).flatMap((t) => (t.subagents ?? []).flatMap((s) => (s.sessionId && isRunning(s) ? [{ method: 'stop' as const, threadId: s.sessionId }] : [])));
+}
+
+/** The project folder itself, where a worktree of a new branch is made; a folderless chat has none. */
+function threadCwdRoot(thread: Thread) {
+  return thread.repo ? (projectRoot(thread.repo) ?? undefined) : undefined;
 }
 
 /** A live thread whose agent runs in this launch of Mochi. */

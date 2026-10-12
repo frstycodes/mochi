@@ -6,7 +6,7 @@ import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAs
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
-import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
+import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { secondOpinionModel } from '../agents/config.ts';
@@ -93,6 +93,13 @@ export const agent = {
     markIdle(threadId as string);
     if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.stop(threadId as string);
+    return runtime();
+  },
+  async stopSubagent(_sender, threadId, subagentId) {
+    string(threadId, 'threadId', 256);
+    string(subagentId, 'subagentId', 256);
+    if (hasClaudeSession(threadId as string)) return stopClaudeSubagent(threadId as string, subagentId as string);
+    if (codex.owns(threadId as string)) return codex.stopSubagent(threadId as string, subagentId as string);
     return runtime();
   },
   async warm(_sender, spaceId) {

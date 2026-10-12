@@ -46,6 +46,8 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
     events.push({ threadId, type: 'approval', requestId: `gate-${next.id}`, kind: 'tool', title: `Start "${next.title}"`, detail: `You asked to approve this step before it runs. Steps after it: ${after}.` });
   }
 
+  events.push(...agentEvents(thread, now));
+
   const isFinished = isIdle && !next && thread.status !== 'review' && !steps.some((s) => s.status !== 'done' && s.status !== 'dropped');
   if (isFinished) events.push({ threadId, type: 'turn-end', status: 'done' });
   return events;
@@ -86,6 +88,51 @@ function scriptAt(thread: Thread, now: number): { say: string[]; add: { at?: num
   if (thread.id === OVERLAP.threadId && now === SCRIPT.overlapAt && !has(OVERLAP.item.title)) return { say: [OVERLAP.say], add: [{ at: OVERLAP.at, item: OVERLAP.item }] };
   if (thread.id === SCOPE.threadId && now === SCRIPT.scopeAt && !has(SCOPE.items[0].title)) return { say: [], add: SCOPE.items.map((item) => ({ item })) };
   return { say: [], add: [] };
+}
+
+/** Scripted subagents: one background agent on Claude's thread, one foreground subagent on Codex's. */
+const AGENTS = [
+  {
+    threadId: 'rl',
+    id: 'demo-agent-load',
+    name: 'Load test the limiter',
+    prompt: 'Run k6 against the rate limiter at 2× the Pro tier for 2 minutes and report p95 latency and 429 rates per tier.',
+    model: 'claude-haiku-5-5',
+    isBackground: true,
+    at: NOW0 + 3,
+    ticks: 45,
+    steps: ['Read apps/api/middleware/ratelimit.ts', 'Write scripts/load/ratelimit.k6.js', 'Run k6 run scripts/load/ratelimit.k6.js --vus 200 --duration 2m', 'Read apps/api/middleware/__tests__/ratelimit.test.ts', 'Run pnpm --filter api test ratelimit'],
+    result: 'p95 stays at 11ms under 1,200 rps. Free keys get 429s at 60/min as expected; Pro at 600/min. One gap: /search shares the global bucket, so a burst there starves other routes for the same key.',
+  },
+  {
+    threadId: 'adm',
+    id: 'demo-agent-callers',
+    name: 'Find usage query callers',
+    prompt: 'List every caller of getDailyUsage and whether it paginates.',
+    model: 'gpt-6-luna',
+    isBackground: false,
+    at: NOW0 + 2,
+    ticks: 8,
+    steps: ['Run rg -n getDailyUsage apps packages', 'Read apps/api/routes/admin/usage.ts', 'Read apps/web/routes/admin/usage.tsx'],
+    result: 'Two callers: the admin usage route (cursor paginated) and the CSV export (streams all rows, unpaginated by design).',
+  },
+];
+
+const TOKENS_PER_AGENT_STEP = 3_400;
+
+function agentEvents(thread: Thread, now: number): AgentEvent[] {
+  return AGENTS.filter((a) => a.threadId === thread.id).flatMap((a): AgentEvent[] => {
+    const t = now - a.at;
+    const subagent = thread.subagents?.find((s) => s.id === a.id);
+    const base = { threadId: thread.id, type: 'subagent', id: a.id } as const;
+    if (t === 0 && !subagent) return [{ ...base, phase: 'start', toolId: `${a.id}-call`, name: a.name, prompt: a.prompt, model: a.model, isBackground: a.isBackground }];
+    if (subagent?.status !== 'running' || t <= 0) return [];
+    if (t >= a.ticks) return [{ ...base, phase: 'end', status: 'done', result: a.result, tokens: subagent.tokens + TOKENS_PER_AGENT_STEP }];
+    const n = Math.floor((t - 1) / 2);
+    const text = a.steps[n % a.steps.length];
+    const step = { id: `${a.id}-${n}`, phase: t % 2 ? 'start' : 'end', text, ...(t % 2 === 0 && text.startsWith('Run') && { exitCode: 0 }) } as const;
+    return [{ ...base, phase: 'progress', step, tokens: subagent.tokens + TOKENS_PER_AGENT_STEP }];
+  });
 }
 
 function planItem(s: Step): AgentPlanItem {

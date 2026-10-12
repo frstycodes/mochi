@@ -147,6 +147,22 @@ Settings › Defaults for new threads › **Agents can change Mochi**: Read only
 
 **Widgets.** `show_setting(settingId, reason, suggested?)` puts a `setting` card in the composer tray with the real control for prefs-backed settings (enums and switches) and a deep link for the rest; Mochi's own blocked calls use the same card.
 
+## Subagents and background agents
+
+A thread's agent can start other agents. Their work is never flattened into the parent's log: each is one `subagent` event stream (`start` / `progress` / `end`, sparse fields: name, prompt, model, background, its own tool steps, latest message, running token total, result, error) folded into `Thread.subagents` (`src/runtime/subagents.ts`). The chat shows each as one row where it started (`src/agents/SubagentRow.tsx`); the side pane's **Agents** tab lists them with live logs, Stop and their diffs (`src/pane/AgentsTab.tsx`), and opens on its own (never taking the front tab) when a thread's first background agent starts. The sidebar card counts running background agents.
+
+| | Claude (Agent SDK 0.3.296, Claude Code 2.1.296) | Codex (app-server 0.155.1, `multi_agent` on by default) |
+|---|---|---|
+| start | `Agent` (or `Task`) `tool_use`: id = the tool call's id, `description`, `prompt`, `model`, `run_in_background` | `item/completed` `subAgentActivity` `kind: started`: id = `agentThreadId`, name from `agentPath`; v1 `collabAgentToolCall` `spawnAgent` → `receiverThreadIds` |
+| own steps | messages with `parent_tool_use_id` = that id (`tool_use` / `tool_result` / text) | notifications under the child's own thread id on the same connection (`item/*`, `thread/tokenUsage/updated`, `turn/*`) |
+| progress | `task_started` (task id, `is_backgrounded`), `task_progress` (`usage.total_tokens`, summary), `task_updated` | child `thread/tokenUsage/updated` `total.totalTokens`; the child's spend is added to the thread's usage |
+| end | `task_notification` (`completed` / `failed` / `stopped`, `summary`, usage); a foreground agent's `tool_result` (`AgentOutput` `completed`) | parent `subAgentActivity` `completed` / `interrupted`, child `turn/completed`; the first end wins |
+| stop | `query.stopTask(taskId)` | `turn/interrupt` on the child's thread and turn |
+
+All of the above verified with live runs on 2026-10-13 (tiny prompts, `electron/agents/*/fixtures/subagent.jsonl`). Claude Code starts a turn of its own when a background agent reports back; the mapper treats it as any turn. Codex child approvals route to the parent thread's queue.
+
+**Mochi background agents** (`start_background_agent`, `list_background_agents`, `stop_background_agent`): for work that should outlive the current turn. The tool adds a `mochi` subagent and starts it as a session of its own in `host.agent` (thread id `<thread>--<id>`), so it runs on the profile's account and, for Claude, counts toward the concurrency cap like any session (Codex has no cap yet). `worktree: same` runs it in the thread's worktree; `new` makes a worktree on `<branch>-<id>` from the project's base branch. Its events are folded into the parent as subagent events in the renderer (`fromBackground`): approvals and questions land on the parent's queue named after the agent, its spend counts toward the thread, its context doesn't. Its session stops after its first turn. On end it logs a line in the thread and leaves a note (`live.notes`) that goes to the thread's agent ahead of your next message; "Send to thread" sends it now. Tier: reversible and quiet. GAP: the "auto" approvals policy the request mentions isn't on main; switch the tier when it lands. A restart marks running agents stopped.
+
 ## Not verified yet (check before building on it)
 
 - Env var the Agent SDK reads for the API key; the `user` tool_result message shape.

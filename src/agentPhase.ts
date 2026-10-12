@@ -19,8 +19,11 @@ export function agentPhase(thread: Thread): AgentPhase {
 
 export function entryPhase(entry?: ActivityEntry): AgentPhase {
   if (!entry || entry.kind === 'reasoning') return 'think';
-  return VERB_PHASE[toolVerb(entry.text)];
+  return toolPhase(entry.text);
 }
+
+/** The pose for a tool call's text ("Run pnpm test" → run). */
+export const toolPhase = (text: string): AgentPhase => VERB_PHASE[toolVerb(text)];
 
 /** A live thread keeps `running` between turns; only its agent knows whether it's working. Demo threads run while their status says so. */
 export function isWorking(thread: Thread) {

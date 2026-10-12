@@ -8,7 +8,7 @@ import { PromptInputProvider, usePromptInputController } from '@/components/ai-e
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, type ActivityEntry, type Author, type Provider, type QueueItem, type Thread } from './model';
+import { authorName, type ActivityEntry, type Author, type Provider, type QueueItem, type Subagent, type Thread } from './model';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
@@ -38,16 +38,18 @@ import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
+import { SubagentRow } from './agents/SubagentRow';
 
 type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
   | { kind: 'event'; key: string; entry: ActivityEntry }
   | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
-  | { kind: 'review'; key: string; review: Review };
+  | { kind: 'review'; key: string; review: Review }
+  | { kind: 'subagent'; key: string; subagent: Subagent };
 
 export function ChatView({ thread }: { thread: Thread }) {
   const { state } = useHarness();
-  const rows = useChatRows(thread.activity, thread.reviews);
+  const rows = useChatRows(thread.activity, thread.reviews, thread.subagents);
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
   const decisions = state.queue.filter((q) => q.threadId === thread.id);
@@ -109,7 +111,7 @@ function useComposerHeightVar() {
   return ref;
 }
 
-function useChatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow[] {
+function useChatRows(activity: ActivityEntry[], reviews: Review[] = [], subagents: Subagent[] = []): ChatRow[] {
   const rows: ChatRow[] = [];
   const pushReviews = (at: number) => reviews.filter((r) => (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach((review) => rows.push({ kind: 'review', key: review.id, review }));
   activity.forEach((entry, i) => {
@@ -123,6 +125,10 @@ function useChatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow
     }
     if (isWork) return rows.push({ kind: 'work', key, who: entry.who, entries: [entry] });
     if (entry.kind === 'event') return rows.push({ kind: 'event', key, entry });
+    if (entry.kind === 'subagent') {
+      const subagent = subagents.find((s) => s.id === entry.subagentId);
+      return subagent && rows.push({ kind: 'subagent', key, subagent });
+    }
     const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
     rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
@@ -135,6 +141,7 @@ function useChatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow
 function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; isLive: boolean }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} isLive={isLive} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
+  if (row.kind === 'subagent') return <SubagentRow thread={thread} subagent={row.subagent} />;
   if (row.kind === 'event')
     return (
       <div className="flex gap-2 type-caption text-muted-foreground">
@@ -185,6 +192,7 @@ function outline(rows: ChatRow[], pins: Pin[]) {
 function rowLabel(row: ChatRow) {
   if (row.kind === 'work') return `${authorName(row.who)} work log (${row.entries.length})`;
   if (row.kind === 'review') return `${authorName(row.review.provider)} second opinion`;
+  if (row.kind === 'subagent') return `Agent: ${row.subagent.name}`;
   if (row.kind === 'event') return row.entry.detail ? `${row.entry.text}: ${row.entry.detail}` : row.entry.text;
   return `${authorName(row.entry.who)}: ${row.entry.text}`;
 }

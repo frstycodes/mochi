@@ -35,6 +35,8 @@ const ENTRY_TOKENS = {
   message: { input: 4_000, output: 600 },
   reasoning: { input: 0, output: 0 },
   event: { input: 0, output: 0 },
+  // A subagent's tokens arrive as usage events of their own.
+  subagent: { input: 0, output: 0 },
 } satisfies Record<ActivityEntry['kind'], { input: number; output: number }>;
 const REASONING_TOKENS_PER_SECOND = 45;
 

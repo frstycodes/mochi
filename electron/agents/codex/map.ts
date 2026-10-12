@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentEvent, AgentModel, AgentPlanItem } from '../../../src/host/types/agent.ts';
+import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
 import { MODEL_PRICES } from '../../../src/usage/model.ts';
 
@@ -172,6 +172,7 @@ const PLAN_STATUS = { pending: 'pending', inProgress: 'running', completed: 'don
 const CONNECTION_STATUS = { notStarted: 'pending', starting: 'pending', connected: 'connected', authenticationRequired: 'needs-auth', failed: 'failed', cancelled: 'failed', disabled: 'disabled' } as const satisfies Record<string, McpServer['status']>;
 const STARTUP_STATUS = { starting: 'pending', ready: 'connected', failed: 'failed', cancelled: 'failed' } as const satisfies Record<string, McpServer['status']>;
 const TURN_STATUS = { completed: 'done', interrupted: 'interrupted', failed: 'failed' } as const;
+const AGENT_END = { completed: 'done', errored: 'failed', interrupted: 'stopped', shutdown: 'stopped' } as const;
 // TODO(codex): threads don't report their model yet, so every Codex token is priced as the default model; cached input is left out of the cost.
 const PRICE = MODEL_PRICES['gpt-5.5-codex'];
 
@@ -204,9 +205,76 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       const { text, links } = webSearch(item);
       return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && links.length > 0 && { links }) }];
     }
+    case 'subAgentActivity':
+      return phase === 'end' ? subAgentActivity(item, threadId) : [];
+    case 'collabAgentToolCall':
+      return phase === 'end' ? collabCall(item, threadId) : [];
   }
   return [];
 }
+
+/**
+ * A spawned agent's lifecycle on its parent (0.155.1, multi-agent v2): `started` when spawned, `completed` / `interrupted`
+ * when it settles. Its own work arrives on its own thread id (`childEvents`). Read on `item/completed` only: the item
+ * fires started and completed with the same kind.
+ */
+function subAgentActivity(item: Record<string, unknown>, threadId: string): AgentEvent[] {
+  if (typeof item.agentThreadId !== 'string') return [];
+  const id = item.agentThreadId;
+  if (item.kind === 'started') return [{ threadId, type: 'subagent', id, phase: 'start', toolId: String(item.id), name: agentName(item.agentPath), isBackground: true }];
+  if (item.kind === 'completed') return [{ threadId, type: 'subagent', id, phase: 'end', status: 'done' }];
+  if (item.kind === 'interrupted') return [{ threadId, type: 'subagent', id, phase: 'end', status: 'stopped' }];
+  return [];
+}
+
+/** The v1 collab tools: `spawnAgent` names the new agents in `receiverThreadIds`; any call may carry their last known states. */
+function collabCall(item: Record<string, unknown>, threadId: string): AgentEvent[] {
+  const receivers = Array.isArray(item.receiverThreadIds) ? item.receiverThreadIds.filter((r) => typeof r === 'string') : [];
+  const prompt = typeof item.prompt === 'string' ? item.prompt : undefined;
+  const model = typeof item.model === 'string' ? item.model : undefined;
+  const spawned: AgentEvent[] =
+    item.tool === 'spawnAgent' && item.status === 'completed'
+      ? receivers.map((id) => ({ threadId, type: 'subagent', id, phase: 'start', toolId: String(item.id), name: prompt ? firstWords(prompt) : 'Agent', ...(prompt && { prompt }), ...(model && { model }), isBackground: true }))
+      : [];
+  const states = Object.entries(obj(item.agentsStates) ?? {}).flatMap(([id, state]): AgentEvent[] => {
+    const status = AGENT_END[obj(state)?.status as keyof typeof AGENT_END];
+    const message = obj(state)?.message;
+    return status ? [{ threadId, type: 'subagent', id, phase: 'end', status, ...(typeof message === 'string' && message && { result: message }) }] : [];
+  });
+  return [...spawned, ...states];
+}
+
+/** What a spawned agent's own thread reports, folded into its parent as that subagent's progress. `s` is the child's own state (its token totals). */
+export function childEvents(method: string, params: unknown, s: ThreadState, subagentId: string): AgentEvent[] {
+  const p = obj(params);
+  if (!p) return [];
+  const progress = (fields: Omit<AgentSubagentEvent, 'threadId' | 'type' | 'id' | 'phase'>): AgentSubagentEvent => ({ threadId: s.threadId, type: 'subagent', id: subagentId, phase: 'progress', ...fields });
+  if (method === 'thread/tokenUsage/updated') {
+    const total = obj(obj(p.tokenUsage)?.total)?.totalTokens;
+    // The parent's own usage leaves its children out, so their spend is added to the thread here, without touching its context meter.
+    const spend = mapUsage(obj(p.tokenUsage), s).flatMap((e): AgentEvent[] => (e.type === 'usage' ? [{ threadId: e.threadId, type: 'usage', inputTokens: e.inputTokens, outputTokens: e.outputTokens, ...(e.costUsd !== undefined && { costUsd: e.costUsd }) }] : []));
+    return [...spend, ...(typeof total === 'number' ? [progress({ tokens: total })] : [])];
+  }
+  if (method === 'turn/completed') {
+    const turn = obj(p.turn);
+    const status = TURN_STATUS[turn?.status as keyof typeof TURN_STATUS];
+    const error = obj(turn?.error)?.message;
+    if (!status) return [];
+    return [{ threadId: s.threadId, type: 'subagent', id: subagentId, phase: 'end', status: status === 'interrupted' ? 'stopped' : status, ...(typeof error === 'string' && { error: apiMessage(error) }) }];
+  }
+  if (method !== 'item/started' && method !== 'item/completed') return [];
+  const item = obj(p.item);
+  if (item?.type === 'agentMessage') return method === 'item/completed' && typeof item.text === 'string' && item.text ? [progress({ message: item.text })] : [];
+  return mapItem(item, method === 'item/started' ? 'start' : 'end', s).flatMap((e) => (e.type === 'tool' ? [progress({ step: { id: e.id, phase: e.phase, text: e.text, ...(e.files && { files: e.files }), ...(e.exitCode !== undefined && { exitCode: e.exitCode }) } })] : []));
+}
+
+/** `/root/echo_hi` → "echo hi". */
+function agentName(agentPath: unknown) {
+  const last = typeof agentPath === 'string' ? agentPath.split('/').filter(Boolean).at(-1) : undefined;
+  return last ? last.replaceAll('_', ' ') : 'Agent';
+}
+
+const firstWords = (text: string) => text.split(/\s+/).slice(0, 6).join(' ');
 
 /**
  * A `webSearch` item (codex 0.155.1 `WebSearchItem`): `action` says whether it searched or opened a page, and the query
