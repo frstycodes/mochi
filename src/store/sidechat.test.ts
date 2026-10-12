@@ -76,3 +76,13 @@ test('an answer still streaming cannot be promoted', () => {
   const state = run(opened, { type: 'sidechat-ask', ...at, id: 'a1', text: 'Why?' });
   assert.equal(run(state, { type: 'sidechat-promote', ...at, id: 'a1', to: 'message' }), state);
 });
+
+test('/side parks its question until asked, and the chat keeps its model through asking and clearing', () => {
+  const opened = run(base(), { type: 'sidechat-open', threadId: 'rl', ask: 'Why Redis?' });
+  const at = { threadId: 'rl', tabId: opened.panes[0].activeTab };
+  assert.equal(chatFor(opened, 'rl', at.tabId).pending, 'Why Redis?');
+  const asked = run(opened, { type: 'sidechat-model', ...at, model: 'opus-5.5' }, { type: 'sidechat-ask', ...at, id: 'a1', text: 'Why Redis?' });
+  assert.equal(chatFor(asked, 'rl', at.tabId).pending, undefined);
+  assert.equal(chatFor(asked, 'rl', at.tabId).model, 'opus-5.5');
+  assert.equal(chatFor(run(asked, { type: 'sidechat-clear', ...at }), 'rl', at.tabId).model, 'opus-5.5');
+});

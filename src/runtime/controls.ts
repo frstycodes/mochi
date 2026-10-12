@@ -40,6 +40,15 @@ export function settingsModel(id: string, harness: Provider): ModelOption {
   return { id, harness, name: id, note: 'Default in Settings', context: '', providerModel: id };
 }
 
+/** Settings and the SDK name Claude models by their own id; the model chip by catalog id. */
+export function claudeModelId(providerModel: string) {
+  return MODELS.find((m) => m.harness === 'claude' && m.providerModel === providerModel)?.id ?? providerModel;
+}
+
+export function providerModelOf(id: string) {
+  return MODELS.find((m) => m.id === id)?.providerModel ?? id;
+}
+
 export const DEFAULT_CONTROLS = {
   claude: { model: 'opus-5.5', effort: 'High', access: 'Auto edit' },
   codex: { model: 'gpt-5.5-codex', effort: 'High', access: 'Auto edit' },

@@ -27,8 +27,8 @@ const listeners = new Set<(settings: AgentSettings) => void>();
 let stored: Stored | undefined;
 
 export function agentSettings(): AgentSettings {
-  const { concurrency, harnesses, worktreeRoot, shell, prDrafts } = load();
-  return { concurrency, harnesses, worktreeRoot, shell, prDrafts };
+  const { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel } = load();
+  return { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel };
 }
 
 /** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.harness/worktrees`. */
@@ -49,6 +49,10 @@ export function terminalShell(): string {
 
 export function prDrafts(): boolean {
   return load().prDrafts;
+}
+
+export function sideChatModel(): string {
+  return load().sideChatModel;
 }
 
 function expandHome(path: string) {
