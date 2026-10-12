@@ -211,12 +211,8 @@ function McpServerItem({ spaceId, provider, server, review }: { spaceId: string;
           <ItemTitle className="flex w-full min-w-0 flex-wrap items-center gap-1.5">
             <span className="truncate">{def.name}</span>
             {isProject && <Badge variant="outline">Project</Badge>}
-            {needs.map((v) => (
-              <Badge key={v} variant="outline" className="text-warning">
-                Needs {v}
-              </Badge>
-            ))}
           </ItemTitle>
+          {!!needs.length && <ItemDescription className="line-clamp-none text-warning [overflow-wrap:anywhere]">Needs {needs.join(', ')} in the environment</ItemDescription>}
           <ItemDescription className="truncate font-mono text-xs" title={serverSummary(def)}>
             {serverSummary(def)}
           </ItemDescription>

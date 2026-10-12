@@ -207,7 +207,7 @@ Ranked by how much they help running many agents at once.
 - [ ] **Session recording / replay** of a thread for demos and debugging.
 - [ ] **Voice**: dictate is designed; add push-to-talk global hotkey and spoken status ("Rate limiting is 60% done, waiting on you").
 - [ ] **Mobile companion / Remote control**: answer Queue items from the phone.
-- [ ] **Settings sync and import** of `CLAUDE.md`, MCP servers, skills per space.
+- [ ] **Settings sync and import** of `CLAUDE.md`, MCP servers, skills per space. Built (SETTINGS.md, Workspace → Profiles); open until a new thread on a signed-in test account shows a profile-enabled server in its context panel on both providers.
 
 ## 7. Chat visualizations
 
