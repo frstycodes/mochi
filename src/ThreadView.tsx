@@ -287,7 +287,15 @@ function ThreadHeader({
         </Tooltip>
         <SplitControls />
         <HeaderPins shownKind={shownKind} onToggle={(kind) => (kind === shownKind ? onTogglePane() : onShowTab(kind))} drop={pinDrop} />
-        <ViewMenu isPaneOpen={isPaneOpen} onTogglePane={onTogglePane} />
+        <TooltipIconButton
+          label={isPaneOpen ? 'Hide the side pane' : 'Show the side pane'}
+          aria-pressed={isPaneOpen}
+          onClick={onTogglePane}
+          className={cn('text-muted-foreground', isPaneOpen && 'bg-accent text-foreground')}
+        >
+          <SidebarRight />
+        </TooltipIconButton>
+        <ViewMenu />
         <RewindLayer thread={thread} />
       </header>
     </TargetContextMenu>
@@ -406,8 +414,8 @@ function PinnedTab({ kind, isShown, onToggle }: { kind: PaneTabKind; isShown: bo
   );
 }
 
-/** Layout toggles and header pins; thread actions live under the title. */
-function ViewMenu({ isPaneOpen, onTogglePane }: { isPaneOpen: boolean; onTogglePane: () => void }) {
+/** The sidebar toggle and header pins; thread actions live under the title, the side pane has its own button. */
+function ViewMenu() {
   const { state: sidebar, isMobile, toggleSidebar } = useSidebar();
   const pins = useHeaderPins();
   return (
@@ -423,8 +431,8 @@ function ViewMenu({ isPaneOpen, onTogglePane }: { isPaneOpen: boolean; onToggleP
         <TooltipContent>View options</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuGroup>
-          {!isMobile && (
+        {!isMobile && (
+          <>
             <DropdownMenuItem onSelect={toggleSidebar}>
               <SidebarLeft />
               {sidebar === 'expanded' ? 'Hide sidebar' : 'Show sidebar'}
@@ -432,13 +440,9 @@ function ViewMenu({ isPaneOpen, onTogglePane }: { isPaneOpen: boolean; onToggleP
                 <Shortcut keys={['mod', 'B']} />
               </DropdownMenuShortcut>
             </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={onTogglePane}>
-            <SidebarRight />
-            {isPaneOpen ? 'Hide side pane' : 'Show side pane'}
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel>Pin to header</DropdownMenuLabel>
           {PINNABLE_KINDS.map((kind) => {
