@@ -6,7 +6,7 @@ import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/ho
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
-import { approvalEvent, createMapper, mcpServersFromStatus, permissionResult, withPlanTools } from './map.ts';
+import { approvalEvent, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -38,13 +38,12 @@ const approvals = new Map<string, { threadId: string; toolName: string; input: R
 
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 const DEFAULT_CAP = 6;
-const PERMISSION_MODES: PermissionMode[] = ['default', 'acceptEdits', 'plan', 'dontAsk', 'auto'];
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
 
 export async function startClaude(threadId: string, options: AgentRunOptions) {
-  if (options.permissionMode && !PERMISSION_MODES.includes(options.permissionMode as PermissionMode)) throw new TypeError(`permissionMode must be one of ${PERMISSION_MODES.join(', ')}`);
+  if (options.permissionMode && !(options.permissionMode in PERMISSION_MODES)) throw new TypeError(`permissionMode must be one of ${Object.keys(PERMISSION_MODES).join(', ')}`);
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
@@ -139,6 +138,8 @@ async function launch(session: Session) {
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
+    const mode = (options.permissionMode as PermissionMode | undefined) ?? 'default';
+    const permissions = permissionOptions(mode);
     session.query = query({
       prompt: inbox(session, abort.signal),
       options: {
@@ -146,7 +147,7 @@ async function launch(session: Session) {
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
-        permissionMode: (options.permissionMode as PermissionMode | undefined) ?? 'default',
+        ...permissions,
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
         env,
@@ -155,11 +156,13 @@ async function launch(session: Session) {
         abortController: abort,
         canUseTool: approve(threadId),
         mcpServers: { [SERVER]: claudeServer(threadId) },
-        allowedTools: AUTO_ALLOWED,
+        allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },
     });
     for await (const message of session.query) {
       if (message.type === 'system' && message.subtype === 'init') session.sessionId = message.session_id;
+      // Auto mode depends on the plan, the model and fast mode; where Claude Code can't run it, edits fall back to acceptEdits rather than asking every time.
+      if (message.type === 'system' && message.subtype === 'init' && mode === 'auto' && message.permissionMode !== 'auto') void session.query.setPermissionMode('acceptEdits').catch(() => {});
       session.mapper.map(message).forEach(emit);
       if (message.type !== 'result') continue;
       void session.query.mcpServerStatus().then((list) => emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } }), () => {});

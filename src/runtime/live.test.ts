@@ -12,7 +12,7 @@ const calls = (s: State, action: Action) => agentCalls(s, action, () => threadsR
 const run = (s: State, action: Action) => threadsReducer(s, action);
 
 test('a live new thread starts its agent, follow-ups send, stop interrupts; demo threads never reach host.agent', () => {
-  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Ask first' } };
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Manual' } };
   let s = base();
   const [start] = calls(s, create);
   assert.equal(start.method, 'start');

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
-import { ArrowUp, BranchUp, Laptop, Mic, Monitor, Paperclip, ShieldCheck, Stop } from 'reicon-react';
+import { ArrowUp, BranchUp, ClipboardList, Hand, Laptop, Mic, Monitor, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { toast } from 'sonner';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
@@ -30,7 +30,8 @@ import type { Provider } from './model';
 import { EffortPicker, ModelPicker, useModels } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
-import { ACCESS, type Access, type ThreadControls } from './runtime/controls';
+import type { ThreadControls } from './runtime/controls';
+import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import { getPrefs, type Prefs } from './settings/prefs';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
@@ -190,8 +191,65 @@ export function RunOnMenu() {
   return <MetaMenu icon={device === 'Cloud sandbox' ? <Monitor /> : <Laptop />} label="Run on" value={device} options={DEVICES} onChange={setDevice} />;
 }
 
-export function PermissionsMenu({ value, onChange }: { value: Access; onChange: (access: Access) => void }) {
-  return <MetaMenu icon={<ShieldCheck />} label="Permissions" value={value} options={ACCESS} onChange={(v) => onChange(v as Access)} />;
+/**
+ * The harness's own modes with what each does there. Full access is warning-coloured wherever it shows, and the first pick
+ * per thread asks for a second click inside the menu.
+ */
+export function PermissionsMenu({ threadId, provider, value, onChange }: { threadId: string; provider: Provider; value: Access; onChange: (access: Access) => void }) {
+  const [isArmed, setIsArmed] = useState(false);
+  const access = accessFor(provider, value);
+  const modes = Object.entries(PERMISSIONS[provider]) as [Access, { hint: string }][];
+  const needsConfirm = (mode: Access) => mode === 'Full access' && access !== mode && !fullAccessConfirmed.has(threadId) && !isArmed;
+  const choose = (mode: Access) => {
+    if (needsConfirm(mode)) return setIsArmed(true);
+    if (mode === 'Full access') fullAccessConfirmed.add(threadId);
+    onChange(mode);
+  };
+  return (
+    <DropdownMenu onOpenChange={(open) => !open && setIsArmed(false)}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="xs"
+          className={cn('text-subtle-foreground hover:text-foreground', access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:hover:bg-warning/20')}
+          aria-label={`Permissions: ${access}`}
+        >
+          <AccessIcon access={access} />
+          {access}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-76">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Permissions</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={access} onValueChange={(v) => choose(v as Access)}>
+            {modes.map(([mode, { hint }]) => {
+              const isFull = mode === 'Full access';
+              return (
+                // Radix changes the value whether or not onSelect is prevented; preventing only keeps the menu open for the confirm.
+                <DropdownMenuRadioItem key={mode} value={mode} onSelect={(e) => needsConfirm(mode) && e.preventDefault()} className={cn('items-start py-1.5', isFull && 'text-warning focus:**:text-warning')}>
+                  <AccessIcon access={mode} className="mt-0.5" />
+                  <span className="flex min-w-0 flex-col">
+                    {mode}
+                    <span className={cn('type-caption text-muted-foreground', isFull && isArmed && 'text-warning')}>{isFull && isArmed ? 'Choose again to turn on: nothing will ask before it runs' : hint}</span>
+                  </span>
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ponytail: kept in memory, so a reload asks once more per thread; persist it if that grates.
+const fullAccessConfirmed = new Set<string>();
+
+const ACCESS_ICONS = { Manual: Hand, Auto: ShieldCheck, 'Full access': ShieldAlert, Plan: ClipboardList } satisfies Record<Access, unknown>;
+
+function AccessIcon({ access, className }: { access: Access; className?: string }) {
+  const Icon = ACCESS_ICONS[access];
+  return <Icon aria-hidden className={className} />;
 }
 
 export function BranchLabel({ branch }: { branch: string }) {

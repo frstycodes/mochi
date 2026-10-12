@@ -308,7 +308,7 @@ function Composer({
         </div>
         <ComposerMeta>
           <RunOnMenu />
-          <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
+          <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {!!thread.repo && <BranchLabel branch={thread.repo.branch} />}
           <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
             {isQueue ? (

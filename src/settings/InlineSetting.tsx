@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { ArrowRight } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { ACCESS, EFFORTS } from '../runtime/controls';
+import { SHARED_ACCESS } from '../runtime/access';
+import { EFFORTS } from '../runtime/controls';
 import { openSettings } from './open';
 import { settingControlId, SettingsSelect } from './parts';
 import { setPrefs, usePrefs, type Prefs } from './prefs';
@@ -21,7 +22,7 @@ const named = (values: readonly string[]) => values.map((value) => ({ value, lab
 /** Prefs an agent can put in front of you with a real control (`show_setting`); every other setting gets a link to its row. */
 const CHOICES = {
   agentControl: AGENT_CONTROLS,
-  permissions: named(ACCESS),
+  permissions: named(SHARED_ACCESS),
   effort: named(EFFORTS),
   agent: AGENTS,
   branchFrom: BRANCH_FROM,

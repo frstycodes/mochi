@@ -112,7 +112,7 @@ function NewThread() {
           <ProjectPicker value={project} onChange={setProject} />
           <RunMenu value={run} onChange={setRun} />
           {!!project && <RunOnMenu />}
-          {!!project && <PermissionsMenu value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+          {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
       </motion.div>
 
