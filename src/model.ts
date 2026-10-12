@@ -1,5 +1,6 @@
 import type { AgentQuestion } from './host/types/agent.ts';
 import type { ThreadControls } from './runtime/controls.ts';
+import type { Review } from './secondOpinion/verdict.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
@@ -115,6 +116,8 @@ export interface Thread {
   agent?: AgentInfo;
   /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
   live?: LiveRun;
+  /** Second opinions from the other provider, oldest first. */
+  reviews?: Review[];
 }
 
 export interface LiveRun {
