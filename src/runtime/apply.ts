@@ -1,5 +1,5 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
-import type { Provider, QueueItem, Step, Thread } from '../model.ts';
+import type { AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { similarity } from '../progress.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -15,7 +15,9 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
 
   switch (event.type) {
     case 'session':
-      return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId } }));
+      return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId }, agent: {} }));
+    case 'info':
+      return update((t) => ({ ...t, agent: mergeInfo(t.agent, event.info) }));
     case 'message':
       return update((t) => {
         const last = t.activity.at(-1);
@@ -242,6 +244,13 @@ function endTurn(state: State, thread: Thread, event: Extract<AgentEvent, { type
 /** Who speaks for a thread right now: its live session, else the owner of the step in flight, else its first provider. */
 function actor(thread: Thread): Provider {
   return thread.session?.provider ?? thread.steps.find((s) => s.status === 'running')?.owner ?? thread.providers[0];
+}
+
+function mergeInfo(info: AgentInfo = {}, update: AgentInfo): AgentInfo {
+  if (!update.mcpServers) return { ...info, ...update };
+  const servers = new Map((info.mcpServers ?? []).map((s) => [s.name, s]));
+  for (const s of update.mcpServers) servers.set(s.name, { ...servers.get(s.name), ...s });
+  return { ...info, ...update, mcpServers: [...servers.values()] };
 }
 
 const NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<Provider, string>;

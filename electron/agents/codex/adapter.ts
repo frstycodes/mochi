@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
 import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 
 interface Live {
@@ -133,6 +133,18 @@ export class CodexAdapter {
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
+    this.emit({ threadId, type: 'info', info: infoFromStart(result) });
+    void this.discover(rpc, threadId, codexId, options.cwd);
+  }
+
+  /** Lists what the thread can reach. Best effort: the panel shows what came back, a failed call just leaves its list out. */
+  private async discover(rpc: RpcClient, threadId: string, codexId: string, cwd: string) {
+    const [mcp, skills, plugins] = await Promise.all([
+      rpc.request('mcpServerStatus/list', { threadId: codexId, detail: 'toolsAndAuthOnly' }).catch(() => null),
+      rpc.request('skills/list', { cwds: [cwd] }).catch(() => null),
+      rpc.request('plugin/installed', { cwds: [cwd] }).catch(() => null),
+    ]);
+    if (this.threads.get(threadId)?.codexId === codexId) this.emit({ threadId, type: 'info', info: infoFromLists(mcp, skills, plugins) });
   }
 
   private async turn(threadId: string, text: string) {

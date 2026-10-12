@@ -6,7 +6,7 @@ import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/ho
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
-import { approvalEvent, createMapper, permissionResult } from './map.ts';
+import { approvalEvent, createMapper, mcpServersFromStatus, permissionResult } from './map.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -156,6 +156,7 @@ async function launch(session: Session) {
       if (message.type === 'system' && message.subtype === 'init') session.sessionId = message.session_id;
       session.mapper.map(message).forEach(emit);
       if (message.type !== 'result') continue;
+      void session.query.mcpServerStatus().then((list) => emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } }), () => {});
       session.isBusy = session.inbox.length > 0;
       if (!session.isBusy && waiting.length) release(session);
     }

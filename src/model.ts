@@ -61,6 +61,26 @@ export interface Source {
   label: string;
 }
 
+/** What the agent reports about its session: what it can reach, not what it used. Fields can arrive separately (Codex lists them after start), so each is optional. */
+export interface AgentInfo {
+  model?: string;
+  cwd?: string;
+  /** In the agent's own terms: Claude's permission mode, Codex's approval policy and sandbox. */
+  permissionMode?: string;
+  version?: string;
+  tools?: string[];
+  mcpServers?: McpServer[];
+  skills?: string[];
+  plugins?: { name: string; version?: string }[];
+  slashCommands?: string[];
+}
+
+export interface McpServer {
+  name: string;
+  status: 'connected' | 'pending' | 'needs-auth' | 'failed' | 'disabled';
+  toolCount?: number;
+}
+
 export interface PullRequest {
   number: number;
   state: 'open' | 'merged' | 'draft';
@@ -90,6 +110,8 @@ export interface Thread {
   drift?: { threshold: number; isMuted: boolean };
   session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
   controls?: ThreadControls;
+  /** From the live agent's session start; reset each time a session (re)starts. */
+  agent?: AgentInfo;
   /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
   live?: LiveRun;
 }
