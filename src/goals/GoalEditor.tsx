@@ -10,11 +10,12 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { DEFAULT_THRESHOLD } from '../drift';
 import type { Size, Thread } from '../model';
 import { useHarness } from '../store';
-import { StepStatusIcon } from '../ui';
+import { StepStatusIcon, TooltipIconButton } from '../ui';
 import { applyDraft, draftFrom, type DraftStep, type GoalDraft } from './edit';
 import { templatesFor } from './templates';
 
@@ -152,7 +153,8 @@ function useGoalDraft(thread: Thread) {
   return { draft, setGoal, updateStep, moveStep, addSteps };
 }
 
-const SIZES = ['1', '2', '3'];
+const SIZES = ['1', '2', '3'] as const;
+const SIZE_NAMES = { '1': 'Small', '2': 'Medium', '3': 'Large' } satisfies Record<(typeof SIZES)[number], string>;
 
 function StepEditRow({
   step,
@@ -183,28 +185,43 @@ function StepEditRow({
         ) : (
           <Input value={step.title} disabled={!isEditable} onChange={(e) => onChange({ title: e.target.value })} aria-label="Step title" className={cn('h-7 min-w-0 flex-1', step.isRemoved && 'line-through')} />
         )}
-        <ToggleGroup type="single" size="sm" variant="outline" spacing={0} value={String(step.size)} disabled={!isEditable} onValueChange={(v) => v && onChange({ size: Number(v) as Size })} aria-label="Size">
+        <ToggleGroup type="single" size="sm" variant="outline" spacing={0} value={String(step.size)} disabled={!isEditable} onValueChange={(v) => v && onChange({ size: Number(v) as Size })} aria-label="Step size">
           {SIZES.map((s) => (
-            <ToggleGroupItem key={s} value={s} aria-label={`Size ${s}`} className="tabular">
-              {s}
-            </ToggleGroupItem>
+            <Tooltip key={s}>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem value={s} aria-label={`${SIZE_NAMES[s]} step`}>
+                  {SIZE_NAMES[s][0]}
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-60 flex-col items-start gap-0.5">
+                <span className="block font-medium">{SIZE_NAMES[s]} step</span>
+                <span className="block opacity-80">Counts {s} {s === '1' ? 'point' : 'points'} toward the goal's progress and ETA.</span>
+              </TooltipContent>
+            </Tooltip>
           ))}
         </ToggleGroup>
-        <Button variant="ghost" size="icon-sm" disabled={!isEditable} aria-pressed={step.gate} aria-label="Pause before this step" title="Pause before this step" onClick={() => onChange({ gate: !step.gate })} className={cn(step.gate && 'bg-accent text-foreground')}>
+        <TooltipIconButton
+          label={step.gate ? 'Pauses before this step' : 'Pause before this step'}
+          hint="The agent stops and asks you in the Queue before it starts this step."
+          disabled={!isEditable}
+          aria-pressed={step.gate}
+          onClick={() => onChange({ gate: !step.gate })}
+          className={cn(step.gate && 'bg-accent text-foreground')}
+        >
           <Pause />
-        </Button>
-        <Button variant="ghost" size="icon-sm" disabled={step.isRemoved} aria-pressed={isCriteriaOpen} aria-label="Acceptance criteria" title="Acceptance criteria" onClick={() => setCriteriaOpen((o) => !o)} className={cn(isCriteriaOpen && 'bg-accent text-foreground')}>
+        </TooltipIconButton>
+        <TooltipIconButton label="Acceptance criteria" hint="What has to be true for this step to count as done, and an optional command that checks it." disabled={step.isRemoved} aria-pressed={isCriteriaOpen} onClick={() => setCriteriaOpen((o) => !o)} className={cn(isCriteriaOpen && 'bg-accent text-foreground')}>
           <ClipboardTick />
-        </Button>
-        <Button variant="ghost" size="icon-sm" disabled={isFirst} aria-label="Move up" onClick={() => onMove(-1)}>
+        </TooltipIconButton>
+        <TooltipIconButton label="Move up" disabled={isFirst} onClick={() => onMove(-1)}>
           <ArrowUp />
-        </Button>
-        <Button variant="ghost" size="icon-sm" disabled={isLast} aria-label="Move down" onClick={() => onMove(1)}>
+        </TooltipIconButton>
+        <TooltipIconButton label="Move down" disabled={isLast} onClick={() => onMove(1)}>
           <ArrowDown />
-        </Button>
-        <Button variant="ghost" size="icon-sm" disabled={step.isLocked} aria-label={step.isRemoved ? 'Keep this step' : 'Remove this step'} onClick={() => onChange({ isRemoved: !step.isRemoved })}>
+        </TooltipIconButton>
+        <TooltipIconButton label={step.isRemoved ? 'Keep this step' : 'Remove this step'} hint={step.isLocked ? "Done steps stay in the goal's history." : undefined} disabled={step.isLocked} onClick={() => onChange({ isRemoved: !step.isRemoved })}>
           {step.isRemoved ? <Undo /> : <Trash3 />}
-        </Button>
+        </TooltipIconButton>
       </div>
       {isCriteriaOpen && !step.isRemoved && (
         <div className="flex items-center gap-1.5 pl-6.5">

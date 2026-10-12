@@ -1,5 +1,7 @@
-import { useId, type CSSProperties } from 'react';
+import { useId, type ComponentProps, type CSSProperties, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Briefcase, Home, Layers, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
@@ -133,3 +135,24 @@ export function SizeBadge({ size }: { size: 1 | 2 | 3 }) {
 }
 
 const SIZE_LABEL = { 1: 'S', 2: 'M', 3: 'L' } satisfies Record<1 | 2 | 3, string>;
+
+/**
+ * Icon-only button with a real tooltip (never a native `title`). `label` is also its accessible name; `hint` adds a second line.
+ * A disabled button gets no pointer events, so the tooltip hangs on a wrapper and can still say why it is disabled.
+ */
+export function TooltipIconButton({ label, hint, children, ...props }: { label: string; hint?: ReactNode } & Omit<ComponentProps<typeof Button>, 'aria-label'>) {
+  const button = (
+    <Button variant="ghost" size="icon-sm" aria-label={label} {...props}>
+      {children}
+    </Button>
+  );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{props.disabled ? <span className="inline-flex">{button}</span> : button}</TooltipTrigger>
+      <TooltipContent className="max-w-60 flex-col items-start gap-0.5">
+        <span className="block font-medium">{label}</span>
+        {!!hint && <span className="block opacity-80">{hint}</span>}
+      </TooltipContent>
+    </Tooltip>
+  );
+}

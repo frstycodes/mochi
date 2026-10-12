@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { ChevronLeft, ChevronRight, Copy, Download, Maximize, SearchZoomIn, SearchZoomOut, X, type IconComponent } from 'reicon-react';
+import { ChevronLeft, ChevronRight, Copy, Download, Maximize, SearchZoomIn, SearchZoomOut, X } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Kbd } from '@/components/ui/kbd';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { Shortcut } from '../Shortcut';
+import { TooltipIconButton } from '../ui';
 import { copyImage, openPhotos, saveImage, usePhotoRequest, type Photo } from './photos';
 import { FIT, clampPan, zoomAt, type View } from './zoom';
 
@@ -92,12 +92,22 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
         <DialogPrimitive.Title className="min-w-0 truncate px-1 type-title">{photo.name}</DialogPrimitive.Title>
         {!!position && <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular">{position}</span>}
         <span className="flex-1" />
-        <ToolButton label="Zoom out" keys="−" icon={SearchZoomOut} disabled={!isZoomed} onClick={() => zoom(1 / STEP)} />
+        <TooltipIconButton label="Zoom out" hint={<Shortcut keys={['-']} />} disabled={!isZoomed} onClick={() => zoom(1 / STEP)}>
+          <SearchZoomOut />
+        </TooltipIconButton>
         <span className="w-11 text-center type-meta text-muted-foreground tabular">{Math.round(view.scale * 100)}%</span>
-        <ToolButton label="Zoom in" keys="+" icon={SearchZoomIn} onClick={() => zoom(STEP)} />
-        <ToolButton label="Fit to window" keys="0" icon={Maximize} disabled={!isZoomed} onClick={() => setView(FIT)} />
-        <ToolButton label="Copy image" icon={Copy} onClick={() => copyImage(photo).then(() => toast('Image copied'), () => toast.error('Could not copy this image'))} />
-        <ToolButton label="Download" icon={Download} onClick={() => saveImage(photo)} />
+        <TooltipIconButton label="Zoom in" hint={<Shortcut keys={['+']} />} onClick={() => zoom(STEP)}>
+          <SearchZoomIn />
+        </TooltipIconButton>
+        <TooltipIconButton label="Fit to window" hint={<Shortcut keys={['0']} />} disabled={!isZoomed} onClick={() => setView(FIT)}>
+          <Maximize />
+        </TooltipIconButton>
+        <TooltipIconButton label="Copy image" onClick={() => copyImage(photo).then(() => toast('Image copied'), () => toast.error('Could not copy this image'))}>
+          <Copy />
+        </TooltipIconButton>
+        <TooltipIconButton label="Download" onClick={() => saveImage(photo)}>
+          <Download />
+        </TooltipIconButton>
         <DialogPrimitive.Close asChild>
           <Button variant="ghost" size="icon-sm" aria-label="Close">
             <X />
@@ -143,22 +153,6 @@ function useZoomKeys(zoom: (factor: number) => void, fit: () => void) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [zoom, fit]);
-}
-
-function ToolButton({ label, keys, icon: Icon, ...props }: { label: string; keys?: string; icon: IconComponent } & Omit<React.ComponentProps<typeof Button>, 'children'>) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label} {...props}>
-          <Icon />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        {label}
-        {!!keys && <Kbd className="ml-1.5">{keys}</Kbd>}
-      </TooltipContent>
-    </Tooltip>
-  );
 }
 
 function StepButton({ side, onClick }: { side: 'left' | 'right'; onClick: () => void }) {
