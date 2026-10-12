@@ -204,6 +204,8 @@ export interface Rect {
 }
 
 /** Ctrl Arrow focus: the leaf whose rect lies in that direction and overlaps on the other axis, nearest first. */
+export const ARROW_SIDE = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'top', ArrowDown: 'bottom' } satisfies Record<string, Side>;
+
 export function neighbourInDirection(rects: Record<string, Rect>, fromId: string, side: Side): string | undefined {
   const from = rects[fromId];
   if (!from) return undefined;

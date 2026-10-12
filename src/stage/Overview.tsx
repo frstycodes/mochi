@@ -1,17 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { ARROW_SIDE, neighbourInDirection, type Side } from '../layout/tree';
 import { activeThreads, pinnedThreads } from '../reorder';
 import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
 import { useHarness } from '../store';
 import { SnapshotCard } from './SnapshotCard';
 import { useThreadSnapshots } from './snapshot';
 
-/** Cmd ↑: every running session in the space as a grid of snapshot cards, pinned first in pin order. Opens and closes without animation (keyboard). */
+/** mod ↑: every running session in the space as a grid of snapshot cards, pinned first in pin order. Opens and closes without animation (keyboard). */
 export function Overview() {
   const { reservesToggle } = useToggleSlot(true);
   const { state, dispatch } = useHarness();
@@ -33,7 +34,7 @@ export function Overview() {
   ].filter((g) => g.snaps.length > 0);
 
   return (
-    <div role="dialog" aria-modal aria-label="All sessions" className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background">
+    <div role="dialog" aria-modal aria-label="All sessions" onKeyDown={moveFocus} className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background">
       <header className={cn('flex h-11 shrink-0 items-center gap-3 px-4', reservesToggle && TOGGLE_RESERVE)}>
         <h2 className="type-title">All sessions</h2>
         <span className="type-meta text-subtle-foreground tabular">{pinned.length + others.length}</span>
@@ -58,6 +59,7 @@ export function Overview() {
                   <button
                     ref={gi === 0 && i === 0 ? first : undefined}
                     type="button"
+                    data-snap-id={snap.id}
                     onClick={() => open(snap.id)}
                     aria-label={`Open ${snap.title}`}
                     className="block h-44 w-full cursor-default rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -72,4 +74,30 @@ export function Overview() {
       </div>
     </div>
   );
+}
+
+/** Arrow keys move between cards by where they sit on screen, so it follows the grid however many columns fit. Enter opens the focused card. */
+function moveFocus(e: KeyboardEvent<HTMLElement>) {
+  const side = ARROW_SIDE[e.key as keyof typeof ARROW_SIDE];
+  if (!side || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+  const cards = [...e.currentTarget.querySelectorAll<HTMLElement>('[data-snap-id]')];
+  const current = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-snap-id]');
+  if (!current) return cards[0]?.focus();
+  const rects = Object.fromEntries(cards.map((c) => [c.dataset.snapId!, c.getBoundingClientRect()]));
+  // A row with fewer cards has nothing straight below the right-hand columns: up and down fall back to the nearest card that way.
+  const isVertical = side === 'top' || side === 'bottom';
+  const next = neighbourInDirection(rects, current.dataset.snapId!, side) ?? (isVertical ? nearestInDirection(rects, current.dataset.snapId!, side) : undefined);
+  e.preventDefault();
+  if (next) cards.find((c) => c.dataset.snapId === next)?.focus();
+}
+
+function nearestInDirection(rects: Record<string, DOMRect>, fromId: string, side: Side) {
+  const from = rects[fromId];
+  const centre = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  const a = centre(from);
+  const ahead = { left: (r: DOMRect) => r.right <= from.left + 1, right: (r: DOMRect) => r.left >= from.right - 1, top: (r: DOMRect) => r.bottom <= from.top + 1, bottom: (r: DOMRect) => r.top >= from.bottom - 1 }[side];
+  const distance = (r: DOMRect) => Math.hypot(centre(r).x - a.x, centre(r).y - a.y);
+  return Object.entries(rects)
+    .filter(([id, r]) => id !== fromId && ahead(r))
+    .sort(([, x], [, y]) => distance(x) - distance(y))[0]?.[0];
 }

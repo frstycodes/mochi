@@ -2,13 +2,12 @@ import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { pinnedThreads, togglePin } from '../reorder';
 import { useHarness, type State } from '../store';
-import { findLeaf, neighbourInDirection, type Rect, type Side } from './tree';
-
-const ARROW_SIDE = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'top', ArrowDown: 'bottom' } satisfies Record<string, Side>;
+import { ARROW_SIDE, findLeaf, neighbourInDirection, type Rect } from './tree';
+import { isMod, isNav } from '../keys';
 
 /**
- * Split and pin shortcuts. Cmd [ / ] and Ctrl arrows move focus, Cmd Shift Enter zooms, Cmd \ splits,
- * Cmd 1–9 jumps to pinned N, Cmd Opt 1–9 opens it in a new split, Cmd Shift P pins or unpins the focused thread.
+ * Split and pin shortcuts. mod [ / ] and nav arrows move focus, mod Shift Enter zooms, mod \ splits,
+ * mod 1–9 jumps to pinned N, mod alt 1–9 opens it in a new split, mod Shift P pins or unpins the focused thread.
  * Digits use `e.code`: Option turns `e.key` into symbols on macOS.
  */
 export function useLayoutKeys() {
@@ -23,13 +22,13 @@ export function useLayoutKeys() {
       const layout = s.layouts[s.spaceId];
       const handled = () => e.preventDefault();
 
-      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key in ARROW_SIDE) {
+      if (isNav(e) && e.key in ARROW_SIDE) {
         const to = neighbourInDirection(leafRects(), layout.focusId, ARROW_SIDE[e.key as keyof typeof ARROW_SIDE]);
         if (!to) return;
         handled();
         return dispatch({ type: 'layout-focus', leafId: to });
       }
-      if (!e.metaKey) return;
+      if (!isMod(e)) return;
       if (!e.shiftKey && !e.altKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
         handled();
         return dispatch({ type: 'layout-focus-step', step: e.code === 'BracketLeft' ? -1 : 1 });
