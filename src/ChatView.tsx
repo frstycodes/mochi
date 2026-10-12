@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { ChevronDown, ChevronUp, Flag } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
@@ -265,7 +265,7 @@ function Composer({ thread, decisions, isTrayOpen, onToggleTray }: { thread: Thr
 }
 
 function QuestionTray({ decisions, isOpen, onToggle }: { decisions: QueueItem[]; isOpen: boolean; onToggle: () => void }) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig();
   const first = decisions[0];
   return (
     <section aria-label="Waiting on you">

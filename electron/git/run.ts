@@ -1,9 +1,5 @@
 import { execFile } from 'node:child_process';
-import { homedir } from 'node:os';
-import { join, relative, resolve, sep } from 'node:path';
-
-/** Every thread worktree lives here, never inside the project, so the project's own `git status` stays clean. */
-export const WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
+import { relative, resolve, sep } from 'node:path';
 
 // GAP: a Finder-launched app gets launchd's PATH, which lacks Homebrew; `gh` then fails with ENOENT. Fine under `pnpm electron:dev`.
 const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
@@ -31,10 +27,4 @@ export function inside(top: string, file: string) {
   const abs = resolve(top, file);
   if (!abs.startsWith(top + sep)) throw new Error(`${file} is outside the worktree`);
   return relative(top, abs);
-}
-
-export function insideWorktreeRoot(path: string) {
-  const abs = resolve(path);
-  if (!abs.startsWith(WORKTREE_ROOT + sep)) throw new Error(`${path} is not a Mochi worktree`);
-  return abs;
 }

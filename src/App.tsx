@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
 import { toast } from 'sonner';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -17,6 +18,7 @@ import { useGlobalKeys } from './palette/useGlobalKeys';
 import { ReviewModeProvider, useReviewMode } from './review/useReviewMode';
 import { ReviewView } from './review/ReviewView';
 import { useSettingsRoute } from './settings/open';
+import { usePrefs } from './settings/prefs';
 import { SettingsPage } from './settings/SettingsPage';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
@@ -29,25 +31,38 @@ export function App() {
   useIdleScrollbars();
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <TooltipProvider delayDuration={400}>
-        {route === 'design' ? (
-          <DesignPage />
-        ) : route.startsWith('/window/') ? (
-          <TornWindow threadId={route.slice('/window/'.length)} />
-        ) : (
-          <HarnessProvider>
-            <ReviewModeProvider>
-              <Shell />
-            </ReviewModeProvider>
-            <Orbit />
-            <PhotoViewer />
-            <Toaster position="bottom-right" />
-          </HarnessProvider>
-        )}
-      </TooltipProvider>
+      <ReducedMotion>
+        <TooltipProvider delayDuration={400}>
+          {route === 'design' ? (
+            <DesignPage />
+          ) : route.startsWith('/window/') ? (
+            <TornWindow threadId={route.slice('/window/'.length)} />
+          ) : (
+            <HarnessProvider>
+              <ReviewModeProvider>
+                <Shell />
+              </ReviewModeProvider>
+              <Orbit />
+              <PhotoViewer />
+              <Toaster position="bottom-right" />
+            </HarnessProvider>
+          )}
+        </TooltipProvider>
+      </ReducedMotion>
     </ThemeProvider>
   );
 }
+
+/** Settings › General's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
+function ReducedMotion({ children }: { children: React.ReactNode }) {
+  const { reduceMotion } = usePrefs();
+  useEffect(() => {
+    document.documentElement.dataset.reduceMotion = reduceMotion;
+  }, [reduceMotion]);
+  return <MotionConfig reducedMotion={MOTION_CONFIG[reduceMotion]}>{children}</MotionConfig>;
+}
+
+const MOTION_CONFIG = { system: 'user', on: 'always', off: 'never' } as const;
 
 function useHashRoute() {
   const [hash, setHash] = useState(() => location.hash.slice(1));

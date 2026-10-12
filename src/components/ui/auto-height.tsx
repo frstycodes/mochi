@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 
 /** Animates its height to fit its children, retargeting mid-flight so per-keystroke changes stay smooth. */
 export function AutoHeight({ className, children }: Pick<ComponentProps<'div'>, 'className' | 'children'>) {
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig();
   const inner = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | 'auto'>('auto');
 

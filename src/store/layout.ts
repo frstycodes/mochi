@@ -21,6 +21,7 @@ import {
   type View,
   type Zone,
 } from '../layout/tree.ts';
+import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from './index.tsx';
 
 export type { View };
@@ -222,7 +223,8 @@ export function saveLayouts(state: Saved) {
 function loadLayouts(): Saved {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
-    const layouts = Object.fromEntries(Object.entries(raw?.layouts ?? {}).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
+    const saved = getPrefs().restoreLayout ? (raw?.layouts ?? {}) : {};
+    const layouts = Object.fromEntries(Object.entries(saved).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
     return { layouts, watched: Array.isArray(raw?.watched) ? raw.watched : [], isNeedsYouNear: raw?.isNeedsYouNear === true };
   } catch {
     return { layouts: {}, watched: [], isNeedsYouNear: false };

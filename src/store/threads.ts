@@ -9,6 +9,7 @@ import { demoEvents, overlapEvents } from '../runtime/demo.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import { handoff } from '../rewind/handoff.ts';
+import { getPrefs } from '../settings/prefs.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 
 export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
@@ -295,7 +296,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   const thread: Thread = {
     id,
     spaceId: state.spaceId,
-    repo: action.project ? { project: action.project, branch: `feat/${id}` } : null,
+    repo: action.project ? { project: action.project, branch: `${getPrefs().branchPrefix}${id}` } : null,
     title: action.title.length > 48 ? `${action.title.slice(0, 47)}…` : action.title,
     goal: action.title,
     providers: [action.provider],

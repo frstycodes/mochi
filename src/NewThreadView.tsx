@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon-react';
 import type { Provider, Step, Thread } from './model';
 import { similarity } from './progress';
+import { getPrefs } from './settings/prefs';
 import { useHarness, useSpaceThreads } from './store';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,7 @@ export function NewThreadView() {
 function NewThread() {
   const { dispatch } = useHarness();
   const { textInput } = usePromptInputController();
-  const [provider, setProvider] = useState<Provider>('claude');
+  const [provider, setProvider] = useState<Provider>(() => getPrefs().agent);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
   const [dependOn, setDependOn] = useState<Match | null>(null);

@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { host } from '../host';
+import { usePrefs } from '../settings/prefs';
 import { useHarness } from '../store';
-import { ALERT_KINDS, isQuiet, type Notice } from './model';
+import { isAlertKind, isQuiet, type Notice } from './model';
 import { saveNotifySettings } from './slice';
 
 /** Side effects of the notification center: OS notifications while the window is in the background, toasts for watched threads while it's focused, the dock badge, and click-to-jump. */
@@ -13,29 +14,33 @@ export function useNotifications() {
   const latest = useRef({ items, jump });
   latest.current = { items, jump };
   const shown = useRef(items);
+  const { alertKinds, watchedToasts, dockBadge } = usePrefs();
   const needsYou = state.threads.filter((t) => t.status === 'needs-you').length;
 
   useEffect(() => {
     const before = new Set(shown.current.map((n) => n.id));
     shown.current = items;
-    const alerts = items.filter((n) => !before.has(n.id) && ALERT_KINDS.has(n.kind));
+    const alerts = items.filter((n) => !before.has(n.id) && isAlertKind(n.kind));
     if (alerts.length === 0 || isQuiet(quiet, new Date())) return;
     if (!document.hasFocus()) {
-      const [first] = alerts;
+      const background = alerts.filter((n) => alertKinds.includes(n.kind));
+      if (background.length === 0) return;
+      const [first] = background;
       // A burst in one tick becomes one OS notification instead of a stack.
-      const notice = alerts.length > 2 ? { id: first.id, title: `${alerts.length} threads need a look`, body: alerts.map((n) => n.title).join('\n') } : null;
-      for (const n of notice ? [notice] : alerts) host.notify.show({ id: n.id, title: n.title, body: n.body }).catch(() => undefined);
+      const notice = background.length > 2 ? { id: first.id, title: `${background.length} threads need a look`, body: background.map((n) => n.title).join('\n') } : null;
+      for (const n of notice ? [notice] : background) host.notify.show({ id: n.id, title: n.title, body: n.body }).catch(() => undefined);
       return;
     }
+    if (!watchedToasts) return;
     for (const n of alerts) {
       if (!state.watched.includes(n.threadId)) continue;
       toast(n.title, { description: n.body, action: { label: 'Open', onClick: () => latest.current.jump(n) } });
     }
-  }, [items, quiet, state.watched]);
+  }, [items, quiet, state.watched, alertKinds, watchedToasts]);
 
   useEffect(() => {
-    host.notify.setBadge(needsYou).catch(() => undefined);
-  }, [needsYou]);
+    host.notify.setBadge(dockBadge ? needsYou : 0).catch(() => undefined);
+  }, [needsYou, dockBadge]);
 
   useEffect(
     () =>

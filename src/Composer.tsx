@@ -26,6 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import { EffortPicker, ModelPicker, type ModelOption } from './ModelControls';
+import { getPrefs, type Prefs } from './settings/prefs';
 
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
@@ -133,16 +134,16 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
-const ACCESS = ['Ask first', 'Auto edit', 'Full access'];
-const DEVICES = ['This Mac', 'Studio', 'Cloud sandbox'];
+export const ACCESS = ['Ask first', 'Auto edit', 'Full access'] as const satisfies Prefs['permissions'][];
+export const DEVICES = ['This Mac', 'Studio', 'Cloud sandbox'] as const satisfies Prefs['runsOn'][];
 
 export function RunOnMenu() {
-  const [device, setDevice] = useState(DEVICES[0]);
+  const [device, setDevice] = useState<string>(() => getPrefs().runsOn);
   return <MetaMenu icon={device === 'Cloud sandbox' ? <Monitor /> : <Laptop />} label="Run on" value={device} options={DEVICES} onChange={setDevice} />;
 }
 
 export function PermissionsMenu() {
-  const [access, setAccess] = useState(ACCESS[1]);
+  const [access, setAccess] = useState<string>(() => getPrefs().permissions);
   return <MetaMenu icon={<ShieldCheck />} label="Permissions" value={access} options={ACCESS} onChange={setAccess} />;
 }
 
@@ -155,7 +156,7 @@ export function BranchLabel({ branch }: { branch: string }) {
   );
 }
 
-function MetaMenu({ icon, label, value, options, onChange }: { icon: ReactNode; label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+function MetaMenu({ icon, label, value, options, onChange }: { icon: ReactNode; label: string; value: string; options: readonly string[]; onChange: (v: string) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

@@ -1,6 +1,7 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
 import type { Provider, QueueItem, Step, Thread } from '../model.ts';
 import { similarity } from '../progress.ts';
+import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
 
@@ -74,7 +75,6 @@ export function resolution(state: State, action: Action): { requestId: string; d
 
 const MATCH = 0.6;
 const OVERLAP = 0.8;
-const DEFAULT_SIZE = 2;
 
 function applyPlan(state: State, thread: Thread, items: AgentPlanItem[]): State {
   const now = state.now;
@@ -137,7 +137,7 @@ function addScope(state: State, threadId: string, provider: Provider, added: { i
     const step: Step = {
       id: `${thread.id}-s${steps.length}`,
       title: item.title,
-      size: item.size ?? DEFAULT_SIZE,
+      size: item.size ?? getPrefs().stepSize,
       status: item.status === 'pending' ? 'ready' : item.status,
       progress: item.status === 'done' ? 1 : (item.progress ?? 0),
       footprint: item.files ?? [],

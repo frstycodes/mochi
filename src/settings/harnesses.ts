@@ -1,7 +1,7 @@
 import type { Provider } from '../model.ts';
 
 /**
- * Every agent harness Harness can drive, in display order. Settings, accounts, detection and sign-in commands all read
+ * Every agent harness Mochi can drive, in display order. Settings, accounts, detection and sign-in commands all read
  * this registry, so supporting another harness is one entry here plus its login check in `electron/settings/detect.ts`.
  */
 export const HARNESSES = {

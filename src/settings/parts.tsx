@@ -5,7 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
+import { host } from '../host';
 import { TooltipIconButton } from '../ui';
 import type { InstallState } from './AgentSettings';
 
@@ -33,7 +35,7 @@ export function SettingsRow({ id, label, description, control, children }: { id?
       data-setting-id={id}
       className="relative flex flex-col gap-2.5 px-3.5 py-2.5 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-3.5 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent"
     >
-      <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 *:not-first:shrink-0">
         <div className="min-w-40 flex-1">
           {id ? (
             <label htmlFor={settingControlId(id)} className="block type-body">
@@ -52,6 +54,9 @@ export function SettingsRow({ id, label, description, control, children }: { id?
 }
 
 export const settingControlId = (id: string) => `setting-${id}`;
+
+// An undo needs time to reach for, so its toast outlasts a plain one.
+export const UNDO_MS = 8000;
 
 export function LoginBadge({ install }: { install: InstallState | undefined }) {
   if (!install || install === 'checking')
@@ -128,15 +133,27 @@ export function CommitInput({ value, onCommit, className, ...props }: { value: s
   );
 }
 
-export function DesktopOnlyNotice() {
+/** Rows the main process reads; the web build says why they're missing instead. `what` is a sentence naming what needs the desktop app. */
+export function DesktopOnly({ what, children }: { what: ReactNode; children: ReactNode }) {
+  if (host.isDesktop) return children;
   return (
     <Alert>
       <InfoCircle />
       <AlertTitle>Needs the desktop app</AlertTitle>
-      <AlertDescription>
-        Detecting your agent harnesses and their accounts, storing an API key and the concurrency limit only work in the Harness desktop app. Here, threads run on the demo agents, so everything else
-        keeps working.
-      </AlertDescription>
+      <AlertDescription>{what} Here, threads run on the demo agents, so everything else keeps working.</AlertDescription>
     </Alert>
+  );
+}
+
+/** One of a few named values, as separate bordered toggles; the row's label names the group. */
+export function SettingsChoice<T extends string>({ id, value, options, onChange }: { id: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void }) {
+  return (
+    <ToggleGroup id={settingControlId(id)} type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as T)}>
+      {options.map((o) => (
+        <ToggleGroupItem key={o.value} value={o.value}>
+          {o.label}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
   );
 }

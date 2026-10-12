@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
 import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../git/checkpoints.ts';
-import { WORKTREE_ROOT, inside, insideWorktreeRoot, run, runGit, topLevel } from '../git/run.ts';
+import { inside, run, runGit, topLevel } from '../git/run.ts';
+import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
@@ -71,7 +72,7 @@ export const git = {
     const pr = record(value, 'pr');
     const title = string(pr.title, 'pr.title', 256).trim();
     if (!title) throw new Error('PR title is empty');
-    return (await run('gh', top, ['pr', 'create', '--title', title, '--body', string(pr.body, 'pr.body', 65_536)])).trim();
+    return (await run('gh', top, ['pr', 'create', '--title', title, '--body', string(pr.body, 'pr.body', 65_536), ...(prDrafts() ? ['--draft'] : [])])).trim();
   },
 
   async pr(_sender, cwd) {
@@ -105,7 +106,7 @@ export const git = {
     const id = string(threadId, 'threadId', 64);
     if (!/^[\w-]+$/.test(id)) throw new Error('threadId must be letters, digits, - or _');
     const name = (await runGit(top, ['check-ref-format', '--branch', string(branch, 'branch', 255)])).trim();
-    const dir = join(WORKTREE_ROOT, basename(top), id);
+    const dir = join(worktreeRoot(), basename(top), id);
     if (existsSync(dir)) return dir;
     await mkdir(dirname(dir), { recursive: true });
     const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
@@ -115,7 +116,7 @@ export const git = {
 
   async worktrees(_sender, root) {
     const top = await mainRepo(string(root, 'root'));
-    return parseWorktrees(await runGit(top, ['worktree', 'list', '--porcelain'])).filter((w) => w.path.startsWith(`${WORKTREE_ROOT}/`));
+    return parseWorktrees(await runGit(top, ['worktree', 'list', '--porcelain'])).filter((w) => isUnderWorktreeRoot(w.path));
   },
 
   async removeWorktree(_sender, path) {
@@ -154,7 +155,7 @@ export const git = {
     const point = from === undefined ? null : record(from, 'from');
     const commit = point ? await resolveCommit(source, checkpointRef(string(point.threadId, 'from.threadId', 64), integer(point.n, 'from.n', 0, 1_000_000))) : '';
     if (point && !commit) throw new Error('That checkpoint has no saved files');
-    const dir = join(WORKTREE_ROOT, basename(top), id);
+    const dir = join(worktreeRoot(), basename(top), id);
     if (existsSync(dir)) throw new Error(`${dir} already exists`);
     await mkdir(dirname(dir), { recursive: true });
     await runGit(top, ['worktree', 'add', '-b', name, dir, commit ? `${commit}^` : (await runGit(source, ['rev-parse', 'HEAD'])).trim()]);
@@ -225,4 +226,15 @@ function parseChecks(json: string): PrCheck[] {
 function oneOf<T extends string>(value: unknown, options: readonly T[], name: string): T {
   if (!options.includes(value as T)) throw new TypeError(`${name} must be one of ${options.join(', ')}`);
   return value as T;
+}
+
+/** Thread worktrees live under the worktree root (Settings › Git), never inside the project, so its own `git status` stays clean. */
+function insideWorktreeRoot(path: string) {
+  const abs = resolve(path);
+  if (!isUnderWorktreeRoot(abs)) throw new Error(`${path} is not a Mochi worktree`);
+  return abs;
+}
+
+function isUnderWorktreeRoot(path: string) {
+  return worktreeRoots().some((root) => path.startsWith(root + sep));
 }

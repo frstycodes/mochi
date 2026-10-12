@@ -6,6 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal, type IMarker } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { host } from '../host';
+import { getPrefs, subscribePrefs } from '../settings/prefs';
 import { filePathsIn } from './links';
 import { onThemeChange, terminalTheme } from './theme';
 
@@ -58,7 +59,7 @@ interface SavedGroup {
   scrollback: Record<string, string>;
 }
 
-const STORAGE_PREFIX = 'harness.terminal.v1:';
+export const TERMINAL_STORAGE_PREFIX = 'harness.terminal.v1:';
 const SAVED_SCROLLBACK_ROWS = 1000;
 const FAILURE_OUTPUT_LINES = 80;
 // 130 is Ctrl C, 143 SIGTERM (the Ports tab's stop): the user ended it, nothing to fix.
@@ -147,9 +148,9 @@ export function feedAgent(session: TerminalSession, runs: { who: string; command
 function createSession(key: string, kind: SessionKind, title: string, options: { command?: string; restored?: string } = {}): TerminalSession {
   const term = new Terminal({
     fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-    fontSize: 12,
+    fontSize: getPrefs().terminalFontSize,
     lineHeight: 1.4,
-    scrollback: 5000,
+    scrollback: getPrefs().terminalScrollback,
     macOptionIsMeta: true,
     // The web build has no shell; its mock plays a scripted session.
     disableStdin: kind === 'agent' || !host.isDesktop,
@@ -252,8 +253,28 @@ function wireHost() {
     const theme = terminalTheme();
     groups.forEach((g) => g.sessions.forEach((s) => (s.term.options.theme = theme)));
   });
+  subscribePrefs(() => {
+    const { terminalFontSize, terminalScrollback } = getPrefs();
+    groups.forEach((g) =>
+      g.sessions.forEach((s) => {
+        if (s.term.options.fontSize === terminalFontSize && s.term.options.scrollback === terminalScrollback) return;
+        s.term.options.fontSize = terminalFontSize;
+        s.term.options.scrollback = terminalScrollback;
+        // A hidden session's element is detached, so it has no size to fit to; it fits when it mounts again.
+        if (s.element.isConnected) s.fit.fit();
+      }),
+    );
+  });
   // Desktop only: the web mock replays its demo on every spawn, so restored scrollback would just repeat it.
   if (host.isDesktop) addEventListener('pagehide', () => groups.forEach(saveGroup));
+}
+
+/** Drops saved scrollback and wipes what open shells show above their prompt; the shells keep running. */
+export function clearTerminalHistory() {
+  try {
+    Object.keys(localStorage).filter((k) => k.startsWith(TERMINAL_STORAGE_PREFIX)).forEach((k) => localStorage.removeItem(k));
+  } catch {}
+  groups.forEach((g) => g.sessions.forEach((s) => s.kind === 'shell' && s.term.clear()));
 }
 
 function saveGroup(group: TerminalGroup) {
@@ -264,16 +285,16 @@ function saveGroup(group: TerminalGroup) {
     scrollback: Object.fromEntries(group.sessions.filter((s) => s.kind === 'shell').map((s) => [s.id, s.serialize.serialize({ scrollback: SAVED_SCROLLBACK_ROWS })])),
   };
   try {
-    localStorage.setItem(STORAGE_PREFIX + group.key, JSON.stringify(saved));
+    localStorage.setItem(TERMINAL_STORAGE_PREFIX + group.key, JSON.stringify(saved));
   } catch {
     // Storage full or blocked: scrollback just doesn't survive the reload.
   }
 }
 
 function loadGroup(key: string): SavedGroup | null {
-  if (!host.isDesktop) return null;
+  if (!host.isDesktop || !getPrefs().restoreTerminals) return null;
   try {
-    const saved: SavedGroup | null = JSON.parse(localStorage.getItem(STORAGE_PREFIX + key) ?? 'null');
+    const saved: SavedGroup | null = JSON.parse(localStorage.getItem(TERMINAL_STORAGE_PREFIX + key) ?? 'null');
     return saved?.sessions.length ? saved : null;
   } catch {
     return null;

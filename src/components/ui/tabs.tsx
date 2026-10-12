@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { motion, useReducedMotion } from "motion/react"
+import { motion, useReducedMotionConfig } from "motion/react"
 import { useControllableState } from "@radix-ui/react-use-controllable-state"
 import { cn } from "@/lib/utils"
 import { Tabs as TabsPrimitive } from "radix-ui"
@@ -90,7 +90,7 @@ function TabsTrigger({
   const tabs = useTabs()
   const variant = React.useContext(TabsListContext)
   const isActive = tabs.value === value
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionConfig()
   const transition = reduceMotion ? { duration: 0 } : SLIDE
 
   return (

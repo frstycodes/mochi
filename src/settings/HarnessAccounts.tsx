@@ -23,7 +23,7 @@ export function AccountsGroup({ provider }: { provider: Provider }) {
     <SettingsGroup
       id={`${provider}Accounts`}
       title="Accounts"
-      footer={`Each account is its own ${HARNESSES[provider].name} login in its own folder. You sign in from a terminal; Harness never sees the credentials.`}
+      footer={`Each account is its own ${HARNESSES[provider].name} login in its own folder. You sign in from a terminal; Mochi never sees the credentials.`}
     >
       {own.map((account) => (
         <AccountRow key={account.id} account={account} />

@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
+import { getPrefs, setPrefs, usePrefs, type Prefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { useSpace } from './store';
 import { ProviderMark } from './ui';
@@ -19,7 +20,7 @@ export interface ModelOption {
 }
 
 // GAP: fake catalog. The real list comes from each harness (Claude Agent SDK, Codex app-server) at connect time.
-const MODELS: ModelOption[] = [
+export const MODELS: ModelOption[] = [
   { id: 'opus-5.5', harness: 'claude', name: 'Opus 5.5', note: 'Hardest problems and long runs', context: '200K' },
   { id: 'sonnet-5.5', harness: 'claude', name: 'Sonnet 5.5', note: 'Fast, strong default', context: '200K' },
   { id: 'haiku-5.5', harness: 'claude', name: 'Haiku 5.5', note: 'Quick edits and lookups', context: '200K' },
@@ -29,14 +30,13 @@ const MODELS: ModelOption[] = [
 ];
 
 const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Provider, string>;
-const DEFAULT_FAVORITES = ['opus-5.5', 'sonnet-5.5', 'gpt-5.5-codex'];
-const EFFORTS = ['Low', 'Medium', 'High', 'Extra high'] as const;
+export const EFFORTS = ['Low', 'Medium', 'High', 'Extra high'] as const satisfies Prefs['effort'][];
 type Effort = (typeof EFFORTS)[number];
 
 export function ModelPicker({ provider, onModelChange }: { provider: Provider; onModelChange?: (model: ModelOption) => void }) {
   const space = useSpace();
   const [modelId, setModelId] = useState(() => MODELS.find((m) => m.harness === provider)!.id);
-  const [favorites, setFavorites] = useState(DEFAULT_FAVORITES);
+  const favorites = usePrefs().starredModels;
   const [isOpen, setOpen] = useState(false);
   const model = MODELS.find((m) => m.id === modelId)!;
   const docked = MODELS.filter((m) => favorites.includes(m.id) || m.id === modelId);
@@ -44,7 +44,7 @@ export function ModelPicker({ provider, onModelChange }: { provider: Provider; o
     setModelId(id);
     onModelChange?.(MODELS.find((m) => m.id === id)!);
   };
-  const toggleFavorite = (id: string) => setFavorites((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
+  const toggleFavorite = (id: string) => setPrefs({ starredModels: toggleStar(favorites, id) });
 
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
@@ -107,6 +107,8 @@ export function ModelPicker({ provider, onModelChange }: { provider: Provider; o
   );
 }
 
+export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
+
 function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string; onToggle: () => void }) {
   return (
     <button
@@ -126,7 +128,7 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
 }
 
 export function EffortPicker() {
-  const [effort, setEffort] = useState<Effort>('High');
+  const [effort, setEffort] = useState<Effort>(() => getPrefs().effort);
   return (
     <DropdownMenu>
       <WheelStepper values={EFFORTS} value={effort} onChange={setEffort}>

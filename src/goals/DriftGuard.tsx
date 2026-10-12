@@ -6,9 +6,10 @@ import { usePromptInputController } from '@/components/ai-elements/prompt-input'
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { DEFAULT_THRESHOLD, judgeDrift, type DriftKind, type DriftVerdict } from '../drift';
+import { driftThreshold, judgeDrift, type DriftKind, type DriftVerdict } from '../drift';
 import type { Thread } from '../model';
 import { progressAt } from '../progress';
+import { setPrefs, usePrefs } from '../settings/prefs';
 import { snapshot, useHarness } from '../store';
 
 interface Pending {
@@ -94,7 +95,7 @@ export function useDriftGuard(thread: Thread) {
   };
 
   const mute = () => {
-    dispatch({ type: 'drift-settings', threadId: thread.id, threshold: thread.drift?.threshold ?? DEFAULT_THRESHOLD, isMuted: true });
+    dispatch({ type: 'drift-settings', threadId: thread.id, threshold: driftThreshold(thread), isMuted: true });
     logEvent('turned off for this thread');
     continueHere();
   };
@@ -111,25 +112,10 @@ function isDone(thread: Thread, now: number) {
 // Undo covers two changes at once, so it stays up longer than a plain toast.
 const UNDO_MS = 8000;
 
-const BRANCH_KEY = 'harness.drift.branchFrom';
-
+/** The card's choice is Settings › Goals and drift's "Off-goal work branches from", so it sticks across threads. */
 function useRememberedBranchFrom() {
-  const [value, setValue] = useState<BranchFrom>(() => {
-    try {
-      return localStorage.getItem(BRANCH_KEY) === 'base' ? 'base' : 'current';
-    } catch {
-      return 'current';
-    }
-  });
-  const set = (next: BranchFrom) => {
-    setValue(next);
-    try {
-      localStorage.setItem(BRANCH_KEY, next);
-    } catch {
-      // Storage blocked: the choice lasts for this session only.
-    }
-  };
-  return [value, set] as const;
+  const { branchFrom } = usePrefs();
+  return [branchFrom, (next: BranchFrom) => setPrefs({ branchFrom: next })] as const;
 }
 
 /** Inline card above the composer. Enter in the composer again continues here; Esc dismisses. */

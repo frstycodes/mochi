@@ -9,8 +9,8 @@ export interface Pin {
   text: string;
 }
 
-const KEY = 'harness.pins.v1';
-type Pins = Record<string, Pin[]>;
+export const PINS_STORAGE_KEY = 'harness.pins.v1';
+export type Pins = Record<string, Pin[]>;
 
 let pins: Pins = load();
 const listeners = new Set<() => void>();
@@ -57,10 +57,25 @@ export function normalise(text: string) {
   return text.replace(/\s+/g, ' ').trim().slice(0, 280);
 }
 
+export function useAllPins() {
+  return useSyncExternalStore(subscribe, () => pins);
+}
+
+/** Every thread's pins at once (Settings › Data clears them); returns what was there, for an undo. */
+export function replaceAllPins(next: Pins) {
+  const previous = pins;
+  write(next);
+  return previous;
+}
+
 function set(threadId: string, list: Pin[]) {
-  pins = { ...pins, [threadId]: list };
+  write({ ...pins, [threadId]: list });
+}
+
+function write(next: Pins) {
+  pins = next;
   try {
-    localStorage.setItem(KEY, JSON.stringify(pins));
+    localStorage.setItem(PINS_STORAGE_KEY, JSON.stringify(pins));
   } catch {
     // Private windows and blocked storage: pins still work for this session.
   }
@@ -69,7 +84,7 @@ function set(threadId: string, list: Pin[]) {
 
 function load(): Pins {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '{}') as Pins;
+    return JSON.parse(localStorage.getItem(PINS_STORAGE_KEY) ?? '{}') as Pins;
   } catch {
     return {};
   }

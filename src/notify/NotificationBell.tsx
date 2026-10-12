@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { host } from '../host';
 import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
+import { openSettings } from '../settings/open';
 import { useHarness } from '../store';
-import { groupBursts, type Burst, type NoticeKind } from './model';
+import { groupBursts, hourLabel, type Burst, type NoticeKind } from './model';
 import { useJump } from './useNotifications';
 
 const KIND_ICONS = {
@@ -25,8 +24,6 @@ const KIND_ICONS = {
   overlap: { icon: TriangleWarning, className: 'text-warning' },
   'race-lost': { icon: Flash, className: 'text-muted-foreground' },
 } satisfies Record<NoticeKind, { icon: IconComponent; className: string }>;
-
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 export function NotificationBell({ spaceId }: { spaceId: string }) {
   const { state, dispatch } = useHarness();
@@ -66,7 +63,12 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
               </div>
             </ScrollArea>
           )}
-          <NotifySettings />
+          <NotifyFooter
+            onOpenSettings={() => {
+              setOpen(false);
+              openSettings('notifications', 'quietHours');
+            }}
+          />
         </PopoverContent>
       </Popover>
       {unread > 0 && <SidebarMenuBadge className="tabular font-medium text-sidebar-foreground">{unread}</SidebarMenuBadge>}
@@ -134,40 +136,20 @@ function NoNotices() {
   );
 }
 
-function NotifySettings() {
-  const { state, dispatch } = useHarness();
-  const { quiet } = state.notifications;
-  const setQuiet = (patch: Partial<typeof quiet>) => dispatch({ type: 'notify-quiet', quiet: { ...quiet, ...patch } });
-  const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
-
+/** Quiet hours, muted threads and which kinds alert live in Settings › Notifications; the popover says what's in effect and links there. */
+function NotifyFooter({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const { state } = useHarness();
+  const { quiet, muted } = state.notifications;
+  const status = [quiet.isOn && `Quiet ${hourLabel(quiet.start)}–${hourLabel(quiet.end)}`, muted.length > 0 && `${muted.length} muted`].filter(Boolean).join(' · ');
   return (
-    <div className="flex flex-col gap-2 bg-muted/40 px-3 py-2.5">
+    <div className="flex flex-col gap-2 bg-muted/40 px-3 py-2">
       <div className="flex items-center gap-2">
-        <label htmlFor="quiet-hours" className="flex-1 type-meta">
-          Quiet hours
-        </label>
-        <Switch id="quiet-hours" size="sm" checked={quiet.isOn} onCheckedChange={(isOn) => setQuiet({ isOn })} />
+        <p className="flex-1 truncate type-caption text-muted-foreground">{status || 'Alerts arrive while Mochi is in the background.'}</p>
+        <Button variant="ghost" size="xs" onClick={onOpenSettings}>
+          <Setting2 data-icon="inline-start" />
+          Settings
+        </Button>
       </div>
-      {quiet.isOn && (
-        <div className="flex items-center gap-2 type-caption text-muted-foreground">
-          <NativeSelect size="sm" aria-label="Quiet from" value={quiet.start} onChange={(e) => setQuiet({ start: Number(e.target.value) })}>
-            {HOURS.map((h) => (
-              <NativeSelectOption key={h} value={h}>
-                {hourLabel(h)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-          to
-          <NativeSelect size="sm" aria-label="Quiet until" value={quiet.end} onChange={(e) => setQuiet({ end: Number(e.target.value) })}>
-            {HOURS.map((h) => (
-              <NativeSelectOption key={h} value={h}>
-                {hourLabel(h)}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </div>
-      )}
-      <p className="type-caption text-subtle-foreground">{quiet.isOn ? 'No alerts or toasts in these hours; the list still fills.' : 'Alerts arrive while Mochi is in the background.'}</p>
       {!host.isDesktop && <BrowserPermission />}
     </div>
   );

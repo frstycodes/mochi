@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { getPrefs } from './settings/prefs';
 import { useSpaceThreads } from './store';
 
 /** Where a new thread runs: one of the space's projects, a folder opened by path, or no folder at all. */
@@ -93,11 +94,10 @@ const FOLDERS: Record<string, string[]> = {
   '~/work': ['latitude', 'latitude-docs', 'latitude-infra'],
   '~/Documents': ['notes'],
 };
-const START_PATH = '~/dev/';
 
 /** T3 Code's Add project: type or paste a path, or browse with the native picker. Suggestions list the folders in the typed directory. */
 function FolderBrowser({ onBack, onChoose }: { onBack: () => void; onChoose: (project: string) => void }) {
-  const [path, setPath] = useState(START_PATH);
+  const [path, setPath] = useState(() => getPrefs().projectsFolder.replace(/\/*$/, '/'));
   const { dir, matches, folder } = resolvePath(path);
   const enter = (name: string) => setPath(`${dir}/${name}/`);
 

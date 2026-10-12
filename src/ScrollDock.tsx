@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
+import { AnimatePresence, motion, useMotionValueEvent, useReducedMotionConfig, useScroll, useTransform, type MotionValue } from 'motion/react';
 
 export interface DockItem<T> {
   value: T;
@@ -34,7 +34,7 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
   const stripRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
-  const reduce = useReducedMotion();
+  const reduce = useReducedMotionConfig();
   const [anchor, setAnchor] = useState<{ x: number; bottom: number } | null>(null);
   const index = Math.max(0, items.findIndex((i) => i.value === value));
   const [preview, setPreview] = useState(index);

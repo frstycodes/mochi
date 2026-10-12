@@ -2,23 +2,73 @@ import { useState } from 'react';
 import { Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { Switch } from '@/components/ui/switch';
+import { EFFORTS, MODELS, toggleStar } from '../../ModelControls';
 import type { Provider } from '../../model';
 import { ProviderMark, TooltipIconButton } from '../../ui';
 import { defaultAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
 import { AccountsGroup, ProfilesGroup } from '../HarnessAccounts';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { CommandLine, CommitInput, SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { CommandLine, CommitInput, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { setPrefs, usePrefs, type Prefs } from '../prefs';
 
 /** Every harness from the registry, one after another; nothing here names a specific harness. */
 export function HarnessesSection() {
   return (
     <div className="flex flex-col gap-10">
-      <p className="type-meta text-muted-foreground">Harness runs your own installs with the logins you set up in them. It never signs in for you and never sees your credentials.</p>
-      {HARNESS_IDS.map((provider) => (
-        <HarnessSettings key={provider} provider={provider} />
-      ))}
+      <p className="type-meta text-muted-foreground">Mochi runs your own installs with the logins you set up in them. It never signs in for you and never sees your credentials.</p>
+      <DesktopOnly what="Detecting your agent harnesses and their accounts, and storing an API key, only work in the Mochi desktop app.">
+        {HARNESS_IDS.map((provider) => (
+          <HarnessSettings key={provider} provider={provider} />
+        ))}
+      </DesktopOnly>
+      <ModelsGroup />
     </div>
+  );
+}
+
+/** Across harnesses: the model chip's scroll dock shows starred models, and new threads start at this effort. */
+function ModelsGroup() {
+  const { starredModels, effort } = usePrefs();
+  return (
+    <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer.">
+      {MODELS.map((m) => (
+        <SettingsRow
+          key={m.id}
+          id={`starred-${m.id}`}
+          label={
+            <span className="flex items-center gap-2">
+              <ProviderMark provider={m.harness} size={14} />
+              {m.name}
+            </span>
+          }
+          description={m.note}
+          control={
+            <Switch
+              id={settingControlId(`starred-${m.id}`)}
+              aria-label={`Star ${m.name}`}
+              checked={starredModels.includes(m.id)}
+              onCheckedChange={() => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
+            />
+          }
+        />
+      ))}
+      <SettingsRow
+        id="effort"
+        label="Default effort"
+        control={
+          <NativeSelect id={settingControlId('effort')} value={effort} onChange={(e) => setPrefs({ effort: e.target.value as Prefs['effort'] })}>
+            {EFFORTS.map((level) => (
+              <NativeSelectOption key={level} value={level}>
+                {level}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        }
+      />
+    </SettingsGroup>
   );
 }
 
@@ -95,7 +145,7 @@ function ApiKeyGroup({ provider }: { provider: Provider }) {
     <SettingsGroup
       footer={
         <>
-          Optional, for using {harness.name} without signing in. Harness passes it as <code className="font-mono">{env}</code>, which bills your API account instead of any subscription, in every
+          Optional, for using {harness.name} without signing in. Mochi passes it as <code className="font-mono">{env}</code>, which bills your API account instead of any subscription, in every
           profile. Kept in your OS keychain and never shown here again.
         </>
       }
