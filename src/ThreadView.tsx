@@ -19,6 +19,8 @@ import { ChatView } from './ChatView';
 import { progressAt } from './progress';
 import { SidePane } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
+import { THREAD_HEADER_MENU } from './menus/menus';
+import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
 import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
@@ -203,48 +205,50 @@ function ThreadHeader({
   onTogglePane: () => void;
 }) {
   const { state } = useHarness();
-  const { isFirst } = useSplit();
+  const { isFirst, leafId } = useSplit();
   const { pct } = progressAt(thread, state.now, true);
   const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
 
   return (
-    <header className={cn('@container flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
-      {hasTrigger && <SidebarTrigger className="-ml-1" />}
-      {thread.status === 'running' ? <AgentLoader phase={agentPhase(thread)} className="text-muted-foreground" /> : <ThreadStatusIcon status={thread.status} />}
-      <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
-      {!!thread.repo && (
-        <span className="hidden min-w-0 items-center gap-1 truncate font-mono type-caption text-subtle-foreground @2xl:flex">
-          <BranchUp className="size-3.5 shrink-0" />
-          {thread.repo.branch}
-        </span>
-      )}
-      {thread.prs.map((pr) => (
-        <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden @xl:inline-flex">
-          #{pr.number}
-        </Badge>
-      ))}
-      <span className="flex-1" />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
-            <ProgressRing pct={pct} slot={thread.line} size={14} />
-            <span className="tabular">{Math.round(pct * 100)}%</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{isSummaryOpen ? 'Hide the summary' : 'Show the summary'}</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={isPaneOpen ? 'Hide the side pane' : 'Show the side pane'} aria-pressed={isPaneOpen} onClick={onTogglePane} className={cn('text-muted-foreground', isPaneOpen && 'bg-accent text-foreground')}>
-            <SidebarRight />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{isPaneOpen ? 'Hide the side pane' : 'Show the side pane'}</TooltipContent>
-      </Tooltip>
-      <ThreadMenu thread={thread} />
-      <RewindLayer thread={thread} />
-      <SplitControls />
-    </header>
+    <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
+      <header className={cn('@container flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
+        {hasTrigger && <SidebarTrigger className="-ml-1" />}
+        {thread.status === 'running' ? <AgentLoader phase={agentPhase(thread)} className="text-muted-foreground" /> : <ThreadStatusIcon status={thread.status} />}
+        <h1 className="min-w-0 truncate type-title">{thread.title}</h1>
+        {!!thread.repo && (
+          <span className="hidden min-w-0 items-center gap-1 truncate font-mono type-caption text-subtle-foreground @2xl:flex">
+            <BranchUp className="size-3.5 shrink-0" />
+            {thread.repo.branch}
+          </span>
+        )}
+        {thread.prs.map((pr) => (
+          <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden @xl:inline-flex">
+            #{pr.number}
+          </Badge>
+        ))}
+        <span className="flex-1" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
+              <ProgressRing pct={pct} slot={thread.line} size={14} />
+              <span className="tabular">{Math.round(pct * 100)}%</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isSummaryOpen ? 'Hide the summary' : 'Show the summary'}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={isPaneOpen ? 'Hide the side pane' : 'Show the side pane'} aria-pressed={isPaneOpen} onClick={onTogglePane} className={cn('text-muted-foreground', isPaneOpen && 'bg-accent text-foreground')}>
+              <SidebarRight />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{isPaneOpen ? 'Hide the side pane' : 'Show the side pane'}</TooltipContent>
+        </Tooltip>
+        <ThreadMenu thread={thread} />
+        <RewindLayer thread={thread} />
+        <SplitControls />
+      </header>
+    </TargetContextMenu>
   );
 }
 

@@ -26,6 +26,8 @@ import { cn } from '@/lib/utils';
 import { PIN_SLOTS, SPACES, type PullRequest, type Thread } from './model';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
+import { THREAD_MENU } from './menus/menus';
+import { TargetContextMenu } from './menus/TargetContextMenu';
 import { NotificationBell } from './notify/NotificationBell';
 import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
@@ -185,7 +187,9 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               <SidebarGroupContent>
                 <SidebarMenu>
                   {settled.map((t) => (
-                    <SidebarMenuItem key={t.id}>{row(t)}</SidebarMenuItem>
+                    <TargetContextMenu key={t.id} target={{ threadId: t.id }} groups={THREAD_MENU}>
+                      <SidebarMenuItem>{row(t)}</SidebarMenuItem>
+                    </TargetContextMenu>
                   ))}
                 </SidebarMenu>
               </SidebarGroupContent>
@@ -216,20 +220,21 @@ function ThreadList({ pinned, active, row }: { pinned: Thread[]; active: Thread[
   const section = (threads: Thread[], isPinned: boolean) => {
     const rows = threads.filter((t) => t.id !== drag.state?.id).map((t, i) => {
       const item = (
-        <SidebarMenuItem
-          key={t.id}
-          data-row-id={t.id}
-          data-pinned={isPinned || undefined}
-          onPointerDown={(e) => drag.onPointerDown(e, t)}
-          onKeyDown={(e) => {
-            if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
-            e.preventDefault();
-            step(t.id, e.key === 'ArrowUp' ? -1 : 1);
-          }}
-          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        >
-          {row(t)}
-        </SidebarMenuItem>
+        <TargetContextMenu key={t.id} target={{ threadId: t.id }} groups={THREAD_MENU}>
+          <SidebarMenuItem
+            data-row-id={t.id}
+            data-pinned={isPinned || undefined}
+            onPointerDown={(e) => drag.onPointerDown(e, t)}
+            onKeyDown={(e) => {
+              if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+              e.preventDefault();
+              step(t.id, e.key === 'ArrowUp' ? -1 : 1);
+            }}
+            aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+          >
+            {row(t)}
+          </SidebarMenuItem>
+        </TargetContextMenu>
       );
       if (!isPinned) return item;
       return (

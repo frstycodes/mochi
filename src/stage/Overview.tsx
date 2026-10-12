@@ -9,6 +9,8 @@ import { ARROW_SIDE, neighbourInDirection, type Side } from '../layout/tree';
 import { activeThreads, pinnedThreads } from '../reorder';
 import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
 import { useHarness } from '../store';
+import { THREAD_MENU } from '../menus/menus';
+import { TargetContextMenu } from '../menus/TargetContextMenu';
 import { SnapshotCard } from './SnapshotCard';
 import { useThreadSnapshots } from './snapshot';
 
@@ -56,16 +58,18 @@ export function Overview() {
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
               {g.snaps.map((snap, i) => (
                 <li key={snap.id}>
-                  <button
-                    ref={gi === 0 && i === 0 ? first : undefined}
-                    type="button"
-                    data-snap-id={snap.id}
-                    onClick={() => open(snap.id)}
-                    aria-label={`Open ${snap.title}`}
-                    className="block h-44 w-full cursor-default rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <SnapshotCard snap={snap} className="size-full transition-[box-shadow] hover:shadow-float" />
-                  </button>
+                  <TargetContextMenu target={{ threadId: snap.id }} groups={THREAD_MENU}>
+                    <button
+                      ref={gi === 0 && i === 0 ? first : undefined}
+                      type="button"
+                      data-snap-id={snap.id}
+                      onClick={() => open(snap.id)}
+                      aria-label={`Open ${snap.title}`}
+                      className="block h-44 w-full cursor-default rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <SnapshotCard snap={snap} className="size-full transition-[box-shadow] hover:shadow-float" />
+                    </button>
+                  </TargetContextMenu>
                 </li>
               ))}
             </ul>

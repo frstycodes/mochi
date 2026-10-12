@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, Eye, EyeSlash, FolderOpen, Grid, History, Inbox, Layers, Maximize, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
 import { host } from '../host';
@@ -49,9 +49,9 @@ export const ACTIONS = [
   { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => toggleSettle(t, dispatch)) },
   { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: ['mod', 'shift', 'P'], when: when.unpinned, run: onThread(pin) },
   { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, shortcut: ['mod', 'shift', 'P'], when: when.pinned, run: onThread(pin) },
-  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: onThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
-  { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: Routing, keywords: 'branch alternative', when: when.liveThread, run: onThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
-  { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: onThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
+  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
+  { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: Routing, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
+  { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread(watch) },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread(watch) },
   { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copy(t.repo!.branch, 'Copied branch name')) },
@@ -85,9 +85,10 @@ export const ACTIONS = [
   { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, shortcut: ['mod', 'up'], keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
   { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, shortcut: ['mod', '\\'], run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
   { id: 'layout-split-down', group: 'Layout', title: 'Split down', icon: RowHorizontal, run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId, side: 'bottom' }) },
-  { id: 'layout-rotate', group: 'Layout', title: 'Rotate split', icon: Rotation, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-rotate', leafId: scope.leafId }) },
-  { id: 'layout-swap', group: 'Layout', title: 'Swap with next split', icon: ArrowSwapHorizontal, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-swap', leafId: scope.leafId }) },
-  { id: 'layout-zoom', group: 'Layout', title: 'Zoom split', icon: Maximize, shortcut: ['mod', 'shift', 'Enter'], when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-zoom', leafId: scope.leafId }) },
+  { id: 'layout-rotate', group: 'Layout', title: 'Rotate split', icon: Rotation, when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-rotate', leafId: scope.leafId }) },
+  { id: 'layout-swap', group: 'Layout', title: 'Swap with next split', icon: ArrowSwapHorizontal, when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-swap', leafId: scope.leafId }) },
+  { id: 'layout-zoom', group: 'Layout', title: 'Zoom split', icon: Fullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-zoom', leafId: scope.leafId }) },
+  { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
   { id: 'layout-close', group: 'Layout', title: 'Close split', icon: X, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-close', leafId: scope.leafId }) },
 
   ...SPACES.map((space, i) => ({ id: `space-${space.id}`, group: 'Space', title: `Switch to ${space.name}`, icon: Monitor, shortcut: ['nav', String(i + 1)], when: when.otherSpace(space.id), run: ({ dispatch }) => dispatch({ type: 'space', id: space.id }) }) satisfies PaletteAction),
@@ -100,6 +101,14 @@ export const ACTIONS = [
 
 function onThread(fn: (thread: Thread, ctx: ActionContext) => void) {
   return (ctx: ActionContext) => ctx.scope.thread && fn(ctx.scope.thread, ctx);
+}
+
+/** For dialogs that render inside the thread's own view (`RewindLayer`): a menu on another thread's row opens that thread first. */
+function inThread(fn: (thread: Thread, ctx: ActionContext) => void) {
+  return onThread((thread, ctx) => {
+    if (!ctx.scope.isFocused) ctx.dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
+    fn(thread, ctx);
+  });
 }
 
 function onTab(fn: (tab: PaneTab, thread: Thread, ctx: ActionContext) => void) {

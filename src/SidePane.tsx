@@ -10,6 +10,8 @@ import { PANE_TABS, tabTitle } from './pane/tabs';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { useHarness } from './store';
 import { isMod } from './keys';
+import { TAB_MENU } from './menus/menus';
+import { TargetContextMenu } from './menus/TargetContextMenu';
 
 export function SidePane({ thread, pane }: { thread: Thread; pane: Pane }) {
   const docked = pane.tabs.filter((t) => !t.isPopped);
@@ -71,52 +73,53 @@ function TabStrip({ thread, tabs, active }: { thread: Thread; tabs: PaneTab[]; a
           const title = tabTitle(tab);
           const isActive = tab.id === active?.id;
           return (
-            <Reorder.Item
-              key={tab.id}
-              as="div"
-              value={tab.id}
-              onDragStart={(_, info) => {
-                setDraggingId(tab.id);
-                startDrag({ kind: 'tab', threadId: thread.id, tabId: tab.id }, title, info.point.x, info.point.y);
-              }}
-              onDrag={(_, info) => moveDrag(info.point.x, info.point.y)}
-              onDragEnd={() => {
-                setDraggingId(null);
-                const landed = endDrag();
-                if (landed) dispatch({ type: 'layout-drop', ...landed });
-              }}
-              className={cn(
-                'group/tab relative flex h-7 min-w-16 flex-[0_1_11rem] items-center rounded-lg',
-                isActive ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:bg-accent/60',
-                draggingId === tab.id && 'z-10 bg-background shadow-float',
-              )}
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
-                onClick={() => dispatch({ type: 'pane-select-tab', threadId: thread.id, tabId: tab.id })}
-                onKeyDown={(e) => {
-                  if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-                  e.preventDefault();
-                  move(tab.id, e.key === 'ArrowLeft' ? -1 : 1);
+            <TargetContextMenu key={tab.id} target={{ threadId: thread.id, tabId: tab.id }} groups={TAB_MENU}>
+              <Reorder.Item
+                as="div"
+                value={tab.id}
+                onDragStart={(_, info) => {
+                  setDraggingId(tab.id);
+                  startDrag({ kind: 'tab', threadId: thread.id, tabId: tab.id }, title, info.point.x, info.point.y);
                 }}
-                className="flex h-full min-w-0 cursor-default items-center gap-1.5 pr-1 pl-2.5 type-meta"
+                onDrag={(_, info) => moveDrag(info.point.x, info.point.y)}
+                onDragEnd={() => {
+                  setDraggingId(null);
+                  const landed = endDrag();
+                  if (landed) dispatch({ type: 'layout-drop', ...landed });
+                }}
+                className={cn(
+                  'group/tab relative flex h-7 min-w-16 flex-[0_1_11rem] items-center rounded-lg',
+                  isActive ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:bg-accent/60',
+                  draggingId === tab.id && 'z-10 bg-background shadow-float',
+                )}
               >
-                <Icon className="size-3.5 shrink-0" />
-                <span className="truncate">{title}</span>
-              </button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Close ${title}`}
-                onClick={() => dispatch({ type: 'pane-close-tab', threadId: thread.id, tabId: tab.id })}
-                className={cn('mr-1 opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100', isActive && 'opacity-100')}
-              >
-                <X />
-              </Button>
-            </Reorder.Item>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                  onClick={() => dispatch({ type: 'pane-select-tab', threadId: thread.id, tabId: tab.id })}
+                  onKeyDown={(e) => {
+                    if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+                    e.preventDefault();
+                    move(tab.id, e.key === 'ArrowLeft' ? -1 : 1);
+                  }}
+                  className="flex h-full min-w-0 cursor-default items-center gap-1.5 pr-1 pl-2.5 type-meta"
+                >
+                  <Icon className="size-3.5 shrink-0" />
+                  <span className="truncate">{title}</span>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Close ${title}`}
+                  onClick={() => dispatch({ type: 'pane-close-tab', threadId: thread.id, tabId: tab.id })}
+                  className={cn('mr-1 opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100', isActive && 'opacity-100')}
+                >
+                  <X />
+                </Button>
+              </Reorder.Item>
+            </TargetContextMenu>
           );
         })}
       </Reorder.Group>

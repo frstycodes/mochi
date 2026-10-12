@@ -20,6 +20,7 @@ export interface ActionScope {
   tabs: PaneTab[];
   spaceId: string;
   leafCount: number;
+  isZoomed: boolean;
   reviewCount: number;
 }
 
@@ -46,6 +47,9 @@ export const when = {
   repo: (s: ActionScope) => !!s.thread?.repo,
   worktree: (s: ActionScope) => !!s.thread?.repo && s.isDesktop,
   splits: (s: ActionScope) => s.leafCount > 1,
+  /** Swap, rotate and zoom need every split on screen. */
+  unzoomedSplits: (s: ActionScope) => s.leafCount > 1 && !s.isZoomed,
+  zoomed: (s: ActionScope) => s.isZoomed,
   reviews: (s: ActionScope) => s.reviewCount > 0,
   otherSpace: (id: string) => (s: ActionScope) => s.spaceId !== id,
   tab: (s: ActionScope) => !!s.tab,
@@ -82,6 +86,7 @@ export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_D
     tabs,
     spaceId: state.spaceId,
     leafCount: leaves(layout.root).length,
+    isZoomed: !!layout.zoomId,
     reviewCount: reviewThreads(state).length,
   };
 }
