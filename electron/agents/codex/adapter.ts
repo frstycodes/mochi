@@ -302,7 +302,7 @@ class CodexServer {
 export function reply(pending: Pick<Pending, 'method' | 'questionIds'>, decision: AgentDecision): unknown {
   if (pending.method === 'item/tool/requestUserInput') {
     const answers = decision.kind === 'answer' ? decision.answers : [];
-    return { answers: Object.fromEntries(pending.questionIds.flatMap((id, i) => (answers[i] === undefined ? [] : [[id, { answers: [answers[i]] }]]))) };
+    return { answers: Object.fromEntries(pending.questionIds.flatMap((id, i) => (answers[i]?.length ? [[id, { answers: answers[i] }]] : []))) };
   }
   if (decision.kind === 'allow') return { decision: decision.forSession ? 'acceptForSession' : 'accept' };
   if (decision.kind === 'deny') return { decision: decision.interrupt ? 'cancel' : 'decline' };

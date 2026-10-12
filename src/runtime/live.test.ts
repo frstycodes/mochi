@@ -16,7 +16,7 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
   let s = base();
   const [start] = calls(s, create);
   assert.equal(start.method, 'start');
-  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
+  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', worktree: `feat/${start.threadId}`, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
 
   s = run(s, create);
   const id = start.threadId;
@@ -79,4 +79,28 @@ test('a folderless chat starts with no folder (main makes one); a restart reuses
   assert.equal(thread.live?.cwd, '/Users/me/dev/app');
   const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/dev/app');
+});
+
+test('a started agent reads as starting until its first event, so a sent message never looks stuck', () => {
+  let s = run(base(), { type: 'create', title: 'reply with ok', provider: 'codex', project: 'harness', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'agent-starting', threadId: id, provider: 'codex' });
+  assert.equal(s.threads.at(-1)!.live?.starting, 'codex');
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'codex', sessionId: 'sess-1' });
+  assert.equal(s.threads.at(-1)!.live?.starting, undefined);
+});
+
+test("a project thread asks main for its worktree; once main reports it, restarts run there, not in the project folder", () => {
+  const create: Action = { type: 'create', title: 'hi', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
+  const [start] = calls(base(), create);
+  let s = run(base(), create);
+  const thread = s.threads.at(-1)!;
+  assert.equal(start.method === 'start' && start.options.cwd, '/Users/me/dev/app');
+  assert.equal(start.method === 'start' && start.options.worktree, thread.repo!.branch);
+
+  s = applyAgentEvent(s, { threadId: thread.id, type: 'worktree', path: '/Users/me/.harness/worktrees/app/t1' });
+  assert.equal(s.threads.at(-1)!.live?.cwd, '/Users/me/.harness/worktrees/app/t1');
+  const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
+  assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/.harness/worktrees/app/t1');
+  assert.equal(restart.method === 'start' && restart.options.worktree, undefined, 'only the first start makes a worktree');
 });

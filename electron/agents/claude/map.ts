@@ -109,8 +109,8 @@ export function createMapper(threadId: string, cwd: string) {
 
 export function approvalEvent(threadId: string, requestId: string, toolName: string, input: Record<string, unknown>, title: string, detail: string): AgentEvent {
   if (toolName === 'AskUserQuestion') {
-    const questions = (input.questions ?? []) as { question: string; options: { label: string }[] }[];
-    return { threadId, type: 'question', requestId, questions: questions.map((q) => ({ text: q.question, options: q.options.map((o) => o.label) })) };
+    const questions = (input.questions ?? []) as { question: string; options: { label: string }[]; multiSelect?: boolean }[];
+    return { threadId, type: 'question', requestId, questions: questions.map((q) => ({ text: q.question, options: q.options.map((o) => o.label), multiSelect: !!q.multiSelect })) };
   }
   if (toolName === 'Bash') return { threadId, type: 'approval', requestId, kind: 'command', title, detail, code: String(input.command ?? '') };
   const file = input.file_path ?? input.notebook_path;
@@ -122,7 +122,8 @@ export function permissionResult(toolName: string, input: Record<string, unknown
   if (decision.kind === 'deny') return { behavior: 'deny', message: decision.message ?? 'The user declined this.' };
   if (decision.kind !== 'answer' || toolName !== 'AskUserQuestion') return { behavior: 'allow', updatedInput: input };
   const questions = (input.questions ?? []) as { question: string }[];
-  const answers = Object.fromEntries(questions.flatMap((q, i) => (decision.answers[i] === undefined ? [] : [[q.question, decision.answers[i]]])));
+  // The SDK types each answer as one string; the CLI itself joins multiple picks with ", ".
+  const answers = Object.fromEntries(questions.flatMap((q, i) => (decision.answers[i]?.length ? [[q.question, decision.answers[i].join(', ')]] : [])));
   return { behavior: 'allow', updatedInput: { ...input, answers } };
 }
 
@@ -155,6 +156,11 @@ type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: bo
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 const STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
+
+/** Claude Code ships no plan tool under the SDK unless asked, and without TaskCreate/TaskUpdate a live thread never gets steps. */
+export function withPlanTools(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return { ...env, CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
+}
 
 export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
   const todos = Array.isArray(input.todos) ? (input.todos as { content?: unknown; status?: unknown }[]) : [];

@@ -115,13 +115,25 @@ export function stepLabel(status: StepStatus) {
   return STEP_LABELS[status];
 }
 
-export function ProgressRing({ pct, slot, size = 16 }: { pct: number; slot: LineSlot; size?: number }) {
+/** `isWorking` set: the arc spins in the line colour while the agent works (at least a quarter, so 0% still moves) and rests grey when idle. */
+export function ProgressRing({ pct, slot, size = 16, isWorking }: { pct: number; slot: LineSlot; size?: number; isWorking?: boolean }) {
   const r = size / 2 - 2;
   const c = 2 * Math.PI * r;
+  const arc = isWorking ? Math.max(pct, 0.25) : pct;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="shrink-0 -rotate-90">
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={2} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={lineColor(slot)} strokeWidth={2} strokeLinecap="round" strokeDasharray={`${c * pct} ${c}`} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={isWorking === false ? 'var(--subtle-foreground)' : lineColor(slot)}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray={`${c * arc} ${c}`}
+        className={cn(isWorking && 'origin-center animate-spin motion-reduce:animate-none')}
+      />
     </svg>
   );
 }

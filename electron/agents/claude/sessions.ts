@@ -6,7 +6,7 @@ import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/ho
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
-import { approvalEvent, createMapper, mcpServersFromStatus, permissionResult } from './map.ts';
+import { approvalEvent, createMapper, mcpServersFromStatus, permissionResult, withPlanTools } from './map.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -127,7 +127,7 @@ async function launch(session: Session) {
     const { configDir = null } = session.account;
     const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
     if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
-    const base = { ...accountEnv('claude', configDir), PATH: await userPath() };
+    const base = withPlanTools({ ...accountEnv('claude', configDir), PATH: await userPath() });
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
     const key = options.useApiKey ? apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');

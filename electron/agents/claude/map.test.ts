@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, createMapper, permissionResult, planFromTodos } from './map.ts';
+import { approvalEvent, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
 import { FIXTURE } from './fixture.ts';
 
 const CWD = '/repo';
@@ -126,8 +126,25 @@ test('subagent messages are skipped', () => {
 
 test('AskUserQuestion becomes a question and its answers go back keyed by question text', () => {
   const input = { questions: [{ question: 'Which db?', header: 'DB', multiSelect: false, options: [{ label: 'Postgres', description: '' }, { label: 'SQLite', description: '' }] }] };
-  assert.deepEqual(approvalEvent('t1', 'r1', 'AskUserQuestion', input, '', ''), { threadId: 't1', type: 'question', requestId: 'r1', questions: [{ text: 'Which db?', options: ['Postgres', 'SQLite'] }] });
-  assert.deepEqual(permissionResult('AskUserQuestion', input, { kind: 'answer', answers: ['SQLite'] }), { behavior: 'allow', updatedInput: { ...input, answers: { 'Which db?': 'SQLite' } } });
+  assert.deepEqual(approvalEvent('t1', 'r1', 'AskUserQuestion', input, '', ''), { threadId: 't1', type: 'question', requestId: 'r1', questions: [{ text: 'Which db?', options: ['Postgres', 'SQLite'], multiSelect: false }] });
+  assert.deepEqual(permissionResult('AskUserQuestion', input, { kind: 'answer', answers: [['SQLite']] }), { behavior: 'allow', updatedInput: { ...input, answers: { 'Which db?': 'SQLite' } } });
+});
+
+test('AskUserQuestion: a multi-select answer with your own text goes back as one comma-joined string; a skipped question is left out', () => {
+  const input = {
+    questions: [
+      { question: 'Which flows?', header: 'Flows', multiSelect: true, options: [{ label: 'Checkout', description: '' }, { label: 'Refund', description: '' }] },
+      { question: 'Which db?', header: 'DB', multiSelect: false, options: [{ label: 'Postgres', description: '' }, { label: 'SQLite', description: '' }] },
+    ],
+  };
+  assert.deepEqual(
+    (approvalEvent('t1', 'r1', 'AskUserQuestion', input, '', '') as { questions: unknown }).questions,
+    [{ text: 'Which flows?', options: ['Checkout', 'Refund'], multiSelect: true }, { text: 'Which db?', options: ['Postgres', 'SQLite'], multiSelect: false }],
+  );
+  assert.deepEqual(permissionResult('AskUserQuestion', input, { kind: 'answer', answers: [['Checkout', 'Refund', 'Gift cards too'], []] }), {
+    behavior: 'allow',
+    updatedInput: { ...input, answers: { 'Which flows?': 'Checkout, Refund, Gift cards too' } },
+  });
 });
 
 test('approvals: Bash is a command, file tools are edits, deny carries a message', () => {
@@ -143,4 +160,8 @@ test('a rejected rate limit pauses the thread with its reset time; warnings pass
   assert.deepEqual(map(event('allowed_warning', 1_760_000_000)), []);
   assert.deepEqual(map(event('rejected', 1_760_000_000)), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z' }]);
   assert.deepEqual(map(event('rejected')), [{ threadId: 't1', type: 'limit' }]);
+});
+
+test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
+  assert.deepEqual(withPlanTools({ PATH: '/bin' }), { PATH: '/bin', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' });
 });

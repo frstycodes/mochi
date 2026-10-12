@@ -108,16 +108,7 @@ export const git = {
   },
 
   async addWorktree(_sender, root, threadId, branch) {
-    const top = await mainRepo(string(root, 'root'));
-    const id = string(threadId, 'threadId', 64);
-    if (!/^[\w-]+$/.test(id)) throw new Error('threadId must be letters, digits, - or _');
-    const name = (await runGit(top, ['check-ref-format', '--branch', string(branch, 'branch', 255)])).trim();
-    const dir = join(worktreeRoot(), basename(top), id);
-    if (existsSync(dir)) return dir;
-    await mkdir(dirname(dir), { recursive: true });
-    const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
-    await runGit(top, exists ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, await baseRef(top)]);
-    return dir;
+    return addWorktree(string(root, 'root'), string(threadId, 'threadId', 64), string(branch, 'branch', 255));
   },
 
   async worktrees(_sender, root) {
@@ -170,6 +161,18 @@ export const git = {
   },
 } satisfies Handlers<GitHost>;
 
+/** The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. */
+export async function addWorktree(root: string, threadId: string, branch: string) {
+  const top = await mainRepo(root);
+  if (!/^[\w-]+$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
+  const name = (await runGit(top, ['check-ref-format', '--branch', branch])).trim();
+  const dir = join(worktreeRoot(), basename(top), threadId);
+  if (existsSync(dir)) return dir;
+  await mkdir(dirname(dir), { recursive: true });
+  const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
+  await runGit(top, exists ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, await baseRef(top)]);
+  return dir;
+}
 
 async function change(cwd: unknown, value: unknown) {
   const top = await topLevel(string(cwd, 'cwd'));

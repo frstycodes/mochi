@@ -19,7 +19,7 @@ export const SnapshotCard = memo(function SnapshotCard({ snap, strip, stacked, c
     <div className={cn('flex overflow-hidden rounded-xl bg-card text-left shadow-popover', STRIP_FLEX[strip ?? 'none'], className)}>
       {!!strip && (
         <div className={cn('flex shrink-0 items-center justify-center gap-2 bg-accent/40', isVertical ? 'h-9 flex-row px-3' : 'w-9 flex-col py-3')}>
-          <ProgressRing pct={snap.pct} slot={snap.line} size={14} />
+          <ProgressRing pct={snap.pct} slot={snap.line} size={14} isWorking={snap.isWorking} />
           {needsYou && <LiveDot className="text-warning" />}
           {!!stacked && (
             <span aria-label={`${stacked} more stacked`} className={cn('flex items-center gap-0.5 type-caption text-muted-foreground tabular', isVertical ? 'flex-row' : 'flex-col')}>
@@ -31,7 +31,7 @@ export const SnapshotCard = memo(function SnapshotCard({ snap, strip, stacked, c
       )}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center gap-2">
-          {!strip && <ProgressRing pct={snap.pct} slot={snap.line} size={14} />}
+          {!strip && <ProgressRing pct={snap.pct} slot={snap.line} size={14} isWorking={snap.isWorking} />}
           <span className="min-w-0 flex-1 truncate type-title">{snap.title}</span>
           {!strip && needsYou && <LiveDot className="text-warning" />}
         </div>
