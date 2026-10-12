@@ -26,4 +26,8 @@ export const notify: NotifyHost = {
     listeners.add(listener);
     return () => void listeners.delete(listener);
   },
+  async haptic() {
+    // Touch only: a desktop browser has no trackpad haptics to reach.
+    if (matchMedia('(pointer: coarse)').matches) navigator.vibrate?.(6);
+  },
 };
