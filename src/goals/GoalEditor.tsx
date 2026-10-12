@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Trash, Undo } from 'reicon-react';
+import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Trash3, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -203,7 +203,7 @@ function StepEditRow({
           <ArrowDown />
         </Button>
         <Button variant="ghost" size="icon-sm" disabled={step.isLocked} aria-label={step.isRemoved ? 'Keep this step' : 'Remove this step'} onClick={() => onChange({ isRemoved: !step.isRemoved })}>
-          {step.isRemoved ? <Undo /> : <Trash />}
+          {step.isRemoved ? <Undo /> : <Trash3 />}
         </Button>
       </div>
       {isCriteriaOpen && !step.isRemoved && (

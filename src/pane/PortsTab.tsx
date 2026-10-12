@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ArrowUpRight, Copy, Global, Pip, Play, Plug, Trash } from 'reicon-react';
+import { ArrowUpRight, Copy, Global, Pip, Play, Plug, Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +61,7 @@ function Ports({ thread, pane, cwd }: { thread: Thread; pane: Pane; cwd: string 
                   <Copy />
                 </IconAction>
                 <IconAction aria-label={`Stop process ${p.pid}`} onClick={() => setKilling(p)}>
-                  <Trash />
+                  <Trash3 />
                 </IconAction>
               </ItemActions>
             </Item>

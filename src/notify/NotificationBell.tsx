@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, TriangleWarning, Trash, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -52,7 +52,7 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
               Mark all read
             </Button>
             <Button variant="ghost" size="icon-xs" aria-label="Clear notifications" disabled={notices.length === 0} onClick={() => dispatch({ type: 'notify-clear' })}>
-              <Trash />
+              <Trash3 />
             </Button>
           </div>
           {bursts.length === 0 ? (
