@@ -31,8 +31,8 @@ export function handoffSummary(thread: Thread, to: Provider, step: Step | undefi
   ].join('\n\n');
 }
 
-// GAP: no agent runtime yet (`host.agent` has no implementation), so a handoff only changes who the model says owns the work.
-// Once it exists: stop the old agent's run, start the new one in the same worktree with `summary` as its first prompt.
+// For a live thread, `agentCalls` (src/runtime/live.ts) also stops the old agent and starts the new one in the same worktree
+// with `summary` as its first prompt. A demo thread, or a one-step handoff, only changes who the model says owns the work.
 /** Moves the thread (or one step) to `to`, logged as a revision, a harness event and the summary the new agent starts from. */
 export function handoff(state: State, threadId: string, stepId: string | undefined, to: Provider, summary: string): State {
   const now = state.now;

@@ -16,3 +16,18 @@ export const accountFor: AccountFor = async (spaceId, provider) => {
 export function accountEnv(account: CodexAccount, env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return account.configDir ? { ...env, CODEX_HOME: account.configDir } : env;
 }
+
+export interface CodexInstall {
+  path: string;
+  /** Spawn env: Harness's own plus the login shell's PATH, since npm installs of `codex` are `#!/usr/bin/env node` scripts. */
+  env: NodeJS.ProcessEnv;
+}
+
+export type FindCodex = () => Promise<CodexInstall | null>;
+
+/** The settings' path override, else the first `codex` on the user's login-shell PATH. */
+export const findCodex: FindCodex = async () => {
+  const { resolveExecutable, userPath } = await import('../config.ts');
+  const path = await resolveExecutable('codex');
+  return path ? { path, env: { ...process.env, PATH: await userPath() } } : null;
+};

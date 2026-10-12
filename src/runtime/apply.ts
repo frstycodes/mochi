@@ -49,11 +49,12 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         ...t,
         context: { used: event.contextUsed ?? t.context.used, max: event.contextMax ?? t.context.max },
         session: t.session && event.inputTokens + event.outputTokens > 0 ? { ...t.session, usage: addUsage(t.session.usage, event) } : t.session,
+        live: t.live && event.inputTokens + event.outputTokens > 0 ? { ...t.live, usage: [...t.live.usage, { at: now, provider: who, tokens: event.inputTokens + event.outputTokens }] } : t.live,
       }));
     case 'limit':
-      return update((t) => log({ ...t, status: 'needs-you' }, { at: now, who: 'harness', kind: 'event', text: `Usage limit reached${event.resetsAt ? `, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` }));
+      return update((t) => log({ ...t, status: 'needs-you', live: t.live && { ...t.live, isWorking: false, limit: { resetsAt: event.resetsAt } } }, { at: now, who: 'harness', kind: 'event', text: `Usage limit reached${event.resetsAt ? `, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` }));
     case 'turn-end':
-      return endTurn(state, thread, event);
+      return endTurn(thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false } })) : state, thread, event);
   }
 }
 
@@ -231,7 +232,8 @@ function endTurn(state: State, thread: Thread, event: Extract<AgentEvent, { type
   const update = (fn: (t: Thread) => Thread): State => ({ ...state, threads: mapThread(state.threads, thread.id, fn) });
   if (event.status === 'interrupted') return update((t) => log(t, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted' }));
   if (event.status === 'failed') return update((t) => log({ ...t, status: 'needs-you' }, { at: now, who: 'harness', kind: 'event', text: `Turn failed${event.error ? `: ${event.error}` : ''}` }));
-  if (hasOpenWork(thread) || thread.status === 'review' || thread.status === 'settled') return state;
+  // A turn with no plan (a plain question) has nothing to review.
+  if (hasOpenWork(thread) || thread.status === 'review' || thread.status === 'settled' || !thread.steps.length) return state;
   if (state.queue.some((q) => q.kind === 'review' && q.threadId === thread.id)) return update((t) => ({ ...t, status: 'review' }));
   const review: QueueItem = { id: `q-review-${thread.id}`, kind: 'review', threadId: thread.id, title: `Review "${thread.title}"`, detail: 'Every step is done. Look over the diff and open a PR.', blocks: { steps: 0, threads: 1 }, createdAt: now };
   return { ...update((t) => ({ ...t, status: 'review' })), queue: [...state.queue, review] };

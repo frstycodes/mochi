@@ -1,7 +1,8 @@
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { ArrowUp, BranchUp, Laptop, Mic, Monitor, Paperclip, ShieldCheck } from 'reicon-react';
+import { ArrowUp, BranchUp, Laptop, Mic, Monitor, Paperclip, ShieldCheck, Stop } from 'reicon-react';
 import { toast } from 'sonner';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
+import { openFiles, type ViewerFile } from './files/viewer';
 import { openPhotos } from './photo/photos';
 import {
   PromptInput,
@@ -25,7 +26,8 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
-import { EffortPicker, ModelPicker, type ModelOption } from './ModelControls';
+import { EffortPicker, ModelPicker } from './ModelControls';
+import { ACCESS, type Access, type ModelOption, type ThreadControls } from './runtime/controls';
 
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
@@ -37,14 +39,19 @@ export function ComposerCard({ className, children, ...props }: ComponentProps<'
 }
 
 type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSubmit'> & {
+  controls: ThreadControls;
   provider: Provider;
-  onModelChange?: (model: ModelOption) => void;
+  /** Keeps the model list to `provider`. */
+  isLocked?: boolean;
+  onControlsChange: (controls: ThreadControls, model?: ModelOption) => void;
   /** Return `false` to hold the message: the text stays in the input, as with the drift guard's card. */
   onSend: (message: PromptInputMessage) => void | boolean;
+  /** Set while the agent works: the send button becomes Stop. */
+  onStop?: () => void;
   submitLabel?: string;
 };
 
-export function ComposerInput({ provider, onModelChange, onSend, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
   return (
     <PromptInput multiple globalDrop className="[&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent" onSubmit={(message) => hold(onSend(message))}>
       <ComposerAttachments />
@@ -62,16 +69,22 @@ export function ComposerInput({ provider, onModelChange, onSend, submitLabel = '
               <PromptInputActionAddScreenshot />
             </PromptInputActionMenuContent>
           </PromptInputActionMenu>
-          <ModelPicker provider={provider} onModelChange={onModelChange} />
-          <EffortPicker />
+          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
+          <EffortPicker value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
         </PromptInputTools>
         <PromptInputTools>
           <PromptInputButton tooltip="Dictate" className="rounded-full" onClick={() => toast('Dictation is not in the prototype yet')}>
             <Mic className="size-4" />
           </PromptInputButton>
-          <PromptInputSubmit aria-label={submitLabel} className="rounded-full">
-            <ArrowUp className="size-4" />
-          </PromptInputSubmit>
+          {onStop ? (
+            <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent" className="rounded-full">
+              <Stop className="size-4" />
+            </PromptInputSubmit>
+          ) : (
+            <PromptInputSubmit aria-label={submitLabel} className="rounded-full">
+              <ArrowUp className="size-4" />
+            </PromptInputSubmit>
+          )}
         </PromptInputTools>
       </PromptInputFooter>
     </PromptInput>
@@ -105,10 +118,12 @@ function ComposerAttachments() {
       )}
       {others.length > 0 && (
         <Attachments variant="inline">
-          {others.map((f) => (
+          {others.map((f, i) => (
             <Attachment key={f.id} data={f} onRemove={() => remove(f.id)}>
-              <AttachmentPreview />
-              <AttachmentInfo className="type-caption" />
+              <button type="button" aria-label={`View ${f.filename ?? 'file'}`} onClick={() => openFiles({ files: others.map(toViewerFile), index: i })} className="flex min-w-0 cursor-pointer items-center gap-1.5">
+                <AttachmentPreview />
+                <AttachmentInfo className="type-caption" />
+              </button>
               <AttachmentRemove />
             </Attachment>
           ))}
@@ -119,6 +134,7 @@ function ComposerAttachments() {
 }
 
 const toPhoto = (f: { url?: string; filename?: string }) => ({ src: f.url ?? '', name: f.filename ?? 'Image' });
+const toViewerFile = (f: { url?: string; filename?: string; mediaType?: string }): ViewerFile => ({ source: 'attachment', name: f.filename ?? 'File', url: f.url ?? '', mediaType: f.mediaType });
 
 /** One line under the card for where and how the agent runs. The gradient fades the transcript scrolling under it. */
 export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
@@ -133,17 +149,16 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
-const ACCESS = ['Ask first', 'Auto edit', 'Full access'];
 const DEVICES = ['This Mac', 'Studio', 'Cloud sandbox'];
 
+// GAP: only This Mac runs anything; the choice isn't kept or sent to an agent.
 export function RunOnMenu() {
   const [device, setDevice] = useState(DEVICES[0]);
   return <MetaMenu icon={device === 'Cloud sandbox' ? <Monitor /> : <Laptop />} label="Run on" value={device} options={DEVICES} onChange={setDevice} />;
 }
 
-export function PermissionsMenu() {
-  const [access, setAccess] = useState(ACCESS[1]);
-  return <MetaMenu icon={<ShieldCheck />} label="Permissions" value={access} options={ACCESS} onChange={setAccess} />;
+export function PermissionsMenu({ value, onChange }: { value: Access; onChange: (access: Access) => void }) {
+  return <MetaMenu icon={<ShieldCheck />} label="Permissions" value={value} options={ACCESS} onChange={(v) => onChange(v as Access)} />;
 }
 
 export function BranchLabel({ branch }: { branch: string }) {
@@ -155,7 +170,7 @@ export function BranchLabel({ branch }: { branch: string }) {
   );
 }
 
-function MetaMenu({ icon, label, value, options, onChange }: { icon: ReactNode; label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+function MetaMenu({ icon, label, value, options, onChange }: { icon: ReactNode; label: string; value: string; options: readonly string[]; onChange: (v: string) => void }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

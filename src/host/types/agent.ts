@@ -13,6 +13,8 @@ export interface AgentStartOptions {
   permissionMode?: string;
   /** Provider session id from an earlier `session` event. */
   resume?: string;
+  /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
+  useApiKey?: boolean;
 }
 
 export type AgentEvent =
