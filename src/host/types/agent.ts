@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { Provider, Size, Thread } from '../../model.ts';
+import type { AgentInfo, Provider, Size, Thread } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
@@ -8,7 +8,11 @@ export interface AgentStartOptions {
   spaceId: string;
   /** An absolute folder; null for a folderless chat, which main runs in a folder of its own under the app's data dir. */
   cwd: string | null;
+  /** Branch for the thread's own worktree of `cwd`, made by main before the agent starts; on failure (not a git repo) the agent runs in `cwd`. */
+  worktree?: string;
   prompt: string;
+  /** Sent with the first prompt. */
+  images?: AgentImage[];
   model?: string;
   effort?: string;
   permissionMode?: string;
@@ -19,21 +23,38 @@ export interface AgentStartOptions {
 }
 
 export type AgentEvent =
+  /** Main made the thread's worktree and runs the agent there. */
+  | { threadId: string; type: 'worktree'; path: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
+  /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
+  | { threadId: string; type: 'info'; info: AgentInfo }
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
   | { threadId: string; type: 'reasoning'; text: string }
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
-  | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
+  | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
   | { threadId: string; type: 'resolved'; requestId: string }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
+/** Base64 without the `data:` prefix. */
+export interface AgentImage {
+  mediaType: 'image/jpeg' | 'image/png';
+  data: string;
+}
+
 /** What an adapter gets once main has resolved and checked the folder. */
-export type AgentRunOptions = Omit<AgentStartOptions, 'cwd'> & { cwd: string };
+export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'worktree'> & { cwd: string };
+
+/** You can always type your own answer too, so `options` may be empty. */
+export interface AgentQuestion {
+  text: string;
+  options: string[];
+  multiSelect: boolean;
+}
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
 export interface AgentPlanItem {
@@ -44,8 +65,8 @@ export interface AgentPlanItem {
   files?: string[];
 }
 
-/** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. */
-export type AgentDecision = { kind: 'allow'; forSession?: boolean } | { kind: 'deny'; message?: string; interrupt?: boolean } | { kind: 'answer'; answers: string[] };
+/** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. `answers` holds each question's picked labels and typed text, in question order; empty means skipped. */
+export type AgentDecision = { kind: 'allow'; forSession?: boolean } | { kind: 'deny'; message?: string; interrupt?: boolean } | { kind: 'answer'; answers: string[][] };
 
 /** Side chat's answer stream, separate from thread events: `id` is the one `ask` returned. */
 export interface AgentAskEvent {
@@ -72,7 +93,7 @@ export interface AgentAskMessage {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  send(threadId: string, text: string): Promise<void>;
+  send(threadId: string, text: string, images?: AgentImage[]): Promise<void>;
   interrupt(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;

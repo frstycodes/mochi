@@ -13,12 +13,19 @@ import {
   QuestionnaireChoice,
   QuestionnaireChoiceDescription,
   QuestionnaireChoices,
+  QuestionnaireDescription,
+  QuestionnaireError,
+  QuestionnaireInput,
   QuestionnaireItem,
+  QuestionnaireNext,
+  QuestionnairePrevious,
+  QuestionnaireProgress,
   QuestionnaireSubmit,
+  QuestionnaireTitle,
 } from '@/components/ui/questionnaire';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import type { QueueItem, QueueKind, Thread } from './model';
+import { answerText, type QueueItem, type QueueKind, type Thread } from './model';
 import { duration } from './progress';
 import { useReviewEntry } from './review/useReviewMode';
 import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode } from './store';
@@ -200,29 +207,43 @@ function choiceFrom(e: FormEvent<HTMLFormElement>) {
 function QuestionChoices({ item }: { item: QueueItem }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
-  const choices = item.choices ?? [];
+  const questions = item.questions ?? [];
+  const isWizard = questions.length > 1;
   const submit = (e: FormEvent<HTMLFormElement>) => {
-    const choice = choiceFrom(e);
-    const picked = choices.find((c) => c.id === choice);
-    if (!picked) return;
-    withUndo(`Answered: ${picked.label}`, () => dispatch({ type: 'answer', queueId: item.id, choice: picked.id }));
+    e.preventDefault();
+    const answers = answersFrom(new FormData(e.currentTarget), questions.length);
+    withUndo(`Answered: ${answerText(answers)}`, () => dispatch({ type: 'answer', queueId: item.id, answers }));
   };
   return (
-    <Questionnaire items={[{ name: 'choice', required: true, choices: choices.map((c) => ({ value: c.id })) }]} defaultItem="choice" shortcuts="numbers" onSubmit={submit}>
-      <QuestionnaireItem name="choice" required>
-        <QuestionnaireChoices>
-          {choices.map((c) => (
-            <QuestionnaireChoice key={c.id} value={c.id}>
-              {c.label}
-            </QuestionnaireChoice>
-          ))}
-        </QuestionnaireChoices>
-      </QuestionnaireItem>
+    <Questionnaire items={questions.map((q, i) => ({ name: `q${i}`, required: true, choices: q.options.map((value) => ({ value })) }))} shortcuts="numbers" onSubmit={submit}>
+      {isWizard && <QuestionnaireProgress />}
+      {questions.map((q, i) => (
+        <QuestionnaireItem key={i} name={`q${i}`} multiple={q.multiSelect} required className="gap-3">
+          {isWizard && <QuestionnaireTitle className="mb-1 text-sm [&:not(:has(~[data-slot=questionnaire-description]))]:mb-3">{q.text}</QuestionnaireTitle>}
+          {q.multiSelect && <QuestionnaireDescription className="type-meta">Pick any that apply.</QuestionnaireDescription>}
+          <QuestionnaireChoices>
+            {q.options.map((label) => (
+              <QuestionnaireChoice key={label} value={label}>
+                {label}
+              </QuestionnaireChoice>
+            ))}
+          </QuestionnaireChoices>
+          <QuestionnaireInput aria-label="Your own answer" placeholder={q.options.length ? 'Or type your own answer' : 'Type your answer'} />
+          <QuestionnaireError className="mt-0 type-meta">Pick an answer or type your own.</QuestionnaireError>
+        </QuestionnaireItem>
+      ))}
       <QuestionnaireActions>
-        <QuestionnaireSubmit size="sm">Send answer</QuestionnaireSubmit>
+        <QuestionnairePrevious size="sm" />
+        <QuestionnaireNext size="sm" />
+        <QuestionnaireSubmit size="sm">{isWizard ? 'Send answers' : 'Send answer'}</QuestionnaireSubmit>
       </QuestionnaireActions>
     </Questionnaire>
   );
+}
+
+/** Each question's checked labels plus its typed answer; the typed one only counts once selected, which the questionnaire tracks by naming its input. */
+function answersFrom(form: FormData, count: number) {
+  return Array.from({ length: count }, (_, i) => [...new Set(form.getAll(`q${i}`).map((v) => v.toString().trim()).filter(Boolean))]);
 }
 
 const OVERLAP_CHOICES = [

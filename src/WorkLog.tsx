@@ -6,12 +6,13 @@ import { FileIcon } from '@react-symbols/icons/utils';
 import { Check, ChevronRight, Eye, Global, TerminalSquare, X } from 'reicon-react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
-import { AgentLoader, entryPhase } from './AgentLoader';
+import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
 import type { ActivityEntry } from './model';
 import { duration } from './progress';
 import { usePrefs } from './settings/prefs';
 import { parseTool, type ToolCall } from './summary';
+import { toolLabel } from './agentPhase';
 import { openFromScope, useThreadFiles, type ThreadFiles } from './files/viewer';
 import { TooltipIconButton } from './ui';
 
@@ -38,10 +39,7 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
       >
         <ChevronRight className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />
         {isLive && current ? (
-          <span className="flex shrink-0 items-center gap-1.5">
-            <AgentLoader phase={entryPhase(entries[entries.length - 1])} className="size-3.5 text-foreground" />
-            <Shimmer as="span">{liveLabel(current)}</Shimmer>
-          </span>
+          <Shimmer as="span" className="shrink-0">{toolLabel(current)}</Shimmer>
         ) : (
           <span className="shrink-0">Worked for {duration(minutes)}</span>
         )}
@@ -76,9 +74,15 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
   );
 }
 
-function liveLabel(call: ToolCall) {
-  const name = call.target.split('/').pop();
-  return { Read: `Reading ${name}`, Edit: `Editing ${name}`, Write: `Writing ${name}`, Run: `Running ${call.target}`, Browser: 'Using the browser' }[call.verb];
+/** Mochi at the end of the chat, always there: one instance, so it idles and then acts out whatever the agent does next. Before the agent's first output it also says what it's waiting on. */
+export function ChatMochi({ phase, label }: { phase: AgentPhase; label?: string }) {
+  return (
+    // -mt-4 pulls it up into the transcript's 20px row gap: it belongs to the last message, not a row of its own.
+    <div role="status" className="-mt-4 flex h-9 items-center gap-1.5 type-meta text-muted-foreground">
+      <AgentLoader phase={phase} className="-ml-2 size-9 text-foreground" />
+      {!!label && <Shimmer as="span">{`${label}…`}</Shimmer>}
+    </div>
+  );
 }
 
 function sum(calls: ToolCall[], key: 'added' | 'removed') {

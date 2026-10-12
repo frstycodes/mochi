@@ -16,7 +16,8 @@ import { ProviderMark } from './ui';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu, useComposerHandoff } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap } from './ThreadMinimap';
-import { WorkLog } from './WorkLog';
+import { ChatMochi, WorkLog } from './WorkLog';
+import { agentPhase, pendingWork } from './agentPhase';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
@@ -30,6 +31,8 @@ import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
 import { parseSlash } from './chat/slash';
 import { SlashMenu, useSlashMenu } from './chat/SlashMenu';
+import { withReferences } from './chat/mentions';
+import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
@@ -65,6 +68,7 @@ export function ChatView({ thread }: { thread: Thread }) {
                   <ChatRowView thread={thread} row={row} isLive={i === rows.length - 1 && isRunning} />
                 </div>
               ))}
+              <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
           </ConversationContent>
         </VizThreadProvider>
@@ -241,13 +245,15 @@ function Composer({
   onToggleTray: () => void;
   handoff: ReturnType<typeof useComposerHandoff>;
 }) {
-  const { dispatch } = useHarness();
+  const { state, dispatch } = useHarness();
   const [isQueue, setIsQueue] = useState(false);
   const controls = controlsOf(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
-  const drift = useDriftGuard(thread);
+  const mention = useMentionMenu(thread);
+  const drift = useDriftGuard(thread, mention.clear);
   const slash = useSlashMenu();
+  const menuProps = mention.isOpen ? mention.textareaProps : slash.textareaProps;
   useSeedAttachment(thread.id === 'adm');
 
   return (
@@ -257,8 +263,10 @@ function Composer({
       <motion.div {...handoff.layout}>
         <div className="relative">
           <SlashMenu menu={slash} />
+          <MentionMenu menu={mention} />
           <ComposerCard className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
+            <MentionChips menu={mention} />
             <ComposerInput
               controls={controls}
               provider={provider}
@@ -268,17 +276,19 @@ function Composer({
               submitLabel={isQueue ? 'Queue message' : 'Send'}
               onSend={({ text, files }) => {
                 const trimmed = text.trim();
-                if (!trimmed && files.length === 0) return;
+                if (!trimmed && files.length === 0 && mention.mentions.length === 0) return;
                 const command = parseSlash(trimmed);
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
                 const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-                return drift.submit(withFiles, isQueue ? QUEUED_PREFIX : '');
+                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads);
+                return drift.submit(shown, isQueue ? QUEUED_PREFIX : '', references);
               }}
-              autoFocus={handoff.isHandoff}
               placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
-              {...slash.textareaProps}
+              autoFocus={handoff.isHandoff}
+              {...menuProps}
               onKeyDown={(e) => {
-                slash.textareaProps.onKeyDown(e);
+                mention.textareaProps.onKeyDown(e);
+                if (!e.isPropagationStopped()) slash.textareaProps.onKeyDown(e);
                 if (e.key === MOD_KEY) setIsQueue(true);
               }}
               onKeyUp={(e) => e.key === MOD_KEY && setIsQueue(false)}

@@ -2,12 +2,13 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
-import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentRunOptions } from '../../src/host/types/agent.ts';
+import type { AgentAskContext, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentRunOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
+import { addWorktree } from './git.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -16,6 +17,20 @@ const DECISIONS = ['allow', 'deny', 'answer'];
 // The renderer caps quotes at 8000 chars and activity at 12 × 600; these bound what a renderer can make main send.
 const MAX_MESSAGE_CHARS = 20_000;
 const MAX_CONTEXT_CHARS = 50_000;
+const MAX_IMAGES = 8;
+// Claude rejects images over 5 MB; base64 runs 4/3 of that.
+const MAX_IMAGE_CHARS = 6_900_000;
+const IMAGE_TYPES = ['image/jpeg', 'image/png'];
+
+function images(value: unknown) {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length > MAX_IMAGES) throw new TypeError(`images must be an array of up to ${MAX_IMAGES}`);
+  for (const v of value) {
+    const image = record(v, 'image');
+    if (!IMAGE_TYPES.includes(image.mediaType as string)) throw new TypeError('image.mediaType must be image/jpeg or image/png');
+    string(image.data, 'image.data', MAX_IMAGE_CHARS);
+  }
+}
 
 // Threads without a Claude or Codex session run on the renderer's demo adapter.
 const runtime = notImplemented('agent runtime');
@@ -33,16 +48,21 @@ export const agent = {
     for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
     if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
     if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
-    const run = { ...o, cwd: await agentFolder(threadId as string, o.cwd) } as unknown as AgentRunOptions;
+    images(o.images);
+    const { worktree, ...rest } = o;
+    const folder = await agentFolder(threadId as string, o.cwd);
+    const cwd = worktree === undefined ? folder : await threadWorktree(threadId as string, folder, string(worktree, 'options.worktree', 255));
+    const run = { ...rest, cwd } as unknown as AgentRunOptions;
     if (o.provider === 'claude') return startClaude(threadId as string, run);
     if (o.provider === 'codex') return codex.start(threadId as string, run);
     return runtime();
   },
-  async send(_sender, threadId, text) {
+  async send(_sender, threadId, text, pictures) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
-    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string);
-    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string);
+    images(pictures);
+    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined);
+    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined);
     return runtime();
   },
   async interrupt(_sender, threadId) {
@@ -131,4 +151,14 @@ async function agentFolder(threadId: string, cwd: unknown) {
   const info = await stat(dir).catch(() => null);
   if (!info?.isDirectory()) throw new Error(`The project folder ${dir} doesn't exist anymore`);
   return dir;
+}
+
+/** Runs a project thread in its own worktree, so the panes and the agent see the same files; a folder that isn't a git repo runs the agent in place. */
+async function threadWorktree(threadId: string, root: string, branch: string) {
+  const path = await addWorktree(root, threadId, branch).catch((error: Error) => {
+    console.warn(`No worktree for ${threadId} in ${root}, running there: ${error.message}`);
+    return null;
+  });
+  if (path) broadcast({ threadId, type: 'worktree', path });
+  return path ?? root;
 }
