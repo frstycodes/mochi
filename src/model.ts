@@ -144,7 +144,8 @@ export interface Thread {
   context: { used: number; max: number };
   orbitSlot?: number;
   settledAt?: number;
-  drift?: { threshold: number; isMuted: boolean };
+  /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
+  drift?: { isMuted: boolean; keeps?: number };
   session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
   controls?: ThreadControls;
   /** From the live agent's session start; reset each time a session (re)starts. */

@@ -1,6 +1,6 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Step, type StepStatus, type Thread } from '../model.ts';
-import { stepTitleFrom, type DriftKind } from '../drift.ts';
+import { hasGoal, isConcrete, KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
@@ -57,7 +57,8 @@ export type ThreadsAction =
   | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
   | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
-  | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
+  | { type: 'drift-settings'; threadId: string; isMuted: boolean }
+  | { type: 'drift-keep'; threadId: string }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
@@ -158,7 +159,9 @@ function reduce(state: State, action: Action): State {
     case 'drift-verdict':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => tagSent(t, action, state.now)) };
     case 'drift-settings':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { threshold: action.threshold, isMuted: action.isMuted } })) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { ...t.drift, isMuted: action.isMuted } })) };
+    case 'drift-keep':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => keepHere(t, state.now)) };
     case 'edit-goal':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now, action.by)) };
     case 'step-status':
@@ -380,7 +383,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     id,
     spaceId: state.spaceId,
     repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, branchName(getPrefs().branchPrefix, '', id)) : null,
-    title: action.title.length > 48 ? `${action.title.slice(0, 47)}…` : action.title,
+    title: titleFrom(action.title),
     goal: action.title,
     providers: [action.provider],
     status: 'running',
@@ -447,9 +450,28 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     threads: mapThread(state.threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
       const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
-      return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
+      const goaled = setGoalFrom(said, action.text, now);
+      return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
     }),
   };
+}
+
+const titleFrom = (text: string) => (text.length > 48 ? `${text.slice(0, 47)}…` : text);
+
+/** A thread started with "hi" has no goal yet: the first concrete message becomes it, and the title too unless you renamed the thread. */
+function setGoalFrom(t: Thread, text: string, now: number): Thread {
+  if (hasGoal(t) || !isConcrete(text)) return t;
+  const n = t.revisions.length + 1;
+  const title = t.title === titleFrom(t.goal) ? titleFrom(text) : t.title;
+  const set = { ...t, goal: text, title, revisions: [...t.revisions, { n, at: now, label: 'Goal set from your message', by: 'you' as const, diff: [`~ Goal: "${t.goal}" → "${text}"`] }] };
+  return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: set from your message` });
+}
+
+function keepHere(t: Thread, now: number): Thread {
+  const keeps = (t.drift?.keeps ?? 0) + 1;
+  const isMuted = keeps >= KEEPS_TO_MUTE;
+  const kept = { ...t, drift: { ...t.drift, isMuted: !!t.drift?.isMuted || isMuted, keeps } };
+  return isMuted && !t.drift?.isMuted ? log(kept, { at: now, who: 'harness', kind: 'event', text: 'Drift guard off for this thread', detail: `You kept ${keeps} suggestions here` }) : kept;
 }
 
 /** A late verdict for a message sent while the classifier was out: the newest untagged message with that text. */

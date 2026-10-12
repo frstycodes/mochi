@@ -183,6 +183,7 @@ export const agent = {
       string(step.status, 'step.status', 32);
       if (!Array.isArray(step.footprint) || step.footprint.some((f) => typeof f !== 'string')) throw new TypeError('step.footprint must be strings');
     }
+    if (!Array.isArray(t.activity)) throw new TypeError('thread.activity must be an array');
     string(t.spaceId, 'thread.spaceId', 256);
     return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },

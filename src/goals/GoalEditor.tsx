@@ -6,13 +6,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { driftThreshold } from '../drift';
 import { getPrefs } from '../settings/prefs';
 import type { Size, Thread } from '../model';
 import { useHarness } from '../store';
@@ -25,9 +23,9 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
   const { state, dispatch } = useHarness();
   const { draft, setGoal, updateStep, moveStep, addSteps } = useGoalDraft(thread);
   const [newTitle, setNewTitle] = useState('');
-  const [drift, setDrift] = useState(thread.drift ?? { threshold: driftThreshold(thread), isMuted: false });
+  const [isDriftMuted, setDriftMuted] = useState(!!thread.drift?.isMuted);
   const hasEdits = applyDraft(thread, draft, state.now) !== thread;
-  const hasDriftEdits = drift.threshold !== driftThreshold(thread) || drift.isMuted !== !!thread.drift?.isMuted;
+  const hasDriftEdits = isDriftMuted !== !!thread.drift?.isMuted;
   const nextVersion = thread.revisions.length + 1;
   const templates = templatesFor(thread.spaceId);
 
@@ -39,7 +37,7 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
 
   const save = () => {
     if (hasEdits) dispatch({ type: 'edit-goal', threadId: thread.id, draft });
-    if (hasDriftEdits) dispatch({ type: 'drift-settings', threadId: thread.id, ...drift });
+    if (hasDriftEdits) dispatch({ type: 'drift-settings', threadId: thread.id, isMuted: isDriftMuted });
     onClose();
   };
 
@@ -110,24 +108,12 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
           </form>
         </section>
 
-        <section aria-label="Drift guard" className="flex flex-col gap-3 rounded-lg bg-muted/40 p-3">
-          <div className="flex items-center gap-3">
-            <Label htmlFor="drift-ask" className="flex-1 flex-col items-start gap-0.5">
-              <span>Ask before off-goal messages</span>
-              <span className="type-caption font-normal text-subtle-foreground">Messages that share nothing with the goal show a card above the composer.</span>
-            </Label>
-            <Switch id="drift-ask" checked={!drift.isMuted} onCheckedChange={(on) => setDrift((d) => ({ ...d, isMuted: !on }))} />
-          </div>
-          <div className={cn('flex items-center gap-3', drift.isMuted && 'opacity-50')}>
-            <Label id="drift-threshold" className="w-24 shrink-0">
-              Sensitivity
-            </Label>
-            <Slider aria-labelledby="drift-threshold" disabled={drift.isMuted} min={0.05} max={0.4} step={0.05} value={[drift.threshold]} onValueChange={([threshold]) => setDrift((d) => ({ ...d, threshold }))} className="flex-1" />
-            <span className="w-10 text-right tabular type-caption text-subtle-foreground">{Math.round(drift.threshold * 100)}%</span>
-          </div>
-          <p className={cn('type-caption text-subtle-foreground', drift.isMuted && 'opacity-50')}>
-            Asks when a message shares less than {Math.round(drift.threshold * 100)}% of its words with the goal, the thread title or an open step. Higher asks more often; short steering messages never ask.
-          </p>
+        <section aria-label="Drift guard" className="flex items-center gap-3 rounded-lg bg-muted/40 p-3">
+          <Label htmlFor="drift-ask" className="flex-1 flex-col items-start gap-0.5">
+            <span>Suggest a new thread for separate work</span>
+            <span className="type-caption font-normal text-subtle-foreground">Only for messages that clearly start unrelated work. Messages always send.</span>
+          </Label>
+          <Switch id="drift-ask" checked={!isDriftMuted} onCheckedChange={(on) => setDriftMuted(!on)} />
         </section>
 
         <DialogFooter>

@@ -3,6 +3,7 @@ import * as sdk from '@anthropic-ai/claude-agent-sdk';
 import { query, type Options, type SDKMessage, type SDKUserMessage, type SpareProcess } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentInstall } from '../../../src/host/types/settings.ts';
+import { CLASSIFY_PROMPT, classifyInput } from '../../../src/drift.ts';
 import type { Thread } from '../../../src/model.ts';
 import { detect } from '../../settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
@@ -14,8 +15,6 @@ const SPARE_IDLE_MS = 10 * 60_000;
 
 // Fixed at prewarm, so it is shared by side chat and classify; each call's own instructions go in `appendSystemPrompt`.
 const BASE_PROMPT = 'You are a helper inside Mochi, an app that runs coding agents. You cannot run tools or change anything.';
-const CLASSIFY_PROMPT =
-  'Classify a message sent to a coding agent against its goal. on-goal: works toward the goal or an open step. scope-add: related, but asks for something the plan does not cover. off-goal: unrelated to the goal. Reply with only a JSON object {"verdict": "on-goal" | "scope-add" | "off-goal", "reason": "<one short sentence>"}, nothing else.';
 
 /** Side chat's Claude answer: a tool-less, unsaved query that never touches the thread's own session. Yields text deltas. */
 export async function* askClaude(spaceId: string, instructions: string, prompt: string, model: string | undefined, abort: AbortController) {
@@ -32,9 +31,7 @@ export async function* askClaude(spaceId: string, instructions: string, prompt: 
 export async function classifyClaude(prompt: string, thread: Thread, signal: AbortSignal) {
   const abort = new AbortController();
   signal.addEventListener('abort', () => abort.abort(), { once: true });
-  const open = thread.steps.filter((s) => s.status !== 'done' && s.status !== 'dropped');
-  const input = `Goal: ${thread.goal}\nTitle: ${thread.title}\nOpen steps:\n${open.map((s) => `- ${s.title}${s.footprint.length ? ` (${s.footprint.join(', ')})` : ''}`).join('\n') || '- none'}\n\nMessage: ${prompt}`;
-  for await (const message of run(await runner(thread.spaceId), input, CLASSIFY_MODEL, CLASSIFY_PROMPT, abort)) {
+  for await (const message of run(await runner(thread.spaceId), classifyInput(prompt, thread), CLASSIFY_MODEL, CLASSIFY_PROMPT, abort)) {
     if (message.type !== 'result') continue;
     if (message.subtype !== 'success') return null;
     return JSON.parse(message.result.slice(message.result.indexOf('{'), message.result.lastIndexOf('}') + 1)) as unknown;
