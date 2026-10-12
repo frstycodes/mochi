@@ -62,7 +62,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 ## Workspace
 
 ### Profiles
-One group per profile: name, icon, GitHub account, linked Claude and Codex accounts, its own browser session (Clear browsing data). Add (up to 9, one per ⌥ digit) / remove (only an empty profile; undo toast). Profiles live in `src/profiles.ts` (localStorage, seeded from `DEFAULT_SPACES`). Done. The GitHub account picks one of gh's own logins (`gh auth status`); PR creation and status run gh with that login's token (`GH_TOKEN`, read from gh, never sent to the renderer). Empty = gh's active account. GAP: pushing still uses your git credentials (SSH key or credential helper); github.com only.
+One group per profile: name, icon, GitHub account, linked Claude and Codex accounts, its own browser session (Clear browsing data). Add (up to 9, one per ⌥ digit) / remove (only an empty profile; undo toast). Profiles live in `src/profiles.ts` (localStorage, seeded from `DEFAULT_SPACES`). Done. The GitHub account picks one of gh's own logins on any host (`gh auth status`; stored as `login`, or `host/login` off github.com). Push, PR creation and PR status run as that login: gh gets its token in `GH_TOKEN` (github.com, `*.ghe.com`) or `GH_ENTERPRISE_TOKEN` (Enterprise Server); push goes over HTTPS to origin's repo with the token from a credential helper reading the environment. Tokens come from gh's store in the main process, never in arguments or the renderer. Empty = gh's active account and your own git credentials. A repo on another host than the account is refused.
 
 ### Git
 | Setting | Control | Default | Status | Today |

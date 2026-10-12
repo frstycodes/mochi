@@ -151,7 +151,7 @@ export interface Space {
   icon: SpaceIconName;
   /** GAP: demo plan names until usage reads the linked account's detected plan; empty for profiles made in Settings. */
   plans: Record<Provider, string>;
-  /** The gh login this profile's pull requests run as; empty means gh's active account. */
+  /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */
   github: string;
 }
 

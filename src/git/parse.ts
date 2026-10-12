@@ -117,7 +117,7 @@ export function parseWorktrees(text: string): Worktree[] {
 }
 
 /**
- * `gh auth status` (gh 2.78 has no --json for it; the text goes to stderr) → github.com logins. Reads only the login and
+ * `gh auth status` (gh 2.78 has no --json for it; the text goes to stderr) → logins on every host. Reads only the login and
  * active lines, so the token lines it also prints never leave this function.
  */
 export function parseGhAuthStatus(text: string): GhAccount[] {
@@ -126,9 +126,8 @@ export function parseGhAuthStatus(text: string): GhAccount[] {
   for (const line of text.split('\n')) {
     const login = line.match(/^\s*(✓ Logged in|X Failed to log in) to (\S+) account (\S+)/);
     if (login) {
-      // GitHub Enterprise logins are skipped, but still end the previous account's block.
-      current = login[2] === 'github.com' ? { login: login[3], isActive: false, isValid: login[1].startsWith('✓') } : null;
-      if (current) accounts.push(current);
+      current = { host: login[2], login: login[3], isActive: false, isValid: login[1].startsWith('✓') };
+      accounts.push(current);
     } else if (current && /^\s*- Active account: true/.test(line)) current.isActive = true;
   }
   return accounts;

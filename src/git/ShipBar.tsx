@@ -40,12 +40,12 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   const push = async () => {
     const ok = await confirm({
       title: `Push ${diff.branch}?`,
-      description: `Your commits go to origin/${diff.branch}, where everyone with access to the repository can see them.`,
+      description: `Your commits go to origin/${diff.branch}${githubUser ? `, pushed as ${githubUser}` : ''}, where everyone with access to the repository can see them.`,
       confirm: 'Push branch',
       cancel: 'Not now',
     });
     if (!ok) return;
-    await run('Push', () => host.git.push(cwd));
+    await run('Push', () => host.git.push(cwd, githubUser));
     await prQuery.refresh();
   };
 

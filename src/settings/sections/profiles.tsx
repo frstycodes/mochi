@@ -7,6 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '../../git/useConfirm';
+import { formatGithubAccount, GITHUB_COM } from '../../git/github';
 import { gitError } from '../../git/useGit';
 import type { GhAccount } from '../../host/types/git';
 import { host } from '../../host';
@@ -84,18 +85,18 @@ const ACTIVE = 'gh-active';
 function GitHubAccountRow({ profile, gh }: { profile: Space; gh: GhAccountsState }) {
   const rowId = `${profile.id}-github`;
   const working = gh.accounts?.filter((a) => a.isValid) ?? [];
-  const active = gh.accounts?.find((a) => a.isActive);
-  const isMissing = !!profile.github && !!gh.accounts && !working.some((a) => a.login === profile.github);
+  const active = gh.accounts?.find((a) => a.isActive && a.host === GITHUB_COM);
+  const isMissing = !!profile.github && !!gh.accounts && !working.some((a) => formatGithubAccount(a) === profile.github);
   const options = [
     { value: ACTIVE, label: active ? `Active account (${active.login})` : 'Active account' },
-    ...working.map((a) => ({ value: a.login, label: a.login })),
+    ...working.map((a) => ({ value: formatGithubAccount(a), label: a.host === GITHUB_COM ? a.login : `${a.login} (${a.host})` })),
     ...(isMissing ? [{ value: profile.github, label: `${profile.github} (signed out)` }] : []),
   ];
   const description = gh.error
     ? `Couldn't ask gh for its logins: ${gh.error}`
     : isMissing
       ? `gh has no working login for ${profile.github}. Run gh auth login, then come back.`
-      : 'Pull requests from this profile’s threads open as this account. Add one with gh auth login.';
+      : 'This profile’s threads push and open pull requests as this account. Add one with gh auth login.';
   return (
     <SettingsRow
       id={rowId}

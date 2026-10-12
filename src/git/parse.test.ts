@@ -110,7 +110,7 @@ test('parseWorktrees reads branches and detached heads', () => {
   ]);
 });
 
-test('parseGhAuthStatus reads github.com logins, which one is active and which still work', () => {
+test('parseGhAuthStatus reads every host\'s logins, which one is active and which still work', () => {
   // Shape of gh 2.78's stderr, tokens masked the way gh prints them.
   const text = `github.com
   ✓ Logged in to github.com account octo (keyring)
@@ -129,9 +129,10 @@ ghe.example.com
   - Active account: true
 `;
   assert.deepEqual(parseGhAuthStatus(text), [
-    { login: 'octo', isActive: false, isValid: true },
-    { login: 'stale_user', isActive: false, isValid: false },
-    { login: 'work-bot', isActive: true, isValid: true },
+    { host: 'github.com', login: 'octo', isActive: false, isValid: true },
+    { host: 'github.com', login: 'stale_user', isActive: false, isValid: false },
+    { host: 'github.com', login: 'work-bot', isActive: true, isValid: true },
+    { host: 'ghe.example.com', login: 'enterprise', isActive: true, isValid: true },
   ]);
   assert.deepEqual(parseGhAuthStatus('You are not logged into any GitHub hosts. To log in, run: gh auth login'), []);
 });

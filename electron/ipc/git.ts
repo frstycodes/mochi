@@ -6,7 +6,7 @@ import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
 import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../git/checkpoints.ts';
 import { inside, run, runGit, topLevel } from '../git/run.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
-import { ghAccounts, runGh } from '../git/gh.ts';
+import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
@@ -63,9 +63,8 @@ export const git = {
     return (await runGit(top, ['rev-parse', '--short', 'HEAD'])).trim();
   },
 
-  async push(_sender, cwd) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    await runGit(top, ['push', '-u', 'origin', 'HEAD']);
+  async push(_sender, cwd, user) {
+    await pushAs(await topLevel(string(cwd, 'cwd')), githubAccount(user));
   },
 
   async createPr(_sender, cwd, value, user) {
@@ -74,19 +73,19 @@ export const git = {
     const title = string(pr.title, 'pr.title', 256).trim();
     if (!title) throw new Error('PR title is empty');
     const args = ['pr', 'create', '--title', title, '--body', string(pr.body, 'pr.body', 65_536), ...(prDrafts() ? ['--draft'] : [])];
-    return (await runGh(top, args, githubUser(user))).trim();
+    return (await runGh(top, args, githubAccount(user))).trim();
   },
 
   async pr(_sender, cwd, user) {
     const top = await topLevel(string(cwd, 'cwd'));
-    const login = githubUser(user);
-    const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state'], login).catch((error: Error) => {
+    const account = githubAccount(user);
+    const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state'], account).catch((error: Error) => {
       if (/no (open )?pull requests? found|no git remotes/i.test(error.message)) return null;
       throw error;
     });
     if (!view) return null;
     // gh exits 8 while checks are pending and 1 when one failed or none are reported; stdout still holds the JSON.
-    const checks = await runGh(top, ['pr', 'checks', '--json', 'name,bucket,link'], login, { okCodes: [0, 1, 8] }).catch(() => '');
+    const checks = await runGh(top, ['pr', 'checks', '--json', 'name,bucket,link'], account, { okCodes: [0, 1, 8] }).catch(() => '');
     return { ...(JSON.parse(view) as { number: number; url: string; state: string }), checks: parseChecks(checks) };
   },
 
@@ -244,12 +243,4 @@ function insideWorktreeRoot(path: string) {
 
 function isUnderWorktreeRoot(path: string) {
   return worktreeRoots().some((root) => path.startsWith(root + sep));
-}
-
-/** A GitHub login (letters, digits, - and _ for managed users), or undefined for gh's active account. */
-function githubUser(value: unknown) {
-  if (value === undefined || value === null || value === '') return undefined;
-  const login = string(value, 'githubUser', 64);
-  if (!/^[\w-]+$/.test(login)) throw new TypeError('githubUser must be a GitHub login');
-  return login;
 }
