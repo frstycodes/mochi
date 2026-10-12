@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { History, Routing } from 'reicon-react';
+import { History } from 'reicon-react';
+import { ForkIcon } from '../ui';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -141,7 +142,7 @@ function PointDialog({ thread, mode, initial, onClose }: { thread: Thread; mode:
             Cancel
           </Button>
           <Button onClick={submit}>
-            {isFork ? <Routing data-icon="inline-start" /> : <History data-icon="inline-start" />}
+            {isFork ? <ForkIcon data-icon="inline-start" /> : <History data-icon="inline-start" />}
             {isFork ? 'Fork thread' : 'Review rewind'}
           </Button>
         </DialogFooter>

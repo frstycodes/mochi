@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Book, Briefcase, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
+import { Book, Briefcase, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
@@ -166,3 +166,8 @@ export function TooltipIconButton({ label, hint, children, ...props }: { label: 
 export function OverflowIcon({ vertical, className, ...props }: IconProps & { vertical?: boolean }) {
   return <MoreH weight="Filled" className={cn(vertical && 'rotate-90', className)} {...props} />;
 }
+
+// reicon has no fork arrow (a line that splits in two, like `-<`): drawn on its 24px grid at its 1.5 stroke. The one fork icon everywhere.
+export const ForkIcon = createIcon('ForkIcon', {
+  O: `<path d="M3.75 12h5.5l6.5-6.25M9.25 12l6.5 6.25M13.25 5.75h2.5v2.5M13.25 18.25h2.5v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+});

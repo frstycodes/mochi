@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Copy3, createIcon, PinTack, RotateLeft, type IconProps } from 'reicon-react';
+import { Copy3, PinTack, RotateLeft, type IconProps } from 'reicon-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
@@ -7,7 +7,7 @@ import { timeAgo } from '../progress';
 import { useHarness } from '../store';
 import { openRewind } from '../rewind/requests';
 import { useRewindActions } from '../rewind/useRewindActions';
-import { TooltipIconButton } from '../ui';
+import { ForkIcon, TooltipIconButton } from '../ui';
 import { isMessagePinned, togglePin, useThreadPins } from './pins';
 
 export interface MessageAction {
@@ -28,7 +28,7 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
   const isPinned = isMessagePinned(pins, index);
   const copy: MessageAction = { id: 'copy', label: 'Copy', icon: Copy3, run: () => copyText(entry.text) };
   const rewind: MessageAction = { id: 'rewind', label: 'Rewind to here', hint: 'Goes back to just before this message and puts it in the composer to edit and send again. Undo brings everything back.', icon: RotateLeft, run: () => void rewindToMessage(thread, index) };
-  const fork: MessageAction = { id: 'fork', label: 'Fork from here', hint: 'A new thread on its own branch with everything up to this message.', icon: ForkArrow, run: () => openRewind({ kind: 'fork', threadId: thread.id, point: { kind: 'message', index } }) };
+  const fork: MessageAction = { id: 'fork', label: 'Fork from here', hint: 'A new thread on its own branch with everything up to this message.', icon: ForkIcon, run: () => openRewind({ kind: 'fork', threadId: thread.id, point: { kind: 'message', index } }) };
   const pin: MessageAction = {
     id: 'pin',
     label: isPinned ? 'Unpin' : 'Pin',
@@ -67,11 +67,6 @@ export function MessageActions({ thread, index, align }: { thread: Thread; index
     </div>
   );
 }
-
-// reicon has no fork arrow (a line that splits in two, like `-<`): drawn on its 24px grid at its 1.5 stroke.
-const ForkArrow = createIcon('ForkArrow', {
-  O: `<path d="M3.75 12h5.5l6.5-6.25M9.25 12l6.5 6.25M13.25 5.75h2.5v2.5M13.25 18.25h2.5v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
-});
 
 /** reicon's upright pushpin, tilted like a pin stuck into the page. */
 function TiltedPin(props: IconProps) {
