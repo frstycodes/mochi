@@ -6,9 +6,9 @@ import { useSideChatDefault } from '../../sidechat/useSideChat';
 import { ACCESS } from '../../runtime/controls';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
 import { useAgentSettings } from '../AgentSettings';
-import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
 import { setPrefs, usePrefs } from '../prefs';
+import { AGENTS } from '../settingOptions';
 
 export function DefaultsSection() {
   const { agent, permissions, runsOn } = usePrefs();
@@ -38,7 +38,6 @@ export function DefaultsSection() {
   );
 }
 
-export const AGENTS = HARNESS_IDS.map((id) => ({ value: id, label: HARNESSES[id].name }));
 
 function SideChatGroup() {
   const [model, setModel] = useSideChatDefault();

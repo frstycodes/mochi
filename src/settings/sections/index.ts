@@ -112,7 +112,7 @@ export const SETTINGS_SECTIONS = [
     title: 'Mochi tools',
     icon: ShieldCheck,
     component: ToolsSection,
-    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only reversible confirm approve mcp control browser delete' }],
+    settings: [{ id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' }],
   },
   {
     id: 'goals',

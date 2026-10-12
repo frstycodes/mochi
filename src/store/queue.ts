@@ -11,9 +11,10 @@ export interface QueueState {
 /** `answers` is each question's picked labels and typed text, for question items. */
 export type QueueAction =
   | { type: 'answer'; queueId: string; answers?: string[][] }
-  /** A Mochi card (a consequential tool call or a setting) joins the queue; `queue-dismiss` takes it out without answering an agent request. */
+  /** A Mochi widget (a delete, a setting change, a browser escalation, or a setting a blocked call points at) joins the queue. */
   | { type: 'queue-add'; item: QueueItem }
-  | { type: 'queue-dismiss'; queueId: string };
+  /** Closes a Mochi widget: the card leaves the queue and its place in the thread becomes the one-line `text`. */
+  | { type: 'card-record'; queueId: string; text: string };
 
 export function initialQueue(saved = getRestored(), isDemo = showsDemoData()): QueueState {
   return { queue: [...(isDemo ? seedQueue() : []), ...(saved?.queue ?? [])] };
@@ -26,8 +27,14 @@ export function queueReducer(state: State, action: Action): State {
     case 'queue-add':
       // The same card again (a setting card from a later blocked call) replaces the old one in place.
       return state.queue.some((q) => q.id === action.item.id) ? { ...state, queue: state.queue.map((q) => (q.id === action.item.id ? action.item : q)) } : { ...state, queue: [...state.queue, action.item] };
-    case 'queue-dismiss':
-      return { ...state, queue: state.queue.filter((q) => q.id !== action.queueId) };
+    case 'card-record':
+      return {
+        ...state,
+        queue: state.queue.filter((q) => q.id !== action.queueId),
+        threads: state.threads.map((t) =>
+          t.activity.some((a) => a.card?.id === action.queueId) ? { ...t, activity: t.activity.map((a) => (a.card?.id === action.queueId ? { ...a, text: action.text, card: { id: action.queueId, isOpen: false } } : a)) } : t,
+        ),
+      };
     case 'delete':
       return { ...state, queue: state.queue.filter((q) => !action.threadIds.includes(q.threadId)) };
     default:

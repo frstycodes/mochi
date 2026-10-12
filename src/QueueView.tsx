@@ -1,11 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, BranchDown, BranchUp, CheckCircle, Clock, MessageQuestion, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, BranchDown, BranchUp, CheckCircle, Clock, MessageQuestion, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Field, FieldLabel } from '@/components/ui/field';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
@@ -27,13 +25,12 @@ import {
 } from '@/components/ui/questionnaire';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { answerText, type QueueItem, type QueueKind, type Thread } from './model';
+import { answerText, isMochiCard, type QueueItem, type QueueKind, type Thread } from './model';
 import { duration } from './progress';
 import { useReviewEntry } from './review/useReviewMode';
 import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode } from './store';
 import { ProviderMarks, lineColor } from './ui';
-import { decideTool } from './runtime/tools';
-import { InlineSetting } from './settings/InlineSetting';
+import { useShowCard } from './chat/MochiWidget';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
@@ -136,8 +133,8 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
-        {item.kind === 'approval' && (item.tool ? <ToolApproval item={item} tool={item.tool} /> : <ApprovalRequest item={item} />)}
-        {!!item.setting && <SettingCard item={item} setting={item.setting} />}
+        {isMochiCard(item) && <ShowCard item={item} />}
+        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} />}
         {item.kind === 'question' && <QuestionChoices item={item} />}
         {item.kind === 'overlap' && <OverlapChoices item={item} />}
       </CardContent>
@@ -195,41 +192,16 @@ function ApprovalRequest({ item }: { item: QueueItem }) {
   );
 }
 
-/** A consequential Mochi tool call: nothing runs until Approve; options are checkboxes, off unless you tick them. */
-function ToolApproval({ item, tool }: { item: QueueItem; tool: NonNullable<QueueItem['tool']> }) {
-  const [options, setOptions] = useState<string[]>([]);
-  const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
+/** Mochi's widgets live in the thread where the agent asked; the Queue lists them and takes you there. */
+function ShowCard({ item }: { item: QueueItem }) {
+  const show = useShowCard();
   return (
-    <div className="flex flex-col gap-3">
-      {!!item.code && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
-      {tool.options?.map((o) => (
-        <Field key={o.id} orientation="horizontal">
-          <Checkbox id={`${item.id}-${o.id}`} checked={options.includes(o.id)} onCheckedChange={(on) => toggle(o.id, on === true)} />
-          <FieldLabel htmlFor={`${item.id}-${o.id}`} className="font-normal">
-            {o.label}
-          </FieldLabel>
-        </Field>
-      ))}
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={() => decideTool(tool.callId, { isApproved: false })}>
-          Deny
-        </Button>
-        <Button size="sm" onClick={() => decideTool(tool.callId, { isApproved: true, options })}>
-          Approve
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function SettingCard({ item, setting }: { item: QueueItem; setting: NonNullable<QueueItem['setting']> }) {
-  const { dispatch } = useHarness();
-  return (
-    <InlineSetting id={setting.id} suggested={setting.suggested}>
-      <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'queue-dismiss', queueId: item.id })}>
-        Done
+    <div className="flex justify-end">
+      <Button size="sm" onClick={() => show(item)}>
+        Show in thread
+        <ArrowRight data-icon="inline-end" />
       </Button>
-    </InlineSetting>
+    </div>
   );
 }
 

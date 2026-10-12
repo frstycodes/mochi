@@ -2,6 +2,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAgentSettings } from '../AgentSettings';
 import { CommitInput, DesktopOnly, FolderInput, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { DEFAULT_PREFS, setPrefs, usePrefs } from '../prefs';
+import { DIFF_STYLES, WORKSPACE_MODES } from '../settingOptions';
 
 export function GitSection() {
   const { branchPrefix, diffStyle, workspaceMode } = usePrefs();
@@ -36,16 +37,6 @@ export function GitSection() {
     </div>
   );
 }
-
-export const WORKSPACE_MODES = [
-  { value: 'worktree', label: 'New worktree' },
-  { value: 'folder', label: 'Project folder' },
-] as const;
-
-export const DIFF_STYLES = [
-  { value: 'unified', label: 'Unified' },
-  { value: 'split', label: 'Split' },
-] as const;
 
 function DesktopGitGroup() {
   const { settings, update } = useAgentSettings();

@@ -55,6 +55,8 @@ export interface ActivityEntry {
   drift?: 'on-goal' | 'scope-add' | 'off-goal';
   /** The agent's id for a tool call, so its end can find the entry its start logged. */
   toolId?: string;
+  /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
+  card?: { id: string; isOpen: boolean };
   links?: WebLink[];
 }
 
@@ -179,12 +181,23 @@ export interface QueueItem {
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
   requestId?: string;
-  /** A consequential Mochi tool call waiting on this card (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
-  tool?: { callId: string; options?: { id: string; label: string }[] };
+  /** A Mochi tool call waiting on this widget (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
+  tool?: ToolWidget;
   /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
   setting?: { id: string; suggested?: string };
   createdAt: number;
 }
+
+/** What a Mochi widget asks: a setting change (current → `value`), a delete naming exactly what goes, or a browser escalation. */
+export interface ToolWidget {
+  callId: string;
+  options?: { id: string; label: string }[];
+  setting?: { id: string; value: string };
+  isDestructive?: boolean;
+}
+
+/** Mochi's own widgets render inline in the thread where the agent asked, not in the composer tray. */
+export const isMochiCard = (item: QueueItem) => !!item.tool || item.kind === 'setting';
 
 /** The options of a lone single-choice question, the only kind a number key can answer. */
 export function singleChoice(item: QueueItem) {
