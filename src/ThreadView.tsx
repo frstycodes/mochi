@@ -140,11 +140,14 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
   const panel = useRef<PanelImperativeHandle | null>(null);
   const lastSize = useRef(DEFAULT_PANE_PCT);
   const [isAnimating, setAnimating] = useState(false);
+  const isMounted = useRef(false);
 
   useEffect(() => {
     const p = panel.current;
+    // Mounting (opening a thread, a Stage swipe landing) never animates the pane: the swiped-in preview already shows it at full size.
+    const isToggle = isMounted.current;
+    isMounted.current = true;
     if (!p || p.isCollapsed() === !isPaneOpen) return;
-    setAnimating(true);
     const target = `${lastSize.current}%`;
     if (isPaneOpen) {
       p.expand();
@@ -154,6 +157,8 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
       lastSize.current = p.getSize().asPercentage;
       p.collapse();
     }
+    if (!isToggle) return;
+    setAnimating(true);
     const t = window.setTimeout(() => setAnimating(false), PANE_ANIMATION_MS);
     return () => window.clearTimeout(t);
   }, [isPaneOpen]);

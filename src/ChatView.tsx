@@ -39,13 +39,15 @@ export function ChatView({ thread }: { thread: Thread }) {
   const tray = useTrayState(decisions.length);
 
   const composer = useComposerHeightVar();
+  const resize = useOpeningResize();
   const messages = useRef<HTMLDivElement>(null);
   const pins = useThreadPins(thread.id);
   usePinHighlights(messages, pins);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <Conversation data-photo-scope className="min-h-0 flex-1">
+      {/* Instant while opening: a thread opens at its latest message, and a Stage swipe lands on the live view already where the preview was. */}
+      <Conversation data-photo-scope initial="instant" resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
           <ConversationContent className="mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6">
             <div ref={messages} className="contents">
@@ -299,3 +301,15 @@ function useSeedAttachment(isEnabled: boolean) {
 const SCREENSHOT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 120"><rect width="160" height="120" fill="#f7f8fa"/><rect x="10" y="10" width="60" height="8" rx="2" fill="#1d1f24"/><rect x="118" y="9" width="32" height="10" rx="3" fill="#1d1f24"/>${[30, 36, 34, 44, 41, 52, 50, 58, 62, 70]
   .map((h, i) => `<rect x="${12 + i * 14}" y="${96 - h}" width="10" height="${h}" rx="1.5" fill="#4a86d8" opacity="${0.55 + i * 0.045}"/>`)
   .join('')}<rect x="10" y="102" width="140" height="1" fill="#e3e5ea"/></svg>`;
+
+const OPENING_MS = 1000;
+
+/** Content keeps growing for a moment after mount (markdown, images); following it smoothly reads as the chat scrolling by itself. */
+function useOpeningResize() {
+  const [isOpening, setOpening] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setOpening(false), OPENING_MS);
+    return () => window.clearTimeout(t);
+  }, []);
+  return isOpening ? 'instant' : 'smooth';
+}

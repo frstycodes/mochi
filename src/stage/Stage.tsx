@@ -1,4 +1,4 @@
-import { startTransition, useLayoutEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion, useMotionValue, useReducedMotion, useScroll, useTransform, type MotionValue } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { endDrag, moveDrag, startDrag } from '../layout/drag';
@@ -38,7 +38,7 @@ export function Stage() {
   const { scrollX, scrollY } = useScroll({ container: scroller });
   const pos = useTransform([isPortrait ? scrollY : scrollX, size], ([offset, page]: number[]) => (isStage && page ? offset / page : slots.center));
   const open = (id: string | undefined) => {
-    if (id && id !== CENTER) startTransition(() => dispatch({ type: 'go', view: { kind: 'thread', id } }));
+    if (id && id !== CENTER) dispatch({ type: 'go', view: { kind: 'thread', id } });
   };
   useSnapPager(scroller, { axis, index: isStage ? slots.center : 0, onSettle: (page) => isStage && open(slots.ids[page]) });
   useStageKeys((step) => open(slots.ids[slots.center + step]));
@@ -67,6 +67,7 @@ export function Stage() {
         className={cn('h-full', isStage ? cn('overscroll-contain bg-sidebar', isPortrait ? 'snap-y snap-mandatory overflow-x-hidden overflow-y-auto' : 'snap-x snap-mandatory overflow-x-auto overflow-y-hidden') : 'overflow-hidden')}
       >
         <div className="relative h-full w-full" style={isPortrait ? { height: `${pages * 100}%` } : { width: `${pages * 100}%` }}>
+          {isStage && slots.ids.map((_, i) => <SnapPoint key={i} slot={i} pages={pages} isPortrait={isPortrait} />)}
           {isStage && (
             <div className="pointer-events-none sticky top-0 left-0 h-full w-full" style={isPortrait ? { height: `${100 / pages}%` } : { width: `${100 / pages}%` }}>
               <EdgeCards slots={slots} pos={pos} size={size} isPortrait={isPortrait} isFlat={reduce} onOpen={scrollToSlot} />
@@ -92,17 +93,30 @@ export function Stage() {
 }
 
 /**
- * One snap page of the scroll content. Every session sits in its own page and the browser scrolls them natively (on the compositor, no frame of lag);
+ * The snap target of one slot, keyed by slot so it never unmounts when a swipe commits. Chromium re-snaps when the element it snapped to
+ * leaves the DOM: with the content pages as targets, landing on the previous session removed its neighbour page and the scroller jumped
+ * back to the old one, undoing the swipe.
+ */
+function SnapPoint({ slot, pages, isPortrait }: { slot: number; pages: number; isPortrait: boolean }) {
+  return <div aria-hidden className="pointer-events-none absolute snap-start snap-always" style={slotStyle(slot, pages, isPortrait)} />;
+}
+
+/**
+ * One session's page of the scroll content. Every session sits in its own page and the browser scrolls them natively (on the compositor, no frame of lag);
  * committing a swipe only moves the live workspace's page to the slot you landed on, a style change rather than a remount.
  */
 function Page({ slot, pages, isPortrait, children }: { slot: number; pages: number; isPortrait: boolean; children: ReactNode }) {
-  const at = `${(slot * 100) / pages}%`;
-  const span = `${100 / pages}%`;
   return (
-    <div className="pointer-events-none absolute flex snap-start snap-always items-center justify-center" style={isPortrait ? { top: at, height: span, left: 0, right: 0 } : { left: at, width: span, top: 0, bottom: 0 }}>
+    <div className="pointer-events-none absolute flex items-center justify-center" style={slotStyle(slot, pages, isPortrait)}>
       {children}
     </div>
   );
+}
+
+function slotStyle(slot: number, pages: number, isPortrait: boolean): CSSProperties {
+  const at = `${(slot * 100) / pages}%`;
+  const span = `${100 / pages}%`;
+  return isPortrait ? { top: at, height: span, left: 0, right: 0 } : { left: at, width: span, top: 0, bottom: 0 };
 }
 
 /** The workspace. Always the same element so toggling the stage never remounts the sessions in it. */
