@@ -80,6 +80,11 @@ export function createMapper(threadId: string, cwd: string) {
         if (typeof content === 'string') return [];
         return content.flatMap((block) => (block.type === 'tool_result' ? toolEnd(block as ToolResultBlock, message.tool_use_result) : []));
       }
+      case 'rate_limit_event': {
+        const { status, resetsAt } = message.rate_limit_info;
+        if (status !== 'rejected') return [];
+        return [{ threadId, type: 'limit', ...(resetsAt !== undefined && { resetsAt: resetTime(resetsAt) }) }];
+      }
       case 'result': {
         const status = isInterrupting ? 'interrupted' : message.subtype === 'success' ? 'done' : 'failed';
         isInterrupting = false;
@@ -141,5 +146,8 @@ function exitCode(block: ToolResultBlock) {
   const match = /Exit code (\d+)/.exec(text);
   return match ? Number(match[1]) : 1;
 }
+
+// GAP: the SDK types `resetsAt` as a number without a unit; read as epoch seconds unless it is large enough to be milliseconds.
+const resetTime = (value: number) => new Date(value < 1e12 ? value * 1000 : value).toISOString();
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);

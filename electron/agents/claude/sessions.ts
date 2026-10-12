@@ -2,6 +2,7 @@ import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app, BrowserWindow } from 'electron';
 import type { AgentDecision, AgentEvent, AgentStartOptions } from '../../../src/host/types/agent.ts';
+import { accountEnv, accountFor, type ClaudeAccount } from './account.ts';
 import { apiKeyEnv, detectClaude, readSettings } from './install.ts';
 import { approvalEvent, createMapper, permissionResult } from './map.ts';
 
@@ -18,6 +19,8 @@ interface Session {
   mapper: ReturnType<typeof createMapper>;
   query?: Query;
   abort?: AbortController;
+  /** Fixed at start: a thread never moves to another Claude account, its transcript lives in that account's config dir. */
+  account: ClaudeAccount;
   sessionId?: string;
   isBusy: boolean;
 }
@@ -36,8 +39,9 @@ export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
 export async function startClaude(threadId: string, options: AgentStartOptions) {
   if (options.permissionMode && !PERMISSION_MODES.includes(options.permissionMode as PermissionMode)) throw new TypeError(`permissionMode must be one of ${PERMISSION_MODES.join(', ')}`);
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
+  const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, inbox: [options.prompt], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [options.prompt], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
   sessions.set(threadId, session);
   await schedule(session);
 }
@@ -100,9 +104,12 @@ async function launch(session: Session) {
   const abort = new AbortController();
   try {
     const settings = await readSettings();
-    const install = await detectClaude(settings);
-    const env = apiKeyEnv(settings);
-    if (!install.loggedIn && !env) throw new Error('Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
+    const base = accountEnv(session.account);
+    const install = await detectClaude(settings, base);
+    // GAP: the API key is a global setting; RUNTIME.md wants it chosen per thread, explicitly, when its account hits a limit.
+    const keyEnv = apiKeyEnv(settings, base);
+    const env = keyEnv ?? base;
+    if (!install.loggedIn && !keyEnv) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     session.query = query({

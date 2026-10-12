@@ -48,11 +48,11 @@ export async function findClaude(settings: ClaudeSettings): Promise<string | nul
 }
 
 /** Detects the install and its login. Throws a message the UI can show as is; never prompts for credentials. */
-export async function detectClaude(settings: ClaudeSettings): Promise<ClaudeInstall> {
+export async function detectClaude(settings: ClaudeSettings, env?: NodeJS.ProcessEnv): Promise<ClaudeInstall> {
   const file = await findClaude(settings);
   if (!file) throw new Error(settings.executablePath ? `Claude Code not found at ${settings.executablePath}. Fix the path in Settings.` : 'Claude Code is not installed. Install it from https://code.claude.com, then try again.');
   // `auth status` exits 1 when logged out but still prints its JSON.
-  const status = run(file, ['auth', 'status', '--json'], { timeout: 15_000 }).then(
+  const status = run(file, ['auth', 'status', '--json'], { timeout: 15_000, env }).then(
     (r) => r.stdout,
     (error: { stdout?: string }) => (error.stdout ? error.stdout : Promise.reject(error)),
   );
@@ -62,10 +62,10 @@ export async function detectClaude(settings: ClaudeSettings): Promise<ClaudeInst
 }
 
 /** The env override for the API-key option only: an `ANTHROPIC_API_KEY` moves billing off the user's subscription, so it is never set otherwise. */
-export function apiKeyEnv(settings: ClaudeSettings): Record<string, string | undefined> | undefined {
+export function apiKeyEnv(settings: ClaudeSettings, base: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> | undefined {
   if (!settings.useApiKey || !settings.apiKey) return undefined;
   // `env` replaces the child environment, so PATH, HOME and the rest must be spread in.
-  return { ...process.env, ANTHROPIC_API_KEY: safeStorage.decryptString(Buffer.from(settings.apiKey, 'base64')) };
+  return { ...base, ANTHROPIC_API_KEY: safeStorage.decryptString(Buffer.from(settings.apiKey, 'base64')) };
 }
 
 async function isExecutable(file: string) {

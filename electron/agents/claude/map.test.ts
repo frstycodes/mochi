@@ -89,3 +89,11 @@ test('approvals: Bash is a command, file tools are edits, deny carries a message
   assert.deepEqual(permissionResult('Bash', { command: 'ls' }, { kind: 'deny' }), { behavior: 'deny', message: 'The user declined this.' });
   assert.deepEqual(permissionResult('Bash', { command: 'ls' }, { kind: 'allow' }), { behavior: 'allow', updatedInput: { command: 'ls' } });
 });
+
+test('a rejected rate limit pauses the thread with its reset time; warnings pass', () => {
+  const { map } = createMapper('t1', CWD);
+  const event = (status: string, resetsAt?: number) => ({ type: 'rate_limit_event', rate_limit_info: { status, resetsAt } }) as unknown as SDKMessage;
+  assert.deepEqual(map(event('allowed_warning', 1_760_000_000)), []);
+  assert.deepEqual(map(event('rejected', 1_760_000_000)), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z' }]);
+  assert.deepEqual(map(event('rejected')), [{ threadId: 't1', type: 'limit' }]);
+});
