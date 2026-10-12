@@ -33,6 +33,12 @@ export const browser: BrowserHost = {
   async logs() {
     return [];
   },
+  async eval() {
+    throw new Error('Driving the browser needs the desktop app');
+  },
+  async waitFor() {
+    throw new Error('Driving the browser needs the desktop app');
+  },
   onEvent() {
     return () => {};
   },

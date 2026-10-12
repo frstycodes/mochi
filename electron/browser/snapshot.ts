@@ -135,3 +135,22 @@ export const scrollScript = (ref: string | undefined, dx: number, dy: number) =>
   target.scrollBy({ left: ${dx}, top: ${dy}, behavior: 'instant' });
   return { x: Math.round(target.scrollLeft), y: Math.round(target.scrollTop), maxY: Math.round(target.scrollHeight - target.clientHeight) };
 })()`;
+
+const missing = (ref: string) => `if (!el || !el.isConnected) return { error: 'No element ${ref.replace(/[^\w-]/g, '')} on the page now; take a new browser_snapshot' };`;
+
+/** A hidden page has no pointer, so hover fires the events a pointer would; `:hover` styles can't be faked. */
+export const hoverScript = (ref: string) => `(() => {
+  const el = globalThis.__mochiRefs?.get(${JSON.stringify(ref)});
+  ${missing(ref)}
+  for (const type of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove']) el.dispatchEvent(new MouseEvent(type, { bubbles: !type.endsWith('enter'), composed: true }));
+  return {};
+})()`;
+
+/** Tags `ref`'s element so CDP can find it by selector (`DOM.setFileInputFiles` needs a node id). Only a file input qualifies. */
+export const markScript = (ref: string, mark: string) => `(() => {
+  const el = globalThis.__mochiRefs?.get(${JSON.stringify(ref)});
+  ${missing(ref)}
+  if (el.localName !== 'input' || el.type !== 'file') return { error: 'That element is not a file input; browser_snapshot shows them as button or textbox with type file nearby' };
+  el.setAttribute('data-mochi-upload', ${JSON.stringify(mark)});
+  return {};
+})()`;

@@ -1,7 +1,10 @@
+import { isAbsolute } from 'node:path';
 import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
-import { actOnView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { actOnView, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
+// Under main's 30s limit for one Mochi call.
+const MAX_WAIT_MS = 25_000;
 const COMMANDS = ['back', 'forward', 'reload', 'hard-reload', 'stop'] satisfies BrowserCommand[];
 const DEVTOOLS = ['docked', 'detached', 'closed'] satisfies BrowserDevtools[];
 
@@ -52,6 +55,14 @@ export const browser = {
   async logs(sender, id) {
     return viewLogs(sender, viewId(id));
   },
+  async eval(sender, id, script) {
+    return evalInView(sender, viewId(id), string(script, 'script', 100_000));
+  },
+  async waitFor(sender, id, until) {
+    const u = record(until, 'until');
+    const optional = (v: unknown, name: string) => (v === undefined ? undefined : string(v, name, 2048));
+    return waitForView(sender, viewId(id), { text: optional(u.text, 'text'), selector: optional(u.selector, 'selector'), url: optional(u.url, 'url'), timeoutMs: number(u.timeoutMs, 'timeoutMs', 0, MAX_WAIT_MS) });
+  },
 } satisfies Handlers<BrowserHost>;
 
 function actOf(value: unknown): BrowserAct {
@@ -62,10 +73,18 @@ function actOf(value: unknown): BrowserAct {
     return s;
   };
   if (a.kind === 'click') return { kind: 'click', ref: ref(a.ref) };
+  if (a.kind === 'hover') return { kind: 'hover', ref: ref(a.ref) };
+  if (a.kind === 'select') return { kind: 'select', ref: ref(a.ref), value: string(a.value, 'value', 2048) };
+  if (a.kind === 'drag') return { kind: 'drag', from: ref(a.from), to: ref(a.to) };
+  if (a.kind === 'upload') {
+    const path = string(a.path, 'path', 4096);
+    if (!isAbsolute(path)) throw new TypeError('path must be absolute');
+    return { kind: 'upload', ref: ref(a.ref), path };
+  }
   if (a.kind === 'type') return { kind: 'type', ref: ref(a.ref), text: string(a.text, 'text', 20_000) };
   if (a.kind === 'press') return { kind: 'press', key: string(a.key, 'key', 32) };
   if (a.kind === 'scroll') return { kind: 'scroll', ref: a.ref === undefined ? undefined : ref(a.ref), dx: number(a.dx, 'dx', -1e5, 1e5), dy: number(a.dy, 'dy', -1e5, 1e5) };
-  throw new TypeError('act.kind must be click, type, press or scroll');
+  throw new TypeError('act.kind must be click, hover, type, select, drag, upload, press or scroll');
 }
 
 function url(value: unknown) {

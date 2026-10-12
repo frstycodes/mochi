@@ -127,6 +127,38 @@ export const TOOL_TABLE = {
     description: 'Scroll the page, or the element `ref`, by pixels (positive down / right).',
     shape: { tabId, ref: ref.optional(), dy: z.number().optional().describe('Default 600'), dx: z.number().optional() },
   },
+  browser_hover: { tier: 'reversible', quiet: true, description: 'Move the pointer over an element from the latest snapshot, for menus and tooltips that open on hover.', shape: { tabId, ref } },
+  browser_select: { tier: 'reversible', quiet: true, description: 'Pick an option in a <select> from the latest snapshot, by its label or value.', shape: { tabId, ref, value: z.string() } },
+  browser_drag: {
+    tier: 'reversible',
+    quiet: true,
+    description: 'Drag one element from the latest snapshot onto another with the mouse (sortable lists, sliders, boards).',
+    shape: { tabId, from: ref.describe('The ref to pick up'), to: ref.describe('The ref to drop on') },
+  },
+  browser_upload: {
+    tier: 'reversible',
+    quiet: true,
+    description: "Put a file into a file input from the latest snapshot. Files inside your thread's worktree go straight in; any other path asks the user first.",
+    shape: { tabId, ref, path: z.string().describe('Relative to your worktree, or absolute') },
+  },
+  browser_wait_for: {
+    tier: 'read',
+    description: 'Wait until the page shows some text, has an element matching a CSS selector, or its URL contains a string; or, with none of those, just wait. Returns whether it happened.',
+    shape: {
+      tabId,
+      text: z.string().optional(),
+      selector: z.string().optional(),
+      url: z.string().optional(),
+      timeoutMs: z.number().int().min(0).max(25_000).optional().describe('Default 5000, at most 25000'),
+    },
+  },
+  browser_eval: {
+    tier: 'reversible',
+    quiet: true,
+    description:
+      "Run JavaScript in the page's own context, where it can read the app's state; top-level await works. Returns the last expression as JSON (capped at 20k chars), or the error. Stops after 10s. Runs on your local dev pages directly; on any other site it asks the user first, since it runs with their signed-in session there. Prefer the other browser tools when they can do it.",
+    shape: { tabId, script: z.string().min(1).max(100_000) },
+  },
   browser_screenshot: { tier: 'read', description: 'A PNG of the page as the user sees it, or the whole scrollable page.', shape: { tabId, fullPage: z.boolean().optional() } },
   browser_console: { tier: 'read', description: "The page's recent console messages (all levels), newest last.", shape: { tabId } },
   browser_back: { tier: 'reversible', quiet: true, description: 'Go back in the tab.', shape: { tabId } },

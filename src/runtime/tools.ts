@@ -25,7 +25,9 @@ export interface ToolEnv {
   removeWorktree: (threadId: string) => Promise<void>;
   /** The browser tabs' pages (`src/browser/pages.ts`) and main's native views behind them. */
   pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void };
-  browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs'>;
+  browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor'>;
+  /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
+  cwdOf: (thread: Thread) => string | null | undefined;
   isDesktop: boolean;
   now?: () => number;
 }
@@ -45,6 +47,8 @@ export interface Approval {
   title: string;
   detail: string;
   options?: { id: string; label: string }[];
+  /** Shown whole on the card, like a script about to run. */
+  code?: string;
 }
 
 export interface Outcome {
@@ -127,7 +131,7 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, tier: Tier) {
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = `q-tool-${ctx.caller.id}-${++nextCard}`;
-  ctx.dispatch({ type: 'queue-add', item: card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, tool: { callId: id, options: approval.options } }) });
+  ctx.dispatch({ type: 'queue-add', item: card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool: { callId: id, options: approval.options } }) });
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
     const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
     waiting.set(id, (d) => (clearTimeout(timer), resolve(d)));
@@ -141,7 +145,7 @@ async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<strin
   return decision.options ?? [];
 }
 
-function card(ctx: ToolContext<unknown>, id: string, kind: QueueItem['kind'], item: Pick<QueueItem, 'title' | 'detail' | 'tool' | 'setting'>): QueueItem {
+function card(ctx: ToolContext<unknown>, id: string, kind: QueueItem['kind'], item: Pick<QueueItem, 'title' | 'detail' | 'code' | 'tool' | 'setting'>): QueueItem {
   return { id, kind, threadId: ctx.caller.id, blocks: { steps: 0, threads: 1 }, createdAt: ctx.state().now, ...item };
 }
 

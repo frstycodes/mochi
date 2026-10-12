@@ -37,6 +37,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const acts: BrowserAct[] = [];
   const commands: string[] = [];
   const removed: string[] = [];
+  const evals: string[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let control_ = control;
   const env: ToolEnv = {
@@ -57,7 +58,10 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       }),
       act: async (_id, a) => (acts.push(a), a.kind === 'scroll' ? { note: 'Scrolled to 0, 600 of 2000' } : {}),
       logs: async () => [{ level: 'error', message: 'boom', source: 'http://localhost:5173/main.js', line: 3 }],
+      eval: async (_id, script) => (evals.push(script), script.includes('throw') ? Promise.reject(new Error('Error: nope\n    at <anonymous>:1:7')) : { value: '42', isTruncated: false }),
+      waitFor: async (_id, until) => ({ isMet: until.text === 'Hello', waitedMs: 120 }),
     },
+    cwdOf: () => '/repo/rl',
     isDesktop: true,
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
@@ -74,7 +78,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   };
   const thread = (id: string) => state.threads.find((t) => t.id === id)!;
   const card = () => state.queue.find((q) => q.tool)!;
-  return { env, call, ok, err, thread, card, state: () => state, toasts, notices, acts, commands, removed, pages, setControl: (c: AgentControl) => void (control_ = c) };
+  return { env, call, ok, err, thread, card, state: () => state, toasts, notices, acts, commands, removed, evals, pages, setControl: (c: AgentControl) => void (control_ = c) };
 }
 
 let nextView = 0;
@@ -474,6 +478,74 @@ test('browser_set_device sets a preset and rejects unknown ones', async () => {
   await t.ok('browser_set_device', { device: 'iphone-16', rotated: true });
   assert.deepEqual([t.pages.get('rl/tab-1')!.device, t.pages.get('rl/tab-1')!.isRotated], ['iphone-16', true]);
   assert.match(await t.err('browser_set_device', { device: 'nokia' }), /No device nokia/);
+});
+
+test('browser_hover, browser_select and browser_drag act on snapshot refs', async () => {
+  const t = setup();
+  await t.ok('browser_snapshot');
+  await t.ok('browser_hover', { ref: 'e1' });
+  await t.ok('browser_select', { ref: 'e2', value: 'Pro' });
+  await t.ok('browser_drag', { from: 'e1', to: 'e2' });
+  assert.deepEqual(t.acts, [{ kind: 'hover', ref: 'e1' }, { kind: 'select', ref: 'e2', value: 'Pro' }, { kind: 'drag', from: 'e1', to: 'e2' }]);
+  assert.match(await t.err('browser_drag', { from: 'e1', to: 'e9' }), /browser_snapshot first/);
+});
+
+test('browser_wait_for reports whether the condition was met', async () => {
+  const t = setup();
+  assert.equal((await t.ok('browser_wait_for', { text: 'Hello' })).isMet, true);
+  assert.equal((await t.ok('browser_wait_for', { text: 'Bye', timeoutMs: 100 })).isMet, false);
+});
+
+test('browser_upload takes worktree files directly and asks for anything outside it', async () => {
+  const t = setup();
+  await t.ok('browser_snapshot');
+  await t.ok('browser_upload', { ref: 'e2', path: 'fixtures/avatar.png' });
+  assert.deepEqual(t.acts.at(-1), { kind: 'upload', ref: 'e2', path: '/repo/rl/fixtures/avatar.png' });
+  const pending = t.call('browser_upload', { ref: 'e2', path: '../../etc/hosts' });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.match(t.card().detail, /\/etc\/hosts/);
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  assert.equal((await pending).isError, true);
+  assert.equal(t.acts.length, 1, 'denied: nothing uploaded');
+});
+
+test('browser_eval runs on a local page without asking and logs the origin and the script', async () => {
+  const t = setup();
+  const r = await t.ok('browser_eval', { script: 'window.store.getState().count' });
+  assert.equal(r.value, '42');
+  assert.deepEqual(t.evals, ['window.store.getState().count']);
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'no card');
+  assert.equal(lastLog(t.thread('rl')), 'Claude ran a script on http://localhost:5173: window.store.getState().count');
+  assert.equal(t.toasts.length, 0);
+});
+
+test('browser_eval on another origin needs approval and shows the whole script', async () => {
+  const t = setup({ url: 'https://bank.example.com/' });
+  const pending = t.call('browser_eval', { script: 'document.cookie' });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.match(t.card().title, /Run a script on https:\/\/bank.example.com\?/);
+  assert.equal(t.card().code, 'document.cookie');
+  assert.deepEqual(t.evals, [], 'nothing ran while the card waits');
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  assert.match((await pending).text, /denied/);
+  assert.deepEqual(t.evals, []);
+  const again = t.call('browser_eval', { script: 'document.title' });
+  await new Promise((r) => setTimeout(r, 0));
+  decideTool(t.card().tool!.callId, { isApproved: true });
+  assert.equal(JSON.parse((await again).text).value, '42');
+});
+
+test('browser_eval is blocked under Read only, and under Reversible on other origins', async () => {
+  assert.match(await setup({ control: 'read' }).err('browser_eval', { script: '1' }), /Read only/);
+  const remote = setup({ url: 'https://example.com/', control: 'reversible' });
+  assert.match(await remote.err('browser_eval', { script: '1' }), /Everything, with confirmation/);
+  assert.deepEqual(remote.evals, []);
+});
+
+test('browser_eval passes the page error back and still logs the run', async () => {
+  const t = setup();
+  assert.match(await t.err('browser_eval', { script: 'throw new Error("nope")' }), /nope/);
+  assert.match(lastLog(t.thread('rl')), /\(threw\)$/);
 });
 
 test('names in the table are verb_noun', () => {

@@ -1,7 +1,10 @@
+import { randomBytes } from 'node:crypto';
+import { stat } from 'node:fs/promises';
 import { BrowserWindow, session, WebContentsView, type WebContents } from 'electron';
-import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserSnapshot, PickedElement } from '../../src/host/types/browser.ts';
+import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserSnapshot, PickedElement } from '../../src/host/types/browser.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
-import { clickScript, focusScript, locateScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
+import { clickScript, focusScript, hoverScript, locateScript, markScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
+import { evalResult, EVAL_TIMEOUT_MS, withTimeout, type CdpEvaluate } from './evaluate.ts';
 
 interface Entry {
   view: WebContentsView;
@@ -176,32 +179,101 @@ export async function actOnView(owner: WebContents, id: string, act: BrowserAct)
     if (result.error) throw new Error(result.error);
     return result;
   };
+  // GAP: assumes CDP takes viewport CSS px times the tab's zoom; not checked on a device-emulated page.
+  const locate = async (ref: string) => {
+    const { x, y, isHidden } = await run<{ x: number; y: number; isHidden: boolean }>(locateScript(ref));
+    return { at: { x: x * entry.zoom, y: y * entry.zoom }, isHidden };
+  };
   const dbg = await debuggerFor(wc);
-  if (act.kind === 'click') {
-    // GAP: assumes CDP takes viewport CSS px times the tab's zoom; not checked on a device-emulated page.
-    const { x, y, isHidden } = await run<{ x: number; y: number; isHidden: boolean }>(locateScript(act.ref));
-    // A hidden page (window on another Space) gets no hit testing, so CDP's mouse events go nowhere; click in the DOM instead.
-    if (isHidden) {
-      await run(clickScript(act.ref));
-      return { note: "Mochi's window is in the background, so this was a DOM click (event.isTrusted is false)" };
+  const mouse = (type: string, at: { x: number; y: number }, extra = {}) => dbg.sendCommand('Input.dispatchMouseEvent', { type, ...at, ...extra });
+  switch (act.kind) {
+    case 'click': {
+      const { at, isHidden } = await locate(act.ref);
+      // A hidden page (window on another Space) gets no hit testing, so CDP's mouse events go nowhere; click in the DOM instead.
+      if (isHidden) {
+        await run(clickScript(act.ref));
+        return { note: HIDDEN_NOTE('click') };
+      }
+      await mouse('mouseMoved', at);
+      await mouse('mousePressed', at, { button: 'left', clickCount: 1 });
+      await mouse('mouseReleased', at, { button: 'left', clickCount: 1 });
+      return {};
     }
-    const at = { x: x * entry.zoom, y: y * entry.zoom };
-    await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...at });
-    await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', ...at, button: 'left', clickCount: 1 });
-    await dbg.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', ...at, button: 'left', clickCount: 1 });
-    return {};
+    case 'hover': {
+      const { at, isHidden } = await locate(act.ref);
+      if (!isHidden) {
+        await mouse('mouseMoved', at);
+        return {};
+      }
+      await run(hoverScript(act.ref));
+      return { note: `${HIDDEN_NOTE('hover')}; CSS :hover styles don't apply` };
+    }
+    case 'drag': {
+      const from = await locate(act.from);
+      const to = await locate(act.to);
+      if (from.isHidden) throw new Error("Mochi's window is in the background, so the page gets no pointer input; ask the user to bring Mochi forward, then drag again");
+      // GAP: mouse-event drags (sortable lists, sliders); HTML5 drag and drop through CDP's mouse events is not verified.
+      await mouse('mouseMoved', from.at);
+      await mouse('mousePressed', from.at, { button: 'left', clickCount: 1 });
+      for (let i = 1; i <= DRAG_STEPS; i++) await mouse('mouseMoved', { x: from.at.x + ((to.at.x - from.at.x) * i) / DRAG_STEPS, y: from.at.y + ((to.at.y - from.at.y) * i) / DRAG_STEPS }, { button: 'left', buttons: 1 });
+      await mouse('mouseReleased', to.at, { button: 'left', clickCount: 1 });
+      return {};
+    }
+    case 'type': {
+      const { isSelect } = await run<{ isSelect: boolean }>(focusScript(act.ref, act.text));
+      if (!isSelect) await dbg.sendCommand('Input.insertText', { text: act.text });
+      return {};
+    }
+    case 'select': {
+      const { isSelect } = await run<{ isSelect: boolean }>(focusScript(act.ref, act.value));
+      if (!isSelect) throw new Error('That element is not a <select>; use browser_type for a text field or browser_click for a custom dropdown');
+      return {};
+    }
+    case 'upload': {
+      if (!(await stat(act.path).then((s) => s.isFile(), () => false))) throw new Error(`No file at ${act.path}`);
+      // CDP sets files by DOM node id; the ref lives in the isolated world, so it marks the element for a moment to find it.
+      const mark = randomBytes(8).toString('hex');
+      await run(markScript(act.ref, mark));
+      const { root } = (await dbg.sendCommand('DOM.getDocument', { depth: 0 })) as { root: { nodeId: number } };
+      const { nodeId } = (await dbg.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: `[data-mochi-upload="${mark}"]` })) as { nodeId: number };
+      if (!nodeId) throw new Error('That element is not on the page now; take a new browser_snapshot');
+      await dbg.sendCommand('DOM.removeAttribute', { nodeId, name: 'data-mochi-upload' });
+      await dbg.sendCommand('DOM.setFileInputFiles', { nodeId, files: [act.path] });
+      return {};
+    }
+    case 'press':
+      await pressKey(dbg, act.key);
+      return {};
+    case 'scroll': {
+      const { x, y, maxY } = await run<{ x: number; y: number; maxY: number }>(scrollScript(act.ref, act.dx, act.dy));
+      return { note: `Scrolled to ${x}, ${y} of ${maxY}` };
+    }
   }
-  if (act.kind === 'type') {
-    const { isSelect } = await run<{ isSelect: boolean }>(focusScript(act.ref, act.text));
-    if (!isSelect) await dbg.sendCommand('Input.insertText', { text: act.text });
-    return {};
+}
+
+const DRAG_STEPS = 8;
+const HIDDEN_NOTE = (what: string) => `Mochi's window is in the background, so this was a DOM ${what} (event.isTrusted is false)`;
+
+/** The page's own world, so the script can read app state; `replMode` gives top-level await and the last expression's value. */
+export async function evalInView(owner: WebContents, id: string, script: string) {
+  const dbg = await debuggerFor(get(owner, id).view.webContents);
+  const answer = withTimeout(dbg.sendCommand('Runtime.evaluate', { expression: script, replMode: true, awaitPromise: true, returnByValue: true, userGesture: true, timeout: EVAL_TIMEOUT_MS }) as Promise<CdpEvaluate>);
+  return evalResult(await answer);
+}
+
+const WAIT_POLL_MS = 200;
+
+/** Resolves once the page shows `text`, matches `selector` or its URL contains `url` (any one given), or after `timeoutMs`. */
+export async function waitForView(owner: WebContents, id: string, until: BrowserWait) {
+  const wc = get(owner, id).view.webContents;
+  const check = `(() => { const want = ${JSON.stringify(until)}; return (!!want.text && !!document.body && document.body.innerText.includes(want.text)) || (!!want.selector && !!document.querySelector(want.selector)) || (!!want.url && location.href.includes(want.url)); })()`;
+  const start = Date.now();
+  for (;;) {
+    const isMet = until.text || until.selector || until.url ? await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: check }]).catch(() => false) : false;
+    if (isMet) return { isMet: true, waitedMs: Date.now() - start };
+    if (Date.now() - start >= until.timeoutMs) return { isMet: false, waitedMs: Date.now() - start };
+    await new Promise((r) => setTimeout(r, WAIT_POLL_MS));
   }
-  if (act.kind === 'press') {
-    await pressKey(dbg, act.key);
-    return {};
-  }
-  const { x, y, maxY } = await run<{ x: number; y: number; maxY: number }>(scrollScript(act.ref, act.dx, act.dy));
-  return { note: `Scrolled to ${x}, ${y} of ${maxY}` };
 }
 
 const KEYS: Record<string, { code: string; keyCode: number; text?: string }> = {

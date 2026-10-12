@@ -35,7 +35,23 @@ export interface PickedElement {
 }
 
 /** An agent's action on an element from its latest `snapshot` (Mochi's browser tools). */
-export type BrowserAct = { kind: 'click'; ref: string } | { kind: 'type'; ref: string; text: string } | { kind: 'press'; key: string } | { kind: 'scroll'; ref?: string; dx: number; dy: number };
+export type BrowserAct =
+  | { kind: 'click' | 'hover'; ref: string }
+  | { kind: 'type'; ref: string; text: string }
+  | { kind: 'select'; ref: string; value: string }
+  | { kind: 'drag'; from: string; to: string }
+  /** `path` is absolute; the renderer checks it's inside the thread's worktree or asks first. */
+  | { kind: 'upload'; ref: string; path: string }
+  | { kind: 'press'; key: string }
+  | { kind: 'scroll'; ref?: string; dx: number; dy: number };
+
+/** What browser_wait_for waits on: any one of text, selector or url, or just the time. */
+export interface BrowserWait {
+  text?: string;
+  selector?: string;
+  url?: string;
+  timeoutMs: number;
+}
 
 export interface BrowserSnapshot {
   text: string;
@@ -80,6 +96,9 @@ export interface BrowserHost {
   act(id: string, act: BrowserAct): Promise<{ note?: string }>;
   /** The last console messages of every level, oldest first. */
   logs(id: string): Promise<BrowserLog[]>;
+  /** Runs `script` in the page's own world (top-level await allowed): the last expression's JSON, capped at 20k chars; throws the page's error. */
+  eval(id: string, script: string): Promise<{ value: string; isTruncated: boolean }>;
+  waitFor(id: string, until: BrowserWait): Promise<{ isMet: boolean; waitedMs: number }>;
   onEvent(listener: (event: BrowserEvent) => void): () => void;
 }
 
@@ -99,5 +118,7 @@ export const browserMethods = {
   snapshot: 'invoke',
   act: 'invoke',
   logs: 'invoke',
+  eval: 'invoke',
+  waitFor: 'invoke',
   onEvent: 'event',
 } satisfies Manifest<BrowserHost>;

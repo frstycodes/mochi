@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { getPage, updatePage } from '../browser/pages.ts';
 import { setWorktreePath, worktreePath } from '../git/worktrees.ts';
+import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -38,6 +39,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     },
     pages: { get: getPage, update: updatePage },
     browser: host.browser,
+    cwdOf: (thread) => thread.live?.cwd ?? threadCwd(thread),
     isDesktop: host.isDesktop,
   };
 }

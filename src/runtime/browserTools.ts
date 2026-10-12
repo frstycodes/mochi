@@ -84,6 +84,60 @@ export const BROWSER_TOOLS = {
     },
   },
   browser_scroll: { run: (ctx) => act(ctx, { kind: 'scroll', ref: ctx.args.ref, dx: ctx.args.dx ?? 0, dy: ctx.args.dy ?? 600 }, '') },
+  browser_hover: {
+    run: async (ctx) => {
+      const ref = refIn(ctx, ctx.args.ref);
+      return act(ctx, { kind: 'hover', ref: ctx.args.ref }, `hovered "${ref.meta.name || ref.meta.role}"`);
+    },
+  },
+  browser_select: {
+    run: async (ctx) => {
+      const ref = refIn(ctx, ctx.args.ref);
+      return act(ctx, { kind: 'select', ref: ctx.args.ref, value: ctx.args.value }, `picked "${ctx.args.value}" in "${ref.meta.name || ref.meta.role}"`);
+    },
+  },
+  browser_drag: {
+    run: async (ctx) => {
+      const from = refIn(ctx, ctx.args.from);
+      const to = refIn(ctx, ctx.args.to);
+      return act(ctx, { kind: 'drag', from: ctx.args.from, to: ctx.args.to }, `dragged "${from.meta.name || from.meta.role}" onto "${to.meta.name || to.meta.role}"`);
+    },
+  },
+  browser_upload: {
+    run: async (ctx) => {
+      const ref = refIn(ctx, ctx.args.ref);
+      const root = ctx.env.cwdOf(ctx.caller);
+      const path = resolvePath(root, ctx.args.path);
+      if (!path) throw new Error('A relative path needs a worktree, and this thread has none; pass an absolute path');
+      if (!root || !isInside(root, path)) await ctx.confirm({ title: `Upload a file from outside the worktree to ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to put ${path} into "${ref.meta.name || 'the file field'}" on ${displayUrl(ref.page.url)}.` });
+      return act(ctx, { kind: 'upload', ref: ctx.args.ref, path }, `put ${path.split('/').pop()} into "${ref.meta.name || 'a file field'}"`);
+    },
+  },
+  browser_wait_for: {
+    run: async (ctx) => {
+      const { key, tab, page } = await live(ctx, tabFor(ctx));
+      const { text, selector, url } = ctx.args;
+      const { isMet, waitedMs } = await ctx.env.browser.waitFor(page.hostId!, { text, selector, url, timeoutMs: ctx.args.timeoutMs ?? 5000 });
+      return { result: { ...pageResult(tab, ctx.env.pages.get(key) ?? page), isMet, waitedMs } };
+    },
+  },
+  browser_eval: {
+    run: async (ctx) => {
+      const { key, tab, page } = await live(ctx, tabFor(ctx));
+      const origin = originOf(page.url);
+      if (!isLocalUrl(page.url))
+        await ctx.confirm({ title: `Run a script on ${origin}?`, detail: `It runs with your signed-in session on ${origin} (cookies, storage) and can do anything you can do there.`, code: ctx.args.script });
+      const changed = `ran a script on ${origin}: ${preview(ctx.args.script)}`;
+      try {
+        const { value, isTruncated } = await ctx.env.browser.eval(page.hostId!, ctx.args.script);
+        return { changed, isFinal: true, result: { ...pageResult(tab, ctx.env.pages.get(key) ?? page), value, ...(isTruncated && { note: 'Cut at 20000 characters; return less, like a slice or a count' }) } };
+      } catch (error) {
+        // The run still happened, so it's logged like one that returned.
+        ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text: `${name(ctx)} ${changed} (threw)` } });
+        throw error;
+      }
+    },
+  },
   browser_screenshot: {
     run: async (ctx) => {
       const { tab, page } = await live(ctx, tabFor(ctx));
@@ -118,7 +172,7 @@ export const BROWSER_TOOLS = {
 export function isLocalUrl(url: string) {
   try {
     const { protocol, hostname } = new URL(url);
-    if (protocol === 'about:') return true;
+    if (protocol === 'about:' || protocol === 'file:') return true;
     return /^(localhost|0\.0\.0\.0|\[::1\]|127(\.\d{1,3}){3})$/.test(hostname) || /\.(localhost|test)$/.test(hostname);
   } catch {
     return false;
@@ -216,6 +270,35 @@ async function until<T>(read: () => T | null | undefined | '' | false, timeout: 
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
 }
+
+const PREVIEW_CHARS = 80;
+
+const preview = (script: string) => {
+  const line = script.replace(/\s+/g, ' ').trim();
+  return line.length > PREVIEW_CHARS ? `${line.slice(0, PREVIEW_CHARS - 1)}…` : line;
+};
+
+const originOf = (url: string) => {
+  try {
+    const { origin, protocol } = new URL(url);
+    return origin === 'null' ? protocol : origin;
+  } catch {
+    return url;
+  }
+};
+
+/** `path` against the worktree, with . and .. folded; null for a relative path with no worktree. */
+export function resolvePath(root: string | null | undefined, path: string) {
+  if (!path.startsWith('/') && !root) return null;
+  const parts: string[] = [];
+  for (const part of (path.startsWith('/') ? path : `${root}/${path}`).split('/')) {
+    if (part === '..') parts.pop();
+    else if (part && part !== '.') parts.push(part);
+  }
+  return `/${parts.join('/')}`;
+}
+
+const isInside = (root: string, path: string) => path === resolvePath(root, '.') || path.startsWith(`${resolvePath(root, '.')}/`);
 
 const name = (ctx: Ctx) => authorName(ctx.caller.providers[0]);
 

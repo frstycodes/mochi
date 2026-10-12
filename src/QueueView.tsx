@@ -195,6 +195,7 @@ function ToolApproval({ item, tool }: { item: QueueItem; tool: NonNullable<Queue
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
   return (
     <div className="flex flex-col gap-3">
+      {!!item.code && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
       {tool.options?.map((o) => (
         <Field key={o.id} orientation="horizontal">
           <Checkbox id={`${item.id}-${o.id}`} checked={options.includes(o.id)} onCheckedChange={(on) => toggle(o.id, on === true)} />

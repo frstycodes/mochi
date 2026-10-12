@@ -136,7 +136,7 @@ Settings › Defaults for new threads › **Agents can change Mochi**: Read only
 |---|---|---|---|
 | Threads | `list_threads` (status, pinned, project), `get_thread` | `rename_thread`, `settle_thread`, `reactivate_thread`, `pin_thread`, `unpin_thread`, `reorder_threads` (before/after one, or the whole pinned order), `watch_thread` | `create_thread` (starts an agent), `send_to_thread`, `delete_thread` |
 | Goals | `get_goal` | `set_step_status`, `add_step`, `edit_goal` (text, step criteria), `reorder_steps`, `drop_step`, `settle_goal` | |
-| Browser | `browser_tabs`, `browser_snapshot`, `browser_screenshot`, `browser_console` | `browser_open`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_back`, `browser_forward`, `browser_reload`, `browser_set_device` | typing, Enter, or clicking a submit control on a non-local origin |
+| Browser | `browser_tabs`, `browser_snapshot`, `browser_screenshot`, `browser_console`, `browser_wait_for` | `browser_open`, `browser_click`, `browser_hover`, `browser_type`, `browser_select`, `browser_drag`, `browser_upload` (worktree files), `browser_press`, `browser_scroll`, `browser_eval` (local pages), `browser_back`, `browser_forward`, `browser_reload`, `browser_set_device` | typing, Enter, or clicking a submit control on a non-local origin; `browser_eval` on a non-local origin (card shows the origin and the whole script: it runs with the user's session); `browser_upload` of a file outside the worktree |
 | Layout | | `open_pane_tab`, `focus_thread`, `split_with`, `close_pane`, `show_file`, `open_changes` | |
 | User | `show_setting` | `ask_side_chat`, `notify_user` (1 per thread per minute) | |
 
