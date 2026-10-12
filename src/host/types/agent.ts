@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { Provider, Thread } from '../../model.ts';
+import type { Provider, Size, Thread } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
@@ -18,11 +18,20 @@ export type AgentEvent =
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
   | { threadId: string; type: 'reasoning'; text: string }
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number }
-  | { threadId: string; type: 'plan'; items: { title: string; status: 'pending' | 'running' | 'done' }[] }
+  | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
+
+/** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
+export interface AgentPlanItem {
+  title: string;
+  status: 'pending' | 'running' | 'done';
+  progress?: number;
+  size?: Size;
+  files?: string[];
+}
 
 export type AgentDecision = { kind: 'allow' } | { kind: 'deny'; message?: string } | { kind: 'answer'; answers: string[] };
 

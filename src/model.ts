@@ -87,6 +87,7 @@ export interface Thread {
   orbitSlot?: number;
   settledAt?: number;
   drift?: { threshold: number; isMuted: boolean };
+  session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
 }
 
 export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap';
@@ -101,6 +102,7 @@ export interface QueueItem {
   blocks: { steps: number; threads: number };
   choices?: { id: string; label: string }[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
+  requestId?: string;
   createdAt: number;
 }
 

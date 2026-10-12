@@ -1,8 +1,11 @@
-import { FAKE_TOOLS, genericTools, NOW0, seedThreads, type ActivityEntry, type LineSlot, type Provider, type QueueItem, type Step, type Thread } from '../model.ts';
+import type { AgentEvent } from '../host/types/agent.ts';
+import { NOW0, seedThreads, type ActivityEntry, type LineSlot, type Provider, type Step, type Thread } from '../model.ts';
 import { stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
+import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
+import { demoEvents, overlapEvents } from '../runtime/demo.ts';
 import { recordCheckpoints, rewind, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import { handoff } from '../rewind/handoff.ts';
@@ -13,7 +16,6 @@ export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
 export interface ThreadsState {
   now: number;
   threads: Thread[];
-  fired: { overlap: boolean; scope: boolean };
   seq: number;
   checkpoints: Record<string, Checkpoint[]>;
   checkpointSeq: number;
@@ -24,9 +26,9 @@ export interface ThreadsState {
 
 export type ThreadsAction =
   | { type: 'tick' }
+  | { type: 'agent'; event: AgentEvent }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
-  | { type: 'add-scope'; threadId: string }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
   | { type: 'create'; title: string; provider: Provider; project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string }
@@ -54,7 +56,7 @@ export function initialThreads(): ThreadsState {
       return [t.id, list];
     }),
   );
-  return { now: NOW0, threads, fired: { overlap: false, scope: false }, seq: 1, checkpoints, checkpointSeq, rewindUndo: null, forks: {} };
+  return { now: NOW0, threads, seq: 1, checkpoints, checkpointSeq, rewindUndo: null, forks: {} };
 }
 
 export function threadsReducer(state: State, action: Action): State {
@@ -68,10 +70,10 @@ function reduce(state: State, action: Action): State {
       return tick(state);
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
+    case 'agent':
+      return applyAgentEvent(state, action.event);
     case 'trigger-overlap':
       return triggerOverlap(state);
-    case 'add-scope':
-      return addScope(state, action.threadId);
     case 'settle':
       return {
         ...state,
@@ -132,60 +134,18 @@ export function hasOpenWork(t: Thread) {
   return t.steps.some((s) => s.status !== 'done' && s.status !== 'dropped');
 }
 
-const SCRIPT = { overlapAt: NOW0 + 6, scopeAt: NOW0 + 40 };
-const SPEED = 40;
-const TOKENS_PER_TOOL = 900;
-const CONTEXT_CEILING = 0.97;
-
+/** One simulated minute: the clock moves and every demo thread (no live session) reports what it did. */
 function tick(state: State): State {
-  const now = state.now + 1;
-  let threads = state.threads;
-  let queue = state.queue;
-
-  for (const thread of state.threads) {
-    if (thread.status === 'settled') continue;
-    for (const s of thread.steps) {
-      if (s.status !== 'running') continue;
-      const progress = Math.min(1, s.progress + 1 / (s.size * SPEED));
-      if (progress < 1) {
-        threads = mapThread(threads, thread.id, (t) => withTool(mapStep(t, s.id, (x) => ({ ...x, progress })), s, now));
-        continue;
-      }
-      threads = completeStep(threads, thread.id, s.id, now);
-    }
+  let next: State = { ...state, now: state.now + 1 };
+  for (const { id } of state.threads) {
+    const thread = next.threads.find((t) => t.id === id);
+    // GAP: a thread counts as demo until a real adapter reports a session; R1 decides which threads start a real agent.
+    if (thread && !thread.session) next = applyAgentEvents(next, demoEvents(thread, next.now));
   }
-
-  threads = threads.map((t) => {
-    if (t.status === 'settled' || t.status === 'needs-you') return t;
-    const running = t.steps.some((s) => s.status === 'running');
-    if (running) return t;
-    const next = t.steps.find((s) => s.status === 'ready');
-    if (next?.gate) {
-      queue = [...queue, gateItem(t, next.id, next.title, now)];
-      return log(mapStep({ ...t, status: 'needs-you' }, next.id, (s) => ({ ...s, status: 'blocked', note: 'Paused before this step for your approval' })), { at: now, who: 'harness', kind: 'event', text: `Paused before "${next.title}"` });
-    }
-    if (next) return mapStep({ ...t, status: 'running' }, next.id, (s) => ({ ...s, status: 'running', startedAt: now }));
-    if (hasOpenWork(t) || t.status === 'review') return t;
-    if (queue.some((q) => q.kind === 'review' && q.threadId === t.id)) return { ...t, status: 'review' };
-    queue = [...queue, { id: `q-review-${t.id}`, kind: 'review', threadId: t.id, title: `Review "${t.title}"`, detail: 'Every step is done. Look over the diff and open a PR.', blocks: { steps: 0, threads: 1 }, createdAt: now }];
-    return { ...t, status: 'review' };
-  });
-
-  let next: State = { ...state, now, threads, queue };
-  if (!state.fired.overlap && now >= SCRIPT.overlapAt) next = triggerOverlap(next);
-  if (!state.fired.scope && now >= SCRIPT.scopeAt) next = addScope({ ...next, fired: { ...next.fired, scope: true } }, 'rl');
   return next;
 }
 
-function withTool(thread: Thread, s: Step, now: number) {
-  if (now % 4 !== 0) return thread;
-  const tools = FAKE_TOOLS[s.id] ?? genericTools(s.title);
-  const used = thread.activity.filter((a) => a.kind === 'tool' && a.at >= (s.startedAt ?? 0)).length;
-  const context = { ...thread.context, used: Math.min(Math.round(thread.context.max * CONTEXT_CEILING), thread.context.used + TOKENS_PER_TOOL) };
-  return log({ ...thread, context }, { at: now, who: s.owner ?? thread.providers[0], kind: 'tool', text: tools[used % tools.length] });
-}
-
-function completeStep(threads: Thread[], threadId: string, stepId: string, now: number): Thread[] {
+export function completeStep(threads: Thread[], threadId: string, stepId: string, now: number): Thread[] {
   const source = threads.find((t) => t.id === threadId)!;
   const step = source.steps.find((s) => s.id === stepId)!;
   let next = mapThread(threads, threadId, (t) =>
@@ -225,44 +185,9 @@ function completeStep(threads: Thread[], threadId: string, stepId: string, now: 
 }
 
 function triggerOverlap(state: State): State {
-  if (state.threads.some((t) => t.steps.some((s) => s.id === 'ad5'))) return { ...state, fired: { ...state.fired, overlap: true } };
-  const now = state.now;
-  const other = state.threads.find((t) => t.id === 'rl')!;
-  const otherStep = other.steps.find((s) => s.id === 'rl5')!;
-  const otherBusy = otherStep.status === 'running';
-  const threads = mapThread(state.threads, 'adm', (t) => {
-    const revision = t.revisions.length + 1;
-    const step: Step = {
-      id: 'ad5',
-      title: 'Add Redis client',
-      size: 2,
-      status: 'waiting',
-      progress: 0,
-      footprint: ['packages/cache/redis.ts', 'apps/web/server/cache.ts'],
-      addedAt: now,
-      addedBy: 'codex',
-      revision,
-      note: 'Held until you choose how to share it',
-    };
-    const withStep = { ...t, revisions: [...t.revisions, { n: revision, at: now, label: 'Codex added Redis caching', by: 'codex' as const }], steps: [...t.steps.slice(0, 2), step, ...t.steps.slice(2)] };
-    return log(
-      log(withStep, { at: now, who: 'codex', kind: 'message', text: 'Usage queries take 1.8s at 10k keys. I will add a Redis client and cache them.' }),
-      { at: now, who: 'harness', kind: 'event', text: `Overlap with "${other.title}" sent to your queue` },
-    );
-  });
-  const item: QueueItem = {
-    id: `q-overlap-${state.seq}`,
-    kind: 'overlap',
-    threadId: 'adm',
-    title: 'Two threads want to add a Redis client',
-    detail: otherBusy
-      ? `Codex just planned it here. Claude is already ${Math.round(otherStep.progress * 100)}% through the same step in "${other.title}".`
-      : `Codex just planned it here. "${other.title}" has the same step.`,
-    blocks: { steps: 1, threads: 2 },
-    overlap: { threadId: 'adm', stepId: 'ad5', otherThreadId: 'rl', otherStepId: 'rl5', sharedFiles: ['packages/cache/redis.ts'] },
-    createdAt: now,
-  };
-  return { ...state, threads, queue: [...state.queue, item], fired: { ...state.fired, overlap: true }, seq: state.seq + 1 };
+  const adm = state.threads.find((t) => t.id === 'adm');
+  if (!adm || adm.steps.some((s) => s.title === 'Add Redis client')) return state;
+  return applyAgentEvents(state, overlapEvents(adm));
 }
 
 function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State {
@@ -350,23 +275,6 @@ export function freeLine(threads: Thread[]): LineSlot {
   return ([1, 2, 3, 4, 5] as const).find((l) => !used.has(l)) ?? 5;
 }
 
-function addScope(state: State, threadId: string): State {
-  const now = state.now;
-  return {
-    ...state,
-    threads: mapThread(state.threads, threadId, (t) => {
-      const revision = t.revisions.length + 1;
-      const n = t.steps.length;
-      const added: Step[] = [
-        { id: `${t.id}-s${n}`, title: 'Return RateLimit-* headers', size: 1, status: 'ready', progress: 0, footprint: ['apps/api/middleware/ratelimit.ts'], addedAt: now, addedBy: t.providers[0], revision },
-        { id: `${t.id}-s${n + 1}`, title: 'Stricter limits for /search', size: 2, status: 'ready', progress: 0, footprint: ['apps/api/routes/search.ts'], addedAt: now, addedBy: t.providers[0], revision },
-      ];
-      const withSteps = { ...t, steps: [...t.steps, ...added], revisions: [...t.revisions, { n: revision, at: now, label: `${t.providers[0] === 'claude' ? 'Claude' : 'Codex'} found 2 more steps`, by: t.providers[0] }] };
-      return log(withSteps, { at: now, who: 'harness', kind: 'event', text: `Goal v${revision}: +2 steps` });
-    }),
-  };
-}
-
 function create(state: State, action: Extract<Action, { type: 'create' }>): State {
   const now = state.now;
   const id = `new-${state.seq}`;
@@ -409,19 +317,6 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     );
   }
   return { ...state, threads, seq: state.seq + 1, views: { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
-}
-
-function gateItem(thread: Thread, stepId: string, title: string, now: number): QueueItem {
-  const after = thread.steps.filter((s) => s.status === 'ready' && s.id !== stepId).length;
-  return {
-    id: `q-gate-${stepId}`,
-    kind: 'approval',
-    threadId: thread.id,
-    title: `Start "${title}"`,
-    detail: `You asked to approve this step before it runs. Steps after it: ${after}.`,
-    blocks: { steps: after + 1, threads: 1 },
-    createdAt: now,
-  };
 }
 
 // GAP: simulated. The real agent runs the command in the thread's worktree and fails the step on a non-zero exit.

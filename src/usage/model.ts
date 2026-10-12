@@ -1,7 +1,7 @@
 import type { ActivityEntry, Provider, Space, Thread } from '../model.ts';
 
-// GAP: there is no agent runtime yet, so every number here is estimated from the tick simulation's activity log.
-// Real numbers come from `host.agent` (per-turn usage reported by Claude Code / Codex) and the providers' usage APIs.
+// GAP: only threads with a live session carry reported usage (`Thread.session.usage`, from `host.agent` usage events);
+// demo threads and plan windows are still estimated from the activity log until the providers' usage APIs are wired.
 
 export type ModelId = 'opus-5.5' | 'sonnet-5.5' | 'gpt-5.5-codex';
 
@@ -57,6 +57,8 @@ export interface PlanUsage {
 }
 
 export function threadUsage(thread: Thread): Usage {
+  const reported = thread.session?.usage;
+  if (reported) return { ...reported, costUsd: reported.costUsd ?? cost(reported, DEFAULT_MODEL[thread.session!.provider]) };
   const tokens = agentEntries(thread).reduce((sum, e) => add(sum, entryTokens(e)), { input: 0, output: 0 });
   return { ...tokens, costUsd: cost(tokens, DEFAULT_MODEL[thread.providers[0]]) };
 }
