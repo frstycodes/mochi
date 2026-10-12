@@ -32,6 +32,8 @@ function haptic() {
 export function ScrollDock<T extends string>({ label, value, onChange, items, children }: { label: string; value: T; onChange: (v: T) => void; items: DockItem<T>[]; children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
   const reduce = useReducedMotion();
   const [anchor, setAnchor] = useState<{ x: number; bottom: number } | null>(null);
   const index = Math.max(0, items.findIndex((i) => i.value === value));
@@ -86,14 +88,26 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
       const dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom);
       if (Math.hypot(dx, dy) > LEAVE_RADIUS_PX) close();
     };
-    window.addEventListener('wheel', onWheel, { passive: false });
+    wheelRef.current = onWheel;
+    // On the trigger, never on window: a non-passive wheel listener on window makes every wheel gesture in the app wait for the main
+    // thread before the compositor may scroll, so swipes elsewhere (Stage, spaces) hitch whenever React is busy.
+    el.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('pointermove', onMove);
     return () => {
       window.clearTimeout(closeTimer);
-      window.removeEventListener('wheel', onWheel);
+      el.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onMove);
     };
   }, []);
+
+  const isOpen = !!anchor;
+  useEffect(() => {
+    const dock = dockRef.current;
+    if (!isOpen || !dock) return;
+    const onWheel = (e: WheelEvent) => wheelRef.current(e);
+    dock.addEventListener('wheel', onWheel, { passive: false });
+    return () => dock.removeEventListener('wheel', onWheel);
+  }, [isOpen]);
 
   const browse = (i: number) => {
     if (i === previewRef.current) return;
@@ -110,6 +124,7 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
           {anchor && (
             <motion.div
               key="dock"
+              ref={dockRef}
               role="status"
               aria-label={`${label}: ${items[preview]?.label}`}
               initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.8, y: 8 }}
