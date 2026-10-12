@@ -2,6 +2,8 @@ import { isAbsolute } from 'node:path';
 import { CONCURRENCY_RANGE, type AgentSettingsPatch, type HarnessSettings, type SettingsHost } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
+import { fromClaude, SERVER_NAME, type ConfigChange, type ConfigPart } from '../../src/settings/agentConfig.ts';
+import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '../agents/profileConfig.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
 import { detect } from '../settings/detect.ts';
 import { noteLogin } from '../agents/models.ts';
@@ -50,7 +52,64 @@ export const settings = {
     }
     return apiKeyState(id);
   },
+  async agentConfig(_sender, spaceId, projectRoot) {
+    return readProfileConfig(string(spaceId, 'spaceId', 128), projectRoot === undefined ? undefined : absolutePath(projectRoot, 'projectRoot') || undefined);
+  },
+  async previewConfig(_sender, spaceId, changes) {
+    return previewConfig(string(spaceId, 'spaceId', 128), validChanges(changes));
+  },
+  async applyConfig(_sender, spaceId, changes, befores) {
+    const paths = record(befores, 'befores');
+    for (const [path, text] of Object.entries(paths)) string(text, `befores.${path}`, MAX_CONFIG_CHARS);
+    return applyConfig(string(spaceId, 'spaceId', 128), validChanges(changes), paths as Record<string, string>);
+  },
+  async testMcp(_sender, spaceId, provider, name) {
+    return testMcpServer(string(spaceId, 'spaceId', 128), validProvider(provider), string(name, 'name', 64));
+  },
 } satisfies Handlers<SettingsHost>;
+
+// Large enough for the default account's `.claude.json`, which also holds Claude Code's per-project history.
+const MAX_CONFIG_CHARS = 8 * 1024 * 1024;
+const PARTS: ConfigPart[] = ['instructions', 'mcp', 'skills'];
+
+function validChanges(value: unknown): ConfigChange[] {
+  if (!Array.isArray(value) || value.length > 20) throw new TypeError('changes must be a list of up to 20');
+  return value.map((v, n): ConfigChange => {
+    const c = record(v, `changes[${n}]`);
+    const provider = validProvider(c.provider);
+    switch (c.kind) {
+      case 'instructions':
+        return { kind: 'instructions', provider, text: string(c.text, 'text', 256 * 1024) };
+      case 'mcp-set': {
+        const raw = record(c.server, 'server');
+        const server = fromClaude(serverName(raw.name), raw);
+        if (server.type === 'stdio' ? !server.command : !server.url) throw new TypeError(`${server.name} needs a ${server.type === 'stdio' ? 'command' : 'url'}`);
+        return { kind: 'mcp-set', provider, server };
+      }
+      case 'mcp-remove':
+        return { kind: 'mcp-remove', provider, name: serverName(c.name) };
+      case 'mcp-enabled':
+      case 'skill-enabled':
+        if (typeof c.enabled !== 'boolean') throw new TypeError('enabled must be true or false');
+        return { kind: c.kind, provider, name: c.kind === 'mcp-enabled' ? serverName(c.name) : string(c.name, 'name', 128), enabled: c.enabled };
+      case 'skill-import':
+        return { kind: 'skill-import', provider, folder: absolutePath(c.folder, 'folder') };
+      case 'import': {
+        const from = record(c.from, 'from');
+        const parts = Array.isArray(c.parts) ? c.parts.filter((p): p is ConfigPart => PARTS.includes(p as ConfigPart)) : [];
+        return { kind: 'import', provider, from: { spaceId: string(from.spaceId, 'from.spaceId', 128), provider: validProvider(from.provider) }, parts };
+      }
+      default:
+        throw new TypeError(`Unknown change ${String(c.kind)}`);
+    }
+  });
+}
+
+function serverName(value: unknown) {
+  const name = string(value, 'name', 64);
+  if (!SERVER_NAME.test(name)) throw new TypeError('Server names use letters, digits, - _ or .');
+  return name;
+}
 
 function validProvider(value: unknown): Provider {
   if (!HARNESS_IDS.includes(value as Provider)) throw new TypeError(`provider must be one of ${HARNESS_IDS.join(', ')}`);

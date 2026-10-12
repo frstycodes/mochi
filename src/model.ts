@@ -228,6 +228,8 @@ export interface Space {
   plans: Record<Provider, string>;
   /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */
   github: string;
+  /** Saving instructions writes the same text to the Claude account's CLAUDE.md and the Codex account's AGENTS.md. */
+  syncInstructions?: boolean;
 }
 
 // Orbit's outer ring keeps slots 0, 4 and 6 for Queue, Board and New thread; pinned threads take the rest, in order.

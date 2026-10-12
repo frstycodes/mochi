@@ -365,17 +365,6 @@
       "port": 5381
     },
     {
-      "name": "mochi-web-search",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "dev",
-        "--port",
-        "5419",
-        "--strictPort"
-      ],
-      "port": 5419
-    },
-    {
       "name": "mochi-second-opinion",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
@@ -396,6 +385,39 @@
         "--strictPort"
       ],
       "port": 5413
+    },
+    {
+      "name": "mochi-profile-config",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5427",
+        "--strictPort"
+      ],
+      "port": 5427
+    },
+    {
+      "name": "mochi-profile-config-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5429",
+        "--strictPort"
+      ],
+      "port": 5429
+    },
+    {
+      "name": "mochi-web-search",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5419",
+        "--strictPort"
+      ],
+      "port": 5419
     },
     {
       "name": "mochi-tools",
