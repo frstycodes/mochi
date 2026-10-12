@@ -69,7 +69,7 @@ function TabStrip({ thread, tabs, active }: { thread: Thread; tabs: PaneTab[]; a
   const canPop = !!active && active.kind !== 'new';
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 px-2">
+    <div className="app-drag flex h-11 shrink-0 items-center gap-1 px-2">
       <Reorder.Group ref={listRef} as="div" axis="x" values={order} onReorder={reorder} role="tablist" aria-label="Side pane tabs" className="flex min-w-0 items-center gap-1 overflow-x-auto select-none" style={{ scrollbarWidth: 'none' }}>
         {tabs.map((tab) => {
           const Icon = PANE_TABS[tab.kind].icon;

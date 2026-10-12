@@ -4,7 +4,7 @@ import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 export function SidebarToggle() {
   const { isMobile } = useSidebar();
   if (isMobile) return null;
-  return <SidebarTrigger className="fixed top-2.5 left-2 z-50 text-muted-foreground in-data-traffic-lights:left-22" />;
+  return <SidebarTrigger className="app-no-drag fixed top-2.5 left-2 z-50 text-muted-foreground in-data-traffic-lights:left-22" />;
 }
 
 /** Phones carry their own trigger in the first split's header; on desktop that header only keeps the fixed toggle's spot clear while the sidebar is collapsed. */

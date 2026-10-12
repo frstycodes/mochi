@@ -143,7 +143,7 @@ export function LeafBar({ children }: { children: ReactNode }) {
   if (!isMulti && !hasTrigger && !reservesToggle) return null;
   return (
     <TargetContextMenu target={{ leafId }} groups={SPLIT_MENU}>
-      <div className={cn('flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
+      <div className={cn('app-drag flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
         {hasTrigger && <SidebarTrigger className="-ml-1" />}
         <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
         <SplitControls />

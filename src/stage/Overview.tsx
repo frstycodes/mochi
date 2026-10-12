@@ -37,7 +37,7 @@ export function Overview() {
 
   return (
     <div role="dialog" aria-modal aria-label="All sessions" onKeyDown={moveFocus} className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background">
-      <header className={cn('flex h-11 shrink-0 items-center gap-3 px-4', reservesToggle && TOGGLE_RESERVE)}>
+      <header className={cn('app-drag flex h-11 shrink-0 items-center gap-3 px-4', reservesToggle && TOGGLE_RESERVE)}>
         <h2 className="type-title">All sessions</h2>
         <span className="type-meta text-subtle-foreground tabular">{pinned.length + others.length}</span>
         <span className="flex-1" />
