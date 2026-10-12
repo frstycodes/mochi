@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { TOOL_NAMES, tierOf, type Tier } from '../../runtime/toolTable';
-import { AGENT_CONTROL } from '../settingOptions';
+import { AGENT_CONTROL, THREAD_MODELS } from '../settingOptions';
 import { SettingsGroup, SettingsRow, SettingsSelect } from '../parts';
 import { setPrefs, usePrefs } from '../prefs';
 
@@ -17,6 +17,9 @@ export function ToolsSection() {
     <div className="flex flex-col gap-8">
       <SettingsGroup footer="Reads always work. Deletes and settings always wait for you in the thread; the Queue lists them too.">
         <AgentControlRow />
+      </SettingsGroup>
+      <SettingsGroup footer="Agents pick a model or effort for a thread they start only when you name one, or a cheaper one for a simple task. Agents can't change this setting.">
+        <ThreadModelsRow />
       </SettingsGroup>
       {(Object.keys(TIER_COPY) as Tier[]).map((tier) => (
         <SettingsGroup key={tier} title={TIER_COPY[tier].title} footer={TIER_COPY[tier].body}>
@@ -41,6 +44,18 @@ export function AgentControlRow() {
       label={AGENT_CONTROL.label}
       description="Threads, goals, panes, settings and the in-app browser"
       control={<SettingsSelect id="agentControl" value={agentControl} options={AGENT_CONTROL.options} onChange={(v) => setPrefs({ agentControl: v })} className="w-56" />}
+    />
+  );
+}
+
+function ThreadModelsRow() {
+  const { threadModels } = usePrefs();
+  return (
+    <SettingsRow
+      id="threadModels"
+      label={THREAD_MODELS.label}
+      description="Compared with the starting thread's model and effort"
+      control={<SettingsSelect id="threadModels" value={threadModels} options={THREAD_MODELS.options} onChange={(v) => setPrefs({ threadModels: v })} className="w-56" />}
     />
   );
 }

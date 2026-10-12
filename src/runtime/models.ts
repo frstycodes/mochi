@@ -12,6 +12,18 @@ export const CLAUDE_FALLBACK_MODELS: AgentModel[] = [
 
 const EFFORT_NAMES: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
 
+/** Efforts cheapest first; -1 for one Mochi doesn't know. */
+export const effortRank = (effort: string) => Object.keys(EFFORT_NAMES).indexOf(effort);
+
+// GAP: only Claude's families are ranked; a Codex model other than the default reads as unranked, so the ceiling refuses it.
+const CLAUDE_FAMILIES = ['haiku', 'sonnet', 'opus'];
+
+/** A model's cost tier, cheapest 0; undefined when Mochi can't rank it. */
+export function modelTier(id: string) {
+  const tier = CLAUDE_FAMILIES.findIndex((family) => id.includes(family));
+  return tier < 0 ? undefined : tier;
+}
+
 export const effortName = (effort: string) => EFFORT_NAMES[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1);
 
 /** Threads and prefs saved before efforts came from the provider hold the chip's label ('Extra high'). */
