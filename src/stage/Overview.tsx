@@ -1,6 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
-import { X } from 'reicon-react';
+import { Grid, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Kbd } from '@/components/ui/kbd';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -26,8 +27,8 @@ export function Overview() {
   useEffect(() => first.current?.focus({ preventScroll: true }), []);
 
   const close = () => dispatch({ type: 'overview-toggle', isOpen: false });
-  const open = (id: string) => {
-    dispatch({ type: 'go', view: { kind: 'thread', id } });
+  const open = (id: string | null) => {
+    dispatch({ type: 'go', view: id ? { kind: 'thread', id } : { kind: 'new' } });
     close();
   };
   const groups = [
@@ -52,6 +53,7 @@ export function Overview() {
         </Button>
       </header>
       <div className="flex flex-col gap-6 px-4 pb-6">
+        {groups.length === 0 && <NoSessions onStart={() => open(null)} />}
         {groups.map((g, gi) => (
           <section key={g.label} className="flex flex-col gap-2">
             <h3 className="type-meta font-medium text-muted-foreground">{g.label}</h3>
@@ -77,6 +79,25 @@ export function Overview() {
         ))}
       </div>
     </div>
+  );
+}
+
+function NoSessions({ onStart }: { onStart: () => void }) {
+  return (
+    <Empty className="mt-16">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Grid />
+        </EmptyMedia>
+        <EmptyTitle>No sessions in this space</EmptyTitle>
+        <EmptyDescription>Every thread you start here shows up as a card you can jump to.</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button size="sm" onClick={onStart}>
+          New thread
+        </Button>
+      </EmptyContent>
+    </Empty>
   );
 }
 

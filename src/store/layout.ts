@@ -24,6 +24,7 @@ import {
 import { getProfiles } from '../profiles.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from './index.tsx';
+import { showsDemoData } from '../demoData.ts';
 
 export type { View };
 
@@ -62,14 +63,15 @@ export type LayoutAction =
 
 const STORAGE_KEY = 'harness.layouts.v1';
 
-// The built-in profiles open on their demo work; a profile added in Settings opens on a new thread.
-const DEFAULT_VIEWS: Record<string, View> = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } };
+// The demo's profiles open on their demo work; every other profile opens on a new thread.
+const DEMO_VIEWS: Record<string, View> = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } };
 const NEW_THREAD: View = { kind: 'new' };
 
 export function initialLayout(saved: Pick<Saved, 'layouts' | 'watched'> & Partial<Saved> = loadLayouts()): LayoutState {
   const orientation = typeof window === 'undefined' ? 'row' : window.innerWidth >= window.innerHeight ? 'row' : 'column';
   const profiles = getProfiles();
-  const layouts = Object.fromEntries(profiles.map(({ id }) => [id, saved.layouts[id] ?? singleLayout(DEFAULT_VIEWS[id] ?? NEW_THREAD, orientation)]));
+  const defaults = showsDemoData() ? DEMO_VIEWS : {};
+  const layouts = Object.fromEntries(profiles.map(({ id }) => [id, saved.layouts[id] ?? singleLayout(defaults[id] ?? NEW_THREAD, orientation)]));
   return { spaceId: profiles[0].id, views: mirror(layouts), layouts, orientation, watched: saved.watched, isStage: false, isOverview: false, isNeedsYouNear: saved.isNeedsYouNear ?? false };
 }
 

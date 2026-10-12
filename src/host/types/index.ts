@@ -1,4 +1,5 @@
 import { agentMethods, type AgentHost } from './agent.ts';
+import { dataMethods, type DataHost } from './data.ts';
 import { browserMethods, type BrowserHost } from './browser.ts';
 import { fsMethods, type FsHost } from './fs.ts';
 import { gitMethods, type GitHost } from './git.ts';
@@ -21,6 +22,7 @@ export interface HostBridge {
   windows: WindowsHost;
   agent: AgentHost;
   settings: SettingsHost;
+  data: DataHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -37,4 +39,5 @@ export const manifest = {
   windows: windowsMethods,
   agent: agentMethods,
   settings: settingsMethods,
+  data: dataMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

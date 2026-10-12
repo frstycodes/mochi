@@ -1,4 +1,5 @@
 import { agent as desktopAgent } from './desktop/agent.ts';
+import { data as desktopData } from './desktop/data.ts';
 import { browser as desktopBrowser } from './desktop/browser.ts';
 import { fs as desktopFs } from './desktop/fs.ts';
 import { git as desktopGit } from './desktop/git.ts';
@@ -10,6 +11,7 @@ import { sim as desktopSim } from './desktop/sim.ts';
 import { windows as desktopWindows } from './desktop/windows.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
 import { agent as webAgent } from './web/agent.ts';
+import { data as webData } from './web/data.ts';
 import { browser as webBrowser } from './web/browser.ts';
 import { fs as webFs } from './web/fs.ts';
 import { git as webGit } from './web/git.ts';
@@ -37,6 +39,7 @@ export const registry: Registry = {
   windows: { web: webWindows, desktop: desktopWindows },
   agent: { web: webAgent, desktop: desktopAgent },
   settings: { web: webSettings, desktop: desktopSettings },
+  data: { web: webData, desktop: desktopData },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -55,4 +58,5 @@ export const host = {
   windows: pick('windows'),
   agent: pick('agent'),
   settings: pick('settings'),
+  data: pick('data'),
 } satisfies HostBridge & { isDesktop: boolean };

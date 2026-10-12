@@ -20,7 +20,7 @@ import { burnSeries, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
 import { summarize, type ToolVerb } from './summary';
 import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon } from './ui';
-import { planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
+import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
 
 const LIST_LIMIT = 3;
 
@@ -235,7 +235,7 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   const space = profileById(thread.spaceId);
   const provider = thread.providers[0];
   const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.plans[provider], state.now);
-  if (thread.status !== 'running' || !plan.isWarning) return null;
+  if (thread.status !== 'running' || !isKnownPlan(space.plans[provider]) || !plan.isWarning) return null;
 
   const name = `${PROVIDER_NAMES[plan.provider]} ${plan.plan}`;
   return (

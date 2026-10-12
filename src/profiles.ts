@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { showsDemoData } from './demoData.ts';
 import { DEFAULT_SPACES, SPACE_ICON_NAMES, type Space, type SpaceIconName } from './model.ts';
 
 /**
@@ -8,6 +9,9 @@ import { DEFAULT_SPACES, SPACE_ICON_NAMES, type Space, type SpaceIconName } from
 export const PROFILES_KEY = 'mochi.profiles.v1';
 // ⌥1 … ⌥9 switch profiles, and the sidebar pages through them; past nine neither reaches the rest.
 export const MAX_PROFILES = 9;
+
+/** A desktop install without demo data starts with this one profile. */
+export const FIRST_PROFILE: Space = { id: 'personal', name: 'Personal', icon: 'home', plans: { claude: '', codex: '' }, github: '' };
 
 let profiles = load();
 const listeners = new Set<() => void>();
@@ -62,16 +66,20 @@ export function newProfileId(name: string, taken: string[]) {
   return id;
 }
 
-/** Saved profiles when they parse into at least one valid entry, else the built-in ones. */
-export function parseProfiles(raw: string | null): Space[] {
+/** Saved profiles when they parse into at least one valid entry, else the starting ones: the demo's, or one empty profile on desktop. */
+export function parseProfiles(raw: string | null, fallback = startingProfiles()): Space[] {
   try {
     const saved: unknown = JSON.parse(raw ?? 'null');
-    if (!Array.isArray(saved)) return DEFAULT_SPACES;
+    if (!Array.isArray(saved)) return fallback;
     const valid = saved.filter(isProfile).slice(0, MAX_PROFILES);
-    return valid.length ? valid : DEFAULT_SPACES;
+    return valid.length ? valid : fallback;
   } catch {
-    return DEFAULT_SPACES;
+    return fallback;
   }
+}
+
+function startingProfiles() {
+  return showsDemoData() ? DEFAULT_SPACES : [FIRST_PROFILE];
 }
 
 function isProfile(value: unknown): value is Space {
@@ -99,11 +107,15 @@ function write(next: Space[]) {
 }
 
 function load() {
+  let list: Space[];
   try {
-    return parseProfiles(localStorage.getItem(PROFILES_KEY));
+    list = parseProfiles(localStorage.getItem(PROFILES_KEY));
   } catch {
-    return DEFAULT_SPACES;
+    list = startingProfiles();
   }
+  // Demo threads live in the demo's profiles, so with demo data on any you don't have join the list (unsaved; they hold threads, so can't be removed).
+  if (!showsDemoData()) return list;
+  return [...list, ...DEFAULT_SPACES.filter((d) => !list.some((p) => p.id === d.id))].slice(0, MAX_PROFILES);
 }
 
 function subscribe(listener: () => void) {

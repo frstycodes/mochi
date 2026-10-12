@@ -179,6 +179,7 @@ export const SETTINGS_SECTIONS = [
     icon: Database,
     component: DataSection,
     settings: [
+      { id: 'demoData', label: 'Show demo data', keywords: 'sample example fixture threads prototype' },
       { id: 'storage', label: 'Storage used', keywords: 'disk space size' },
       { id: 'clearPins', label: 'Clear pins', keywords: 'reset delete' },
       { id: 'clearSideChats', label: 'Clear side chats', keywords: 'reset delete' },

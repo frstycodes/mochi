@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import type { QueueItem, QueueKind, Thread } from './model';
 import { duration } from './progress';
 import { useReviewEntry } from './review/useReviewMode';
-import { snapshot, useHarness, useSpaceQueue, type OverlapMode } from './store';
+import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode } from './store';
 import { ProviderMarks, lineColor } from './ui';
 
 const KIND = {
@@ -34,6 +34,7 @@ const KIND = {
 
 export function QueueView() {
   const items = useSpaceQueue();
+  const isWorking = useSpaceThreads().some((t) => t.status === 'running' && (!t.live || t.live.isWorking));
   const { state } = useHarness();
   const review = useReviewEntry(state.spaceId);
   const [selected, setSelected] = useState(0);
@@ -60,7 +61,7 @@ export function QueueView() {
             </Button>
           )}
         </div>
-        {items.length === 0 && <EmptyQueue />}
+        {items.length === 0 && <EmptyQueue isWorking={isWorking} />}
         <ol className="flex flex-col gap-3">
           <AnimatePresence initial={false}>
             {items.map((item, i) => (
@@ -271,7 +272,7 @@ function OverlapChoices({ item }: { item: QueueItem }) {
   );
 }
 
-function EmptyQueue() {
+function EmptyQueue({ isWorking }: { isWorking: boolean }) {
   return (
     <Empty className="border border-dashed">
       <EmptyHeader>
@@ -279,7 +280,7 @@ function EmptyQueue() {
           <CheckCircle />
         </EmptyMedia>
         <EmptyTitle>Nothing needs you</EmptyTitle>
-        <EmptyDescription>Your agents are working. Questions, approvals and overlaps show up here, most blocking first.</EmptyDescription>
+        <EmptyDescription>{isWorking ? 'Your agents are working. ' : ''}Questions, approvals and overlaps from your threads show up here, most blocking first.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );
