@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
 import { CodexAdapter, reply } from './adapter.ts';
-import { codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillInput, threadState, updateLimits } from './map.ts';
+import { codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
@@ -343,9 +343,21 @@ test('skills/list becomes / commands, and a message opening with one attaches it
     { name: 'fix-lint', description: 'Fix lint', path: '/s/fix-lint/SKILL.md' },
     { name: 'plain', description: 'Plain one', path: '/s/plain/SKILL.md' },
   ]);
-  assert.deepEqual(skillInput('/fix-lint src/a.ts', commands), { type: 'skill', name: 'fix-lint', path: '/s/fix-lint/SKILL.md' });
-  assert.equal(skillInput('/off', commands), null);
-  assert.equal(skillInput('please /plain', commands), null);
+  assert.deepEqual(skillInputs('/fix-lint src/a.ts', [], commands), [{ type: 'skill', name: 'fix-lint', path: '/s/fix-lint/SKILL.md' }]);
+  assert.deepEqual(skillInputs('/off', [], commands), []);
+  assert.deepEqual(skillInputs('please /plain', [], commands), []);
+  assert.deepEqual(
+    skillInputs('/fix-lint a.ts', ['plain', 'fix-lint', 'gone'], commands).map((s) => s.name),
+    ['fix-lint', 'plain'],
+    'skills picked with @ attach too, once each, unknown ones left out',
+  );
+  assert.deepEqual(
+    skillEvents('t1', 'turn-1', [{ name: 'plain' }]).map((e) => e.type === 'tool' && [e.phase, e.text, e.skill]),
+    [
+      ['start', 'Skill plain', 'plain'],
+      ['end', 'Skill plain', 'plain'],
+    ],
+  );
   assert.deepEqual(infoFromLists(null, reply, null).skills, ['fix-lint', 'plain']);
   assert.deepEqual(commandsFromSkills(null), []);
 });

@@ -238,3 +238,19 @@ test('commands keep skills and custom commands with their argument hints, not Cl
     ],
   );
 });
+
+test('a Skill call is a skill load and an mcp__ call names its server and tool, read back through init', () => {
+  const { map } = createMapper('t1', CWD);
+  map({ type: 'system', subtype: 'init', session_id: 's', parent_tool_use_id: null, cwd: CWD, tools: [], mcp_servers: [{ name: 'claude.ai Linear', status: 'connected' }, { name: 'git', status: 'connected' }, { name: 'github', status: 'connected' }] } as unknown as SDKMessage);
+  const call = (id: string, name: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input }] } } as unknown as SDKMessage);
+  const result = (id: string) => map({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'Launching skill: ui' }] }, tool_use_result: { success: true, commandName: 'ui' } } as unknown as SDKMessage);
+
+  assert.deepEqual(call('k1', 'Skill', { skill: '/ui', args: 'the header' }), [{ threadId: 't1', type: 'tool', id: 'k1', phase: 'start', text: 'Skill ui', skill: 'ui' }]);
+  assert.deepEqual(result('k1'), [{ threadId: 't1', type: 'tool', id: 'k1', phase: 'end', text: 'Skill ui' }]);
+  assert.deepEqual(call('m1', 'mcp__claude_ai_Linear__get_issue', { id: 'LAT-1' })[0], { threadId: 't1', type: 'tool', id: 'm1', phase: 'start', text: 'Mcp claude.ai Linear: get_issue', mcp: { server: 'claude.ai Linear', tool: 'get_issue' } });
+  const github = call('m2', 'mcp__github__list_prs', {})[0];
+  assert.deepEqual(github.type === 'tool' && github.mcp, { server: 'github', tool: 'list_prs' }, 'the longer server name wins over a prefix of it');
+  const unknown = call('m3', 'mcp__later__do_it', {})[0];
+  assert.deepEqual(unknown.type === 'tool' && unknown.mcp, { server: 'later', tool: 'do_it' }, 'a server init did not list splits at its first __');
+  assert.deepEqual(call('b1', 'Skill', {})[0], { threadId: 't1', type: 'tool', id: 'b1', phase: 'start', text: 'Skill' }, 'no skill name, no skill load');
+});

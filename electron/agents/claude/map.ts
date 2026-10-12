@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
-import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
@@ -15,6 +15,8 @@ export function createMapper(threadId: string, cwd: string) {
   let context = { used: 0, max: 0 };
   let isNewBlock = false;
   let isInterrupting = false;
+  /** MCP server names from init, to read a server back out of `mcp__<server>__<tool>`. */
+  let servers: string[] = [];
 
   const planFromTasks = (): AgentEvent => ({ threadId, type: 'plan', items: tasks.map(({ title, status }) => ({ title, status })) });
 
@@ -27,7 +29,7 @@ export function createMapper(threadId: string, cwd: string) {
       const { description, prompt, model, run_in_background } = input as Partial<AgentInput>;
       return [subagent(id, 'start', { toolId: id, name: description || 'Agent', ...(prompt && { prompt }), ...(model && { model }), isBackground: run_in_background === true })];
     }
-    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input) };
+    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers), ...toolKind(name, input, servers) };
     if (name === 'TodoWrite') return [start, { threadId, type: 'plan', items: planFromTodos(input) }];
     if (name !== 'TaskUpdate') return [start];
     const task = tasks.find((t) => t.id === input.taskId);
@@ -53,7 +55,7 @@ export function createMapper(threadId: string, cwd: string) {
   }
 
   function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock) {
-    const outcome: { text: string; files?: string[]; exitCode?: number } = { text: describeTool(tool.name, tool.input) };
+    const outcome: { text: string; files?: string[]; exitCode?: number } = { text: describeTool(tool.name, tool.input, servers) };
     const file = tool.input.file_path ?? tool.input.notebook_path;
     if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [path.relative(cwd, path.resolve(cwd, file))];
     if (tool.name === 'Bash') outcome.exitCode = exitCode(block);
@@ -79,7 +81,7 @@ export function createMapper(threadId: string, cwd: string) {
         if (block.type !== 'tool_use') return [];
         const input = block.input as Record<string, unknown>;
         tools.set(block.id, { name: block.name, input });
-        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input) } })];
+        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input, servers) } })];
       });
     if (message.type !== 'user' || typeof message.message.content === 'string') return [];
     return message.message.content.flatMap((block): AgentEvent[] => {
@@ -127,7 +129,10 @@ export function createMapper(threadId: string, cwd: string) {
     switch (message.type) {
       case 'system':
         if (message.subtype.startsWith('task_')) return mapTask(message);
-        if (message.subtype === 'init') return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }];
+        if (message.subtype === 'init') {
+          servers = (message.mcp_servers ?? []).map((s) => s.name);
+          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }];
+        }
         if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name), commands: commandsFrom(message.commands) } }];
         return [];
       case 'stream_event': {
@@ -249,12 +254,27 @@ export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
   return todos.flatMap((t) => (typeof t.content === 'string' ? [{ title: t.content, status: STATUS[t.status as keyof typeof STATUS] ?? 'pending' }] : []));
 }
 
-/** One line for the work log: the command for Bash, the path for file tools, the tool name otherwise. Tools the work log knows get its verb ("Run pnpm test"). */
-export function describeTool(name: string, input: Record<string, unknown>) {
+/** One line for the work log: the command for Bash, the path for file tools, the tool name otherwise. Tools the work log knows get its verb ("Run pnpm test", "Skill ui", "Mcp linear: list_issues"). */
+export function describeTool(name: string, input: Record<string, unknown>, servers: string[] = []) {
+  const kind = toolKind(name, input, servers);
+  if (kind.skill) return `Skill ${kind.skill}`;
+  if (kind.mcp) return `Mcp ${kind.mcp.server}: ${kind.mcp.tool}`;
   const target = input.command ?? input.file_path ?? input.notebook_path ?? input.pattern ?? input.url ?? input.query ?? input.subject ?? input.description;
   if (typeof target !== 'string') return name;
   const verb = VERBS[name as keyof typeof VERBS];
   return verb ? `${verb} ${target}` : `${name}: ${target.split('\n')[0].slice(0, 200)}`;
+}
+
+/** The skill a Skill call loads (its `skill` input, a leading `/` allowed) or the MCP server and tool an `mcp__` call runs. */
+export function toolKind(name: string, input: Record<string, unknown>, servers: string[] = []): { skill?: string; mcp?: McpCall } {
+  if (name === 'Skill' && typeof input.skill === 'string' && input.skill.trim()) return { skill: input.skill.trim().replace(/^\//, '') };
+  if (!name.startsWith('mcp__')) return {};
+  const rest = name.slice('mcp__'.length);
+  // Longest first: a server whose name runs into another's (`git`, `github`) matches by its own full prefix.
+  const server = [...servers].sort((a, b) => b.length - a.length).find((s) => rest.startsWith(`${mcpToolPrefix(s)}__`));
+  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2) } };
+  const split = rest.indexOf('__');
+  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2) } } : {};
 }
 
 const VERBS = { Bash: 'Run', Read: 'Read', Edit: 'Edit', MultiEdit: 'Edit', Write: 'Write', NotebookEdit: 'Edit', WebSearch: 'Search', WebFetch: 'Fetch' } as const;

@@ -149,13 +149,24 @@ export function commandsFromSkills(reply: unknown): AgentCommand[] {
 }
 
 /**
- * The `skill` input item that makes Codex load the skill a message opens with (`/name args`): app-server takes no slash
- * commands in text, its TUI attaches the skill the same way. Null for a message that doesn't name one.
+ * The `skill` input items that make Codex load the skill a message opens with (`/name args`) and the ones named alongside it
+ * (`@` in the composer): app-server takes no slash commands in text, its TUI attaches skills the same way. Unknown names are left out.
  */
-export function skillInput(text: string, skills: AgentCommand[]) {
-  const name = /^\/(\S+)/.exec(text)?.[1];
-  const skill = name && skills.find((s) => s.name === name && s.path);
-  return skill ? { type: 'skill' as const, name: skill.name, path: skill.path! } : null;
+export function skillInputs(text: string, names: string[], skills: AgentCommand[]) {
+  const leading = /^\/(\S+)/.exec(text)?.[1];
+  const wanted = [...new Set([...(leading ? [leading] : []), ...names])];
+  return wanted.flatMap((name) => {
+    const skill = skills.find((s) => s.name === name && s.path);
+    return skill ? [{ type: 'skill' as const, name: skill.name, path: skill.path! }] : [];
+  });
+}
+
+/** One finished skill-load per attached skill, as the work log shows a Claude Skill tool call. */
+export function skillEvents(threadId: string, turnId: string, attached: { name: string }[]): AgentEvent[] {
+  return attached.flatMap(({ name }) => {
+    const call = { threadId, type: 'tool' as const, id: `skill:${turnId}:${name}`, text: `Skill ${name}`, skill: name };
+    return [{ ...call, phase: 'start' as const }, { ...call, phase: 'end' as const }];
+  });
 }
 
 /** Server requests that become queue cards. Anything else gets a JSON-RPC error reply from the caller. */
@@ -227,7 +238,7 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       return [{ threadId, type: 'tool', id, phase, text: `Edit ${files.join(', ') || 'files'}`, ...(phase === 'end' && item.status === 'completed' && { files }) }];
     }
     case 'mcpToolCall':
-      return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `${item.server}: ${item.tool}` }] : [];
+      return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `Mcp ${item.server}: ${item.tool}`, mcp: { server: item.server, tool: item.tool } }] : [];
     case 'webSearch': {
       const { text, links } = webSearch(item);
       return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && links.length > 0 && { links }) }];

@@ -34,7 +34,7 @@ import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
 import { parseSlash, resolveToken, type SlashItem } from './chat/slash';
-import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
+import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
 import { withReferences } from './chat/mentions';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
@@ -113,7 +113,7 @@ function useComposerHeightVar() {
 
 // isLive: the newest row of a running thread, the one still being written.
 function ChatRowView({ thread, row, slashItems, isLive, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; action?: CurrentAction }) {
-  if (row.kind === 'work') return <WorkLog entries={row.entries} action={isLive ? action : undefined} />;
+  if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'subagent') {
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
@@ -234,10 +234,11 @@ function Composer({
   const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
-  const mention = useMentionMenu(thread);
+  const mention = useMentionMenu(thread, useThreadSkills(provider, thread.spaceId, thread.agent), useThreadServers(provider, thread.spaceId, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
   const slash = useSlashMenu(slashItems);
-  const menuProps = mention.isOpen ? mention.textareaProps : slash.textareaProps;
+  // Slash tracks the caret always; the open menu owns the listbox attributes.
+  const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
   useSeedAttachment(thread.id === 'adm');
 
   return (
@@ -265,7 +266,7 @@ function Composer({
                 const command = parseSlash(trimmed);
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
                 const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, !!resolveToken(trimmed, slashItems));
+                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, !!resolveToken(trimmed, slashItems), provider);
                 return drift.submit(shown, isQueue ? QUEUED_PREFIX : '', references);
               }}
               placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
