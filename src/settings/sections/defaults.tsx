@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { DEVICES } from '../../Composer';
-import { ModelPicker } from '../../ModelControls';
+import { ModelPicker, useUnavailableHarnesses } from '../../ModelControls';
+import { useSpace } from '../../store';
 import { useSideChatDefault } from '../../sidechat/useSideChat';
 import { ACCESS } from '../../runtime/controls';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
@@ -41,10 +42,15 @@ export const AGENTS = HARNESS_IDS.map((id) => ({ value: id, label: HARNESSES[id]
 
 function SideChatGroup() {
   const [model, setModel] = useSideChatDefault();
+  const unavailable = useUnavailableHarnesses(useSpace().id);
   if (!model) return null;
   return (
-    <SettingsGroup footer="New side chats answer on this model; the side chat's own model button can still change each one.">
-      <SettingsRow id="sideChatModel" label="Side chat model" control={<ModelPicker id={settingControlId('sideChatModel')} value={model} provider="claude" isLocked onChange={(m) => setModel(m.id)} />} />
+    <SettingsGroup footer="New side chats answer on this model, Claude or Codex, through this profile's account; the side chat's own model button can still change each one.">
+      <SettingsRow
+        id="sideChatModel"
+        label="Side chat model"
+        control={<ModelPicker id={settingControlId('sideChatModel')} value={model.model} provider={model.provider} unavailable={unavailable} onChange={(m) => setModel({ provider: m.harness, model: m.id })} />}
+      />
     </SettingsGroup>
   );
 }

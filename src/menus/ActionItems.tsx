@@ -1,17 +1,18 @@
 import { Fragment } from 'react';
 import { ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuShortcut } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { Thread } from '../model';
 import { ACTIONS, type PaletteAction } from '../palette/actions';
 import { scopeOf, splitByRule, type ScopeTarget } from '../palette/when';
 import { useActionContext, useActions } from '../palette/useActions';
 import { Shortcut } from '../Shortcut';
+import { useReviewerChecks } from '../secondOpinion/reviewer';
 
 type Groups = readonly (readonly string[])[];
 
 /** Registry actions for one target as context menu items, in the given groups; unavailable ones drop out, empty groups and their separators too. */
 export function ActionItems({ target, groups }: { target: ScopeTarget; groups: Groups }) {
-  const { actions, run } = useActions(target);
+  const { actions, run, scope } = useActions(target);
+  useReviewerChecks();
   // Action ids are plain strings: a typo would silently drop the item, so dev builds fail loudly instead.
   if (import.meta.env.DEV) groups.flat().forEach((id) => ACTIONS.some((a) => a.id === id) || console.error(`Context menu lists unknown action "${id}"`));
   const shown = groups.map((ids) => ids.flatMap((id) => actions.filter((a) => a.id === id))).filter((g) => g.length > 0);
@@ -19,9 +20,11 @@ export function ActionItems({ target, groups }: { target: ScopeTarget; groups: G
     <Fragment key={group[0].id}>
       {i > 0 && <ContextMenuSeparator />}
       <ContextMenuGroup>
-        {group.map((action) => (
-          <ActionItem key={action.id} action={action} onSelect={() => run(action)} />
-        ))}
+        {group.map((action) => {
+          const title = action.label?.(scope) ?? action.title;
+          const reason = action.disabledReason?.(scope);
+          return reason ? <SkippedItem key={action.id} action={action} title={title} reason={reason} /> : <ActionItem key={action.id} action={action} title={title} onSelect={() => run(action)} />;
+        })}
       </ContextMenuGroup>
     </Fragment>
   ));
@@ -52,7 +55,7 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
           <ContextMenuGroup>
             {group.map(({ action, many, skipped }) =>
               skipped.length > 0 ? (
-                <SkippedItem key={action.id} action={action} title={many.title} reason={many.skipReason} skipped={skipped} />
+                <SkippedItem key={action.id} action={action} title={many.title} reason={`${skipped.map((t) => t.title).join(', ')}: ${many.skipReason}`} />
               ) : (
                 <ContextMenuItem key={action.id} onSelect={() => many.run(threads, { ...base, scope: scopes[0] })}>
                   <action.icon />
@@ -68,7 +71,7 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
 }
 
 // Not Radix `disabled`: that drops the item from keyboard focus and pointer events, so its reason could never show.
-function SkippedItem({ action, title, reason, skipped }: { action: PaletteAction; title: string; reason: string; skipped: Thread[] }) {
+function SkippedItem({ action, title, reason }: { action: PaletteAction; title: string; reason: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -78,17 +81,17 @@ function SkippedItem({ action, title, reason, skipped }: { action: PaletteAction
         </ContextMenuItem>
       </TooltipTrigger>
       <TooltipContent side="right" className="max-w-64">
-        {skipped.map((t) => t.title).join(', ')}: {reason}
+        {reason}
       </TooltipContent>
     </Tooltip>
   );
 }
 
-function ActionItem({ action, onSelect }: { action: PaletteAction; onSelect: () => void }) {
+function ActionItem({ action, title, onSelect }: { action: PaletteAction; title: string; onSelect: () => void }) {
   return (
     <ContextMenuItem onSelect={onSelect}>
       <action.icon />
-      {action.title}
+      {title}
       {!!action.shortcut && (
         <ContextMenuShortcut className="tracking-normal">
           <Shortcut keys={action.shortcut} />

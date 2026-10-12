@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { effortId, modelId } from '../runtime/models.ts';
 
 /**
  * Renderer-only preferences (SETTINGS.md): one localStorage entry, read synchronously so reducers and module code can use
@@ -12,8 +13,10 @@ export interface Prefs {
   alertKinds: string[];
   watchedToasts: boolean;
   dockBadge: boolean;
+  /** Provider model ids. */
   starredModels: string[];
-  effort: 'Low' | 'Medium' | 'High' | 'Extra high';
+  /** A provider effort id; a model that doesn't take it runs its own default. */
+  effort: string;
   agent: 'claude' | 'codex';
   permissions: 'Ask first' | 'Auto edit' | 'Full access';
   runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
@@ -43,8 +46,8 @@ export const DEFAULT_PREFS: Prefs = {
   alertKinds: ['needs-you', 'review', 'ci', 'pr-review', 'overlap', 'race-lost'],
   watchedToasts: true,
   dockBadge: true,
-  starredModels: ['opus-5.5', 'sonnet-5.5', 'gpt-5.5-codex'],
-  effort: 'High',
+  starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
+  effort: 'high',
   agent: 'claude',
   permissions: 'Auto edit',
   runsOn: 'This Mac',
@@ -117,7 +120,8 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
     const value = saved[key];
     if (Array.isArray(fallback) ? Array.isArray(value) && value.every((v) => typeof v === 'string') : typeof value === typeof fallback) next[key] = value;
   }
-  return next as unknown as Prefs;
+  const prefs = next as unknown as Prefs;
+  return { ...prefs, starredModels: prefs.starredModels.map(modelId), effort: effortId(prefs.effort) };
 }
 
 function load(): Prefs {

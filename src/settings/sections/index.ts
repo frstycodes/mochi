@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react';
 import { BranchUp, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
-import { MODELS } from '../../runtime/controls';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { BrowserSection } from './browser';
@@ -81,12 +80,13 @@ export const SETTINGS_SECTIONS = [
           { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check' },
           { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
           { id: `${id}Model`, label: `${name} default model`, keywords: 'model' },
+          { id: `${id}SecondOpinionModel`, label: `${name} second opinion model`, keywords: 'model review verdict' },
           { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
           { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },
           ...(apiKey ? [{ id: `${id}ApiKey`, label: apiKey.label, keywords: 'key billing keychain' }] : []),
         ];
       }),
-      { id: 'starredModels', label: 'Starred models', keywords: `favorite star dock ${MODELS.map((m) => m.name).join(' ')}` },
+      { id: 'starredModels', label: 'Starred models', keywords: 'favorite star dock model claude codex opus sonnet haiku gpt' },
       { id: 'effort', label: 'Default effort', keywords: 'reasoning thinking' },
     ],
   },
@@ -100,7 +100,7 @@ export const SETTINGS_SECTIONS = [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread' },
       { id: 'permissions', label: 'Permissions', keywords: 'ask auto edit full access' },
       { id: 'runsOn', label: 'Runs on', keywords: 'device machine cloud sandbox' },
-      { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question sonnet opus haiku' },
+      { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
     ],

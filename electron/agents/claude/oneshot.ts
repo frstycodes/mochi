@@ -1,14 +1,14 @@
 import os from 'node:os';
 import * as sdk from '@anthropic-ai/claude-agent-sdk';
-import { query, type Options, type SDKMessage, type SpareProcess } from '@anthropic-ai/claude-agent-sdk';
+import { query, type Options, type SDKMessage, type SDKUserMessage, type SpareProcess } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
-import type { AgentAskContext, AgentAskMessage } from '../../../src/host/types/agent.ts';
 import type { AgentInstall } from '../../../src/host/types/settings.ts';
 import type { Thread } from '../../../src/model.ts';
 import { detect } from '../../settings/detect.ts';
 import { accountEnv, accountFor, userPath } from '../config.ts';
 
 const CLASSIFY_MODEL = 'claude-haiku-5-5';
+const SIDE_CHAT_MODEL = 'claude-sonnet-5-5';
 const DETECT_TTL_MS = 5 * 60_000;
 const SPARE_IDLE_MS = 10 * 60_000;
 
@@ -17,12 +17,9 @@ const BASE_PROMPT = 'You are a helper inside Mochi, an app that runs coding agen
 const CLASSIFY_PROMPT =
   'Classify a message sent to a coding agent against its goal. on-goal: works toward the goal or an open step. scope-add: related, but asks for something the plan does not cover. off-goal: unrelated to the goal. Reply with only a JSON object {"verdict": "on-goal" | "scope-add" | "off-goal", "reason": "<one short sentence>"}, nothing else.';
 
-/** Side chat: a tool-less, unsaved query that never touches the thread's own session. Yields text deltas. */
-export async function* askClaude(spaceId: string, context: AgentAskContext, messages: AgentAskMessage[], model: string, abort: AbortController) {
-  const prompt = messages.map((m) => `${m.role === 'user' ? 'User' : 'You'}: ${m.text}`).join('\n\n');
-  const instructions = `Answer side questions about a coding agent's thread from the context below, briefly, in Markdown.\n\n<thread>\n${JSON.stringify(context, null, 1)}\n</thread>`;
-  for await (const message of run(await runner(spaceId), prompt, model, instructions, abort)) {
-    if (message.type === 'system' && message.subtype === 'init') console.info(`side chat asked ${model}, session on ${message.model}`);
+/** Side chat's Claude answer: a tool-less, unsaved query that never touches the thread's own session. Yields text deltas. */
+export async function* askClaude(spaceId: string, instructions: string, prompt: string, model: string | undefined, abort: AbortController) {
+  for await (const message of run(await runner(spaceId), prompt, model ?? SIDE_CHAT_MODEL, instructions, abort)) {
     if (message.type === 'stream_event' && message.event.type === 'content_block_delta' && message.event.delta.type === 'text_delta') yield message.event.delta.text;
     if (message.type === 'result' && message.subtype !== 'success') throw new Error(message.errors?.join('\n') || `Claude stopped: ${message.subtype}`);
   }
@@ -43,6 +40,20 @@ export async function classifyClaude(prompt: string, thread: Thread, signal: Abo
     return JSON.parse(message.result.slice(message.result.indexOf('{'), message.result.lastIndexOf('}') + 1)) as unknown;
   }
   return null;
+}
+
+/** `supportedModels()` from the profile's account: a query whose prompt never arrives, closed once it answers. */
+export async function claudeSupportedModels(spaceId: string) {
+  const { options } = await runner(spaceId);
+  const idle = (async function* (): AsyncGenerator<SDKUserMessage> {
+    await new Promise(() => {});
+  })();
+  const q = query({ prompt: idle, options: { ...options, cwd: os.tmpdir() } });
+  try {
+    return await q.supportedModels();
+  } finally {
+    q.close();
+  }
 }
 
 /** Parks a Claude Code process for the profile's account, so its next side question or classify skips the startup. */

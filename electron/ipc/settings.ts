@@ -4,6 +4,7 @@ import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
 import { detect } from '../settings/detect.ts';
+import { noteLogin } from '../agents/models.ts';
 import { integer, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 export const settings = {
@@ -16,7 +17,9 @@ export const settings = {
   async detect(_sender, accountId) {
     const account = accountsState().accounts.find((a) => a.id === string(accountId, 'accountId', 128));
     if (!account) throw new Error('No such account');
-    return detect(account);
+    const install = await detect(account);
+    noteLogin(account.id, install.login);
+    return install;
   },
   async accounts() {
     return accountsState();
@@ -83,8 +86,10 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
     patch.prDrafts = p.prDrafts;
   }
   if (p.sideChatModel !== undefined) {
-    patch.sideChatModel = string(p.sideChatModel, 'sideChatModel', MAX_MODEL_CHARS).trim();
-    if (!patch.sideChatModel) throw new TypeError('Pick a side chat model');
+    const side = record(p.sideChatModel, 'sideChatModel');
+    const model = string(side.model, 'sideChatModel.model', MAX_MODEL_CHARS).trim();
+    if (!model) throw new TypeError('Pick a side chat model');
+    patch.sideChatModel = { provider: validProvider(side.provider as string), model };
   }
   if (p.harnesses === undefined) return patch;
   patch.harnesses = {};
@@ -96,6 +101,7 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
       if (next.path && !isAbsolute(next.path)) throw new TypeError('The path must be absolute');
     }
     if (h.model !== undefined) next.model = string(h.model, 'model', MAX_MODEL_CHARS).trim();
+    if (h.secondOpinionModel !== undefined) next.secondOpinionModel = string(h.secondOpinionModel, 'secondOpinionModel', MAX_MODEL_CHARS).trim();
     patch.harnesses[id as Provider] = next;
   }
   return patch;

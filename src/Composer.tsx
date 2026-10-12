@@ -27,8 +27,10 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
-import { EffortPicker, ModelPicker } from './ModelControls';
-import { ACCESS, type Access, type ModelOption, type ThreadControls } from './runtime/controls';
+import { EffortPicker, ModelPicker, useModels } from './ModelControls';
+import { optionFor, type ModelOption } from './runtime/models';
+import { useSpace } from './store';
+import { ACCESS, type Access, type ThreadControls } from './runtime/controls';
 import { getPrefs, type Prefs } from './settings/prefs';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
@@ -82,6 +84,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSu
 };
 
 export function ComposerInput({ controls, provider, isLocked, onControlsChange, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
+  const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
   return (
     <PromptInput multiple globalDrop onSubmit={(message) => hold(onSend(message))}>
       <ComposerAttachments />
@@ -100,7 +103,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
             </PromptInputActionMenuContent>
           </PromptInputActionMenu>
           <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
-          <EffortPicker value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
+          <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
         </PromptInputTools>
         <PromptInputTools>
           <PromptInputButton tooltip="Dictate" className="rounded-full" onClick={() => toast('Dictation is not in the prototype yet')}>
@@ -171,7 +174,7 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'relative flex h-8 items-center gap-1 px-1 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:bottom-0 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
+        'relative flex h-8 items-center gap-1 px-1 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
         className,
       )}
       {...props}

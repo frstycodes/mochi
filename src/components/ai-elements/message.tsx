@@ -22,10 +22,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useTheme } from "next-themes";
 import { Streamdown, type PluginConfig } from "streamdown";
+import { useWordReveal, WORD_REVEAL } from "@/chat/wordReveal";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -319,24 +321,32 @@ export const MessageBranchPage = ({
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 export const MessageResponse = memo(
-  ({ className, plugins, ...props }: MessageResponseProps) => {
+  ({ className, plugins, isAnimating = false, ...props }: MessageResponseProps) => {
     const loaded = useStreamdownPlugins();
     const merged = useMemo(() => ({ ...loaded, ...plugins }), [loaded, plugins]);
     const { resolvedTheme } = useTheme();
     const mermaid = useMemo(() => ({ config: { theme: resolvedTheme === "dark" ? "dark" : "neutral" } as const }), [resolvedTheme]);
     // Streamdown's memoised blocks ignore a changed mermaid config, so a diagram keeps the old theme until remounted.
     const hasMermaid = typeof props.children === "string" && props.children.includes("```mermaid");
+    // Streamdown drops the word wrappers once isAnimating goes false, so words still queued would pop in together.
+    const isRevealing = useTrailingTrue(isAnimating, STREAM_DRAIN_MS);
+    const ref = useRef<HTMLDivElement>(null);
+    useWordReveal(ref, isRevealing);
     return (
-      <Streamdown
-        key={hasMermaid ? resolvedTheme : undefined}
-        className={cn(
-          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-          className
-        )}
-        plugins={merged}
-        mermaid={mermaid}
-        {...props}
-      />
+      <div ref={ref} className="contents">
+        <Streamdown
+          key={hasMermaid ? resolvedTheme : undefined}
+          className={cn(
+            "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+            className
+          )}
+          plugins={merged}
+          mermaid={mermaid}
+          animated
+          isAnimating={isRevealing}
+          {...props}
+        />
+      </div>
     );
   },
   (prevProps, nextProps) =>
@@ -345,6 +355,19 @@ export const MessageResponse = memo(
 );
 
 MessageResponse.displayName = "MessageResponse";
+
+// Streamdown only wraps words in spans; useWordReveal animates them, because Streamdown's own CSS animation re-stamps shown words with a 0ms duration on every delta, cutting their fade short.
+const STREAM_DRAIN_MS = WORD_REVEAL.maxBacklogMs + WORD_REVEAL.duration;
+
+function useTrailingTrue(value: boolean, holdMs: number) {
+  const [held, setHeld] = useState(value);
+  useEffect(() => {
+    if (value) return setHeld(true);
+    const timer = setTimeout(() => setHeld(false), holdMs);
+    return () => clearTimeout(timer);
+  }, [value, holdMs]);
+  return value || held;
+}
 
 let loadedPlugins: PluginConfig = {};
 let pluginsLoading: Promise<PluginConfig> | null = null;

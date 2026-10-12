@@ -77,7 +77,7 @@ export interface AgentAskEvent {
 
 /** What a side question sees of its thread: read-only, never written back. */
 export interface AgentAskContext {
-  /** The thread's profile, whose Claude account answers. */
+  /** The thread's profile, whose account for the asked provider answers. */
   spaceId: string;
   title: string;
   goal: string;
@@ -86,10 +86,41 @@ export interface AgentAskContext {
   diff: { path: string; added: number; removed: number }[] | null;
 }
 
+/** Who answers a side question; `model` unset, or one the account doesn't offer, runs the account's default model. */
+export interface AgentAskModel {
+  provider: Provider;
+  model?: string;
+}
+
+/** One model a provider offers an account, from the provider's own list (Claude Agent SDK `supportedModels()`, Codex `model/list`). */
+export interface AgentModel {
+  /** The provider's own model id, sent as-is. */
+  id: string;
+  name: string;
+  description: string;
+  /** Provider effort ids (`low` … `max`, Codex's `ultra`); empty when the model takes none. */
+  efforts: string[];
+  /** The provider's default effort for this model; unset leaves it to the harness. */
+  defaultEffort?: string;
+  isDefault: boolean;
+}
+
 export interface AgentAskMessage {
   role: 'user' | 'assistant';
   text: string;
 }
+
+/** A read-only second-opinion run on `provider`, in the thread's folder. The renderer builds the prompt and checks the verdict. */
+export interface AgentReviewRequest {
+  provider: Provider;
+  /** The thread's profile, whose account for `provider` reviews. */
+  spaceId: string;
+  cwd: string;
+  prompt: string;
+}
+
+/** A review's stream under the id `review` returned: what it is doing (`step`), then one `done` with its answer (structured output or text) or one `error`. */
+export type AgentReviewEvent = { id: string; type: 'step'; text: string } | { id: string; type: 'done'; result: unknown } | { id: string; type: 'error'; text: string };
 
 /** The statuses an agent may set on a step through Mochi's tools. */
 export const STEP_STATUSES = ['ready', 'running', 'waiting', 'blocked', 'done', 'dropped'] as const satisfies readonly StepStatus[];
@@ -116,15 +147,20 @@ export interface AgentHost {
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
-  /** Streams the answer from Claude `model` as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
-  ask(context: AgentAskContext, messages: AgentAskMessage[], model: string): Promise<{ id: string }>;
+  /** Streams the answer from `model` on the profile's account as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
+  ask(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel): Promise<{ id: string }>;
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
+  /** Starts a review run beside the thread's agent, never touching its session. Events arrive on `onReviewEvent`. */
+  review(request: AgentReviewRequest): Promise<{ id: string }>;
+  onReviewEvent(listener: (event: AgentReviewEvent) => void): () => void;
   /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
   rewindFiles(threadId: string, text: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
   warm(spaceId: string): Promise<void>;
+  /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
+  models(provider: Provider, spaceId: string): Promise<AgentModel[]>;
   onToolCall(listener: (call: AgentToolCall) => void): () => void;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
 }
@@ -138,9 +174,12 @@ export const agentMethods = {
   onEvent: 'event',
   ask: 'invoke',
   onAskEvent: 'event',
+  review: 'invoke',
+  onReviewEvent: 'event',
   classify: 'invoke',
   rewindFiles: 'invoke',
   warm: 'invoke',
+  models: 'invoke',
   onToolCall: 'event',
   toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;

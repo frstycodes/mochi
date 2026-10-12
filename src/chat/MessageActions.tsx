@@ -42,7 +42,7 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
   return actions;
 }
 
-/** Shows on hover or keyboard focus under a message; a pinned message keeps its pin visible. */
+/** Shows on hover or keyboard focus under a message; pinned messages are marked on the outline rail instead. */
 export function MessageActions({ thread, index, align }: { thread: Thread; index: number; align: 'start' | 'end' }) {
   const actions = useMessageActions(thread, index);
   const { now } = useHarness().state;
@@ -58,7 +58,7 @@ export function MessageActions({ thread, index, align }: { thread: Thread; index
           onClick={a.run}
           className={cn(
             'size-6 text-subtle-foreground opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 hover:text-foreground focus-visible:opacity-100 [&_svg]:size-3.5',
-            a.isActive && 'text-foreground opacity-100',
+            a.isActive && 'text-foreground',
           )}
         >
           <a.icon weight={a.isActive ? 'Filled' : 'Outline'} />

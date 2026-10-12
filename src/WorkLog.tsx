@@ -89,7 +89,7 @@ function sum(calls: ToolCall[], key: 'added' | 'removed') {
   return calls.reduce((n, c) => n + (c[key] ?? 0), 0);
 }
 
-function Expand({ isOpen, children }: { isOpen: boolean; children: ReactNode }) {
+export function Expand({ isOpen, children }: { isOpen: boolean; children: ReactNode }) {
   const reduce = useReducedMotionConfig();
   return (
     <AnimatePresence initial={false}>

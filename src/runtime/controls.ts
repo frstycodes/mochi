@@ -1,76 +1,41 @@
+import type { SideChatModel } from '../host/types/settings.ts';
 import type { Provider, Thread } from '../model.ts';
 import { getPrefs } from '../settings/prefs.ts';
+import { effortId, modelId } from './models.ts';
 
-export const EFFORTS = ['Low', 'Medium', 'High', 'Extra high'] as const;
-export type Effort = (typeof EFFORTS)[number];
+/** Settings' default effort choices; a model's own list comes from its provider (`AgentModel.efforts`). */
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const ACCESS = ['Ask first', 'Auto edit', 'Full access'] as const;
 export type Access = (typeof ACCESS)[number];
 
 /** What the composer's model, effort and permissions menus chose for a thread. GAP: an agent reads them at start only; a change mid-run applies at its next start (the API-key restart). */
 export interface ThreadControls {
+  /** The provider's own model id; '' runs the account's default. */
   model: string;
-  effort: Effort;
+  /** A provider effort id ('high', 'xhigh'); a model that doesn't take it runs its own default. */
+  effort: string;
   access: Access;
 }
 
-export interface ModelOption {
-  id: string;
-  harness: Provider;
-  name: string;
-  note: string;
-  context: string;
-  /** The id the harness takes; unset runs the harness's own configured default. */
-  providerModel?: string;
-}
-
-// GAP: fake catalog. The real list comes from each harness (Claude Agent SDK, Codex app-server) at connect time. Claude's
-// entries carry real SDK ids; Codex's carry none, so Codex runs the user's configured default.
-export const MODELS: ModelOption[] = [
-  { id: 'opus-5.5', harness: 'claude', name: 'Opus 5.5', note: 'Hardest problems and long runs', context: '200K', providerModel: 'claude-opus-5-5' },
-  { id: 'sonnet-5.5', harness: 'claude', name: 'Sonnet 5.5', note: 'Fast, strong default', context: '200K', providerModel: 'claude-sonnet-5-5' },
-  { id: 'haiku-5.5', harness: 'claude', name: 'Haiku 5.5', note: 'Quick edits and lookups', context: '200K', providerModel: 'claude-haiku-5-5' },
-  { id: 'gpt-5.5-codex', harness: 'codex', name: 'GPT-5.5 Codex', note: 'Tuned for agentic coding', context: '272K' },
-  { id: 'gpt-5.5', harness: 'codex', name: 'GPT-5.5', note: 'General reasoning', context: '272K' },
-  { id: 'gpt-5.5-mini', harness: 'codex', name: 'GPT-5.5 mini', note: 'Cheap and fast', context: '128K' },
-];
-
-/** A model named in Settings that the catalog doesn't list: its id is the harness's own id. */
-export function settingsModel(id: string, harness: Provider): ModelOption {
-  return { id, harness, name: id, note: 'Default in Settings', context: '', providerModel: id };
-}
-
-/** Settings and the SDK name Claude models by their own id; the model chip by catalog id. */
-export function claudeModelId(providerModel: string) {
-  return MODELS.find((m) => m.harness === 'claude' && m.providerModel === providerModel)?.id ?? providerModel;
-}
-
-export function providerModelOf(id: string) {
-  return MODELS.find((m) => m.id === id)?.providerModel ?? id;
-}
+/** A saved side chat choice with an old catalog id read as the provider's own. */
+export const sideChatChoice = (choice: SideChatModel): SideChatModel => ({ ...choice, model: modelId(choice.model) });
 
 export const DEFAULT_CONTROLS = {
-  claude: { model: 'opus-5.5', effort: 'High', access: 'Auto edit' },
-  codex: { model: 'gpt-5.5-codex', effort: 'High', access: 'Auto edit' },
+  claude: { model: '', effort: 'high', access: 'Auto edit' },
+  codex: { model: '', effort: 'high', access: 'Auto edit' },
 } satisfies Record<Provider, ThreadControls>;
 
 export function controlsOf(thread: Thread): ThreadControls {
-  return thread.controls ?? DEFAULT_CONTROLS[thread.providers[0]];
+  const controls = thread.controls ?? DEFAULT_CONTROLS[thread.providers[0]];
+  return { ...controls, model: modelId(controls.model), effort: effortId(controls.effort) };
 }
 
-/**
- * A new thread's controls: effort and permissions from Settings › Harnesses and › Defaults for new threads. `defaultModel`
- * is the harness's Settings default ('' = the harness's own), shown as its catalog entry when it has one.
- */
+/** A new thread's controls: effort and permissions from Settings › Harnesses and › Defaults, the model from the harness's Settings default ('' = the account's). */
 export function initialControls(provider: Provider, defaultModel: string): ThreadControls {
   const { effort, permissions } = getPrefs();
-  const controls = { ...DEFAULT_CONTROLS[provider], effort, access: permissions };
-  if (!defaultModel) return controls;
-  const listed = MODELS.find((m) => m.harness === provider && m.providerModel === defaultModel);
-  return { ...controls, model: listed?.id ?? defaultModel };
+  return { ...DEFAULT_CONTROLS[provider], model: modelId(defaultModel), effort: effortId(effort), access: permissions };
 }
-
-const EFFORT_LEVELS = { Low: 'low', Medium: 'medium', High: 'high', 'Extra high': 'xhigh' } satisfies Record<Effort, string>;
 
 // Claude's adapter refuses `bypassPermissions`, so Full access is its `auto` mode; Codex's adapter maps these names onto its policies.
 const PERMISSION_MODES = {
@@ -78,7 +43,7 @@ const PERMISSION_MODES = {
   codex: { 'Ask first': 'default', 'Auto edit': 'acceptEdits', 'Full access': 'bypassPermissions' },
 } satisfies Record<Provider, Record<Access, string>>;
 
+/** Main swaps a model the account doesn't offer (or none) for the account's default, and an effort the model doesn't take for its own. */
 export function agentOptions(controls: ThreadControls, provider: Provider) {
-  const listed = MODELS.find((m) => m.id === controls.model);
-  return { model: listed ? listed.providerModel : controls.model, effort: EFFORT_LEVELS[controls.effort], permissionMode: PERMISSION_MODES[provider][controls.access] };
+  return { model: controls.model || undefined, effort: controls.effort, permissionMode: PERMISSION_MODES[provider][controls.access] };
 }

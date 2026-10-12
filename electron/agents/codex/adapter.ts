@@ -1,8 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, codexModels, codexThreadId, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
@@ -31,9 +31,21 @@ const POLICIES: Record<string, { approvalPolicy: string; sandbox: string }> = {
   acceptEdits: { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
   plan: { approvalPolicy: 'on-request', sandbox: 'read-only' },
   bypassPermissions: { approvalPolicy: 'never', sandbox: 'danger-full-access' },
+  /** Second opinions: nothing can write, and nothing asks; a command that needs more simply fails. */
+  review: { approvalPolicy: 'never', sandbox: 'read-only' },
 };
 /** Codex's plan tool is off unless configured; Harness maps its plans onto goal steps, so its threads always get it. Verified against 0.155.1: without it `turn/plan/updated` never fires. */
 const PLAN_TOOL = { 'tools.update_plan.enabled': true };
+/**
+ * Side chat's thread: nothing saved, nothing writable, nothing to approve, and the tool features the installed codex lists
+ * (`codex features list`, 0.155.1) switched off, so it only answers from the context it is given.
+ */
+const ASK_THREAD = {
+  ephemeral: true,
+  sandbox: 'read-only',
+  approvalPolicy: 'never',
+  config: Object.fromEntries(['shell_tool', 'unified_exec', 'apps', 'plugins', 'multi_agent', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'goals'].map((f) => [`features.${f}`, false])),
+};
 /**
  * Mirrors Claude's `AUTO_ALLOWED` (`electron/mcp/server.ts`): Mochi asks with its own card, so Codex never prompts, and a
  * call may wait on that card as long as main does. `tool_timeout_sec` read in 0.155.1's binary; the approval key was verified against its config schema.
@@ -52,6 +64,8 @@ export class CodexAdapter {
   private servers = new Map<string, CodexServer>();
   private threads = new Map<string, Live>();
   private requests = new Map<string, Pending>();
+  /** Review threads answer every turn in this JSON schema. */
+  private schemas = new Map<string, unknown>();
   private emit: (event: AgentEvent) => void;
   private accountFor: AccountFor;
   private findCodex: FindCodex;
@@ -84,6 +98,12 @@ export class CodexAdapter {
     });
   }
 
+  /** A read-only review on its own Codex thread; its events go out under `threadId` like any thread's. Stop it when done. */
+  async review(threadId: string, options: AgentRunOptions, outputSchema: unknown) {
+    this.schemas.set(threadId, outputSchema);
+    await this.start(threadId, { ...options, permissionMode: 'review' });
+  }
+
   async send(threadId: string, text: string, images?: AgentImage[]) {
     if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
     await this.report(threadId, () => this.turn(threadId, text, images));
@@ -104,12 +124,55 @@ export class CodexAdapter {
   }
 
   async stop(threadId: string) {
+    this.schemas.delete(threadId);
     const live = this.threads.get(threadId);
     if (!live) return;
     await this.interrupt(threadId).catch(() => {});
     this.forget(threadId);
     const rpc = live.server.rpc;
     if (rpc && live.gen === live.server.gen) await rpc.request('thread/unsubscribe', { threadId: live.codexId }).catch(() => {});
+  }
+
+  /**
+   * Side chat on the profile's Codex account: an ephemeral read-only thread on the account's app-server, its answer
+   * streamed as text deltas. Never touches a Mochi thread. Throws a message the side chat can show.
+   */
+  async *ask(spaceId: string, instructions: string, prompt: string, model: string | undefined, abort: AbortController): AsyncGenerator<string> {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    const result = await rpc.request('thread/start', { ...ASK_THREAD, cwd: os.tmpdir(), model: model ?? null, developerInstructions: instructions }, THREAD_TIMEOUT_MS);
+    const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
+    if (typeof codexId !== 'string') throw new Error('codex thread/start returned no thread id');
+    const answer = new Inbox();
+    server.asks.set(codexId, answer);
+    let turnId: string | undefined;
+    const stop = () => turnId && void rpc.request('turn/interrupt', { threadId: codexId, turnId }).catch(() => {});
+    abort.signal.addEventListener('abort', stop, { once: true });
+    try {
+      const turn = await rpc.request('turn/start', { threadId: codexId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
+      turnId = (turn as { turn?: { id?: unknown } })?.turn?.id as string | undefined;
+      yield* answer.drain(abort.signal);
+    } finally {
+      abort.signal.removeEventListener('abort', stop);
+      server.asks.delete(codexId);
+      void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
+    }
+  }
+
+  /** Every page of the profile's account's `model/list`. Throws when logged out. */
+  async models(spaceId: string): Promise<AgentModel[]> {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    const models: AgentModel[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = (await rpc.request('model/list', { cursor })) as { nextCursor?: string | null };
+      models.push(...codexModels(page));
+      cursor = page?.nextCursor ?? null;
+    } while (cursor);
+    return models;
   }
 
   dispose() {
@@ -164,7 +227,7 @@ export class CodexAdapter {
       await this.open(live.server, rpc, threadId, live.options);
       live = this.threads.get(threadId)!;
     }
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null });
+    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
   }
@@ -179,6 +242,7 @@ export class CodexAdapter {
 
   /** Live turns on that account fail and its open cards go away; the next call restarts its server after a backoff. */
   private exited(server: CodexServer, message: string) {
+    for (const ask of server.asks.values()) ask.fail(message);
     for (const [requestId, p] of this.requests) {
       if (p.server !== server) continue;
       this.requests.delete(requestId);
@@ -193,6 +257,8 @@ export class CodexAdapter {
 
   private notification(server: CodexServer, method: string, params: unknown) {
     if (method === 'account/rateLimits/updated') return updateLimits(server.limits, params);
+    const ask = server.asks.get(codexThreadId(params) ?? '');
+    if (ask) return ask.notify(method, params);
     const live = server.byCodex.get(codexThreadId(params) ?? '');
     if (!live) return;
     const turnId = (params as { turn?: { id?: unknown } }).turn?.id;
@@ -237,6 +303,7 @@ class CodexServer {
   rpc?: RpcClient;
   gen = 0;
   byCodex = new Map<string, Live>();
+  asks = new Map<string, Inbox>();
   limits: AccountLimits = {};
   private hooks: ServerHooks;
   private child?: ChildProcessWithoutNullStreams;
@@ -305,6 +372,44 @@ class CodexServer {
     this.ready = undefined;
     this.gen++;
     this.hooks.exited(message);
+  }
+}
+
+/** One side chat answer: its thread's notifications in, text chunks out, ending at `turn/completed`. */
+class Inbox {
+  private chunks: string[] = [];
+  private streamed = new Set<string>();
+  private end?: { error?: string };
+  private wake = () => {};
+
+  notify(method: string, params: unknown) {
+    const p = params as { itemId?: unknown; delta?: unknown; item?: { type?: unknown; id?: unknown; text?: unknown }; turn?: { status?: unknown; error?: { message?: unknown } } };
+    if (method === 'item/agentMessage/delta' && typeof p.delta === 'string') {
+      this.streamed.add(String(p.itemId));
+      this.chunks.push(p.delta);
+    }
+    // A message that never streamed arrives whole.
+    if (method === 'item/completed' && p.item?.type === 'agentMessage' && typeof p.item.text === 'string' && !this.streamed.has(String(p.item.id))) this.chunks.push(p.item.text);
+    if (method === 'turn/completed') {
+      const error = p.turn?.error?.message;
+      this.end = p.turn?.status === 'failed' ? { error: typeof error === 'string' ? apiMessage(error) : 'Codex stopped without an answer' } : {};
+    }
+    this.wake();
+  }
+
+  fail(error: string) {
+    this.end = { error };
+    this.wake();
+  }
+
+  async *drain(signal: AbortSignal) {
+    const aborted = new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    while (!signal.aborted) {
+      if (this.chunks.length) yield this.chunks.splice(0).join('');
+      else if (this.end?.error) throw new Error(this.end.error);
+      else if (this.end) return;
+      else await Promise.race([new Promise<void>((resolve) => (this.wake = resolve)), aborted]);
+    }
   }
 }
 

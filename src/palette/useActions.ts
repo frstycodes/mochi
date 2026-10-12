@@ -8,7 +8,7 @@ import { available, scopeOf, type ScopeTarget } from './when';
 export function useActions(target?: ScopeTarget) {
   const { base, review } = useActionContext();
   const ctx: ActionContext = { ...base, scope: scopeOf(base.state, target) };
-  return { actions: available<PaletteAction>(ACTIONS, ctx.scope), run: (action: PaletteAction) => action.run(ctx), review };
+  return { actions: available<PaletteAction>(ACTIONS, ctx.scope), run: (action: PaletteAction) => action.run(ctx), scope: ctx.scope, review };
 }
 
 /** Everything an action's `run` needs except its scope, for callers that scope several targets themselves (bulk menus). */

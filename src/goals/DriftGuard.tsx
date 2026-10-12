@@ -18,6 +18,8 @@ interface Pending {
   prefix: string;
   verdict: DriftVerdict;
   references?: References;
+  /** A late model verdict on a message that already went out: the card offers to move it, not to hold it. */
+  isSent?: boolean;
 }
 
 /** What the agent gets in place of the shown message, when the composer added referenced threads or windows. */
@@ -25,20 +27,23 @@ type References = { prompt: string; images: AgentImage[] };
 
 type BranchFrom = 'current' | 'base';
 
-/** Scores each message against the thread's goal before it is sent. Off-goal ones are held for the card. `onSent` runs once a message actually goes. */
+/** Scores each message against the thread's goal. A clear local off-goal is held for the card; one that needs the model is sent first and judged after. `onSent` runs once a message actually goes. */
 export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const { state, dispatch } = useHarness();
   const { textInput, attachments } = usePromptInputController();
   const [pending, setPending] = useState<Pending | null>(null);
   const [branchFrom, setBranchFrom] = useRememberedBranchFrom();
 
-  const send = (text: string, drift: DriftKind, reason: string, references?: References) => {
+  const send = (text: string, drift: DriftKind | undefined, reason: string, references?: References) => {
     dispatch({ type: 'send', threadId: thread.id, text, drift, reason, ...references });
     onSent?.();
   };
+  const tag = (text: string, drift: DriftKind, reason: string) => dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift, reason });
   const logEvent = (text: string) => dispatch({ type: 'say', threadId: thread.id, entry: { who: 'harness', kind: 'event', text: `Drift guard: ${text}` } });
   const close = () => {
     setPending(null);
+    // A sent message already left the input, which may hold the next one by now.
+    if (pending?.isSent) return;
     textInput.clear();
     attachments.clear();
   };
@@ -61,26 +66,31 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     if (thread.drift?.isMuted) return act(prompt, prefix, { kind: 'on-goal', reason: 'Drift guard off for this thread' }, references);
     const verdict = judgeDrift(prompt, thread);
     if (!(verdict instanceof Promise)) return act(prompt, prefix, verdict, references);
-    verdict.then((v) => act(prompt, prefix, v, references) && textInput.clear());
-    return false;
+    const text = `${prefix}${prompt}`;
+    send(text, undefined, 'Checking against the goal', references);
+    verdict.then((v) => (v.kind === 'off-goal' ? setPending({ prompt, prefix, verdict: v, references, isSent: true }) : tag(text, v.kind, v.reason)));
+    return true;
   };
 
-  const continueHere = () => {
+  /** Sends a held message, or tags one already sent. */
+  const resolve = (drift: DriftKind, reason: string) => {
     if (!pending) return;
-    send(`${pending.prefix}${pending.prompt}`, 'off-goal', `${pending.verdict.reason}; you chose Continue here`, pending.references);
+    const text = `${pending.prefix}${pending.prompt}`;
+    if (pending.isSent) tag(text, drift, reason);
+    else send(text, drift, reason, pending.references);
     close();
   };
 
-  const addToGoal = () => {
-    if (!pending) return;
-    send(`${pending.prefix}${pending.prompt}`, 'scope-add', 'you chose Add to goal', pending.references);
-    close();
-  };
+  const continueHere = () => pending && resolve('off-goal', `${pending.verdict.reason}; you chose ${pending.isSent ? 'Keep here' : 'Continue here'}`);
+
+  const addToGoal = () => resolve('scope-add', 'you chose Add to goal');
 
   const newThread = () => {
     if (!pending) return;
     const before = snapshot(state);
     const isGoalDone = isDone(thread, state.now);
+    // GAP: undo restores the store, but the interrupted turn stays interrupted.
+    if (pending.isSent && thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
     dispatch({ type: 'drift-new-thread', threadId: thread.id, prompt: pending.prompt, branchFrom });
     close();
     toast(isGoalDone ? `Settled "${thread.title}" and started a new thread` : 'Started a new thread', {
@@ -98,6 +108,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
 
   const dismiss = () => {
     if (!pending) return;
+    if (pending.isSent) return continueHere();
     logEvent(`"${pending.prompt.slice(0, 40)}" looked off-goal, dismissed`);
     setPending(null);
   };
@@ -154,7 +165,15 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
             <Compass aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <p className="type-body">
-                This looks unrelated to <em className="font-medium not-italic">{thread.title}</em>.
+                {pending.isSent ? (
+                  <>
+                    Sent, but “{pending.prompt}” looks unrelated to <em className="font-medium not-italic">{thread.title}</em>.
+                  </>
+                ) : (
+                  <>
+                    This looks unrelated to <em className="font-medium not-italic">{thread.title}</em>.
+                  </>
+                )}
               </p>
               <p className="type-caption text-subtle-foreground">
                 {pending.verdict.reason}
@@ -163,10 +182,10 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={guard.newThread}>New thread</Button>
+            <Button onClick={guard.newThread}>{pending.isSent ? 'Move to new thread' : 'New thread'}</Button>
             <Button variant="outline" onClick={guard.continueHere}>
-              Continue here
-              <Kbd className="-mr-1">Enter</Kbd>
+              {pending.isSent ? 'Keep here' : 'Continue here'}
+              {!pending.isSent && <Kbd className="-mr-1">Enter</Kbd>}
             </Button>
             <Button variant="ghost" onClick={guard.addToGoal}>
               Add to goal
