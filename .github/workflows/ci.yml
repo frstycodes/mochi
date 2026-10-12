@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # Installs Node, the pinned pnpm (package.json `packageManager`) and dependencies, with the store cached.
+      - uses: voidzero-dev/setup-vp@v1.21.2
+        with:
+          node-version: '24'
+          cache: true
+
+      # Lint plus type checks for src and electron (TypeScript Go via tsgolint).
+      - run: vp check
+      # `vp test` is Vitest; the suite is node:test, so run the package script.
+      - run: vp run test
+      - run: vp run build
