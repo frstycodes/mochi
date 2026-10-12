@@ -16,7 +16,7 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
   let s = base();
   const [start] = calls(s, create);
   assert.equal(start.method, 'start');
-  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', worktree: `feat/${start.threadId}`, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
+  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', worktree: `mochi/${start.threadId}`, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
 
   s = run(s, create);
   const id = start.threadId;
@@ -74,7 +74,7 @@ test('a folderless chat starts with no folder (main makes one); a restart reuses
 
   const s = run(base(), { type: 'create', title: 'hi', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
   const thread = s.threads.at(-1)!;
-  assert.deepEqual(thread.repo, { project: 'app', branch: `feat/${thread.id}`, path: '/Users/me/dev/app' });
+  assert.deepEqual(thread.repo, { project: 'app', branch: `mochi/${thread.id}`, path: '/Users/me/dev/app' });
   assert.equal(thread.live?.cwd, '/Users/me/dev/app');
   const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/dev/app');

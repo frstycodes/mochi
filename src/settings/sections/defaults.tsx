@@ -38,7 +38,7 @@ export function DefaultsSection() {
   );
 }
 
-const AGENTS = HARNESS_IDS.map((id) => ({ value: id, label: HARNESSES[id].name }));
+export const AGENTS = HARNESS_IDS.map((id) => ({ value: id, label: HARNESSES[id].name }));
 
 function SideChatGroup() {
   const [model, setModel] = useSideChatDefault();

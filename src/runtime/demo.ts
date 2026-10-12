@@ -1,5 +1,5 @@
 import type { AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
-import { FAKE_TOOLS, genericTools, NOW0, type Step, type Thread } from '../model.ts';
+import { DEMO_LINKS, FAKE_TOOLS, genericTools, NOW0, type Step, type Thread } from '../model.ts';
 
 /** The prototype's scripted agent: a pure function from a thread snapshot and the clock to what it would report this minute. */
 export function demoEvents(thread: Thread, now: number): AgentEvent[] {
@@ -18,10 +18,11 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
       const tools = FAKE_TOOLS[s.id] ?? genericTools(s.title);
       const used = thread.activity.filter((a) => a.kind === 'tool' && a.at >= (s.startedAt ?? 0)).length;
       const id = `demo-${threadId}-${s.id}-${now}`;
+      const text = tools[used % tools.length];
       contextUsed = Math.min(Math.round(thread.context.max * CONTEXT_CEILING), contextUsed + TOKENS_PER_TOOL);
       events.push(
-        { threadId, type: 'tool', id, phase: 'start', text: tools[used % tools.length] },
-        { threadId, type: 'tool', id, phase: 'end', text: tools[used % tools.length] },
+        { threadId, type: 'tool', id, phase: 'start', text },
+        { threadId, type: 'tool', id, phase: 'end', text, ...(DEMO_LINKS[text] && { links: DEMO_LINKS[text] }) },
         { threadId, type: 'usage', inputTokens: 0, outputTokens: 0, contextUsed, contextMax: thread.context.max },
       );
     }

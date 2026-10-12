@@ -38,6 +38,8 @@ export function notificationsReducer(state: State, action: Action): State {
     }
     case 'notify-quiet':
       return withNotifications(state, { quiet: action.quiet });
+    case 'delete':
+      return withNotifications(state, { items: n.items.filter((i) => !action.threadIds.includes(i.threadId)), seen: { threads: state.threads, queue: state.queue } });
   }
   if (state.threads === n.seen?.threads && state.queue === n.seen.queue) return state;
   const seen = { threads: state.threads, queue: state.queue };

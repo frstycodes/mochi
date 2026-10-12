@@ -49,8 +49,22 @@ export interface ActivityEntry {
   who: Author;
   kind: 'message' | 'tool' | 'event' | 'reasoning';
   text: string;
+  /** Events only: the why, shown muted under the label. */
+  detail?: string;
   seconds?: number;
   drift?: 'on-goal' | 'scope-add' | 'off-goal';
+  /** The agent's id for a tool call, so its end can find the entry its start logged. */
+  toolId?: string;
+  links?: WebLink[];
+}
+
+export interface WebLink {
+  url: string;
+  title?: string;
+}
+
+export function authorName(who: Author) {
+  return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Mochi' }[who];
 }
 
 export interface SkillUse {
@@ -137,7 +151,7 @@ export interface LiveRun {
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'run';
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting' | 'run';
 
 export interface QueueItem {
   id: string;
@@ -150,6 +164,10 @@ export interface QueueItem {
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
   requestId?: string;
+  /** A consequential Mochi tool call waiting on this card (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
+  tool?: { callId: string; options?: { id: string; label: string }[] };
+  /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
+  setting?: { id: string; suggested?: string };
   createdAt: number;
 }
 
@@ -266,6 +284,10 @@ function rateLimiting(): Thread {
       { at: at(s, 2), who: 'claude', kind: 'message', text: 'Plan: tiers doc, schema, gateway wiring, Redis-backed token bucket, load test, docs. I will rate limit by API key, not IP, since every public route needs a key.' },
       { at: at(s, 92), who: 'you', kind: 'message', text: 'Also add per-key overrides, sales wants to raise limits for a few customers.' },
       { at: at(s, 93), who: 'harness', kind: 'event', text: 'Goal v2: +1 step "Per-key overrides"' },
+      { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Search redis token bucket rate limiter lua script atomic', links: DEMO_LINKS['Search redis token bucket rate limiter lua script atomic'] },
+      { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', links: DEMO_LINKS['Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/'] },
+      { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts' },
+      { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run node -e "\\\n  const lua = require(\'fs\').readFileSync(\'packages/cache/bucket.lua\', \'utf8\');\\\n  console.log(lua.length)"' },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Read packages/cache/index.ts' },
       { at: at(s, 101), who: 'claude', kind: 'tool', text: 'Edit packages/cache/redis.ts  +38 −0' },
       { at: at(s, 104), who: 'claude', kind: 'tool', text: 'Run pnpm --filter cache test' },
@@ -522,13 +544,32 @@ export function seedQueue(): QueueItem[] {
 }
 
 export const FAKE_TOOLS: Record<string, string[]> = {
-  rl5: ['Edit packages/cache/redis.ts  +12 −2', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
+  rl5: ['Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts', 'Search redis token bucket rate limiter lua script atomic', 'Edit packages/cache/redis.ts  +12 −2', 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
   rl6: ['Write apps/api/middleware/ratelimit.ts', 'Edit apps/api/gateway.ts  +6 −1', 'Run pnpm --filter api test ratelimit'],
   rl7: ['Edit packages/db/schema/limits.ts  +14 −0', 'Edit apps/api/middleware/ratelimit.ts  +22 −3'],
   rl8: ['Write scripts/load/ratelimit.k6.js', 'Run k6 run scripts/load/ratelimit.k6.js'],
   ad2: ['Edit apps/web/routes/admin/usage.tsx  +48 −10', 'Read apps/api/routes/admin/usage.ts', 'Run pnpm --filter web typecheck'],
   ad3: ['Write apps/api/routes/admin/usage.csv.ts', 'Run pnpm --filter api test usage'],
   ad4: ['Edit apps/web/routes/admin/usage.tsx  +30 −2'],
+};
+
+/** What the demo's web searches and fetches return, keyed by the tool line. Worst case on purpose: long titles, a domain with no favicon, a dozen hits. */
+export const DEMO_LINKS: Record<string, WebLink[]> = {
+  'Search redis token bucket rate limiter lua script atomic': [
+    { url: 'https://redis.io/glossary/rate-limiting/', title: 'Rate Limiting with Redis: token bucket, sliding window and fixed window algorithms explained with examples' },
+    { url: 'https://github.com/redis/redis/issues/8114', title: 'EVALSHA with a token bucket script returns stale counts under MULTI' },
+    { url: 'https://stackoverflow.com/questions/13175050/how-to-implement-rate-limiting-using-redis', title: 'How to implement rate limiting using Redis' },
+    { url: 'https://blog.cloudflare.com/counting-things-a-lot-of-different-things/', title: 'How we built rate limiting capable of scaling to millions of domains' },
+    { url: 'https://stripe.com/blog/rate-limiters', title: 'Scaling your API with rate limiters' },
+    { url: 'https://upstash.com/docs/redis/sdks/ratelimit-ts/algorithms', title: 'Ratelimiting algorithms' },
+    { url: 'https://engineering.example-internal-wiki.invalid/limits', title: 'Internal: per-tier limits (no favicon here)' },
+    { url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429', title: '429 Too Many Requests - HTTP | MDN' },
+    { url: 'https://www.npmjs.com/package/rate-limiter-flexible' },
+    { url: 'https://news.ycombinator.com/item?id=21378232', title: 'Ask HN: How do you rate limit an API at scale?' },
+    { url: 'https://aws.amazon.com/builders-library/fairness-in-multi-tenant-systems/', title: 'Fairness in multi-tenant systems' },
+    { url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket - Wikipedia' },
+  ],
+  'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/': [{ url: 'https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', title: 'Scripting with Lua' }],
 };
 
 export function genericTools(stepTitle: string) {

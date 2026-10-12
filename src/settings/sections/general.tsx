@@ -32,7 +32,7 @@ const THEMES = [
   { value: 'system', label: 'System' },
 ] as const;
 
-const MOTION = [
+export const MOTION = [
   { value: 'system', label: 'System' },
   { value: 'on', label: 'On' },
   { value: 'off', label: 'Off' },

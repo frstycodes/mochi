@@ -5,8 +5,8 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
-import { STEP_STATUSES, type AgentToolResult } from '../../src/host/types/agent.ts';
+import type { AgentToolResult } from '../../src/host/types/agent.ts';
+import { MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, tierOf, type ToolName } from '../../src/runtime/toolTable.ts';
 import { mainWindow } from '../window.ts';
 
 /**
@@ -15,26 +15,10 @@ import { mainWindow } from '../window.ts';
  */
 export const SERVER = 'mochi';
 
-const threadId = z.string().optional().describe('Another thread in this profile; defaults to your own thread');
+const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
 
-const TOOLS = [
-  { name: 'get_goal', description: "Read a thread's goal and its steps, with each step's id and status.", shape: { threadId } },
-  {
-    name: 'set_step_status',
-    description: "Set a goal step's status. Mark steps running when you start them and done when finished, so the user sees progress.",
-    shape: { stepId: z.string(), status: z.enum(STEP_STATUSES), threadId },
-  },
-  { name: 'add_step', description: "Add a step to a thread's goal, as a new goal revision.", shape: { title: z.string(), size: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe('1 small, 2 medium, 3 large'), threadId } },
-  { name: 'list_threads', description: 'List the threads in this profile.', shape: {} },
-  {
-    name: 'create_thread',
-    description: 'Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on.',
-    shape: { prompt: z.string(), provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent") },
-  },
-] as const;
-
-/** Read-only and goal-bookkeeping tools run without an approval card; `create_thread` starts an agent, so it asks. */
-export const AUTO_ALLOWED = ['get_goal', 'set_step_status', 'add_step', 'list_threads'].map((name) => `mcp__${SERVER}__${name}`);
+/** Mochi asks with its own card for consequential tools (`src/runtime/tools.ts`), so the harness never asks too. */
+export const AUTO_ALLOWED = TOOL_NAMES.map((name) => `mcp__${SERVER}__${name}`);
 
 /** Claude: an in-process server per session, bound to its thread. A server instance serves one connection. */
 export function claudeServer(thread: string) {
@@ -59,16 +43,17 @@ export function resolveToolCall(id: string, result: AgentToolResult) {
   pending.delete(id);
 }
 
-async function callMochi(thread: string, name: string, args: Record<string, unknown>): Promise<CallToolResult> {
+async function callMochi(thread: string, name: ToolName, args: Record<string, unknown>): Promise<CallToolResult> {
   const win = mainWindow();
   if (!win) return { content: [{ type: 'text', text: 'Mochi has no window open' }], isError: true };
   const id = `tool-${++nextId}`;
   const result = await new Promise<AgentToolResult>((resolve) => {
     pending.set(id, resolve);
     win.webContents.send('agent:onToolCall', { id, threadId: thread, name, args });
-    setTimeout(() => resolveToolCall(id, { text: 'Mochi did not answer in time', isError: true }), TOOL_TIMEOUT_MS);
+    setTimeout(() => resolveToolCall(id, { text: 'Mochi did not answer in time', isError: true }), tierOf(name) === 'consequential' ? MOCHI_TIMEOUT_MS : TOOL_TIMEOUT_MS);
   });
-  return { content: [{ type: 'text', text: result.text }], isError: result.isError };
+  const image = result.image ? [{ type: 'image' as const, data: result.image.data, mimeType: result.image.mimeType }] : [];
+  return { content: [{ type: 'text', text: result.text }, ...image], isError: result.isError };
 }
 
 function listening() {

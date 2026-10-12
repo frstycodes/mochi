@@ -365,6 +365,17 @@
       "port": 5381
     },
     {
+      "name": "mochi-web-search",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5419",
+        "--strictPort"
+      ],
+      "port": 5419
+    },
+    {
       "name": "mochi-second-opinion",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
@@ -385,6 +396,17 @@
         "--strictPort"
       ],
       "port": 5413
+    },
+    {
+      "name": "mochi-tools",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5397",
+        "--strictPort"
+      ],
+      "port": 5397
     },
     {
       "name": "mochi-schedules",

@@ -39,7 +39,8 @@ export function parseSaved(json: string | null): Saved | null {
     const saved = JSON.parse(json) as Saved;
     if (saved?.version !== 1 || !Array.isArray(saved.threads) || !Array.isArray(saved.queue)) return null;
     const threads = saved.threads.filter((t) => typeof t?.id === 'string' && t.live).map((t) => restoreThread(t, saved.now));
-    return { ...saved, threads, queue: saved.queue.filter((q) => !q.requestId) };
+    // Agent requests and Mochi tool cards wait on a live call, which a restart ended.
+    return { ...saved, threads, queue: saved.queue.filter((q) => !q.requestId && !q.tool) };
   } catch {
     return null;
   }

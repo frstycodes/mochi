@@ -508,7 +508,13 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
           <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
           <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>
-          {row.isWorking ? <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer> : <span className="min-w-0 flex-1 truncate">{row.detail}</span>}
+          {row.isWorking ? (
+            <span className="flex min-w-0 flex-1" title={row.detail}>
+              <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1 truncate">{row.detail}</span>
+          )}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           {!!pr && <PrBadge pr={pr} />}
           <NextRunBadge threadId={thread.id} />

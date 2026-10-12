@@ -160,7 +160,7 @@ export const agent = {
     const r = record(result, 'result');
     string(r.text, 'result.text', MAX_CONTEXT_CHARS);
     if (r.isError !== undefined && typeof r.isError !== 'boolean') throw new TypeError('result.isError must be a boolean');
-    resolveToolCall(id as string, { text: r.text as string, isError: r.isError as boolean | undefined });
+    resolveToolCall(id as string, { text: r.text as string, isError: r.isError as boolean | undefined, ...(r.image !== undefined && { image: imageOf(r.image) }) });
   },
   async classify(_sender, prompt, thread) {
     string(prompt, 'prompt', 20_000);
@@ -262,4 +262,12 @@ async function threadWorktree(threadId: string, root: string, branch: string) {
   });
   if (path) broadcast({ threadId, type: 'worktree', path });
   return path ?? root;
+}
+
+function imageOf(value: unknown) {
+  const image = record(value, 'result.image');
+  if (image.mimeType !== 'image/png') throw new TypeError('result.image.mimeType must be image/png');
+  const data = string(image.data, 'result.image.data', MAX_IMAGE_CHARS);
+  if (!/^[A-Za-z0-9+/]+=*$/.test(data)) throw new TypeError('result.image.data must be base64');
+  return { data, mimeType: 'image/png' as const };
 }

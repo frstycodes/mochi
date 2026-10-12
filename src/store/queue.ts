@@ -9,15 +9,30 @@ export interface QueueState {
 }
 
 /** `answers` is each question's picked labels and typed text, for question items. */
-export type QueueAction = { type: 'answer'; queueId: string; answers?: string[][] };
+export type QueueAction =
+  | { type: 'answer'; queueId: string; answers?: string[][] }
+  /** A Mochi card (a consequential tool call or a setting) joins the queue; `queue-dismiss` takes it out without answering an agent request. */
+  | { type: 'queue-add'; item: QueueItem }
+  | { type: 'queue-dismiss'; queueId: string };
 
 export function initialQueue(saved = getRestored(), isDemo = showsDemoData()): QueueState {
   return { queue: [...(isDemo ? seedQueue() : []), ...(saved?.queue ?? [])] };
 }
 
 export function queueReducer(state: State, action: Action): State {
-  if (action.type === 'answer') return answer(state, action.queueId, action.answers);
-  return state;
+  switch (action.type) {
+    case 'answer':
+      return answer(state, action.queueId, action.answers);
+    case 'queue-add':
+      // The same card again (a setting card from a later blocked call) replaces the old one in place.
+      return state.queue.some((q) => q.id === action.item.id) ? { ...state, queue: state.queue.map((q) => (q.id === action.item.id ? action.item : q)) } : { ...state, queue: [...state.queue, action.item] };
+    case 'queue-dismiss':
+      return { ...state, queue: state.queue.filter((q) => q.id !== action.queueId) };
+    case 'delete':
+      return { ...state, queue: state.queue.filter((q) => !action.threadIds.includes(q.threadId)) };
+    default:
+      return state;
+  }
 }
 
 export function rankQueue(items: QueueItem[]) {

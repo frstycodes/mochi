@@ -9,6 +9,7 @@ import { warmClaude } from './oneshot.ts';
 import { approvalEvent, createMapper, mcpServersFromStatus, permissionResult, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
+import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -129,7 +130,8 @@ async function launch(session: Session) {
     const { configDir = null } = session.account;
     const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
     if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
-    const base = withPlanTools({ ...accountEnv('claude', configDir), PATH: await userPath() });
+    // A consequential Mochi call waits on the user's card; Claude Code's own MCP timeout would cut it short.
+    const base = withPlanTools({ ...accountEnv('claude', configDir), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
     const key = options.useApiKey ? apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');

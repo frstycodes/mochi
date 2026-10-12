@@ -166,6 +166,20 @@ test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, ke
   assert.deepEqual(withPlanTools({ PATH: '/bin' }), { PATH: '/bin', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' });
 });
 
+test('WebSearch ends with its hits as links, WebFetch with the page it read', () => {
+  const { map } = createMapper('t1', CWD);
+  const call = (id: string, name: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input }] } } as unknown as SDKMessage);
+  const result = (id: string, toolUseResult: unknown) => map({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] }, tool_use_result: toolUseResult } as unknown as SDKMessage);
+
+  assert.deepEqual(call('s1', 'WebSearch', { query: 'token bucket' }), [{ threadId: 't1', type: 'tool', id: 's1', phase: 'start', text: 'Search token bucket' }]);
+  const hits = { query: 'token bucket', durationSeconds: 1, results: ['Here is what I found', { tool_use_id: 'x', content: [{ title: 'Token bucket', url: 'https://en.wikipedia.org/wiki/Token_bucket' }, { title: '', url: 'https://redis.io/' }] }] };
+  assert.deepEqual(result('s1', hits).at(0), { threadId: 't1', type: 'tool', id: 's1', phase: 'end', text: 'Search token bucket', links: [{ url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket' }, { url: 'https://redis.io/' }] });
+
+  call('f1', 'WebFetch', { url: 'http://redis.io/docs', prompt: 'summarize' });
+  const fetched = { url: 'https://redis.io/docs/', code: 200, codeText: 'OK', bytes: 1, result: '', durationMs: 1 };
+  assert.deepEqual(result('f1', fetched).at(0), { threadId: 't1', type: 'tool', id: 'f1', phase: 'end', text: 'Fetch http://redis.io/docs', links: [{ url: 'https://redis.io/docs/' }] });
+});
+
 test('supportedModels() lists each model once by its wire id, the default row marking the default', () => {
   const effort = { supportsEffort: true, supportedEffortLevels: ['low', 'high'] as ('low' | 'high')[] };
   const models = claudeModels([

@@ -1,6 +1,6 @@
 import type { ActivityEntry } from './model.ts';
 
-export type ToolVerb = 'Read' | 'Edit' | 'Write' | 'Run' | 'Browser';
+export type ToolVerb = 'Read' | 'Edit' | 'Write' | 'Run' | 'Browser' | 'Search' | 'Fetch';
 
 export interface ThreadSummary {
   tools: { verb: ToolVerb; count: number }[];
@@ -16,7 +16,7 @@ export interface FileChange {
   removed: number;
 }
 
-const VERBS = ['Read', 'Edit', 'Write', 'Run', 'Browser'] satisfies ToolVerb[];
+const VERBS = ['Read', 'Edit', 'Write', 'Run', 'Browser', 'Search', 'Fetch'] satisfies ToolVerb[];
 
 export function toolVerb(text: string): ToolVerb {
   const first = text.split(' ')[0];

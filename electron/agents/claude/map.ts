@@ -1,7 +1,8 @@
 import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionResult, SDKMessage, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem } from '../../../src/host/types/agent.ts';
-import type { AgentInfo, McpServer } from '../../../src/model.ts';
+import type { WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
+import type { AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
@@ -35,6 +36,8 @@ export function createMapper(threadId: string, cwd: string) {
     const file = tool.input.file_path ?? tool.input.notebook_path;
     if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) end.files = [path.relative(cwd, path.resolve(cwd, file))];
     if (tool.name === 'Bash') end.exitCode = exitCode(block);
+    const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
+    if (links) end.links = links;
     const task = (result as { task?: { id?: unknown } } | undefined)?.task;
     if (tool.name !== 'TaskCreate' || typeof task?.id !== 'string') return [end];
     tasks.push({ id: task.id, title: String(tool.input.subject ?? ''), status: 'pending' });
@@ -167,10 +170,26 @@ export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
   return todos.flatMap((t) => (typeof t.content === 'string' ? [{ title: t.content, status: STATUS[t.status as keyof typeof STATUS] ?? 'pending' }] : []));
 }
 
-/** One line for the work log: the command for Bash, the path for file tools, the tool name otherwise. */
+/** One line for the work log: the command for Bash, the path for file tools, the tool name otherwise. Tools the work log knows get its verb ("Run pnpm test"). */
 export function describeTool(name: string, input: Record<string, unknown>) {
   const target = input.command ?? input.file_path ?? input.notebook_path ?? input.pattern ?? input.url ?? input.query ?? input.subject ?? input.description;
-  return typeof target === 'string' ? `${name}: ${target.split('\n')[0].slice(0, 200)}` : name;
+  if (typeof target !== 'string') return name;
+  const verb = VERBS[name as keyof typeof VERBS];
+  return verb ? `${verb} ${target}` : `${name}: ${target.split('\n')[0].slice(0, 200)}`;
+}
+
+const VERBS = { Bash: 'Run', Read: 'Read', Edit: 'Edit', MultiEdit: 'Edit', Write: 'Write', NotebookEdit: 'Edit', WebSearch: 'Search', WebFetch: 'Fetch' } as const;
+
+/** WebSearch's hits (`WebSearchOutput.results`: hit groups mixed with the model's commentary strings) or the page WebFetch read. */
+export function webLinks(name: string, input: Record<string, unknown>, result: unknown): WebLink[] | undefined {
+  const output = (result ?? {}) as Partial<WebSearchOutput & WebFetchOutput>;
+  if (name === 'WebFetch') {
+    const url = typeof output.url === 'string' ? output.url : input.url;
+    return typeof url === 'string' ? [{ url }] : undefined;
+  }
+  if (name !== 'WebSearch' || !Array.isArray(output.results)) return;
+  const hits = output.results.flatMap((r) => (typeof r === 'object' && Array.isArray(r?.content) ? r.content : []));
+  return hits.filter((h) => typeof h?.url === 'string').map((h) => ({ url: h.url, ...(typeof h.title === 'string' && h.title && { title: h.title }) }));
 }
 
 // BashOutput carries no exit code; Claude Code marks a failed command `is_error` and puts "Exit code N" in the result text.

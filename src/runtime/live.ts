@@ -41,6 +41,8 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
     case 'settle':
       return hasAgent(state, action.threadId) ? [{ method: 'stop', threadId: action.threadId }] : [];
+    case 'delete':
+      return action.threadIds.filter((id) => hasAgent(state, id)).map((threadId) => ({ method: 'stop' as const, threadId }));
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.
       const thread = state.threads.find((t) => t.id === action.threadId);

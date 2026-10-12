@@ -41,7 +41,7 @@ export function BrowserSection() {
 
 const PAGES = new Intl.PluralRules('en');
 
-const ENGINES = (Object.keys(SEARCH_ENGINES) as Prefs['searchEngine'][]).map((id) => ({ value: id, label: SEARCH_ENGINES[id].name }));
+export const ENGINES = (Object.keys(SEARCH_ENGINES) as Prefs['searchEngine'][]).map((id) => ({ value: id, label: SEARCH_ENGINES[id].name }));
 
 // Radix Select can't hold '' (the pref's "first booted"), so the choice uses its own value for it.
 const FIRST_BOOTED = 'first-booted';

@@ -110,6 +110,43 @@ Same rules as SESSIONS.md (own files, worktree per session, typecheck + tests + 
 
 Wave 3 of SESSIONS.md (scheduled threads, team spaces, replay, voice, mobile, settings sync) starts after R2.
 
+## Mochi tools
+
+The agent in a thread controls Mochi through the `mochi` MCP server (`electron/mcp/server.ts`). One table, `src/runtime/toolTable.ts`, lists every tool with its tier, its zod schema and its description; main builds the MCP servers from it and the renderer enforces tiers from it (decision, 2026-10-12).
+
+**Flow.** main → `agent:onToolCall` → `runTool` (`src/runtime/tools.ts`) checks scope and tier, runs the handler against the store (or `host.browser` for browser tools), logs it, answers through `agent.toolResult`. Both harnesses auto-approve every `mochi` tool (Claude `allowedTools`, Codex `default_tools_approval_mode = approve`): Mochi asks with its own card, so the user is never asked twice.
+
+**Tiers.**
+
+| Tier | Runs | The user sees |
+|---|---|---|
+| read | always | nothing; the call shows in the work log |
+| reversible | when the setting allows it | the change, a toast with Undo, and a line in the calling thread ("Claude settled 2 threads") |
+| consequential | only after Approve, never automatically | an approval card in the Queue and the thread's composer tray saying exactly what happens ("Delete 'Fix flaky checkout e2e' and its worktree? This can't be undone"), Approve / Deny, options as checkboxes on the card |
+
+Settings › Defaults for new threads › **Agents can change Mochi**: Read only / Reversible (default) / Everything with confirmation. A call above the setting fails with a reason the agent can relay, and the composer tray shows the same setting as an inline control (a `setting` card), so the user changes it where they are.
+
+- **Undo** restores the slices the call changed (threads one by one, panes, layouts) only where they still hold the call's result; anything changed since is kept, and the toast says so. Layout and own-goal bookkeeping (`set_step_status`, `add_step`, pane tabs) are reversible but quiet: logged, no toast, since they fire constantly.
+- **Scope.** Every thread id is resolved in the caller's profile; another profile's thread is "not found". Browser tools only reach the caller's own pane tabs. An agent can't settle, delete or message its own thread.
+- **Approval lifetime.** Cards wait up to 30 minutes (`APPROVAL_TIMEOUT_MS`), the same limit main and both harnesses give a Mochi call (Claude `MCP_TOOL_TIMEOUT`, Codex `tool_timeout_sec`, both read in the installed binaries). After that the card is withdrawn and the agent gets "expired". Cards aren't persisted: after a restart nothing is waiting on them.
+- **Result.** Every write answers with what changed, as JSON (`{ changed: "Settled 2 threads", threads: [...] }`); errors say what to call instead.
+
+**Tools** (verb_noun; `threadId` defaults to the caller; plural `threadIds` where the sidebar has bulk actions).
+
+| Area | read | reversible | consequential |
+|---|---|---|---|
+| Threads | `list_threads` (status, pinned, project), `get_thread` | `rename_thread`, `settle_thread`, `reactivate_thread`, `pin_thread`, `unpin_thread`, `reorder_threads` (before/after one, or the whole pinned order), `watch_thread` | `create_thread` (starts an agent), `send_to_thread`, `delete_thread` |
+| Goals | `get_goal` | `set_step_status`, `add_step`, `edit_goal` (text, step criteria), `reorder_steps`, `drop_step`, `settle_goal` | |
+| Browser | `browser_tabs`, `browser_snapshot`, `browser_screenshot`, `browser_console`, `browser_wait_for` | `browser_open`, `browser_click`, `browser_hover`, `browser_type`, `browser_select`, `browser_drag`, `browser_upload` (worktree files), `browser_press`, `browser_scroll`, `browser_eval` (local pages), `browser_back`, `browser_forward`, `browser_reload`, `browser_set_device` | typing, Enter, or clicking a submit control on a non-local origin; `browser_eval` on a non-local origin (card shows the origin and the whole script: it runs with the user's session); `browser_upload` of a file outside the worktree |
+| Layout | | `open_pane_tab`, `focus_thread`, `split_with`, `close_pane`, `show_file`, `open_changes` | |
+| User | `show_setting` | `ask_side_chat`, `notify_user` (1 per thread per minute) | |
+
+**Delete** (`delete` action): stops the live agent, removes the thread with its queue items, pane, side chats, checkpoints, fork records, layout leaves and saved state; the card's "Also remove its worktree" checkbox runs `git worktree remove` after. Not undoable.
+
+**Browser.** `browser_snapshot` walks the page's DOM in an isolated world (the page can't see or touch it) and returns an indented role/name tree like Playwright's, with `[ref=eN]` on interactive elements; refs live in that world and reset on each snapshot. Clicks and keys go through CDP `Input.*` (trusted events); typing selects the field's text and inserts. While Mochi's window is on another Space the page is `hidden` and gets no hit testing, so a click falls back to a DOM `click()` and the result says it wasn't trusted; screenshots fall back from `capturePage` (empty or `UnknownVizError` there) to CDP `Page.captureScreenshot` (both seen in a production build, 2026-10-12). Local means `localhost`, `127.*`, `[::1]`, `0.0.0.0`, `*.localhost`, `*.test`, `about:`. Navigating to any other origin is allowed, logged, and toasts with Undo (= back). Tools act on a tab whose page is on screen: they select their tab in the pane, and fail with "focus_thread first" when the thread isn't showing, because a hidden native view has no size to render at. GAP: CDP coordinates are not checked against a zoomed or device-emulated page.
+
+**Widgets.** `show_setting(settingId, reason, suggested?)` puts a `setting` card in the composer tray with the real control for prefs-backed settings (enums and switches) and a deep link for the rest; Mochi's own blocked calls use the same card.
+
 ## Not verified yet (check before building on it)
 
 - Env var the Agent SDK reads for the API key; the `user` tool_result message shape.
