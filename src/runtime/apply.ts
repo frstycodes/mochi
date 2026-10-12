@@ -7,6 +7,10 @@ import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/thr
 
 /** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
+  // Any word from the agent means it's up.
+  if (state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
+    state = { ...state, threads: mapThread(state.threads, event.threadId, (t) => ({ ...t, live: { ...t.live!, starting: undefined } })) };
+  }
   const thread = state.threads.find((t) => t.id === event.threadId);
   if (!thread) return state;
   const now = state.now;

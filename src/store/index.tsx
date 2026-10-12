@@ -55,11 +55,14 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     const before = latest.current;
     const answer = resolution(before, action);
     if (answer) void host.agent.resolve(answer.requestId, answer.decision);
-    for (const call of agentCalls(before, action, () => reducer(before, action))) {
+    const calls = agentCalls(before, action, () => reducer(before, action));
+    for (const call of calls) {
       // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
       callAgent(call).catch((error: unknown) => apply({ type: 'agent', event: failed(call.threadId, error) }));
     }
     apply(action);
+    // After the action: a new thread only exists once it has applied.
+    for (const call of calls) if (call.method === 'start') apply({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
   }, []);
   // The tick is the demo adapter's clock; real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {

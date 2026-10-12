@@ -33,6 +33,7 @@ export interface ThreadsState {
 export type ThreadsAction =
   | { type: 'tick' }
   | { type: 'agent'; event: AgentEvent }
+  | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
@@ -92,6 +93,8 @@ function reduce(state: State, action: Action): State {
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
       return applyAgentEvent(state, action.event);
+    case 'agent-starting':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'trigger-overlap':
       return triggerOverlap(state);
     case 'settle':

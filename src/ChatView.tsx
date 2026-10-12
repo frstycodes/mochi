@@ -15,7 +15,8 @@ import { useHarness } from './store';
 import { ProviderMark } from './ui';
 import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, RunOnMenu } from './Composer';
 import { ThreadMinimap } from './ThreadMinimap';
-import { WorkLog } from './WorkLog';
+import { ChatMochi, WorkLog } from './WorkLog';
+import { agentPhase, pendingWork } from './agentPhase';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
@@ -63,6 +64,7 @@ export function ChatView({ thread }: { thread: Thread }) {
                   <ChatRowView thread={thread} row={row} isLive={i === rows.length - 1 && isRunning} />
                 </div>
               ))}
+              <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
           </ConversationContent>
         </VizThreadProvider>

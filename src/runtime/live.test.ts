@@ -81,6 +81,15 @@ test('a folderless chat starts with no folder (main makes one); a restart reuses
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/dev/app');
 });
 
+test('a started agent reads as starting until its first event, so a sent message never looks stuck', () => {
+  let s = run(base(), { type: 'create', title: 'reply with ok', provider: 'codex', project: 'harness', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'agent-starting', threadId: id, provider: 'codex' });
+  assert.equal(s.threads.at(-1)!.live?.starting, 'codex');
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'codex', sessionId: 'sess-1' });
+  assert.equal(s.threads.at(-1)!.live?.starting, undefined);
+});
+
 test("a project thread asks main for its worktree; once main reports it, restarts run there, not in the project folder", () => {
   const create: Action = { type: 'create', title: 'hi', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
   const [start] = calls(base(), create);
