@@ -454,6 +454,28 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-recursing-bohr-242ecd/d2867df4-fd42-4989-ad4e-db4ab8691fbf/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-turn-accordion",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5471",
+        "--strictPort"
+      ],
+      "port": 5471
+    },
+    {
+      "name": "mochi-turn-accordion-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5473",
+        "--strictPort"
+      ],
+      "port": 5473
     }
   ]
 }
