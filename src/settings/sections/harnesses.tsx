@@ -117,7 +117,21 @@ function HarnessSettings({ provider }: { provider: Provider }) {
             id={`${provider}Model`}
             label="Default model"
             description="New threads start on this model."
-            control={<DefaultModelSelect provider={provider} value={settings.harnesses[provider].model} onChange={(model) => void update({ harnesses: { [provider]: { model } } })} />}
+            control={<ModelSelect id={`${provider}Model`} provider={provider} value={settings.harnesses[provider].model} onChange={(model) => void update({ harnesses: { [provider]: { model } } })} />}
+          />
+          <SettingsRow
+            id={`${provider}SecondOpinionModel`}
+            label="Second opinion model"
+            description={`What ${harness.name} reviews other threads on. Empty uses the default model.`}
+            control={
+              <ModelSelect
+                id={`${provider}SecondOpinionModel`}
+                provider={provider}
+                emptyLabel="Default model"
+                value={settings.harnesses[provider].secondOpinionModel}
+                onChange={(secondOpinionModel) => void update({ harnesses: { [provider]: { secondOpinionModel } } })}
+              />
+            }
           />
         </SettingsGroup>
       )}
@@ -132,16 +146,16 @@ function HarnessSettings({ provider }: { provider: Provider }) {
 const ACCOUNT_DEFAULT = 'account-default';
 
 /** The current profile's list for `provider`, its account default first; a saved model the account no longer offers stays listed as Unavailable. */
-function DefaultModelSelect({ provider, value, onChange }: { provider: Provider; value: string; onChange: (model: string) => void }) {
+function ModelSelect({ id, provider, value, emptyLabel, onChange }: { id: string; provider: Provider; value: string; emptyLabel?: string; onChange: (model: string) => void }) {
   const models = useModels(useSpace().id)[provider];
   const stored = optionFor(models, value, provider);
   const fallback = optionFor(models, '', provider);
   const options = [
-    { value: ACCOUNT_DEFAULT, label: models?.length ? `Account default (${fallback.name})` : 'Account default' },
+    { value: ACCOUNT_DEFAULT, label: emptyLabel ?? (models?.length ? `Account default (${fallback.name})` : 'Account default') },
     ...(models ?? []).map((m) => ({ value: m.id, label: m.name })),
     ...(value && !models?.some((m) => m.id === value) ? [{ value, label: stored.isUnavailable ? `${value} (Unavailable)` : value }] : []),
   ];
-  return <SettingsSelect id={`${provider}Model`} value={value || ACCOUNT_DEFAULT} options={options} onChange={(v) => onChange(v === ACCOUNT_DEFAULT ? '' : v)} className="w-56" />;
+  return <SettingsSelect id={id} value={value || ACCOUNT_DEFAULT} options={options} onChange={(v) => onChange(v === ACCOUNT_DEFAULT ? '' : v)} className="w-56" />;
 }
 
 function ApiKeyGroup({ provider }: { provider: Provider }) {

@@ -80,6 +80,11 @@ export function defaultModel(provider: Provider): string | undefined {
   return load().harnesses[provider].model || undefined;
 }
 
+/** The model a harness gives second opinions on: its own setting, else its default thread model, else undefined (the harness picks). */
+export function secondOpinionModel(provider: Provider): string | undefined {
+  return load().harnesses[provider].secondOpinionModel || defaultModel(provider);
+}
+
 /** The key the user stored for this harness, or undefined. Only ever set as the harness's own variable in its child env (see `agentEnv`). */
 export function apiKeyFor(provider: Provider): string | undefined {
   const cipher = load().apiKeys[provider];

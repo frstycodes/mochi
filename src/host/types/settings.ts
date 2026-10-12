@@ -22,6 +22,8 @@ export type AgentLogin =
 export interface HarnessSettings {
   path: string;
   model: string;
+  /** What this harness reviews on when it gives another thread a second opinion; empty follows `model`. */
+  secondOpinionModel: string;
 }
 
 /** Everything the main process reads. Empty strings mean "not set": the built-in worktrees folder, the user's `$SHELL`. */
@@ -104,7 +106,7 @@ export const settingsMethods = {
 
 export const DEFAULT_SETTINGS: AgentSettings = {
   concurrency: 6,
-  harnesses: Object.fromEntries(HARNESS_IDS.map((id) => [id, { path: '', model: HARNESSES[id].defaultModel }])) as AgentSettings['harnesses'],
+  harnesses: Object.fromEntries(HARNESS_IDS.map((id) => [id, { path: '', model: HARNESSES[id].defaultModel, secondOpinionModel: '' }])) as AgentSettings['harnesses'],
   worktreeRoot: '',
   shell: '',
   prDrafts: false,

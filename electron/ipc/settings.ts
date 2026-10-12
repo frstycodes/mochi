@@ -101,6 +101,7 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
       if (next.path && !isAbsolute(next.path)) throw new TypeError('The path must be absolute');
     }
     if (h.model !== undefined) next.model = string(h.model, 'model', MAX_MODEL_CHARS).trim();
+    if (h.secondOpinionModel !== undefined) next.secondOpinionModel = string(h.secondOpinionModel, 'secondOpinionModel', MAX_MODEL_CHARS).trim();
     patch.harnesses[id as Provider] = next;
   }
   return patch;

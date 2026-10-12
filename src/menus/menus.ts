@@ -2,7 +2,7 @@
 export const THREAD_MENU = [
   ['thread-open', 'thread-open-split'],
   ['thread-pin', 'thread-unpin', 'thread-watch', 'thread-unwatch'],
-  ['thread-fork', 'thread-handoff', 'thread-rewind'],
+  ['thread-fork', 'thread-handoff', 'thread-second-opinion', 'thread-rewind'],
   ['thread-copy-branch', 'thread-reveal'],
   ['thread-settle', 'thread-reactivate'],
 ] as const;
