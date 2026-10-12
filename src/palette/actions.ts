@@ -45,7 +45,7 @@ export const ACTIONS = [
   { id: 'go-queue', group: 'Go to', title: 'Queue', icon: Inbox, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'queue' } }) },
   { id: 'go-review', group: 'Go to', title: 'Review mode', icon: TaskSquare, keywords: 'inbox approve', when: when.reviews, run: ({ openReview }) => openReview() },
   { id: 'go-board', group: 'Go to', title: 'Board', icon: Route, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }) },
-  { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, keywords: 'agents claude codex login api key preferences', run: () => openSettings() },
+  { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, shortcut: ['mod', ','], keywords: 'agents claude codex accounts login api key preferences', run: () => openSettings() },
   { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, shortcut: ['N'], run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 
   { id: 'thread-open', group: 'Thread', title: 'Open thread', icon: ArrowRight, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'go', view: { kind: 'thread', id: t.id } })) },

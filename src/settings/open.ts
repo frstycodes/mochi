@@ -1,16 +1,34 @@
 import { useSyncExternalStore } from 'react';
+import type { SectionId } from './sections';
 
-let isOpen = false;
-const listeners = new Set<() => void>();
-
-/** Cmd K and the sidebar footer menu open Settings; `SettingsDialog`, mounted once in `App`, renders it. */
-export function openSettings(open = true) {
-  isOpen = open;
-  listeners.forEach((l) => l());
+/** `nonce` re-triggers the scroll-and-flash when the same setting is deep-linked twice. */
+export interface SettingsRoute {
+  section: SectionId;
+  settingId?: string;
+  nonce: number;
 }
 
-export function useSettingsOpen() {
-  return useSyncExternalStore(subscribe, () => isOpen);
+let route: SettingsRoute | null = null;
+let nonce = 0;
+const listeners = new Set<() => void>();
+
+/** Opens the settings page (⌘, / Ctrl+,, the palette, the profile menu); `settingId` scrolls to that row and flashes it. */
+export function openSettings(section: SectionId = 'harnesses', settingId?: string) {
+  set({ section, settingId, nonce: ++nonce });
+}
+
+/** Back to the app: the layout lives in the store, so the splits and views come back as they were. */
+export function closeSettings() {
+  set(null);
+}
+
+export function useSettingsRoute() {
+  return useSyncExternalStore(subscribe, () => route);
+}
+
+function set(next: SettingsRoute | null) {
+  route = next;
+  listeners.forEach((l) => l());
 }
 
 function subscribe(listener: () => void) {

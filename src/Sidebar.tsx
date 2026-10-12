@@ -118,7 +118,7 @@ function SpaceHeader() {
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">
-          {space.profile} profile · Claude {space.accounts.claude} · Codex {space.accounts.codex} · GitHub {space.accounts.github}
+          {space.profile} profile · Claude {space.plans.claude} · Codex {space.plans.codex} · GitHub {space.github}
         </TooltipContent>
       </Tooltip>
     </SidebarHeader>
@@ -597,6 +597,7 @@ function DemoMenu({ paused }: { paused: boolean }) {
         <DropdownMenuItem onSelect={() => openSettings()}>
           <Setting2 />
           Settings
+          <Shortcut keys={['mod', ',']} className="ml-auto" />
         </DropdownMenuItem>
         <DropdownMenuGroup>
           <DropdownMenuLabel>Prototype</DropdownMenuLabel>
