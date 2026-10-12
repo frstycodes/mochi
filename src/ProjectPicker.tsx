@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, ChatRound, ChevronDown, ChevronRight, Folder, FolderAdd } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -6,21 +6,24 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { host } from './host';
 import { getPrefs } from './settings/prefs';
-import { useSpaceThreads } from './store';
+import { useHarness, useSpaceThreads } from './store';
+import { addRecentProject, projectName, projectRef, useSavedProjects } from './projects';
 
-/** Where a new thread runs: one of the space's projects, a folder opened by path, or no folder at all. */
+/** Where a new thread runs: a folder this profile opened before, one opened by path, or no folder at all. `value` is a project ref (`src/projects.ts`). */
 export function ProjectPicker({ value, onChange }: { value: string | null; onChange: (project: string | null) => void }) {
-  const [opened, setOpened] = useState<string[]>([]);
-  const projects = useRecentProjects(opened);
+  const spaceId = useHarness().state.spaceId;
+  const projects = useRecentProjects();
   const [isOpen, setOpen] = useState(false);
   const [isBrowsing, setBrowsing] = useState(false);
+  const name = value && projectName(value);
 
   const choose = (project: string | null) => {
     onChange(project);
     setOpen(false);
+    setBrowsing(false);
   };
   const openFolder = (project: string) => {
-    setOpened((o) => (o.includes(project) ? o : [project, ...o]));
+    addRecentProject(spaceId, project);
     choose(project);
   };
 
@@ -33,9 +36,9 @@ export function ProjectPicker({ value, onChange }: { value: string | null; onCha
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="xs" className="max-w-48 text-subtle-foreground hover:text-foreground" aria-label={`Project: ${value ?? 'No project'}`}>
+        <Button variant="ghost" size="xs" className="max-w-48 text-subtle-foreground hover:text-foreground" aria-label={`Project: ${name ?? 'No project'}`}>
           {value ? <Folder /> : <ChatRound />}
-          <span className="truncate">{value ?? 'No project'}</span>
+          <span className="truncate">{name ?? 'No project'}</span>
           <ChevronDown data-icon="inline-end" />
         </Button>
       </PopoverTrigger>
@@ -46,11 +49,12 @@ export function ProjectPicker({ value, onChange }: { value: string | null; onCha
   );
 }
 
-/** Projects of the space's threads, most recently started first, after folders opened this session. */
-export function useRecentProjects(opened: string[] = []) {
+/** Folders this profile opened, then the projects of its threads, most recently started first. */
+export function useRecentProjects() {
   const threads = useSpaceThreads();
-  const fromThreads = [...threads].sort((a, b) => b.startedAt - a.startedAt).flatMap((t) => (t.repo ? [t.repo.project] : []));
-  return [...new Set([...opened, ...fromThreads])];
+  const saved = useSavedProjects(useHarness().state.spaceId);
+  const fromThreads = [...threads].sort((a, b) => b.startedAt - a.startedAt).flatMap((t) => (t.repo ? [projectRef(t.repo)!] : []));
+  return [...new Set([...saved, ...fromThreads])];
 }
 
 function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string[]; value: string | null; onChoose: (project: string | null) => void; onBrowse: () => void }) {
@@ -64,7 +68,10 @@ function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string
             {projects.map((p) => (
               <CommandItem key={p} value={p} data-checked={p === value} onSelect={() => onChoose(p)}>
                 <Folder />
-                <span className="truncate">{p}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{projectName(p)}</span>
+                  {p !== projectName(p) && <span className="truncate type-caption text-subtle-foreground">{p}</span>}
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -88,18 +95,10 @@ function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string
   );
 }
 
-// GAP: fake file system. The desktop app lists real directories through the harness server.
-const FOLDERS: Record<string, string[]> = {
-  '~': ['dev', 'work', 'Documents'],
-  '~/dev': ['agent-skills', 'focus-mode', 'harness', 'liane', 'map-veto'],
-  '~/work': ['latitude', 'latitude-docs', 'latitude-infra'],
-  '~/Documents': ['notes'],
-};
-
 /** T3 Code's Add project: type or paste a path, or browse with the native picker. Suggestions list the folders in the typed directory. */
 function FolderBrowser({ onBack, onChoose }: { onBack: () => void; onChoose: (project: string) => void }) {
   const [path, setPath] = useState(() => getPrefs().projectsFolder.replace(/\/*$/, '/'));
-  const { dir, matches, folder } = resolvePath(path);
+  const { dir, matches, folder } = useFolderMatches(path);
   const enter = (name: string) => setPath(`${dir}/${name}/`);
 
   return (
@@ -127,9 +126,9 @@ function FolderBrowser({ onBack, onChoose }: { onBack: () => void; onChoose: (pr
         <CommandEmpty>No folder here</CommandEmpty>
         {!!folder && (
           <CommandGroup>
-            <CommandItem value={`open ${folder.path}`} onSelect={() => onChoose(folder.name)}>
+            <CommandItem value={`open ${folder.path}`} onSelect={() => onChoose(folder.path)}>
               <FolderAdd />
-              Open {folder.name}
+              Open {projectName(folder.path)}
             </CommandItem>
           </CommandGroup>
         )}
@@ -157,16 +156,26 @@ function FolderBrowser({ onBack, onChoose }: { onBack: () => void; onChoose: (pr
   );
 }
 
-function resolvePath(path: string) {
+/** The typed path split at its last slash: subfolders of the directory part that start with the rest, and the typed path itself when it is a folder. */
+function useFolderMatches(path: string) {
   const cut = path.lastIndexOf('/');
-  const dir = cut < 0 ? '~' : path.slice(0, cut);
+  const dir = cut < 0 ? '~' : path.slice(0, cut) || '/';
   const partial = (cut < 0 ? path : path.slice(cut + 1)).toLowerCase();
-  const matches = (FOLDERS[dir] ?? []).filter((name) => name.toLowerCase().startsWith(partial));
-  const full = path.replace(/\/+$/, '');
-  const parent = full.slice(0, full.lastIndexOf('/'));
-  const name = full.slice(full.lastIndexOf('/') + 1);
-  const isFolder = !!FOLDERS[parent]?.includes(name);
-  return { dir, matches, folder: isFolder ? { path: full, name } : null };
+  const full = path.replace(/\/+$/, '') || '/';
+  const [found, setFound] = useState<{ key: string; names: string[]; folder: { path: string } | null }>({ key: '', names: [], folder: null });
+  useEffect(() => {
+    let isCurrent = true;
+    void Promise.all([host.fs.folders(dir), host.fs.folders(full)]).then(
+      ([inDir, self]) => isCurrent && setFound({ key: `${dir}\n${full}`, names: inDir?.names ?? [], folder: self && { path: self.path } }),
+      () => isCurrent && setFound({ key: `${dir}\n${full}`, names: [], folder: null }),
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [dir, full]);
+  const isFresh = found.key === `${dir}\n${full}`;
+  const matches = isFresh ? found.names.filter((name) => name.toLowerCase().startsWith(partial)) : [];
+  return { dir, matches, folder: isFresh ? found.folder : null };
 }
 
 function browseNative(onChoose: (project: string) => void) {

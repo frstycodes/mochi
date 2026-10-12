@@ -70,8 +70,8 @@ export interface PullRequest {
 export interface Thread {
   id: string;
   spaceId: string;
-  /** null: a chat with no folder, so no files, branch or PRs. */
-  repo: { project: string; branch: string } | null;
+  /** null: a chat with no folder, so no files, branch or PRs. `project` is the folder's name; `path` its absolute path, unset for the web build's fixture projects. */
+  repo: { project: string; branch: string; path?: string } | null;
   title: string;
   goal: string;
   providers: Provider[];
@@ -96,6 +96,8 @@ export interface Thread {
 
 export interface LiveRun {
   isWorking: boolean;
+  /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
+  cwd?: string;
   /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
   limit?: { resetsAt?: string };
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */

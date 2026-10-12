@@ -11,6 +11,8 @@ import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.
 import type { ThreadControls } from '../runtime/controls.ts';
 import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
+import { threadCwd } from '../host/cwd.ts';
+import { projectRef, repoFor } from '../projects.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 
 export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
@@ -33,7 +35,7 @@ export type ThreadsAction =
   | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
-  | { type: 'create'; title: string; provider: Provider; project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
@@ -255,7 +257,7 @@ function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State
     const shared: Thread = {
       id: `shared-${state.seq}`,
       spaceId: owner.spaceId,
-      repo: owner.repo && { project: owner.repo.project, branch: 'feat/cache-redis-client' },
+      repo: owner.repo && { ...owner.repo, branch: 'feat/cache-redis-client' },
       title: 'Redis client (shared)',
       goal: `One Redis client both "${owner.title}" and "${asker.title}" build on.`,
       providers: ['claude'],
@@ -303,7 +305,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   const dep = action.dependOn && state.threads.find((t) => t.id === action.dependOn!.threadId);
   const depStep = dep?.steps.find((s) => s.id === action.dependOn!.stepId);
   const base = (sid: string, title: string, size: 1 | 2 | 3): Step => ({ id: sid, title, size, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: action.provider, revision: 1 });
-  const isLive = !!action.isLive && !!action.project;
+  const isLive = !!action.isLive;
   // A live thread's own steps come from its agent's plan; the placeholders are for the demo adapter.
   const steps: Step[] = [
     ...(dep && depStep
@@ -314,7 +316,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   const thread: Thread = {
     id,
     spaceId: state.spaceId,
-    repo: action.project ? { project: action.project, branch: `${getPrefs().branchPrefix}${id}` } : null,
+    repo: action.project ? repoFor(action.project, `${getPrefs().branchPrefix}${id}`) : null,
     title: action.title.length > 48 ? `${action.title.slice(0, 47)}…` : action.title,
     goal: action.title,
     providers: [action.provider],
@@ -332,8 +334,8 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     sources: [],
     context: { used: isLive ? 0 : 4_000, max: action.provider === 'codex' ? 272_000 : 200_000 },
     controls: action.controls,
-    ...(isLive && { live: { isWorking: true, usage: [] } }),
   };
+  if (isLive) thread.live = { isWorking: true, usage: [], cwd: threadCwd(thread) ?? undefined };
   let threads = [...state.threads, thread];
   if (dep && depStep) {
     threads = mapThread(threads, dep.id, (t) =>
@@ -386,7 +388,7 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   }
   next = { ...next, threads: mapThread(next.threads, source.id, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: `Drift guard: moved "${short}" to a new thread` })) };
   const branchFrom = action.branchFrom === 'current' ? source.repo?.branch : 'the base branch';
-  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: source.repo?.project ?? null, branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live });
+  return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live });
 }
 
 /** A whole-thread handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */

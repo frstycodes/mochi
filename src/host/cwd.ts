@@ -1,17 +1,16 @@
 import { worktreePath } from '../git/worktrees.ts';
 import type { Thread } from '../model.ts';
+import { host } from './index.ts';
 
-/** The thread's own worktree once the worktree manager created it, else its project root. */
-export function threadCwd(thread: Thread) {
+// The web build's host mocks ignore the folder, so its fixture projects (no path) get a placeholder root.
+const WEB_FIXTURE_ROOT = '.';
+
+/** The thread's own worktree once the worktree manager created it, else its project folder; null for a folderless chat or a project with no path on desktop. */
+export function threadCwd(thread: Thread, isDesktop = host.isDesktop) {
   if (!thread.repo) return null;
-  return worktreePath(thread.id) ?? projectRoot(thread.repo.project);
+  return worktreePath(thread.id) ?? projectRoot(thread.repo, isDesktop);
 }
 
-// GAP: threads carry a project name, not a folder; the project picker's "Open folder" doesn't keep paths yet. Until it does
-// every project resolves to DEMO_ROOT, which the main process resolves against its own cwd (the harness repo in dev).
-const PROJECT_ROOTS: Record<string, string> = {};
-const DEMO_ROOT = '.';
-
-export function projectRoot(project: string) {
-  return PROJECT_ROOTS[project] ?? DEMO_ROOT;
+export function projectRoot(repo: NonNullable<Thread['repo']>, isDesktop = host.isDesktop) {
+  return repo.path ?? (isDesktop ? null : WEB_FIXTURE_ROOT);
 }

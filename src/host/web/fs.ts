@@ -15,6 +15,13 @@ const files = new Map<string, { text: string; mtimeMs: number }>(
 );
 const listeners = new Set<(change: FsChange) => void>();
 
+const FOLDERS: Record<string, string[]> = {
+  '~': ['dev', 'work', 'Documents'],
+  '~/dev': ['agent-skills', 'focus-mode', 'harness', 'liane', 'map-veto'],
+  '~/work': ['latitude', 'latitude-docs', 'latitude-infra'],
+  '~/Documents': ['notes'],
+};
+
 export const fs: FsHost = {
   async list() {
     return [...files.keys()].sort();
@@ -45,6 +52,13 @@ export const fs: FsHost = {
   async openIn() {},
   async reveal() {
     throw new Error('Revealing files needs the desktop app');
+  },
+  // A browser can't list folders: a fixed tree, so Open folder's suggestions and Tab completion can be tried.
+  async folders(path) {
+    const full = path.replace(/\/+$/, '') || '~';
+    const parent = full.slice(0, full.lastIndexOf('/'));
+    if (FOLDERS[full]) return { path: full, names: FOLDERS[full] };
+    return FOLDERS[parent]?.includes(full.slice(full.lastIndexOf('/') + 1)) ? { path: full, names: [] } : null;
   },
   // GAP: the File System Access API never exposes a path, only the folder's name.
   async pickFolder() {

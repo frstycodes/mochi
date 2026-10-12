@@ -15,6 +15,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   switch (action.type) {
     case 'create':
     case 'drift-new-thread':
+    case 'sidechat-promote':
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
         .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal));
@@ -44,9 +45,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
 }
 
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey'>): AgentCall[] {
-  const cwd = threadCwd(thread);
-  if (!cwd) return [];
-  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
+  // A project with no folder on disk can't run; a folderless chat runs in a folder main makes for it.
+  const cwd = thread.live?.cwd ?? threadCwd(thread);
+  if (thread.repo && !cwd) return [];
+  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd: cwd ?? null, prompt, ...agentOptions(controls, provider), ...extra } }];
 }
 
 function isLive(state: State, threadId: string) {

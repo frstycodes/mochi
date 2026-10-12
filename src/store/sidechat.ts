@@ -1,4 +1,5 @@
 import type { Action, State } from './index.tsx';
+import { projectRef } from '../projects.ts';
 import { panesReducer } from './panes.ts';
 import { threadsReducer } from './threads.ts';
 
@@ -127,7 +128,7 @@ function promote(state: State, action: Extract<Action, { type: 'sidechat-promote
   const marked = patchMessage(state, action, (m) => ({ ...m, promotedTo: action.to }));
   if (action.to === 'message') return threadsReducer(marked, { type: 'say', threadId: thread.id, entry: { who: 'you', kind: 'message', text } });
   const newId = `new-${state.seq}`;
-  const created = threadsReducer(marked, { type: 'create', title: question?.text || answer.text.split('\n')[0], provider: thread.providers[0], project: thread.repo?.project ?? null });
+  const created = threadsReducer(marked, { type: 'create', title: question?.text || answer.text.split('\n')[0], provider: thread.providers[0], project: projectRef(thread.repo), controls: thread.controls, isLive: !!thread.live });
   return threadsReducer(created, { type: 'say', threadId: newId, entry: { who: 'you', kind: 'message', text } });
 }
 
