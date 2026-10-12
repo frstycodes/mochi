@@ -253,6 +253,17 @@
         "--strictPort"
       ],
       "port": 5347
+    },
+    {
+      "name": "harness-claude",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5351",
+        "--strictPort"
+      ],
+      "port": 5351
     }
   ]
 }
