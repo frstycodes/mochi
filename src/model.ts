@@ -55,7 +55,11 @@ export interface ActivityEntry {
   drift?: 'on-goal' | 'scope-add' | 'off-goal';
   /** The agent's id for a tool call, so its end can find the entry its start logged. */
   toolId?: string;
+  /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
+  card?: { id: string; isOpen: boolean };
   links?: WebLink[];
+  /** Wall-clock milliseconds, stamped on live agents' entries; `at` is the app clock's minute. */
+  ms?: number;
 }
 
 export interface WebLink {
@@ -103,11 +107,26 @@ export interface PullRequest {
   title: string;
 }
 
+/**
+ * `project` is the folder's name; `path` its absolute path, unset for the web build's fixture projects. A thread works in its own
+ * worktree unless `mode` is `folder` (the project's own checkout, on `branch`). `base`: the branch a new worktree starts from and
+ * the Changes tab diffs against, the default branch when unset. `isExisting`: `branch` is used as it is, checked out in the
+ * worktree or switched to in the folder, instead of created.
+ */
+export interface Repo {
+  project: string;
+  branch: string;
+  path?: string;
+  mode?: 'folder';
+  base?: string;
+  isExisting?: boolean;
+}
+
 export interface Thread {
   id: string;
   spaceId: string;
-  /** null: a chat with no folder, so no files, branch or PRs. `project` is the folder's name; `path` its absolute path, unset for the web build's fixture projects. */
-  repo: { project: string; branch: string; path?: string } | null;
+  /** null: a chat with no folder, so no files, branch or PRs. */
+  repo: Repo | null;
   title: string;
   goal: string;
   providers: Provider[];
@@ -165,12 +184,23 @@ export interface QueueItem {
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
   requestId?: string;
-  /** A consequential Mochi tool call waiting on this card (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
-  tool?: { callId: string; options?: { id: string; label: string }[] };
+  /** A Mochi tool call waiting on this widget (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
+  tool?: ToolWidget;
   /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
   setting?: { id: string; suggested?: string };
   createdAt: number;
 }
+
+/** What a Mochi widget asks: a setting change (current → `value`), a delete naming exactly what goes, or a browser escalation. */
+export interface ToolWidget {
+  callId: string;
+  options?: { id: string; label: string }[];
+  setting?: { id: string; value: string };
+  isDestructive?: boolean;
+}
+
+/** Mochi's own widgets render inline in the thread where the agent asked, not in the composer tray. */
+export const isMochiCard = (item: QueueItem) => !!item.tool || item.kind === 'setting';
 
 /** The options of a lone single-choice question, the only kind a number key can answer. */
 export function singleChoice(item: QueueItem) {
@@ -547,11 +577,11 @@ export function seedQueue(): QueueItem[] {
 }
 
 export const FAKE_TOOLS: Record<string, string[]> = {
-  rl5: ['Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts', 'Search redis token bucket rate limiter lua script atomic', 'Edit packages/cache/redis.ts  +12 −2', 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
+  rl5: ['Search ioredis cluster evalsha NOSCRIPT retry', 'Run pnpm --filter cache add ioredis', 'Search upstash ratelimit sliding window vs token bucket', 'Read packages/cache/index.ts', 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts', 'Search redis token bucket rate limiter lua script atomic', 'Edit packages/cache/redis.ts  +12 −2', 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
   rl6: ['Write apps/api/middleware/ratelimit.ts', 'Edit apps/api/gateway.ts  +6 −1', 'Run pnpm --filter api test ratelimit'],
   rl7: ['Edit packages/db/schema/limits.ts  +14 −0', 'Edit apps/api/middleware/ratelimit.ts  +22 −3'],
   rl8: ['Write scripts/load/ratelimit.k6.js', 'Run k6 run scripts/load/ratelimit.k6.js'],
-  ad2: ['Edit apps/web/routes/admin/usage.tsx  +48 −10', 'Read apps/api/routes/admin/usage.ts', 'Run pnpm --filter web typecheck'],
+  ad2: ['Search upstash ratelimit sliding window vs token bucket', 'Edit apps/web/routes/admin/usage.tsx  +48 −10', 'Search ioredis cluster evalsha NOSCRIPT retry', 'Read apps/api/routes/admin/usage.ts', 'Run pnpm --filter web typecheck'],
   ad3: ['Write apps/api/routes/admin/usage.csv.ts', 'Run pnpm --filter api test usage'],
   ad4: ['Edit apps/web/routes/admin/usage.tsx  +30 −2'],
 };
@@ -571,6 +601,26 @@ export const DEMO_LINKS: Record<string, WebLink[]> = {
     { url: 'https://news.ycombinator.com/item?id=21378232', title: 'Ask HN: How do you rate limit an API at scale?' },
     { url: 'https://aws.amazon.com/builders-library/fairness-in-multi-tenant-systems/', title: 'Fairness in multi-tenant systems' },
     { url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket - Wikipedia' },
+  ],
+  'Search stream large CSV export node fastify backpressure': [
+    { url: 'https://nodejs.org/en/learn/modules/backpressuring-in-streams', title: 'Backpressuring in Streams | Node.js' },
+    { url: 'https://github.com/fastify/fastify/issues/3360', title: 'Streaming a large CSV response with reply.send(stream)' },
+    { url: 'https://www.npmjs.com/package/csv-stringify', title: 'csv-stringify' },
+    { url: 'https://stackoverflow.com/questions/38788721/stream-csv-from-postgres', title: 'Stream CSV from Postgres to the client in Node' },
+    { url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition', title: 'Content-Disposition - HTTP | MDN' },
+  ],
+  'Search ioredis cluster evalsha NOSCRIPT retry': [
+    { url: 'https://github.com/redis/ioredis/issues/536', title: 'Cluster: NOSCRIPT after failover, defineCommand does not reload' },
+    { url: 'https://redis.io/docs/latest/commands/evalsha/', title: 'EVALSHA | Docs' },
+    { url: 'https://stackoverflow.com/questions/36468713/redis-evalsha-noscript-in-cluster', title: 'Redis EVALSHA NOSCRIPT in cluster mode' },
+    { url: 'https://www.npmjs.com/package/ioredis', title: 'ioredis' },
+  ],
+  'Search upstash ratelimit sliding window vs token bucket': [
+    { url: 'https://upstash.com/blog/rate-limiting', title: 'Rate limiting your serverless applications' },
+    { url: 'https://blog.bytebytego.com/p/rate-limiting-fundamentals', title: 'Rate limiting fundamentals' },
+    { url: 'https://konghq.com/blog/engineering/how-to-design-a-scalable-rate-limiting-algorithm', title: 'How to design a scalable rate limiting algorithm' },
+    { url: 'https://en.wikipedia.org/wiki/Token_bucket', title: 'Token bucket - Wikipedia' },
+    { url: 'https://cloud.google.com/architecture/rate-limiting-strategies-techniques', title: 'Rate-limiting strategies and techniques' },
   ],
   'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/': [{ url: 'https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', title: 'Scripting with Lua' }],
 };

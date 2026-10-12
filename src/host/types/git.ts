@@ -70,6 +70,33 @@ export interface Worktree {
   head: string;
 }
 
+export interface Branch {
+  /** Local `feat/x`, or remote `origin/feat/x`. */
+  name: string;
+  isRemote: boolean;
+  /** Epoch ms of the tip commit. */
+  committedAt: number;
+  /** A local branch checked out in a worktree (the project's own checkout included): git allows only one. */
+  worktree?: string;
+}
+
+export interface BranchList {
+  /** null on a detached HEAD. */
+  current: string | null;
+  /** origin's default branch, else main or master. */
+  defaultBranch: string;
+  /** Uncommitted changes in the checkout the list was read from. */
+  isDirty: boolean;
+  /** Current first, then most recently committed. */
+  branches: Branch[];
+}
+
+/** How a thread's worktree is made: a new `branch` from `base` (default branch when unset), or an existing `branch` checked out. */
+export interface WorktreeOptions {
+  base?: string;
+  isExisting?: boolean;
+}
+
 export interface SyncResult {
   base: string;
   conflicts: string[];
@@ -87,7 +114,8 @@ export interface GhAccount {
 
 export interface GitHost {
   status(cwd: string): Promise<GitStatus>;
-  diff(cwd: string, scope: DiffScope): Promise<GitDiff>;
+  /** `base` overrides the default branch the `branch` scope diffs against (the thread's chosen base). */
+  diff(cwd: string, scope: DiffScope, base?: string): Promise<GitDiff>;
   stage(cwd: string, target: ChangeTarget): Promise<void>;
   unstage(cwd: string, target: ChangeTarget): Promise<void>;
   revert(cwd: string, target: ChangeTarget): Promise<void>;
@@ -99,8 +127,13 @@ export interface GitHost {
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
   /** gh's logins on every host it knows, for picking a profile's account. Never carries tokens. */
   ghAccounts(): Promise<GhAccount[]>;
-  sync(cwd: string): Promise<SyncResult>;
-  addWorktree(root: string, threadId: string, branch: string): Promise<string>;
+  sync(cwd: string, base?: string): Promise<SyncResult>;
+  /** Refuses an existing branch that's checked out elsewhere, naming where. */
+  addWorktree(root: string, threadId: string, branch: string, options?: WorktreeOptions): Promise<string>;
+  /** The project's branches for the new-thread pickers. */
+  branches(root: string): Promise<BranchList>;
+  /** Why `name` can't be a new branch (`git check-ref-format`, already exists), or null. */
+  branchNameError(root: string, name: string): Promise<string | null>;
   worktrees(root: string): Promise<Worktree[]>;
   removeWorktree(path: string): Promise<void>;
   diskUsage(path: string): Promise<number>;
@@ -125,6 +158,8 @@ export const gitMethods = {
   ghAccounts: 'invoke',
   sync: 'invoke',
   addWorktree: 'invoke',
+  branches: 'invoke',
+  branchNameError: 'invoke',
   worktrees: 'invoke',
   removeWorktree: 'invoke',
   diskUsage: 'invoke',

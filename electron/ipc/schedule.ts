@@ -1,6 +1,7 @@
 import { PR_EVENTS, type ScheduleHost, type TriggerInput } from '../../src/host/types/schedule.ts';
 import { parseCron } from '../../src/schedule/cron.ts';
 import { scheduler } from '../schedule/scheduler.ts';
+import { startWorkspace } from './agent.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 const PROVIDERS = ['claude', 'codex'];
@@ -41,12 +42,13 @@ function triggerInput(value: unknown): TriggerInput {
   if (!PROVIDERS.includes(start.provider as string)) throw new TypeError('start.provider must be claude or codex');
   string(start.spaceId, 'start.spaceId', 256);
   if (start.cwd !== null) string(start.cwd, 'start.cwd');
-  for (const key of ['worktree', 'model', 'effort', 'permissionMode']) if (start[key] !== undefined) string(start[key], `start.${key}`, 256);
+  for (const key of ['model', 'effort', 'permissionMode']) if (start[key] !== undefined) string(start[key], `start.${key}`, 256);
+  const workspace = startWorkspace(start.workspace);
   for (const key of ['sessionId', 'githubUser']) if (v[key] !== undefined) string(v[key], key, 256);
   string(v.threadId, 'threadId', 256);
   string(v.name, 'name', 200);
   string(v.prompt, 'prompt', 100_000);
   // startAgent checks the folder and options again when a run starts; only these fields are kept.
-  const { provider, spaceId, cwd, worktree, model, effort, permissionMode } = start;
-  return { threadId: v.threadId, name: v.name, prompt: v.prompt, when: when as TriggerInput['when'], missed: v.missed, start: { provider, spaceId, cwd, worktree, model, effort, permissionMode }, sessionId: v.sessionId, githubUser: v.githubUser } as TriggerInput;
+  const { provider, spaceId, cwd, model, effort, permissionMode } = start;
+  return { threadId: v.threadId, name: v.name, prompt: v.prompt, when: when as TriggerInput['when'], missed: v.missed, start: { provider, spaceId, cwd, workspace, model, effort, permissionMode }, sessionId: v.sessionId, githubUser: v.githubUser } as TriggerInput;
 }

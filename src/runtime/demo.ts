@@ -41,6 +41,13 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
   events.push(...script.say.map((text): AgentEvent => ({ threadId, type: 'message', text, isDelta: false })));
   for (const { at, item } of script.add) items.splice(at ?? items.length, 0, item);
   if (isChanged || script.add.length) events.push({ threadId, type: 'plan', items });
+  if (thread.id === WEB_APPROVAL.threadId && now === WEB_APPROVAL.at && thread.status === 'running') {
+    const id = `demo-web-${now}`;
+    events.push(
+      { threadId, type: 'tool', id, phase: 'start', text: `Search ${WEB_APPROVAL.query}`, links: DEMO_LINKS[`Search ${WEB_APPROVAL.query}`] },
+      { threadId, type: 'approval', requestId: id, kind: 'tool', title: `Search the web for “${WEB_APPROVAL.query}” on ${WEB_APPROVAL.domains}`, detail: 'Looks this up before picking a CSV streaming approach.' },
+    );
+  }
   if (next?.gate) {
     const after = steps.filter((s) => s.status === 'ready').length;
     events.push({ threadId, type: 'approval', requestId: `gate-${next.id}`, kind: 'tool', title: `Start "${next.title}"`, detail: `You asked to approve this step before it runs. Steps after it: ${after}.` });
@@ -62,6 +69,8 @@ export function overlapEvents(thread: Thread): AgentEvent[] {
 }
 
 export const SCRIPT = { overlapAt: NOW0 + 6, scopeAt: NOW0 + 40 };
+// A web search that asks first, so the demo's live turn shows an approval asked and answered inside its work log.
+const WEB_APPROVAL = { threadId: 'adm', at: NOW0 + 14, query: 'stream large CSV export node fastify backpressure', domains: 'github.com, nodejs.org +3 more' };
 const SPEED = 40;
 const TOKENS_PER_TOOL = 900;
 const CONTEXT_CEILING = 0.97;

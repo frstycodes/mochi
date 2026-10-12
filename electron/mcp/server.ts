@@ -5,9 +5,9 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AgentToolResult } from '../../src/host/types/agent.ts';
-import { MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, tierOf, type ToolName } from '../../src/runtime/toolTable.ts';
+import { MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, type ToolName } from '../../src/runtime/toolTable.ts';
 import { mainWindow } from '../window.ts';
+import { toolCalls } from './calls.ts';
 
 /**
  * Mochi's own tools for the agent in a thread. Each call goes to the renderer, which runs it as the store action the UI
@@ -17,7 +17,7 @@ export const SERVER = 'mochi';
 
 const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
 
-/** Mochi asks with its own card for consequential tools (`src/runtime/tools.ts`), so the harness never asks too. */
+/** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
 export const AUTO_ALLOWED = TOOL_NAMES.map((name) => `mcp__${SERVER}__${name}`);
 
 /** Claude: an in-process server per session, bound to its thread. A server instance serves one connection. */
@@ -32,26 +32,16 @@ export async function codexUrl(thread: string) {
 }
 
 const SECRET = randomBytes(24).toString('hex');
-const TOOL_TIMEOUT_MS = 30_000;
-let nextId = 0;
-const pending = new Map<string, (result: AgentToolResult) => void>();
+const calls = toolCalls(MOCHI_TIMEOUT_MS);
 let http: Promise<Server> | undefined;
 
 /** The renderer's answer to a call from `callMochi`. */
-export function resolveToolCall(id: string, result: AgentToolResult) {
-  pending.get(id)?.(result);
-  pending.delete(id);
-}
+export const resolveToolCall = calls.resolve;
 
 async function callMochi(thread: string, name: ToolName, args: Record<string, unknown>): Promise<CallToolResult> {
   const win = mainWindow();
   if (!win) return { content: [{ type: 'text', text: 'Mochi has no window open' }], isError: true };
-  const id = `tool-${++nextId}`;
-  const result = await new Promise<AgentToolResult>((resolve) => {
-    pending.set(id, resolve);
-    win.webContents.send('agent:onToolCall', { id, threadId: thread, name, args });
-    setTimeout(() => resolveToolCall(id, { text: 'Mochi did not answer in time', isError: true }), tierOf(name) === 'consequential' ? MOCHI_TIMEOUT_MS : TOOL_TIMEOUT_MS);
-  });
+  const result = await calls.call(win.webContents, { threadId: thread, name, args });
   const image = result.image ? [{ type: 'image' as const, data: result.image.data, mimeType: result.image.mimeType }] : [];
   return { content: [{ type: 'text', text: result.text }, ...image], isError: result.isError };
 }

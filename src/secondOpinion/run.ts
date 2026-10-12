@@ -28,7 +28,7 @@ async function run(thread: Thread, review: Review, dispatch: Dispatch<Action>) {
   const cwd = isReal ? (thread.live?.cwd ?? threadCwd(thread)) : threadCwd(thread);
   if (isReal && !cwd) throw new Error("This thread's folder isn't on disk, so there is no diff to review");
   dispatch({ type: 'review-step', threadId, id: review.id, text: 'Read the diff against the base branch' });
-  const diff: GitDiff = cwd ? await host.git.diff(cwd, 'branch') : { branch: '', base: '', files: [] };
+  const diff: GitDiff = cwd ? await host.git.diff(cwd, 'branch', thread.repo?.base) : { branch: '', base: '', files: [] };
   const { prompt, isTruncated } = reviewPrompt(thread, diff);
   if (isTruncated) dispatch({ type: 'review-update', threadId, id: review.id, patch: { isTruncated } });
 

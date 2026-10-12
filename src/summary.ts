@@ -60,3 +60,78 @@ export function summarize(activity: ActivityEntry[]): ThreadSummary {
   const tools = VERBS.filter((v) => counts.has(v)).map((verb) => ({ verb, count: counts.get(verb)! }));
   return { tools, toolTotal: tools.reduce((n, t) => n + t.count, 0), added, removed, files: [...files.values()] };
 }
+
+const PLURAL = new Intl.PluralRules('en');
+
+// Ordered by importance: what changed the repo, then what ran, then what was looked up.
+const TURN_PHRASES: { key: string; matches: (c: ToolCall) => boolean; forms: Record<'one' | 'other', string> }[] = [
+  { key: 'edit', matches: (c) => c.verb === 'Edit', forms: { one: 'edited # file', other: 'edited # files' } },
+  { key: 'write', matches: (c) => c.verb === 'Write', forms: { one: 'created # file', other: 'created # files' } },
+  { key: 'run', matches: (c) => c.verb === 'Run', forms: { one: 'ran # command', other: 'ran # commands' } },
+  { key: 'search', matches: (c) => c.verb === 'Search', forms: { one: 'searched once', other: 'searched # times' } },
+  { key: 'fetch', matches: (c) => c.verb === 'Fetch', forms: { one: 'read # page', other: 'read # pages' } },
+  { key: 'read', matches: (c) => c.verb === 'Read', forms: { one: 'read # file', other: 'read # files' } },
+  { key: 'browser', matches: (c) => c.verb === 'Browser', forms: { one: 'used the browser', other: 'used the browser # times' } },
+];
+
+/** A finished turn in one line: "Edited 2 files, ran 1 command, searched 4 times · 1m 12s". Files count once however often they were edited. */
+export function turnSummary(entries: ActivityEntry[]) {
+  const calls = entries.filter((e) => e.kind === 'tool').map((e) => parseTool(e.text));
+  const phrases = TURN_PHRASES.flatMap(({ matches, forms, key }) => {
+    const hits = calls.filter(matches);
+    const count = key === 'edit' || key === 'write' ? new Set(hits.map((c) => c.target)).size : hits.length;
+    return count ? [forms[PLURAL.select(count) === 'one' ? 'one' : 'other'].replace('#', String(count))] : [];
+  });
+  const text = phrases.join(', ') || (entries.some((e) => e.kind === 'reasoning') ? 'thought it through' : 'worked');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)} · ${turnDuration(entries)}`;
+}
+
+/** Wall-clock across the entries that carry it (a live agent's; your answers don't), else the app clock's minutes. */
+export function turnDuration(entries: ActivityEntry[]) {
+  const stamped = entries.flatMap((e) => (e.ms === undefined ? [] : [e.ms]));
+  if (stamped.length > 1) {
+    const s = Math.max(1, Math.round((Math.max(...stamped) - Math.min(...stamped)) / 1000));
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${s % 60 ? ` ${s % 60}s` : ''}`;
+  }
+  const first = entries[0];
+  const last = entries[entries.length - 1];
+  const minutes = Math.max(1, (last?.at ?? 0) - (first?.at ?? 0));
+  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ''}`;
+}
+
+const DOMAINS_SHOWN = 2;
+
+/** What a read-only tool asks to do, as the end of a sentence ("search the web for “X” on a.com, b.com +5 more"); undefined for tools without one. */
+export function describeApproval(tool: string, input: Record<string, unknown>): string | undefined {
+  if (tool === 'WebSearch' && typeof input.query === 'string') {
+    const domains = Array.isArray(input.allowed_domains) ? input.allowed_domains.filter((d): d is string => typeof d === 'string') : [];
+    const more = domains.length > DOMAINS_SHOWN ? ` +${domains.length - DOMAINS_SHOWN} more` : '';
+    return `search the web for “${input.query}”${domains.length ? ` on ${domains.slice(0, DOMAINS_SHOWN).join(', ')}${more}` : ''}`;
+  }
+  if (tool === 'WebFetch' && typeof input.url === 'string') return `read ${input.url.replace(/^https?:\/\/(www\.)?/, '')}`;
+  return undefined;
+}
+
+/** An approval asked or granted: noise in a finished log, where the call's own row already shows it ran. */
+export const isApprovalChatter = (text: string) => /^(Waiting on you|Approved):/.test(text);
+
+/** A harness event as a sentence. "Approved: {json}" from before approvals were described reads from its input instead. */
+export function eventLine(text: string) {
+  const match = /^(Approved|Denied|Waiting on you): ([\s\S]*)$/.exec(text);
+  if (!match) return text;
+  const [, verdict, rest] = match;
+  const sentence = rest.trim().startsWith('{') ? fromJson(rest) : lowerFirst(rest);
+  return `${verdict}: ${sentence}`;
+}
+
+function fromJson(json: string) {
+  try {
+    const input = JSON.parse(json) as Record<string, unknown>;
+    return describeApproval(typeof input.url === 'string' ? 'WebFetch' : 'WebSearch', input) ?? 'a tool call';
+  } catch {
+    return 'a tool call';
+  }
+}
+
+// "Search the web…" → "search the web…", but an acronym or a name like "WebSearch" keeps its case.
+const lowerFirst = (s: string) => (/^[A-Z][a-z ]/.test(s) && !/^[A-Z]\w*[A-Z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
