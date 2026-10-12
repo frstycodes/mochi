@@ -33,15 +33,10 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'approval':
       return waitOnYou(state, thread, { id: `q-${event.requestId}`, kind: 'approval', title: event.title, detail: event.detail, code: event.code, requestId: event.requestId }, 'Paused for your approval');
     case 'question': {
-      // GAP: a queue item holds one choice list, so only the first question shows; the rest wait for a multi-question card.
-      const [first] = event.questions;
-      const more = event.questions.length - 1;
-      return waitOnYou(
-        state,
-        thread,
-        { id: `q-${event.requestId}`, kind: 'question', title: first.text, detail: more ? `${more} more question${more === 1 ? '' : 's'} after this one.` : '', choices: first.options.map((label, i) => ({ id: String(i), label })), requestId: event.requestId },
-        'Waiting on your answer',
-      );
+      const { questions } = event;
+      if (!questions.length) return state;
+      const title = questions.length === 1 ? questions[0].text : `Answer ${questions.length} questions`;
+      return waitOnYou(state, thread, { id: `q-${event.requestId}`, kind: 'question', title, detail: '', questions, requestId: event.requestId }, 'Waiting on your answer');
     }
     case 'resolved':
       return withdraw(state, thread, `q-${event.requestId}`);
@@ -70,8 +65,7 @@ export function resolution(state: State, action: Action): { requestId: string; d
   if (!item?.requestId) return null;
   if (!state.threads.find((t) => t.id === item.threadId)?.session) return null;
   if (item.kind !== 'question') return { requestId: item.requestId, decision: { kind: 'allow' } };
-  const label = item.choices?.find((c) => c.id === action.choice)?.label;
-  return { requestId: item.requestId, decision: { kind: 'answer', answers: label ? [label] : [] } };
+  return { requestId: item.requestId, decision: { kind: 'answer', answers: action.answers ?? [] } };
 }
 
 const MATCH = 0.6;

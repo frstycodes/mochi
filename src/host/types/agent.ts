@@ -25,7 +25,7 @@ export type AgentEvent =
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
-  | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
+  | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
   | { threadId: string; type: 'resolved'; requestId: string }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
@@ -34,6 +34,13 @@ export type AgentEvent =
 
 /** What an adapter gets once main has resolved and checked the folder. */
 export type AgentRunOptions = Omit<AgentStartOptions, 'cwd'> & { cwd: string };
+
+/** You can always type your own answer too, so `options` may be empty. */
+export interface AgentQuestion {
+  text: string;
+  options: string[];
+  multiSelect: boolean;
+}
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
 export interface AgentPlanItem {
@@ -44,8 +51,8 @@ export interface AgentPlanItem {
   files?: string[];
 }
 
-/** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. */
-export type AgentDecision = { kind: 'allow'; forSession?: boolean } | { kind: 'deny'; message?: string; interrupt?: boolean } | { kind: 'answer'; answers: string[] };
+/** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. `answers` holds each question's picked labels and typed text, in question order; empty means skipped. */
+export type AgentDecision = { kind: 'allow'; forSession?: boolean } | { kind: 'deny'; message?: string; interrupt?: boolean } | { kind: 'answer'; answers: string[][] };
 
 /** Side chat's answer stream, separate from thread events: `id` is the one `ask` returned. */
 export interface AgentAskEvent {

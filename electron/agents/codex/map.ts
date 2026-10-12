@@ -106,7 +106,8 @@ export function mapRequest(method: string, params: unknown, requestId: string, s
       const o = obj(q);
       if (typeof o?.question !== 'string') return [];
       const options = Array.isArray(o.options) ? o.options.flatMap((x) => (typeof obj(x)?.label === 'string' ? [obj(x)!.label as string] : [])) : [];
-      return [{ text: o.question, options }];
+      // app-server's request_user_input has no multi-select flag; free text is always offered.
+      return [{ text: o.question, options, multiSelect: false }];
     });
     return questions.length ? { threadId, type: 'question', requestId, questions } : null;
   }
