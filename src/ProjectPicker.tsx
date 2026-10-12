@@ -64,19 +64,21 @@ function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string
       <CommandList className="max-h-72">
         <CommandEmpty>No project matches.</CommandEmpty>
         {projects.length > 0 && (
-          <CommandGroup heading="Projects">
-            {projects.map((p) => (
-              <CommandItem key={p} value={p} data-checked={p === value} onSelect={() => onChoose(p)}>
-                <Folder />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate">{projectName(p)}</span>
-                  {p !== projectName(p) && <span className="truncate type-caption text-subtle-foreground">{p}</span>}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          <>
+            <CommandGroup heading="Projects">
+              {projects.map((p) => (
+                <CommandItem key={p} value={p} data-checked={p === value} onSelect={() => onChoose(p)}>
+                  <Folder />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{projectName(p)}</span>
+                    {p !== projectName(p) && <span className="truncate type-caption text-subtle-foreground">{p}</span>}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+          </>
         )}
-        <CommandSeparator />
         <CommandGroup>
           <CommandItem value="No project" keywords={['chat', 'folder']} data-checked={value === null} onSelect={() => onChoose(null)}>
             <ChatRound />
