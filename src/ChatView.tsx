@@ -137,11 +137,15 @@ function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; is
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'event')
     return (
-      <p className="flex items-center gap-2 type-caption text-subtle-foreground">
-        <Flag className="size-3.5 shrink-0" />
-        {row.entry.text}
-        <span className="tabular">· {clock(row.entry.at)}</span>
-      </p>
+      <div className="flex gap-2 type-caption text-muted-foreground">
+        <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
+        <p className="min-w-0">
+          {row.entry.text}
+          {/* The separator travels with the time, so a wrap never leaves it dangling. */}
+          <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(row.entry.at)}</span>
+          {!!row.entry.detail && <span className="block text-subtle-foreground">{row.entry.detail}</span>}
+        </p>
+      </div>
     );
 
   const { entry } = row;
@@ -181,7 +185,7 @@ function outline(rows: ChatRow[], pins: Pin[]) {
 function rowLabel(row: ChatRow) {
   if (row.kind === 'work') return `${authorName(row.who)} work log (${row.entries.length})`;
   if (row.kind === 'review') return `${authorName(row.review.provider)} second opinion`;
-  if (row.kind === 'event') return row.entry.text;
+  if (row.kind === 'event') return row.entry.detail ? `${row.entry.text}: ${row.entry.detail}` : row.entry.text;
   return `${authorName(row.entry.who)}: ${row.entry.text}`;
 }
 

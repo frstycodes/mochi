@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, Provider, Size, StepStatus, Thread } from '../../model.ts';
+import type { AgentInfo, Provider, Size, StepStatus, Thread, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
@@ -30,7 +30,8 @@ export type AgentEvent =
   | { threadId: string; type: 'info'; info: AgentInfo }
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
   | { threadId: string; type: 'reasoning'; text: string }
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number }
+  /** `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills the query in late). */
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number; links?: WebLink[] }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }

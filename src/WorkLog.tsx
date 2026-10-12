@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Eye, Global, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Eye, Global, GlobalSearch, TerminalSquare, X } from 'reicon-react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
@@ -15,6 +15,7 @@ import { parseTool, type ToolCall } from './summary';
 import { toolLabel } from './agentPhase';
 import { openFromScope, useThreadFiles, type ThreadFiles } from './files/viewer';
 import { TooltipIconButton } from './ui';
+import { WebFetchRow, WebSearchRow } from './WebLinks';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
@@ -24,6 +25,7 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
   const calls = entries.filter((e) => e.kind === 'tool').map((e) => parseTool(e.text));
   const edits = calls.filter((c) => c.verb === 'Edit' || c.verb === 'Write');
   const runs = calls.filter((c) => c.verb === 'Run');
+  const searches = calls.filter((c) => c.verb === 'Search').length;
   const failed = runs.filter((c) => (RUNS[c.target]?.exitCode ?? 0) !== 0).length;
   const minutes = Math.max(1, entries[entries.length - 1].at - entries[0].at);
   const current = calls[calls.length - 1];
@@ -39,11 +41,13 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
       >
         <ChevronRight className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />
         {isLive && current ? (
-          <Shimmer as="span" className="shrink-0">{toolLabel(current)}</Shimmer>
+          <span className="flex min-w-0" title={current.target}>
+            <Shimmer as="span" className="min-w-0 truncate">{toolLabel(current)}</Shimmer>
+          </span>
         ) : (
           <span className="shrink-0">Worked for {duration(minutes)}</span>
         )}
-        <span className="flex min-w-0 items-center gap-3 truncate text-subtle-foreground">
+        <span className="flex shrink-0 items-center gap-3 text-subtle-foreground">
           {edits.length > 0 && (
             <span className="flex items-center gap-1.5">
               <FileStack paths={edits.map((c) => c.target)} />
@@ -56,18 +60,25 @@ export function WorkLog({ entries, isLive }: { entries: ActivityEntry[]; isLive:
               <span className="tabular">{runs.length}</span>
             </span>
           )}
+          {searches > 0 && (
+            <span className="flex items-center gap-1">
+              <GlobalSearch className="size-3.5" />
+              <span className="tabular">{searches}</span>
+            </span>
+          )}
           {failed > 0 && <span className="tabular text-destructive">{failed} failed</span>}
         </span>
       </button>
       <Expand isOpen={isOpen}>
         <ol className="flex flex-col gap-0.5 pt-0.5 pl-5">
-          {entries.map((e, i) =>
-            e.kind === 'reasoning' ? (
-              <ThoughtRow key={i} entry={e} />
-            ) : (
-              <ToolRow key={i} call={parseTool(e.text)} isRunning={isLive && i === entries.length - 1} files={files} />
-            ),
-          )}
+          {entries.map((e, i) => {
+            if (e.kind === 'reasoning') return <ThoughtRow key={i} entry={e} />;
+            const call = parseTool(e.text);
+            const isRunning = isLive && i === entries.length - 1;
+            if (call.verb === 'Search') return <WebSearchRow key={i} call={call} links={e.links} isRunning={isRunning} />;
+            if (call.verb === 'Fetch') return <WebFetchRow key={i} call={call} links={e.links} isRunning={isRunning} />;
+            return <ToolRow key={i} call={call} isRunning={isRunning} files={files} />;
+          })}
         </ol>
       </Expand>
     </div>
@@ -112,7 +123,8 @@ function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolea
   const [isOpen, setOpen] = useState(false);
   const patch = PATCHES[call.target];
   const run = RUNS[call.target];
-  const detail = (call.verb === 'Edit' || call.verb === 'Write') && patch ? <DiffView patch={patch} /> : call.verb === 'Run' && run ? <RunOutput run={run} /> : null;
+  const isLongCommand = call.verb === 'Run' && (call.target.includes('\n') || call.target.length > LONG_COMMAND);
+  const detail = (call.verb === 'Edit' || call.verb === 'Write') && patch ? <DiffView patch={patch} /> : call.verb === 'Run' && (run || isLongCommand) ? <RunOutput command={call.target} run={run} /> : null;
 
   const row = (
     <>
@@ -166,7 +178,10 @@ function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolea
   );
 }
 
-const VERB_LABEL = { Read: 'Read', Edit: 'Edited', Write: 'Created', Run: 'Ran', Browser: 'Opened' } satisfies Record<ToolCall['verb'], string>;
+const VERB_LABEL = { Read: 'Read', Edit: 'Edited', Write: 'Created', Run: 'Ran', Browser: 'Opened', Search: 'Searched', Fetch: 'Read' } satisfies Record<ToolCall['verb'], string>;
+
+// Past this many characters a command row expands to show the whole command.
+const LONG_COMMAND = 80;
 
 function ToolGlyph({ call }: { call: ToolCall }) {
   if (call.verb === 'Run') return <TerminalSquare className="size-4 shrink-0 text-muted-foreground" />;
@@ -175,7 +190,7 @@ function ToolGlyph({ call }: { call: ToolCall }) {
 }
 
 function ToolTarget({ call }: { call: ToolCall }) {
-  if (call.verb === 'Run') return <code className="min-w-0 truncate font-mono text-xs text-foreground">{call.target}</code>;
+  if (call.verb === 'Run') return <code className="min-w-0 truncate font-mono text-xs text-foreground" title={call.target}>{call.target}</code>;
   const slash = call.target.lastIndexOf('/');
   return (
     <span className="flex min-w-0 font-mono text-xs" title={call.target}>
@@ -255,10 +270,11 @@ function DiffView({ patch }: { patch: string }) {
 
 const TONE = { plain: 'text-foreground', dim: 'text-subtle-foreground', pass: 'text-success', fail: 'text-destructive' } satisfies Record<RunResult['lines'][number]['tone'], string>;
 
-function RunOutput({ run }: { run: RunResult }) {
+function RunOutput({ command, run }: { command: string; run?: RunResult }) {
   return (
     <pre className="max-h-64 overflow-auto rounded-xl border bg-card px-3 py-2.5 font-mono text-xs leading-5">
-      {run.lines.map((l, i) => (
+      <div className="break-all whitespace-pre-wrap text-muted-foreground">$ {command}</div>
+      {run?.lines.map((l, i) => (
         <div key={i} className={cn('min-h-5', TONE[l.tone])}>
           {l.text}
         </div>

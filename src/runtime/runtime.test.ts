@@ -157,3 +157,12 @@ test('demo threads progress, log tools, grow context and end in review', () => {
   for (let i = 0; i < 2000 && !s.queue.some((q) => q.id === 'q-review-rl'); i++) s = tick(s);
   assert.equal(thread(s, 'rl').status, 'review');
 });
+
+test("a tool's end with links fills in the entry its start logged", () => {
+  let s = base();
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'tool', id: 'w1', phase: 'start', text: 'Search the web' });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'tool', id: 'w1', phase: 'end', text: 'Search token bucket', links: [{ url: 'https://redis.io/' }] });
+  const entry = thread(s, 'rl').activity.at(-1)!;
+  assert.equal(entry.text, 'Search token bucket');
+  assert.deepEqual(entry.links, [{ url: 'https://redis.io/' }]);
+});
