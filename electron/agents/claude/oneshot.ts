@@ -52,6 +52,8 @@ export async function warmClaude(spaceId: string) {
 
 interface Runner {
   accountId: string;
+  /** What a parked process was started with; a spare is reused only while it matches. */
+  key: string;
   options: Options;
 }
 
@@ -62,9 +64,14 @@ async function runner(spaceId: string): Promise<Runner> {
   if (!install.path) throw new Error('Claude Code is not installed. Install it from https://code.claude.com, or set its path in Settings.');
   if (install.login.state === 'logged-out') throw new Error(configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${configDir} claude auth login\` in a terminal, then try again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then try again.');
   // Not `agentEnv()`: it adds the stored API key, which only a thread the user explicitly switched to the key may use.
-  const env = { ...accountEnv('claude', configDir), PATH: await userPath() };
-  const options: Options = { pathToClaudeCodeExecutable: install.path, env, tools: [], settingSources: [], persistSession: false, includePartialMessages: true, thinking: { type: 'disabled' }, systemPrompt: BASE_PROMPT };
-  return { accountId: account.id, options };
+  const PATH = await userPath();
+  const env = { ...accountEnv('claude', configDir), PATH };
+  // `tools: []` drops only the built-in tools; `strictMcpConfig` also drops the account's MCP servers and claude.ai
+  // connectors, which otherwise put their tools (~40–100k tokens) on every request.
+  const options: Options = { pathToClaudeCodeExecutable: install.path, env, tools: [], strictMcpConfig: true, settingSources: [], persistSession: false, includePartialMessages: true, thinking: { type: 'disabled' }, systemPrompt: BASE_PROMPT };
+  // Not the whole `env`: the SDK writes CLAUDE_AGENT_SDK_VERSION into `process.env` on every query and prewarm, so a
+  // key over the env changes after the first one and the parked process would never match.
+  return { accountId: account.id, key: JSON.stringify([install.path, configDir, PATH]), options };
 }
 
 /** A claimed spare when one is parked, else a cold `query()`; either way the account's next spare starts parking. */
@@ -98,7 +105,7 @@ const prewarm = (sdk as { prewarm?: typeof sdk.prewarm }).prewarm;
 
 function park(runner: Runner) {
   if (!prewarm) return;
-  const key = JSON.stringify(runner.options);
+  const { key } = runner;
   const parked = spares.get(runner.accountId);
   if (parked?.key === key) return void parked.idle.refresh();
   if (parked) discard(runner.accountId);
@@ -114,7 +121,7 @@ function park(runner: Runner) {
 
 async function take(runner: Runner) {
   const parked = spares.get(runner.accountId);
-  if (!parked || parked.key !== JSON.stringify(runner.options)) return null;
+  if (!parked || parked.key !== runner.key) return null;
   clearTimeout(parked.idle);
   spares.delete(runner.accountId);
   return parked.spare;
