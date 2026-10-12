@@ -10,6 +10,8 @@ export type PanesAction =
   | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number } }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   | { type: 'pane-close-tab'; threadId: string; tabId: string }
+  | { type: 'pane-close-tabs'; threadId: string; tabIds: string[] }
+  | { type: 'pane-restore'; pane: Pane }
   | { type: 'pane-pop'; threadId: string; tabId: string; isPopped: boolean }
   | { type: 'pane-reorder'; threadId: string; order: string[] }
   | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> };
@@ -56,6 +58,10 @@ export function panesReducer(state: State, action: Action): State {
           return { ...p, tabs, activeTab: p.activeTab === action.tabId ? neighbour(p.tabs, action.tabId) : p.activeTab };
         }),
       };
+    case 'pane-close-tabs':
+      return action.tabIds.reduce((s, tabId) => panesReducer(s, { type: 'pane-close-tab', threadId: action.threadId, tabId }), state);
+    case 'pane-restore':
+      return { ...state, panes: mapPane(state.panes, action.pane.threadId, () => action.pane) };
     case 'pane-reorder':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, tabs: reorderTabs(p.tabs, action.order) })) };
     case 'pane-update-tab':

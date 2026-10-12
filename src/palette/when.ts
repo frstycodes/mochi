@@ -1,48 +1,91 @@
-import { findLeaf, leaves } from '../layout/tree.ts';
-import type { Thread } from '../model.ts';
+import { findLeaf, leaves, type View } from '../layout/tree.ts';
+import type { PaneTab, Thread } from '../model.ts';
 import { pinnedThreads } from '../reorder.ts';
 import { reviewThreads } from '../review/order.ts';
 import type { State } from '../store/index.tsx';
 
-/** What the palette knows about where you are, so actions can hide when they would do nothing. */
+/** What an action runs on. The palette scopes to the focused split; a context menu scopes to the row, card, split or tab it was opened on. */
 export interface ActionScope {
   thread: Thread | undefined;
+  /** False when a menu targets a thread other than the focused split's, so "Open" only shows where it would navigate. */
+  isFocused: boolean;
   isPinned: boolean;
+  isWatched: boolean;
+  isDesktop: boolean;
+  /** The split actions act on: the focused one, or the split whose header was right-clicked. */
+  leafId: string;
+  /** The pane tab actions act on: a right-clicked tab, a tab dragged into the split, else the open pane's active tab. */
+  tab: PaneTab | undefined;
+  /** The thread's docked pane tabs, in strip order. */
+  tabs: PaneTab[];
   spaceId: string;
   leafCount: number;
   reviewCount: number;
 }
 
+export interface ScopeTarget {
+  threadId?: string;
+  leafId?: string;
+  tabId?: string;
+}
+
 type Rule = (scope: ActionScope) => boolean;
 
 const isLive: Rule = (s) => !!s.thread && s.thread.status !== 'settled';
+const tabIndex = (s: ActionScope) => (s.tab ? s.tabs.indexOf(s.tab) : -1);
 
 export const when = {
   thread: (s: ActionScope) => !!s.thread,
   liveThread: isLive,
+  unfocusedThread: (s: ActionScope) => !!s.thread && !s.isFocused,
   settledThread: (s: ActionScope) => s.thread?.status === 'settled',
   unpinned: (s: ActionScope) => isLive(s) && !s.isPinned,
   pinned: (s: ActionScope) => isLive(s) && s.isPinned,
+  unwatched: (s: ActionScope) => isLive(s) && !s.isWatched,
+  watched: (s: ActionScope) => !!s.thread && s.isWatched,
   repo: (s: ActionScope) => !!s.thread?.repo,
+  worktree: (s: ActionScope) => !!s.thread?.repo && s.isDesktop,
   splits: (s: ActionScope) => s.leafCount > 1,
   reviews: (s: ActionScope) => s.reviewCount > 0,
   otherSpace: (id: string) => (s: ActionScope) => s.spaceId !== id,
+  tab: (s: ActionScope) => !!s.tab,
+  /** A real tab, not the new-tab page: it can float or take a split of its own. */
+  contentTab: (s: ActionScope) => !!s.tab && s.tab.kind !== 'new',
+  browserTab: (s: ActionScope) => s.tab?.kind === 'browser',
+  otherTabs: (s: ActionScope) => tabIndex(s) >= 0 && s.tabs.length > 1,
+  tabsToRight: (s: ActionScope) => tabIndex(s) >= 0 && tabIndex(s) < s.tabs.length - 1,
 };
 
 export function available<T extends { id: string; when?: Rule }>(actions: readonly T[], scope: ActionScope) {
   return actions.filter((a) => !a.when || a.when(scope));
 }
 
-export function scopeOf(state: State): ActionScope {
+const IS_DESKTOP = typeof window !== 'undefined' && !!window.harnessHost;
+
+export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_DESKTOP): ActionScope {
   const layout = state.layouts[state.spaceId];
-  const view = findLeaf(layout.root, layout.focusId)?.view;
-  const threadId = view?.kind === 'thread' ? view.id : view?.kind === 'tab' ? view.threadId : undefined;
+  const leafId = target.leafId ?? layout.focusId;
+  const view = findLeaf(layout.root, leafId)?.view;
+  const threadId = target.threadId ?? threadOf(view);
   const thread = state.threads.find((t) => t.id === threadId);
+  const pane = state.panes.find((p) => p.threadId === threadId);
+  const tabs = pane?.tabs.filter((t) => !t.isPopped) ?? [];
+  const tabId = target.tabId ?? (view?.kind === 'tab' ? view.tabId : !target.threadId && pane?.isOpen ? pane.activeTab : undefined);
   return {
     thread,
+    isFocused: !!thread && thread.id === threadOf(findLeaf(layout.root, layout.focusId)?.view),
     isPinned: !!thread && pinnedThreads(state.threads, state.spaceId).includes(thread),
+    isWatched: !!thread && state.watched.includes(thread.id),
+    isDesktop,
+    leafId,
+    tab: pane?.tabs.find((t) => t.id === tabId),
+    tabs,
     spaceId: state.spaceId,
     leafCount: leaves(layout.root).length,
     reviewCount: reviewThreads(state).length,
   };
+}
+
+function threadOf(view: View | undefined) {
+  return view?.kind === 'thread' ? view.id : view?.kind === 'tab' ? view.threadId : undefined;
 }

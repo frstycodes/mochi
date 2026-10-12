@@ -1,3 +1,4 @@
+import { shell } from 'electron';
 import { EDITORS, type Editor, type FsHost } from '../../src/host/types/fs.ts';
 import { installedEditors, openInEditor } from '../fs/editors.ts';
 import { readInside, unwatchRoot, watchRoot, writeInside } from '../fs/files.ts';
@@ -24,5 +25,9 @@ export const fs = {
     if (line !== undefined && !(Number.isInteger(line) && (line as number) > 0)) throw new TypeError('line must be a positive integer');
     const file = await resolveInside(string(root, 'root'), string(path, 'path'));
     await openInEditor(editor as Editor, await resolveRoot(string(root, 'root')), file, line as number | undefined);
+  },
+  reveal: async (_sender, root, path) => {
+    const rel = string(path, 'path');
+    shell.showItemInFolder(rel ? await resolveInside(string(root, 'root'), rel) : await resolveRoot(string(root, 'root')));
   },
 } satisfies Handlers<FsHost>;

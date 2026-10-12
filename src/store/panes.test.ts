@@ -50,3 +50,12 @@ test('popping out any kind moves selection to a docked neighbour, putting back s
   assert.equal(back.isOpen, true);
   assert.equal(back.tabs.find((t) => t.id === 'b')?.isPopped, false);
 });
+
+test('closing several tabs keeps a survivor active, and restoring brings the pane back as it was', () => {
+  const others = run(pane(), { type: 'pane-close-tabs', threadId: 't', tabIds: ['a', 'b'] });
+  assert.deepEqual(others.tabs.map((t) => t.id), ['c']);
+  assert.equal(others.activeTab, 'c');
+  const right = run(pane({ activeTab: 'c' }), { type: 'pane-close-tabs', threadId: 't', tabIds: ['b', 'c'] });
+  assert.equal(right.activeTab, 'a');
+  assert.deepEqual(run(others, { type: 'pane-restore', pane: pane() }), pane());
+});
