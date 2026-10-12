@@ -9,6 +9,8 @@ export interface AgentStartOptions {
   /** An absolute folder; null for a folderless chat, which main runs in a folder of its own under the app's data dir. */
   cwd: string | null;
   prompt: string;
+  /** Sent with the first prompt. */
+  images?: AgentImage[];
   model?: string;
   effort?: string;
   permissionMode?: string;
@@ -33,6 +35,12 @@ export type AgentEvent =
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** What an adapter gets once main has resolved and checked the folder. */
+/** Base64 without the `data:` prefix. */
+export interface AgentImage {
+  mediaType: 'image/jpeg' | 'image/png';
+  data: string;
+}
+
 export type AgentRunOptions = Omit<AgentStartOptions, 'cwd'> & { cwd: string };
 
 /** `progress`, `size` and `files` are optional hints; Claude and Codex plans carry none of them. */
@@ -72,7 +80,7 @@ export interface AgentAskMessage {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  send(threadId: string, text: string): Promise<void>;
+  send(threadId: string, text: string, images?: AgentImage[]): Promise<void>;
   interrupt(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;

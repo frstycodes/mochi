@@ -1,4 +1,4 @@
-import type { AgentEvent } from '../host/types/agent.ts';
+import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import { NOW0, seedThreads, type ActivityEntry, type LineSlot, type Provider, type Step, type Thread } from '../model.ts';
 import { stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
@@ -42,7 +42,8 @@ export type ThreadsAction =
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
   | { type: 'resume'; threadId: string; onApiKey?: boolean }
-  | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string }
+  /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). */
+  | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft }

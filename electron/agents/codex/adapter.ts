@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { codexThreadId, mapNotification, mapRequest, requestKey, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
@@ -71,13 +71,13 @@ export class CodexAdapter {
       const rpc = await server.client();
       await server.requireLogin(rpc);
       await this.open(server, rpc, threadId, options);
-      await this.turn(threadId, options.prompt);
+      await this.turn(threadId, options.prompt, options.images);
     });
   }
 
-  async send(threadId: string, text: string) {
+  async send(threadId: string, text: string, images?: AgentImage[]) {
     if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
-    await this.report(threadId, () => this.turn(threadId, text));
+    await this.report(threadId, () => this.turn(threadId, text, images));
   }
 
   async interrupt(threadId: string) {
@@ -135,14 +135,14 @@ export class CodexAdapter {
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
   }
 
-  private async turn(threadId: string, text: string) {
+  private async turn(threadId: string, text: string, images: AgentImage[] = []) {
     let live = this.threads.get(threadId)!;
     const rpc = await live.server.client();
     if (live.gen !== live.server.gen) {
       await this.open(live.server, rpc, threadId, live.options);
       live = this.threads.get(threadId)!;
     }
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [{ type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null });
+    const result = await rpc.request('turn/start', { threadId: live.codexId, input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }], effort: live.options.effort ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
   }
