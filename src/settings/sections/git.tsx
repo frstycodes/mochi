@@ -2,6 +2,7 @@ import { Switch } from '@/components/ui/switch';
 import { useAgentSettings } from '../AgentSettings';
 import { CommitInput, DesktopOnly, FolderInput, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { DEFAULT_PREFS, setPrefs, usePrefs } from '../prefs';
+import { DIFF_STYLES } from '../settingOptions';
 
 export function GitSection() {
   const { branchPrefix, diffStyle } = usePrefs();
@@ -32,10 +33,6 @@ export function GitSection() {
   );
 }
 
-export const DIFF_STYLES = [
-  { value: 'unified', label: 'Unified' },
-  { value: 'split', label: 'Split' },
-] as const;
 
 function DesktopGitGroup() {
   const { settings, update } = useAgentSettings();

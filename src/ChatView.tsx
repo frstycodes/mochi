@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Flag } from 'reicon-react';
+import { ChevronDown, ChevronUp } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, type ActivityEntry, type Author, type Provider, type QueueItem, type Thread } from './model';
+import { authorName, isMochiCard, type ActivityEntry, type Author, type Provider, type QueueItem, type Thread } from './model';
+import { CardEntry, EventLine } from './chat/MochiWidget';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
@@ -50,7 +51,8 @@ export function ChatView({ thread }: { thread: Thread }) {
   const rows = useChatRows(thread.activity, thread.reviews);
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
-  const decisions = state.queue.filter((q) => q.threadId === thread.id);
+  // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
+  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q));
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
@@ -135,18 +137,7 @@ function useChatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow
 function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; isLive: boolean }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} isLive={isLive} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
-  if (row.kind === 'event')
-    return (
-      <div className="flex gap-2 type-caption text-muted-foreground">
-        <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
-        <p className="min-w-0">
-          {row.entry.text}
-          {/* The separator travels with the time, so a wrap never leaves it dangling. */}
-          <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(row.entry.at)}</span>
-          {!!row.entry.detail && <span className="block text-subtle-foreground">{row.entry.detail}</span>}
-        </p>
-      </div>
-    );
+  if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
   const { entry } = row;
   const isYou = entry.who === 'you';
