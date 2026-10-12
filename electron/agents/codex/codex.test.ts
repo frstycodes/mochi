@@ -159,7 +159,7 @@ test('queue answers become the decisions app-server expects', () => {
   assert.deepEqual(reply(command, { kind: 'allow', forSession: true }), { decision: 'acceptForSession' });
   assert.deepEqual(reply(command, { kind: 'deny' }), { decision: 'decline' });
   assert.deepEqual(reply(command, { kind: 'deny', interrupt: true }), { decision: 'cancel' });
-  assert.deepEqual(reply({ method: 'item/tool/requestUserInput', questionIds: ['q1', 'q2'] }, { kind: 'answer', answers: ['Redis'] }), { answers: { q1: { answers: ['Redis'] } } });
+  assert.deepEqual(reply({ method: 'item/tool/requestUserInput', questionIds: ['q1', 'q2'] }, { kind: 'answer', answers: [['Redis', 'my own cache'], []] }), { answers: { q1: { answers: ['Redis', 'my own cache'] } } });
 });
 
 test('rpc: line framing, id correlation out of order, errors, timeouts and invalid lines', async () => {

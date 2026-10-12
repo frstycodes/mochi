@@ -84,12 +84,13 @@ test('a request the agent withdraws leaves the queue and unblocks the step', () 
   assert.equal(applyAgentEvent(s, { threadId: 'rl', type: 'resolved', requestId: 'tool-8' }), s, 'resolving an answered request is a no-op');
 });
 
-test('a question goes to the queue as choices and resolves with the picked label', () => {
+test('a question goes to the queue with its questions and resolves with your answers', () => {
   let s = live(base(), 'rl');
-  s = applyAgentEvent(s, { threadId: 'rl', type: 'question', requestId: 'ask-1', questions: [{ text: 'Which store?', options: ['Redis', 'Postgres'] }] });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'question', requestId: 'ask-1', questions: [{ text: 'Which store?', options: ['Redis', 'Postgres'], multiSelect: false }] });
   const item = s.queue.find((q) => q.requestId === 'ask-1')!;
   assert.equal(item.kind, 'question');
-  assert.deepEqual(resolution(s, { type: 'answer', queueId: item.id, choice: '1' }), { requestId: 'ask-1', decision: { kind: 'answer', answers: ['Postgres'] } });
+  assert.equal(item.title, 'Which store?');
+  assert.deepEqual(resolution(s, { type: 'answer', queueId: item.id, answers: [['Postgres']] }), { requestId: 'ask-1', decision: { kind: 'answer', answers: [['Postgres']] } });
 });
 
 test('demo threads resolve in the store, never through host.agent', () => {

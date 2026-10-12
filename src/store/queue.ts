@@ -1,4 +1,4 @@
-import { seedQueue, type QueueItem } from '../model.ts';
+import { answerText, seedQueue, type QueueItem } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { getRestored } from './persist.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -8,14 +8,15 @@ export interface QueueState {
   queue: QueueItem[];
 }
 
-export type QueueAction = { type: 'answer'; queueId: string; choice?: string };
+/** `answers` is each question's picked labels and typed text, for question items. */
+export type QueueAction = { type: 'answer'; queueId: string; answers?: string[][] };
 
 export function initialQueue(saved = getRestored(), isDemo = showsDemoData()): QueueState {
   return { queue: [...(isDemo ? seedQueue() : []), ...(saved?.queue ?? [])] };
 }
 
 export function queueReducer(state: State, action: Action): State {
-  if (action.type === 'answer') return answer(state, action.queueId, action.choice);
+  if (action.type === 'answer') return answer(state, action.queueId, action.answers);
   return state;
 }
 
@@ -24,12 +25,11 @@ export function rankQueue(items: QueueItem[]) {
   return [...items].sort((a, b) => weight(b) - weight(a) || a.createdAt - b.createdAt);
 }
 
-function answer(state: State, queueId: string, choice?: string): State {
+function answer(state: State, queueId: string, answers: string[][] = []): State {
   const item = state.queue.find((q) => q.id === queueId);
   if (!item) return state;
   const now = state.now;
   const queue = state.queue.filter((q) => q.id !== queueId);
-  const label = item.choices?.find((c) => c.id === choice)?.label;
 
   const threads = mapThread(state.threads, item.threadId, (t) => {
     if (item.kind === 'review') {
@@ -39,7 +39,7 @@ function answer(state: State, queueId: string, choice?: string): State {
     }
     const blocked = t.steps.find((s) => s.status === 'blocked');
     const unblocked = blocked ? mapStep(t, blocked.id, (s) => ({ ...s, status: 'running', note: undefined })) : t;
-    const text = item.kind === 'approval' ? `Approved: ${item.code ?? item.title}` : (label ?? 'Answered');
+    const text = item.kind === 'approval' ? `Approved: ${item.code ?? item.title}` : (answerText(answers) || 'Answered');
     return log({ ...unblocked, status: 'running' }, { at: now, who: 'you', kind: item.kind === 'approval' ? 'event' : 'message', text });
   });
   return { ...state, threads, queue };
