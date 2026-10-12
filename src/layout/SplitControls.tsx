@@ -22,6 +22,8 @@ import { useHarness } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
 import { Shortcut } from '../Shortcut';
+import { SPLIT_MENU } from '../menus/menus';
+import { TargetContextMenu } from '../menus/TargetContextMenu';
 
 /** Per-split actions in a split's header: the Stage Manager toggle (first split only), the layout menu and close. */
 export function SplitControls() {
@@ -136,14 +138,16 @@ function PresetSubmenu() {
 
 /** Header for splits that aren't threads (Queue, Board, New thread, a dropped tab). Hidden for a lone split unless it must carry the sidebar toggle. */
 export function LeafBar({ children }: { children: ReactNode }) {
-  const { isMulti, isFirst } = useSplit();
+  const { isMulti, isFirst, leafId } = useSplit();
   const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
   if (!isMulti && !hasTrigger && !reservesToggle) return null;
   return (
-    <div className={cn('flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
-      {hasTrigger && <SidebarTrigger className="-ml-1" />}
-      <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
-      <SplitControls />
-    </div>
+    <TargetContextMenu target={{ leafId }} groups={SPLIT_MENU}>
+      <div className={cn('flex h-11 shrink-0 items-center gap-2 px-3', reservesToggle && TOGGLE_RESERVE)}>
+        {hasTrigger && <SidebarTrigger className="-ml-1" />}
+        <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
+        <SplitControls />
+      </div>
+    </TargetContextMenu>
   );
 }

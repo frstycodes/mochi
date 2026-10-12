@@ -1,14 +1,12 @@
-import { lazy, Suspense, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { MultiFileDiff } from '@pierre/diffs/react';
 import { useTheme } from 'next-themes';
 import { AlertTriangle, Code, Document, Export, Eye } from 'reicon-react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { host } from '@/host';
-import type { Editor } from '@/host/types/fs';
+import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './editors';
 import { FilePreview, previewKind } from './previews';
 import { useOpenFile, type OpenFile } from './useFiles';
 import { isMod } from '../keys';
@@ -133,13 +131,8 @@ function ConflictDiff({ path, disk, mine }: { path: string; disk: string; mine: 
   );
 }
 
-const EDITOR_NAMES = { vscode: 'VS Code', cursor: 'Cursor', zed: 'Zed' } satisfies Record<Editor, string>;
-let installed: Promise<Editor[]> | undefined;
-const installedEditors = () => (installed ??= host.fs.editors().catch(() => []));
-
 function OpenInMenu({ root, path, line }: { root: string; path: string; line?: number }) {
-  const [editors, setEditors] = useState<Editor[]>([]);
-  useEffect(() => void installedEditors().then(setEditors), []);
+  const editors = useInstalledEditors();
   if (editors.length === 0) return null;
   return (
     <DropdownMenu>
@@ -150,7 +143,7 @@ function OpenInMenu({ root, path, line }: { root: string; path: string; line?: n
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {editors.map((editor) => (
-          <DropdownMenuItem key={editor} onSelect={() => host.fs.openIn(editor, root, path, line).catch((e: Error) => toast.error(e.message))}>
+          <DropdownMenuItem key={editor} onSelect={() => openInEditor(editor, root, path, line)}>
             Open in {EDITOR_NAMES[editor]}
           </DropdownMenuItem>
         ))}

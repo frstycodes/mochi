@@ -11,15 +11,45 @@ function ContextMenu({
 
 function ContextMenuTrigger({
   className,
+  onKeyDown,
+  onContextMenuCapture,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Trigger>) {
   return (
     <ContextMenuPrimitive.Trigger
       data-slot="context-menu-trigger"
       className={cn("select-none", className)}
+      onKeyDown={(event) => {
+        onKeyDown?.(event)
+        if (event.defaultPrevented || !isMenuKey(event)) return
+        event.preventDefault()
+        openFromKeyboard(event.target as HTMLElement)
+      }}
+      onContextMenuCapture={(event) => {
+        onContextMenuCapture?.(event)
+        // Stopping it here keeps Radix from opening the app menu and leaves the native one (cut, copy, paste) alone.
+        if (wantsNativeMenu(event.target as Node)) event.stopPropagation()
+      }}
       {...props}
     />
   )
+}
+
+// Radix opens on `contextmenu` only. The menu key and Shift F10 open it on the focused element, anchored under it;
+// Windows also fires a native `contextmenu` for the menu key, which preventDefault on keydown suppresses.
+function isMenuKey(event: React.KeyboardEvent) {
+  return event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")
+}
+
+function openFromKeyboard(target: HTMLElement) {
+  const rect = target.getBoundingClientRect()
+  target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: rect.left + Math.min(16, rect.width / 2), clientY: rect.bottom }))
+}
+
+function wantsNativeMenu(target: Node) {
+  if (target instanceof Element && target.closest("input, textarea, [contenteditable]:not([contenteditable=false])")) return true
+  const selection = window.getSelection()
+  return !!selection && !selection.isCollapsed && selection.containsNode(target, true)
 }
 
 function ContextMenuGroup({

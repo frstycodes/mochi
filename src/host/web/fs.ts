@@ -43,4 +43,7 @@ export const fs: FsHost = {
     return [];
   },
   async openIn() {},
+  async reveal() {
+    throw new Error('Revealing files needs the desktop app');
+  },
 };

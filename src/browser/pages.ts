@@ -63,6 +63,13 @@ export function updatePage(key: string, patch: Partial<Page>) {
   listeners.forEach((l) => l());
 }
 
+export function reloadPage(key: string, hard = false) {
+  const page = pages.get(key);
+  if (!page) return;
+  if (page.hostId) void host.browser.command(page.hostId, hard ? 'hard-reload' : 'reload');
+  else updatePage(key, { reloads: page.reloads + 1 });
+}
+
 /** Native view for the page, created on first use. Desktop only. */
 export async function ensureView(key: string, spaceId: string) {
   const page = pages.get(key);

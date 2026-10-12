@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, screen, shell, type Rectangle } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, screen, shell, type Rectangle } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -52,6 +52,7 @@ export function createWindow(route = '', bounds?: Rectangle) {
     if (/^https?:/.test(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
+  win.webContents.on('context-menu', (_event, params) => showTextMenu(win, params));
   win.webContents.on('will-navigate', (event, url) => {
     if (!isTrustedUrl(url)) event.preventDefault();
   });
@@ -63,6 +64,27 @@ export function createWindow(route = '', bounds?: Rectangle) {
 }
 
 nativeTheme.on('updated', () => BrowserWindow.getAllWindows().forEach((win) => win.setBackgroundColor(background())));
+
+// Electron shows no context menu by default. The app's own menus preventDefault, so this only fires where none exists:
+// text fields and selected text get the native edit menu, everything else stays without one.
+function showTextMenu(win: BrowserWindow, params: Electron.ContextMenuParams) {
+  if (params.isEditable) {
+    const spelling = params.dictionarySuggestions.map((word) => ({ label: word, click: () => win.webContents.replaceMisspelling(word) }));
+    const template: Electron.MenuItemConstructorOptions[] = [
+      ...spelling,
+      ...(spelling.length ? [{ type: 'separator' as const }] : []),
+      { role: 'undo' },
+      { role: 'redo' },
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' },
+      { role: 'selectAll' },
+    ];
+    return Menu.buildFromTemplate(template).popup({ window: win });
+  }
+  if (params.selectionText.trim()) Menu.buildFromTemplate([{ role: 'copy' }]).popup({ window: win });
+}
 
 /** Every display already holding a window is taken; with none free the window opens where Electron cascades it. */
 function freeDisplayBounds(): Rectangle | undefined {

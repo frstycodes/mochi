@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Thread } from './model.ts';
-import { dropPin, pinnedThreads, reorderThreads, stepPin, togglePin } from './reorder.ts';
+import { dropPin, pinMany, pinnedThreads, reorderThreads, stepPin, togglePin } from './reorder.ts';
 
 const t = (id: string, orbitSlot?: number) => ({ id, orbitSlot, spaceId: 's', status: 'running' }) as Thread;
 
@@ -42,4 +42,13 @@ test('drop inserts at the index of the target list', () => {
   assert.deepEqual(dropPin(['a'], ['b', 'c'], 'c', true, 0), { pinned: ['c', 'a'], unpinned: ['b'] });
   assert.deepEqual(dropPin(['a', 'b'], ['c'], 'a', false, 1), { pinned: ['b'], unpinned: ['c', 'a'] });
   assert.equal(dropPin(['a', 'b', 'c', 'd', 'e'], ['f'], 'f', true, 2), null);
+});
+
+test('bulk pin appends in selection order; bulk unpin puts them back at the top of Threads; overflow refuses all', () => {
+  const threads = [t('a', 1), t('b'), t('c'), t('d')];
+  assert.deepEqual(pinMany(threads, 's', ['c', 'b']), { pinned: ['a', 'c', 'b'], unpinned: ['d'] });
+  const pinned = [t('a', 1), t('b', 2), t('c', 3), t('d')];
+  assert.deepEqual(pinMany(pinned, 's', ['a', 'c']), { pinned: ['b'], unpinned: ['c', 'a', 'd'] });
+  const full = [t('a', 1), t('b', 2), t('c', 3), t('d', 4), t('e'), t('f'), t('g')];
+  assert.equal(pinMany(full, 's', ['e', 'f']), null);
 });

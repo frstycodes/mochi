@@ -13,6 +13,8 @@ import { useThreadSnapshots, type ThreadSnapshot } from './snapshot';
 import { useStageKeys } from './useStageKeys';
 import { useSnapPager } from '../useSnapPager';
 import { useWindowSyncHost } from './windowSync';
+import { THREAD_MENU } from '../menus/menus';
+import { TargetContextMenu } from '../menus/TargetContextMenu';
 
 const CARD = { landscape: { w: 248, h: 176 }, portrait: { w: 248, h: 150 } };
 const DRAG_SLOP_PX = 6;
@@ -178,11 +180,13 @@ function EdgeCard({ snap, i, side, stacked, pos, size, isPortrait, isFlat, onOpe
 
   return (
     <motion.div className="absolute" style={{ ...base, width: card.w, height: card.h, transform, opacity, zIndex, pointerEvents, transformOrigin, transformStyle: 'preserve-3d' }}>
-      <button type="button" aria-label={`Open ${snap.title}`} {...drag} className="group size-full cursor-default touch-none rounded-xl outline-none select-none [transform-style:preserve-3d]">
-        <div className={cn('size-full transition-[translate,transform] duration-240 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:duration-160 motion-reduce:transition-none', ORIGIN[side], !isFlat && PEEK[side], isFlat && PEEK[side].replace(/\S*rotate\S*/g, ''))}>
-          <SnapshotCard snap={snap} strip={STRIP[side]} stacked={stacked} className="size-full group-focus-visible:ring-2 group-focus-visible:ring-ring" />
-        </div>
-      </button>
+      <TargetContextMenu target={{ threadId: snap.id }} groups={THREAD_MENU}>
+        <button type="button" aria-label={`Open ${snap.title}`} {...drag} className="group size-full cursor-default touch-none rounded-xl outline-none select-none [transform-style:preserve-3d]">
+          <div className={cn('size-full transition-[translate,transform] duration-240 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:duration-160 motion-reduce:transition-none', ORIGIN[side], !isFlat && PEEK[side], isFlat && PEEK[side].replace(/\S*rotate\S*/g, ''))}>
+            <SnapshotCard snap={snap} strip={STRIP[side]} stacked={stacked} className="size-full group-focus-visible:ring-2 group-focus-visible:ring-ring" />
+          </div>
+        </button>
+      </TargetContextMenu>
     </motion.div>
   );
 }
@@ -220,7 +224,8 @@ function useCardDrag(snap: ThreadSnapshot, side: Side, onOpen: () => void) {
     onPointerUp: () => {
       const s = start.current;
       start.current = null;
-      if (!s?.isDragging) return onOpen();
+      if (!s) return;
+      if (!s.isDragging) return onOpen();
       const landed = endDrag();
       if (landed) dispatch({ type: 'layout-drop', leafId: landed.leafId, zone: landed.zone, view: landed.view });
     },

@@ -29,7 +29,7 @@ import { ProviderMark } from '@/ui';
 import { consoleReport, screenshot, togglePick } from './actions';
 import { DEVICES, RESPONSIVE } from './devices';
 import { deviceSize, isDemoUrl } from './PageSurface';
-import { updatePage, useAddressHistory, type Page } from './pages';
+import { reloadPage, updatePage, useAddressHistory, type Page } from './pages';
 import { displayUrl, normalizeUrl } from './url';
 import { OverflowIcon } from '../ui';
 
@@ -41,8 +41,8 @@ export function BrowserToolbar({ thread, pageId, page, onPopOut }: { thread: Thr
   const isNative = !!page.hostId;
   const canPick = isNative || isDemoUrl(page.url);
   const command = (c: BrowserCommand) => {
-    if (page.hostId) void host.browser.command(page.hostId, c);
-    else if (c === 'reload' || c === 'hard-reload') updatePage(pageId, { reloads: page.reloads + 1 });
+    if (c === 'reload' || c === 'hard-reload') reloadPage(pageId, c === 'hard-reload');
+    else if (page.hostId) void host.browser.command(page.hostId, c);
   };
 
   return (

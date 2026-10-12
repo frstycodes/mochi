@@ -242,6 +242,17 @@
         "--strictPort"
       ],
       "port": 5339
+    },
+    {
+      "name": "harness-menus",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5347",
+        "--strictPort"
+      ],
+      "port": 5347
     }
   ]
 }

@@ -109,7 +109,8 @@ export function LeafView({ leaf, isMulti, isZoomed, isFirst }: { leaf: Leaf; isM
         data-leaf-id={leaf.id}
         aria-label={isMulti ? `Split${isFocused ? ', focused' : ''}` : undefined}
         tabIndex={-1}
-        onPointerDownCapture={focus}
+        // Primary button only: right-clicking a split's tab or header opens its menu without focusing the split.
+        onPointerDownCapture={(e) => e.button === 0 && focus()}
         onFocusCapture={() => isTabbing() && focus()}
         className={cn('relative h-full min-h-0 min-w-0 bg-background outline-none', isMulti && 'overflow-hidden rounded-xl border border-transparent', isMulti && isFocused && 'border-foreground/20')}
       >

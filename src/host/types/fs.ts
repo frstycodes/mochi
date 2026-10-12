@@ -12,6 +12,8 @@ export interface FsHost {
   onChange(listener: (change: FsChange) => void): () => void;
   editors(): Promise<Editor[]>;
   openIn(editor: Editor, root: string, path: string, line?: number): Promise<void>;
+  /** Selects `path` in Finder (Explorer, the file manager); an empty `path` reveals `root` itself. */
+  reveal(root: string, path: string): Promise<void>;
 }
 
 export type FileContent = { kind: 'text'; text: string; mtimeMs: number } | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
@@ -35,4 +37,5 @@ export const fsMethods = {
   onChange: 'event',
   editors: 'invoke',
   openIn: 'invoke',
+  reveal: 'invoke',
 } satisfies Manifest<FsHost>;

@@ -46,9 +46,9 @@ export type LayoutAction =
   | { type: 'layout-close'; leafId?: string }
   | { type: 'layout-focus'; leafId: string }
   | { type: 'layout-focus-step'; step: 1 | -1 }
-  | { type: 'layout-zoom' }
+  | { type: 'layout-zoom'; leafId?: string }
   | { type: 'layout-swap'; leafId?: string; withId?: string }
-  | { type: 'layout-rotate' }
+  | { type: 'layout-rotate'; leafId?: string }
   | { type: 'layout-resize'; splitId: string; sizes: number[] }
   | { type: 'layout-equalize'; splitId: string }
   | { type: 'layout-preset'; preset: Preset }
@@ -128,9 +128,12 @@ function reduce(state: State, action: Action): State {
       const focusId = order.at((i + action.step) % order.length)!.id;
       return set({ ...layout, focusId, zoomId: layout.zoomId && focusId });
     }
-    case 'layout-zoom':
+    case 'layout-zoom': {
       if (leaves(layout.root).length < 2) return state;
-      return set({ ...layout, zoomId: layout.zoomId ? undefined : layout.focusId });
+      // Zooming a split that isn't focused focuses it too, or the zoomed split would show while focus stays on a hidden one.
+      const id = action.leafId ?? layout.focusId;
+      return set({ ...layout, zoomId: layout.zoomId ? undefined : id, focusId: layout.zoomId ? layout.focusId : id });
+    }
     case 'layout-swap': {
       const order = leaves(layout.root);
       const id = action.leafId ?? layout.focusId;
@@ -141,7 +144,7 @@ function reduce(state: State, action: Action): State {
     }
     case 'layout-rotate': {
       const l = edit();
-      const target = parentOf(l.root, l.focusId) ?? l.root;
+      const target = parentOf(l.root, action.leafId ?? l.focusId) ?? l.root;
       if (target.kind === 'leaf') return state;
       return set({ ...l, root: rotateSplit(l.root, target.id), isAuto: false });
     }

@@ -1,20 +1,14 @@
-import { useTheme } from 'next-themes';
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@/components/ui/command';
 import { SPACES } from '../model';
-import { useReviewMode } from '../review/useReviewMode';
 import { useHarness } from '../store';
 import { StepStatusIcon, ThreadStatusIcon, lineColor } from '../ui';
-import { ACTIONS, ACTION_GROUPS, type ActionContext, type PaletteAction } from './actions';
-import { available, scopeOf } from './when';
+import { ACTION_GROUPS, type PaletteAction } from './actions';
+import { useActions } from './useActions';
 import { Shortcut } from '../Shortcut';
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { state, dispatch } = useHarness();
-  const { setTheme } = useTheme();
-  const review = useReviewMode();
-  const scope = scopeOf(state);
-  const ctx: ActionContext = { state, dispatch, scope, setTheme, openReview: review.open };
-  const actions = available<PaletteAction>(ACTIONS, scope);
+  const { actions, run: runAction, review } = useActions();
   const liveSteps = useLiveSteps();
   const close = () => onOpenChange(false);
   const go = (threadId: string) => {
@@ -24,7 +18,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   };
   const run = (action: PaletteAction) => {
     if (action.id !== 'go-review') review.close();
-    action.run(ctx);
+    runAction(action);
     close();
   };
 
