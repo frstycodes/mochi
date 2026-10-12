@@ -438,7 +438,8 @@ function ThreadItem({ thread, isActive, onSelect }: { thread: Thread; isActive: 
               <span className="shrink-0">No project</span>
             </>
           )}
-          <span className="ml-auto shrink-0 tabular transition-opacity group-hover/menu-item:opacity-0">{row.ago}</span>
+          {/* While the Settle / Reactivate chip covers this slot, it widens to the chip's width so the branch truncates before the chip instead of under it. */}
+          <span className={cn('ml-auto shrink-0 tabular transition-opacity group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
         </span>
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
