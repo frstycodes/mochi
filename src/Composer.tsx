@@ -76,7 +76,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof PromptInputTextarea>, 'onSu
   /** Keeps the model list to `provider`. */
   isLocked?: boolean;
   onControlsChange: (controls: ThreadControls, model?: ModelOption) => void;
-  /** Return `false` to hold the message: the text stays in the input, as with the drift guard's card. */
+  /** Return `false` to hold the message: the text stays in the input. */
   onSend: (message: PromptInputMessage) => void | boolean;
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;

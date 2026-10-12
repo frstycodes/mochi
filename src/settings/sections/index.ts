@@ -122,7 +122,6 @@ export const SETTINGS_SECTIONS = [
     component: GoalsSection,
     settings: [
       { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
-      { id: 'driftThreshold', label: 'Drift sensitivity', keywords: 'off-goal threshold scope' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
       { id: 'stepSize', label: 'New step size', keywords: 'points progress eta small medium large' },
     ],
