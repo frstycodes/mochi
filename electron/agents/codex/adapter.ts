@@ -33,6 +33,8 @@ const POLICIES: Record<string, { approvalPolicy: string; sandbox: string }> = {
 };
 /** Codex's plan tool is off unless configured; Harness maps its plans onto goal steps, so its threads always get it. Verified against 0.155.1: without it `turn/plan/updated` never fires. */
 const PLAN_TOOL = { 'tools.update_plan.enabled': true };
+/** Mirrors Claude's `AUTO_ALLOWED` (`electron/mcp/server.ts`): goal bookkeeping runs unasked, starting an agent asks. Keys verified against 0.155.1's config schema. */
+const MOCHI_APPROVALS = { 'mcp_servers.mochi.default_tools_approval_mode': 'approve', 'mcp_servers.mochi.tools.create_thread.approval_mode': 'prompt' };
 const NOT_FOUND = 'Codex is not installed or not on your PATH. Install it (`npm i -g @openai/codex`) or set its path in Settings.';
 const THREAD_TIMEOUT_MS = 120_000;
 const CRASH_WINDOW_MS = 60_000;
@@ -49,11 +51,14 @@ export class CodexAdapter {
   private emit: (event: AgentEvent) => void;
   private accountFor: AccountFor;
   private findCodex: FindCodex;
+  private toolsUrl?: (threadId: string) => Promise<string>;
 
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex) {
+  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. */
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string) => Promise<string>) {
     this.emit = emit;
     this.accountFor = accountFor;
     this.findCodex = findCodex;
+    this.toolsUrl = toolsUrl;
   }
 
   owns(threadId: string) {
@@ -122,7 +127,8 @@ export class CodexAdapter {
 
   private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions) {
     this.forget(threadId);
-    const params = { cwd: options.cwd, model: options.model ?? null, config: PLAN_TOOL, ...POLICIES[options.permissionMode ?? ''] };
+    const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
+    const params = { cwd: options.cwd, model: options.model ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume
       ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
@@ -304,6 +310,7 @@ export function reply(pending: Pick<Pending, 'method' | 'questionIds'>, decision
     const answers = decision.kind === 'answer' ? decision.answers : [];
     return { answers: Object.fromEntries(pending.questionIds.flatMap((id, i) => (answers[i]?.length ? [[id, { answers: answers[i] }]] : []))) };
   }
+  if (pending.method === 'mcpServer/elicitation/request') return decision.kind === 'allow' ? { action: 'accept', content: {}, _meta: null } : { action: 'decline', content: null, _meta: null };
   if (decision.kind === 'allow') return { decision: decision.forSession ? 'acceptForSession' : 'accept' };
   if (decision.kind === 'deny') return { decision: decision.interrupt ? 'cancel' : 'decline' };
   return { decision: 'decline' };

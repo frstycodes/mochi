@@ -14,6 +14,9 @@ export const isTrustedUrl = (url: string) =>
 
 const routed = new Map<string, BrowserWindow>();
 
+/** The window holding the app's store; torn-off windows show a single route. */
+export const mainWindow = () => BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && ![...routed.values()].includes(w));
+
 /** A torn-off window: focuses the one already showing `route`, otherwise opens it on a display with no Mochi window yet, one per monitor. */
 export function openRoute(route: string) {
   const existing = routed.get(route);
