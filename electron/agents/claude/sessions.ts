@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app, BrowserWindow } from 'electron';
-import type { AgentDecision, AgentEvent, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
@@ -16,7 +16,7 @@ import { approvalEvent, createMapper, mcpServersFromStatus, permissionResult, wi
 interface Session {
   threadId: string;
   options: AgentRunOptions;
-  inbox: string[];
+  inbox: { text: string; images?: AgentImage[] }[];
   /** Every message handed to Claude Code, with the uuid `rewindFiles` takes. */
   sent: { uuid: string; text: string }[];
   wake: EventEmitter;
@@ -45,16 +45,16 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [options.prompt], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
   sessions.set(threadId, session);
   void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
 }
 
-export async function sendClaude(threadId: string, text: string) {
+export async function sendClaude(threadId: string, text: string, images?: AgentImage[]) {
   const session = sessions.get(threadId);
   if (!session) throw new Error('No Claude session for this thread in this run of Harness; start it again with resume');
-  session.inbox.push(text);
+  session.inbox.push({ text, images });
   session.isBusy = true;
   if (session.query) session.wake.emit('push');
   else if (!waiting.includes(session)) await schedule(session);
@@ -189,11 +189,11 @@ function evictIdle() {
 
 async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDKUserMessage> {
   while (!signal.aborted) {
-    const text = session.inbox.shift();
-    if (text !== undefined) {
+    const next = session.inbox.shift();
+    if (next) {
       const uuid = randomUUID();
-      session.sent.push({ uuid, text });
-      yield { type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, uuid };
+      session.sent.push({ uuid, text: next.text });
+      yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid };
       continue;
     }
     try {
@@ -226,4 +226,9 @@ const config = () => import('../config.ts');
 
 function emit(event: AgentEvent) {
   for (const win of BrowserWindow.getAllWindows()) if (!win.webContents.isDestroyed()) win.webContents.send('agent:onEvent', event);
+}
+
+function userContent(text: string, images?: AgentImage[]): SDKUserMessage['message']['content'] {
+  if (!images?.length) return text;
+  return [...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType, data: i.data } })), { type: 'text' as const, text }];
 }

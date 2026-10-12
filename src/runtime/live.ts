@@ -1,5 +1,5 @@
 import { threadCwd } from '../host/cwd.ts';
-import type { AgentStartOptions } from '../host/types/agent.ts';
+import type { AgentImage, AgentStartOptions } from '../host/types/agent.ts';
 import type { Provider, Thread } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
@@ -8,7 +8,7 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 /** The composer marks a held-key message with this in the transcript; the agent gets the message without it. */
 export const QUEUED_PREFIX = 'Queued: ';
 
-export type AgentCall = { method: 'start'; threadId: string; options: AgentStartOptions } | { method: 'send'; threadId: string; text: string } | { method: 'interrupt' | 'stop'; threadId: string };
+export type AgentCall = { method: 'start'; threadId: string; options: AgentStartOptions } | { method: 'send'; threadId: string; text: string; images?: AgentImage[] } | { method: 'interrupt' | 'stop'; threadId: string };
 
 /** The `host.agent` calls an action makes for live threads; demo threads make none. `next` is the state after the action. */
 export function agentCalls(state: State, action: Action, next: () => State): AgentCall[] {
@@ -21,9 +21,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
         .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { worktree: t.repo?.branch }));
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
-      const text = action.text.replace(QUEUED_PREFIX, '');
+      const text = action.prompt ?? action.text.replace(QUEUED_PREFIX, '');
+      const images = action.images?.length ? { images: action.images } : {};
       if (!thread?.live) return [];
-      return thread.live.isDetached ? reattach(thread, text) : [{ method: 'send', threadId: thread.id, text }];
+      return thread.live.isDetached ? reattach(thread, text, undefined, images.images) : [{ method: 'send', threadId: thread.id, text, ...images }];
     }
     case 'resume': {
       const thread = state.threads.find((t) => t.id === action.threadId);
@@ -49,7 +50,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'worktree'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'worktree' | 'images'>): AgentCall[] {
   // A project with no folder on disk can't run; a folderless chat runs in a folder main makes for it.
   const cwd = thread.live?.cwd ?? threadCwd(thread);
   if (thread.repo && !cwd) return [];
@@ -57,9 +58,9 @@ function start(thread: Thread, provider: Provider, controls: ThreadControls, pro
 }
 
 /** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */
-function reattach(thread: Thread, prompt: string, onApiKey?: boolean) {
+function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[]) {
   const provider = thread.session?.provider ?? thread.providers[0];
-  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined });
+  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }) });
 }
 
 /** A live thread whose agent runs in this launch of Mochi. */

@@ -26,4 +26,11 @@ export const windows: WindowsHost = {
   onFullScreenChange() {
     return () => {};
   },
+  async listApps() {
+    return { access: 'unsupported', windows: [] };
+  },
+  async captureApp() {
+    return null;
+  },
+  async openScreenRecordingSettings() {},
 };

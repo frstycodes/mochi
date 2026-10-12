@@ -92,7 +92,7 @@ let pending: Promise<unknown> = Promise.resolve();
 function callAgent(call: AgentCall) {
   const run = () => {
     if (call.method === 'start') return host.agent.start(call.threadId, call.options);
-    if (call.method === 'send') return host.agent.send(call.threadId, call.text);
+    if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images);
     return host.agent[call.method](call.threadId);
   };
   const next = pending.then(run);

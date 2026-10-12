@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { driftThreshold, judgeDrift, type DriftKind, type DriftVerdict } from '../drift';
+import type { AgentImage } from '../host/types/agent';
 import type { Thread } from '../model';
 import { progressAt } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
@@ -16,18 +17,25 @@ interface Pending {
   prompt: string;
   prefix: string;
   verdict: DriftVerdict;
+  references?: References;
 }
+
+/** What the agent gets in place of the shown message, when the composer added referenced threads or windows. */
+type References = { prompt: string; images: AgentImage[] };
 
 type BranchFrom = 'current' | 'base';
 
-/** Scores each message against the thread's goal before it is sent. Off-goal ones are held for the card. */
-export function useDriftGuard(thread: Thread) {
+/** Scores each message against the thread's goal before it is sent. Off-goal ones are held for the card. `onSent` runs once a message actually goes. */
+export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const { state, dispatch } = useHarness();
   const { textInput, attachments } = usePromptInputController();
   const [pending, setPending] = useState<Pending | null>(null);
   const [branchFrom, setBranchFrom] = useRememberedBranchFrom();
 
-  const send = (text: string, drift: DriftKind, reason: string) => dispatch({ type: 'send', threadId: thread.id, text, drift, reason });
+  const send = (text: string, drift: DriftKind, reason: string, references?: References) => {
+    dispatch({ type: 'send', threadId: thread.id, text, drift, reason, ...references });
+    onSent?.();
+  };
   const logEvent = (text: string) => dispatch({ type: 'say', threadId: thread.id, entry: { who: 'harness', kind: 'event', text: `Drift guard: ${text}` } });
   const close = () => {
     setPending(null);
@@ -35,37 +43,37 @@ export function useDriftGuard(thread: Thread) {
     attachments.clear();
   };
 
-  const act = (prompt: string, prefix: string, verdict: DriftVerdict) => {
+  const act = (prompt: string, prefix: string, verdict: DriftVerdict, references?: References) => {
     if (verdict.kind !== 'off-goal') {
-      send(`${prefix}${prompt}`, verdict.kind, verdict.reason);
+      send(`${prefix}${prompt}`, verdict.kind, verdict.reason, references);
       return true;
     }
-    setPending({ prompt, prefix, verdict });
+    setPending({ prompt, prefix, verdict, references });
     return false;
   };
 
   /** `false` keeps the text in the input. */
-  const submit = (prompt: string, prefix = '') => {
+  const submit = (prompt: string, prefix = '', references?: References) => {
     if (pending?.prompt === prompt) {
       continueHere();
       return true;
     }
-    if (thread.drift?.isMuted) return act(prompt, prefix, { kind: 'on-goal', reason: 'Drift guard off for this thread' });
+    if (thread.drift?.isMuted) return act(prompt, prefix, { kind: 'on-goal', reason: 'Drift guard off for this thread' }, references);
     const verdict = judgeDrift(prompt, thread);
-    if (!(verdict instanceof Promise)) return act(prompt, prefix, verdict);
-    verdict.then((v) => act(prompt, prefix, v) && textInput.clear());
+    if (!(verdict instanceof Promise)) return act(prompt, prefix, verdict, references);
+    verdict.then((v) => act(prompt, prefix, v, references) && textInput.clear());
     return false;
   };
 
   const continueHere = () => {
     if (!pending) return;
-    send(`${pending.prefix}${pending.prompt}`, 'off-goal', `${pending.verdict.reason}; you chose Continue here`);
+    send(`${pending.prefix}${pending.prompt}`, 'off-goal', `${pending.verdict.reason}; you chose Continue here`, pending.references);
     close();
   };
 
   const addToGoal = () => {
     if (!pending) return;
-    send(`${pending.prefix}${pending.prompt}`, 'scope-add', 'you chose Add to goal');
+    send(`${pending.prefix}${pending.prompt}`, 'scope-add', 'you chose Add to goal', pending.references);
     close();
   };
 

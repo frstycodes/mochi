@@ -11,6 +11,8 @@ export interface AgentStartOptions {
   /** Branch for the thread's own worktree of `cwd`, made by main before the agent starts; on failure (not a git repo) the agent runs in `cwd`. */
   worktree?: string;
   prompt: string;
+  /** Sent with the first prompt. */
+  images?: AgentImage[];
   model?: string;
   effort?: string;
   permissionMode?: string;
@@ -37,6 +39,12 @@ export type AgentEvent =
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
+
+/** Base64 without the `data:` prefix. */
+export interface AgentImage {
+  mediaType: 'image/jpeg' | 'image/png';
+  data: string;
+}
 
 /** What an adapter gets once main has resolved and checked the folder. */
 export type AgentRunOptions = Omit<AgentStartOptions, 'cwd' | 'worktree'> & { cwd: string };
@@ -85,7 +93,7 @@ export interface AgentAskMessage {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  send(threadId: string, text: string): Promise<void>;
+  send(threadId: string, text: string, images?: AgentImage[]): Promise<void>;
   interrupt(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
