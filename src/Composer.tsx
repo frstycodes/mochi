@@ -2,6 +2,7 @@ import { useState, type ComponentProps, type ReactNode } from 'react';
 import { ArrowUp, BranchUp, Laptop, Mic, Monitor, Paperclip, ShieldCheck } from 'reicon-react';
 import { toast } from 'sonner';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
+import { openPhotos } from './photo/photos';
 import {
   PromptInput,
   PromptInputActionAddAttachments,
@@ -91,10 +92,13 @@ function ComposerAttachments() {
     <PromptInputHeader className="gap-2 px-3 pt-3">
       {images.length > 0 && (
         <Attachments variant="grid" className="ml-0">
-          {images.map((f) => (
-            <Attachment key={f.id} data={f} onRemove={() => remove(f.id)} className="size-16 rounded-lg ring-1 ring-border">
-              <AttachmentPreview />
-              <AttachmentRemove />
+          {images.map((f, i) => (
+            // Unclipped so the remove button can stick out of the corner; the preview clips itself.
+            <Attachment key={f.id} data={f} onRemove={() => remove(f.id)} className="size-16 overflow-visible rounded-lg border">
+              <button type="button" aria-label={`View ${f.filename ?? 'image'}`} onClick={() => openPhotos({ photos: images.map(toPhoto), index: i })} className="size-full cursor-zoom-in overflow-hidden rounded-lg">
+                <AttachmentPreview />
+              </button>
+              <AttachmentRemove className="-top-1.5 -right-1.5 size-5 bg-popover shadow-popover backdrop-blur-none group-focus-within:opacity-100 hover:bg-popover" />
             </Attachment>
           ))}
         </Attachments>
@@ -113,6 +117,8 @@ function ComposerAttachments() {
     </PromptInputHeader>
   );
 }
+
+const toPhoto = (f: { url?: string; filename?: string }) => ({ src: f.url ?? '', name: f.filename ?? 'Image' });
 
 /** One line under the card for where and how the agent runs. The gradient fades the transcript scrolling under it. */
 export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {

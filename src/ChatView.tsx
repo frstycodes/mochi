@@ -38,7 +38,7 @@ export function ChatView({ thread }: { thread: Thread }) {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <Conversation className="min-h-0 flex-1">
+      <Conversation data-photo-scope className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
           <ConversationContent className="mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6">
             {rows.map((row, i) => (

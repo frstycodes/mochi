@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
+import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
 import { SidebarToggle } from './SidebarToggle';
@@ -35,6 +36,7 @@ export function App() {
               <Shell />
             </ReviewModeProvider>
             <Orbit />
+            <PhotoViewer />
             <Toaster position="bottom-right" />
           </HarnessProvider>
         )}

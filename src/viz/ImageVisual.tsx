@@ -1,18 +1,14 @@
 import { useState, type ComponentProps, type DragEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Download } from 'reicon-react';
 import type { ExtraProps } from 'streamdown';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { download } from './exportVisual';
+import { fetchImage, imageFileName, openFromScope } from '../photo/photos';
 
 const IMAGE_DRAG_TYPE = 'application/x-harness-image';
 
-/** Message images: click for a lightbox, drag onto the composer to attach. */
+/** Message images: click to open the photo viewer (with the thread's other images as its gallery), drag onto the composer to attach. */
 export function ImageVisual({ src, alt, className, node: _node, ...props }: ComponentProps<'img'> & ExtraProps) {
-  const [isOpen, setOpen] = useState(false);
   const [isBroken, setBroken] = useState(false);
   if (typeof src !== 'string' || !src) return null;
   if (isBroken) return <span className="type-meta text-subtle-foreground italic">{alt || 'Image not available'}</span>;
@@ -23,44 +19,10 @@ export function ImageVisual({ src, alt, className, node: _node, ...props }: Comp
   };
 
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={`Open image${alt ? `: ${alt}` : ''}`} className="my-2 block max-w-full cursor-zoom-in rounded-lg ring-1 ring-border">
-        <img {...props} src={src} alt={alt} draggable onDragStart={onDragStart} onError={() => setBroken(true)} className={cn('block max-h-80 max-w-full rounded-lg', className)} />
-      </button>
-      <Dialog open={isOpen} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 sm:max-w-[min(calc(100vw-4rem),1100px)]">
-          <div className="flex items-center gap-2 pr-8">
-            <DialogTitle className="truncate type-title">{alt || 'Image'}</DialogTitle>
-            <Button variant="ghost" size="icon-sm" aria-label="Download image" className="ml-auto" onClick={() => saveImage(src, alt)}>
-              <Download />
-            </Button>
-          </div>
-          <img src={src} alt={alt} draggable onDragStart={onDragStart} className="min-h-0 w-full flex-1 rounded-lg object-contain" />
-        </DialogContent>
-      </Dialog>
-    </>
+    <button type="button" onClick={(e) => openFromScope(e.currentTarget.querySelector('img')!)} aria-label={`Open image${alt ? `: ${alt}` : ''}`} className="my-2 block max-w-full cursor-zoom-in rounded-lg border">
+      <img {...props} data-photo src={src} alt={alt} draggable onDragStart={onDragStart} onError={() => setBroken(true)} className={cn('block max-h-80 max-w-full rounded-lg', className)} />
+    </button>
   );
-}
-
-async function saveImage(src: string, alt?: string) {
-  try {
-    const blob = await fetchImage(src);
-    download(imageFileName(alt, blob.type), blob);
-  } catch {
-    window.open(src, '_blank', 'noopener');
-  }
-}
-
-async function fetchImage(src: string) {
-  const res = await fetch(src);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.blob();
-}
-
-function imageFileName(alt: string | undefined, type: string) {
-  const ext = type.split('/')[1]?.replace('svg+xml', 'svg') || 'png';
-  const base = (alt || 'image').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'image';
-  return `${base}.${ext}`;
 }
 
 /** Wraps the composer: a message image dropped on it becomes an attachment. Sets `data-image-over` while one hovers. */

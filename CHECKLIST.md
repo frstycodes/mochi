@@ -223,3 +223,8 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [x] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
 - [x] Theme-aware: re-render on light / dark switch; contrast checked in both (colours come from the theme tokens; no separate contrast measurement)
 - [x] Harness-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
+
+## 8. Viewers
+
+- [x] Photo viewer for chat images and composer attachments: full window, gallery per thread (or per composer) with filmstrip and ←/→, zoom at the pointer (pinch, Ctrl-scroll, double-click, +/−, 0 to fit), drag to pan, copy as PNG, download (`src/photo/`)
+- [ ] File viewer for attachments and files in chat (code, Markdown, PDF, CSV, JSON), reusing the Files tab's previews

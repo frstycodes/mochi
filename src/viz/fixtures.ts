@@ -146,7 +146,7 @@ const GALLERY: Omit<ActivityEntry, 'at'>[] = [
     kind: 'message',
     text: ['Pick a tier to preview its headroom; double-click one and I will load-test it:', '', fence('html', WIDGET, 'title="Tier picker"'), '', 'How the bucket works:', '', fence('svg', BUCKET_SVG, 'title="Token bucket"')].join('\n'),
   },
-  { who: 'claude', kind: 'message', text: `Here is the usage page after the change. Drag it into the composer to attach it.\n\n![API usage page](${SCREENSHOT})` },
+  { who: 'claude', kind: 'message', text: `Here is the usage page before and after the change. Click one to page through both; drag one into the composer to attach it.\n\n![Usage page before](${SCREENSHOT})\n\n![API usage page](${SCREENSHOT})` },
   {
     who: 'claude',
     kind: 'message',
