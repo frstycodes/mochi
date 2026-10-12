@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentStartOptions } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
@@ -26,6 +27,8 @@ export const agent = {
     const o = record(options, 'options');
     if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
     string(o.cwd, 'options.cwd');
+    // A packaged app's cwd is `/`, so a relative folder would run the agent there. GAP: the renderer sends `.` until projects keep real paths.
+    if (app.isPackaged && !isAbsolute(o.cwd as string)) throw new TypeError('This thread has no project folder yet, so no agent was started.');
     string(o.spaceId, 'options.spaceId', 256);
     string(o.prompt, 'options.prompt', 100_000);
     for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
