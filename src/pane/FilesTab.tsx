@@ -65,7 +65,7 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
     <div ref={container} className="flex h-full min-h-0" onKeyDown={onKeyDown}>
       {isTreeOpen && (
         <aside className="flex w-52 shrink-0 flex-col pt-11">
-          {error ? <p className="px-3 type-meta text-destructive">{error}</p> : <FileTree files={files ?? []} selected={selected?.path ?? null} onSelect={open} />}
+          {error ? <p className="px-3 type-meta text-destructive">{error}</p> : <FileTree root={root} files={files ?? []} selected={selected?.path ?? null} onSelect={open} />}
         </aside>
       )}
       <div className={cn('min-w-0 flex-1', isTreeOpen && 'bg-background')}>

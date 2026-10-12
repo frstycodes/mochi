@@ -2,8 +2,9 @@ import type { Dispatch } from 'react';
 import { Archive, ArrowRight, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Routing, RowHorizontal, RowVertical, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
-import { host } from '../host';
 import { threadCwd } from '../host/cwd';
+import { copyText } from '../clipboard';
+import { REVEAL_IN, revealPath } from '../files/editors';
 import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import { SPACES, type Thread } from '../model';
 import { PANE_TABS } from '../pane/tabs';
@@ -12,7 +13,7 @@ import { togglePin } from '../reorder';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
-import { IS_MAC, type Key } from '../keys';
+import type { Key } from '../keys';
 import type { PaneTab } from '../model';
 
 export const ACTION_GROUPS = ['Go to', 'Thread', 'Side pane', 'Layout', 'Space', 'Appearance'] as const;
@@ -43,8 +44,8 @@ export const ACTIONS = [
   { id: 'go-board', group: 'Go to', title: 'Board', icon: Route, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }) },
   { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, shortcut: ['N'], run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 
-  { id: 'thread-open', group: 'Thread', title: 'Open thread', icon: ArrowRight, when: when.unfocusedThread, run: onThread((t, { dispatch }) => dispatch({ type: 'go', view: { kind: 'thread', id: t.id } })) },
-  { id: 'thread-open-split', group: 'Thread', title: 'Open in new split', icon: RowVertical, when: when.unfocusedThread, run: onThread((t, { dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'thread', id: t.id } })) },
+  { id: 'thread-open', group: 'Thread', title: 'Open thread', icon: ArrowRight, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'go', view: { kind: 'thread', id: t.id } })) },
+  { id: 'thread-open-split', group: 'Thread', title: 'Open in new split', icon: RowVertical, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'layout-split', view: { kind: 'thread', id: t.id } })) },
   { id: 'thread-settle', group: 'Thread', title: 'Settle thread', icon: Archive, when: when.liveThread, run: onThread((t, { dispatch }) => toggleSettle(t, dispatch)) },
   { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => toggleSettle(t, dispatch)) },
   { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: ['mod', 'shift', 'P'], when: when.unpinned, run: onThread(pin) },
@@ -54,8 +55,8 @@ export const ACTIONS = [
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread(watch) },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread(watch) },
-  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copy(t.repo!.branch, 'Copied branch name')) },
-  { id: 'thread-reveal', group: 'Thread', title: IS_MAC ? 'Reveal worktree in Finder' : 'Show worktree in file manager', icon: FolderOpen, when: when.worktree, run: onThread((t) => void host.fs.reveal(threadCwd(t)!, '').catch((e: Error) => toast.error('Could not reveal the worktree', { description: e.message }))) },
+  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyText(t.repo!.branch, 'Copied branch name')) },
+  { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },
 
   { id: 'pane-toggle', group: 'Side pane', title: 'Toggle side pane', icon: Sidebar, when: when.thread, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-toggle', threadId: t.id })) },
@@ -111,6 +112,12 @@ function inThread(fn: (thread: Thread, ctx: ActionContext) => void) {
   });
 }
 
+/** Opening from an Overview card leaves the Overview, as clicking the card does. */
+function open({ dispatch }: ActionContext, action: Action) {
+  dispatch(action);
+  dispatch({ type: 'overview-toggle', isOpen: false });
+}
+
 function onTab(fn: (tab: PaneTab, thread: Thread, ctx: ActionContext) => void) {
   return (ctx: ActionContext) => ctx.scope.tab && ctx.scope.thread && fn(ctx.scope.tab, ctx.scope.thread, ctx);
 }
@@ -118,13 +125,6 @@ function onTab(fn: (tab: PaneTab, thread: Thread, ctx: ActionContext) => void) {
 function watch(thread: Thread, { state, dispatch }: ActionContext) {
   dispatch({ type: 'watch-toggle', threadId: thread.id });
   toast(state.watched.includes(thread.id) ? `Stopped watching ${thread.title}` : `Watching ${thread.title}`);
-}
-
-function copy(text: string, message: string) {
-  navigator.clipboard.writeText(text).then(
-    () => toast(message),
-    () => toast.error('Could not copy to the clipboard'),
-  );
 }
 
 /** Closes several tabs at once; their pane comes back whole from the undo toast. */

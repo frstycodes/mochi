@@ -21,10 +21,11 @@ import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { Shortcut } from './Shortcut';
+import { MessageContextMenu } from './menus/MessageContextMenu';
 import { MOD_KEY } from './keys';
 
 type ChatRow =
-  | { kind: 'message'; key: string; entry: ActivityEntry; showAuthor: boolean }
+  | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
   | { kind: 'event'; key: string; entry: ActivityEntry }
   | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] };
 
@@ -44,7 +45,7 @@ export function ChatView({ thread }: { thread: Thread }) {
           <ConversationContent className="mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6">
             {rows.map((row, i) => (
               <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                <ChatRowView row={row} isLive={i === rows.length - 1 && isRunning} />
+                <ChatRowView threadId={thread.id} row={row} isLive={i === rows.length - 1 && isRunning} />
               </div>
             ))}
           </ConversationContent>
@@ -93,13 +94,13 @@ function useChatRows(activity: ActivityEntry[]): ChatRow[] {
     if (entry.kind === 'event') return rows.push({ kind: 'event', key, entry });
     const previous = [...rows].reverse().find((r) => r.kind !== 'event');
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.entry.who;
-    rows.push({ kind: 'message', key, entry, showAuthor: previousWho !== entry.who });
+    rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
   });
   return rows;
 }
 
 // isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ row, isLive }: { row: ChatRow; isLive: boolean }) {
+function ChatRowView({ threadId, row, isLive }: { threadId: string; row: ChatRow; isLive: boolean }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} isLive={isLive} />;
   if (row.kind === 'event')
     return (
@@ -113,22 +114,25 @@ function ChatRowView({ row, isLive }: { row: ChatRow; isLive: boolean }) {
   const { entry } = row;
   const isYou = entry.who === 'you';
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
+  const label = `${authorName(entry.who)} · ${clock(entry.at)}`;
   return (
-    <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
-      <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
-        {isAgent && row.showAuthor && (
-          <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
-            <ProviderMark provider={entry.who as Provider} size={14} />
-            {authorName(entry.who)}
-            <span className="tabular">{clock(entry.at)}</span>
-          </span>
-        )}
-        {/* GAP: the tick simulation never streams text; once the agent runtime does, isAnimating should follow the stream, not the row position. */}
-        <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
-          {entry.text}
-        </MessageResponse>
-      </MessageContent>
-    </Message>
+    <MessageContextMenu threadId={threadId} entry={entry} index={row.index} label={label}>
+      <Message from={isYou ? 'user' : 'assistant'} title={label}>
+        <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
+          {isAgent && row.showAuthor && (
+            <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
+              <ProviderMark provider={entry.who as Provider} size={14} />
+              {authorName(entry.who)}
+              <span className="tabular">{clock(entry.at)}</span>
+            </span>
+          )}
+          {/* GAP: the tick simulation never streams text; once the agent runtime does, isAnimating should follow the stream, not the row position. */}
+          <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
+            {entry.text}
+          </MessageResponse>
+        </MessageContent>
+      </Message>
+    </MessageContextMenu>
   );
 }
 

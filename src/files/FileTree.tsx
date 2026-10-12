@@ -3,8 +3,9 @@ import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronRight, Folder, FolderOpen } from 'reicon-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { FileContextMenu } from './FileContextMenu';
 
-export function FileTree({ files, selected, onSelect }: { files: string[]; selected: string | null; onSelect: (path: string) => void }) {
+export function FileTree({ root, files, selected, onSelect }: { root: string; files: string[]; selected: string | null; onSelect: (path: string) => void }) {
   const tree = useMemo(() => buildTree(files), [files]);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   useEffect(() => {
@@ -21,7 +22,7 @@ export function FileTree({ files, selected, onSelect }: { files: string[]; selec
     <ScrollArea className="h-full">
       <ul role="tree" aria-label="Files" className="flex flex-col px-1.5 pb-2">
         {tree.map((node) => (
-          <TreeRow key={node.path} node={node} depth={0} expanded={expanded} selected={selected} onToggle={toggle} onSelect={onSelect} />
+          <TreeRow key={node.path} root={root} node={node} depth={0} expanded={expanded} selected={selected} onToggle={toggle} onSelect={onSelect} />
         ))}
       </ul>
     </ScrollArea>
@@ -34,29 +35,31 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
-function TreeRow({ node, depth, expanded, selected, onToggle, onSelect }: { node: TreeNode; depth: number; expanded: Set<string>; selected: string | null; onToggle: (path: string) => void; onSelect: (path: string) => void }) {
+function TreeRow({ root, node, depth, expanded, selected, onToggle, onSelect }: { root: string; node: TreeNode; depth: number; expanded: Set<string>; selected: string | null; onToggle: (path: string) => void; onSelect: (path: string) => void }) {
   const isDir = !!node.children;
   const isOpen = expanded.has(node.path);
   const FolderIcon = isOpen ? FolderOpen : Folder;
   return (
     <li role="treeitem" aria-expanded={isDir ? isOpen : undefined} aria-selected={node.path === selected}>
-      <button
-        type="button"
-        onClick={() => (isDir ? onToggle(node.path) : onSelect(node.path))}
-        style={{ paddingLeft: 4 + depth * 12 }}
-        className={cn(
-          'flex h-6.5 w-full items-center gap-1.5 rounded-md pr-2 text-left type-meta text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-          node.path === selected && 'bg-sidebar-accent text-foreground',
-        )}
-      >
-        {isDir ? <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground', isOpen && 'rotate-90')} /> : <span className="size-3.5 shrink-0" />}
-        {isDir ? <FolderIcon aria-hidden className="size-3.5 shrink-0" /> : <FileIcon fileName={node.name} autoAssign aria-hidden className="size-3.5 shrink-0" />}
-        <span className="truncate">{node.name}</span>
-      </button>
+      <FileContextMenu root={root} path={node.path} onOpen={isDir ? undefined : () => onSelect(node.path)}>
+        <button
+          type="button"
+          onClick={() => (isDir ? onToggle(node.path) : onSelect(node.path))}
+          style={{ paddingLeft: 4 + depth * 12 }}
+          className={cn(
+            'flex h-6.5 w-full items-center gap-1.5 rounded-md pr-2 text-left type-meta text-muted-foreground outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+            node.path === selected && 'bg-sidebar-accent text-foreground',
+          )}
+        >
+          {isDir ? <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground', isOpen && 'rotate-90')} /> : <span className="size-3.5 shrink-0" />}
+          {isDir ? <FolderIcon aria-hidden className="size-3.5 shrink-0" /> : <FileIcon fileName={node.name} autoAssign aria-hidden className="size-3.5 shrink-0" />}
+          <span className="truncate">{node.name}</span>
+        </button>
+      </FileContextMenu>
       {isDir && isOpen && (
         <ul role="group">
           {node.children!.map((child) => (
-            <TreeRow key={child.path} node={child} depth={depth + 1} expanded={expanded} selected={selected} onToggle={onToggle} onSelect={onSelect} />
+            <TreeRow key={child.path} root={root} node={child} depth={depth + 1} expanded={expanded} selected={selected} onToggle={onToggle} onSelect={onSelect} />
           ))}
         </ul>
       )}
