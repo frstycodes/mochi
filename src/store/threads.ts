@@ -1,5 +1,5 @@
 import type { AgentEvent } from '../host/types/agent.ts';
-import { NOW0, seedThreads, type ActivityEntry, type LineSlot, type Provider, type Step, type Thread } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Step, type StepStatus, type Thread } from '../model.ts';
 import { stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
@@ -37,7 +37,7 @@ export type ThreadsAction =
   | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
@@ -45,7 +45,8 @@ export type ThreadsAction =
   | { type: 'send'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; threshold: number; isMuted: boolean }
-  | { type: 'edit-goal'; threadId: string; draft: GoalDraft }
+  | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
+  | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
@@ -125,7 +126,9 @@ function reduce(state: State, action: Action): State {
     case 'drift-settings':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { threshold: action.threshold, isMuted: action.isMuted } })) };
     case 'edit-goal':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now)) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now, action.by)) };
+    case 'step-status':
+      return setStepStatus(state, action);
     case 'reorder':
       return { ...state, threads: reorderThreads(state.threads, action.pinned, action.unpinned) };
     case 'say':
@@ -353,7 +356,21 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
       mapStep(t, depStep.id, (s) => ({ ...s, sharedKey: `shared-${depStep.id}`, link: { mode: 'provides-for', threadIds: [...(s.link?.mode === 'provides-for' ? s.link.threadIds : []), id] } })),
     );
   }
-  return { ...state, threads, seq: state.seq + 1, views: { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
+  return { ...state, threads, seq: state.seq + 1, views: action.isBackground ? state.views : { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
+}
+
+/** Done goes through `completeStep`, so links and acceptance resolve the same as when a plan finishes it. */
+function setStepStatus(state: State, action: Extract<Action, { type: 'step-status' }>): State {
+  const { threadId, stepId, status, by } = action;
+  const now = state.now;
+  const step = state.threads.find((t) => t.id === threadId)?.steps.find((s) => s.id === stepId);
+  if (!step || step.status === status) return state;
+  if (status === 'done') return { ...state, threads: completeStep(state.threads, threadId, stepId, now) };
+  const changes: Partial<Step> = status === 'dropped' ? { droppedAt: now } : status === 'running' ? { startedAt: step.startedAt ?? now, doneAt: undefined } : { doneAt: undefined };
+  return {
+    ...state,
+    threads: mapThread(state.threads, threadId, (t) => log(mapStep(t, stepId, (s) => ({ ...s, status, ...changes })), { at: now, who: by, kind: 'event', text: `"${step.title}" is now ${status}` })),
+  };
 }
 
 // GAP: simulated. The real agent runs the command in the thread's worktree and fails the step on a non-zero exit.

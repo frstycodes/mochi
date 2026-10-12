@@ -38,5 +38,8 @@ export const agent: AgentHost = {
     return localClassifier(prompt, thread);
   },
   async rewindFiles() {},
+  // No agents in the web build, so no tool calls.
+  onToolCall: () => () => {},
+  async toolResult() {},
   async warm() {},
 };

@@ -6,6 +6,7 @@ import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution } from '../runtime/apply.ts';
 import { agentCalls, type AgentCall } from '../runtime/live.ts';
+import { runTool } from '../runtime/tools.ts';
 import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
 import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
@@ -67,6 +68,17 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [state.paused]);
   useEffect(() => host.agent.onEvent((event) => apply({ type: 'agent', event })), []);
+  useEffect(
+    () =>
+      host.agent.onToolCall((call) => {
+        const { action, next, result } = runTool(latest.current, call, reducer);
+        if (action) dispatch(action);
+        // The next call can land before React renders this one; it must see this change.
+        latest.current = next;
+        void host.agent.toolResult(call.id, result);
+      }),
+    [dispatch],
+  );
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);

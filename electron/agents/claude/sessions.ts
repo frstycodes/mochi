@@ -7,6 +7,7 @@ import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
 import { approvalEvent, createMapper, permissionResult } from './map.ts';
+import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -150,6 +151,8 @@ async function launch(session: Session) {
         enableFileCheckpointing: true,
         abortController: abort,
         canUseTool: approve(threadId),
+        mcpServers: { [SERVER]: claudeServer(threadId) },
+        allowedTools: AUTO_ALLOWED,
       },
     });
     for await (const message of session.query) {
