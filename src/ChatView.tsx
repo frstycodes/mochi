@@ -51,7 +51,8 @@ export function ChatView({ thread }: { thread: Thread }) {
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
   const decisions = state.queue.filter((q) => q.threadId === thread.id);
-  const isRunning = thread.steps.some((s) => s.status === 'running');
+  // A live agent thread may have no planned steps; its turn is what's running.
+  const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
 
   const composer = useComposerHeightVar();
@@ -158,7 +159,6 @@ function ChatRowView({ thread, row, isLive }: { thread: Thread; row: ChatRow; is
                 <span className="tabular">{clock(entry.at)}</span>
               </span>
             )}
-            {/* GAP: the tick simulation never streams text; once the agent runtime does, isAnimating should follow the stream, not the row position. */}
             <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
               {entry.text}
             </MessageResponse>
