@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Folder, Search, SidebarLeft } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -10,6 +10,7 @@ import { useFileList } from '@/files/useFiles';
 import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
 import { AskAboutFileRange } from '@/sidechat/AskInSideChat';
+import { noteOpened } from './recentFiles';
 import type { PaneTabProps } from './tabs';
 import { Shortcut } from '../Shortcut';
 import { isMod } from '../keys';
@@ -29,6 +30,9 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
   const [isTreeOpen, setIsTreeOpen] = useState(!initial);
   const [isQuickOpen, setIsQuickOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selected) noteOpened(threadId, selected.path);
+  }, [threadId, selected]);
   const open = (path: string) => {
     setSelected({ path });
     if (container.current!.clientWidth < SIDE_BY_SIDE_MIN_WIDTH) setIsTreeOpen(false);
