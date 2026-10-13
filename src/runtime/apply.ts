@@ -1,4 +1,5 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
+import { noteCollisions } from './collisions.ts';
 import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
@@ -42,6 +43,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }) }));
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       if (!event.files?.length) return state;
+      if (event.patch) state = noteCollisions(state, thread.id);
       return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));
     case 'plan':
       return applyPlan(state, thread, event.items);
