@@ -9,6 +9,8 @@ export type ChatRow =
   | { kind: 'review'; key: string; review: Review }
   /** A subagent where it was started (`entry.subagentId`). */
   | { kind: 'subagent'; key: string; entry: ActivityEntry }
+  /** A message another thread's agent sent (`entry.from`): a line in the log, not a bubble. It still starts a turn like yours. */
+  | { kind: 'thread-message'; key: string; entry: ActivityEntry; index: number }
   /** The files a finished turn changed, after its last row. */
   | { kind: 'changes'; key: string; turn: TurnChanges };
 
@@ -49,6 +51,7 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
     }
     turn = undefined;
     isMidWork = false;
+    if (entry.from) return rows.push({ kind: 'thread-message', key, entry, index: i });
     const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
     rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
@@ -61,7 +64,7 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
 /** The work row a running thread is still writing: the newest one, unless anyone has spoken since. */
 export function liveWorkIndex(rows: ChatRow[]) {
   const i = rows.findLastIndex((r) => r.kind === 'work');
-  return rows.slice(i + 1).some((r) => r.kind === 'message') ? -1 : i;
+  return rows.slice(i + 1).some((r) => r.kind === 'message' || r.kind === 'thread-message') ? -1 : i;
 }
 
 /**
@@ -73,7 +76,7 @@ export function finalReplies(rows: ChatRow[], isWorking: boolean): Set<number> {
   let candidate = -1;
   rows.forEach((row, i) => {
     if (row.kind === 'work' || row.kind === 'subagent') return void (candidate = -1);
-    if (row.kind !== 'message') return;
+    if (row.kind !== 'message' && row.kind !== 'thread-message') return;
     if (row.entry.who === 'you') {
       if (candidate >= 0) finals.add(candidate);
       candidate = -1;

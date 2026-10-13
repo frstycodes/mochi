@@ -5,6 +5,7 @@ import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
+import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
@@ -349,8 +350,9 @@ const THREAD_SPECS = {
   send_to_thread: {
     run: ({ state, caller, args, dispatch }) => {
       const [thread] = others(state(), caller, [args.threadId], 'message');
-      const text = `From "${caller.title}": ${args.text.trim()}`;
-      dispatch({ type: 'send', threadId: thread.id, text, drift: 'on-goal', reason: `Sent by ${authorName(caller.providers[0])} from another thread` });
+      const text = args.text.trim();
+      const from = { threadId: caller.id, title: caller.title };
+      dispatch({ type: 'send', threadId: thread.id, text, prompt: receivedPrompt(from, text), from, drift: 'on-goal', reason: `Sent by ${authorName(caller.providers[0])} from another thread` });
       return { changed: `messaged "${thread.title}"`, result: { threadId: thread.id, sent: text }, isFinal: true };
     },
   },

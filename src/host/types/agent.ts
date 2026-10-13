@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, McpCall, Provider, Size, StepStatus, Thread, WebLink } from '../../model.ts';
+import type { AgentInfo, McpCall, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
@@ -47,7 +47,7 @@ export type AgentEvent =
    * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall }
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string } }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent

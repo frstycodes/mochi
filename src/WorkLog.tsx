@@ -25,6 +25,8 @@ import { patchSections } from './chat/turnChanges';
 import { imageMime } from './files/previews';
 import { outputLines } from './chat/output';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
+import { isSendCall } from './chat/threadMessages';
+import { ThreadMessageBody, ThreadMessageIcon, ThreadMessageLine } from './chat/ThreadMessage';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
@@ -112,7 +114,7 @@ export function CallList({ className, ...props }: ComponentProps<'ol'>) {
 }
 
 /** What a row needs from a call, whether the thread's own (`ActivityEntry`) or a subagent's (`SubagentStep`). */
-type ToolEntry = Pick<ActivityEntry, 'text' | 'description' | 'output' | 'exitCode' | 'patch' | 'links'>;
+type ToolEntry = Pick<ActivityEntry, 'text' | 'description' | 'output' | 'exitCode' | 'patch' | 'links' | 'mcp' | 'sent'>;
 
 /** One call: what it did in words, opening in place to the detail behind it. */
 export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunning: boolean; files: ThreadFiles | null }) {
@@ -127,8 +129,12 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
       {/* One toggle stretched under the row; the file name sits above it as its own link. */}
       <div className={cn('relative isolate flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta', !!detail && 'hover:bg-accent/60')}>
         {!!detail && <button type="button" aria-expanded={isOpen} aria-label={description} onClick={() => setOpen((o) => !o)} className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2" />}
-        <CallGlyph call={call} links={entry.links} />
-        {isRunning ? (
+        {isSendCall(entry) ? <ThreadMessageIcon direction="to" /> : <CallGlyph call={call} links={entry.links} />}
+        {isSendCall(entry) ? (
+          <span className="flex min-w-0 flex-1 text-foreground">
+            <ThreadMessageLine direction="to" peer={entry.sent} text={entry.sent?.text} />
+          </span>
+        ) : isRunning ? (
           <Shimmer as="span" className="min-w-0 flex-1 truncate">
             {description}
           </Shimmer>
@@ -167,6 +173,7 @@ function CallText({ call, description, hasOwnDescription, files }: { call: ToolC
 
 /** What a call opens to: the command and its output, the edit's diff, the file it read, the pages a search returned. */
 function callDetail(entry: ToolEntry, call: ToolCall, files: ThreadFiles | null): ReactNode {
+  if (entry.sent) return <ThreadMessageBody text={entry.sent.text}>Delivered to {entry.sent.title}</ThreadMessageBody>;
   if (call.verb === 'Run') return <RunOutput command={call.target} run={runOf(entry)} />;
   if (call.verb === 'Edit' || call.verb === 'Write') {
     const patch = entry.patch ?? PATCHES[call.target];

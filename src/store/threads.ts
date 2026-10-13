@@ -1,7 +1,8 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import type { CheckRun } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
+import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
@@ -66,7 +67,7 @@ export type ThreadsAction =
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
    * `queuedId`: the queued message this sends, which leaves the queue. `interrupts`: ends the turn in flight first (the queue's Send now).
    */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; interrupts?: boolean }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; interrupts?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
   /** Edit and remove both take a message out; Edit puts its text back in the composer itself. */
   | { type: 'queued-remove'; threadId: string; id: string }
@@ -529,14 +530,16 @@ function checkAcceptance(thread: Thread, step: Step, now: number) {
 
 function send(state: State, action: Extract<Action, { type: 'send' }>): State {
   const now = state.now;
+  const { from } = action;
+  const threads = from?.threadId ? mapThread(state.threads, from.threadId, (t) => markSent(t, { threadId: action.threadId, title: state.threads.find((r) => r.id === action.threadId)?.title ?? '', text: action.text })) : state.threads;
   return {
     ...state,
-    threads: mapThread(state.threads, action.threadId, (t) => {
+    threads: mapThread(threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
       const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
-      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.thumbs?.length && { images: action.thumbs }) });
+      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.thumbs?.length && { images: action.thumbs }), ...(from && { from }) });
       return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
     }),
   };

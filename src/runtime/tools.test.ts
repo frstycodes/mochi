@@ -381,8 +381,12 @@ test('create_thread creates in the same project without moving your view, and Un
 
 test('send_to_thread sends into the other thread as a message from this one, with no Undo', async () => {
   const t = setup();
-  await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new limits table' });
-  assert.ok(t.thread('adm').activity.some((a) => a.kind === 'message' && a.text.includes('Use the new limits table')));
+  const sender = t.thread('rl');
+  t.env.dispatch({ type: 'say', threadId: 'rl', entry: { who: 'claude', kind: 'tool', text: 'Mcp mochi: send_to_thread', mcp: { server: 'mochi', tool: 'send_to_thread' } } });
+  await t.ok('send_to_thread', { threadId: 'adm', text: '  Use the new limits table ' });
+  const received = t.thread('adm').activity.at(-1)!;
+  assert.deepEqual({ who: received.who, kind: received.kind, text: received.text, from: received.from }, { who: 'you', kind: 'message', text: 'Use the new limits table', from: { threadId: 'rl', title: sender.title } });
+  assert.deepEqual(t.thread('rl').activity.findLast((a) => a.kind === 'tool')!.sent, { threadId: 'adm', title: t.thread('adm').title, text: 'Use the new limits table' }, "the sender's call row knows what it sent");
   assert.equal(t.toasts.at(-1)!.undo, undefined);
 });
 

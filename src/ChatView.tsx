@@ -35,6 +35,7 @@ import { GoalCard } from './goals/GoalCard';
 import { ReportCard } from './goals/ReportCard';
 import { currentReport } from './goals/report';
 import { TurnChangesCard } from './chat/TurnChangesCard';
+import { ReceivedMessageRow } from './chat/ThreadMessage';
 import { turnChanges } from './chat/turnChanges';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
@@ -145,6 +146,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
     return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
   }
+  if (row.kind === 'thread-message') return <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
