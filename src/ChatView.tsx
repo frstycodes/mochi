@@ -28,6 +28,8 @@ import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisu
 import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
+import { GoalCard } from './goals/GoalCard';
+import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
 import { MessageActions } from './chat/MessageActions';
@@ -76,6 +78,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
         <VizThreadProvider value={thread.id}>
           <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
+              {hasGoal(thread) && <GoalCard thread={thread} />}
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
                   <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />

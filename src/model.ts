@@ -40,6 +40,13 @@ export interface Step {
   owner?: Provider;
 }
 
+/** What done means for a goal: checkable (a command Mochi can run) or judged (a sentence). */
+export interface Criterion {
+  id: string;
+  text: string;
+  command?: string;
+}
+
 export interface Revision {
   n: number;
   at: number;
@@ -87,6 +94,11 @@ export interface McpCall {
 export interface WebLink {
   url: string;
   title?: string;
+}
+
+/** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
+export function firstPrompt(thread: Thread) {
+  return thread.activity.find((e) => e.who === 'you' && e.kind === 'message')?.text ?? thread.goal;
 }
 
 export function authorName(who: Author) {
@@ -162,7 +174,11 @@ export interface Thread {
   isTitleRenamed?: boolean;
   /** A model named the thread after its first exchange (`useAutoTitles`). */
   isTitleGenerated?: boolean;
+  /** The drafted or edited outcome; '' while the thread has no goal (a question, a chat). */
   goal: string;
+  criteria?: Criterion[];
+  /** You removed the goal: drafts don't bring it back, an edit does. */
+  isGoalOff?: boolean;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;

@@ -1,6 +1,6 @@
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
-import type { Provider, Thread } from '../model.ts';
+import { firstPrompt, type Provider, type Thread } from '../model.ts';
 import { startWorkspace } from '../git/workspace.ts';
 import { sourcePrompt } from '../sources.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -27,7 +27,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? t.goal, { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }) }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }) }));
     }
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);

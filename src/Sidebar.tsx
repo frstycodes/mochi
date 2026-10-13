@@ -44,6 +44,7 @@ import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, progressAt } from './progress';
 import { openSettings } from './settings/open';
+import { hasGoal } from './drift';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
@@ -513,7 +514,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
         <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
           <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
-          <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>
+          {hasGoal(thread) && <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>}
           {row.isWorking ? (
             <span className="flex min-w-0 flex-1" title={row.detail}>
               <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>

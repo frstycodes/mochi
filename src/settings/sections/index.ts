@@ -114,7 +114,7 @@ export const SETTINGS_SECTIONS = [
     title: 'Background tasks',
     icon: Sparkles,
     component: BackgroundSection,
-    settings: UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title commit pull request pr goal steps handoff summary' })),
+    settings: UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr goal steps handoff summary' })),
   },
   {
     id: 'tools',

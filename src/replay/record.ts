@@ -36,6 +36,8 @@ const RECORDED = [
   'say',
   'rename',
   'edit-goal',
+  'goal-drafted',
+  'goal-remove',
   'step-status',
   'drift-verdict',
   'drift-keep',

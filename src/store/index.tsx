@@ -26,6 +26,7 @@ import { scheduleReducer, type ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
+import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
 
 export type { View } from './layout.ts';
 export type { OverlapMode } from './threads.ts';
@@ -144,6 +145,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   useAutoTitles(state.threads, dispatch);
+  useGoalDrafts(state.threads, dispatch);
   useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
 }
