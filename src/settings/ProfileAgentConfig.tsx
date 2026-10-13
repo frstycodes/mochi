@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { MultiFileDiff } from '@pierre/diffs/react';
-import { useTheme } from 'next-themes';
 import { Add, Download, Flash, FolderOpen, InfoCircle, Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -19,11 +17,11 @@ import type { Provider, Space } from '../model';
 import { useProfiles, updateProfile } from '../profiles';
 import { useHarness, useView } from '../store';
 import { OverflowIcon } from '../ui';
-import { INSTRUCTIONS_FILE, parseServerCommand, parseServerJson, serverSummary, type ConfigChange, type McpEntry } from './agentConfig';
+import { INSTRUCTIONS_FILE, parseServerCommand, parseServerJson, serverSummary, toClaude, type ConfigChange, type McpEntry, type McpServerDef } from './agentConfig';
 import { ipcMessage } from './AgentSettings';
+import { FileDiffs } from './FileDiffs';
 import { HARNESS_IDS, HARNESSES } from './harnesses';
 import { takeRequestedHarness, useSettingsRoute } from './open';
-import { usePrefs } from './prefs';
 import { SettingsRow } from './parts';
 
 /**
@@ -45,9 +43,10 @@ export function AgentConfigRows({ profile }: { profile: Space }) {
   );
 }
 
-type Review = (title: string, changes: ConfigChange[]) => Promise<boolean>;
+export type Review = (title: string, changes: ConfigChange[]) => Promise<boolean>;
 
-function useProfileConfig(spaceId: string) {
+/** The profile's config files, read again when the window regains focus; nothing is read without a profile. */
+export function useProfileConfig(spaceId: string | undefined) {
   const { state } = useHarness();
   const view = useView(spaceId);
   const projectRoot = (view.kind === 'thread' && state.threads.find((t) => t.id === view.id)?.repo?.path) || undefined;
@@ -55,6 +54,7 @@ function useProfileConfig(spaceId: string) {
   const [error, setError] = useState<string>();
   const reload = useCallback(
     () =>
+      spaceId &&
       host.settings.agentConfig(spaceId, projectRoot).then(
         (next) => (setConfig(next), setError(undefined)),
         (e: Error) => setError(`Couldn't read this profile's agent config: ${ipcMessage(e)}`),
@@ -62,6 +62,7 @@ function useProfileConfig(spaceId: string) {
     [spaceId, projectRoot],
   );
   useEffect(() => {
+    if (!spaceId) return;
     void reload();
     // The tools write these files too (`claude mcp add`, `/skills`), so coming back to the window re-reads them.
     addEventListener('focus', reload);
@@ -71,7 +72,7 @@ function useProfileConfig(spaceId: string) {
 }
 
 /** `review` previews the edits, waits for the user in the diff dialog, writes, and resolves true once written. */
-function useConfigWriter(spaceId: string, onWritten: () => void) {
+export function useConfigWriter(spaceId: string, onWritten: () => void) {
   const [pending, setPending] = useState<{ title: string; changes: ConfigChange[]; preview: ConfigPreview; resolve: (ok: boolean) => void } | null>(null);
   const [isWriting, setWriting] = useState(false);
   const review: Review = (title, changes) =>
@@ -105,10 +106,11 @@ function useConfigWriter(spaceId: string, onWritten: () => void) {
 
 // {ROWS}
 
-function InstructionsRow({ profile, config, review }: { profile: Space; config?: ProfileConfig; review: Review }) {
+/** `proposal` starts `provider`'s editor open on that text, unsaved; `children` show under the editor. */
+export function InstructionsRow({ profile, config, review, provider: first = 'claude', proposal, children }: { profile: Space; config?: ProfileConfig; review: Review; provider?: Provider; proposal?: string; children?: ReactNode }) {
   const isSynced = !!profile.syncInstructions;
-  const [provider, setProvider] = useState<Provider>('claude');
-  const [drafts, setDrafts] = useState<Partial<Record<Provider, string>>>({});
+  const [provider, setProvider] = useState<Provider>(first);
+  const [drafts, setDrafts] = useState<Partial<Record<Provider, string>>>(proposal === undefined ? {} : { [first]: proposal });
   const shown = isSynced ? 'claude' : provider;
   const saved = config?.[shown].instructions.text ?? '';
   const text = drafts[shown] ?? saved;
@@ -123,6 +125,7 @@ function InstructionsRow({ profile, config, review }: { profile: Space; config?:
   return (
     <ExpandRow
       id={`${profile.id}-instructions`}
+      isOpenAtFirst={proposal !== undefined}
       label="Instructions"
       description={!config ? 'Reading…' : isSynced ? 'CLAUDE.md and AGENTS.md, kept the same' : HARNESS_IDS.map((p) => `${INSTRUCTIONS_FILE[p]} ${lineCount(config[p].instructions.text)}`).join(' · ')}
     >
@@ -154,6 +157,7 @@ function InstructionsRow({ profile, config, review }: { profile: Space; config?:
         </Button>
       </div>
       {isSynced && differs && <p className="type-caption text-warning">The two files differ. Saving writes this text (from CLAUDE.md) to both.</p>}
+      {children}
     </ExpandRow>
   );
 }
@@ -271,11 +275,30 @@ function TestResult({ test }: { test: { state: 'running' } | { state: 'ok'; tool
   );
 }
 
-function AddServerForm({ provider, taken, review, onDone }: { provider: Provider; taken: string[]; review: Review; onDone: () => void }) {
-  const [mode, setMode] = useState<'command' | 'json'>('command');
+/** An MCP server an agent suggested, in Settings' add form as JSON (so its env and headers come along), until it's added. */
+export function SuggestedServerRow({ profile, provider, server, children }: { profile: Space; provider: Provider; server: McpServerDef; children?: ReactNode }) {
+  const { config, reload } = useProfileConfig(profile.id);
+  const { review, dialog } = useConfigWriter(profile.id, reload);
+  const taken = config?.[provider].mcpServers.map((s) => s.def.name) ?? [];
+  const isAdded = taken.includes(server.name);
+  return (
+    <SettingsRow label={`Add MCP server ${server.name}`} description={`${HARNESSES[provider].name}, ${profile.name}`}>
+      {isAdded ? (
+        <p className="type-meta text-muted-foreground">Added. It shows in Settings › Profiles with the others.</p>
+      ) : (
+        <AddServerForm provider={provider} taken={taken} review={review} onDone={reload} initialJson={JSON.stringify({ mcpServers: { [server.name]: toClaude(server) } }, null, 2)} />
+      )}
+      {children}
+      {dialog}
+    </SettingsRow>
+  );
+}
+
+function AddServerForm({ provider, taken, review, onDone, initialJson }: { provider: Provider; taken: string[]; review: Review; onDone: () => void; initialJson?: string }) {
+  const [mode, setMode] = useState<'command' | 'json'>(initialJson ? 'json' : 'command');
   const [name, setName] = useState('');
   const [command, setCommand] = useState('');
-  const [json, setJson] = useState('');
+  const [json, setJson] = useState(initialJson ?? '');
   const [error, setError] = useState<string>();
   const submit = async () => {
     let servers;
@@ -424,9 +447,9 @@ function ImportRow({ profile, review }: { profile: Space; review: Review }) {
 // {PARTS}
 
 /** A row whose editor opens under it; a deep link to the row opens it too. */
-function ExpandRow({ id, label, description, children }: { id: string; label: string; description: ReactNode; children: ReactNode }) {
+function ExpandRow({ id, label, description, isOpenAtFirst = false, children }: { id: string; label: string; description: ReactNode; isOpenAtFirst?: boolean; children: ReactNode }) {
   const route = useSettingsRoute();
-  const [isOpen, setOpen] = useState(false);
+  const [isOpen, setOpen] = useState(isOpenAtFirst);
   useEffect(() => {
     if (route?.settingId === id) setOpen(true);
   }, [route?.nonce, route?.settingId, id]);
@@ -482,8 +505,6 @@ function AccountNote({ config }: { config: ProviderConfig }) {
 }
 
 function ReviewDialog({ pending, isWriting, onWrite, onCancel }: { pending: { title: string; preview: ConfigPreview } | null; isWriting: boolean; onWrite: () => void; onCancel: () => void }) {
-  const { resolvedTheme } = useTheme();
-  const { diffStyle } = usePrefs();
   const preview = pending?.preview;
   const isEmpty = !!preview && !preview.edits.length && !preview.copies.length;
   return (
@@ -507,24 +528,7 @@ function ReviewDialog({ pending, isWriting, onWrite, onCancel }: { pending: { ti
                 </AlertDescription>
               </Alert>
             )}
-            {preview.edits.map((e) => (
-              <section key={e.path} className="flex flex-col gap-1.5">
-                <h4 className="flex items-center gap-2 type-meta text-muted-foreground [overflow-wrap:anywhere]">
-                  {e.path}
-                  {!e.before && <Badge variant="outline">New file</Badge>}
-                </h4>
-                <div className="overflow-hidden rounded-xl border bg-card">
-                  <MultiFileDiff
-                    oldFile={{ name: e.path, contents: e.before }}
-                    newFile={{ name: e.path, contents: e.after }}
-                    disableWorkerPool
-                    options={{ diffStyle, disableFileHeader: true, overflow: 'wrap', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
-                    style={{ '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties}
-                    className="max-h-80 overflow-auto"
-                  />
-                </div>
-              </section>
-            ))}
+            <FileDiffs edits={preview.edits} />
             {preview.copies.map((c) => (
               <p key={c.to} className="type-meta [overflow-wrap:anywhere]">
                 Copies the skill folder <span className="font-mono text-xs">{c.from}</span> to <span className="font-mono text-xs">{c.to}</span>

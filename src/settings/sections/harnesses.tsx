@@ -1,20 +1,19 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronDown, Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ModelMenu, toggleStar, useModels } from '../../ModelControls';
-import { EFFORTS } from '../../runtime/controls';
-import { effortName, optionFor, type ModelOption } from '../../runtime/models';
+import { optionFor, type ModelOption } from '../../runtime/models';
 import { useSpace } from '../../store';
 import type { Provider } from '../../model';
 import { ProviderMark, TooltipIconButton } from '../../ui';
 import { defaultAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
+import { CatalogRow } from '../CatalogRow';
 import { AccountsGroup, ProfilesGroup } from '../HarnessAccounts';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { CommandLine, CommitInput, DesktopOnly, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
-import { setPrefs, usePrefs } from '../prefs';
+import { CommandLine, DesktopOnly, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
 
 /** Every harness from the registry, one after another; nothing here names a specific harness. */
 export function HarnessesSection() {
@@ -33,34 +32,28 @@ export function HarnessesSection() {
 
 /** Across harnesses: the model chip's scroll dock shows starred models, and new threads start at this effort. */
 function ModelsGroup() {
-  const { effort } = usePrefs();
   return (
     <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer. The lists are this profile's accounts' own.">
-      <StarredModelsRow />
-      <SettingsRow
-        id="effort"
-        label="Default effort"
-        control={<SettingsSelect id="effort" value={effort} options={EFFORTS.map((level) => ({ value: level, label: effortName(level) }))} onChange={(v) => setPrefs({ effort: v })} />}
-      />
+      <CatalogRow settingKey="starredModels" />
+      <CatalogRow settingKey="effort" />
     </SettingsGroup>
   );
 }
 
 /** The model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
-function StarredModelsRow() {
-  const { starredModels } = usePrefs();
+export function StarredModelsRow({ rowId, value: starredModels, onChange, children }: { rowId: string; value: string[]; onChange: (ids: string[]) => void; children?: ReactNode }) {
   const catalog = useModels(useSpace().id);
   const models = HARNESS_IDS.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
   const starred = models.filter((m) => starredModels.includes(m.id));
   return (
     <SettingsRow
-      id="starredModelsPicker"
+      id={rowId}
       label="Starred models"
       description={starred.map((m) => m.name).join(', ') || 'None starred yet'}
       control={
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button id={settingControlId('starredModelsPicker')} variant="outline" size="sm">
+            <Button id={settingControlId(rowId)} variant="outline" size="sm">
               Choose models
               <ChevronDown data-icon="inline-end" />
             </Button>
@@ -70,18 +63,20 @@ function StarredModelsRow() {
             pending={HARNESS_IDS.filter((h) => !catalog[h])}
             harnesses={HARNESS_IDS}
             isChecked={(m) => starredModels.includes(m.id)}
-            onPick={(m) => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
+            onPick={(m) => onChange(toggleStar(starredModels, m.id))}
             keepsOpen
             align="end"
           />
         </DropdownMenu>
       }
-    />
+    >
+      {children}
+    </SettingsRow>
   );
 }
 
 function HarnessSettings({ provider }: { provider: Provider }) {
-  const { installs, checkProvider, settings, update } = useAgentSettings();
+  const { installs, checkProvider, settings } = useAgentSettings();
   const harness = HARNESSES[provider];
   const install = installs[defaultAccountId(provider)];
   const detected = install === 'checking' ? undefined : install;
@@ -111,40 +106,9 @@ function HarnessSettings({ provider }: { provider: Provider }) {
       )}
       {!!settings && (
         <SettingsGroup>
-          <SettingsRow
-            id={`${provider}Path`}
-            label="Custom path"
-            description="Leave empty to use the one on your PATH."
-            control={
-              <CommitInput
-                id={settingControlId(`${provider}Path`)}
-                value={settings.harnesses[provider].path}
-                placeholder="Found on your PATH"
-                onCommit={(path) => void update({ harnesses: { [provider]: { path } } })}
-                className="font-mono placeholder:font-sans"
-              />
-            }
-          />
-          <SettingsRow
-            id={`${provider}Model`}
-            label="Default model"
-            description="New threads start on this model."
-            control={<ModelSelect id={`${provider}Model`} provider={provider} value={settings.harnesses[provider].model} onChange={(model) => void update({ harnesses: { [provider]: { model } } })} />}
-          />
-          <SettingsRow
-            id={`${provider}SecondOpinionModel`}
-            label="Second opinion model"
-            description={`What ${harness.name} reviews other threads on. Empty uses the default model.`}
-            control={
-              <ModelSelect
-                id={`${provider}SecondOpinionModel`}
-                provider={provider}
-                emptyLabel="Default model"
-                value={settings.harnesses[provider].secondOpinionModel}
-                onChange={(secondOpinionModel) => void update({ harnesses: { [provider]: { secondOpinionModel } } })}
-              />
-            }
-          />
+          <CatalogRow settingKey={`${provider}.path`} />
+          <CatalogRow settingKey={`${provider}.model`} />
+          <CatalogRow settingKey={`${provider}.secondOpinionModel`} />
         </SettingsGroup>
       )}
       {!isMissing && <AccountsGroup provider={provider} />}
@@ -158,7 +122,7 @@ function HarnessSettings({ provider }: { provider: Provider }) {
 const ACCOUNT_DEFAULT = 'account-default';
 
 /** The current profile's list for `provider`, its account default first; a saved model the account no longer offers stays listed as Unavailable. */
-function ModelSelect({ id, provider, value, emptyLabel, onChange }: { id: string; provider: Provider; value: string; emptyLabel?: string; onChange: (model: string) => void }) {
+export function ModelSelect({ id, provider, value, emptyLabel, onChange }: { id: string; provider: Provider; value: string; emptyLabel?: string; onChange: (model: string) => void }) {
   const models = useModels(useSpace().id)[provider];
   const stored = optionFor(models, value, provider);
   const fallback = optionFor(models, '', provider);
