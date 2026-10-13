@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { contrast, nudge, parseHex, toHex } from './color.ts';
-import { scopeColor, themeTokens } from './map.ts';
+import { customizedThemeText, customTheme, themeSchema } from './custom.ts';
+import { pierreDiffColors, scopeColor, themeTokens } from './map.ts';
+import { THEME_VARIABLES } from './model.ts';
 
 const ratio = (a: string, b: string) => contrast(parseHex(a)!, parseHex(b)!);
 
@@ -40,7 +42,8 @@ test('themeTokens maps VS Code keys onto Mochi tokens', () => {
   assert.equal(tokens['--background'], '#282c34');
   assert.equal(tokens['--sidebar'], '#21252b');
   assert.equal(tokens['--primary'], '#404754');
-  assert.equal(tokens['--success'], '#98c379');
+  assert.equal(tokens['--success'], undefined, 'ANSI green is not a status color: PR and run states keep Mochi’s');
+  assert.equal(tokens['--diff-added'], undefined, 'nor a diff color');
 });
 
 test('themeTokens derives missing keys from editor background and foreground', () => {
@@ -60,14 +63,14 @@ test('themeTokens enforces 4.5:1 on every text pair a theme gets wrong', () => {
         'button.background': '#0e639c',
         'button.foreground': '#2a6a9a',
         descriptionForeground: '#3a3a3a',
-        errorForeground: '#5a1010',
+        'gitDecoration.addedResourceForeground': '#0a3a0a',
       },
       tokenColors: [],
     },
     'dark',
   );
   const surfaces = ['--background', '--sidebar', '--card', '--popover'].map((t) => tokens[t]);
-  for (const text of ['--foreground', '--muted-foreground', '--subtle-foreground', '--destructive', '--success', '--warning', '--info']) {
+  for (const text of ['--foreground', '--muted-foreground', '--subtle-foreground', '--diff-added']) {
     for (const surface of surfaces) assert.ok(ratio(tokens[text], surface) >= 4.5, `${text} ${tokens[text]} on ${surface}`);
   }
   assert.ok(ratio(tokens['--primary-foreground'], tokens['--primary']) >= 4.5);
@@ -103,4 +106,51 @@ test('themeTokens drops borders a theme draws in its own surface color and keeps
   assert.equal(tokens['--input'], '#abb2bf26', 'invisible input border falls back to translucent foreground');
   assert.equal(tokens['--border'], '#3e4452', 'a visible border is kept');
   assert.ok(ratio(tokens['--ring'], '#282c34') >= 3);
+});
+
+test('themeTokens never sets status colors and takes diff colors only from git or gutter keys', () => {
+  const colors = { 'editor.background': '#1e1e1e', errorForeground: '#f44747', 'editorWarning.foreground': '#cca700', 'terminal.ansiRed': '#ff0000', 'gitDecoration.deletedResourceForeground': '#f48771' };
+  const tokens = themeTokens({ colors, tokenColors: [] }, 'dark');
+  for (const status of ['--destructive', '--warning', '--success', '--info', '--merged']) assert.equal(tokens[status], undefined, status);
+  assert.equal(tokens['--diff-removed'], '#f48771');
+  assert.equal(tokens['--diff-added'], undefined);
+});
+
+test('a mochi block overrides mapped and status colors as written, and translucent tokens derive from the result', () => {
+  const colors = { 'editor.background': '#1e1e1e', 'editorHoverWidget.background': '#252526' };
+  const theme = { colors, tokenColors: [], mochi: { popover: '#102030', success: '#00ff00', 'not-a-variable': '#123456', foreground: 'red' } };
+  const tokens = themeTokens(theme, 'dark');
+  assert.equal(tokens['--popover'], '#102030');
+  assert.equal(tokens['--success'], '#00ff00', 'a theme may set a status color on purpose');
+  assert.equal(tokens['--float'], '#102030e6', 'float follows the overridden popover');
+  assert.equal(tokens['--not-a-variable'], undefined);
+  assert.equal(tokens['--foreground'], themeTokens({ colors, tokenColors: [] }, 'dark')['--foreground'], 'a value that is not hex is ignored');
+});
+
+test('pierreDiffColors pins diffs to Mochi’s colors unless the theme or its mochi block has diff colors', () => {
+  const ansiOnly = pierreDiffColors({ colors: { 'terminal.ansiGreen': '#00ff00', 'terminal.ansiRed': '#ff0000' }, tokenColors: [] }, 'dark');
+  assert.equal(ansiOnly['gitDecoration.addedResourceForeground'], '#07c480');
+  assert.equal(ansiOnly['gitDecoration.deletedResourceForeground'], '#ff2e3f');
+  const own = pierreDiffColors({ colors: { 'editorGutter.addedBackground': '#587c0c' }, tokenColors: [], mochi: { 'diff-removed': '#aa0000' } }, 'light');
+  assert.equal(own['gitDecoration.addedResourceForeground'], '#587c0c');
+  assert.equal(own['gitDecoration.deletedResourceForeground'], '#aa0000');
+  assert.equal(own['gitDecoration.modifiedResourceForeground'], '#009fff');
+});
+
+test('Customize copies a theme into a custom file that looks the same and lists every variable it maps', () => {
+  const original = customTheme('one.json', JSON.stringify({ name: 'One', type: 'dark', colors: { 'editor.background': '#282c34', 'editor.foreground': '#abb2bf', 'gitDecoration.addedResourceForeground': '#81b88b' }, tokenColors: [{ scope: 'keyword', settings: { foreground: '#c678dd' } }] }));
+  const text = customizedThemeText(original);
+  const copy = customTheme('one-custom.json', text);
+  assert.equal(copy.label, 'One (custom)');
+  assert.equal(copy.kind, 'dark');
+  assert.equal(JSON.parse(text).$schema, './mochi-theme.schema.json');
+  assert.deepEqual(themeTokens(copy.theme, copy.kind), themeTokens(original.theme, original.kind));
+  assert.equal(copy.theme.mochi?.['syntax-keyword'], '#c678dd');
+  assert.equal(copy.theme.mochi?.success, undefined, 'status colors are left to Mochi');
+  for (const name of Object.keys(copy.theme.mochi ?? {})) assert.ok((THEME_VARIABLES as readonly string[]).includes(name), name);
+});
+
+test('the schema lists exactly the editable variables', () => {
+  const { properties } = themeSchema();
+  assert.deepEqual(Object.keys(properties.mochi.properties), [...THEME_VARIABLES]);
 });

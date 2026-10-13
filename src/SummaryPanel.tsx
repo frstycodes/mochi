@@ -156,7 +156,7 @@ function ChangesRow({ thread, summary, open }: SectionProps) {
           (thread.status === 'settled' ? 'None' : 'None yet')
         ) : (
           <>
-            <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
+            <span className="text-diff-added">+{summary.added}</span> <span className="text-diff-removed">−{summary.removed}</span> · {summary.files.length}{' '}
             {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
           </>
         )}

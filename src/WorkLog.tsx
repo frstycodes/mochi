@@ -513,8 +513,8 @@ function ToolGlyph({ call }: { call: ToolCall }) {
 export function DiffStat({ added, removed, withBar }: { added: number; removed: number; withBar?: boolean }) {
   return (
     <span className="flex items-center gap-1.5 font-mono text-xs tabular">
-      <span className="text-success">+{added}</span>
-      <span className="text-destructive">−{removed}</span>
+      <span className="text-diff-added">+{added}</span>
+      <span className="text-diff-removed">−{removed}</span>
       {withBar && <DiffBar added={added} removed={removed} />}
     </span>
   );
@@ -531,7 +531,7 @@ function DiffBar({ added, removed }: { added: number; removed: number }) {
   return (
     <span aria-hidden className="flex gap-px">
       {Array.from({ length: BAR_BLOCKS }, (_, i) => (
-        <span key={i} className={cn('size-1.5 rounded-xs', i < green ? 'bg-success' : i < green + red ? 'bg-destructive' : 'bg-muted-foreground/25')} />
+        <span key={i} className={cn('size-1.5 rounded-xs', i < green ? 'bg-diff-added' : i < green + red ? 'bg-diff-removed' : 'bg-muted-foreground/25')} />
       ))}
     </span>
   );

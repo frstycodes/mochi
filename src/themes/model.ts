@@ -6,6 +6,8 @@ export interface VsCodeTheme {
   tokenColors: TokenColor[];
   semanticTokenColors?: Record<string, unknown>;
   semanticHighlighting?: boolean;
+  /** Mochi's own variables by name (`background`, `success`), hex; beats whatever `colors` maps to. */
+  mochi?: Record<string, string>;
 }
 
 export interface TokenColor {
@@ -48,3 +50,21 @@ export function kindOf(uiTheme: unknown, type?: unknown): ThemeKind {
 }
 
 export const marketplaceThemeId = (namespace: string, name: string, label: string) => `ext:${namespace}.${name}:${label}`;
+
+/**
+ * The Mochi variables a theme's `mochi` block can set, grouped as Settings › Themes edits them. `float`, `glass`, `scrim`
+ * and the chart grid derive from these and are not listed.
+ */
+export const THEME_VARIABLE_GROUPS = {
+  Surfaces: ['background', 'sidebar', 'card', 'popover', 'muted', 'accent', 'sidebar-accent', 'highlight', 'primary', 'secondary'],
+  Text: ['foreground', 'muted-foreground', 'subtle-foreground', 'popover-foreground', 'accent-foreground', 'primary-foreground', 'secondary-foreground'],
+  Lines: ['border', 'input', 'ring'],
+  Status: ['success', 'merged', 'destructive', 'warning', 'info'],
+  Diff: ['diff-added', 'diff-removed'],
+  Syntax: ['syntax-keyword', 'syntax-string', 'syntax-comment', 'syntax-number', 'syntax-function', 'syntax-type', 'syntax-tag', 'syntax-property', 'syntax-link'],
+  Charts: ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5'],
+} as const;
+
+export const THEME_VARIABLES = Object.values(THEME_VARIABLE_GROUPS).flat();
+
+export type ThemeVariable = (typeof THEME_VARIABLES)[number];

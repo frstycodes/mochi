@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { DEFAULT_THEMES, registerCustomTheme, type ThemeRegistration } from '@pierre/diffs';
+import { pierreDiffColors } from './map';
 import { slotOf, type ColorTheme } from './model';
 import { useColorTheme } from './store';
 
@@ -13,8 +14,10 @@ const registered = new Set<string>();
 export function shikiTheme(theme: ColorTheme): ThemeRegistration {
   let shiki = shikiThemes.get(theme);
   if (!shiki) {
-    const { colors, tokenColors, semanticTokenColors } = theme.theme;
-    shiki = { name: `mochi-${hash(JSON.stringify(theme.theme))}`, type: slotOf(theme.kind), colors, tokenColors, semanticTokenColors } as ThemeRegistration;
+    const { tokenColors, semanticTokenColors } = theme.theme;
+    const slot = slotOf(theme.kind);
+    const colors = { ...theme.theme.colors, ...pierreDiffColors(theme.theme, slot) };
+    shiki = { name: `mochi-${hash(JSON.stringify(theme.theme))}`, type: slot, colors, tokenColors, semanticTokenColors } as ThemeRegistration;
     shikiThemes.set(theme, shiki);
   }
   return shiki;

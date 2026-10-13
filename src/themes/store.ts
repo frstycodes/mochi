@@ -12,10 +12,12 @@ interface State {
   isLoaded: boolean;
   /** The theme the pointer rests on in Settings › Themes, shown until it leaves. */
   preview: ColorTheme | null;
+  /** The custom theme open in the variable editor, with unsaved edits; on screen whenever nothing is previewed. */
+  editing: ColorTheme | null;
   active: Partial<Record<ThemeSlot, ColorTheme>>;
 }
 
-let state: State = { installed: [], isLoaded: false, preview: null, active: readActive() };
+let state: State = { installed: [], isLoaded: false, preview: null, editing: null, active: readActive() };
 const listeners = new Set<() => void>();
 
 function update(patch: Partial<State>) {
@@ -42,6 +44,10 @@ export function setThemePreview(preview: ColorTheme | null) {
   if (state.preview !== preview) update({ preview });
 }
 
+export function setThemeEditing(editing: ColorTheme | null) {
+  if (state.editing !== editing) update({ editing });
+}
+
 /** Uses `theme` (null = Mochi) for its own appearance, light or dark. */
 export function chooseTheme(theme: ColorTheme | null, slot: ThemeSlot) {
   setPrefs(slot === 'light' ? { lightTheme: theme?.id ?? MOCHI_THEME_ID } : { darkTheme: theme?.id ?? MOCHI_THEME_ID });
@@ -55,16 +61,17 @@ function themeFor(id: string, slot: ThemeSlot, { installed, isLoaded, active }: 
 
 /**
  * The appearance on screen: `mode` follows Light / Dark / System, or the previewed theme's own kind while one is previewed;
- * `light` / `dark` are each slot's theme (null = Mochi), the preview standing in for its slot.
+ * `light` / `dark` are each slot's theme (null = Mochi), the preview (else the theme being edited) standing in for its slot.
  */
 export function useColorTheme() {
   const { resolvedTheme } = useTheme();
   const prefs = usePrefs();
   const current = useThemesState();
-  const previewSlot = current.preview && slotOf(current.preview.kind);
+  const preview = current.preview ?? current.editing;
+  const previewSlot = preview && slotOf(preview.kind);
   const mode: ThemeSlot = previewSlot ?? (resolvedTheme === 'light' ? 'light' : 'dark');
-  const light = previewSlot === 'light' ? current.preview : themeFor(prefs.lightTheme, 'light', current);
-  const dark = previewSlot === 'dark' ? current.preview : themeFor(prefs.darkTheme, 'dark', current);
+  const light = previewSlot === 'light' ? preview : themeFor(prefs.lightTheme, 'light', current);
+  const dark = previewSlot === 'dark' ? preview : themeFor(prefs.darkTheme, 'dark', current);
   return { mode, light, dark, theme: mode === 'light' ? light : dark, isPreview: !!previewSlot };
 }
 

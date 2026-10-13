@@ -112,7 +112,7 @@ function RefFacts({ state }: { state: RefState }) {
       {!!state.diff && (
         <Fact icon={Edit} label="Changes">
           <span className="tabular">
-            <span className="text-success">+{state.diff.added}</span> <span className="text-destructive">−{state.diff.removed}</span>
+            <span className="text-diff-added">+{state.diff.added}</span> <span className="text-diff-removed">−{state.diff.removed}</span>
             <span className="text-subtle-foreground">
               {' '}
               · {state.diff.files} {PLURAL.select(state.diff.files) === 'one' ? 'file' : 'files'}

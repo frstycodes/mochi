@@ -119,9 +119,9 @@ function FileEntry({ file, isNested, isOpen, onToggle, actions }: { file: DiffFi
 
 const KIND = {
   modified: { letter: 'M', label: 'Modified', className: 'text-warning' },
-  added: { letter: 'A', label: 'Added', className: 'text-success' },
-  untracked: { letter: 'U', label: 'Untracked', className: 'text-success' },
-  deleted: { letter: 'D', label: 'Deleted', className: 'text-destructive' },
+  added: { letter: 'A', label: 'Added', className: 'text-diff-added' },
+  untracked: { letter: 'U', label: 'Untracked', className: 'text-diff-added' },
+  deleted: { letter: 'D', label: 'Deleted', className: 'text-diff-removed' },
   renamed: { letter: 'R', label: 'Renamed', className: 'text-subtle-foreground' },
 } satisfies Record<ChangeKind, { letter: string; label: string; className: string }>;
 

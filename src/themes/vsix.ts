@@ -60,6 +60,7 @@ export async function loadTheme(path: string, read: ReadFile, depth = 0, seen = 
     tokenColors: [...(base?.tokenColors ?? []), ...tokenColors],
     semanticTokenColors: { ...base?.semanticTokenColors, ...(isRecord(own.semanticTokenColors) ? own.semanticTokenColors : {}) },
     semanticHighlighting: typeof own.semanticHighlighting === 'boolean' ? own.semanticHighlighting : base?.semanticHighlighting,
+    mochi: { ...base?.mochi, ...stringRecord(own.mochi) },
   };
 }
 
@@ -69,8 +70,8 @@ export function parseTheme(text: string): VsCodeTheme {
   if (!isRecord(raw)) throw new Error('A theme is a JSON object');
   if (typeof raw.include === 'string') throw new Error('This theme includes another file: import it as a file instead of pasting');
   if (typeof raw.tokenColors === 'string') throw new Error('Its tokenColors point to another file: import it as a file instead of pasting');
-  if (!isRecord(raw.colors) && !Array.isArray(raw.tokenColors)) throw new Error('A color theme needs colors or tokenColors');
-  return { name: typeof raw.name === 'string' ? raw.name : undefined, type: typeof raw.type === 'string' ? raw.type : undefined, colors: stringRecord(raw.colors), tokenColors: tokenColorList(raw.tokenColors), semanticTokenColors: isRecord(raw.semanticTokenColors) ? raw.semanticTokenColors : {} };
+  if (!isRecord(raw.colors) && !Array.isArray(raw.tokenColors) && !isRecord(raw.mochi)) throw new Error('A color theme needs colors, tokenColors or mochi');
+  return { name: typeof raw.name === 'string' ? raw.name : undefined, type: typeof raw.type === 'string' ? raw.type : undefined, colors: stringRecord(raw.colors), tokenColors: tokenColorList(raw.tokenColors), semanticTokenColors: isRecord(raw.semanticTokenColors) ? raw.semanticTokenColors : {}, mochi: stringRecord(raw.mochi) };
 }
 
 /**

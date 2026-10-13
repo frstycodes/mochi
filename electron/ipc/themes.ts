@@ -3,14 +3,14 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import type { ThemesHost } from '../../src/host/types/themes.ts';
-import { checkCustomFile, customFileName, customTheme } from '../../src/themes/custom.ts';
+import { checkCustomFile, customFileName, customTheme, SCHEMA_FILE, themeSchema } from '../../src/themes/custom.ts';
 import type { ColorTheme } from '../../src/themes/model.ts';
 import { checkRef, createMarketplace } from '../../src/themes/openVsx.ts';
 import { LIMITS, loadTheme } from '../../src/themes/vsix.ts';
 import { integer, string, type Handlers } from './handlers.ts';
 
 // userData/themes/<namespace>.<name>.json holds an installed extension's themes, already read out of its .vsix;
-// userData/themes/custom/ holds the user's own theme files as written.
+// userData/themes/custom/ holds the user's own theme files as written, beside the schema they name (`SCHEMA_FILE`).
 const root = () => join(app.getPath('userData'), 'themes');
 const customDir = () => join(root(), 'custom');
 const installedFile = (namespace: string, name: string) => join(root(), `${namespace}.${name}.json`);
@@ -80,11 +80,13 @@ async function saveCustomText(text: string, file?: string) {
   const theme = customTheme(name, text);
   await mkdir(customDir(), { recursive: true });
   await writeFile(join(customDir(), name), text);
+  // Rewritten on every save so the schema tracks the variables of the Mochi that wrote the file.
+  await writeFile(join(customDir(), SCHEMA_FILE), JSON.stringify(themeSchema(), null, 2));
   return theme;
 }
 
 async function customFiles() {
-  return (await readdir(customDir()).catch(() => [] as string[])).filter((f) => /\.jsonc?$/i.test(f));
+  return (await readdir(customDir()).catch(() => [] as string[])).filter((f) => /\.jsonc?$/i.test(f) && f !== SCHEMA_FILE);
 }
 
 /** A file the user broke by hand drops out of the list instead of failing it. */

@@ -72,11 +72,8 @@ Mochi's look is the built-in "Mochi" theme. Any VS Code color theme (Open VSX or
 | `muted-foreground` | `descriptionForeground` | 30% background into foreground |
 | `subtle-foreground` | — | 42% background into foreground |
 | `accent` / `-foreground` | `list.hoverBackground`, `list.inactiveSelectionBackground` / `list.hoverForeground` | 8% foreground over popover |
-| `destructive` | `errorForeground`, `editorError.foreground`, `terminal.ansiRed` | VS Code ANSI red |
-| `warning` | `editorWarning.foreground`, `terminal.ansiYellow` | ANSI yellow |
-| `success` | `terminal.ansiGreen`, `gitDecoration.addedResourceForeground` | ANSI green |
-| `info` | `textLink.foreground`, `editorInfo.foreground`, `terminal.ansiBlue` | ANSI blue |
-| `merged` | `terminal.ansiMagenta` | ANSI magenta |
+| `destructive`, `warning`, `success`, `info`, `merged` | none: PR and run states keep Mochi's colors under every theme | Mochi's |
+| `diff-added` / `diff-removed` | `gitDecoration.addedResourceForeground`, `editorGutter.addedBackground` / the `deleted` pair | `success` / `destructive` |
 | `border` | `panel.border`, `sideBar.border`, `editorGroup.border`, `contrastBorder` | foreground at 10% |
 | `input` | `input.border`, `dropdown.border`, `contrastBorder` | foreground at 15% |
 | `ring` | `focusBorder` | 30% background into foreground |
@@ -85,7 +82,9 @@ Mochi's look is the built-in "Mochi" theme. Any VS Code color theme (Open VSX or
 | `chart-1…5` | ANSI blue, red+yellow (orange), cyan, yellow, magenta | VS Code ANSI defaults |
 | `float`, `glass`, `glass-edge`, `scrim`, `chart-grid`, `chart-axis` | derived from popover, background and foreground at Mochi's alphas | — |
 
-Rules the mapping enforces: translucent surfaces are painted over the background; every text token reads at 4.5:1 against the surfaces it sits on (lightness nudged in OKLab, hue kept: foreground on background, sidebar, card and popover; muted, subtle and status colours on those plus muted; each `-foreground` on its fill); `ring` at 3:1; chart lines at 3:1 on background; `accent` at least 0.04 L from popover so menu highlights show; a `border` under 1.15:1 or `input` under 1.3:1 against its surfaces falls back to translucent foreground. Token colours (`tokenColors`) feed every highlighter: pierre diffs and markdown code blocks get the theme as a shiki theme (`src/themes/highlight.ts`), the CodeMirror file viewer reads `--syntax-*` (first TextMate scope that resolves, `SYNTAX_SCOPES`), the terminal re-reads the tokens.
+A theme file's `mochi` block (`{ "success": "#3fb950", "popover": "#1c2128" }`, hex, names from `THEME_VARIABLE_GROUPS` in `src/themes/model.ts`) sets those variables directly, on top of the mapping and without the contrast nudge; `float`, `glass`, `scrim` and the chart grid then derive from the result. Settings › Themes › Customize copies any theme into a custom file with the block filled from the mapping, and Edit colors edits it with a live preview; desktop writes `mochi-theme.schema.json` beside the custom files, which they name in `$schema`. Pierre diffs get the same diff colors: `mochi` `diff-*`, else the theme's git keys, else pierre's own (`pierreDiffColors`), never ANSI green and red.
+
+Rules the mapping enforces: translucent surfaces are painted over the background; every text token reads at 4.5:1 against the surfaces it sits on (lightness nudged in OKLab, hue kept: foreground on background, sidebar, card and popover; muted, subtle and diff colours on those plus muted; each `-foreground` on its fill); `ring` at 3:1; chart lines at 3:1 on background; `accent` at least 0.04 L from popover so menu highlights show; a `border` under 1.15:1 or `input` under 1.3:1 against its surfaces falls back to translucent foreground. Token colours (`tokenColors`) feed every highlighter: pierre diffs and markdown code blocks get the theme as a shiki theme (`src/themes/highlight.ts`), the CodeMirror file viewer reads `--syntax-*` (first TextMate scope that resolves, `SYNTAX_SCOPES`), the terminal re-reads the tokens.
 
 ## Typography
 

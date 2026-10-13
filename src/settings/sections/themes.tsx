@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ClipboardText, Download, Edit2, Import, SearchNormal, TickCircle, Trash3 } from 'reicon-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Brush, ClipboardText, DocumentCode, Download, Edit2, Import, SearchNormal, TickCircle, Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { host } from '../../host';
+import { customizedThemeText } from '../../themes/custom';
 import { themeTokens } from '../../themes/map';
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from '../../themes/model';
 import type { MarketplaceExtension } from '../../themes/openVsx';
@@ -17,6 +18,7 @@ import { installExtension, useApplyTheme, useInspectedThemes, useMarketplaceSear
 import { usePrefs } from '../prefs';
 import { TooltipIconButton } from '../../ui';
 import { SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { ThemeVariableEditor } from './ThemeVariableEditor';
 
 export function ThemesSection() {
   // Leaving the section mid-hover must not leave a preview painted.
@@ -66,24 +68,45 @@ function SlotSelect({ slot }: { slot: ThemeSlot }) {
 
 function InstalledGroup() {
   const { installed, isLoaded } = useThemesState();
+  const apply = useApplyTheme();
   const [draft, setDraft] = useState<{ file?: string; text: string } | null>(null);
+  const [editingFile, setEditingFile] = useState<string | null>(null);
   const importFile = () =>
     host.themes.importFile().then(
       (theme) => theme && void refreshThemes().then(() => toast.success(`Imported ${theme.label}`)),
       (error: Error) => toast.error('Could not import the theme', { description: error.message }),
     );
+  const editJson = (file: string) =>
+    (host.isDesktop ? host.themes.openCustom(file) : host.themes.readCustom(file).then((text) => setDraft({ file, text }))).catch((error: Error) =>
+      toast.error('Could not open the theme', { description: error.message }),
+    );
+  const customize = (theme: ColorTheme) =>
+    host.themes
+      .saveCustom(customizedThemeText(theme))
+      .then(async (copy) => {
+        await refreshThemes();
+        apply(copy);
+        if (copy.source.kind === 'custom') setEditingFile(copy.source.file);
+      })
+      .catch((error: Error) => toast.error('Could not copy the theme', { description: error.message }));
   const isEmpty = isLoaded && installed.length === 0;
   return (
     <SettingsGroup
       id="installedThemes"
       title="Installed"
-      footer="Custom themes are VS Code color theme files (.json or .jsonc). Includes resolve next to an imported file; Edit opens it in your JSON editor and changes show when you come back."
+      footer="Custom themes are VS Code color theme files (.json or .jsonc). Customize copies a theme with every Mochi color it maps to, ready to edit here or in its file. PR states and other status colors stay Mochi's unless you set them."
     >
       {!isLoaded && <SkeletonRows count={2} />}
       {isEmpty && <SettingsRow label={<span className="text-muted-foreground">No themes yet. Install one from Open VSX below, or import your own.</span>} />}
-      {installed.map((theme) => (
-        <InstalledRow key={theme.id} theme={theme} onEdit={(file, text) => setDraft({ file, text })} />
-      ))}
+      {installed.map((theme) => {
+        const { source } = theme;
+        const isEditing = source.kind === 'custom' && source.file === editingFile;
+        return (
+          <InstalledRow key={theme.id} theme={theme} isEditing={isEditing} onEdit={(file) => setEditingFile(isEditing ? null : file)} onEditJson={(file) => void editJson(file)} onCustomize={() => void customize(theme)}>
+            {isEditing && source.kind === 'custom' && <ThemeVariableEditor theme={theme} onEditJson={() => void editJson(source.file)} onDone={() => setEditingFile(null)} />}
+          </InstalledRow>
+        );
+      })}
       <SettingsRow
         id="customTheme"
         label="Custom theme"
@@ -106,7 +129,21 @@ function InstalledGroup() {
   );
 }
 
-function InstalledRow({ theme, onEdit }: { theme: ColorTheme; onEdit: (file: string, text: string) => void }) {
+function InstalledRow({
+  theme,
+  isEditing,
+  onEdit,
+  onEditJson,
+  onCustomize,
+  children,
+}: {
+  theme: ColorTheme;
+  isEditing: boolean;
+  onEdit: (file: string) => void;
+  onEditJson: (file: string) => void;
+  onCustomize: () => void;
+  children?: ReactNode;
+}) {
   const prefs = usePrefs();
   const apply = useApplyTheme();
   const slot = slotOf(theme.kind);
@@ -117,8 +154,6 @@ function InstalledRow({ theme, onEdit }: { theme: ColorTheme; onEdit: (file: str
     const removing = source.kind === 'custom' ? host.themes.removeCustom(source.file) : source.kind === 'marketplace' ? host.themes.uninstall(source.namespace, source.name) : Promise.resolve();
     void removing.then(refreshThemes).catch((error: Error) => toast.error('Could not remove the theme', { description: error.message }));
   };
-  const edit = (file: string) =>
-    (host.isDesktop ? host.themes.openCustom(file) : host.themes.readCustom(file).then((text) => onEdit(file, text))).catch((error: Error) => toast.error('Could not open the theme', { description: error.message }));
   return (
     <SettingsRow
       label={
@@ -128,10 +163,11 @@ function InstalledRow({ theme, onEdit }: { theme: ColorTheme; onEdit: (file: str
         </span>
       }
       description={<span className="block truncate pl-[2.625rem]">{[sourceLabel(theme), KIND_LABELS[theme.kind]].join(' · ')}</span>}
-      onPointerEnter={() => setThemePreview(theme)}
+      // While its editor is open the edits are on screen; hovering the row must not swap them for the saved file.
+      onPointerEnter={() => !isEditing && setThemePreview(theme)}
       onPointerLeave={() => setThemePreview(null)}
       control={
-        <div className="flex items-center gap-1" onFocus={() => setThemePreview(theme)} onBlur={() => setThemePreview(null)}>
+        <div className="flex items-center gap-1" onFocus={() => !isEditing && setThemePreview(theme)} onBlur={() => setThemePreview(null)}>
           {isUsed ? (
             <span className="flex h-6 items-center gap-1 px-2.5 type-meta text-muted-foreground">
               <TickCircle aria-hidden className="size-3.5 text-success" />
@@ -142,9 +178,18 @@ function InstalledRow({ theme, onEdit }: { theme: ColorTheme; onEdit: (file: str
               Use
             </Button>
           )}
-          {source.kind === 'custom' && (
-            <TooltipIconButton label="Edit" hint={host.isDesktop ? 'Opens the theme file in your JSON editor' : 'Edit the theme JSON here'} onClick={() => void edit(source.file)}>
-              <Edit2 />
+          {source.kind === 'custom' ? (
+            <>
+              <TooltipIconButton label="Edit colors" hint="Set Mochi's colors for this theme, previewed as you go" onClick={() => onEdit(source.file)} aria-expanded={isEditing}>
+                <Edit2 />
+              </TooltipIconButton>
+              <TooltipIconButton label="Edit JSON" hint={host.isDesktop ? 'Opens the theme file in your JSON editor' : 'Edit the theme JSON here'} onClick={() => onEditJson(source.file)}>
+                <DocumentCode />
+              </TooltipIconButton>
+            </>
+          ) : (
+            <TooltipIconButton label="Customize" hint="Copies it as a custom theme with every color it maps to filled in" onClick={onCustomize}>
+              <Brush />
             </TooltipIconButton>
           )}
           {source.kind !== 'mochi' && (
@@ -158,7 +203,9 @@ function InstalledRow({ theme, onEdit }: { theme: ColorTheme; onEdit: (file: str
           )}
         </div>
       }
-    />
+    >
+      {children}
+    </SettingsRow>
   );
 }
 
@@ -192,7 +239,7 @@ function ThemeJsonEditor({ draft, onDone }: { draft: { file?: string; text: stri
           setText(e.target.value);
           setError(null);
         }}
-        placeholder={'{\n  "name": "My theme",\n  "type": "dark",\n  "colors": { "editor.background": "#1e1e1e" },\n  "tokenColors": []\n}'}
+        placeholder={'{\n  "name": "My theme",\n  "type": "dark",\n  "mochi": { "success": "#3fb950" },\n  "colors": { "editor.background": "#1e1e1e" },\n  "tokenColors": []\n}'}
         spellCheck={false}
         aria-label="Theme JSON"
         aria-invalid={!!error}
