@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import type { CheckRun } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type TurnReport } from '../model.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
@@ -19,6 +19,7 @@ import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { projectRef, repoFor } from '../projects.ts';
+import { recordPrs } from '../git/prs.ts';
 import { branchName, repoWorkspace, type WorkspaceDraft } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 import { getRestored } from './persist.ts';
@@ -73,6 +74,8 @@ export type ThreadsAction =
   | { type: 'queued-resume'; threadId: string }
   /** A link or file you added in the summary; a live agent is told in a message of yours. */
   | { type: 'source-add'; threadId: string; source: Source }
+  /** PRs Mochi learned of for the thread (gh's read of its branch, a PR it opened): added, or updated by number. */
+  | { type: 'prs-seen'; threadId: string; prs: PullRequest[] }
   | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; isMuted: boolean }
@@ -182,6 +185,8 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, queuePause: undefined })) };
     case 'source-add':
       return addSource(state, action);
+    case 'prs-seen':
+      return seePrs(state, action.threadId, action.prs);
     case 'controls':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, controls: action.controls })) };
     case 'resume':
@@ -274,6 +279,14 @@ function withQueue(thread: Thread, queued: QueuedMessage[]): Thread {
 function mapEntry(t: Thread, index: number, fn: (e: ActivityEntry) => ActivityEntry): Thread {
   const entry = t.activity[index];
   return entry ? { ...t, activity: t.activity.map((e, i) => (i === index ? fn(e) : e)) } : t;
+}
+
+/** Unchanged state when every PR is already recorded as it is, so a periodic gh read doesn't re-save. */
+export function seePrs<S extends { threads: Thread[] }>(state: S, threadId: string, prs: PullRequest[]): S {
+  const thread = state.threads.find((t) => t.id === threadId);
+  const next = thread && recordPrs(thread.prs, prs);
+  if (!thread || next === thread.prs) return state;
+  return { ...state, threads: mapThread(state.threads, threadId, (t) => ({ ...t, prs: next! })) };
 }
 
 export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {

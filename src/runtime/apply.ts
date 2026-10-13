@@ -4,7 +4,8 @@ import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
 import type { Action, State } from '../store/index.tsx';
-import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
+import { completeStep, hasOpenWork, log, mapStep, mapThread, seePrs } from '../store/threads.ts';
+import { createdPr } from '../git/prs.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
 
@@ -44,6 +45,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'tool':
       if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }) }));
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
+      state = recordCreatedPr(state, thread, event);
       if (!event.files?.length) return state;
       if (event.patch) state = noteCollisions(state, thread.id);
       return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));
@@ -87,6 +89,14 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
 function toolEnd(event: Extract<AgentEvent, { type: 'tool' }>): Partial<ActivityEntry> {
   const { text, links, output, exitCode, patch } = event;
   return { ...(links && { text, links }), ...(output !== undefined && { output }), ...(exitCode !== undefined && { exitCode }), ...(patch && { patch }) };
+}
+
+/** A `gh pr create` the agent ran puts its PR on the thread right away; one already recorded keeps the state gh gave it. */
+function recordCreatedPr(state: State, thread: Thread, event: Extract<AgentEvent, { type: 'tool' }>): State {
+  const command = thread.activity.find((e) => e.toolId === event.id)?.text;
+  const pr = command && createdPr(command, event.output);
+  if (!pr || thread.prs.some((p) => p.number === pr.number)) return state;
+  return seePrs(state, thread.id, [pr]);
 }
 
 export function applyAgentEvents(state: State, events: AgentEvent[]): State {

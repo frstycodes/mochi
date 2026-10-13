@@ -13,6 +13,7 @@ import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/gi
 import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 import { runCheck } from '../git/check.ts';
+import { prsOnBranches, type GhPr } from '../../src/git/prs.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
@@ -24,6 +25,9 @@ const CI_LOG_LINES = 150;
 
 // A turn's files; far above what one turn edits, low enough to fit in a git command line.
 const MAX_RESTORE = 500;
+
+// ponytail: the repo's newest PRs of any state; a thread's PR older than this many others goes unseen. Upgrade: `--search head:<branch>` per branch.
+const PR_LIST_LIMIT = 100;
 
 // ponytail: one query per batch; GitHub's GraphQL node limit is far above this.
 const MAX_REFS = 50;
@@ -91,6 +95,22 @@ export const git = {
 
   async pr(_sender, cwd, user) {
     return readPr(string(cwd, 'cwd'), githubAccount(user));
+  },
+
+  async worktreePrs(_sender, value, user) {
+    if (!Array.isArray(value)) throw new TypeError('worktrees must be an array');
+    const worktrees = value.slice(0, MAX_REFS).map((w, i) => string(w, `worktrees[${i}]`));
+    const args = ['pr', 'list', '--state', 'all', '--limit', String(PR_LIST_LIMIT), '--json', 'number,url,title,state,isDraft,headRefName,isCrossRepository'];
+    try {
+      const tops = await Promise.all(worktrees.map((w) => topLevel(w).catch(() => null)));
+      const branches = await Promise.all(tops.map((top) => (top ? currentBranch(top) : Promise.resolve('HEAD'))));
+      const first = tops.find((top) => top !== null);
+      if (!first) return [];
+      const found = prsOnBranches(JSON.parse(await runGh(first, args, githubAccount(user))) as GhPr[], new Set(branches.filter((b) => b !== 'HEAD')));
+      return worktrees.flatMap((worktree, i) => found.filter((f) => f.branch === branches[i]).map(({ pr }) => ({ worktree, pr })));
+    } catch {
+      return [];
+    }
   },
 
   async ciLog(_sender, cwd, link, user) {
