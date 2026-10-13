@@ -14,7 +14,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTabKind, Thread } from './model';
@@ -34,7 +33,7 @@ import { ActionItems } from './menus/ActionItems';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
-import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
+import { TitleBar } from './TitleBar';
 import { useHarness } from './store';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 
@@ -251,14 +250,12 @@ function ThreadHeader({
   const { state } = useHarness();
   const { isFirst, leafId } = useSplit();
   const { pct } = progressAt(thread, state.now, true);
-  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
-      <header ref={header} data-pin-drop className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3 transition-colors duration-150', reservesToggle && TOGGLE_RESERVE, pinDrop.isOver && 'bg-accent/40')}>
-        {hasTrigger && <SidebarTrigger className="-ml-1" />}
+      <TitleBar ref={header} isFirst={isFirst} data-pin-drop className={cn('@container transition-colors duration-150', pinDrop.isOver && 'bg-accent/40')}>
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <DeviceIndicator />
         <ThreadMenu thread={thread} />
@@ -295,7 +292,7 @@ function ThreadHeader({
         </TooltipIconButton>
         <PinsMenu />
         <RewindLayer thread={thread} />
-      </header>
+      </TitleBar>
     </TargetContextMenu>
   );
 }
