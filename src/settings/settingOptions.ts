@@ -26,6 +26,11 @@ export const WORKSPACE_MODES = [
   { value: 'folder', label: 'Project folder' },
 ] as const;
 
+export const WHILE_WORKING = [
+  { value: 'queue', label: 'Queue until it finishes' },
+  { value: 'steer', label: 'Send right away (steer)' },
+] as const;
+
 export const BRANCH_FROM = [
   { value: 'current', label: 'Current branch' },
   { value: 'base', label: 'Base branch' },
@@ -48,6 +53,7 @@ export const AGENT_SETTINGS = {
   workspaceMode: { label: 'New threads work in', options: WORKSPACE_MODES },
   searchEngine: { label: 'Search engine', options: ENGINES },
   driftGuard: { label: 'Drift guard', options: SWITCH },
+  whileWorking: { label: 'While the agent is working, new messages', options: WHILE_WORKING },
   restoreLayout: { label: 'Restore layout on launch', options: SWITCH },
   restoreTerminals: { label: 'Restore terminals on launch', options: SWITCH },
   watchedToasts: { label: 'Toasts for watched threads', options: SWITCH },

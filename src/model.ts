@@ -1,4 +1,5 @@
 import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
+import type { Mention } from './chat/mentions.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
@@ -72,6 +73,8 @@ export interface ActivityEntry {
   skill?: string;
   /** Tool entries: the MCP server tool this call ran. */
   mcp?: McpCall;
+  /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
+  wasQueued?: boolean;
 }
 
 export interface McpCall {
@@ -178,7 +181,24 @@ export interface Thread {
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
   subagents?: Subagent[];
+  /** Messages you wrote while the agent worked, sent one per turn end, first first (`src/chat/outbox.ts`). */
+  queued?: QueuedMessage[];
+  /** Why the queue stopped sending; cleared by your next send or Resume. */
+  queuePause?: QueuePause;
 }
+
+/** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
+export interface QueuedMessage {
+  id: string;
+  /** The text as typed: what the transcript shows, and what Edit puts back in the composer. */
+  draft: string;
+  files: number;
+  mentions: Mention[];
+  /** The text starts with a `/` command, so mention tags go after it. */
+  isCommand: boolean;
+}
+
+export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
 
 /** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a Mochi background agent (`start_background_agent`). */
 export interface Subagent {
@@ -233,6 +253,8 @@ export interface LiveRun {
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
+  /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
+  isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */

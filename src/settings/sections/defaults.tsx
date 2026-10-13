@@ -5,9 +5,10 @@ import { useSideChatDefault } from '../../sidechat/useSideChat';
 import { SHARED_ACCESS } from '../../runtime/access';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
 import { useAgentSettings } from '../AgentSettings';
-import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
+import { Shortcut } from '../../Shortcut';
 import { setPrefs, usePrefs } from '../prefs';
-import { AGENTS } from '../settingOptions';
+import { AGENTS, WHILE_WORKING } from '../settingOptions';
 
 const FULL_ACCESS_TOGGLE = 'text-warning hover:text-warning data-[state=on]:border-warning/60 data-[state=on]:bg-warning/12 data-[state=on]:text-warning dark:data-[state=on]:bg-warning/12';
 
@@ -23,6 +24,7 @@ export function DefaultsSection() {
           control={<SettingsChoice id="permissions" value={permissions} options={SHARED_ACCESS.map((a) => ({ value: a, label: a, className: a === 'Full access' ? FULL_ACCESS_TOGGLE : undefined }))} onChange={(v) => setPrefs({ permissions: v })} />}
         />
       </SettingsGroup>
+      <WhileWorkingGroup />
       <SideChatGroup />
       <DesktopOnly what="The concurrency limit only works in the Mochi desktop app.">
         <ConcurrencyGroup />
@@ -34,6 +36,20 @@ export function DefaultsSection() {
   );
 }
 
+function WhileWorkingGroup() {
+  const { whileWorking } = usePrefs();
+  return (
+    <SettingsGroup
+      footer={
+        <span className="inline-flex flex-wrap items-center gap-1">
+          Hold <Shortcut keys={['mod']} /> while sending to do the other for that one message. Queued messages go out one per turn, in order.
+        </span>
+      }
+    >
+      <SettingsRow id="whileWorking" label="While the agent is working, new messages" control={<SettingsSelect id="whileWorking" value={whileWorking} options={WHILE_WORKING} onChange={(v) => setPrefs({ whileWorking: v })} className="w-52" />} />
+    </SettingsGroup>
+  );
+}
 
 function SideChatGroup() {
   const [model, setModel] = useSideChatDefault();

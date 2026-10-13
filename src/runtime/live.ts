@@ -8,8 +8,6 @@ import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from 
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
-/** The composer marks a held-key message with this in the transcript; the agent gets the message without it. */
-export const QUEUED_PREFIX = 'Queued: ';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
@@ -32,10 +30,12 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
-      const text = withNotes(thread, action.prompt ?? action.text.replace(QUEUED_PREFIX, ''));
+      const text = withNotes(thread, action.prompt ?? action.text);
       const images = action.images?.length ? { images: action.images } : {};
       const skills = action.skills?.length ? { skills: action.skills } : {};
-      return thread.live.isDetached ? reattach(thread, text, undefined, images.images, skills.skills) : [{ method: 'send', threadId: thread.id, text, ...images, ...skills }];
+      if (thread.live.isDetached) return reattach(thread, text, undefined, images.images, skills.skills);
+      const interrupt = action.interrupts && thread.live.isWorking ? [{ method: 'interrupt' as const, threadId: thread.id }] : [];
+      return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills }];
     }
     case 'source-add': {
       const thread = state.threads.find((t) => t.id === action.threadId);
