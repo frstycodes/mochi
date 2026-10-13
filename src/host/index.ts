@@ -1,3 +1,4 @@
+import { account as desktopAccount } from './desktop/account.ts';
 import { agent as desktopAgent } from './desktop/agent.ts';
 import { data as desktopData } from './desktop/data.ts';
 import { browser as desktopBrowser } from './desktop/browser.ts';
@@ -12,6 +13,7 @@ import { sim as desktopSim } from './desktop/sim.ts';
 import { themes as desktopThemes } from './desktop/themes.ts';
 import { windows as desktopWindows } from './desktop/windows.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
+import { account as webAccount } from './web/account.ts';
 import { agent as webAgent } from './web/agent.ts';
 import { data as webData } from './web/data.ts';
 import { browser as webBrowser } from './web/browser.ts';
@@ -46,6 +48,7 @@ export const registry: Registry = {
   data: { web: webData, desktop: desktopData },
   schedule: { web: webSchedule, desktop: desktopSchedule },
   themes: { web: webThemes, desktop: desktopThemes },
+  account: { web: webAccount, desktop: desktopAccount },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -67,4 +70,5 @@ export const host = {
   data: pick('data'),
   schedule: pick('schedule'),
   themes: pick('themes'),
+  account: pick('account'),
 } satisfies HostBridge & { isDesktop: boolean };
