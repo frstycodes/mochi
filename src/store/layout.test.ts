@@ -54,3 +54,18 @@ test('splitting with a thread already on screen focuses it instead', () => {
   assert.deepEqual(threadIds(again), ['a', 'b']);
   assert.deepEqual(again.views.s, th('b'));
 });
+
+test('a pane tab dropped on an edge opens beside; returning it closes its split, or shows its thread when it was the only one', () => {
+  const tab: View = { kind: 'tab', threadId: 'a', tabId: 't1' };
+  const one = start();
+  const [a] = leaves(one.layouts.s.root);
+  const dropped = run(one, { type: 'layout-drop', leafId: a.id, zone: 'right', view: tab });
+  assert.deepEqual(threadIds(dropped), ['a', 'tab']);
+  assert.deepEqual(dropped.views.s, tab);
+  const back = run(dropped, { type: 'layout-return-tab', threadId: 'a', tabId: 't1' });
+  assert.deepEqual(threadIds(back), ['a']);
+  assert.deepEqual(back.views.s, th('a'));
+  const alone = run(start(tab), { type: 'layout-return-tab', threadId: 'a', tabId: 't1' });
+  assert.deepEqual(threadIds(alone), ['a']);
+  assert.equal(run(back, { type: 'layout-return-tab', threadId: 'a', tabId: 't1' }).layouts, back.layouts);
+});

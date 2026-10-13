@@ -31,7 +31,7 @@ import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
 import { ChatView } from './ChatView';
 import { progressAt } from './progress';
-import { SidePane } from './SidePane';
+import { SidePane, useSplitTabIds } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
 import { THREAD_ACTIONS_MENU, THREAD_HEADER_MENU } from './menus/menus';
 import { ActionItems } from './menus/ActionItems';
@@ -55,7 +55,10 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const [isSummarySheetOpen, setSummarySheetOpen] = useState(false);
   const isPaneShown = isWide ? isPaneOpen : isPaneTabOpen;
 
+  const inSplits = useSplitTabIds(thread.id);
   const showTab = (kind: PaneTabKind) => {
+    const split = pane?.tabs.find((t) => t.kind === kind && inSplits.has(t.id));
+    if (split) return dispatch({ type: 'go', view: { kind: 'tab', threadId: thread.id, tabId: split.id } });
     dispatch({ type: 'pane-show-tab', threadId: thread.id, kind });
     if (!isWide) setPaneTabOpen(true);
   };

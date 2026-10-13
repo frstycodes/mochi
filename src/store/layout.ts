@@ -47,6 +47,8 @@ export type LayoutAction =
   | { type: 'layout-split'; view: View; leafId?: string; side?: Side }
   | { type: 'layout-drop'; leafId: string; zone: Zone; view: View }
   | { type: 'layout-close'; leafId?: string }
+  /** A pane tab open as a split goes back to its thread's pane: its split closes, or shows the thread if it was the only one. */
+  | { type: 'layout-return-tab'; threadId: string; tabId: string }
   | { type: 'layout-focus'; leafId: string }
   | { type: 'layout-focus-step'; step: 1 | -1 }
   | { type: 'layout-zoom'; leafId?: string }
@@ -126,6 +128,12 @@ function reduce(state: State, action: Action): State {
       const i = order.findIndex((l) => l.id === id);
       const focusId = id === layout.focusId ? (order[i - 1] ?? order[i + 1]).id : layout.focusId;
       return set({ ...layout, root, focusId, zoomId: undefined });
+    }
+    case 'layout-return-tab': {
+      const shown = leaves(layout.root).find(({ view }) => view.kind === 'tab' && view.threadId === action.threadId && view.tabId === action.tabId);
+      if (!shown) return state;
+      if (layout.root.id === shown.id) return set({ ...layout, root: setLeafView(layout.root, shown.id, { kind: 'thread', id: action.threadId }) });
+      return reduce(state, { type: 'layout-close', leafId: shown.id });
     }
     case 'layout-focus':
       if (action.leafId === layout.focusId || !findLeaf(layout.root, action.leafId)) return state;

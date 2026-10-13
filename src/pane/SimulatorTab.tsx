@@ -1,12 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Camera, Code, Home, Link, LockKeyhole, Mobile, Moon, Play, Power, Record, StopCircle, Sun, Tablet, Text } from 'reicon-react';
+import { Camera, CloseCircle, Code, Home, Link, LockKeyhole, Mobile, Moon, Play, Power, Record, StopCircle, Sun, Tablet, Text, TickCircle, X } from 'reicon-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -15,7 +14,7 @@ import { threadCwd } from '@/host/cwd';
 import { CONTENT_SIZES, type SimButton, type SimContentSize, type Simulator } from '@/host/types/sim';
 import { cn } from '@/lib/utils';
 import { DeviceScreen } from '@/sim/DeviceScreen';
-import { useBuild } from '@/sim/useBuild';
+import { useBuild, type BuildState } from '@/sim/useBuild';
 import { useCapture } from '@/sim/useCapture';
 import { useDeviceSettings } from '@/sim/useDeviceSettings';
 import { message, useSimulators } from '@/sim/useSimulators';
@@ -32,7 +31,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
   const isBooted = device?.state === 'Booted';
   const stream = useSimStream(isBooted ? device.udid : null);
   const settings = useDeviceSettings(isBooted ? device.udid : null);
-  const build = useBuild(device?.udid ?? null);
+  const { build, run, showLog, dismiss } = useBuild(device?.udid ?? null, thread);
   const capture = useCapture(thread.id, isBooted ? device : null);
   const cwd = threadCwd(thread);
 
@@ -70,7 +69,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
         {isBooted && !stream.error && (!stream.frameUrl || !stream.size) && <LoadingState label="Starting the screen…" />}
         {isBooted && !stream.error && !!stream.frameUrl && !!stream.size && <DeviceScreen device={device} frameUrl={stream.frameUrl} size={stream.size} />}
       </div>
-      {build.lines.length > 0 && <BuildLog lines={build.lines} isBuilding={build.isBuilding} onClose={build.clear} />}
+      {!!build && <BuildStatus build={build} onShowLog={showLog} onDismiss={dismiss} />}
       <div className="flex h-11 shrink-0 items-center justify-center gap-1 px-2">
         <HardwareButton udid={device.udid} button="home" label="Home" disabled={!isBooted}>
           <Home />
@@ -87,9 +86,9 @@ export function SimulatorTab({ thread }: PaneTabProps) {
         <Tooltip>
           <TooltipTrigger asChild>
             <span>
-              <Button size="sm" variant="secondary" disabled={!isBooted || !cwd || build.isBuilding} onClick={() => cwd && build.run(cwd)}>
-                {build.isBuilding ? <Spinner /> : <Play />}
-                {build.isBuilding ? 'Building…' : 'Build & run'}
+              <Button size="sm" variant="secondary" disabled={!isBooted || !cwd || build?.isBuilding} onClick={() => cwd && run(cwd)}>
+                {build?.isBuilding ? <Spinner /> : <Play />}
+                {build?.isBuilding ? 'Building…' : 'Build & run'}
               </Button>
             </span>
           </TooltipTrigger>
@@ -241,21 +240,28 @@ function IconAction({ label, pressed, disabled, onClick, children }: { label: st
   );
 }
 
-function BuildLog({ lines, isBuilding, onClose }: { lines: string[]; isBuilding: boolean; onClose: () => void }) {
+/** One line while building or after: what it's doing (or how it ended) and a way into the full log in the Terminal tab. */
+function BuildStatus({ build, onShowLog, onDismiss }: { build: BuildState; onShowLog: () => void; onDismiss: () => void }) {
+  const { isBuilding, lastLine, result } = build;
+  const detail = result ? (result.isOk ? `Launched ${result.bundleId}` : result.error) : (lastLine ?? 'Starting…');
   return (
-    <div className="mx-2 flex max-h-48 min-h-0 shrink-0 flex-col rounded-xl bg-card ring-1 ring-border">
-      <div className="flex h-8 shrink-0 items-center gap-2 pr-1 pl-3">
-        <Code className="size-3.5 text-muted-foreground" aria-hidden />
-        <span className="type-meta flex-1 text-muted-foreground">{isBuilding ? 'Building…' : 'Build log'}</span>
-        {!isBuilding && (
-          <Button variant="ghost" size="xs" onClick={onClose}>
-            Hide
-          </Button>
-        )}
-      </div>
-      <ScrollArea type="scroll" className="min-h-0 flex-1">
-        <pre className="type-caption px-3 pb-2 font-mono break-all whitespace-pre-wrap text-muted-foreground">{lines.join('\n')}</pre>
-      </ScrollArea>
+    <div role="status" className="mx-2 flex h-9 shrink-0 items-center gap-2 rounded-xl bg-card pr-1 pl-3 ring-1 ring-border">
+      {isBuilding && <Spinner aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />}
+      {result?.isOk && <TickCircle aria-hidden className="size-3.5 shrink-0 text-success" />}
+      {result && !result.isOk && <CloseCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />}
+      <span className="shrink-0 type-meta text-foreground">{isBuilding ? 'Building' : result?.isOk ? 'Built' : 'Build failed'}</span>
+      <span className="min-w-0 flex-1 truncate font-mono type-caption text-muted-foreground" title={detail}>
+        {detail}
+      </span>
+      <Button variant="ghost" size="xs" onClick={onShowLog}>
+        <Code />
+        Show log
+      </Button>
+      {!isBuilding && (
+        <IconAction label="Dismiss" onClick={onDismiss}>
+          <X />
+        </IconAction>
+      )}
     </div>
   );
 }
