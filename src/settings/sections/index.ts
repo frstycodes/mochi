@@ -1,9 +1,10 @@
 import type { ComponentType } from 'react';
-import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Devices, Global, Keyboard, Notification, Palette, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
+import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Devices, Global, Keyboard, Notification, Palette, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent, ProfileCircle } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { UTILITY_TASKS } from '../../utility/prompts';
+import { AccountSection } from './account';
 import { BackgroundSection, UTILITY_TASK_LABELS } from './background';
 import { BrowserSection } from './browser';
 import { DataSection } from './data';
@@ -36,6 +37,14 @@ export interface SettingsSection {
 
 /** The settings page in sidebar order (SETTINGS.md). */
 export const SETTINGS_SECTIONS = [
+  {
+    id: 'account',
+    group: 'App',
+    title: 'Account',
+    icon: ProfileCircle,
+    component: AccountSection,
+    settings: [{ id: 'mochiAccount', label: 'Mochi account', keywords: 'sign in sign out login logout clerk devices computers sync' }],
+  },
   {
     id: 'general',
     group: 'App',
