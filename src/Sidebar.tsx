@@ -46,7 +46,7 @@ import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type Vie
 import { duration, goalProgress } from './progress';
 import { openSettings } from './settings/open';
 import { hasGoal } from './drift';
-import { reportHeadline } from './goals/report';
+import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
@@ -574,7 +574,7 @@ export function threadDetail(thread: Thread, question?: string) {
   if (thread.status === 'needs-you') return question ?? 'Waiting on you';
   if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];
-  if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : 'Ready for review';
+  if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : NEXT_STEP_TITLES['open-pr'];
   // A live agent reports what it's doing; idle, its last report says where things stand; demo threads are told by their goal steps.
   if (thread.live) return workingLabel(thread) ?? reportHeadline(thread) ?? 'Idle';
   const step = thread.steps.find((s) => s.status === 'running') ?? thread.steps.find((s) => s.status === 'ready');

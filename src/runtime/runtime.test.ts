@@ -156,8 +156,9 @@ test('demo threads progress, log tools, grow context and end in review', () => {
   assert.ok(adm.steps.find((x) => x.id === 'ad2')!.progress > before.steps.find((x) => x.id === 'ad2')!.progress);
   assert.ok(adm.activity.some((a) => a.kind === 'tool' && a.at > NOW0));
   assert.ok(adm.context.used > before.context.used);
-  for (let i = 0; i < 2000 && !s.queue.some((q) => q.id === 'q-review-rl'); i++) s = tick(s);
+  for (let i = 0; i < 2000 && thread(s, 'rl').status !== 'review'; i++) s = tick(s);
   assert.equal(thread(s, 'rl').status, 'review');
+  assert.equal(s.queue.some((q) => q.id === 'q-review-rl'), false, 'the report card says what is next, not a queue card');
 });
 
 test("a tool's end with links fills in the entry its start logged", () => {

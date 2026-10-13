@@ -626,6 +626,9 @@ function Recipes() {
         <Block title="Report card" use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes." wide>
           <ReportCard thread={reportFixture(rl)} />
         </Block>
+        <Block title="Report, criteria met" use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to run open_pr; with a PR open the chip is the next step; merged, Settle thread." wide>
+          <ReportCard thread={metReportFixture(rl)} />
+        </Block>
         <Block title="Turn changes" use="Under a finished turn that changed files, like Claude's: totals and Undo, a row per file opening to its diff, the first three then Show more. Undo is disabled here: these threads have no worktree." wide>
           <div className="flex flex-col gap-3">
             {turnChanges(changesFixture(rl).activity).map((turn) => (
@@ -735,6 +738,12 @@ function Pair({ rule, children }: { rule: string; children: [ReactNode, ReactNod
 }
 
 /** A goal thread as it looks after its agent claimed one criterion and reported. */
+function metReportFixture(rl: Thread): Thread {
+  const at = rl.activity.at(-1)?.at ?? 0;
+  const claim = { evidence: 'pnpm test: 214 passed', at, by: 'claude' as const };
+  return { ...reportFixture(rl), prs: [], criteria: [{ id: 'c1', text: 'Every 429 carries Retry-After', claim }, { id: 'c2', text: 'pnpm test passes', command: 'pnpm test', claim }], report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body'], left: [] } };
+}
+
 function reportFixture(rl: Thread): Thread {
   const at = rl.activity.at(-1)?.at ?? 0;
   return {
