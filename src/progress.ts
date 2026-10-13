@@ -58,14 +58,14 @@ export type Phase = 'planning' | 'building' | 'verifying' | 'ready' | 'settled';
 export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Settled' } satisfies Record<Phase, string>;
 
 /**
- * The ring: criteria met when the goal has criteria (what done means), else plan steps done. `phase` is read from what
- * Mochi saw happen (edits, claims, checks), never from the agent's own percentage.
+ * The ring: criteria met out of the goal's criteria (what done means); no criteria, no count. Steps never count: they aren't
+ * equal in size and a re-plan would move the count backwards. `phase` is read from what Mochi saw happen (edits, claims,
+ * checks), never from the agent's own percentage.
  */
-export function goalProgress(thread: Thread, now: number) {
+export function goalProgress(thread: Thread) {
   const criteria = thread.criteria ?? [];
   const met = criteria.filter(isMet).length;
-  const pct = criteria.length ? met / criteria.length : progressAt(thread, now, true).pct;
-  return { pct, met, total: criteria.length, phase: phaseOf(thread, criteria.length > 0 && met === criteria.length) };
+  return { met, total: criteria.length, phase: phaseOf(thread, criteria.length > 0 && met === criteria.length) };
 }
 
 function phaseOf(thread: Thread, isAllMet: boolean): Phase {
@@ -76,9 +76,9 @@ function phaseOf(thread: Thread, isAllMet: boolean): Phase {
   return 'planning';
 }
 
-/** "Building · 1/3" with criteria, "Building · 40%" without. */
+/** "Building · 1/3" with criteria, "Building" without. */
 export function progressLabel(p: ReturnType<typeof goalProgress>) {
-  return `${GOAL_PHASE_LABELS[p.phase]} · ${p.total ? `${p.met}/${p.total}` : `${Math.round(p.pct * 100)}%`}`;
+  return p.total ? `${GOAL_PHASE_LABELS[p.phase]} · ${p.met}/${p.total}` : GOAL_PHASE_LABELS[p.phase];
 }
 
 export function boardColumns(lines: Step[][]): Map<string, number> {

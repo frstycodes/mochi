@@ -15,7 +15,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Kbd } from '@/components/ui/kbd';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,7 +24,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { BoardView } from '../BoardView';
-import { seedQueue, type Thread } from '../model';
+import { seedQueue, type LineSlot, type Thread } from '../model';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
 import { ReportCard } from '../goals/ReportCard';
@@ -462,13 +461,13 @@ function Display() {
             </CardFooter>
           </Card>
         </Block>
-        <Block title="Progress" use="Line colour shows which thread; the number always sits beside it.">
+        <Block title="Progress" use="One segment per criterion, in the thread's line colour, the count beside it; green once all are met, spinning while the agent works, no count without criteria. Never a percent.">
           <div className="flex flex-col gap-3">
-            {([1, 2, 3, 4, 5] as const).map((slot, i) => (
-              <div key={slot} className="flex items-center gap-3">
-                <ProgressRing pct={0.15 + i * 0.18} slot={slot} />
-                <Progress value={(0.15 + i * 0.18) * 100} style={{ '--progress-color': lineColor(slot) } as React.CSSProperties} aria-label={`Thread line ${slot}`} />
-                <span className="tabular w-10 text-right type-caption text-muted-foreground">{Math.round((0.15 + i * 0.18) * 100)}%</span>
+            {RING_SAMPLES.map(({ met, total, isWorking }, i) => (
+              <div key={i} className="flex items-center gap-2 type-caption text-muted-foreground">
+                <ProgressRing met={met} total={total} slot={((i % 5) + 1) as LineSlot} isWorking={isWorking} />
+                <span className="tabular">{total ? `${met}/${total}` : 'No criteria'}</span>
+                {isWorking && <span>Working</span>}
               </div>
             ))}
           </div>
@@ -735,6 +734,15 @@ function Pair({ rule, children }: { rule: string; children: [ReactNode, ReactNod
 }
 
 /** A goal thread as it looks after its agent claimed one criterion and reported. */
+const RING_SAMPLES = [
+  { met: 0, total: 3, isWorking: true },
+  { met: 1, total: 3, isWorking: true },
+  { met: 2, total: 5, isWorking: false },
+  { met: 4, total: 4, isWorking: false },
+  { met: 0, total: 0, isWorking: true },
+  { met: 0, total: 0, isWorking: false },
+];
+
 function reportFixture(rl: Thread): Thread {
   const at = rl.activity.at(-1)?.at ?? 0;
   return {

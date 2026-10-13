@@ -45,7 +45,6 @@ import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, goalProgress } from './progress';
 import { openSettings } from './settings/open';
-import { hasGoal } from './drift';
 import { reportHeadline } from './goals/report';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
@@ -515,8 +514,8 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
         {/* overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line. */}
         <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
-          <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
-          {hasGoal(thread) && <span className="shrink-0 tabular">{row.met}</span>}
+          <ProgressRing met={row.progress.met} total={row.progress.total} slot={thread.line} size={12} isWorking={row.isWorking} />
+          {!!row.progress.total && <span className="shrink-0 tabular">{`${row.progress.met}/${row.progress.total}`}</span>}
           {row.isWorking ? (
             <span className="flex min-w-0 flex-1" title={row.detail}>
               <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
@@ -561,11 +560,11 @@ const AGENTS_LABEL = new Intl.PluralRules('en');
 /** What a thread row says under its title: the step in flight, or what it is waiting for. */
 function useThreadRow(thread: Thread) {
   const { state } = useHarness();
-  const progress = goalProgress(thread, state.now);
+  const progress = goalProgress(thread);
   const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { pct: progress.pct, met: progress.total ? `${progress.met}/${progress.total}` : `${Math.round(progress.pct * 100)}%`, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { progress, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {

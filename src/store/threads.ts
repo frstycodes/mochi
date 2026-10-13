@@ -609,7 +609,7 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   const source = state.threads.find((t) => t.id === action.threadId);
   if (!source) return state;
   const now = state.now;
-  const isGoalDone = goalProgress(source, now).phase === 'ready';
+  const isGoalDone = goalProgress(source).phase === 'ready';
   const hasOpenPr = source.prs.some((p) => p.state === 'open');
   const short = action.prompt.length > 40 ? `${action.prompt.slice(0, 39)}…` : action.prompt;
   let next: State = state;

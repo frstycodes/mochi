@@ -33,16 +33,18 @@ test('every step counts the same, dropped ones are left out, scope grows over ti
   assert.equal(live.pct, (1 + 0.5) / 3);
 });
 
-test('the ring follows criteria when the goal has them, and the phase follows what happened', () => {
+test('the ring counts criteria only, never steps or a percent, and the phase follows what happened', () => {
   const goal = { ...thread, goal: 'Keys rate limited', status: 'running' as const, activity: [], criteria: [{ id: 'c1', text: 'Header' }, { id: 'c2', text: 'Tests' }] };
-  assert.deepEqual(goalProgress({ ...goal, steps: [] }, 30), { pct: 0, met: 0, total: 2, phase: 'planning' });
-  assert.equal(goalProgress(goal, 30).phase, 'building', 'a step done');
+  assert.deepEqual(goalProgress({ ...goal, steps: [] }), { met: 0, total: 2, phase: 'planning' });
+  assert.equal(goalProgress(goal).phase, 'building', 'a step done');
   const claimed = { ...goal, criteria: [{ ...goal.criteria[0], claim: { evidence: 'curl', at: 1, by: 'claude' as const } }, goal.criteria[1]] };
-  assert.deepEqual(goalProgress(claimed, 30), { pct: 0.5, met: 1, total: 2, phase: 'verifying' });
-  assert.equal(progressLabel(goalProgress(claimed, 30)), 'Verifying · 1/2');
+  assert.deepEqual(goalProgress(claimed), { met: 1, total: 2, phase: 'verifying' });
+  assert.equal(progressLabel(goalProgress(claimed)), 'Verifying · 1/2');
   const passed = { ...claimed, criteria: claimed.criteria.map((c) => ({ ...c, check: { status: 'passed' as const, at: 2 } })) };
-  assert.equal(progressLabel(goalProgress(passed, 30)), 'Ready for review · 2/2');
-  assert.equal(progressLabel(goalProgress({ ...thread, goal: 'x', criteria: [] }, 30)), 'Building · 50%');
+  assert.equal(progressLabel(goalProgress(passed)), 'Ready for review · 2/2');
+  const noCriteria = goalProgress({ ...thread, goal: 'x', criteria: [] });
+  assert.deepEqual([noCriteria.met, noCriteria.total], [0, 0], 'done steps never fill the ring');
+  assert.equal(progressLabel(noCriteria), 'Building');
 });
 
 test('shared steps align to one column and push later stations right', () => {

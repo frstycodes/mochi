@@ -253,9 +253,8 @@ function ThreadHeader({
   shownKind?: PaneTabKind;
   onShowTab: (kind: PaneTabKind) => void;
 }) {
-  const { state } = useHarness();
   const { isFirst, leafId } = useSplit();
-  const progress = goalProgress(thread, state.now);
+  const progress = goalProgress(thread);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
@@ -285,7 +284,7 @@ function ThreadHeader({
             <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
               {hasGoal(thread) ? (
                 <>
-                  <ProgressRing pct={progress.pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+                  <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
                   <span className="tabular">{progressLabel(progress)}</span>
                 </>
               ) : (
