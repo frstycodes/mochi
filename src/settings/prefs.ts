@@ -9,6 +9,9 @@ import { effortId, modelId } from '../runtime/models.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
+  /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
+  lightTheme: string;
+  darkTheme: string;
   projectsFolder: string;
   restoreLayout: boolean;
   /** NoticeKind values that raise an OS notification while the window is in the background. */
@@ -61,6 +64,8 @@ export type AgentControl = (typeof AGENT_CONTROLS)[number];
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
+  lightTheme: 'mochi',
+  darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
   alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],

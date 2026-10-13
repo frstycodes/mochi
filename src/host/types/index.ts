@@ -10,6 +10,7 @@ import { ptyMethods, type PtyHost } from './pty.ts';
 import { scheduleMethods, type ScheduleHost } from './schedule.ts';
 import { settingsMethods, type SettingsHost } from './settings.ts';
 import { simMethods, type SimHost } from './sim.ts';
+import { themesMethods, type ThemesHost } from './themes.ts';
 import { windowsMethods, type WindowsHost } from './windows.ts';
 
 export interface HostBridge {
@@ -25,6 +26,7 @@ export interface HostBridge {
   settings: SettingsHost;
   data: DataHost;
   schedule: ScheduleHost;
+  themes: ThemesHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -43,4 +45,5 @@ export const manifest = {
   settings: settingsMethods,
   data: dataMethods,
   schedule: scheduleMethods,
+  themes: themesMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

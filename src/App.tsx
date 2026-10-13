@@ -31,6 +31,7 @@ import { useWorktreeManager } from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
 import { useReplayRoute } from './replay/open';
 import { ReplayPage, ReplayView } from './replay/ReplayView';
+import { ColorThemeController } from './themes/ColorThemeController';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
@@ -40,6 +41,7 @@ export function App() {
   useIdleScrollbars();
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ColorThemeController />
       <ReducedMotion>
         <TooltipProvider delayDuration={400}>
           {embeddedReplay ? (

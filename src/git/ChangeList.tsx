@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { useTheme } from 'next-themes';
+import { useDiffTheme } from '../themes/highlight';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { ChevronRight, Folder, MessageText, Minus, Plus, Undo } from 'reicon-react';
@@ -187,7 +187,7 @@ function HunkBlock({ file, hunk, isFirst, actions }: { file: DiffFile; hunk: Dif
 const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as CSSProperties;
 
 function HunkDiff({ patch, diffStyle, notes, onComment, renderNote }: { patch: string; diffStyle: DiffStyle; notes: LineNote[]; onComment: (side: NoteSide, line: number) => void; renderNote: (note: LineNote) => React.ReactNode }) {
-  const { resolvedTheme } = useTheme();
+  const diffTheme = useDiffTheme();
   return (
     <PatchDiff<LineNote>
       patch={patch}
@@ -198,7 +198,7 @@ function HunkDiff({ patch, diffStyle, notes, onComment, renderNote }: { patch: s
         hunkSeparators: 'simple',
         disableFileHeader: true,
         overflow: 'wrap',
-        themeType: resolvedTheme === 'light' ? 'light' : 'dark',
+        ...diffTheme,
         enableGutterUtility: true,
         onGutterUtilityClick: (range) => onComment(range.side ?? 'additions', range.start),
       }}

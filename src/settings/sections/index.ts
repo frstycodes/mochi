@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
+import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Global, Keyboard, Notification, Palette, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
@@ -17,6 +17,7 @@ import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
 import { SchedulesSection } from './schedules';
 import { TerminalSection } from './terminal';
+import { ThemesSection } from './themes';
 import { ToolsSection } from './tools';
 
 export const SECTION_GROUPS = ['App', 'Agents', 'Workspace'] as const;
@@ -41,9 +42,24 @@ export const SETTINGS_SECTIONS = [
     component: GeneralSection,
     settings: [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
+      { id: 'colorThemes', label: 'Color themes', keywords: 'vs code vscode theme marketplace open vsx colors' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
       { id: 'projectsFolder', label: 'Projects folder', keywords: 'path open folder directory' },
       { id: 'restoreLayout', label: 'Restore layout on launch', keywords: 'splits views startup' },
+    ],
+  },
+  {
+    id: 'themes',
+    group: 'App',
+    title: 'Themes',
+    icon: Palette,
+    component: ThemesSection,
+    settings: [
+      { id: 'lightTheme', label: 'Light theme', keywords: 'color theme appearance vs code' },
+      { id: 'darkTheme', label: 'Dark theme', keywords: 'color theme appearance vs code' },
+      { id: 'installedThemes', label: 'Installed themes', keywords: 'uninstall remove color theme' },
+      { id: 'customTheme', label: 'Custom theme', keywords: 'import paste json jsonc vs code color theme file' },
+      { id: 'themeMarketplace', label: 'Open VSX themes', keywords: 'marketplace browse install vs code color theme one dark catppuccin github dracula' },
     ],
   },
   {

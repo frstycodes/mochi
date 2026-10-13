@@ -55,6 +55,38 @@ The signature artifacts are the chat (main view), the summary card with its floa
 - **Thread lines** use the validated categorical order `chart-1…5`. A thread keeps its colour for life. Line colour marks identity only: the metro line, the progress ring, the burn-up fill, the dot next to a thread name. Text never wears a line colour.
 - **Status** is reserved: success (running), warning (needs you, overlap), destructive (failed). Always paired with an icon or label.
 
+## Color themes
+
+Mochi's look is the built-in "Mochi" theme. Any VS Code color theme (Open VSX or a custom file) replaces it per appearance: `src/themes/map.ts` turns the theme's `colors` into Mochi's tokens, written as inline custom properties on `<html>` (`ColorThemeController`), so Mochi itself is no properties at all. The first key present wins; a missing token derives from `editor.background` / `editor.foreground`.
+
+| Mochi token | VS Code keys, in order | Fallback |
+|---|---|---|
+| `background` | `editor.background` | `#1e1e1e` / `#ffffff` |
+| `foreground` | `editor.foreground`, `foreground` | `#d4d4d4` / `#333333` |
+| `sidebar` | `sideBar.background`, `activityBar.background` | background |
+| `card` | `editorWidget.background`, `sideBarSectionHeader.background` | 4% foreground into background |
+| `popover` (+ fg) | `editorHoverWidget.background`, `menu.background`, `quickInput.background`, `editorWidget.background` | card |
+| `primary` / `-foreground` | `button.background` / `button.foreground` | foreground / background (the inverted neutral) |
+| `secondary` / `-foreground` | `button.secondaryBackground` / `button.secondaryForeground` | 8% foreground |
+| `muted` | `input.background` | 6% foreground |
+| `muted-foreground` | `descriptionForeground` | 30% background into foreground |
+| `subtle-foreground` | — | 42% background into foreground |
+| `accent` / `-foreground` | `list.hoverBackground`, `list.inactiveSelectionBackground` / `list.hoverForeground` | 8% foreground over popover |
+| `destructive` | `errorForeground`, `editorError.foreground`, `terminal.ansiRed` | VS Code ANSI red |
+| `warning` | `editorWarning.foreground`, `terminal.ansiYellow` | ANSI yellow |
+| `success` | `terminal.ansiGreen`, `gitDecoration.addedResourceForeground` | ANSI green |
+| `info` | `textLink.foreground`, `editorInfo.foreground`, `terminal.ansiBlue` | ANSI blue |
+| `merged` | `terminal.ansiMagenta` | ANSI magenta |
+| `border` | `panel.border`, `sideBar.border`, `editorGroup.border`, `contrastBorder` | foreground at 10% |
+| `input` | `input.border`, `dropdown.border`, `contrastBorder` | foreground at 15% |
+| `ring` | `focusBorder` | 30% background into foreground |
+| `highlight` | `editor.lineHighlightBackground` | foreground at 6% |
+| `sidebar-accent` | `list.inactiveSelectionBackground`, `list.hoverBackground` | foreground at 7% |
+| `chart-1…5` | ANSI blue, red+yellow (orange), cyan, yellow, magenta | VS Code ANSI defaults |
+| `float`, `glass`, `glass-edge`, `scrim`, `chart-grid`, `chart-axis` | derived from popover, background and foreground at Mochi's alphas | — |
+
+Rules the mapping enforces: translucent surfaces are painted over the background; every text token reads at 4.5:1 against the surfaces it sits on (lightness nudged in OKLab, hue kept: foreground on background, sidebar, card and popover; muted, subtle and status colours on those plus muted; each `-foreground` on its fill); `ring` at 3:1; chart lines at 3:1 on background; `accent` at least 0.04 L from popover so menu highlights show; a `border` under 1.15:1 or `input` under 1.3:1 against its surfaces falls back to translucent foreground. Token colours (`tokenColors`) feed every highlighter: pierre diffs and markdown code blocks get the theme as a shiki theme (`src/themes/highlight.ts`), the CodeMirror file viewer reads `--syntax-*` (first TextMate scope that resolves, `SYNTAX_SCOPES`), the terminal re-reads the tokens.
+
 ## Typography
 
 Inter, one family. Hierarchy from size and weight, three weights (400, 500, 600). Mono only for code, file paths, branches, URLs and tool calls. `tabular-nums` on every changing number. Headings get slight negative tracking; captions get a hair of positive tracking.
