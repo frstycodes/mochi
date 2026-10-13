@@ -38,6 +38,10 @@ export const agent: AgentHost = {
     return () => askListeners.delete(listener);
   },
   ...demoReviewer,
+  // No models in the web build: every background task keeps its local behaviour.
+  async utility() {
+    return null;
+  },
   async classify(prompt, thread) {
     return localClassifier(prompt, thread);
   },

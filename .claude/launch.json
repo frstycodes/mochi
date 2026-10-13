@@ -512,6 +512,31 @@
         "--strictPort"
       ],
       "port": 5481
+    },
+    {
+      "name": "mochi-utility-models",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5591",
+        "--strictPort"
+      ],
+      "port": 5591
+    },
+    {
+      "name": "mochi-utility-models-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5593",
+        "--strictPort"
+      ],
+      "port": 5593,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-header-sidebar-redesign-c0e17b/927fa2dc-97ea-4104-9007-f1e06ab5de5c/scratchpad/mochi-userdata"
+      }
     }
   ]
 }

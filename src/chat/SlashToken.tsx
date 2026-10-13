@@ -1,10 +1,11 @@
-import { useLayoutEffect, useRef, type ComponentProps } from 'react';
+import { Fragment, useLayoutEffect, useRef, type ComponentProps } from 'react';
 import { PromptInputTextarea, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { cn } from '@/lib/utils';
-import { resolveToken, slotPlaceholder, type SlashItem } from './slash';
+import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
 
 /**
- * The composer's textarea with a resolved `/name` in colour and its argument slots as muted placeholder text. A textarea
+ * The composer's textarea with each resolved `/name` in colour, wherever it sits, and the last one's argument slots as muted
+ * placeholder text after the end of the text (anywhere else it would push the text out of line with the textarea's). A textarea
  * can't colour runs, so while a token resolves its own text goes transparent and a mirror on top (no pointer events) draws
  * it: the textarea keeps caret, selection, IME and undo; the mirror copies its box metrics and scroll offset.
  */
@@ -13,10 +14,11 @@ export function TokenTextarea({ items, className, onScroll, ...props }: Componen
   const textarea = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
   const text = textInput.value;
-  const token = resolveToken(text, items);
+  const tokens = slashTokens(text, items);
+  const last = tokens.at(-1);
 
   useLayoutEffect(() => {
-    if (token && textarea.current && mirror.current) syncMirror(textarea.current, mirror.current);
+    if (last && textarea.current && mirror.current) syncMirror(textarea.current, mirror.current);
   });
 
   return (
@@ -24,20 +26,19 @@ export function TokenTextarea({ items, className, onScroll, ...props }: Componen
       <PromptInputTextarea
         ref={textarea}
         // No colour transition: the text must vanish the frame the mirror shows it.
-        className={cn(className, 'transition-none', !!token && 'text-transparent caret-foreground')}
+        className={cn(className, 'transition-none', !!last && 'text-transparent caret-foreground')}
         // The mirror can't show a scrollbar, so the textarea hides its own and both wrap at the same width.
-        style={token ? { scrollbarWidth: 'none' } : undefined}
+        style={last ? { scrollbarWidth: 'none' } : undefined}
         onScroll={(e) => {
           if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop;
           onScroll?.(e);
         }}
         {...props}
       />
-      {!!token && (
+      {!!last && (
         <div ref={mirror} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden break-words whitespace-pre-wrap text-foreground">
-          <span className="text-info">{text.slice(0, token.end)}</span>
-          {token.rest}
-          <span className="text-subtle-foreground">{slotPlaceholder(token.rest, token.item.argumentHint)}</span>
+          <TokenRuns text={text} tokens={tokens} />
+          <span className="text-subtle-foreground">{slotPlaceholder(text.slice(last.end), last.item.argumentHint)}</span>
           {/* A trailing newline only takes up a line with something after it. */}
           {'​'}
         </div>
@@ -55,14 +56,23 @@ function syncMirror(textarea: HTMLTextAreaElement, mirror: HTMLDivElement) {
   mirror.scrollTop = textarea.scrollTop;
 }
 
-/** A sent message that opens with a known `/name`: the token in colour, the rest as typed. */
+/** A sent message with a known `/name` in it: each token in colour, the rest as typed. */
 export function SlashTokenText({ text, items }: { text: string; items: SlashItem[] }) {
-  const token = resolveToken(text, items);
-  if (!token) return null;
+  const tokens = slashTokens(text, items);
+  if (!tokens.length) return null;
   return (
     <p className="break-words whitespace-pre-wrap">
-      <span className="text-info">{text.slice(0, token.end)}</span>
-      {token.rest}
+      <TokenRuns text={text} tokens={tokens} />
     </p>
   );
+}
+
+function TokenRuns({ text, tokens }: { text: string; tokens: ReturnType<typeof slashTokens> }) {
+  return tokens.map((token, i) => (
+    <Fragment key={token.start}>
+      {text.slice(tokens[i - 1]?.end ?? 0, token.start)}
+      <span className="text-info">{text.slice(token.start, token.end)}</span>
+      {i === tokens.length - 1 && text.slice(token.end)}
+    </Fragment>
+  ));
 }

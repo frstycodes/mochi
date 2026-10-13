@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { AgentAskContext, AgentAskEvent, AgentAskMessage, AgentAskModel } from '../host/types/agent';
-import { DEFAULT_SETTINGS, type SideChatModel } from '../host/types/settings';
+import { DEFAULT_SETTINGS, type ModelChoice } from '../host/types/settings';
 import type { Thread } from '../model';
 import { sideChatChoice } from '../runtime/controls';
 import { useHarness } from '../store';
@@ -46,7 +46,7 @@ export function useSideChat(thread: Thread, tabId: string) {
     chat,
     isStreaming,
     model,
-    setModel: (choice: SideChatModel) => dispatch({ type: 'sidechat-model', ...at, model: choice }),
+    setModel: (choice: ModelChoice) => dispatch({ type: 'sidechat-model', ...at, model: choice }),
     ask,
     setDraft: (quote?: Quote) => dispatch({ type: 'sidechat-draft', ...at, quote }),
     clear: () => dispatch({ type: 'sidechat-clear', ...at }),
@@ -56,7 +56,7 @@ export function useSideChat(thread: Thread, tabId: string) {
 
 /** Settings › Defaults' side chat model, old catalog ids read as the provider's own (null until read), and a setter that saves it. */
 export function useSideChatDefault() {
-  const [model, setModel] = useState<SideChatModel | null>(null);
+  const [model, setModel] = useState<ModelChoice | null>(null);
   useEffect(() => {
     let isCurrent = true;
     host.settings.get().then(
@@ -67,7 +67,7 @@ export function useSideChatDefault() {
       isCurrent = false;
     };
   }, []);
-  const save = (choice: SideChatModel) => {
+  const save = (choice: ModelChoice) => {
     setModel(choice);
     host.settings.set({ sideChatModel: choice }).catch((error: Error) => toast.error('Side chat model not saved', { description: error.message }));
   };

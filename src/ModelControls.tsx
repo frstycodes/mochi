@@ -112,6 +112,7 @@ export function ModelMenu({
   children?: ReactNode;
 }) {
   const space = useSpace();
+  const notes = useHarnessNotes(space.id);
   const isNarrow = useIsMobile();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState<Provider | null>(null);
@@ -226,7 +227,7 @@ export function ModelMenu({
             <DropdownMenuGroup>
               {starredModels.length > 0 && <DropdownMenuLabel>Harnesses</DropdownMenuLabel>}
               {harnesses.map((h) => {
-                const row = <HarnessRow harness={h} summary={harnessSummary(ofHarness(h), isChecked, pending.includes(h))} plan={unavailable[h] ?? space.plans[h]} />;
+                const row = <HarnessRow harness={h} summary={[harnessSummary(ofHarness(h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')} plan={unavailable[h] ?? space.plans[h]} />;
                 if (isNarrow)
                   return (
                     <DropdownMenuItem
@@ -359,6 +360,35 @@ export function useUnavailableHarnesses(spaceId: string) {
     };
   }, [spaceId]);
   return unavailable;
+}
+
+// GAP: read once per profile per launch, so signing in another way shows the old note until Mochi restarts.
+const harnessNotes = new Map<string, Promise<Partial<Record<Provider, string>>>>();
+
+/** Per harness, what its model list leaves out on this login; the picker's harness row says it. */
+function useHarnessNotes(spaceId: string) {
+  const [notes, setNotes] = useState<Partial<Record<Provider, string>>>({});
+  useEffect(() => {
+    if (!host.isDesktop) return;
+    let isCurrent = true;
+    let read = harnessNotes.get(spaceId);
+    if (!read) {
+      read = host.settings.accounts().then(({ links }) => host.settings.detect(linkedAccountId(links, spaceId, 'codex'))).then((install) => ({ codex: codexPlanNote(install) }));
+      harnessNotes.set(spaceId, read);
+      read.catch(() => harnessNotes.delete(spaceId));
+    }
+    read.then((n) => isCurrent && setNotes(n), () => {});
+    return () => {
+      isCurrent = false;
+    };
+  }, [spaceId]);
+  return notes;
+}
+
+// Seen with codex-cli 0.155.1 on a ChatGPT Plus login (2026-10-13): gpt-6.1-sol is missing from `model/list` even with
+// `includeHidden`, and asking for it fails with "not supported when using Codex with a ChatGPT account".
+function codexPlanNote(install: AgentInstall) {
+  return install.login.state === 'logged-in' && install.login.method === 'ChatGPT' ? 'Some models need an API key' : undefined;
 }
 
 function unavailableReason(install: AgentInstall) {

@@ -69,6 +69,8 @@ The agent's plan list arrives whole each time (TodoWrite input, `turn/plan/updat
 
 Sizes for new steps default to 2 until the agent says otherwise. Progress, burn-up and ETA keep their math.
 
+Being replaced by Goals v2 below: steps mirror the plan with no sizes, and new plan items stop bumping the goal version.
+
 ## Approvals
 
 - Claude: keep the `canUseTool` promise's resolver in a map keyed by `toolUseID`, emit `approval`, resolve when the queue card is answered; abort through the callback's `signal` if the turn is interrupted. It only fires when nothing earlier approved the call; to gate every call, use a `PreToolUse` hook (docs). The composer's permissions menu sets `permissionMode` per harness (`PERMISSIONS` in `src/runtime/access.ts`):
@@ -92,6 +94,8 @@ Sizes for new steps default to 2 until the agent says otherwise. Progress, burn-
 
 - Side chat `ask` (built, `electron/agents/ask.ts`): one model setting for either provider (Settings › Defaults, migrated from the Claude-only one), switchable per chat; same context and caps both ways. Claude: an Agent SDK query on the profile's Claude account with `tools: []`, no settings files and no saved transcript (`oneshot.ts`). Codex: an ephemeral, read-only, never-approve thread on the account's app-server with the tool features off (`CodexAdapter.ask`); no prewarm, first token ~7–9s measured on 0.155.1.
 - Models (built, `electron/agents/models.ts`): `host.agent.models(provider, spaceId)` lists the profile's account's own models: Claude from the Agent SDK's `supportedModels()` (built-in fallback list when it fails), Codex from app-server `model/list` (ids, names, default, reasoning efforts). Cached per account, dropped when detection sees that account's login change. Every thread start and side chat ask sends an explicit model the account offers: a stored model it no longer offers (or none) becomes the account default, an effort the model doesn't take becomes the model's own default; the picker shows such a model as Unavailable.
+- Background tasks (built, `utility` in `electron/agents/ask.ts`): thread titles (after the first exchange with a real goal; never over a title you or the agent renamed, `isTitleRenamed`), commit messages and PR title/body (drafts in the ship flow, editable), goal steps (goal editor's Draft steps) and handoff summaries. Each task has a model in Settings › Background tasks (`utilityModels`, default `claude-haiku-5-5`); a call tries it, then `claude-haiku-5-5`, then `gpt-6-luna` (`utilityCandidates`), skipping a model the account doesn't list, on the side chat askers (no API key, Claude through the prewarm spare), within 20s; null keeps the local text (truncated title, the thread's title and goal for a PR, the handoff template). Measured 2026-10-13: Haiku 2.2–3.5s warm, Luna 10.4s. Drift classify keeps its fixed Haiku: its 4s budget fits no Codex start. GAP: in dev, StrictMode runs a dialog's draft effect twice, so the PR and handoff drafts cost two calls.
+- Codex `model/list` (checked 2026-10-13, codex-cli 0.155.1, ChatGPT Plus): `gpt-6-astra` (default), `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`; hidden: `gpt-reserve`, `gpt-5.5`, `codex-auto-review`. `gpt-6.1-sol` is absent even with `includeHidden`, and `codex exec -m gpt-6.1-sol` fails with "not supported when using Codex with a ChatGPT account": it needs an API key login. The picker's Codex row says "Some models need an API key" on ChatGPT logins.
 - Drift classifier (built): `classify` in main with `claude-haiku-5-5`, answering `{ verdict: 'on-goal' | 'scope-add' | 'off-goal', reason }` as JSON within 4s, else the local classifier (`classifyWithModel`, `src/drift.ts`). The local `similarity()` pass still decides clear cases first. Not `outputFormat`: it is fixed at prewarm and the spare is shared with side chat.
 - Startup: a cold Claude Code start costs ~3–5s, more than the 4s budget, so both share one SDK `prewarm()` spare per account (parked when a side chat opens, a Claude thread starts, and after every claim; closed after 10 min unused and on quit). `prewarm` is `@alpha`; without it both fall back to cold starts.
 - Usage: Claude reports cost; Codex reports tokens only, so Codex cost comes from a pricing constant marked TODO until checked against OpenAI's published prices.
@@ -173,9 +177,25 @@ All of the above verified with live runs on 2026-10-13 (tiny prompts, `electron/
 
 **Mochi background agents** (`start_background_agent`, `list_background_agents`, `stop_background_agent`): for work that should outlive the current turn. The tool adds a `mochi` subagent and starts it as a session of its own in `host.agent` (thread id `<thread>--<id>`), so it runs on the profile's account and, for Claude, counts toward the concurrency cap like any session (Codex has no cap yet). `worktree: same` runs it in the thread's worktree; `new` makes a worktree on `<branch>-<id>` branched off the thread's branch (`workspace.base`). Its events are folded into the parent as subagent events in the renderer (`fromBackground`): approvals and questions land on the parent's queue named after the agent, its spend counts toward the thread, its context doesn't. Its session stops after its first turn. On end it logs a line in the thread and leaves a note (`live.notes`) that goes to the thread's agent ahead of your next message; "Send to thread" sends it now. Start and stop are `change` tools (list is `read`), quiet: the chat row is their notice. A restart marks running agents stopped.
 
+## Goals v2
+
+Design in CHECKLIST §10–12 (decided 2026-10-13). Runtime pieces:
+
+- **Drafting.** On a thread's first message, and on later messages while the thread has no goal, one background-model call returns `{ kind: 'task' | 'chat', outcome, criteria[], similar[] }`. `similar` judges a shortlist (word overlap against active goals and settled records in the profile). The agent starts at once; the draft lands when it returns and never blocks the send.
+- **Plan prompting.** Goal threads get an instruction to keep their own plan current (Claude task tools, Codex `turn/plan/updated`); the plan still maps through `applyPlan`, without sizes and without a revision.
+- **Mochi tools.** `report` (decisions, what's left, one question for you; once per turn), `claim_criterion` (criterion id + one line of evidence), `get_report` (read, for coordinators). `edit_goal` edits outcome and criteria; `add_step` and friends edit the plan without a revision.
+- **Verification.** A checkable criterion's command runs in the thread's worktree (`threadCwd`) when the agent claims it or the turn ends, through main, with a timeout; output is kept on the criterion.
+- **Phase.** Derived in the renderer from what the thread already holds: no steps and no edits → Planning; edits → Building; a check run or claim → Verifying; all criteria met → Ready for review.
+- **Context.** Report cards and simplifications are Mochi's own data: never sent to the agent, never in fork seeding or handoff summaries.
+
 ## Not verified yet (check before building on it)
 
 - Env var the Agent SDK reads for the API key; the `user` tool_result message shape.
 - Per-process memory of a Claude Agent SDK session; safe concurrency count.
 - Whether app-server picks up an existing `codex login` without a login call; concurrent-turn limits.
 - Whether `TaskCreate` / `TaskUpdate` replace `TodoWrite` on the default model (docs say "on certain models"; `CLAUDE_CODE_ENABLE_TASKS=0` forces TodoWrite).
+- Whether runtime events say clearly enough when a test or check ran to drive the Verifying phase (check `src/runtime/apply.ts` event kinds before goals PR 5).
+- How reliably Claude and Codex call an end-of-turn Mochi tool when asked; the background-model fallback covers misses.
+- How to block `gh pr create` in Codex; the fallback replaces the body after the fact.
+- How to attach screenshots to a PR body without a GitHub upload API (side branch or release assets).
+- Whether a thread records the files it actually edited outside the plan's `footprint` (check before goals PR 4).

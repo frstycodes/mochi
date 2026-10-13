@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUpRight, BranchUp, ChevronDown, ClockCircle, CloseCircle, MinusCircle, TickCircle } from 'reicon-react';
+import { ArrowUpRight, BranchUp, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +13,10 @@ import { useProfiles } from '../profiles';
 import type { ConfirmRequest } from './useConfirm';
 import { usePr } from './useGit';
 import { isMod } from '../keys';
+import { TooltipIconButton } from '../ui';
+import { commitPrompt, localCommit, parseCommit } from '../utility/prompts';
+import { useDraft } from '../utility/useDraft';
+import { PrDialog } from './PrDialog';
 
 interface ShipBarProps {
   thread: Thread;
@@ -51,17 +55,13 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
     await prQuery.refresh();
   };
 
-  const createPr = async () => {
-    const ok = await confirm({
-      title: 'Open a pull request?',
-      description: `"${thread.title}" from ${diff.branch} into ${diff.base.replace(/^origin\//, '')}${githubUser ? `, opened as ${githubUser}` : ''}. GitHub notifies the repository's watchers.`,
-      confirm: 'Create pull request',
-      cancel: 'Not now',
-    });
-    if (!ok) return;
-    const url = await run('Create pull request', () => host.git.createPr(cwd, { title: thread.title, body: thread.goal }, githubUser));
-    if (url) toast.success('Pull request opened', { description: url });
-    await prQuery.refresh();
+  const [isPrOpen, setPrOpen] = useState(false);
+  const commitDraft = useDraft('commit', thread.spaceId);
+  const draftCommit = async () => {
+    const staged = diff.files.filter((f) => f.staged);
+    const text = await commitDraft.draft(commitPrompt(staged));
+    // What you typed while it drafted wins.
+    setMessage((typed) => typed || (text && parseCommit(text)) || localCommit(staged));
   };
 
   return (
@@ -78,12 +78,15 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && isMod(e) && e.currentTarget.form?.requestSubmit()}
-            placeholder={stagedCount ? 'Commit message' : 'Stage changes to commit them'}
+            placeholder={commitDraft.isDrafting ? 'Drafting from the staged changes…' : stagedCount ? 'Commit message' : 'Stage changes to commit them'}
             aria-label="Commit message"
             className="min-h-14 resize-none text-sm"
           />
           <div className="flex items-center gap-2">
             <span className="flex-1 type-caption text-subtle-foreground tabular">{stagedCount ? `${stagedCount} staged` : 'Nothing staged'}</span>
+            <TooltipIconButton label="Draft a message" hint={stagedCount ? 'Written from the staged changes on your Background tasks model. Edit it before you commit.' : 'Stage changes first.'} disabled={!stagedCount || commitDraft.isDrafting} onClick={draftCommit}>
+              <Sparkles />
+            </TooltipIconButton>
             <Button type="submit" size="sm" disabled={!stagedCount || !message.trim()}>
               Commit
             </Button>
@@ -95,11 +98,25 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
           <BranchUp data-icon="inline-start" />
           Push
         </Button>
-        {pr ? <PrLink pr={pr} /> : <Button variant="ghost" size="sm" onClick={createPr} disabled={prQuery.isLoading}>Create pull request</Button>}
+        {pr ? <PrLink pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading}>Create pull request</Button>}
         {!!pr && pr.checks.length > 0 && <ChecksSummary checks={pr.checks} isOpen={isChecksOpen} onToggle={() => setChecksOpen((o) => !o)} />}
       </div>
       {!!pr && isChecksOpen && <CheckList checks={pr.checks} />}
       {!!prQuery.error && <p className="type-caption text-subtle-foreground">PR status unavailable: {prQuery.error}</p>}
+      {isPrOpen && (
+        <PrDialog
+          thread={thread}
+          cwd={cwd}
+          diff={diff}
+          githubUser={githubUser}
+          onCreate={async (pr) => {
+            const url = await run('Create pull request', () => host.git.createPr(cwd, pr, githubUser));
+            if (url) toast.success('Pull request opened', { description: url });
+            await prQuery.refresh();
+          }}
+          onClose={() => setPrOpen(false)}
+        />
+      )}
     </div>
   );
 }

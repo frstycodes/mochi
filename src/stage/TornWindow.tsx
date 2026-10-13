@@ -6,6 +6,7 @@ import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { LeafView } from '../layout/Workspace';
 import { useThread } from '../store';
+import { DragStrip } from '../TitleBar';
 import { MirrorProvider } from './windowSync';
 
 /** A split torn into its own OS window (or browser tab): one thread, mirrored from the main window's store. */
@@ -35,7 +36,8 @@ function TornThread({ threadId }: { threadId: string }) {
 
 function Waiting() {
   return (
-    <Empty className="h-svh">
+    <Empty className="relative h-svh">
+      <DragStrip />
       <EmptyHeader>
         <Spinner />
         <EmptyTitle>Connecting to the main window</EmptyTitle>
@@ -47,7 +49,8 @@ function Waiting() {
 
 function Gone() {
   return (
-    <Empty className="h-full flex-1">
+    <Empty className="relative h-full flex-1">
+      <DragStrip />
       <EmptyHeader>
         <EmptyTitle>This thread is gone</EmptyTitle>
         <EmptyDescription>It was deleted in the main window. Close this window.</EmptyDescription>
