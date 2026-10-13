@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
+import { dueQueued, sendMessage } from '../chat/outbox.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -137,6 +138,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
       }),
     [dispatch],
   );
+  useQueueRunner(state, dispatch);
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);
@@ -144,6 +146,19 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useAutoTitles(state.threads, dispatch);
   useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
+}
+
+/** Sends each live thread's next queued message once its agent's turn is over; `dueQueued` says when. */
+function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
+  // The send applies on the next render; until then the same head is still due.
+  const sent = useRef(new Set<string>());
+  useEffect(() => {
+    for (const { thread, message } of dueQueued(state)) {
+      if (sent.current.has(message.id)) continue;
+      sent.current.add(message.id);
+      sendMessage(dispatch, state, thread, message, { queuedId: message.id });
+    }
+  }, [state, dispatch]);
 }
 
 // Sequential: a handoff's stop must reach the old agent before the new one starts in the same thread.

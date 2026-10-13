@@ -1,5 +1,6 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
 import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
+import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -29,9 +30,10 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => ({ ...t, agent: mergeInfo(t.agent, event.info) }));
     case 'message':
       return update((t) => {
-        const last = t.activity.at(-1);
-        if (!event.isDelta || last?.kind !== 'message' || last.who !== who) return log(t, { at: now, who, kind: 'message', text: event.text });
-        return { ...t, activity: [...t.activity.slice(0, -1), { ...last, text: last.text + event.text }] };
+        // A delta continues the block the agent is streaming, even when your message (a steer) or an event landed after it.
+        const i = event.isDelta ? t.activity.findLastIndex((e) => e.kind === 'message' && e.who === who) : -1;
+        if (i < 0) return log(t, { at: now, who, kind: 'message', text: event.text });
+        return { ...t, activity: t.activity.map((e, j) => (j === i ? { ...e, text: e.text + event.text } : e)) };
       });
     case 'reasoning':
       return update((t) => log(t, { at: now, who, kind: 'reasoning', text: event.text }));
@@ -61,9 +63,12 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         session: t.session && event.inputTokens + event.outputTokens > 0 ? { ...t.session, usage: addUsage(t.session.usage, event) } : t.session,
       }));
     case 'limit':
-      return update((t) => log({ ...t, status: 'needs-you', live: t.live && { ...t.live, isWorking: false, limit: { resetsAt: event.resetsAt } } }, { at: now, who: 'harness', kind: 'event', text: `Usage limit reached${event.resetsAt ? `, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` }));
-    case 'turn-end':
-      return endTurn(thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false } })) : state, thread, event);
+      return update((t) => log({ ...pauseQueue(t, 'limit'), status: 'needs-you', live: t.live && { ...t.live, isWorking: false, limit: { resetsAt: event.resetsAt } } }, { at: now, who: 'harness', kind: 'event', text: `Usage limit reached${event.resetsAt ? `, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` }));
+    case 'turn-end': {
+      if (event.status === 'interrupted' && thread.live?.isReplacingTurn) return update((t) => log({ ...t, live: { ...t.live!, isReplacingTurn: undefined } }, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted for your queued message' }));
+      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false } })) : state;
+      return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
+    }
   }
 }
 

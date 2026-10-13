@@ -25,6 +25,8 @@ export interface Prefs {
   headerPins: PaneTabKind[];
   /** Off sends every message straight through: no local score, no classifier call. */
   driftGuard: boolean;
+  /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
+  whileWorking: 'queue' | 'steer';
   branchFrom: 'current' | 'base';
   stepSize: 1 | 2 | 3;
   branchPrefix: string;
@@ -68,6 +70,7 @@ export const DEFAULT_PREFS: Prefs = {
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
   driftGuard: true,
+  whileWorking: 'queue',
   branchFrom: 'current',
   stepSize: 2,
   branchPrefix: 'mochi/',

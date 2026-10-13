@@ -188,7 +188,9 @@ export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: 
     'aria-controls': isOpen ? listId : undefined,
     'aria-activedescendant': isOpen ? `${listId}-${items.indexOf(current)}` : undefined,
   };
-  return { listId, items, active, isOpen, choose, mentions, remove, clear: () => setMentions([]), textareaProps };
+  // Edit on a queued message brings its references back beside any you already picked.
+  const restore = (list: Mention[]) => setMentions((all) => [...all, ...list.filter((m) => !all.some((a) => a.id === m.id))]);
+  return { listId, items, active, isOpen, choose, mentions, remove, restore, clear: () => setMentions([]), textareaProps };
 }
 
 /** Other apps' windows, listed fresh each time the menu opens. */
