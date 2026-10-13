@@ -33,6 +33,9 @@ import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
 import { ReportCard } from './goals/ReportCard';
+import { currentReport } from './goals/report';
+import { TurnChangesCard } from './chat/TurnChangesCard';
+import { turnChanges } from './chat/turnChanges';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
@@ -57,16 +60,16 @@ import { rememberedScroll, Transcript, type TranscriptHandle } from './chat/Tran
 /** `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread. */
 export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: boolean }) {
   const { state } = useHarness();
-  const rows = chatRows(thread.activity, thread.reviews);
+  // A live agent thread may have no planned steps; its turn is what's running.
+  const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
+  const rows = chatRows(thread.activity, thread.reviews, shownTurnChanges(thread, isRunning));
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
-  const liveIndex = rows.findLastIndex((r) => r.kind !== 'review');
+  const liveIndex = rows.findLastIndex((r) => r.kind !== 'review' && r.kind !== 'changes');
   const liveWork = liveWorkIndex(rows);
   const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
   // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
   const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q) && q.kind !== 'review');
-  // A live agent thread may have no planned steps; its turn is what's running.
-  const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
   const withActions = finalReplies(rows, isRunning);
 
@@ -134,6 +137,7 @@ function useComposerHeightVar() {
 const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; hasActions: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
+  if (row.kind === 'changes') return <TurnChangesCard thread={thread} turn={row.turn} isReadOnly={isReadOnly} />;
   if (row.kind === 'subagent') {
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
     return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
@@ -208,6 +212,12 @@ function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; 
       </MessageResponse>
     </>
   );
+}
+
+/** Finished turns' file changes: the turn still running gets its card once it ends, and a turn with a report lists its files there instead. */
+function shownTurnChanges(thread: Thread, isRunning: boolean) {
+  const isOpenTurnHidden = isRunning || !!currentReport(thread);
+  return turnChanges(thread.activity).filter((t) => t.end < thread.activity.length - 1 || !isOpenTurnHidden);
 }
 
 /** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */

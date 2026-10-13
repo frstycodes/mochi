@@ -176,7 +176,7 @@ function FilesPreview({ preview, canOverwrite, onCanOverwrite }: { preview: Rewi
   );
 }
 
-function FileList({ title, paths }: { title?: string; paths: string[] }) {
+export function FileList({ title, paths }: { title?: string; paths: string[] }) {
   return (
     <section className="flex flex-col gap-1">
       {!!title && <h3 className="type-meta text-muted-foreground">{title}</h3>}
@@ -193,7 +193,7 @@ function FileList({ title, paths }: { title?: string; paths: string[] }) {
 }
 
 /** A disabled control can't hold a tooltip itself, so the wrapper carries the reason. */
-function DisabledTooltip({ reason, children }: { reason?: string; children: React.ReactElement }) {
+export function DisabledTooltip({ reason, children }: { reason?: string; children: React.ReactElement }) {
   if (!reason) return children;
   return (
     <Tooltip>
@@ -228,7 +228,7 @@ function useRewindPreview(cwd: string | undefined, threadId: string, n: number |
 
 const PLURAL = new Intl.PluralRules('en');
 
-function countLabel(count: number, noun: string) {
+export function countLabel(count: number, noun: string) {
   return `${count} ${noun}${PLURAL.select(count) === 'one' ? '' : 's'}`;
 }
 

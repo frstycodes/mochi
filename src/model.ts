@@ -113,6 +113,8 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
+  /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
+  turnUndo?: { start: number; isUndone: boolean };
 }
 
 export interface McpCall {

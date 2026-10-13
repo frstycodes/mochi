@@ -2,6 +2,7 @@ import { ClipboardText } from 'reicon-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
+import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { CriteriaList } from './CriteriaList';
 import { currentReport } from './report';
 
@@ -33,12 +34,8 @@ export function ReportCard({ thread }: { thread: Thread }) {
         {criteria.length > 0 && <CriteriaList thread={thread} />}
         <ReportList label="Decided" items={report.decisions} />
         <ReportList label="Left" items={report.left} />
-        {changes.files.length > 0 && (
-          <p className="tabular type-caption text-subtle-foreground">
-            <span className="text-success">+{changes.added}</span> <span className="text-destructive">−{changes.removed}</span> in {changes.files.length} {changes.files.length === 1 ? 'file' : 'files'}
-            {thread.prs.length > 0 && ` · ${thread.prs.map((p) => `#${p.number} ${p.state}`).join(', ')}`}
-          </p>
-        )}
+        {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
+        {thread.prs.length > 0 && <p className="tabular type-caption text-subtle-foreground">{thread.prs.map((p) => `#${p.number} ${p.state}`).join(', ')}</p>}
       </CardContent>
     </Card>
   );

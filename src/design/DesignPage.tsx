@@ -29,6 +29,8 @@ import { seedQueue, type Thread } from '../model';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
 import { ReportCard } from '../goals/ReportCard';
+import { TurnChangesCard } from '../chat/TurnChangesCard';
+import { turnChanges } from '../chat/turnChanges';
 import { PipLayer } from '../Browser';
 import { SidePane } from '../SidePane';
 import { AppSidebar } from '../Sidebar';
@@ -624,6 +626,13 @@ function Recipes() {
         <Block title="Report card" use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes." wide>
           <ReportCard thread={reportFixture(rl)} />
         </Block>
+        <Block title="Turn changes" use="Under a finished turn that changed files, like Claude's: totals and Undo, a row per file opening to its diff, the first three then Show more. Undo is disabled here: these threads have no worktree." wide>
+          <div className="flex flex-col gap-3">
+            {turnChanges(changesFixture(rl).activity).map((turn) => (
+              <TurnChangesCard key={turn.start} thread={changesFixture(rl)} turn={turn} />
+            ))}
+          </div>
+        </Block>
         <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
           <QueueDecision item={decision} showThread />
         </Block>
@@ -736,6 +745,27 @@ function reportFixture(rl: Thread): Thread {
       { id: 'c2', text: 'pnpm test passes', command: 'pnpm test' },
     ],
     report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'], left: ['Per-key overrides in the admin UI'], question: 'Switch the 429 body to JSON now, or in a follow-up?' },
+  };
+}
+
+const CHANGED_FILES = ['packages/cache/redis.ts', 'apps/api/routes/admin/usage.ts', 'apps/web/routes/admin/usage.tsx', 'apps/api/middleware/ratelimit.ts', 'apps/api/middleware/__tests__/ratelimit.integration.test.ts', 'apps/api/gateway.ts', 'packages/db/schema/limits.ts', 'packages/db/migrations/0042_api_limits.sql', 'docs/api/limits.md', 'apps/web/components/charts/BarChart.tsx', 'apps/web/routes/admin/usage.css', 'scripts/load/ratelimit.k6.js', 'package.json', 'README.md'];
+
+/** One turn that changed 14 files, then a small one whose changes were undone. */
+function changesFixture(rl: Thread): Thread {
+  const at = rl.activity.at(-1)?.at ?? 0;
+  const tool = (text: string): Thread['activity'][number] => ({ at, who: 'claude', kind: 'tool', text });
+  return {
+    ...rl,
+    live: undefined,
+    activity: [
+      { at, who: 'you', kind: 'message', text: 'Wire the limits through the gateway and the admin page' },
+      ...CHANGED_FILES.map((path, i) => tool(`${i % 4 === 1 ? 'Write' : 'Edit'} ${path}  +${(i * 37) % 210 + 4} −${i % 3 === 0 ? 0 : i * 2}`)),
+      { at, who: 'claude', kind: 'message', text: 'Wired through. Tests pass.' },
+      { at, who: 'you', kind: 'message', text: 'Bump the README too' },
+      tool('Edit README.md  +3 −1'),
+      { at, who: 'claude', kind: 'message', text: 'Done.' },
+      { at, who: 'harness', kind: 'event', text: 'Undid the changes to 1 file from "Bump the README too"', turnUndo: { start: CHANGED_FILES.length + 2, isUndone: true } },
+    ],
   };
 }
 

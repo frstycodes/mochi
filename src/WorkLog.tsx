@@ -20,6 +20,7 @@ import { useVizThreadId } from './viz/WidgetVisual';
 import { fileLink } from './terminal/links';
 import { describeCall } from './chat/describe';
 import { PREVIEW_KINDS } from './files/kinds';
+import { patchSections } from './chat/turnChanges';
 import { imageMime } from './files/previews';
 import { outputLines } from './chat/output';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
@@ -556,20 +557,25 @@ function useHighlighterReady() {
 
 const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties;
 
+/** One bordered diff per file in the patch. */
 export function DiffView({ patch }: { patch: string }) {
   const diffTheme = useDiffTheme();
   const { diffStyle } = usePrefs();
   const isReady = useHighlighterReady();
   if (!isReady) return null;
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <PatchDiff
-        patch={patch}
-        disableWorkerPool
-        options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
-        style={DIFF_STYLE}
-        className="max-h-80 overflow-auto"
-      />
+    <div className="flex flex-col gap-2">
+      {patchSections(patch).map((section, i) => (
+        <div key={i} className="overflow-hidden rounded-lg border bg-card">
+          <PatchDiff
+            patch={section}
+            disableWorkerPool
+            options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
+            style={DIFF_STYLE}
+            className="max-h-80 overflow-auto"
+          />
+        </div>
+      ))}
     </div>
   );
 }

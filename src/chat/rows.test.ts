@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ActivityEntry } from '../model.ts';
 import { chatRows, finalReplies, liveWorkIndex } from './rows.ts';
+import { turnChanges, type TurnChanges } from './turnChanges.ts';
 
 const e = (kind: ActivityEntry['kind'], who: ActivityEntry['who'], text: string): ActivityEntry => ({ at: 0, who, kind, text });
-const shape = (activity: ActivityEntry[]) => chatRows(activity).map((r) => (r.kind === 'work' ? `work(${r.entries.map((x) => x.text).join(', ')})` : r.kind === 'review' ? 'review' : r.entry.text));
+const shape = (activity: ActivityEntry[], changes: TurnChanges[] = []) =>
+  chatRows(activity, [], changes).map((r) => (r.kind === 'work' ? `work(${r.entries.map((x) => x.text).join(', ')})` : r.kind === 'review' ? 'review' : r.kind === 'changes' ? `changes(${r.turn.start})` : r.entry.text));
 
 test('work groups interleave with prose: tools, message, tools, message, each group in transcript order', () => {
   assert.deepEqual(
@@ -89,4 +91,29 @@ test('message actions go on the agent\'s last reply of each turn, and on the new
   const text = (set: Set<number>) => [...set].map((i) => (rows[i].kind === 'message' ? rows[i].entry.text : '?'));
   assert.deepEqual(text(finalReplies(rows, true)), ['Fixed.'], 'mid-turn replies and the working turn get none');
   assert.deepEqual(text(finalReplies(rows, false)), ['Fixed.', 'Running them.']);
+});
+
+test("a turn's changes card sits after its last row, before your next message; an open turn's goes last", () => {
+  const activity = [
+    e('message', 'you', 'add charts'),
+    e('tool', 'claude', 'Edit charts.tsx  +12 −0'),
+    e('message', 'claude', 'Added.'),
+    e('message', 'you', 'thanks'),
+    e('message', 'claude', 'Anytime.'),
+    e('message', 'you', 'now tests'),
+    e('tool', 'claude', 'Write charts.test.ts  +30 −0'),
+    e('message', 'claude', 'Tested.'),
+  ];
+  assert.deepEqual(shape(activity, turnChanges(activity)), [
+    'add charts',
+    'work(Edit charts.tsx  +12 −0)',
+    'Added.',
+    'changes(0)',
+    'thanks',
+    'Anytime.',
+    'now tests',
+    'work(Write charts.test.ts  +30 −0)',
+    'Tested.',
+    'changes(5)',
+  ]);
 });
