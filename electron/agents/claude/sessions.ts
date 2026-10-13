@@ -22,8 +22,10 @@ interface Session {
   threadId: string;
   options: AgentRunOptions;
   inbox: { text: string; images?: AgentImage[] }[];
-  /** Every message handed to Claude Code, with the uuid `rewindFiles` takes. */
-  sent: { uuid: string; text: string }[];
+  /** Every message handed to Claude Code, with the uuid `rewindFiles` takes and the chain entry before it (`rewindPoint`). */
+  sent: { uuid: string; text: string; after: string | null }[];
+  /** The newest entry of the main conversation chain; undefined while a resumed session hasn't shown one yet. */
+  lastUuid?: string | null;
   wake: EventEmitter;
   mapper: ReturnType<typeof createMapper>;
   query?: Query;
@@ -49,7 +51,7 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
   sessions.set(threadId, session);
   void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
@@ -93,10 +95,15 @@ export function stopClaude(threadId: string) {
 // GAP: not run against a real thread yet; whether Claude Code accepts our client uuids here is unverified.
 export async function rewindClaude(threadId: string, text: string) {
   const session = sessions.get(threadId);
-  const uuid = session?.sent.findLast((m) => m.text === text)?.uuid;
+  const uuid = session?.sent.findLast((m) => m.text.includes(text))?.uuid;
   if (!session?.query || !uuid) return;
   const result = await session.query.rewindFiles(uuid);
   if (!result.canRewind) console.warn(`Claude rewind skipped for ${threadId}: ${result.error ?? 'no checkpoint'}`);
+}
+
+/** The chain entry just before the latest sent message with this text, for `forkAt`; null when unknown or it was the first. */
+export function claudeRewindPoint(threadId: string, text: string) {
+  return sessions.get(threadId)?.sent.findLast((m) => m.text.includes(text))?.after ?? null;
 }
 
 /** Stops one subagent (Agent tool task) of a live session; Claude Code then reports it `stopped`. */
@@ -160,6 +167,8 @@ async function launch(session: Session) {
         ...permissions,
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
+        // Only on the launch that forks: init then hands back the fork's own id, and later launches resume that whole.
+        ...(options.forkAt && session.sessionId === options.resume && { resumeSessionAt: options.forkAt, forkSession: true }),
         env,
         includePartialMessages: true,
         enableFileCheckpointing: true,
@@ -170,6 +179,7 @@ async function launch(session: Session) {
       },
     });
     for await (const message of session.query) {
+      if ((message.type === 'assistant' || message.type === 'user') && !message.parent_tool_use_id && message.uuid) session.lastUuid = message.uuid;
       if (message.type === 'system' && message.subtype === 'init') {
         session.sessionId = message.session_id;
         void session.query.supportedCommands().then((list) => emit({ threadId, type: 'info', info: { commands: commandsFrom(list) } }), () => {});
@@ -215,7 +225,8 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
     const next = session.inbox.shift();
     if (next) {
       const uuid = randomUUID();
-      session.sent.push({ uuid, text: next.text });
+      session.sent.push({ uuid, text: next.text, after: session.lastUuid ?? null });
+      session.lastUuid = uuid;
       session.mapper.sent(next.text).forEach(emit);
       yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid };
       continue;

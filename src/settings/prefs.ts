@@ -45,6 +45,8 @@ export interface Prefs {
   threadModels: ThreadModels;
   /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
   recordReplays: boolean;
+  /** The rewind mode you last ran, offered first next time. */
+  rewindMode: 'chat' | 'files';
 }
 
 export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
@@ -82,6 +84,7 @@ export const DEFAULT_PREFS: Prefs = {
   agentControl: 'everything',
   threadModels: 'cheaper',
   recordReplays: true,
+  rewindMode: 'files',
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';

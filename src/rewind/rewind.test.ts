@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
-import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { threadAt } from './checkpoints.ts';
+import { initialThreads, mapThread, threadsReducer } from '../store/threads.ts';
+import type { Action } from '../store/index.tsx';
+import { applyAgentEvent } from '../runtime/apply.ts';
+import { agentCalls } from '../runtime/live.ts';
+import { rewindBlockedReason, threadAt } from './checkpoints.ts';
 import { forkRelatives } from './fork.ts';
 import { handoffSummary } from './handoff.ts';
 
@@ -13,6 +16,9 @@ const tickUntil = (s: State, done: (s: State) => boolean) => {
   for (let i = 0; i < 500 && !done(s); i++) s = threadsReducer(s, { type: 'tick' });
   return s;
 };
+/** A demo thread works while it's running; rewinds wait for it to stop. */
+const idle = (s: State, id: string): State => ({ ...s, threads: mapThread(s.threads, id, (t) => ({ ...t, status: 'review' })) });
+const calls = (s: State, action: Action) => agentCalls(s, action, () => threadsReducer(s, action));
 
 test('threadAt rebuilds steps, activity and revisions as they stood', () => {
   const rl = thread(base(), 'rl');
@@ -42,6 +48,7 @@ test('a finished step records a checkpoint that asks for files', () => {
 
 test('rewind restores the snapshot, drops later checkpoints, and one undo brings it all back', () => {
   let s = tickUntil(base(), (s) => thread(s, 'rl').steps.find((x) => x.id === 'rl5')!.status === 'done');
+  s = idle(s, 'rl');
   const before = thread(s, 'rl');
   const target = s.checkpoints.rl[1];
   s = threadsReducer(s, { type: 'rewind', threadId: 'rl', n: target.n });
@@ -51,7 +58,8 @@ test('rewind restores the snapshot, drops later checkpoints, and one undo brings
   assert.equal(rewound.revisions.at(-1)!.label, 'Rewound to after "Agree limit tiers per plan"');
   assert.ok(rewound.steps.filter((x) => x.status === 'running').every((x) => x.startedAt === s.now), 'running steps restart their clock');
   assert.equal(s.checkpoints.rl.at(-1)!.n, target.n);
-  s = threadsReducer(s, { type: 'rewind-undo' });
+  assert.equal(threadsReducer(s, { type: 'rewind-undo' }), s, 'the demo agent works again, so undo waits');
+  s = threadsReducer(idle(s, 'rl'), { type: 'rewind-undo' });
   const back = thread(s, 'rl');
   assert.deepEqual(back.steps, before.steps);
   assert.equal(back.activity.length, before.activity.length + 1);
@@ -114,7 +122,7 @@ test('handoff moves one step or the whole thread and logs a revision, an event a
 });
 
 test('rewinding to a message drops it and everything after, keeps what came before, and undoes in one step', () => {
-  let s = base();
+  let s = idle(base(), 'rl');
   const before = thread(s, 'rl');
   const index = before.activity.findIndex((a) => a.who === 'you' && a.text.startsWith('Also add per-key overrides'));
   s = threadsReducer(s, { type: 'rewind-message', threadId: 'rl', index });
@@ -123,6 +131,92 @@ test('rewinding to a message drops it and everything after, keeps what came befo
   assert.deepEqual(kept, before.activity.slice(0, index), 'transcript stops right before the message');
   assert.match(rewound.activity.at(-1)!.text, /^Rewound transcript to before "Also add per-key overrides/);
   assert.ok(!rewound.steps.some((x) => x.id === 'rl7'), 'the step that message added is gone');
-  s = threadsReducer(s, { type: 'rewind-undo' });
+  s = threadsReducer(idle(s, 'rl'), { type: 'rewind-undo' });
   assert.deepEqual(thread(s, 'rl').steps, before.steps);
+});
+
+/** A live Claude thread that has finished two turns, each started by one of your messages, with its files saved before each. */
+function liveThread() {
+  let s = base();
+  s = threadsReducer(s, { type: 'create', title: 'edit notes.txt', provider: 'claude', project: 'harness', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  const turn = (text: string) => {
+    s = applyAgentEvent(s, { threadId: id, type: 'message', text, isDelta: false });
+    s = applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'done' });
+  };
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-1' });
+  turn('Wrote one.');
+  s = threadsReducer(s, { type: 'send', threadId: id, text: 'Now write two', drift: 'on-goal', reason: '' });
+  turn('Wrote two.');
+  for (const c of s.checkpoints[id]) s = threadsReducer(s, { type: 'checkpoint-ref', threadId: id, n: c.n, ref: `ref-${c.n}` });
+  const index = thread(s, id).activity.findIndex((a) => a.text === 'Now write two');
+  return { s, id, index };
+}
+
+test('a working agent blocks every rewind and the undo until its turn ends', () => {
+  let { s, id, index } = liveThread();
+  const working = threadsReducer(s, { type: 'send', threadId: id, text: 'and three', drift: 'on-goal', reason: '' });
+  assert.equal(rewindBlockedReason(thread(working, id)), 'Stop the agent to rewind');
+  assert.equal(threadsReducer(working, { type: 'rewind-message', threadId: id, index, mode: 'chat' }), working, 'message rewind refused');
+  assert.equal(threadsReducer(working, { type: 'rewind', threadId: id, n: working.checkpoints[id][0].n }), working, 'checkpoint rewind refused');
+
+  s = threadsReducer(s, { type: 'rewind-message', threadId: id, index, mode: 'chat' });
+  const rewound = threadsReducer(s, { type: 'send', threadId: id, text: 'try again', drift: 'on-goal', reason: '' });
+  assert.equal(threadsReducer(rewound, { type: 'rewind-undo' }), rewound, 'undo refused while the agent works');
+  const done = applyAgentEvent(rewound, { threadId: id, type: 'turn-end', status: 'done' });
+  assert.equal(rewindBlockedReason(thread(done, id)), undefined);
+  assert.notEqual(threadsReducer(done, { type: 'rewind-undo' }), done, 'undo runs once the turn ended');
+});
+
+test('each of your messages saves a checkpoint of the files it found', () => {
+  const { s, id, index } = liveThread();
+  const cp = s.checkpoints[id].find((c) => c.before === index)!;
+  assert.equal(cp.label, 'Before "Now write two"');
+  assert.equal(cp.thread.activity.length, index);
+});
+
+test('rewind chat: transcript back, files untouched, the agent stops and its next start forks the session at that point', () => {
+  const { s: s0, id, index } = liveThread();
+  const action: Action = { type: 'rewind-message', threadId: id, index, mode: 'chat', forkAt: 'uuid-after-one' };
+  assert.deepEqual(calls(s0, action), [{ method: 'stop', threadId: id }]);
+  const s = threadsReducer(s0, action);
+  const t = thread(s, id);
+  assert.ok(!t.activity.some((a) => a.text === 'Now write two' || a.text === 'Wrote two.'));
+  assert.match(t.activity.at(-1)!.text, /^Rewound transcript to before "Now write two"/);
+  assert.equal(s.rewindUndo!.hasFiles, false, 'files stay, so undo leaves them too');
+  assert.deepEqual(t.live!.restart, { forkAt: 'uuid-after-one' });
+  assert.equal(t.session!.id, 'sess-1');
+  const [start] = calls(s, { type: 'send', threadId: id, text: 'Now write 2', drift: 'on-goal', reason: '' });
+  assert.equal(start.method, 'start');
+  assert.deepEqual(start.method === 'start' && [start.options.resume, start.options.forkAt, start.options.prompt], ['sess-1', 'uuid-after-one', 'Now write 2']);
+});
+
+test('rewind chat and files: files are restored too, and a session main cannot cut starts fresh with the transcript', () => {
+  const { s: s0, id, index } = liveThread();
+  const s = threadsReducer(s0, { type: 'rewind-message', threadId: id, index, mode: 'files', forkAt: null });
+  assert.match(thread(s, id).activity.at(-1)!.text, /^Rewound files and transcript to before "Now write two"/);
+  assert.equal(s.rewindUndo!.hasFiles, true);
+  const [start] = calls(s, { type: 'send', threadId: id, text: 'Now write 2', drift: 'on-goal', reason: '' });
+  assert.ok(start.method === 'start' && start.options.resume === undefined && start.options.forkAt === undefined, 'fresh session');
+  assert.match(start.method === 'start' ? start.options.prompt : '', /Assistant: Wrote one\.[\s\S]*Now write 2$/);
+  assert.ok(start.method === 'start' && !start.options.prompt.includes('Wrote two'), 'nothing after the rewind point');
+});
+
+test('undo brings back chat and files for either mode and resumes the original session', () => {
+  for (const mode of ['chat', 'files'] as const) {
+    const { s: s0, id, index } = liveThread();
+    const before = thread(s0, id);
+    let s = threadsReducer(s0, { type: 'rewind-message', threadId: id, index, mode, forkAt: 'uuid-after-one' });
+    assert.equal(s.rewindUndo!.hasFiles, mode === 'files', 'undo restores the files exactly when the rewind changed them');
+    // You sent again after the rewind, so an agent runs on the fork; undo stops it.
+    s = threadsReducer(s, { type: 'send', threadId: id, text: 'Now write 2', drift: 'on-goal', reason: '' });
+    s = applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'done' });
+    assert.deepEqual(calls(s, { type: 'rewind-undo' }), [{ method: 'stop', threadId: id }]);
+    s = threadsReducer(s, { type: 'rewind-undo' });
+    const back = thread(s, id);
+    assert.deepEqual(back.activity.slice(0, -1), before.activity, mode);
+    assert.equal(back.activity.at(-1)!.text, 'Undid the rewind');
+    const [start] = calls(s, { type: 'send', threadId: id, text: 'go on', drift: 'on-goal', reason: '' });
+    assert.deepEqual(start.method === 'start' && [start.options.resume, start.options.forkAt, start.options.prompt], ['sess-1', undefined, 'go on'], 'the original session, whole');
+  }
 });

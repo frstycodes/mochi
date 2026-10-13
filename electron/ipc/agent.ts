@@ -6,7 +6,7 @@ import { NO_AGENT_PROCESS, type AgentAskContext, type AgentAskModel, type AgentI
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, secondOpinionModel } from '../agents/config.ts';
@@ -126,6 +126,12 @@ export const agent = {
     string(text, 'text', 100_000);
     if (hasClaudeSession(threadId as string)) return rewindClaude(threadId as string, text as string);
   },
+  async rewindPoint(_sender, threadId, text) {
+    string(threadId, 'threadId', 256);
+    string(text, 'text', 100_000);
+    if (hasClaudeSession(threadId as string)) return claudeRewindPoint(threadId as string, text as string);
+    return codex.rewindPoint(threadId as string, text as string);
+  },
   async ask(sender, context, messages, model) {
     const m = record(model, 'model');
     if (!PROVIDERS.includes(m.provider as string)) throw new TypeError('model.provider must be claude or codex');
@@ -219,7 +225,7 @@ export async function startAgent(threadId: unknown, options: unknown) {
   if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
   string(o.spaceId, 'options.spaceId', 256);
   string(o.prompt, 'options.prompt', 100_000);
-  for (const key of ['model', 'effort', 'permissionMode', 'resume']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
+  for (const key of ['model', 'effort', 'permissionMode', 'resume', 'forkAt']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
   if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
   if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
   images(o.images);

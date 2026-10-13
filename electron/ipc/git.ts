@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
-import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../git/checkpoints.ts';
+import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, mainRepo, run, runGit, topLevel } from '../git/run.ts';
 import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
@@ -169,8 +169,8 @@ export const git = {
   // Checkpoints and rewind only run in a Mochi worktree: resetting a branch is never done to the user's own checkout.
   async checkpoint(_sender, cwd, threadId, n) {
     const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
-    const ref = checkpointRef(string(threadId, 'threadId', 64), integer(n, 'n', 0, 1_000_000));
-    return snapshot(top, ref, `harness checkpoint ${n}`);
+    const ref = checkpointRef(string(threadId, 'threadId', 64), n === 'turn' ? 'turn' : integer(n, 'n', 0, 1_000_000));
+    return snapshot(top, ref, `harness checkpoint ${ref.split('/').pop()}`);
   },
 
   async restoreCheckpoint(_sender, cwd, threadId, n) {
@@ -181,6 +181,20 @@ export const git = {
     if (!commit) throw new Error(`Checkpoint ${which} does not exist`);
     if (which !== 'undo') await snapshot(top, checkpointRef(id, 'undo'), 'harness checkpoint before rewind');
     await restore(top, commit);
+    // The restored files are the agent's baseline now, so the next rewind doesn't count them as someone else's changes.
+    await snapshot(top, checkpointRef(id, 'turn'), 'harness checkpoint after rewind');
+  },
+
+  async rewindPreview(_sender, cwd, threadId, n) {
+    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
+    const id = string(threadId, 'threadId', 64);
+    const index = integer(n, 'n', 0, 1_000_000);
+    const commit = await resolveCommit(top, checkpointRef(id, index));
+    if (!commit) throw new Error(`Checkpoint ${index} has no saved files`);
+    const now = await snapshotCommit(top, 'harness rewind preview');
+    const turn = await resolveCommit(top, checkpointRef(id, 'turn'));
+    // GAP: no turn snapshot yet (the thread's first turn hasn't ended this launch) reads as no outside changes.
+    return { files: await changedPaths(top, commit, now), outside: turn ? await changedPaths(top, turn, now) : [] };
   },
 
   async checkpointDiff(_sender, cwd, threadId, n) {
