@@ -84,6 +84,8 @@ export interface ActivityEntry {
   who: Author;
   kind: 'message' | 'tool' | 'event' | 'reasoning' | 'subagent';
   text: string;
+  /** A reply rewritten as bullets for you (Simplify). Display only: never sent to an agent. `rulesKey`: the settings it was made with. */
+  simplified?: { text: string; rulesKey: string; isShown: boolean };
   /** Events only: the why, shown muted under the label. */
   detail?: string;
   seconds?: number;

@@ -122,6 +122,11 @@ const BADGE = [
   { value: 'off', label: 'Off' },
 ] as const;
 
+const SIMPLIFY_LENGTHS = [
+  { value: 'short', label: 'Short' },
+  { value: 'detailed', label: 'Detailed' },
+] as const;
+
 const HOURS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: hourLabel(h) }));
 
 type PrefKey = { [K in keyof Prefs]: Prefs[K] extends string | number | boolean ? K : never }[keyof Prefs];
@@ -240,6 +245,11 @@ const APP_SETTINGS: Setting[] = [
     },
   },
   pref('whileWorking', 'While the agent is working, new messages', 'defaults', select(WHILE_WORKING)),
+  pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS)),
+  pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH),
+  pref('simplifyRules', 'Your rules', 'simplify', { type: 'text', placeholder: 'Keep numbers, no jargon, one line per file' }),
+  pref('simplifyAuto', 'Simplify long replies automatically', 'simplify', SWITCH),
+  pref('simplifyAutoWords', 'Long means more than (words)', 'simplify', { type: 'number', min: 50, max: 2000, step: 50 }),
   hostSetting('concurrency', 'Agents running at once', 'defaults', { type: 'number', ...CONCURRENCY_RANGE, step: 1 }),
   pref('driftGuard', 'Drift guard', 'goals', SWITCH),
   pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM)),
