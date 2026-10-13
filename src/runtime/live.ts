@@ -2,6 +2,7 @@ import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import type { Provider, Thread } from '../model.ts';
 import { startWorkspace } from '../git/workspace.ts';
+import { sourcePrompt } from '../sources.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
@@ -34,6 +35,11 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const text = withNotes(thread, action.prompt ?? action.text.replace(QUEUED_PREFIX, ''));
       const images = action.images?.length ? { images: action.images } : {};
       return thread.live.isDetached ? reattach(thread, text, undefined, images.images) : [{ method: 'send', threadId: thread.id, text, ...images }];
+    }
+    case 'source-add': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      if (thread?.sources.some((s) => s.label === action.source.label)) return [];
+      return agentCalls(state, { type: 'send', threadId: action.threadId, text: sourcePrompt(action.source), reason: '' }, next);
     }
     case 'resume': {
       const thread = state.threads.find((t) => t.id === action.threadId);

@@ -21,7 +21,6 @@ export interface Prefs {
   effort: string;
   agent: 'claude' | 'codex';
   permissions: SharedAccess;
-  runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
   /** Side pane tabs pinned as icons in the thread header, in order. */
   headerPins: PaneTabKind[];
   /** Off sends every message straight through: no local score, no classifier call. */
@@ -42,7 +41,13 @@ export interface Prefs {
   demoData: boolean;
   /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): deletes and settings always ask first. */
   agentControl: AgentControl;
+  /** What model and effort `create_thread` may give a new thread (RUNTIME.md › Mochi tools). */
+  threadModels: ThreadModels;
 }
+
+export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
+
+export type ThreadModels = (typeof THREAD_MODELS_RULES)[number];
 
 export const AGENT_CONTROLS = ['read', 'changes', 'everything'] as const;
 
@@ -59,7 +64,6 @@ export const DEFAULT_PREFS: Prefs = {
   effort: 'high',
   agent: 'claude',
   permissions: 'Auto',
-  runsOn: 'This Mac',
   headerPins: ['browser', 'terminal'],
   driftGuard: true,
   branchFrom: 'current',
@@ -74,6 +78,7 @@ export const DEFAULT_PREFS: Prefs = {
   simulator: '',
   demoData: false,
   agentControl: 'everything',
+  threadModels: 'cheaper',
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';
@@ -128,6 +133,7 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   if (saved.branchFrom === undefined && legacyBranchFrom === 'base') saved.branchFrom = 'base';
   // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
+  if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];

@@ -1,5 +1,6 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Step, type StepStatus, type Thread } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Source, type Step, type StepStatus, type Thread } from '../model.ts';
+import { sourcePrompt } from '../sources.ts';
 import { hasGoal, isConcrete, KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
@@ -55,6 +56,8 @@ export type ThreadsAction =
   | { type: 'resume'; threadId: string; onApiKey?: boolean }
   /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers. */
   | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
+  /** A link or file you added in the summary; a live agent is told in a message of yours. */
+  | { type: 'source-add'; threadId: string; source: Source }
   | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; isMuted: boolean }
@@ -140,6 +143,8 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, '', t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':
       return send(state, action);
+    case 'source-add':
+      return addSource(state, action);
     case 'controls':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, controls: action.controls })) };
     case 'resume':
@@ -454,6 +459,14 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
       return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
     }),
   };
+}
+
+function addSource(state: State, action: Extract<Action, { type: 'source-add' }>): State {
+  const thread = state.threads.find((t) => t.id === action.threadId);
+  if (!thread || thread.sources.some((s) => s.label === action.source.label)) return state;
+  const added = { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, sources: [...t.sources, action.source] })) };
+  if (thread.live) return send(added, { type: 'send', threadId: action.threadId, text: sourcePrompt(action.source), reason: '' });
+  return { ...added, threads: mapThread(added.threads, action.threadId, (t) => log(t, { at: state.now, who: 'harness', kind: 'event', text: `Added source ${action.source.label}` })) };
 }
 
 const titleFrom = (text: string) => (text.length > 48 ? `${text.slice(0, 47)}…` : text);

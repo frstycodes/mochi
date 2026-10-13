@@ -1,4 +1,4 @@
-import { PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind } from '../model.ts';
+import { PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind, type PaneVisual } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { showsDemoData } from '../demoData.ts';
 import { runningBackground } from '../runtime/subagents.ts';
@@ -9,8 +9,11 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number } }
+  /** `isPopped` adds it as a floating window, leaving the pane and its selection as they are. */
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
+  /** The thread's docked tab of this kind, selected with the pane open; a new one when there is none. */
+  | { type: 'pane-show-tab'; threadId: string; kind: PaneTabKind }
   | { type: 'pane-close-tab'; threadId: string; tabId: string }
   | { type: 'pane-close-tabs'; threadId: string; tabIds: string[] }
   | { type: 'pane-restore'; pane: Pane }
@@ -38,10 +41,23 @@ export function panesReducer(state: State, action: Action): State {
     case 'pane-open-tab': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       const existing = state.panes.find((p) => p.threadId === action.threadId) ?? newPane(action.threadId);
-      const tab: PaneTab = { id: nextTabId(existing.tabs), kind: action.kind, url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined), file: action.file, title: action.file?.path.split('/').pop() };
+      const tab: PaneTab = {
+        id: nextTabId(existing.tabs),
+        kind: action.kind,
+        url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined),
+        file: action.file,
+        title: action.title ?? action.file?.path.split('/').pop(),
+        ...(action.visual && { visual: action.visual }),
+      };
+      if (action.isPopped) return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), { ...existing, tabs: [...existing.tabs, { ...tab, isPopped: true }] }] };
       const tabs = existing.tabs.flatMap((t) => (t.kind !== 'new' ? [t] : t.id === existing.activeTab ? [tab] : []));
       const pane = { ...existing, isOpen: true, tabs: tabs.includes(tab) ? tabs : [...tabs, tab], activeTab: tab.id };
       return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
+    }
+    case 'pane-show-tab': {
+      const tab = state.panes.find((p) => p.threadId === action.threadId)?.tabs.find((t) => t.kind === action.kind && !t.isPopped);
+      if (!tab) return panesReducer(state, { type: 'pane-open-tab', threadId: action.threadId, kind: action.kind });
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: tab.id })) };
     }
     case 'pane-select-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, activeTab: action.tabId })) };

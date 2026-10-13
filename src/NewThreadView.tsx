@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
-import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, RunOnMenu, handOffComposer, newComposerLayoutId } from './Composer';
+import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
@@ -140,7 +140,6 @@ function NewThread() {
           <ProjectPicker value={project} onChange={changeProject} />
           {!!project && <WorkspaceControls workspace={workspace} />}
           <RunMenu value={run} onChange={setRun} />
-          {!!project && <RunOnMenu />}
           {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
         {!!project && <WorkspaceNotes workspace={workspace} />}

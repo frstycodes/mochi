@@ -58,8 +58,14 @@ export const TOOL_TABLE = {
   watch_thread: { tier: 'change', quiet: true, description: 'Watch a thread (its events toast for the user) or stop watching it.', shape: { threadId: otherThread, watch: z.boolean() } },
   create_thread: {
     tier: 'change',
-    description: 'Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast.',
-    shape: { prompt: z.string(), provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent") },
+    description:
+      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Leave model and effort out unless the user named them, or the task is clearly simple enough for a cheaper model or lower effort; never pick something more expensive than the default on your own. The user's setting may refuse a choice; relay its reason.",
+    shape: {
+      prompt: z.string(),
+      provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
+      model: z.string().optional().describe("A model id the account offers, like \"claude-sonnet-5-5\"; defaults to this thread's"),
+      effort: z.string().optional().describe("low, medium, high, xhigh or max; defaults to this thread's"),
+    },
   },
   send_to_thread: {
     tier: 'change',

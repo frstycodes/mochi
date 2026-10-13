@@ -1,7 +1,7 @@
 import { SEARCH_ENGINES } from '../browser/url.ts';
 import { EFFORTS } from '../runtime/controls.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
-import type { AgentControl, Prefs } from './prefs.ts';
+import type { AgentControl, Prefs, ThreadModels } from './prefs.ts';
 
 type Option = { readonly value: string; readonly label: string };
 
@@ -79,6 +79,16 @@ export const AGENT_CONTROL = {
     { value: 'everything', label: 'Everything, asking before deletes and settings' },
   ],
 } as const satisfies { label: string; options: readonly { value: AgentControl; label: string }[] };
+
+/** Not an agent setting: an agent can't raise its own ceiling. */
+export const THREAD_MODELS = {
+  label: 'Models for threads agents start',
+  options: [
+    { value: 'cheaper', label: 'Default or cheaper' },
+    { value: 'any', label: 'Any model' },
+    { value: 'default', label: 'Always the default' },
+  ],
+} as const satisfies { label: string; options: readonly { value: ThreadModels; label: string }[] };
 
 /** Every setting a widget can show: the ones agents propose, plus the agent-control level a blocked call points at. */
 export const WIDGET_SETTINGS = { ...AGENT_SETTINGS, agentControl: AGENT_CONTROL };
