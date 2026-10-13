@@ -9,6 +9,7 @@ import { agentCalls, CONTINUE_PROMPT, resumeAfterLostProcess, scheduledStart } f
 import { isUnstarted, type WorkspaceDraft } from '../git/workspace.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { threadCwd } from '../host/cwd.ts';
+import { currentAction, pendingWork } from '../agentPhase.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const calls = (s: State, action: Action) => agentCalls(s, action, () => threadsReducer(s, action));
@@ -183,4 +184,43 @@ test('a send that finds no agent process restarts the agent with resume, carryin
   const [again] = resumeAfterLostProcess(s.threads.find((t) => t.id === id)!, { method: 'send', threadId: id, text: 'still there?' });
   assert.equal(again.method === 'start' && again.options.resume, 'sess-2');
   assert.equal(again.method === 'start' && again.options.prompt, 'still there?');
+});
+
+test('worktree setup: the thread reads "Setting up worktree…", a failed step needs you, the agent saying anything clears starting only after setup', () => {
+  const create: Action = { type: 'create', title: 'fix the bug', provider: 'claude', project: '/Users/me/dev/harness', isLive: true };
+  let s = run(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'agent-starting', threadId: id, provider: 'claude' });
+  const step = { id: 'install', label: 'Install dependencies with pnpm', status: 'running' as const, startedAt: 1 };
+  s = applyAgentEvent(s, { threadId: id, type: 'worktree', path: '/w/harness/' + id });
+  s = applyAgentEvent(s, { threadId: id, type: 'setup', setup: { status: 'running', startedAt: 1, steps: [step] } });
+  let thread = s.threads.find((t) => t.id === id)!;
+  assert.equal(thread.live?.starting, 'claude', "main's own setup events don't mean the agent is up");
+  assert.equal(pendingWork(thread)?.label, 'Setting up worktree…');
+
+  s = applyAgentEvent(s, { threadId: id, type: 'setup', setup: { status: 'failed', startedAt: 1, steps: [{ ...step, status: 'failed', exitCode: 1 }] } });
+  thread = s.threads.find((t) => t.id === id)!;
+  assert.equal(thread.status, 'needs-you');
+  assert.deepEqual(currentAction(thread), { label: 'Worktree setup failed', isWaiting: true });
+
+  s = applyAgentEvent(s, { threadId: id, type: 'setup', setup: { status: 'running', startedAt: 1, steps: [step] } });
+  assert.equal(s.threads.find((t) => t.id === id)!.status, 'running', 'Retry puts it back to work');
+});
+
+test('a thread whose worktree was cleaned up makes it again on its next message', () => {
+  const create: Action = { type: 'create', title: 'fix the bug', provider: 'claude', project: '/Users/me/dev/harness', isLive: true };
+  let s = run(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = applyAgentEvent(s, { threadId: id, type: 'worktree', path: `/w/harness/${id}` });
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-1' });
+  s = { ...s, threads: s.threads.map((t) => (t.id === id ? { ...t, live: { ...t.live!, isWorking: false, isDetached: true } } : t)) };
+  setWorktreePath(id, `/w/harness/${id}`);
+  const [kept] = calls(s, { type: 'send', threadId: id, text: 'go on', drift: 'on-goal', reason: '' });
+  assert.equal(kept.method === 'start' && kept.options.cwd, `/w/harness/${id}`);
+  assert.equal(kept.method === 'start' && kept.options.workspace, undefined);
+  setWorktreePath(id, null);
+  const [remade] = calls(s, { type: 'send', threadId: id, text: 'go on', drift: 'on-goal', reason: '' });
+  assert.equal(remade.method === 'start' && remade.options.cwd, '/Users/me/dev/harness');
+  assert.deepEqual(remade.method === 'start' && remade.options.workspace, { mode: 'worktree', branch: `mochi/${id}` });
+  assert.equal(remade.method === 'start' && remade.options.resume, 'sess-1');
 });

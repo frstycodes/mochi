@@ -22,6 +22,7 @@ import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
+import { SetupRow } from './chat/SetupRow';
 import { agentPhase, currentAction, isWorking, pendingWork, type CurrentAction } from './agentPhase';
 import { chatRows, finalReplies, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
@@ -85,6 +86,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
           <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
               {hasGoal(thread) && <GoalCard thread={thread} />}
+              {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
                   <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />

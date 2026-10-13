@@ -3,7 +3,7 @@ import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
@@ -391,7 +391,7 @@ const GOAL_SPECS = {
       const title = args.title.trim();
       if (!title) throw new Error('title is required');
       const draft = draftFrom(thread);
-      draft.steps.push({ title, size: (args.size ?? 1) as Size, gate: false, isRemoved: false, isLocked: false });
+      draft.steps.push({ title, size: 1, gate: false, isRemoved: false, isLocked: false });
       editGoal(dispatch, thread, caller, draft);
       return { changed: `added the step "${title}"`, result: goalOf(target(state(), caller, thread.id)) };
     },

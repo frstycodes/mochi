@@ -1,4 +1,4 @@
-import type { AgentQuestion, LimitWindow, SubagentStatus } from './host/types/agent.ts';
+import type { AgentQuestion, LimitWindow, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -229,6 +229,8 @@ export interface Thread {
   agent?: AgentInfo;
   /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
   live?: LiveRun;
+  /** Its new worktree's preparation before the agent's first turn; unset when there was nothing to prepare. */
+  setup?: WorktreeSetup;
   /** Second opinions from the other provider, oldest first. */
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */

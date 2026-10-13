@@ -9,12 +9,12 @@ import { cn } from '@/lib/utils';
 import type { ActivityEntry, Step, StepStatus, Thread } from './model';
 import { BurnUp, timeScale, type TimeScale } from './BurnUp';
 import { revisionDiff } from './goals/edit';
-import { clock, duration, minutesLeft, progressAt, statusAt, type Progress } from './progress';
+import { clock, duration, progressAt, statusAt, type Progress } from './progress';
 import { checkpointAt, checkpointPhrase, rewindBlockedReason } from './rewind/checkpoints';
 import { PROVIDER_NAME, stepOwner } from './rewind/handoff';
 import { openRewind } from './rewind/requests';
 import { useHarness } from './store';
-import { ForkIcon, ProviderMark, SizeBadge, StepStatusIcon, TooltipIconButton, lineColor, stepColor, stepLabel } from './ui';
+import { ForkIcon, ProviderMark, StepStatusIcon, TooltipIconButton, lineColor, stepColor, stepLabel } from './ui';
 
 export function GoalTimeline({ thread }: { thread: Thread }) {
   const { state } = useHarness();
@@ -26,9 +26,9 @@ export function GoalTimeline({ thread }: { thread: Thread }) {
   return (
     <div className="flex flex-col gap-5">
       <section aria-label="Progress" className="grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)]">
-        <ProgressSummary thread={thread} live={timeline.live} eta={timeline.eta} scrubAt={scrubAt} onLive={() => setScrubAt(null)} />
+        <ProgressSummary thread={thread} live={timeline.live} scrubAt={scrubAt} onLive={() => setScrubAt(null)} />
         <div ref={plotRef} className="min-w-0">
-          {plotWidth > 0 && <BurnUp thread={thread} now={state.now} scale={timeline.scale} live={timeline.live} projection={timeline.projection} scrubAt={scrubAt} onScrub={setScrubAt} />}
+          {plotWidth > 0 && <BurnUp thread={thread} now={state.now} scale={timeline.scale} live={timeline.live} scrubAt={scrubAt} onScrub={setScrubAt} />}
         </div>
       </section>
       <StepList thread={thread} viewT={viewT} isLive={scrubAt === null} scale={plotWidth > 0 ? timeline.scale : null} now={state.now} />
@@ -36,17 +36,11 @@ export function GoalTimeline({ thread }: { thread: Thread }) {
   );
 }
 
-const PROJECTION_SHARE = 0.3;
 
 export function useTimeline(thread: Thread, now: number, width: number) {
   const live = progressAt(thread, now, true);
-  const eta = minutesLeft(thread, now);
   const span = Math.max(60, now - thread.startedAt);
-  const ahead = eta === null ? 0 : Math.min(eta, Math.round(span * PROJECTION_SHARE));
-  const remaining = live.scope - live.done - live.partial;
-  const projection = eta ? { t: now + ahead, value: live.done + live.partial + (remaining * ahead) / eta } : null;
-  const scale = timeScale(thread.startedAt, thread.startedAt + span + ahead, width);
-  return { live, eta, projection, scale };
+  return { live, scale: timeScale(thread.startedAt, thread.startedAt + span, width) };
 }
 
 export function useElementWidth<T extends HTMLElement>() {
@@ -62,15 +56,9 @@ export function useElementWidth<T extends HTMLElement>() {
   return [ref, width] as const;
 }
 
-export function etaLabel(eta: number | null) {
-  if (eta === null) return 'Measuring pace';
-  if (eta === 0) return 'Done';
-  return `About ${duration(eta)} left`;
-}
-
-function ProgressSummary({ thread, live, eta, scrubAt, onLive }: { thread: Thread; live: Progress; eta: number | null; scrubAt: number | null; onLive: () => void }) {
+function ProgressSummary({ thread, live, scrubAt, onLive }: { thread: Thread; live: Progress; scrubAt: number | null; onLive: () => void }) {
   const shown = scrubAt === null ? live : progressAt(thread, scrubAt, false);
-  const added = thread.steps.filter((s) => s.revision > 1 && s.status !== 'dropped').reduce((n, s) => n + s.size, 0);
+  const added = thread.steps.filter((s) => s.revision > 1 && s.status !== 'dropped').length;
   const dropped = thread.steps.filter((s) => s.status === 'dropped').length;
 
   return (
@@ -78,15 +66,13 @@ function ProgressSummary({ thread, live, eta, scrubAt, onLive }: { thread: Threa
       <div className="flex items-end gap-2.5">
         <span className="tabular type-display">{Math.round(shown.pct * 100)}%</span>
         <span className="tabular pb-1 type-meta text-muted-foreground">
-          {Math.round(shown.done + shown.partial)} of {shown.scope} pts
+          {Math.round(shown.done)} of {shown.scope} steps
         </span>
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 type-meta">
-        <dt className="text-subtle-foreground">Pace</dt>
-        <dd className="tabular">{etaLabel(eta)}</dd>
         <dt className="text-subtle-foreground">Scope</dt>
         <dd className="tabular">
-          +{added} pts added{dropped > 0 && `, ${dropped} dropped`}
+          +{added} added{dropped > 0 && `, ${dropped} dropped`}
         </dd>
       </dl>
       <RevisionHistory thread={thread} />
@@ -240,7 +226,6 @@ function StepInfo({ thread, step, status, liveTool }: { thread: Thread; step: St
           <span className={cn('min-w-0 truncate', status === 'dropped' && 'text-subtle-foreground line-through')} title={`${step.title} (${stepLabel(status)})`}>
             {step.title}
           </span>
-          <SizeBadge size={step.size} />
           {step.revision > 1 && <Badge variant="outline">v{step.revision}</Badge>}
           {thread.providers.length > 1 && <ProviderMark provider={stepOwner(thread, step)} size={12} className="shrink-0" />}
           {step.gate && status !== 'done' && (

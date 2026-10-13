@@ -2,7 +2,7 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { app } from 'electron';
-import { NO_AGENT_PROCESS, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type StartWorkspace } from '../../src/host/types/agent.ts';
+import { NO_AGENT_PROCESS, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
@@ -19,7 +19,9 @@ import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall } from '../mcp/server.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
-import { addWorktree } from './git.ts';
+import { createWorktree } from './git.ts';
+import { prepareWorktree } from '../git/setup.ts';
+import { Starts } from '../agents/starts.ts';
 import { switchBranch } from '../git/branches.ts';
 import { runGit, topLevel } from '../git/run.ts';
 import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
@@ -71,6 +73,9 @@ const codex = new CodexAdapter(
 codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
+const starts = new Starts();
+// A Mochi background agent's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
+const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
 export const agent = {
   async start(_sender, threadId, options) {
@@ -82,6 +87,8 @@ export const agent = {
     images(pictures);
     skillNames(skills);
     if (speed !== undefined) string(speed, 'speed', 256);
+    // Sent while the worktree is being set up: it goes to the agent once that start is through.
+    await starts.wait(threadId as string);
     const run = claudeRunOptions(threadId as string) ?? codex.runOptions(threadId as string);
     if (!run) throw new Error(NO_AGENT_PROCESS);
     // '' is standard; a tier the running model doesn't list runs standard too.
@@ -92,9 +99,15 @@ export const agent = {
   },
   async interrupt(_sender, threadId) {
     string(threadId, 'threadId', 256);
+    if (starts.abort(threadId as string)) return;
     if (hasClaudeSession(threadId as string)) return interruptClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.interrupt(threadId as string);
     // Nothing running for this thread (already stopped, or never started this launch): nothing to interrupt.
+  },
+  async setupChoice(_sender, threadId, choice) {
+    string(threadId, 'threadId', 256);
+    if (choice !== 'retry' && choice !== 'skip') throw new TypeError('choice must be retry or skip');
+    if (!starts.choose(threadId as string, choice as SetupChoice)) throw new Error("This thread's worktree setup isn't waiting on you");
   },
   async resolve(_sender, requestId, decision) {
     return resolveRequest(requestId, decision);
@@ -102,6 +115,7 @@ export const agent = {
   async stop(_sender, threadId) {
     string(threadId, 'threadId', 256);
     markIdle(threadId as string);
+    starts.abort(threadId as string);
     if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.stop(threadId as string);
     // Stopping a thread with no agent process is a no-op, so settling twice or settling then deleting never errors.
@@ -247,16 +261,38 @@ export async function startAgent(threadId: unknown, options: unknown) {
   skillNames(o.skills);
   // `speed` goes only through `offered`, which drops one the model doesn't list.
   const { workspace, worktree, speed, ...rest } = o;
-  const folder = await agentFolder(threadId as string, o.cwd);
-  const cwd = await workspaceFolder(threadId as string, folder, startWorkspace(workspace, worktree));
-  markBusy(threadId as string);
-  try {
+  const id = threadId as string;
+  const start = starts.begin(id);
+  markBusy(id);
+  const launch = async (cwd: string) => {
     const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined, speed as string | undefined)) } as unknown as AgentRunOptions;
-    if (o.provider === 'claude') return await startClaude(threadId as string, run);
-    return await codex.start(threadId as string, run);
+    if (o.provider === 'claude') return startClaude(id, run);
+    return codex.start(id, run);
+  };
+  let isSettingUp = false;
+  try {
+    const folder = await agentFolder(id, o.cwd);
+    const { cwd, setup } = await workspaceFolder(id, folder, startWorkspace(workspace, worktree), start);
+    if (!setup) return await launch(cwd);
+    // The renderer runs agent calls one after another, so a start that waited out the setup would hold back the Stop (and
+    // every other thread's calls) behind it. It returns here; the setup and the launch report through events.
+    isSettingUp = true;
+    void setup
+      .then(() => {
+        if (!start.signal.aborted) return launch(cwd);
+        markIdle(id);
+        broadcast({ threadId: id, type: 'turn-end', status: 'interrupted' });
+      })
+      .catch((error: unknown) => {
+        markIdle(id);
+        broadcast({ threadId: id, type: 'turn-end', status: 'failed', error: error instanceof Error ? error.message : String(error) });
+      })
+      .finally(start.end);
   } catch (error) {
-    markIdle(threadId as string);
+    markIdle(id);
     throw error;
+  } finally {
+    if (!isSettingUp) start.end();
   }
 }
 
@@ -343,15 +379,15 @@ export function startWorkspace(value: unknown, legacyWorktree?: unknown): StartW
  * that isn't a git repo runs the agent in place, but a refused existing branch fails the start). A project folder thread runs in
  * the project's checkout, switched to its branch first when it chose one; a dirty checkout refuses the switch.
  */
-async function workspaceFolder(threadId: string, root: string, workspace: StartWorkspace | undefined) {
-  if (!workspace) return root;
+async function workspaceFolder(threadId: string, root: string, workspace: StartWorkspace | undefined, start: ReturnType<Starts['begin']>): Promise<{ cwd: string; setup?: Promise<unknown> }> {
+  if (!workspace) return { cwd: root };
   if (workspace.mode === 'folder') {
     const top = await topLevel(root).catch(() => null);
-    if (!top) return root;
+    if (!top) return { cwd: root };
     if (workspace.isExisting) await switchBranch(top, workspace.branch);
     const branch = (await runGit(top, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] })).trim();
     if (branch) broadcast({ threadId, type: 'branch', branch });
-    return root;
+    return { cwd: root };
   }
   const isRepo = await topLevel(root).then(
     () => true,
@@ -359,11 +395,25 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
   );
   if (!isRepo) {
     console.warn(`No worktree for ${threadId}: ${root} isn't a git repo, running there`);
-    return root;
+    return { cwd: root };
   }
-  const path = await addWorktree(root, threadId, workspace.branch, workspace);
-  broadcast({ threadId, type: 'worktree', path });
-  return path;
+  const { dir, isNew } = await createWorktree(root, threadId, workspace.branch, workspace);
+  broadcast({ threadId, type: 'worktree', path: dir });
+  const settings = agentSettings();
+  if (!isNew || !settings.prepareWorktrees) return { cwd: dir };
+  const setup = topLevel(root).then((top) =>
+    prepareWorktree({
+      root: top,
+      dir,
+      include: settings.worktreeInclude,
+      command: settings.setupCommands[root],
+      emit: (setup) => broadcast({ threadId, type: 'setup', setup }),
+      // A background agent's setup has no row to answer from: a failed step is skipped.
+      choose: isBackgroundSession(threadId) ? () => Promise.resolve('skip') : start.choose,
+      signal: start.signal,
+    }),
+  );
+  return { cwd: dir, setup };
 }
 
 function imageOf(value: unknown) {

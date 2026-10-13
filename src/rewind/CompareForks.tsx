@@ -10,7 +10,7 @@ import { useWorktreePath } from '../git/worktrees';
 import { threadCwd } from '../host/cwd';
 import type { DiffFile } from '../host/types/git';
 import type { Thread } from '../model';
-import { progressAt } from '../progress';
+import { goalProgress } from '../progress';
 import { useHarness } from '../store';
 import { lineColor, ProgressRing } from '../ui';
 import { DiffStat } from '../WorkLog';
@@ -57,7 +57,7 @@ function useForkDiff(thread: Thread | undefined) {
 
 function ForkSide({ thread, diff, otherFiles, onKeep }: { thread: Thread; diff: ForkDiff; otherFiles: DiffFile[] | undefined; onKeep: () => void }) {
   const { state } = useHarness();
-  const { pct } = progressAt(thread, state.now, true);
+  const { pct } = goalProgress(thread, state.now);
   const files = diff.data?.files ?? [];
   const added = files.reduce((n, f) => n + f.added, 0);
   const removed = files.reduce((n, f) => n + f.removed, 0);
