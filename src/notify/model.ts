@@ -2,6 +2,9 @@ import type { QueueItem, Thread } from '../model.ts';
 
 export type NoticeKind = 'needs-you' | 'step-done' | 'review' | 'ci' | 'pr-review' | 'overlap' | 'race-lost' | 'run';
 
+/** Only main alerts these, as OS notifications for watched threads (`electron/notify/watch.ts`); they never land in the center. */
+type WatchKind = 'done' | 'failed' | 'limit';
+
 export interface Notice {
   id: string;
   kind: NoticeKind;
@@ -31,14 +34,17 @@ export interface Burst {
 export const ALERT_KINDS = {
   'needs-you': 'Needs you',
   review: 'Ready for review',
-  ci: 'CI failed',
+  done: 'Turn finished',
+  failed: 'Agent failed',
+  limit: 'Usage limit',
+  ci: 'CI result',
   'pr-review': 'Pull request review',
   overlap: 'File overlap',
   'race-lost': 'Race lost',
   run: 'Scheduled run finished',
-} satisfies Partial<Record<NoticeKind, string>>;
+} satisfies Partial<Record<NoticeKind | WatchKind, string>>;
 
-export const isAlertKind = (kind: NoticeKind): kind is keyof typeof ALERT_KINDS => kind in ALERT_KINDS;
+export const isAlertKind = (kind: NoticeKind): kind is NoticeKind & keyof typeof ALERT_KINDS => kind in ALERT_KINDS;
 
 export const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
 

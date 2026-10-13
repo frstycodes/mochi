@@ -3,7 +3,6 @@ import type { NotifyHost, NotifyPermission } from '../types/notify.ts';
 const listeners = new Set<(id: string) => void>();
 const permission = (): NotifyPermission => (typeof Notification === 'undefined' ? 'denied' : Notification.permission);
 
-// GAP: browsers have no dock badge; `navigator.setAppBadge` only works for installed PWAs, which the web build isn't.
 export const notify: NotifyHost = {
   async show({ title, body, id }) {
     if (permission() !== 'granted') return;
@@ -14,7 +13,11 @@ export const notify: NotifyHost = {
       if (id) for (const l of listeners) l(id);
     };
   },
-  async setBadge() {},
+  // GAP: the web build has no main process to watch threads or poll CI, and no dock badge (`navigator.setAppBadge` is PWA-only).
+  async watch() {},
+  async pendingOpen() {
+    return null;
+  },
   async permission() {
     return permission();
   },
@@ -25,6 +28,9 @@ export const notify: NotifyHost = {
   onClick(listener) {
     listeners.add(listener);
     return () => void listeners.delete(listener);
+  },
+  onOpenThread() {
+    return () => {};
   },
   async haptic() {
     // Touch only: a desktop browser has no trackpad haptics to reach.

@@ -97,7 +97,10 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     [],
   );
   useEffect(() => {
-    const onSchedule = (event: ScheduleEvent) => apply(event.type === 'agent' ? { type: 'agent', event: event.event } : { type: 'schedule-run', event });
+    const onSchedule = (event: ScheduleEvent) => {
+      if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
+      apply(event.type === 'ci' ? { type: 'ci-result', event } : { type: 'schedule-run', event });
+    };
     const off = host.schedule.onEvent(onSchedule);
     // What happened while no window was open: runs and their agent's events, in order.
     void host.schedule.drain().then((events) => events.forEach(onSchedule), (error: unknown) => console.error('Reading scheduled runs failed', error));

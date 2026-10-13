@@ -126,6 +126,8 @@ export interface GitHost {
   /** `githubUser` (`login` on github.com, `host/login` elsewhere) runs gh as the profile's GitHub account; omitted, gh's active account. */
   createPr(cwd: string, pr: { title: string; body: string }, githubUser?: string): Promise<string>;
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
+  /** The tail of a failed GitHub Actions job's log, from the check's `link`; throws for a check that isn't an Actions job. */
+  ciLog(cwd: string, checkLink: string, githubUser?: string): Promise<string>;
   /** gh's logins on every host it knows, for picking a profile's account. Never carries tokens. */
   ghAccounts(): Promise<GhAccount[]>;
   sync(cwd: string, base?: string): Promise<SyncResult>;
@@ -156,6 +158,7 @@ export const gitMethods = {
   push: 'invoke',
   createPr: 'invoke',
   pr: 'invoke',
+  ciLog: 'invoke',
   ghAccounts: 'invoke',
   sync: 'invoke',
   addWorktree: 'invoke',

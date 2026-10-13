@@ -1,13 +1,14 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, WorktreeOptions } from '../../src/host/types/git.ts';
+import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
 import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../git/checkpoints.ts';
 import { inside, run, runGit, topLevel } from '../git/run.ts';
 import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
+import type { GithubAccountRef } from '../../src/git/github.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
@@ -15,6 +16,8 @@ const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
 // ponytail: untracked files diff one process each; capped so a missing .gitignore can't fork thousands.
 const MAX_UNTRACKED = 200;
 const MAX_PATCH = 8 * 1024 * 1024;
+// Enough to hold a stack trace and the failing assertion, small enough to send as one message.
+const CI_LOG_LINES = 150;
 
 export const git = {
   async status(_sender, cwd) {
@@ -78,16 +81,16 @@ export const git = {
   },
 
   async pr(_sender, cwd, user) {
+    return readPr(string(cwd, 'cwd'), githubAccount(user));
+  },
+
+  async ciLog(_sender, cwd, link, user) {
     const top = await topLevel(string(cwd, 'cwd'));
-    const account = githubAccount(user);
-    const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state,title'], account).catch((error: Error) => {
-      if (/no (open )?pull requests? found|no git remotes/i.test(error.message)) return null;
-      throw error;
-    });
-    if (!view) return null;
-    // gh exits 8 while checks are pending and 1 when one failed or none are reported; stdout still holds the JSON.
-    const checks = await runGh(top, ['pr', 'checks', '--json', 'name,bucket,link'], account, { okCodes: [0, 1, 8] }).catch(() => '');
-    return { ...(JSON.parse(view) as { number: number; url: string; state: string; title: string }), checks: parseChecks(checks) };
+    const job = /\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/.exec(string(link, 'checkLink', 2048));
+    if (!job) throw new Error("This check doesn't run on GitHub Actions, so there's no log to fetch. Open it on GitHub instead.");
+    const [, runId, jobId] = job;
+    const log = await runGh(top, ['run', 'view', runId, ...(jobId ? ['--job', jobId] : []), '--log-failed'], githubAccount(user));
+    return log.split('\n').slice(-CI_LOG_LINES).join('\n');
   },
 
   async ghAccounts() {
@@ -230,6 +233,19 @@ async function currentBranch(top: string) {
 async function mainRepo(path: string) {
   const common = (await runGit(await topLevel(path), ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
   return dirname(common);
+}
+
+/** The branch's PR and its checks, or null when the branch has none. */
+export async function readPr(cwd: string, account: GithubAccountRef | undefined): Promise<PrInfo | null> {
+  const top = await topLevel(cwd);
+  const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state,title'], account).catch((error: Error) => {
+    if (/no (open )?pull requests? found|no git remotes/i.test(error.message)) return null;
+    throw error;
+  });
+  if (!view) return null;
+  // gh exits 8 while checks are pending and 1 when one failed or none are reported; stdout still holds the JSON.
+  const checks = await runGh(top, ['pr', 'checks', '--json', 'name,bucket,link'], account, { okCodes: [0, 1, 8] }).catch(() => '');
+  return { ...(JSON.parse(view) as { number: number; url: string; state: string; title: string }), checks: parseChecks(checks) };
 }
 
 const BUCKETS = ['pass', 'fail', 'pending', 'skipping', 'cancel'] satisfies CheckState[];
