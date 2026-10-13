@@ -73,16 +73,18 @@ function languageFor(path: string) {
   return LANGUAGES.find(([re]) => re.test(path))?.[1];
 }
 
-// light-dark() follows the `color-scheme` index.css sets per theme. GitHub Primer syntax colours, AA on both surfaces.
+// A color theme's syntax colors (`--syntax-*`, src/themes/map.ts) when it sets them; else GitHub Primer's, AA on both
+// surfaces, with light-dark() following the `color-scheme` index.css sets per theme.
 const highlightStyle = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: 'light-dark(#cf222e, #ff7b72)' },
-  { tag: [t.string, t.special(t.string), t.regexp], color: 'light-dark(#0a3069, #a5d6ff)' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'light-dark(#5f6873, #8b949e)', fontStyle: 'italic' },
-  { tag: [t.number, t.bool, t.null, t.atom, t.propertyName, t.attributeName], color: 'light-dark(#0550ae, #79c0ff)' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.function(t.variableName))], color: 'light-dark(#8250df, #d2a8ff)' },
-  { tag: [t.typeName, t.className, t.namespace], color: 'light-dark(#953800, #ffa657)' },
-  { tag: [t.tagName, t.heading], color: 'light-dark(#116329, #7ee787)', fontWeight: '600' },
-  { tag: [t.link, t.url], color: 'light-dark(#0550ae, #79c0ff)', textDecoration: 'underline' },
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: 'var(--syntax-keyword, light-dark(#cf222e, #ff7b72))' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--syntax-string, light-dark(#0a3069, #a5d6ff))' },
+  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--syntax-comment, light-dark(#5f6873, #8b949e))', fontStyle: 'italic' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--syntax-number, light-dark(#0550ae, #79c0ff))' },
+  { tag: [t.propertyName, t.attributeName], color: 'var(--syntax-property, light-dark(#0550ae, #79c0ff))' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName), t.definition(t.function(t.variableName))], color: 'var(--syntax-function, light-dark(#8250df, #d2a8ff))' },
+  { tag: [t.typeName, t.className, t.namespace], color: 'var(--syntax-type, light-dark(#953800, #ffa657))' },
+  { tag: [t.tagName, t.heading], color: 'var(--syntax-tag, light-dark(#116329, #7ee787))', fontWeight: '600' },
+  { tag: [t.link, t.url], color: 'var(--syntax-link, light-dark(#0550ae, #79c0ff))', textDecoration: 'underline' },
   { tag: t.emphasis, fontStyle: 'italic' },
   { tag: t.strong, fontWeight: '600' },
   { tag: t.invalid, color: 'var(--destructive)' },

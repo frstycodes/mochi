@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
-import { useTheme } from 'next-themes';
+import { useDiffTheme } from './themes/highlight';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
@@ -195,7 +195,7 @@ function CallGlyph({ call, links = [] }: { call: ToolCall; links?: WebLink[] }) 
 
 /** The first lines of a file the agent read, highlighted like the viewer; the whole file opens in the viewer. */
 function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
-  const { resolvedTheme } = useTheme();
+  const diffTheme = useDiffTheme();
   const [state, setState] = useState<{ text?: string; error?: string }>({});
   const isReady = useHighlighterReady();
   useEffect(() => {
@@ -214,7 +214,7 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
       <File
         file={{ name: path.split('/').pop() ?? path, contents: lines.slice(0, PREVIEW_LINES).join('\n') }}
         disableWorkerPool
-        options={{ disableFileHeader: true, overflow: 'scroll', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
+        options={{ disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
         style={DIFF_STYLE}
         className="max-h-64 overflow-auto"
       />
@@ -557,7 +557,7 @@ function useHighlighterReady() {
 const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties;
 
 export function DiffView({ patch }: { patch: string }) {
-  const { resolvedTheme } = useTheme();
+  const diffTheme = useDiffTheme();
   const { diffStyle } = usePrefs();
   const isReady = useHighlighterReady();
   if (!isReady) return null;
@@ -566,7 +566,7 @@ export function DiffView({ patch }: { patch: string }) {
       <PatchDiff
         patch={patch}
         disableWorkerPool
-        options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
+        options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
         style={DIFF_STYLE}
         className="max-h-80 overflow-auto"
       />

@@ -25,7 +25,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { useTheme } from "next-themes";
+import type { CodeHighlighterPlugin } from "@streamdown/code";
+import type { ThemeRegistrationAny } from "shiki";
+import { shikiTheme } from "@/themes/highlight";
+import type { ColorTheme } from "@/themes/model";
+import { useColorTheme } from "@/themes/store";
 import { Streamdown, type PluginConfig } from "streamdown";
 import { useWordReveal, WORD_REVEAL } from "@/chat/wordReveal";
 
@@ -323,11 +327,12 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 export const MessageResponse = memo(
   ({ className, plugins, isAnimating = false, ...props }: MessageResponseProps) => {
     const loaded = useStreamdownPlugins();
-    const merged = useMemo(() => ({ ...loaded, ...plugins }), [loaded, plugins]);
-    const { resolvedTheme } = useTheme();
-    const mermaid = useMemo(() => ({ config: { theme: resolvedTheme === "dark" ? "dark" : "neutral" } as const }), [resolvedTheme]);
-    // Streamdown's memoised blocks ignore a changed mermaid config, so a diagram keeps the old theme until remounted.
-    const hasMermaid = typeof props.children === "string" && props.children.includes("```mermaid");
+    const { mode, light, dark } = useColorTheme();
+    const code = useMemo(() => themedCodePlugin(light, dark), [loaded, light, dark]);
+    const merged = useMemo(() => ({ ...loaded, ...(code && { code }), ...plugins }), [loaded, code, plugins]);
+    const mermaid = useMemo(() => ({ config: { theme: mode === "dark" ? "dark" : "neutral" } as const }), [mode]);
+    // Streamdown's memoised blocks ignore a changed mermaid config or code plugin, so a block keeps the old theme until remounted.
+    const hasFence = typeof props.children === "string" && props.children.includes("```");
     // Streamdown drops the word wrappers once isAnimating goes false, so words still queued would pop in together.
     const isRevealing = useTrailingTrue(isAnimating, STREAM_DRAIN_MS);
     const ref = useRef<HTMLDivElement>(null);
@@ -335,7 +340,7 @@ export const MessageResponse = memo(
     return (
       <div ref={ref} className="contents">
         <Streamdown
-          key={hasMermaid ? resolvedTheme : undefined}
+          key={hasFence ? `${mode}:${code ? `${light?.id}:${dark?.id}` : ""}` : undefined}
           className={cn(
             "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
             className
@@ -370,6 +375,19 @@ function useTrailingTrue(value: boolean, holdMs: number) {
 }
 
 let loadedPlugins: PluginConfig = {};
+let codeModule: typeof import("@streamdown/code") | null = null;
+let defaultCodeThemes: [ThemeRegistrationAny, ThemeRegistrationAny] | null = null;
+const codePlugins = new Map<string, CodeHighlighterPlugin>();
+
+/** The code plugin for the chosen color themes (null = Mochi, which keeps GitHub's); undefined until the plugins load or when both are Mochi. */
+function themedCodePlugin(light: ColorTheme | null, dark: ColorTheme | null) {
+  if (!codeModule || !defaultCodeThemes || (!light && !dark)) return undefined;
+  const themes: [ThemeRegistrationAny, ThemeRegistrationAny] = [light ? shikiTheme(light) : defaultCodeThemes[0], dark ? shikiTheme(dark) : defaultCodeThemes[1]];
+  const key = `${themes[0].name}|${themes[1].name}`;
+  let plugin = codePlugins.get(key);
+  if (!plugin) codePlugins.set(key, (plugin = codeModule.createCodePlugin({ themes })));
+  return plugin;
+}
 let pluginsLoading: Promise<PluginConfig> | null = null;
 
 // Dynamic imports keep mermaid, KaTeX and the highlighter out of the first parse; messages render plain until they land.
@@ -384,6 +402,8 @@ function loadStreamdownPlugins() {
     import("shiki/dist/themes/github-light.mjs"),
     import("shiki/dist/themes/github-dark.mjs"),
   ]).then(([code, math, mermaid, cjk, , light, dark]) => {
+    codeModule = code;
+    defaultCodeThemes = [light.default, dark.default];
     loadedPlugins = { code: code.createCodePlugin({ themes: [light.default, dark.default] }), math: math.math, mermaid: mermaid.mermaid, cjk: cjk.cjk };
     return loadedPlugins;
   });

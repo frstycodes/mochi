@@ -14,10 +14,22 @@ Status: **now** = a value exists in code today (hardcoded or local state) and on
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Theme | Light / Dark / System | System | now | src/App.tsx:27, cycled from the sidebar |
+| Color themes | the theme per appearance + Browse themes (opens Themes) | Mochi / Mochi | done | src/settings/sections/general.tsx |
 | Reduce motion | System / On / Off | System | now | only per browser page (src/browser/Toolbar.tsx:263) |
 | Projects folder | path + Browse | `~/dev` | now | src/ProjectPicker.tsx:96 |
 | Open files in | Harness / VS Code / Cursor / Zed (only installed ones) | Harness | now | electron/fs/editors.ts:8 |
 | Restore layout on launch | switch | on | now | src/store/layout.ts:61 |
+
+### Themes
+VS Code color themes, one per appearance like VS Code's preferred light and dark themes, so System keeps switching (`lightTheme` / `darkTheme` prefs; `mochi` is the built-in). `src/settings/sections/themes.tsx`. Done.
+
+| Group | Rows |
+|---|---|
+| Color theme | Light, Dark: a select of Mochi plus the installed themes of that kind; the highlighted item previews live |
+| Installed | every marketplace and custom theme: swatch, name, source and kind, Use / In use, Edit (custom), Uninstall or Delete (falls back to Mochi when in use); Custom theme: Import file (.json/.jsonc, `include` resolved next to it, inlined on import), Paste JSON (validated inline) |
+| Open VSX | search over the Themes category, most downloaded first, only extensions whose package.json contributes color themes; icon, name, namespace, downloads, theme count, live swatches (each downloads the .vsix once it scrolls into view); hovering a row or swatch previews it, a swatch click installs and uses that theme, Install installs them all |
+
+Hovering or focusing any theme repaints the app until the pointer leaves; picking is instant, persisted, no reload. Applying a light theme while Dark is forced switches to Light (and the reverse); under System it waits for the OS. Storage: desktop `userData/themes/<namespace>.<name>.json` (the themes already read out of the .vsix) and `userData/themes/custom/*.json` (Edit opens it in the OS's JSON editor, changes show on window focus); web build in localStorage. GAP: a theme whose `tokenColors` is a `.tmTheme` plist only recolours the UI, not code.
 
 ### Notifications
 | Setting | Control | Default | Status | Today |
