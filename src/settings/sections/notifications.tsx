@@ -10,7 +10,7 @@ export function NotificationsSection() {
   const toggleKind = (kind: string, isOn: boolean) => setPrefs({ alertKinds: isOn ? [...alertKinds, kind] : alertKinds.filter((k) => k !== kind) });
   return (
     <div className="flex flex-col gap-8">
-      <SettingsGroup id="alertKinds" title="System alerts" footer="An OS notification while Mochi is in the background. Every notice still lands in the notification list.">
+      <SettingsGroup id="alertKinds" title="System alerts" footer="An OS notification while Mochi is in the background. Watched threads also alert when their turn finishes, fails or hits the usage limit, and with every window closed. Every notice still lands in the notification list.">
         {Object.entries(ALERT_KINDS).map(([kind, label]) => (
           <SettingsRow
             key={kind}

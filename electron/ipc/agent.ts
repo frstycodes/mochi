@@ -89,15 +89,7 @@ export const agent = {
     return runtime();
   },
   async resolve(_sender, requestId, decision) {
-    string(requestId, 'requestId', 256);
-    const d = record(decision, 'decision');
-    if (!DECISIONS.includes(d.kind as string)) throw new TypeError('decision.kind must be allow, deny or answer');
-    if (d.kind === 'answer' && (!Array.isArray(d.answers) || d.answers.some((a) => typeof a !== 'string'))) throw new TypeError('decision.answers must be strings');
-    if (d.kind === 'deny' && d.message !== undefined) string(d.message, 'decision.message', 4096);
-    if (resolveClaude(requestId as string, d as unknown as AgentDecision)) return;
-    for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
-    if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d as unknown as AgentDecision);
-    return runtime();
+    return resolveRequest(requestId, decision);
   },
   async stop(_sender, threadId) {
     string(threadId, 'threadId', 256);
@@ -197,6 +189,19 @@ export const agent = {
     return classifyWithModel(prompt as string, t as unknown as Thread, (signal) => classifyClaude(prompt as string, t as unknown as Thread, signal));
   },
 } satisfies Handlers<AgentHost>;
+
+/** Answers a pending approval or question, from the renderer or a notification's buttons. */
+export async function resolveRequest(requestId: unknown, decision: unknown) {
+  string(requestId, 'requestId', 256);
+  const d = record(decision, 'decision');
+  if (!DECISIONS.includes(d.kind as string)) throw new TypeError('decision.kind must be allow, deny or answer');
+  if (d.kind === 'answer' && (!Array.isArray(d.answers) || d.answers.some((a) => typeof a !== 'string'))) throw new TypeError('decision.answers must be strings');
+  if (d.kind === 'deny' && d.message !== undefined) string(d.message, 'decision.message', 4096);
+  if (resolveClaude(requestId as string, d as unknown as AgentDecision)) return;
+  for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
+  if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d as unknown as AgentDecision);
+  return runtime();
+}
 
 /** Starts a thread's agent from options the renderer (or the scheduler) built; both go through the same checks. */
 export async function startAgent(threadId: unknown, options: unknown) {

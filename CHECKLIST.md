@@ -109,7 +109,7 @@ Principles: no assumed orientation (portrait monitors are first class), every la
 - [x] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the Stage Manager cards)
 - [x] Cmd 1–9 jumps to pinned N; Cmd Opt 1–9 opens pinned N in a new split
 - [x] Hover a pinned thread → live peek (transcript tail + preview thumbnail) without switching
-- [ ] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (watch toggle + in-app toast for needs-you / done done; OS notifications and CI fail wait for `notify`)
+- [x] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (main owns the OS notifications, CI polling and dock badge, so they keep working with every window closed: `electron/notify/watch.ts`; a CI failure lands in the Queue with "Send failing log to agent")
 
 ### Stage Manager mode
 The main session (or split) sits centered; pinned sessions hover at both screen edges as 3D cards, sticking out slightly.
@@ -230,7 +230,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 
 ## 9. Accounts and limits
 
-- [ ] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Mochi never handles credentials
-- [ ] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
-- [ ] Threads always run on their profile's account; never rotate to another account of the same provider
+- [x] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Mochi never handles credentials
+- [x] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
+- [x] Threads always run on their profile's account; never rotate to another account of the same provider
 - [x] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider

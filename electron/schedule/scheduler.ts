@@ -9,6 +9,7 @@ import { afterLaunch, cronDecision, prEvents, prPrompt, summaryLine, SUMMARY_HIN
 import { isBusy, keepWhenClosed, onAgentEvent, openWindows } from '../agents/events.ts';
 import { githubAccount, runGh } from '../git/gh.ts';
 import { startAgent } from '../ipc/agent.ts';
+import { pollCi } from '../notify/watch.ts';
 import { mainWindow } from '../window.ts';
 
 /**
@@ -101,7 +102,7 @@ function tick() {
   }
 }
 
-/** One gh call per PR trigger; a thread that is working waits, its events stay unseen until the next poll. */
+/** One gh call per PR trigger; a thread that is working waits, its events stay unseen until the next poll. Then watched threads' CI. */
 async function poll() {
   for (const trigger of triggers) {
     if (trigger.when.kind !== 'pr' || trigger.isPaused || !trigger.start.cwd) continue;
@@ -118,6 +119,7 @@ async function poll() {
       console.warn(`PR poll for ${trigger.threadId} failed: ${(error as Error).message}`);
     }
   }
+  await pollCi(deliver);
 }
 
 async function openPrs(cwd: string, isReviewRequested: boolean, githubUser: string | undefined): Promise<PrSnapshot[]> {

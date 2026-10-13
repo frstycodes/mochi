@@ -247,6 +247,8 @@ export interface QueueItem {
   tool?: ToolWidget;
   /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
   setting?: { id: string; suggested?: string };
+  /** A `ci` card: the PR and the first failed check, whose log "Send failing log to agent" fetches. */
+  ci?: { pr: number; url: string; check?: { name: string; link?: string } };
   createdAt: number;
 }
 

@@ -130,6 +130,9 @@ export const git: GitHost = {
   async createPr() {
     return 'https://github.com/latitude-dev/latitude/pull/490';
   },
+  async ciLog() {
+    return 'Error: lint failed\n  src/index.ts:12:3  no-unused-vars';
+  },
   async ghAccounts() {
     return [];
   },
