@@ -11,7 +11,7 @@ import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
-import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindMode, type RewindUndo } from '../rewind/checkpoints.ts';
+import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, turnUndo, undoRewind, type Checkpoint, type RewindMode, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import { contextMax } from '../runtime/models.ts';
@@ -95,6 +95,7 @@ export type ThreadsAction =
   | { type: 'rewind'; threadId: string; n: number; mode?: RewindMode; forkAt?: string | null }
   | { type: 'rewind-message'; threadId: string; index: number; mode?: RewindMode; forkAt?: string | null }
   | { type: 'rewind-undo' }
+  | { type: 'turn-undo'; threadId: string; start: number; isUndone: boolean; text: string }
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
   | { type: 'fork-keep'; keepId: string; dropId: string }
@@ -236,6 +237,8 @@ function reduce(state: State, action: Action): State {
       return rewind(state, action.threadId, action.n, action.mode, action.forkAt);
     case 'rewind-message':
       return rewindToMessage(state, action.threadId, action.index, action.mode, action.forkAt);
+    case 'turn-undo':
+      return turnUndo(state, action.threadId, { start: action.start, isUndone: action.isUndone }, action.text);
     case 'rewind-undo':
       return undoRewind(state);
     case 'checkpoint-ref':

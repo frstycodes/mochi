@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
 import { CodexAdapter, reply } from './adapter.ts';
-import { codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
+import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
@@ -87,7 +87,15 @@ test('file changes report paths relative to the worktree and name them on the ap
   assert.deepEqual(mapNotification('item/started', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'tool', id: 'f1', phase: 'start', text: 'Edit src/a.ts, b.ts' }]);
   const approval = mapRequest('item/fileChange/requestApproval', { threadId: 't', turnId: 'u', itemId: 'f1' }, 'codex:string:9', s);
   assert.equal(approval?.type === 'approval' && approval.title, 'Edit src/a.ts, b.ts');
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: { ...item, status: 'completed' } }, s).at(0), { threadId: 'h1', type: 'tool', id: 'f1', phase: 'end', text: 'Edit src/a.ts, b.ts', files: ['src/a.ts', 'b.ts'] });
+  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: { ...item, status: 'completed' } }, s).at(0), {
+    threadId: 'h1',
+    type: 'tool',
+    id: 'f1',
+    phase: 'end',
+    text: 'Edit src/a.ts, b.ts',
+    files: ['src/a.ts', 'b.ts'],
+    patch: ['diff --git a/b.ts b/b.ts', '--- /dev/null', '+++ b/b.ts'].join('\n'),
+  });
 });
 
 test('after a resume only the reported request counts, not the whole history', () => {
@@ -434,4 +442,23 @@ test('skills/list becomes / commands, and a message opening with one attaches it
   );
   assert.deepEqual(infoFromLists(null, reply, null).skills, ['fix-lint', 'plain']);
   assert.deepEqual(commandsFromSkills(null), []);
+});
+
+test("a completed file change carries one patch with a section per file, so each file's +/− and diff show", () => {
+  const changes = [
+    { path: '/repo/src/a.ts', kind: { type: 'update', move_path: null }, diff: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n' },
+    { path: '/repo/src/new.ts', kind: { type: 'add' }, diff: 'one\ntwo\n' },
+    { path: '/repo/gone.ts', kind: { type: 'delete' }, diff: 'bye\n' },
+  ];
+  const s = threadState('h1', '/repo');
+  const [end] = mapNotification('item/completed', { threadId: 't', item: { type: 'fileChange', id: 'f2', status: 'completed', changes } }, s);
+  assert.equal(
+    end.type === 'tool' && end.patch,
+    [
+      'diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,2 +1,2 @@', '-old', '+new', ' same',
+      'diff --git a/src/new.ts b/src/new.ts', '--- /dev/null', '+++ b/src/new.ts', '@@ -0,0 +1,2 @@', '+one', '+two',
+      'diff --git a/gone.ts b/gone.ts', '--- a/gone.ts', '+++ /dev/null', '@@ -1,1 +0,0 @@', '-bye',
+    ].join('\n'),
+  );
+  assert.equal(changesPatch([{ path: '/repo/x.ts', kind: { type: 'update', move_path: null }, diff: '' }], '/repo'), '', 'an update without hunks adds nothing');
 });

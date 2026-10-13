@@ -115,6 +115,8 @@ export interface ActivityEntry {
   wasQueued?: boolean;
   /** Your messages: thumbnails (data URLs) of the images sent with it. */
   images?: string[];
+  /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
+  turnUndo?: { start: number; isUndone: boolean };
 }
 
 export interface McpCall {

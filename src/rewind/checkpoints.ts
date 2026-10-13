@@ -233,3 +233,12 @@ export function undoRewind(state: State): State {
     rewindUndo: null,
   };
 }
+
+/** Logs a turn's file changes undone or put back. The `undo` file save now holds this undo's files, so a rewind's undo can no longer put its own back. */
+export function turnUndo(state: State, threadId: string, turnUndo: NonNullable<ActivityEntry['turnUndo']>, text: string): State {
+  return {
+    ...state,
+    threads: mapThread(state.threads, threadId, (t) => log(t, { at: state.now, who: 'harness', kind: 'event', text, turnUndo })),
+    rewindUndo: state.rewindUndo?.threadId === threadId && state.rewindUndo.hasFiles ? null : state.rewindUndo,
+  };
+}

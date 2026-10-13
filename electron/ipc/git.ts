@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
-import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, snapshot, snapshotCommit } from '../git/checkpoints.ts';
+import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
 import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
@@ -21,6 +21,9 @@ const MAX_UNTRACKED = 200;
 const MAX_PATCH = 8 * 1024 * 1024;
 // Enough to hold a stack trace and the failing assertion, small enough to send as one message.
 const CI_LOG_LINES = 150;
+
+// A turn's files; far above what one turn edits, low enough to fit in a git command line.
+const MAX_RESTORE = 500;
 
 // ponytail: one query per batch; GitHub's GraphQL node limit is far above this.
 const MAX_REFS = 50;
@@ -184,6 +187,19 @@ export const git = {
     await restore(top, commit);
     // The restored files are the agent's baseline now, so the next rewind doesn't count them as someone else's changes.
     await snapshot(top, checkpointRef(id, 'turn'), 'harness checkpoint after rewind');
+  },
+
+  async restoreFiles(_sender, cwd, threadId, n, paths) {
+    const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
+    const id = string(threadId, 'threadId', 64);
+    const which = n === 'undo' ? 'undo' : integer(n, 'n', 0, 1_000_000);
+    if (!Array.isArray(paths) || paths.length === 0 || paths.length > MAX_RESTORE) throw new TypeError(`paths must list 1 to ${MAX_RESTORE} files`);
+    const files = paths.map((p, i) => inside(top, string(p, `paths[${i}]`, 4096)));
+    const commit = await resolveCommit(top, checkpointRef(id, which));
+    if (!commit) throw new Error(`Checkpoint ${which} has no saved files`);
+    if (which !== 'undo') await snapshot(top, checkpointRef(id, 'undo'), 'harness checkpoint before undoing a turn');
+    await restorePaths(top, commit, files);
+    await snapshot(top, checkpointRef(id, 'turn'), 'harness checkpoint after undoing a turn');
   },
 
   async rewindPreview(_sender, cwd, threadId, n) {

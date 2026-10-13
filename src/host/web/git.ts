@@ -189,6 +189,7 @@ export const git: GitHost = {
     return `${threadId}${n}`.padEnd(40, '0');
   },
   async restoreCheckpoint() {},
+  async restoreFiles() {},
   async rewindPreview() {
     return { files: ['src/limits/schema.ts', 'src/gateway/config.ts'], outside: [] };
   },
