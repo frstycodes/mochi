@@ -44,7 +44,7 @@ async function connect(port: string, hello: object) {
   const frames: ServerFrame[] = [];
   const waiters: (() => void)[] = [];
   socket.on('message', (data) => {
-    frames.push(JSON.parse(data.toString()) as ServerFrame);
+    frames.push(JSON.parse((data as Buffer).toString('utf8')) as ServerFrame);
     waiters.splice(0).forEach((w) => w());
   });
   await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
@@ -138,6 +138,21 @@ test('a duplicate command id runs once and both get the first result', async () 
   assert.deepEqual(runs[0].command, { type: 'send', threadId: 't1', text: 'hi' });
   assert.equal(runs[0].deviceName, 'Laptop');
   await laptop.close();
+  await server.close();
+});
+
+test('commands sent right behind hello wait for the device check and come after welcome', async () => {
+  const { server, runs } = await serve();
+  const socket = new WebSocket(`ws://${server.addresses[0]}`);
+  const frames: ServerFrame[] = [];
+  socket.on('message', (data) => frames.push(JSON.parse((data as Buffer).toString('utf8')) as ServerFrame));
+  await new Promise((resolve) => socket.once('open', resolve));
+  socket.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, auth: 'viewer' }));
+  socket.send(JSON.stringify({ type: 'command', id: 'early', command: { type: 'interrupt', threadId: 't1' } }));
+  while (!frames.some((f) => f.type === 'result')) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(frames.map((f) => f.type).slice(0, 2), ['welcome', 'result']);
+  assert.equal(runs.length, 0, 'a refused command never reaches the renderer');
+  socket.close();
   await server.close();
 });
 

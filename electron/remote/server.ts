@@ -63,10 +63,10 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
       connections.delete(connection);
       options.onDevicesChange?.();
     });
+    send(socket, { type: 'welcome', version: PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), scopes: device.scopes });
     socket.removeAllListeners('message');
     socket.on('message', (data) => void onCommand(connection, data));
     for (const data of held) void onCommand(connection, data);
-    send(socket, { type: 'welcome', version: PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), scopes: device.scopes });
     if (!device.scopes.includes('read')) return;
     await catchUp(connection, hello.resume);
   }
@@ -99,7 +99,7 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
   }
 
   async function onCommand(connection: Connection, data: RawData) {
-    const frame = parseCommand(data.toString());
+    const frame = parseCommand(text(data));
     if (typeof frame === 'string') return send(connection.socket, { type: 'result', id: '', isOk: false, error: frame });
     const { id, command } = frame;
     if (!hasScope(connection.device.scopes, command)) return send(connection.socket, { type: 'result', id, isOk: false, error: `This device can’t ${command.type}: it needs the ${COMMAND_SCOPES[command.type]} scope` });
@@ -163,7 +163,7 @@ function firstFrame(socket: WebSocket, held: RawData[]): Promise<HelloFrame | st
     socket.once('message', (data) => {
       clearTimeout(timer);
       socket.on('message', (next) => held.push(next));
-      resolve(parseHello(data.toString()));
+      resolve(parseHello(text(data)));
     });
   });
 }
@@ -176,5 +176,8 @@ function refuse(socket: WebSocket, reason: string) {
 function send(socket: WebSocket, frame: ServerFrame) {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(frame));
 }
+
+/** ws hands a message over as one Buffer, fragments or an ArrayBuffer depending on `binaryType`. */
+const text = (data: RawData) => (Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data)).toString('utf8');
 
 const formatAddress = ({ address, port, family }: AddressInfo) => (family === 'IPv6' ? `[${address}]:${port}` : `${address}:${port}`);
