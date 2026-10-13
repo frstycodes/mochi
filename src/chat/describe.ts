@@ -3,8 +3,9 @@ import type { ActivityEntry } from '../model.ts';
 import { parseTool } from '../summary.ts';
 
 /** A tool call as a plain sentence for its work-group row: the agent's own description when it sent one (Claude's Bash), else one derived from the call. */
-export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description'>) {
+export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description' | 'sent'>) {
   if (entry.description) return entry.description;
+  if (entry.sent) return `Messaging ${entry.sent.title}`;
   const call = parseTool(entry.text);
   const name = call.target.split('/').pop() || call.target;
   switch (call.verb) {

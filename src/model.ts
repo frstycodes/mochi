@@ -117,6 +117,16 @@ export interface ActivityEntry {
   images?: string[];
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
   turnUndo?: { start: number; isUndone: boolean };
+  /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
+  from?: ThreadRef;
+  /** Tool entries: the message this `send_to_thread` call delivered. */
+  sent?: ThreadRef & { text: string };
+}
+
+/** Another thread, with its title when the entry was written; a renamed or deleted thread still reads. `threadId` is missing only on messages migrated from the old `From "…":` prefix whose sender is gone. */
+export interface ThreadRef {
+  threadId?: string;
+  title: string;
 }
 
 export interface McpCall {
@@ -523,6 +533,9 @@ function rateLimiting(): Thread {
       { at: at(s, 101), who: 'claude', kind: 'tool', text: 'Edit packages/cache/redis.ts  +38 −0' },
       { at: at(s, 104), who: 'claude', kind: 'tool', text: 'Run pnpm --filter cache test' },
       { at: at(s, 105), who: 'claude', kind: 'tool', text: 'Skill code-review', skill: 'code-review' },
+      { at: at(s, 106), who: 'claude', kind: 'tool', text: 'Mcp mochi: send_to_thread', mcp: MOCHI_SEND, sent: { threadId: 'adm', title: 'Admin usage dashboard', text: LIMITS_NOTE } },
+      { at: at(s, 109), who: 'you', kind: 'message', text: USAGE_REPLY, from: { threadId: 'adm', title: 'Admin usage dashboard' } },
+      { at: at(s, 110), who: 'claude', kind: 'message', text: 'Admin usage will badge overridden keys, so I will keep `override_rpm` nullable rather than defaulting it to the tier limit.' },
     ],
     prs: [],
     sources: [
@@ -540,6 +553,11 @@ function rateLimiting(): Thread {
     },
   };
 }
+
+// The demo's two threads messaging each other (`send_to_thread`).
+const MOCHI_SEND = { server: 'mochi', tool: 'send_to_thread' };
+const LIMITS_NOTE = 'Heads up: the limits table now has a `tier` column and a nullable `override_rpm` per key.\n\n- Read limits from `packages/db/schema/limits.ts` instead of hardcoding 60/600\n- Enterprise keys have no tier default, only an override';
+const USAGE_REPLY = 'Got it. The usage page now reads the limit per key and shows **Override** on keys with `override_rpm` set. Tell me if the column gets renamed.';
 
 function adminDashboard(): Thread {
   const s = 770;
@@ -580,6 +598,9 @@ function adminDashboard(): Thread {
       { at: at(s, 42), who: 'codex', kind: 'tool', text: 'Mcp figma: get_design_context', mcp: { server: 'figma', tool: 'get_design_context' } },
       { at: at(s, 42), who: 'codex', kind: 'tool', text: 'Mcp figma: get_screenshot', mcp: { server: 'figma', tool: 'get_screenshot' } },
       { at: at(s, 44), who: 'codex', kind: 'tool', text: 'Edit apps/web/routes/admin/usage.tsx  +120 −4' },
+      { at: at(s, 45), who: 'you', kind: 'message', text: LIMITS_NOTE, from: { threadId: 'rl', title: 'Public API rate limiting' } },
+      { at: at(s, 46), who: 'codex', kind: 'tool', text: 'Read packages/db/schema/limits.ts' },
+      { at: at(s, 47), who: 'codex', kind: 'tool', text: 'Mcp mochi: send_to_thread', mcp: MOCHI_SEND, sent: { threadId: 'rl', title: 'Public API rate limiting', text: USAGE_REPLY } },
     ],
     prs: [],
     sources: [

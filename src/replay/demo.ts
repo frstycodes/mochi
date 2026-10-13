@@ -62,12 +62,12 @@ export function demoRecording(thread: Thread): Recording | null {
 }
 
 function entryEvents(entry: ActivityEntry, who: Provider, id: string, agent: (event: DistributiveOmit<AgentEvent, 'threadId'>) => ReplayStep['action'], threadId: string): ReplayStep['action'][] {
-  if (entry.who === 'you') return [{ type: 'send', threadId, text: entry.text, reason: '', drift: 'on-goal' }];
+  if (entry.who === 'you') return [{ type: 'send', threadId, text: entry.text, reason: '', drift: 'on-goal', ...(entry.from && { from: entry.from }) }];
   if (entry.who === 'harness' || entry.kind === 'event') return [{ type: 'say', threadId, entry: { who: entry.who, kind: entry.kind, text: entry.text, detail: entry.detail } }];
   if (entry.kind === 'reasoning') return [agent({ type: 'reasoning', text: entry.text })];
   if (entry.kind === 'tool') {
     const file = /^(Write|Edit)\s+(\S+)/.exec(entry.text)?.[2];
-    return [agent({ type: 'tool', id, phase: 'start', text: entry.text }), agent({ type: 'tool', id, phase: 'end', text: entry.text, exitCode: /^Run\b/.test(entry.text) ? 0 : undefined, files: file ? [file] : undefined })];
+    return [agent({ type: 'tool', id, phase: 'start', text: entry.text, ...(entry.mcp && { mcp: entry.mcp }), ...(entry.sent && { sent: entry.sent }) }), agent({ type: 'tool', id, phase: 'end', text: entry.text, exitCode: /^Run\b/.test(entry.text) ? 0 : undefined, files: file ? [file] : undefined })];
   }
   if (entry.kind !== 'message' || who !== entry.who) return [];
   const words = entry.text.match(/\S+\s*/g) ?? [entry.text];

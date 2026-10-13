@@ -2,6 +2,7 @@ import type { AgentPhase } from './agentShape.ts';
 import type { ActivityEntry, Thread, WebLink } from './model.ts';
 import { HARNESSES } from './settings/harnesses.ts';
 import { parseTool, toolVerb, type ToolCall, type ToolVerb } from './summary.ts';
+import { isSendTarget } from './chat/threadMessages.ts';
 
 const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse', Skill: 'read', Mcp: 'run' } satisfies Record<ToolVerb, AgentPhase>;
 
@@ -109,7 +110,7 @@ export function toolLabel(call: ToolCall) {
     Search: `Searching ${call.target}`,
     Fetch: `Reading ${hostname(call.target)}`,
     Skill: `Using skill ${call.target}`,
-    Mcp: `Calling ${mcpLabel(call.target)}`,
+    Mcp: isSendTarget(call) ? 'Messaging another thread' : `Calling ${mcpLabel(call.target)}`,
   }[call.verb];
 }
 

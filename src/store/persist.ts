@@ -1,4 +1,5 @@
 import { pauseQueue } from '../chat/outbox.ts';
+import { migrateReceived } from '../chat/threadMessages.ts';
 import { LIMIT_DEMO_IDS } from '../usage/limitDemo.ts';
 import { host } from '../host/index.ts';
 import type { WorktreeSetup } from '../host/types/agent.ts';
@@ -41,7 +42,7 @@ export function parseSaved(json: string | null): Saved | null {
   try {
     const saved = JSON.parse(json) as Saved;
     if (saved?.version !== 1 || !Array.isArray(saved.threads) || !Array.isArray(saved.queue)) return null;
-    const threads = saved.threads.filter((t) => typeof t?.id === 'string' && t.live).map((t) => restoreThread(t, saved.now));
+    const threads = migrateReceived(saved.threads.filter((t) => typeof t?.id === 'string' && t.live).map((t) => restoreThread(t, saved.now)));
     // Agent requests and Mochi tool cards wait on a live call, which a restart ended.
     return { ...saved, threads, queue: saved.queue.filter((q) => !q.requestId && !q.tool) };
   } catch {

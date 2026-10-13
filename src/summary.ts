@@ -1,4 +1,5 @@
 import type { ActivityEntry } from './model.ts';
+import { isSendTarget } from './chat/threadMessages.ts';
 
 export type ToolVerb = 'Read' | 'Edit' | 'Write' | 'Run' | 'Browser' | 'Search' | 'Fetch' | 'Skill' | 'Mcp';
 
@@ -110,7 +111,8 @@ const TURN_PHRASES: { key: string; matches: (c: ToolCall) => boolean; forms: { o
   { key: 'write', matches: (c) => c.verb === 'Write', forms: { one: 'created # file', other: 'created # files' } },
   { key: 'run', matches: (c) => c.verb === 'Run', forms: { one: 'ran # command', other: 'ran # commands' } },
   { key: 'skill', matches: (c) => c.verb === 'Skill', forms: { one: 'used # skill', other: 'used # skills' } },
-  { key: 'mcp', matches: (c) => c.verb === 'Mcp', forms: { one: 'called # MCP tool', other: 'called # MCP tools' } },
+  { key: 'message', matches: isSendTarget, forms: { one: 'messaged # thread', other: 'messaged # threads' } },
+  { key: 'mcp', matches: (c) => c.verb === 'Mcp' && !isSendTarget(c), forms: { one: 'called # MCP tool', other: 'called # MCP tools' } },
   { key: 'search', matches: (c) => c.verb === 'Search', forms: { one: 'searched the web', two: 'searched the web twice', other: 'searched the web # times' } },
   { key: 'fetch', matches: (c) => c.verb === 'Fetch', forms: { one: 'read # page', other: 'read # pages' } },
   { key: 'read', matches: (c) => c.verb === 'Read', forms: { one: 'read # file', other: 'read # files' } },

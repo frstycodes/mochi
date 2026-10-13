@@ -117,3 +117,16 @@ test("a turn's changes card sits after its last row, before your next message; a
     'changes(5)',
   ]);
 });
+
+test("another thread's message is its own log row: it ends the work group before it and starts a turn like yours", () => {
+  const received: ActivityEntry = { ...e('message', 'you', 'Keys rotate hourly'), from: { threadId: 't2', title: 'Crypto module' } };
+  const activity = [e('message', 'you', 'sync the keys'), e('tool', 'claude', 'Run pnpm test'), e('message', 'claude', 'Waiting on crypto.'), received, e('tool', 'claude', 'Edit keys.ts'), e('message', 'claude', 'Rotated.')];
+  const rows = chatRows(activity);
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    ['message', 'work', 'message', 'thread-message', 'work', 'message'],
+  );
+  assert.deepEqual(rows[3], { kind: 'thread-message', key: '0-3', entry: received, index: 3 });
+  assert.deepEqual([...finalReplies(rows, false)], [2, 5], 'the reply before it is final, like before your own message');
+  assert.equal(liveWorkIndex(chatRows(activity.slice(0, 4))), -1, 'the group before it is no longer live');
+});
