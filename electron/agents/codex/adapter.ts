@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions, LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';
@@ -414,7 +415,7 @@ class CodexServer {
 
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
-    const child = spawn(install.path, ['app-server'], { cwd: os.homedir(), env: accountEnv(this.account, install.env), stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(install.path, ['app-server'], { cwd: os.homedir(), env: hooksEnv(accountEnv(this.account, install.env)), stdio: ['pipe', 'pipe', 'pipe'] });
     const gen = ++this.gen;
     this.child = child;
     this.stderr = '';

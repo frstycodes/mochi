@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron';
+import { installHooks } from './git/hooks.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
 import { registerIpc } from './ipc/index.ts';
@@ -15,6 +16,7 @@ app.whenReady().then(() => {
   registerIpc(isTrustedUrl);
   startWatch();
   void startScheduler();
+  installHooks().catch((error: unknown) => console.warn('Git hooks not installed; agents commit without the message check', error));
   createWindow();
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
 });

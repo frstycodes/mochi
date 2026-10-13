@@ -38,13 +38,14 @@ test('setPrefs persists, notifies, and survives a reload from storage', () => {
   unsubscribe();
 });
 
-test("new threads' branches start with mochi/ by default and follow the Branch prefix setting", async () => {
-  assert.equal(DEFAULT_PREFS.branchPrefix, 'mochi/');
+test("new threads' branches have no prefix by default, follow the Branch prefix setting, and drop the old mochi/ default", async () => {
+  assert.equal(DEFAULT_PREFS.branchPrefix, '');
+  assert.equal(parsePrefs(JSON.stringify({ branchPrefix: 'mochi/' }), null).branchPrefix, '');
   const { initialThreads, threadsReducer } = await import('../store/threads.ts');
   const create = { type: 'create', title: 'x', provider: 'claude', project: '/Users/me/dev/app' } as const;
   const branchOf = () => threadsReducer({ ...initialThreads(), spaceId: 'latitude', views: {} } as never, create).threads.at(-1)!.repo!.branch;
   setPrefs({ branchPrefix: DEFAULT_PREFS.branchPrefix });
-  assert.match(branchOf(), /^mochi\//);
+  assert.doesNotMatch(branchOf(), /\//);
   setPrefs({ branchPrefix: 'me/' });
   assert.match(branchOf(), /^me\//);
 });
