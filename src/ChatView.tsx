@@ -35,7 +35,7 @@ import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
-import { parseSlash, resolveToken, type SlashItem } from './chat/slash';
+import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
 import { withReferences } from './chat/mentions';
@@ -141,7 +141,7 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, 
               <span className="tabular">{clock(entry.at)}</span>
             </span>
           )}
-          {isYou && resolveToken(entry.text, slashItems) ? (
+          {isYou && slashTokens(entry.text, slashItems).length > 0 ? (
             <SlashTokenText text={entry.text} items={slashItems} />
           ) : (
             <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
@@ -277,7 +277,7 @@ function Composer({
                 const command = parseSlash(trimmed);
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
                 const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, !!resolveToken(trimmed, slashItems), provider);
+                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, { isCommand: !!resolveToken(trimmed, slashItems), provider, typedSkills: typedSkills(trimmed, slashItems) });
                 return drift.submit(shown, isQueue ? QUEUED_PREFIX : '', references);
               }}
               placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
