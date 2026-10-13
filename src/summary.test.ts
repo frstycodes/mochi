@@ -20,6 +20,7 @@ test('a finished work group reads as counts by importance, plural-aware, like Cl
   ];
   assert.equal(turnSummary(entries), 'Edited 2 files, ran 1 command, searched the web 4 times');
   assert.equal(turnSummary([tool('Run a'), tool('Run b'), tool('Run c')]), 'Ran 3 commands');
+  assert.equal(turnSummary([tool('Mcp mochi: get_goal'), tool('Mcp mochi: add_step'), tool('Mcp linear: get_issue')]), 'Used Mochi twice, called 1 MCP tool');
   assert.equal(turnSummary([tool('Search a'), tool('Search b'), tool('Read a.ts'), tool('Read b.ts'), tool('Read c.ts'), tool('Read d.ts')]), 'Searched the web twice, read 4 files');
   assert.equal(turnSummary([tool('Search a'), tool('Fetch https://x.dev')]), 'Searched the web, read 1 page');
   assert.equal(turnSummary([{ at: 0, who: 'claude', kind: 'reasoning', text: '…' }]), 'Thought it through');

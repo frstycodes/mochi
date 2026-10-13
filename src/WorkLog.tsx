@@ -4,7 +4,7 @@ import { useDiffTheme } from './themes/highlight';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Flag, Global, GlobalSearch, Note, Server, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Flag, Global, GlobalSearch, Note, TerminalSquare, X } from 'reicon-react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
@@ -20,6 +20,7 @@ import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { useVizThreadId } from './viz/WidgetVisual';
 import { fileLink } from './terminal/links';
 import { describeCall } from './chat/describe';
+import { McpIcon } from './chat/McpIcon';
 import { PREVIEW_KINDS } from './files/kinds';
 import { patchSections } from './chat/turnChanges';
 import { imageMime } from './files/previews';
@@ -416,7 +417,7 @@ function ActionIcon({ action }: { action: CurrentAction }) {
   }
   if (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-3.5 shrink-0" />;
   if (call.verb === 'Skill') return <Note aria-hidden className="size-3.5 shrink-0 text-info" />;
-  if (call.verb === 'Mcp') return <Server aria-hidden className="size-3.5 shrink-0" />;
+  if (call.verb === 'Mcp') return <McpIcon target={call.target} className="size-3.5" />;
   return null;
 }
 
@@ -506,7 +507,7 @@ function SkillRow({ name, description }: { name: string; description?: string })
 function ToolGlyph({ call }: { call: ToolCall }) {
   if (call.verb === 'Run') return <TerminalSquare className="size-4 shrink-0 text-muted-foreground" />;
   if (call.verb === 'Browser') return <Global className="size-4 shrink-0 text-muted-foreground" />;
-  if (call.verb === 'Mcp') return <Server className="size-4 shrink-0 text-muted-foreground" />;
+  if (call.verb === 'Mcp') return <McpIcon target={call.target} className="size-4" />;
   return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-4 shrink-0" />;
 }
 

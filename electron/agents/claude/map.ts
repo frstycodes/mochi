@@ -280,8 +280,11 @@ export function commandsFrom(list: SlashCommand[]): AgentCommand[] {
 
 /** `query.mcpServerStatus()` after a turn: init reports servers still connecting as pending. */
 export function mcpServersFromStatus(list: McpServerStatus[]): McpServer[] {
-  return list.map((s) => ({ name: s.name, status: mcpStatus(s.status), ...(s.tools && { toolCount: s.tools.length }) }));
+  return list.map((s) => ({ name: s.name, status: mcpStatus(s.status), ...(s.tools && { toolCount: s.tools.length }), ...(isRemote(s.config) && { url: s.config.url }) }));
 }
+
+// GAP: claude.ai connectors ('claudeai-proxy') carry Anthropic's proxy URL, not the service's, so they keep the plain glyph.
+const isRemote = (config: McpServerStatus['config']): config is { type: 'http' | 'sse'; url: string } => (config?.type === 'http' || config?.type === 'sse') && typeof config.url === 'string';
 
 const MCP_STATUSES = new Set<string>(['connected', 'pending', 'needs-auth', 'failed', 'disabled'] satisfies McpServer['status'][]);
 const mcpStatus = (status: string) => (MCP_STATUSES.has(status) ? status : 'failed') as McpServer['status'];
