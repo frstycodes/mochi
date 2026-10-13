@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { PR_GUARD } from './prGuard.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
@@ -185,6 +186,7 @@ async function launch(session: Session) {
         abortController: abort,
         canUseTool: approve(threadId),
         mcpServers: { [SERVER]: claudeServer(threadId) },
+        hooks: PR_GUARD,
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },
     });
