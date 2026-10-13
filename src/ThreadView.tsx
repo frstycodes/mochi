@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { BranchUp, ChevronDown, Laptop, Monitor, SidebarLeft, SidebarRight } from 'reicon-react';
+import { BranchUp, ChevronDown, Laptop, Monitor, SidebarRight } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,17 +9,14 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTabKind, Thread } from './model';
@@ -27,7 +24,6 @@ import { DEVICES } from './Composer';
 import { PANE_TABS } from './pane/tabs';
 import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop } from './pane/headerPins';
 import { getPrefs, type Prefs } from './settings/prefs';
-import { Shortcut } from './Shortcut';
 import { AgentLoader } from './AgentLoader';
 import { agentPhase, isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
@@ -42,7 +38,7 @@ import { ActionItems } from './menus/ActionItems';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
-import { LIGHTS_RESERVE, useToggleSlot } from './SidebarToggle';
+import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 
@@ -253,13 +249,13 @@ function ThreadHeader({
   const { state } = useHarness();
   const { isFirst, leafId } = useSplit();
   const { pct } = progressAt(thread, state.now, true);
-  const { hasTrigger, reservesLights } = useToggleSlot(isFirst);
+  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
-      <header ref={header} data-pin-drop className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3 transition-colors duration-150', reservesLights && LIGHTS_RESERVE, pinDrop.isOver && 'bg-accent/40')}>
+      <header ref={header} data-pin-drop className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3 transition-colors duration-150', reservesToggle && TOGGLE_RESERVE, pinDrop.isOver && 'bg-accent/40')}>
         {hasTrigger && <SidebarTrigger className="-ml-1" />}
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <DeviceMenu />
@@ -295,7 +291,7 @@ function ThreadHeader({
         >
           <SidebarRight />
         </TooltipIconButton>
-        <ViewMenu />
+        <PinsMenu />
         <RewindLayer thread={thread} />
       </header>
     </TargetContextMenu>
@@ -414,35 +410,22 @@ function PinnedTab({ kind, isShown, onToggle }: { kind: PaneTabKind; isShown: bo
   );
 }
 
-/** The sidebar toggle and header pins; thread actions live under the title, the side pane has its own button. */
-function ViewMenu() {
-  const { state: sidebar, isMobile, toggleSidebar } = useSidebar();
+/** Which pane tabs sit in the header; thread actions live under the title. */
+function PinsMenu() {
   const pins = useHeaderPins();
   return (
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="View options" className="text-muted-foreground">
+            <Button variant="ghost" size="icon-sm" aria-label="Pin to header" className="text-muted-foreground">
               <OverflowIcon vertical />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>View options</TooltipContent>
+        <TooltipContent>Pin to header</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-56">
-        {!isMobile && (
-          <>
-            <DropdownMenuItem onSelect={toggleSidebar}>
-              <SidebarLeft />
-              {sidebar === 'expanded' ? 'Hide sidebar' : 'Show sidebar'}
-              <DropdownMenuShortcut>
-                <Shortcut keys={['mod', 'B']} />
-              </DropdownMenuShortcut>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel>Pin to header</DropdownMenuLabel>
           {PINNABLE_KINDS.map((kind) => {
