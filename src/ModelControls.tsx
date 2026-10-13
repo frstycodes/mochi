@@ -81,7 +81,7 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
 }
 
 /**
- * The menu body for a `DropdownMenu`: starred models first (where stars apply), then one row per harness whose submenu lists its
+ * The menu body for a `DropdownMenu`: a Starred row (where stars apply), then one row per harness, each opening a submenu of its
  * models; typing filters every harness's models into one flat list. Where a submenu can't sit beside the menu, or nothing can
  * hover, the harness rows drill in instead. `pending`: harnesses whose list hasn't arrived yet. `keepsOpen`: picking doesn't close (star mode).
  */
@@ -114,13 +114,13 @@ export function ModelMenu({
   const notes = useHarnessNotes(space.id);
   const isNarrow = useSyncExternalStore(onDrillInChange, () => window.matchMedia(DRILL_IN).matches);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState<Provider | null>(null);
+  const [page, setPage] = useState<Provider | 'starred' | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isSingle = harnesses.length === 1;
   const drilled = isSingle ? harnesses[0] : isNarrow ? page : null;
   const found = search ? searchModels(models, search) : [];
-  const starredModels = onToggleStar && !drilled ? models.filter((m) => starred?.includes(m.id)) : [];
+  const starredModels = onToggleStar && !isSingle ? models.filter((m) => starred?.includes(m.id)) : [];
   const isLoading = pending.length === harnesses.length;
   const ofHarness = (h: Provider) => models.filter((m) => m.harness === h);
   const items = (list: ModelOption[], hasMark?: boolean) =>
@@ -137,6 +137,16 @@ export function ModelMenu({
         hasMark={hasMark}
       />
     ));
+  const lists = [
+    ...(starredModels.length
+      ? [{ id: 'starred' as const, row: <MenuRow icon={<StarredMark />} title="Starred" summary={starredModels.map((m) => m.name).join(', ')} />, content: items(starredModels, true) }]
+      : []),
+    ...harnesses.map((h) => ({
+      id: h,
+      row: <MenuRow icon={<ProviderMark provider={h} size={16} />} title={HARNESSES[h].name} summary={[harnessSummary(ofHarness(h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')} trailing={unavailable[h] ?? space.plans[h]} />,
+      content: pending.includes(h) ? <MenuNote>Asking {HARNESSES[h].name} for its models…</MenuNote> : items(ofHarness(h)),
+    })),
+  ];
   const firstItem = () => contentRef.current?.querySelector<HTMLElement>('[role^=menuitem]:not([data-disabled])');
   const back = () => {
     setPage(null);
@@ -191,7 +201,7 @@ export function ModelMenu({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={onSearchKeyDown}
-          placeholder={drilled && !search ? `Search ${HARNESSES[drilled].name} models` : 'Search models'}
+          placeholder="Search models"
           aria-label="Search models"
           className="w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
         />
@@ -212,46 +222,32 @@ export function ModelMenu({
                 All models
               </DropdownMenuItem>
             )}
-            {pending.includes(drilled) ? <MenuNote>Asking {HARNESSES[drilled].name} for its models…</MenuNote> : items(ofHarness(drilled))}
+            {lists.find((l) => l.id === drilled)?.content}
           </>
         )}
-        {!search && !drilled && (
-          <>
-            {starredModels.length > 0 && (
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Starred</DropdownMenuLabel>
-                {items(starredModels, true)}
-              </DropdownMenuGroup>
-            )}
-            <DropdownMenuGroup>
-              {starredModels.length > 0 && <DropdownMenuLabel>Harnesses</DropdownMenuLabel>}
-              {harnesses.map((h) => {
-                const row = <HarnessRow harness={h} summary={[harnessSummary(ofHarness(h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')} plan={unavailable[h] ?? space.plans[h]} />;
-                if (isNarrow)
-                  return (
-                    <DropdownMenuItem
-                      key={h}
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setPage(h);
-                      }}
-                    >
-                      {row}
-                      <ChevronRight aria-hidden className="text-subtle-foreground" />
-                    </DropdownMenuItem>
-                  );
-                return (
-                  <DropdownMenuSub key={h}>
-                    <DropdownMenuSubTrigger>{row}</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent collisionPadding={8} className="max-h-(--radix-dropdown-menu-content-available-height) w-72 overflow-y-auto">
-                      {pending.includes(h) ? <MenuNote>Asking {HARNESSES[h].name} for its models…</MenuNote> : items(ofHarness(h))}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                );
-              })}
-            </DropdownMenuGroup>
-          </>
-        )}
+        {!search &&
+          !drilled &&
+          lists.map(({ id, row, content }) =>
+            isNarrow ? (
+              <DropdownMenuItem
+                key={id}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setPage(id);
+                }}
+              >
+                {row}
+                <ChevronRight aria-hidden className="text-subtle-foreground" />
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuSub key={id}>
+                <DropdownMenuSubTrigger>{row}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent collisionPadding={8} className="max-h-(--radix-dropdown-menu-content-available-height) w-72 overflow-y-auto">
+                  {content}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ),
+          )}
       </div>
       {children}
     </DropdownMenuContent>
@@ -284,17 +280,22 @@ function MenuNote({ children }: { children: ReactNode }) {
   return <p className="px-1.5 py-4 text-center type-meta text-muted-foreground">{children}</p>;
 }
 
-function HarnessRow({ harness, summary, plan }: { harness: Provider; summary: string; plan?: string }) {
+function MenuRow({ icon, title, summary, trailing }: { icon: ReactNode; title: string; summary: string; trailing?: string }) {
   return (
     <>
-      <ProviderMark provider={harness} size={16} />
+      {icon}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate">{HARNESSES[harness].name}</span>
+        <span className="truncate">{title}</span>
         <span className="truncate type-caption text-subtle-foreground">{summary}</span>
       </span>
-      {!!plan && <span className="type-caption text-subtle-foreground">{plan}</span>}
+      {!!trailing && <span className="type-caption text-subtle-foreground">{trailing}</span>}
     </>
   );
+}
+
+function StarredMark() {
+  // `!` on the svg and its paths: a focused menu item recolours every descendant, and the path fills with its own colour.
+  return <Star aria-hidden weight="Filled" className="size-4 text-warning! [&_*]:text-warning!" />;
 }
 
 function ModelItem({
@@ -455,8 +456,8 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
       }}
       className="flex size-5 shrink-0 cursor-default items-center justify-center rounded-sm text-subtle-foreground hover:text-foreground"
     >
-      {/* `!`: a focused menu item recolours every descendant. */}
-      <Star weight={isOn ? 'Filled' : undefined} className={cn('size-3.5', isOn && 'text-warning!')} />
+      {/* `!` on the svg and its paths: a focused menu item recolours every descendant. */}
+      <Star weight={isOn ? 'Filled' : undefined} className={cn('size-3.5', isOn && 'text-warning! [&_*]:text-warning!')} />
     </button>
   );
 }
