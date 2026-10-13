@@ -37,9 +37,10 @@ export type AgentEvent =
   /**
    * `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills
    * the query in late). `skill`: the call loaded this skill (Claude's Skill tool, a skill Codex got with the message). `mcp`: the
-   * call ran this tool of this MCP server.
+   * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
+   * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number; links?: WebLink[]; skill?: string; mcp?: McpCall }
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
@@ -91,7 +92,8 @@ export interface AgentSubagentEvent {
   /** One line on what it is doing now. */
   activity?: string;
   /** One of its own tool calls. */
-  step?: { id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number };
+  /** One of its tool calls, with the same extras as the thread's own (`description` on start; `output`, `patch` on end). */
+  step?: { id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string };
   /** Its latest message; `isDelta` appends to the one before. */
   message?: string;
   isDelta?: boolean;

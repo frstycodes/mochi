@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils';
 import { SubagentAvatar, SubagentLine, SubagentMeta, subagentPersona } from '../agents/parts';
 import { useThreadFiles } from '../files/viewer';
 import { reportOf } from '../runtime/subagents';
-import { parseTool } from '../summary';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from '../viz/FenceVisual';
 import { useGitDiff } from '../git/useGit';
 import { useWorktreePath } from '../git/worktrees';
@@ -20,7 +19,7 @@ import type { Subagent, Thread } from '../model';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
 import { VizThreadProvider } from '../viz/WidgetVisual';
-import { DiffStat, DiffView, Expand, ToolRow } from '../WorkLog';
+import { CallList, CallRow, DiffStat, DiffView, Expand } from '../WorkLog';
 import type { PaneTabProps } from './tabs';
 
 /** Every agent this thread's agent started, running first, each with its live log, a stop button and what it changed. */
@@ -125,16 +124,16 @@ function useRevealOnFocus(isFocused: boolean) {
   return ref;
 }
 
-/** Its own tool calls, as work log rows. */
+/** Its own tool calls, as the same call list an open work group shows. */
 function SubagentSteps({ subagent }: { subagent: Subagent }) {
   const files = useThreadFiles();
   if (!subagent.steps.length) return <p className="px-2 py-1 type-meta text-subtle-foreground">{subagent.status === 'running' ? 'No tool calls yet' : 'No tool calls'}</p>;
   return (
-    <ol className="flex flex-col gap-0.5">
+    <CallList>
       {subagent.steps.map((step) => (
-        <ToolRow key={step.id} call={parseTool(step.text)} isRunning={!step.isDone && subagent.status === 'running'} files={files} />
+        <CallRow key={step.id} entry={step} isRunning={!step.isDone && subagent.status === 'running'} files={files} />
       ))}
-    </ol>
+    </CallList>
   );
 }
 

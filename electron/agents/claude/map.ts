@@ -43,7 +43,8 @@ export function createMapper(threadId: string, cwd: string) {
       const { description, prompt, model, run_in_background } = input as Partial<AgentInput>;
       return [subagent(id, 'start', { toolId: id, name: description || 'Agent', ...(prompt && { prompt }), ...(model && { model }), isBackground: run_in_background === true })];
     }
-    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers), ...toolKind(name, input, servers) };
+    const description = callDescription(name, input);
+    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) };
     if (name === 'TodoWrite') return [start, { threadId, type: 'plan', items: planFromTodos(input) }];
     if (name !== 'TaskUpdate') return [start];
     const task = tasks.find((t) => t.id === input.taskId);
@@ -59,7 +60,7 @@ export function createMapper(threadId: string, cwd: string) {
     if (!tool) return [];
     tools.delete(block.tool_use_id);
     if (AGENT_TOOLS.has(tool.name)) return agentEnd(block, result);
-    const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block) };
+    const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block, result) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
     if (links) end.links = links;
     const task = (result as { task?: { id?: unknown } } | undefined)?.task;
@@ -68,11 +69,14 @@ export function createMapper(threadId: string, cwd: string) {
     return [end, planFromTasks()];
   }
 
-  function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock) {
-    const outcome: { text: string; files?: string[]; exitCode?: number } = { text: describeTool(tool.name, tool.input, servers) };
+  /** What a finished call reports, the thread's own or a subagent's: its line, edited files, a command's exit code and output tail, an edit's patch. */
+  function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock, result: unknown) {
+    const outcome: { text: string; files?: string[]; exitCode?: number; output?: string; patch?: string } = { text: describeTool(tool.name, tool.input, servers, cwd) };
     const file = tool.input.file_path ?? tool.input.notebook_path;
     if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [path.relative(cwd, path.resolve(cwd, file))];
-    if (tool.name === 'Bash') outcome.exitCode = exitCode(block);
+    if (tool.name === 'Bash') Object.assign(outcome, { exitCode: exitCode(block), output: tail(resultText(block)) });
+    const patch = !block.is_error && EDIT_TOOLS.has(tool.name) ? patchOf(tool.input, result) : undefined;
+    if (patch) outcome.patch = patch;
     return outcome;
   }
 
@@ -95,7 +99,8 @@ export function createMapper(threadId: string, cwd: string) {
         if (block.type !== 'tool_use') return [];
         const input = block.input as Record<string, unknown>;
         tools.set(block.id, { name: block.name, input });
-        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input, servers) } })];
+        const description = callDescription(block.name, input);
+        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input, servers, cwd), ...(description && { description }) } })];
       });
     if (message.type !== 'user' || typeof message.message.content === 'string') return [];
     return message.message.content.flatMap((block): AgentEvent[] => {
@@ -104,7 +109,7 @@ export function createMapper(threadId: string, cwd: string) {
       const tool = tools.get(result.tool_use_id);
       if (!tool) return [];
       tools.delete(result.tool_use_id);
-      return [subagent(id, 'progress', { step: { id: result.tool_use_id, phase: 'end', ...toolOutcome(tool, result) } })];
+      return [subagent(id, 'progress', { step: { id: result.tool_use_id, phase: 'end', ...toolOutcome(tool, result, message.tool_use_result) } })];
     });
   }
 
@@ -276,15 +281,45 @@ export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
   return todos.flatMap((t) => (typeof t.content === 'string' ? [{ title: t.content, status: STATUS[t.status as keyof typeof STATUS] ?? 'pending' }] : []));
 }
 
-/** One line for the work log: the command for Bash, the path for file tools, the tool name otherwise. Tools the work log knows get its verb ("Run pnpm test", "Skill ui", "Mcp linear: list_issues"). */
-export function describeTool(name: string, input: Record<string, unknown>, servers: string[] = []) {
+/**
+ * One line for the work log: the command for Bash, the path for file tools (relative to `cwd` when inside it), the tool name otherwise.
+ * Tools the work log knows get its verb ("Run pnpm test", "Skill ui", "Mcp linear: list_issues").
+ */
+export function describeTool(name: string, input: Record<string, unknown>, servers: string[] = [], cwd?: string) {
   const kind = toolKind(name, input, servers);
   if (kind.skill) return `Skill ${kind.skill}`;
   if (kind.mcp) return `Mcp ${kind.mcp.server}: ${kind.mcp.tool}`;
-  const target = input.command ?? input.file_path ?? input.notebook_path ?? input.pattern ?? input.url ?? input.query ?? input.subject ?? input.description;
+  const file = input.file_path ?? input.notebook_path;
+  const inside = typeof file === 'string' && cwd ? path.relative(cwd, path.resolve(cwd, file)) : undefined;
+  const target = input.command ?? (inside && !inside.startsWith('..') ? inside : file) ?? input.pattern ?? input.url ?? input.query ?? input.subject ?? input.description;
   if (typeof target !== 'string') return name;
   const verb = VERBS[name as keyof typeof VERBS];
   return verb ? `${verb} ${target}` : `${name}: ${target.split('\n')[0].slice(0, 200)}`;
+}
+
+/** The plain-language line a work-group row shows: Bash's own `description`; Grep and Glob in words. Other tools read fine from their verb and target. */
+export function callDescription(name: string, input: Record<string, unknown>) {
+  const where = typeof input.path === 'string' ? ` in ${input.path.split('/').pop()}` : '';
+  if (name === 'Bash' && typeof input.description === 'string' && input.description.trim()) return input.description.trim();
+  if (name === 'Grep' && typeof input.pattern === 'string') return `Searched for “${input.pattern}”${where}`;
+  if (name === 'Glob' && typeof input.pattern === 'string') return `Found files matching ${input.pattern}${where}`;
+  return undefined;
+}
+
+const OUTPUT_MAX = 4000;
+
+/** The end of a command's output: where the result or the error is, and capped so a chatty command can't bloat the saved thread. */
+function tail(text: string) {
+  return text.length > OUTPUT_MAX ? `…${text.slice(-OUTPUT_MAX)}` : text;
+}
+
+/** An Edit/Write result's `structuredPatch` as a unified diff `@pierre/diffs` can render. */
+export function patchOf(input: Record<string, unknown>, result: unknown) {
+  const hunks = (result as { structuredPatch?: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] } | undefined)?.structuredPatch;
+  const file = input.file_path ?? input.notebook_path;
+  if (!Array.isArray(hunks) || !hunks.length || typeof file !== 'string') return undefined;
+  const name = path.basename(file);
+  return [`diff --git a/${name} b/${name}`, `--- a/${name}`, `+++ b/${name}`, ...hunks.flatMap((h) => [`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`, ...h.lines])].join('\n');
 }
 
 /** The skill a Skill call loads (its `skill` input, a leading `/` allowed) or the MCP server and tool an `mcp__` call runs. */

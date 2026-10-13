@@ -10,10 +10,9 @@ export type ChatRow =
   | { kind: 'subagent'; key: string; entry: ActivityEntry };
 
 /**
- * One work row per turn (your message to the next): every tool call and reasoning of the turn, plus the events logged
- * while the agent was mid-work (approvals, their answers, goal changes). The agent's prose stays its own row, so work
- * after a paragraph still joins the turn's one row above it. Events before the turn's first work (drift tags on your
- * message) or after its prose stay rows of their own.
+ * Work groups interleave with prose like Claude's: the tool calls and reasoning between two messages (anyone's) are one
+ * group, plus the events logged while the agent was mid-work (approvals, their answers, goal changes). Events before a
+ * group's first work (drift tags on your message) or after prose stay rows of their own.
  */
 export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow[] {
   const rows: ChatRow[] = [];
@@ -41,7 +40,7 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): Cha
       if (entry.card) turn = undefined;
       return rows.push({ kind: 'event', key, entry });
     }
-    if (entry.who === 'you') turn = undefined;
+    turn = undefined;
     isMidWork = false;
     const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
@@ -51,8 +50,8 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): Cha
   return rows;
 }
 
-/** The work row a running thread is still writing: the newest one, unless you've spoken since. */
+/** The work row a running thread is still writing: the newest one, unless anyone has spoken since. */
 export function liveWorkIndex(rows: ChatRow[]) {
   const i = rows.findLastIndex((r) => r.kind === 'work');
-  return rows.slice(i + 1).some((r) => r.kind === 'message' && r.entry.who === 'you') ? -1 : i;
+  return rows.slice(i + 1).some((r) => r.kind === 'message') ? -1 : i;
 }

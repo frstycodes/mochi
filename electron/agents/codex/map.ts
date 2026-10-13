@@ -210,6 +210,7 @@ const CONNECTION_STATUS = { notStarted: 'pending', starting: 'pending', connecte
 const STARTUP_STATUS = { starting: 'pending', ready: 'connected', failed: 'failed', cancelled: 'failed' } as const satisfies Record<string, McpServer['status']>;
 const TURN_STATUS = { completed: 'done', interrupted: 'interrupted', failed: 'failed' } as const;
 const AGENT_END = { completed: 'done', errored: 'failed', interrupted: 'stopped', shutdown: 'stopped' } as const;
+const OUTPUT_MAX = 4000;
 
 function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'end', s: ThreadState): AgentEvent[] {
   if (!item || typeof item.id !== 'string') return [];
@@ -226,7 +227,12 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
     case 'commandExecution': {
       if (typeof item.command !== 'string') return [];
       const exitCode = typeof item.exitCode === 'number' ? item.exitCode : undefined;
-      return [{ threadId, type: 'tool', id, phase, text: item.command, ...(phase === 'end' && exitCode !== undefined && { exitCode }) }];
+      const output = typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput.slice(-OUTPUT_MAX) : undefined;
+      // `command` is the shell wrapper (`/bin/zsh -lc '…'`); a single `commandActions` entry is what the agent actually typed.
+      const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
+      const typed = actions.length === 1 ? obj(actions[0])?.command : undefined;
+      const text = typeof typed === 'string' ? typed : item.command;
+      return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && exitCode !== undefined && { exitCode }), ...(phase === 'end' && output !== undefined && { output }) }];
     }
     case 'fileChange': {
       const files = Array.isArray(item.changes) ? item.changes.flatMap((c) => (typeof obj(c)?.path === 'string' ? [relative(s.cwd, obj(c)!.path as string)] : [])) : [];
@@ -300,7 +306,7 @@ export function childEvents(method: string, params: unknown, s: ThreadState, sub
   if (method !== 'item/started' && method !== 'item/completed') return [];
   const item = obj(p.item);
   if (item?.type === 'agentMessage') return method === 'item/completed' && typeof item.text === 'string' && item.text ? [progress({ message: item.text })] : [];
-  return mapItem(item, method === 'item/started' ? 'start' : 'end', s).flatMap((e) => (e.type === 'tool' ? [progress({ step: { id: e.id, phase: e.phase, text: e.text, ...(e.files && { files: e.files }), ...(e.exitCode !== undefined && { exitCode: e.exitCode }) } })] : []));
+  return mapItem(item, method === 'item/started' ? 'start' : 'end', s).flatMap((e) => (e.type === 'tool' ? [progress({ step: { id: e.id, phase: e.phase, text: e.text, ...(e.files && { files: e.files }), ...(e.exitCode !== undefined && { exitCode: e.exitCode }), ...(e.output !== undefined && { output: e.output }) } })] : []));
 }
 
 /** `/root/echo_hi` → "echo hi". */

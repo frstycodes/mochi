@@ -52,7 +52,7 @@ test('a real turn maps to streamed messages, a plan, a command, an approval and 
   ]);
 
   const tools = events.filter((e) => e.type === 'tool');
-  assert.deepEqual(tools.map((t) => [t.phase, t.text, t.exitCode]), [['start', "/bin/zsh -lc 'touch c.txt'", undefined], ['end', "/bin/zsh -lc 'touch c.txt'", 0]]);
+  assert.deepEqual(tools.map((t) => [t.phase, t.text, t.exitCode]), [['start', 'touch c.txt', undefined], ['end', 'touch c.txt', 0]]);
 
   const approval = events.find((e) => e.type === 'approval')!;
   assert.deepEqual(approval, { threadId: 'h1', type: 'approval', requestId: 'codex:default:number:0', kind: 'command', title: 'Run a command', detail: 'In /tmp/scratch', code: "/bin/zsh -lc 'touch c.txt'" });
@@ -296,7 +296,7 @@ test('a spawned agent becomes a subagent of its thread with its own steps, resul
     assert.ok(subagent.every((e) => e.threadId === 'h1' && e.id === child), 'the child reports as a subagent of the thread that spawned it');
     assert.deepEqual(subagent[0], { threadId: 'h1', type: 'subagent', id: child, phase: 'start', toolId: 'call_03dd2329246e48cbaa23dd501478dcfa', name: 'echo hi', isBackground: true });
     const steps = subagent.flatMap((e) => (e.step ? [[e.step.phase, e.step.text, e.step.exitCode]] : []));
-    assert.deepEqual(steps, [['start', "/bin/zsh -lc 'echo hi'", undefined], ['end', "/bin/zsh -lc 'echo hi'", 0]]);
+    assert.deepEqual(steps, [['start', 'echo hi', undefined], ['end', 'echo hi', 0]]);
     assert.deepEqual(subagent.flatMap((e) => (e.message ? [e.message] : [])), ['hi']);
     assert.equal(subagent.findLast((e) => e.tokens)?.tokens, 42727);
     assert.deepEqual(subagent.filter((e) => e.phase === 'end').map((e) => e.status), ['done', 'done'], 'both the parent item and the child turn end it; the store keeps the first');

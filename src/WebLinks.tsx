@@ -1,61 +1,39 @@
 import { useState } from 'react';
-import { ArrowUpRight, Copy3, Global, GlobalSearch } from 'reicon-react';
+import { ArrowUpRight, Copy3, Global } from 'reicon-react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { hostname } from './agentPhase';
 import { copyText } from './clipboard';
 import type { WebLink } from './model';
-import type { ToolCall } from './summary';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { useVizThreadId } from './viz/WidgetVisual';
 
 const SHOWN = 4;
 
-/** A web search in the work log: the query, then the pages it returned with their favicons. */
-export function WebSearchRow({ call, links = [], isRunning }: { call: ToolCall; links?: WebLink[]; isRunning: boolean }) {
+/** The pages a web search returned, with their favicons; the first few, then the rest on demand. */
+export function LinkList({ links }: { links: WebLink[] }) {
   const [isAll, setAll] = useState(false);
   const shown = isAll ? links : links.slice(0, SHOWN);
   return (
-    <li className="flex flex-col">
-      <div className="flex h-7 min-w-0 items-center gap-2 px-2 type-meta">
-        <GlobalSearch className="size-4 shrink-0 text-muted-foreground" />
-        <span className="shrink-0 text-subtle-foreground">{isRunning ? 'Searching' : 'Searched'}</span>
-        <span className="min-w-0 truncate text-foreground" title={call.target}>
-          {call.target}
-        </span>
-        {links.length > 0 && <span className="ml-auto shrink-0 pl-2 tabular text-subtle-foreground">{links.length}</span>}
-      </div>
-      {links.length > 0 && (
-        <ul className="flex flex-col pl-6">
-          {shown.map((link, i) => (
-            <li key={`${link.url}-${i}`}>
-              <LinkRow link={link} />
-            </li>
-          ))}
-          {links.length > SHOWN && (
-            <li>
-              <button type="button" onClick={() => setAll((a) => !a)} className="flex h-6 cursor-default items-center rounded-md px-2 type-caption text-subtle-foreground hover:bg-accent/60 hover:text-foreground">
-                {isAll ? 'Show fewer' : `${links.length - SHOWN} more`}
-              </button>
-            </li>
-          )}
-        </ul>
+    <ul className="-mx-2 flex flex-col">
+      {shown.map((link, i) => (
+        <li key={`${link.url}-${i}`}>
+          <LinkRow link={link} />
+        </li>
+      ))}
+      {links.length > SHOWN && (
+        <li>
+          <button type="button" onClick={() => setAll((a) => !a)} className="flex h-6 cursor-default items-center rounded-md px-2 type-caption text-subtle-foreground hover:bg-accent/60 hover:text-foreground">
+            {isAll ? 'Show fewer' : `${links.length - SHOWN} more`}
+          </button>
+        </li>
       )}
-    </li>
+    </ul>
   );
 }
 
-/** A page the agent read: its favicon and where it lives, opening in the browser tab. */
-export function WebFetchRow({ call, links, isRunning }: { call: ToolCall; links?: WebLink[]; isRunning: boolean }) {
-  const link = links?.[0] ?? { url: call.target };
-  return (
-    <li className="flex min-w-0">
-      <LinkRow link={link} verb={isRunning ? 'Reading' : 'Read'} className="h-7 type-meta" />
-    </li>
-  );
-}
-
-function LinkRow({ link, verb, className }: { link: WebLink; verb?: string; className?: string }) {
+/** A page: its favicon and where it lives, opening in the browser tab. */
+export function LinkRow({ link, className }: { link: WebLink; className?: string }) {
   const { openUrl } = usePaneOpeners(useVizThreadId());
   const host = hostname(link.url);
   return (
@@ -68,7 +46,6 @@ function LinkRow({ link, verb, className }: { link: WebLink; verb?: string; clas
           className={cn('flex h-6 w-full min-w-0 cursor-default items-center gap-2 rounded-md px-2 text-left type-caption hover:bg-accent/60', className)}
         >
           <Favicon host={host} />
-          {!!verb && <span className="shrink-0 text-subtle-foreground">{verb}</span>}
           <span className="min-w-0 truncate text-foreground">{link.title ?? host}</span>
           <span className="max-w-[45%] shrink-0 truncate text-subtle-foreground">{link.title ? host : pathOf(link.url)}</span>
         </button>
