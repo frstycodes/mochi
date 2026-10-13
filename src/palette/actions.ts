@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
@@ -13,6 +13,8 @@ import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
 import { openSchedule } from '../schedule/ScheduleDialog';
 import { openSettings } from '../settings/open';
+import { openReplay } from '../replay/open';
+import { shareReplay } from '../replay/load';
 import { askInSideChat } from '../sidechat/AskInSideChat';
 import { askSecondOpinion } from '../secondOpinion/run';
 import { reviewerFor } from '../secondOpinion/reviewer';
@@ -73,6 +75,8 @@ export const ACTIONS = [
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
   { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
+  { id: 'thread-replay', group: 'Thread', title: 'Replay thread', icon: VideoPlay, keywords: 'recording session playback demo debug', when: when.thread, run: onThread((t) => openReplay(t.id)) },
+  { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Export, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   {
     id: 'thread-second-opinion',

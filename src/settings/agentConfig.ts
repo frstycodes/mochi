@@ -212,6 +212,18 @@ export function isSecret(key: string, value: string): boolean {
   return value.length >= 32 && !/\s/.test(value) && /\d/.test(value) && /[a-z]/i.test(value) && !/[/\\]/.test(value);
 }
 
+const ASSIGNMENT = /([\w.-]+)(["']?\s*[:=]\s*)(["']?)([^\s"',;]+)/g;
+const BEARER = /\bBearer\s+[\w.~+/-]+=*/gi;
+export const REDACTED = '[redacted]';
+
+/** Free text (a tool's output, a command) with credentials masked: `KEY=value` / `"key": "value"` pairs judged by `isSecret`, bare tokens by their known prefixes. */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(BEARER, `Bearer ${REDACTED}`)
+    .replace(ASSIGNMENT, (all, key: string, sep: string, quote: string, value: string) => (value !== REDACTED && isSecret(key, value) ? `${key}${sep}${quote}${REDACTED}` : all))
+    .replace(/[^\s"'`,;:=()[\]{}<>]+/g, (token) => (SECRET_VALUE.test(token) ? REDACTED : token));
+}
+
 /**
  * The server with every secret-looking value replaced by `${VAR}`, so importing never copies a credential: the user sets
  * VAR (or re-enters the value in the tool) and the row shows "needs VAR" until then.

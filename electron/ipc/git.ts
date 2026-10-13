@@ -183,6 +183,16 @@ export const git = {
     await restore(top, commit);
   },
 
+  async checkpointDiff(_sender, cwd, threadId, n) {
+    const top = await topLevel(string(cwd, 'cwd'));
+    const index = integer(n, 'n', 0, 1_000_000);
+    const commit = await resolveCommit(top, checkpointRef(string(threadId, 'threadId', 64), index));
+    if (!commit) throw new Error(`Checkpoint ${index} has no saved files`);
+    const [branch, base] = await Promise.all([currentBranch(top), baseRef(top)]);
+    const from = await runGit(top, ['merge-base', commit, base]).then((s) => s.trim(), () => `${commit}^`);
+    return { branch, base, files: parseDiff(await runGit(top, ['diff', from, commit, ...DIFF_FLAGS]), false) };
+  },
+
   async forkWorktree(_sender, cwd, threadId, branch, from) {
     const source = await topLevel(string(cwd, 'cwd'));
     const top = await mainRepo(source);
