@@ -20,13 +20,44 @@ test('one aliased query; names go in as variables, never into the query text', (
 test("gh's response maps to states; unresolved refs are left out", () => {
   const json = JSON.stringify({
     data: {
-      r0: { issueOrPullRequest: { __typename: 'PullRequest', title: 'A', url: 'u0', state: 'OPEN', isDraft: false, mergeable: 'CONFLICTING', commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE' } } }] } } },
-      r1: { issueOrPullRequest: { __typename: 'Issue', title: 'B', url: 'u1', state: 'CLOSED', stateReason: 'NOT_PLANNED' } },
+      r0: {
+        issueOrPullRequest: {
+          __typename: 'PullRequest',
+          title: 'A',
+          url: 'u0',
+          state: 'OPEN',
+          isDraft: false,
+          mergeable: 'CONFLICTING',
+          reviewDecision: 'CHANGES_REQUESTED',
+          updatedAt: '2026-10-13T10:00:00Z',
+          author: { login: 'ana' },
+          headRefName: 'feat/a',
+          baseRefName: 'main',
+          additions: 12,
+          deletions: 3,
+          changedFiles: 2,
+          commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE' } } }] },
+        },
+      },
+      r1: { issueOrPullRequest: { __typename: 'Issue', title: 'B', url: 'u1', state: 'CLOSED', stateReason: 'NOT_PLANNED', author: null } },
       r2: { issueOrPullRequest: null },
     },
   });
   assert.deepEqual(parseRefs(json, refs), {
-    'o/r#1': { kind: 'pr', status: 'open', title: 'A', url: 'u0', hasConflicts: true, isFailing: true, isNotPlanned: false },
-    'o/r#2': { kind: 'issue', status: 'closed', title: 'B', url: 'u1', hasConflicts: false, isFailing: false, isNotPlanned: true },
+    'o/r#1': {
+      kind: 'pr',
+      status: 'open',
+      title: 'A',
+      url: 'u0',
+      hasConflicts: true,
+      checks: 'fail',
+      review: 'changes',
+      isNotPlanned: false,
+      author: 'ana',
+      updatedAt: '2026-10-13T10:00:00Z',
+      branch: { head: 'feat/a', base: 'main' },
+      diff: { added: 12, removed: 3, files: 2 },
+    },
+    'o/r#2': { kind: 'issue', status: 'closed', title: 'B', url: 'u1', hasConflicts: false, checks: null, review: null, isNotPlanned: true, author: null, updatedAt: null, branch: null, diff: null },
   });
 });

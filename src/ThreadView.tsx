@@ -39,6 +39,7 @@ import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { ThreadPrHoverCard } from './chat/RefHoverCard';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -270,9 +271,11 @@ function ThreadHeader({
           </span>
         )}
         {thread.prs.map((pr) => (
-          <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden @xl:inline-flex">
-            #{pr.number}
-          </Badge>
+          <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr}>
+            <Badge variant="secondary" tabIndex={0} aria-label={`#${pr.number}: ${pr.title}`} className="hidden @xl:inline-flex">
+              #{pr.number}
+            </Badge>
+          </ThreadPrHoverCard>
         ))}
         <span className="flex-1" />
         <Tooltip>

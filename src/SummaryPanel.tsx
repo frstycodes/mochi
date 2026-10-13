@@ -11,7 +11,6 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
@@ -19,7 +18,9 @@ import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
 import { openFiles } from './files/viewer';
 import { withLivePr } from './git/prs';
-import { PrStateIcon } from './icons/github';
+import { RefHoverCard, RefIcon } from './chat/RefHoverCard';
+import { refDescription } from './chat/refs';
+import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { usePr } from './git/useGit';
 import type { McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
 import { useProfiles } from './profiles';
@@ -161,7 +162,7 @@ function NeedsYou({ thread }: { thread: Thread }) {
 }
 
 function ChangesRow({ thread, summary, prs, open }: SectionProps) {
-  const chips = prs.filter(isPrChip);
+  const chips = useThreadPrs(thread, prs).filter((item) => isPrChip(item.pr));
   if (!thread.repo && summary.files.length === 0 && chips.length === 0) return null;
   return (
     <>
@@ -179,9 +180,9 @@ function ChangesRow({ thread, summary, prs, open }: SectionProps) {
       </SummaryRow>
       {chips.length > 0 && (
         <ul aria-label="Open pull requests" className="flex flex-wrap gap-1 pt-0.5 pr-2 pb-1 pl-[34px]">
-          {chips.map((pr) => (
-            <li key={pr.number}>
-              <PrChip pr={pr} onOpen={open.url} />
+          {chips.map((item) => (
+            <li key={item.pr.number}>
+              <PrChip item={item} onOpen={open.url} />
             </li>
           ))}
         </ul>
@@ -190,36 +191,34 @@ function ChangesRow({ thread, summary, prs, open }: SectionProps) {
   );
 }
 
-/** A demo PR has no URL: the chip still names it on hover and focus, but opens nothing. */
-function PrChip({ pr, onOpen }: { pr: PullRequest; onOpen: (url: string) => void }) {
-  const { url } = pr;
+/** A PR GitHub can't place (no URL, no repo) still previews on hover and focus, but opens nothing. */
+function PrChip({ item, onOpen }: { item: ThreadPr; onOpen: (url: string) => void }) {
+  const url = item.state.url;
   const chip = 'inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 type-caption font-medium text-foreground';
+  const label = `${item.label}: ${item.state.title}, ${refDescription('pr', item.state)}`;
   const content = (
     <>
-      <PrStateIcon state={pr.state} className="size-3.5" />
-      <span className="tabular">#{pr.number}</span>
+      <RefIcon item={item} className="size-3.5" />
+      <span className="tabular">{item.label}</span>
     </>
   );
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {url ? (
-          <button type="button" onClick={() => onOpen(url)} aria-label={`#${pr.number}: ${pr.title}, ${pr.state}`} className={cn(chip, 'transition-colors hover:bg-accent')}>
-            {content}
-          </button>
-        ) : (
-          <span tabIndex={0} aria-label={`#${pr.number}: ${pr.title}, ${pr.state}`} className={chip}>
-            {content}
-          </span>
-        )}
-      </TooltipTrigger>
-      <TooltipContent className="max-w-72">{pr.title}</TooltipContent>
-    </Tooltip>
+    <RefHoverCard item={item}>
+      {url ? (
+        <button type="button" onClick={() => onOpen(url)} aria-label={label} className={cn(chip, 'transition-colors hover:bg-accent')}>
+          {content}
+        </button>
+      ) : (
+        <span tabIndex={0} aria-label={label} className={chip}>
+          {content}
+        </span>
+      )}
+    </RefHoverCard>
   );
 }
 
-function PullRequestRows({ prs, open }: SectionProps) {
-  return prs.map((pr) => <PullRequestRow key={pr.number} pr={pr} onOpen={open.url} />);
+function PullRequestRows({ thread, prs, open }: SectionProps) {
+  return useThreadPrs(thread, prs).map((item) => <PullRequestRow key={item.pr.number} item={item} onOpen={open.url} />);
 }
 
 function SourceRows({ thread, open }: SectionProps) {
@@ -350,17 +349,27 @@ function OpenInEditorItems({ thread }: { thread: Thread }) {
   ));
 }
 
-function PullRequestRow({ pr, onOpen }: { pr: PullRequest; onOpen: (url: string) => void }) {
-  const { url } = pr;
+// SummaryRow doesn't forward props, so the hover card and context menu triggers sit on a wrapper.
+function PullRequestRow({ item, onOpen }: { item: ThreadPr; onOpen: (url: string) => void }) {
+  const url = item.state.url;
   const row = (
-    <SummaryRow icon={<PrStateIcon state={pr.state} className="size-4" />} label={pr.title} onClick={url ? () => onOpen(url) : undefined}>
-      <span className="tabular type-caption text-subtle-foreground">#{pr.number}</span>
-    </SummaryRow>
+    <div>
+      <SummaryRow icon={<RefIcon item={item} className="size-4" />} label={item.state.title} onClick={url ? () => onOpen(url) : undefined}>
+        <span className="tabular type-caption text-subtle-foreground">{item.label}</span>
+      </SummaryRow>
+    </div>
   );
-  if (!url) return row;
+  if (!url)
+    return (
+      <RefHoverCard item={item} side="left" align="start">
+        {row}
+      </RefHoverCard>
+    );
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <RefHoverCard item={item} side="left" align="start">
+        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      </RefHoverCard>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => onOpen(url)}>Open in the side pane</ContextMenuItem>
         {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}

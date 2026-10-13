@@ -2,19 +2,17 @@ import { isValidElement, type ComponentProps, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { defaultComponents, type ExtraProps } from 'streamdown';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { threadCwd } from '@/host/cwd';
-import { GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import { copyText } from '../clipboard';
 import { worktreeLink } from '../files/kinds';
 import { useWorktreeFiles } from '../files/useWorktreeFiles';
 import { useThreadFiles } from '../files/viewer';
 import { fileLink } from '../terminal/links';
-import { useProfiles } from '../profiles';
+import { useGithubScope } from '../git/useThreadPrs';
 import { useHarness, useThread } from '../store';
 import { useVizThreadId } from '../viz/WidgetVisual';
-import { refDescription, refFromUrl, refLabel, refStatus, refTone, refUrl, type GithubRef } from './refs';
+import { RefHoverCard, RefIcon } from './RefHoverCard';
+import { refDescription, refFromUrl, refLabel, refUrl, type GithubRef } from './refs';
 import { useRefState, useRepoSlug } from './useRefState';
 
 const DefaultLink = defaultComponents.a!;
@@ -44,42 +42,35 @@ function TextRef({ refKey, children }: { refKey: string; children: ReactNode }) 
   return <RefChip githubRef={owner ? { owner, repo, number: Number(number) } : { ...home!, number: Number(number) }} />;
 }
 
-/** A PR or issue: its state icon in the state's colour, `#n` (own repo) or `owner/repo#n`, the title on hover. */
+/** A PR or issue: its state icon in the state's colour, `#n` (own repo) or `owner/repo#n`, the preview card on hover or focus. */
 export function RefChip({ githubRef, children }: { githubRef: GithubRef; children?: ReactNode }) {
   const { threadId, cwd, githubUser } = useThreadGithub();
   const home = useRepoSlug(cwd);
   const state = useRefState(githubRef, { cwd, githubUser });
   const { dispatch } = useHarness();
   const url = state?.url ?? refUrl(githubRef);
-  const kind = state?.kind ?? githubRef.kind ?? 'pr';
-  const description = refDescription(githubRef, state);
+  const description = refDescription(githubRef.kind, state);
   const label = refLabel(githubRef, home);
 
   return (
     <ContextMenu>
-      <Tooltip>
+      <RefHoverCard item={{ githubRef, label, state }}>
         <ContextMenuTrigger asChild>
-          <TooltipTrigger asChild>
-            <a
-              href={url}
-              onClick={(e) => {
-                e.preventDefault();
-                dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url });
-              }}
-              aria-label={`${children ? textOf(children) : label}: ${state?.title ? `${state.title}, ` : ''}${description}`}
-              className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 align-baseline font-medium text-foreground no-underline transition-colors [--ref-surface:var(--muted)] hover:bg-accent hover:[--ref-surface:var(--accent)]"
-            >
-              <GithubStateIcon kind={kind} status={refStatus(state)} hasConflicts={state?.hasConflicts} className={cn('size-3.5', REF_TONE_CLASS[refTone(state)])} />
-              <span className="truncate tabular">{children ?? label}</span>
-              {!!state?.isFailing && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />}
-            </a>
-          </TooltipTrigger>
+          <a
+            href={url}
+            onClick={(e) => {
+              e.preventDefault();
+              dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url });
+            }}
+            aria-label={`${children ? textOf(children) : label}: ${state?.title ? `${state.title}, ` : ''}${description}`}
+            className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 align-baseline font-medium text-foreground no-underline transition-colors [--ref-surface:var(--muted)] hover:bg-accent hover:[--ref-surface:var(--accent)]"
+          >
+            <RefIcon item={{ githubRef, label, state }} className="size-3.5" />
+            <span className="truncate tabular">{children ?? label}</span>
+            {state?.checks === 'fail' && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />}
+          </a>
         </ContextMenuTrigger>
-        <TooltipContent className="max-w-72 flex-col items-start gap-0.5">
-          <span className="block font-medium">{state?.title ?? refLabel(githubRef, null)}</span>
-          <span className="block opacity-80">{description}</span>
-        </TooltipContent>
-      </Tooltip>
+      </RefHoverCard>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url })}>Open in the side pane</ContextMenuItem>
         {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
@@ -123,9 +114,7 @@ export function FileLinkButton({ link, className, children }: { link: string; cl
 
 function useThreadGithub() {
   const threadId = useVizThreadId();
-  const thread = useThread(threadId);
-  const githubUser = useProfiles().find((p) => p.id === thread?.spaceId)?.github || undefined;
-  return { threadId, cwd: thread ? threadCwd(thread) : null, githubUser };
+  return { threadId, ...useGithubScope(useThread(threadId)) };
 }
 
 function isRelative(href: string) {

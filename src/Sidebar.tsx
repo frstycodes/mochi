@@ -24,8 +24,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
-import { PrStateIcon } from './icons/github';
-import { PIN_SLOTS, type PullRequest, type Thread } from './model';
+import { PrStack } from './git/PrStack';
+import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
@@ -481,7 +481,6 @@ function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: Re
 function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
-  const pr = thread.prs[thread.prs.length - 1];
   return (
     <>
       <SidebarMenuButton
@@ -511,7 +510,8 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
           <span className={cn('ml-auto shrink-0 tabular group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
         </span>
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
-        <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
+        {/* overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line. */}
+        <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
           <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>
           {row.isWorking ? (
@@ -522,7 +522,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             <span className="min-w-0 flex-1 truncate">{row.detail}</span>
           )}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
-          {!!pr && <PrBadge pr={pr} />}
+          <PrStack thread={thread} />
           <AgentsBadge thread={thread} />
           <NextRunBadge threadId={thread.id} />
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
@@ -538,15 +538,6 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
 
 function ProjectAvatar({ name }: { name: string }) {
   return <span aria-hidden className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[0.625rem] font-semibold text-foreground uppercase">{name[0]}</span>;
-}
-
-function PrBadge({ pr }: { pr: PullRequest }) {
-  return (
-    <span className="flex shrink-0 items-center gap-0.5 tabular" title={`${pr.title} (${pr.state})`}>
-      <PrStateIcon state={pr.state} className="size-3" />
-      {pr.number}
-    </span>
-  );
 }
 
 /** How many background agents the thread has running; nothing when none do. */

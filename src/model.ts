@@ -594,6 +594,9 @@ function authMigration(): Thread {
     prs: [
       { number: 479, state: 'merged', title: 'Better Auth core' },
       { number: 482, state: 'open', title: 'Session backfill + legacy removal' },
+      { number: 484, state: 'open', title: 'Keep the latitude.sid cookie name' },
+      { number: 485, state: 'draft', title: 'Passkeys on the login page' },
+      { number: 487, state: 'open', title: 'Docs: migrating to Better Auth' },
     ],
     sources: [
       { kind: 'link', label: 'better-auth.com/docs/concepts/session-management' },
