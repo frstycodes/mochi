@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions, LimitWindow } from '../../../src/host/types/agent.ts';
+import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
@@ -160,7 +160,7 @@ export class CodexAdapter {
 
   async resolve(requestId: string, decision: AgentDecision) {
     const pending = this.requests.get(requestId);
-    if (!pending) return;
+    if (!pending) throw new Error(NO_PENDING_REQUEST);
     this.requests.delete(requestId);
     pending.server.rpc?.respond(pending.id, reply(pending, decision));
   }

@@ -5,7 +5,7 @@ import { NOW0 } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { applyAgentEvent, resolution } from './apply.ts';
+import { applyAgentEvent, resolution, undelivered } from './apply.ts';
 import { SCRIPT } from './demo.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
@@ -70,7 +70,7 @@ test('an approval goes to the queue, blocks the running step, and its answer res
   assert.equal(applyAgentEvent(s, approval).queue.length, s.queue.length, 'a repeated request is not queued twice');
 
   const answer = { type: 'answer' as const, queueId: item.id };
-  assert.deepEqual(resolution(s, answer), { requestId: 'tool-7', decision: { kind: 'allow' } });
+  assert.deepEqual(resolution(s, answer), { threadId: 'rl', title: item.title, requestId: 'tool-7', decision: { kind: 'allow' } });
   s = queueReducer(s, answer);
   assert.ok(!s.queue.some((q) => q.id === item.id));
   assert.equal(thread(s, 'rl').steps.find((x) => x.id === 'rl5')!.status, 'running');
@@ -85,13 +85,23 @@ test('a request the agent withdraws leaves the queue and unblocks the step', () 
   assert.equal(applyAgentEvent(s, { threadId: 'rl', type: 'resolved', requestId: 'tool-8' }), s, 'resolving an answered request is a no-op');
 });
 
+test('an answer main could not deliver lands in the transcript with what you answered', () => {
+  let s = live(base(), 'rl');
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'question', requestId: 'ask-2', questions: [{ text: 'How should I open the PRs?', options: ['Bypass hook'], multiSelect: false }] });
+  const answer = resolution(s, { type: 'answer', queueId: 'q-ask-2', answers: [['use gh pr create for now']] })!;
+  s = threadsReducer(s, { type: 'say', threadId: 'rl', entry: undelivered(answer, new Error('The agent is no longer waiting on this request')) });
+  const line = thread(s, 'rl').activity.at(-1)!;
+  assert.equal(line.who, 'harness');
+  assert.match(line.text, /didn't reach the agent: The agent is no longer waiting on this request\..*use gh pr create for now/);
+});
+
 test('a question goes to the queue with its questions and resolves with your answers', () => {
   let s = live(base(), 'rl');
   s = applyAgentEvent(s, { threadId: 'rl', type: 'question', requestId: 'ask-1', questions: [{ text: 'Which store?', options: ['Redis', 'Postgres'], multiSelect: false }] });
   const item = s.queue.find((q) => q.requestId === 'ask-1')!;
   assert.equal(item.kind, 'question');
   assert.equal(item.title, 'Which store?');
-  assert.deepEqual(resolution(s, { type: 'answer', queueId: item.id, answers: [['Postgres']] }), { requestId: 'ask-1', decision: { kind: 'answer', answers: [['Postgres']] } });
+  assert.deepEqual(resolution(s, { type: 'answer', queueId: item.id, answers: [['Postgres']] }), { threadId: 'rl', title: 'Which store?', requestId: 'ask-1', decision: { kind: 'answer', answers: [['Postgres']] } });
 });
 
 test('demo threads resolve in the store, never through host.agent', () => {

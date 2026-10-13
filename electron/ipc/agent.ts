@@ -2,7 +2,7 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { app } from 'electron';
-import { NO_AGENT_PROCESS, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
+import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
@@ -24,11 +24,10 @@ import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
 import { switchBranch } from '../git/branches.ts';
 import { runGit, topLevel } from '../git/run.ts';
-import { MAX_MODEL_CHARS, notImplemented, record, string, type Handlers } from './handlers.ts';
+import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
 const PROVIDERS = ['claude', 'codex'];
-const DECISIONS = ['allow', 'deny', 'answer'];
 // The renderer caps quotes at 8000 chars and activity at 12 × 600; these bound what a renderer can make main send.
 const MAX_MESSAGE_CHARS = 20_000;
 const MAX_CONTEXT_CHARS = 50_000;
@@ -55,8 +54,6 @@ function skillNames(value: unknown) {
   for (const v of value) string(v, 'skill', 256);
 }
 
-// Threads without a Claude or Codex session run on the renderer's demo adapter.
-const runtime = notImplemented('agent runtime');
 const broadcast = emitAgentEvent;
 // Codex review threads report like any thread; their events go to the review that owns them, never to the store.
 const reviewers = new Map<string, (event: AgentEvent) => void>();
@@ -237,14 +234,10 @@ export const agent = {
 /** Answers a pending approval or question, from the renderer or a notification's buttons. */
 export async function resolveRequest(requestId: unknown, decision: unknown) {
   string(requestId, 'requestId', 256);
-  const d = record(decision, 'decision');
-  if (!DECISIONS.includes(d.kind as string)) throw new TypeError('decision.kind must be allow, deny or answer');
-  if (d.kind === 'answer' && (!Array.isArray(d.answers) || d.answers.some((a) => typeof a !== 'string'))) throw new TypeError('decision.answers must be strings');
-  if (d.kind === 'deny' && d.message !== undefined) string(d.message, 'decision.message', 4096);
-  if (resolveClaude(requestId as string, d as unknown as AgentDecision)) return;
-  for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
-  if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d as unknown as AgentDecision);
-  return runtime();
+  const d = agentDecision(decision);
+  if (resolveClaude(requestId as string, d)) return;
+  if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d);
+  throw new Error(NO_PENDING_REQUEST);
 }
 
 /** Starts a thread's agent from options the renderer (or the scheduler) built; both go through the same checks. */

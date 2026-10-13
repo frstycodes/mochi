@@ -6,7 +6,7 @@ import { showsDemoData } from '../demoData.ts';
 import { NO_AGENT_PROCESS, type AgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
-import { resolution } from '../runtime/apply.ts';
+import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
@@ -79,7 +79,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     const before = latest.current;
     recordAction(before, action);
     const answer = resolution(before, action);
-    if (answer) void host.agent.resolve(answer.requestId, answer.decision);
+    if (answer) host.agent.resolve(answer.requestId, answer.decision).catch((error: unknown) => apply({ type: 'say', threadId: answer.threadId, entry: undelivered(answer, error) }));
     let after: State | undefined;
     const next = () => (after ??= reducer(before, action));
     const calls = agentCalls(before, action, next);

@@ -256,7 +256,8 @@ function approve(threadId: string): CanUseTool {
   return (toolName, input, { signal, toolUseID, title, description, decisionReason }) =>
     new Promise((resolve) => {
       approvals.set(toolUseID, { threadId, toolName, input, resolve });
-      signal.addEventListener('abort', () => approvals.delete(toolUseID), { once: true });
+      // Claude Code withdrew the prompt (interrupt, its own cancel): the card goes with it rather than taking an answer nobody reads.
+      signal.addEventListener('abort', () => approvals.delete(toolUseID) && emit({ threadId, type: 'resolved', requestId: toolUseID }), { once: true });
       emit(approvalEvent(threadId, toolUseID, toolName, input, title ?? toolName, description ?? decisionReason ?? ''));
     });
 }
@@ -266,6 +267,7 @@ function dropApprovals(threadId: string, message: string) {
     if (pending.threadId !== threadId) continue;
     approvals.delete(id);
     pending.resolve({ behavior: 'deny', message, interrupt: true });
+    emit({ threadId, type: 'resolved', requestId: id });
   }
 }
 
