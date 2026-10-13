@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from 'react';
 import { outcomeOf } from './goals/outcome.ts';
-import type { PullRequest, Space, Thread } from './model.ts';
+import type { Space, Thread } from './model.ts';
 import { duration } from './progress.ts';
 import type { ThreadSummary } from './summary.ts';
 import { spaceUsage, threadUsage, type Usage } from './usage/model.ts';
 
-export type SummarySectionId = 'outcome' | 'prs' | 'sources' | 'skills' | 'tools' | 'session' | 'usage' | 'space';
+export type SummarySectionId = 'outcome' | 'sources' | 'skills' | 'tools' | 'session' | 'usage' | 'space';
 
 /** A collapsible section of the summary: `title`, then `detail`, so a closed one still says something. */
 export interface SummarySection {
@@ -18,26 +18,10 @@ export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximum
 export const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
 const PLURAL = new Intl.PluralRules('en');
 
-/** Open and draft PRs sit in the base panel as chips; the section only earns its place for the rest. */
-export const isPrChip = (pr: PullRequest) => pr.state !== 'merged';
-
 /** The sections with something to show, in reading order. */
-export function summarySections({
-  thread,
-  summary,
-  prs,
-  threads,
-  space,
-}: {
-  thread: Thread;
-  summary: ThreadSummary;
-  prs: PullRequest[];
-  threads: Thread[];
-  space: Space;
-}): SummarySection[] {
+export function summarySections({ thread, summary, threads, space }: { thread: Thread; summary: ThreadSummary; threads: Thread[]; space: Space }): SummarySection[] {
   const sections: (SummarySection | false)[] = [
     thread.status === 'settled' && outcomeSection(thread),
-    prs.some((pr) => !isPrChip(pr)) && { id: 'prs', title: 'Pull requests', detail: String(prs.length) },
     thread.sources.length > 0 && { id: 'sources', title: 'Sources', detail: String(thread.sources.length) },
     summary.skills.length > 0 && { id: 'skills', title: 'Skills used', detail: String(summary.skills.length) },
     summary.toolTotal > 0 && { id: 'tools', title: 'Tools called', detail: String(summary.toolTotal) },
