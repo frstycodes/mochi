@@ -56,8 +56,7 @@ function useForkDiff(thread: Thread | undefined) {
 }
 
 function ForkSide({ thread, diff, otherFiles, onKeep }: { thread: Thread; diff: ForkDiff; otherFiles: DiffFile[] | undefined; onKeep: () => void }) {
-  const { state } = useHarness();
-  const { pct } = goalProgress(thread, state.now);
+  const { met, total } = goalProgress(thread);
   const files = diff.data?.files ?? [];
   const added = files.reduce((n, f) => n + f.added, 0);
   const removed = files.reduce((n, f) => n + f.removed, 0);
@@ -74,8 +73,8 @@ function ForkSide({ thread, diff, otherFiles, onKeep }: { thread: Thread; diff: 
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 type-meta text-muted-foreground">
           {!!thread.repo && <span className="min-w-0 truncate font-mono type-caption">{thread.repo.branch}</span>}
           <span className="flex items-center gap-1.5 tabular">
-            <ProgressRing pct={pct} slot={thread.line} size={12} />
-            {Math.round(pct * 100)}% · {done} of {open} steps
+            <ProgressRing met={met} total={total} slot={thread.line} size={12} />
+            {!!total && `${met}/${total} criteria · `}{done} of {open} steps
           </span>
           {files.length > 0 && <DiffStat added={added} removed={removed} />}
         </div>

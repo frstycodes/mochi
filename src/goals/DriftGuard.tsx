@@ -47,7 +47,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const newThread = () => {
     if (!pending) return;
     const before = snapshot(state);
-    const isGoalDone = isDone(thread, state.now);
+    const isGoalDone = isDone(thread);
     // GAP: undo restores the store, but the interrupted turn stays interrupted.
     if (thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
     dispatch({ type: 'drift-new-thread', threadId: thread.id, prompt: pending.text, branchFrom });
@@ -70,8 +70,8 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
 
 export type DriftGuard = ReturnType<typeof useDriftGuard>;
 
-function isDone(thread: Thread, now: number) {
-  return goalProgress(thread, now).phase === 'ready';
+function isDone(thread: Thread) {
+  return goalProgress(thread).phase === 'ready';
 }
 
 // Undo covers two changes at once, so it stays up longer than a plain toast.
@@ -88,7 +88,6 @@ function useRememberedBranchFrom() {
  * composer; once you Tab into it, 1 2 3 pick the buttons in order and Esc keeps the message here.
  */
 export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread }) {
-  const { state } = useHarness();
   const { pending } = guard;
   const titleId = useId();
 
@@ -120,7 +119,7 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
               </p>
               <p className="type-caption text-subtle-foreground">
                 {pending.verdict.reason}
-                {isDone(thread, state.now) && '. The goal is done, so a new thread settles this one first.'}
+                {isDone(thread) && '. The goal is done, so a new thread settles this one first.'}
               </p>
             </div>
           </div>

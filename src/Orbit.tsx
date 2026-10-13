@@ -34,7 +34,7 @@ const QUEUE_ICONS = {
 } satisfies Record<QueueKind, LucideIcon>;
 
 export function Orbit() {
-  const { state, dispatch } = useHarness();
+  const { dispatch } = useHarness();
   const items = useOrbitItems();
   const [center, setCenter] = useState<{ x: number; y: number; k: number } | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
@@ -123,7 +123,7 @@ export function Orbit() {
           {items.map((it, i) => (
             <OrbitNode key={it.key} item={it} center={center} isSelected={selected?.key === it.key} index={i} />
           ))}
-          {selected && peekKey === selected.key && <Peek item={selected} center={center} now={state.now} />}
+          {selected && peekKey === selected.key && <Peek item={selected} center={center} />}
         </motion.div>
       )}
     </AnimatePresence>
@@ -221,7 +221,7 @@ function OuterNode({ item, isSelected }: { item: Extract<OrbitItem, { ring: 'out
   );
 }
 
-function Peek({ item, center, now }: { item: OrbitItem; center: { x: number; y: number; k: number }; now: number }) {
+function Peek({ item, center }: { item: OrbitItem; center: { x: number; y: number; k: number } }) {
   const rad = (item.angle * Math.PI) / 180;
   const r = (item.ring === 'inner' ? R_IN : R_OUT) * center.k + 40;
   const W = 260;
@@ -236,7 +236,7 @@ function Peek({ item, center, now }: { item: OrbitItem; center: { x: number; y: 
       className="absolute flex flex-col gap-2 rounded-xl border border-border bg-background p-3 text-sm shadow-[var(--elev-popover)]"
       style={{ left, top, width: W }}
     >
-      {item.ring === 'inner' ? <QueuePeek item={item.item} thread={item.thread} /> : item.thread ? <ThreadPeek thread={item.thread} now={now} /> : <span className="text-muted-foreground">Go to {item.label}</span>}
+      {item.ring === 'inner' ? <QueuePeek item={item.item} thread={item.thread} /> : item.thread ? <ThreadPeek thread={item.thread} /> : <span className="text-muted-foreground">Go to {item.label}</span>}
     </motion.div>
   );
 }
@@ -260,15 +260,15 @@ function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
   );
 }
 
-function ThreadPeek({ thread, now }: { thread: Thread; now: number }) {
-  const progress = goalProgress(thread, now);
+function ThreadPeek({ thread }: { thread: Thread }) {
+  const progress = goalProgress(thread);
   const running = thread.steps.find((s) => s.status === 'running');
   const last = thread.activity[thread.activity.length - 1];
   return (
     <>
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
-        <ProgressRing pct={progress.pct} slot={thread.line} size={18} isWorking={isWorking(thread)} />
+        <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={18} isWorking={isWorking(thread)} />
         <span className="tabular font-medium text-foreground">{progressLabel(progress)}</span>
         <span className="truncate text-muted-foreground">{running ? running.title : 'Nothing running'}</span>
       </div>

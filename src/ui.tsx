@@ -104,29 +104,28 @@ export function stepLabel(status: StepStatus) {
   return STEP_LABELS[status];
 }
 
-/** `isWorking` set: the arc spins in the line colour while the agent works (at least a quarter, so 0% still moves) and rests grey when idle. */
-export function ProgressRing({ pct, slot, size = 16, isWorking }: { pct: number; slot: LineSlot; size?: number; isWorking?: boolean }) {
+/**
+ * One segment per criterion, filled as each is met and green once all are, so it reads as a count, never a share of the work.
+ * No criteria: the ring shows state only. `isWorking` set: it spins in the line colour (a quarter arc when nothing is met yet,
+ * so it still moves) and rests grey when idle.
+ */
+export function ProgressRing({ met, total, slot, size = 16, isWorking }: { met: number; total: number; slot: LineSlot; size?: number; isWorking?: boolean }) {
   const r = size / 2 - 2;
   const c = 2 * Math.PI * r;
-  const arc = isWorking ? Math.max(pct, 0.25) : pct;
+  const gap = total > 1 ? Math.min(2, c / total / 3) : 0;
+  const segment = total ? c / total - gap : 0;
+  const isDone = total > 0 && met === total;
+  const color = isDone ? 'var(--success)' : isWorking === false ? 'var(--muted-foreground)' : lineColor(slot);
+  // Dash pattern: `met` segments then the rest of the circle blank; with nothing met while working, the spinner's quarter arc.
+  const fill = met > 0 ? `${Array.from({ length: met }, () => `${segment} ${gap}`).join(' ')} 0 ${c}` : isWorking ? `${c / 4} ${c}` : `0 ${c}`;
+  const circle = { cx: size / 2, cy: size / 2, r, fill: 'none', strokeWidth: 2 };
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="shrink-0 -rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={2} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={isWorking === false ? 'var(--subtle-foreground)' : lineColor(slot)}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeDasharray={`${c * arc} ${c}`}
-        className={cn(isWorking && 'origin-center animate-spin motion-reduce:animate-none')}
-      />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className={cn('shrink-0 -rotate-90', isWorking && 'origin-center animate-spin motion-reduce:animate-none')}>
+      <circle {...circle} stroke="var(--muted-foreground)" strokeOpacity={0.4} strokeDasharray={total > 1 ? `${segment} ${gap}` : undefined} />
+      <circle {...circle} stroke={color} strokeDasharray={fill} />
     </svg>
   );
 }
-
 
 /**
  * Icon-only button with a real tooltip (never a native `title`). `label` is also its accessible name; `hint` adds a second line.

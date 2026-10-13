@@ -29,11 +29,12 @@ import { GoalTimeline, StepLinkLine } from './GoalTimeline';
 import { openGoalEditor } from './goals/GoalEditor';
 import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
-import { burnSeries, clock, duration, GOAL_PHASE_LABELS, goalProgress, progressAt, progressLabel } from './progress';
+import { clock, duration, goalProgress, progressLabel } from './progress';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
-import { lineColor, OverflowIcon, StepStatusIcon, TooltipIconButton } from './ui';
+import { isWorking } from './agentPhase';
+import { lineColor, OverflowIcon, ProgressRing, StepStatusIcon, TooltipIconButton } from './ui';
 import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
@@ -611,11 +612,9 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
 }
 
 function GoalSection({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const progress = goalProgress(thread, state.now);
-  const latest = thread.revisions[thread.revisions.length - 1];
+  const progress = goalProgress(thread);
   const now = thread.steps.filter((s) => s.status === 'running' || s.status === 'blocked');
   const waiting = thread.steps.filter((s) => s.status === 'waiting');
   const next = thread.steps.filter((s) => s.status === 'ready').slice(0, 2);
@@ -626,10 +625,10 @@ function GoalSection({ thread }: { thread: Thread }) {
         <section aria-label="Goal" className="relative isolate flex flex-col gap-3 rounded-lg px-2 py-2 hover:bg-accent/40">
           <div className="flex items-center gap-2">
             <h2 className="type-title">Goal</h2>
-            <Badge variant="outline" title={latest.label}>
-              v{latest.n}
-            </Badge>
-            <span className="flex-1" />
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 tabular type-caption text-subtle-foreground">
+              <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+              <span className="truncate">{progressLabel(progress)}</span>
+            </span>
             {/* z-10 lifts it above the stretched open-timeline button. */}
             <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => openGoalEditor(thread.id)}>
               <Edit />
@@ -642,11 +641,6 @@ function GoalSection({ thread }: { thread: Thread }) {
           </div>
           <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
           {!!thread.criteria?.length && <CriteriaList thread={thread} />}
-          <div className="flex items-end justify-between gap-2">
-            <span className="tabular type-display">{Math.round(progress.pct * 100)}%</span>
-            <span className="tabular pb-1 type-caption text-subtle-foreground">{progress.total ? progressLabel(progress) : GOAL_PHASE_LABELS[progress.phase]}</span>
-          </div>
-          <Sparkline thread={thread} now={state.now} />
           {now.map((s) => (
             <div key={s.id} className="flex flex-col gap-1.5">
               <StepLine step={s} />
@@ -695,28 +689,6 @@ function StepLine({ step }: { step: Step }) {
       </span>
       <span className="truncate">{step.title}</span>
     </span>
-  );
-}
-
-function Sparkline({ thread, now }: { thread: Thread; now: number }) {
-  const series = burnSeries(thread, now);
-  const live = progressAt(thread, now, true);
-  const span = Math.max(1, now - thread.startedAt);
-  const max = Math.max(...series.map((p) => p.scope), live.scope, 1) * 1.1;
-  const W = 268;
-  const H = 36;
-  const x = (t: number) => ((t - thread.startedAt) / span) * W;
-  const y = (v: number) => H - (v / max) * H;
-  const path = (key: 'scope' | 'done') => series.map((p, i) => (i === 0 ? `M${x(p.t)} ${y(p[key])}` : `H${x(p.t)} V${y(p[key])}`)).join(' ');
-  const color = lineColor(thread.line);
-  const endY = y(live.done + live.partial);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-9 w-full overflow-visible" preserveAspectRatio="none" role="img" aria-label="Scope and done over time">
-      <path d={`${path('done')} H${W} V${endY} V${H} H0 Z`} fill={color} fillOpacity={0.14} />
-      <path d={`${path('done')} H${W} V${endY}`} fill="none" stroke={color} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-      <path d={`${path('scope')} H${W}`} fill="none" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
-    </svg>
   );
 }
 
