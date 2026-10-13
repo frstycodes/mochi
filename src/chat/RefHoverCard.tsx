@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactElement, ReactNode } from 'react';
 import { ArrowRight, ArrowUpRight, ClockCircle, CloseCircle, Edit, Eye, Hierarchy2, MessageEdit, TickCircle, UserTick, type IconComponent } from 'reicon-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
@@ -94,8 +95,8 @@ function RefFacts({ state }: { state: RefState }) {
   return (
     <dl className="flex flex-col gap-1.5 type-meta">
       {!!state.author && (
-        <Fact icon={UserTick} label="Author">
-          {state.author}
+        <Fact media={<AuthorAvatar author={state.author} />} label="Author">
+          {state.author.login}
           {!!state.updatedAt && <span className="text-subtle-foreground"> · updated {timeAgo(minutesSince(state.updatedAt))}</span>}
         </Fact>
       )}
@@ -139,14 +140,28 @@ const REVIEWS = {
 
 const PLURAL = new Intl.PluralRules('en');
 
+type FactMedia = { icon: IconComponent; media?: never } | { media: ReactNode; icon?: never };
+
 /** One row: the icon carries the tone, `label` names the row for screen readers only (the value says it). */
-function Fact({ icon: Icon, tone, label, children }: { icon: IconComponent; tone?: string; label: string; children: ReactNode }) {
+function Fact({ icon: Icon, media, tone, label, children }: FactMedia & { tone?: string; label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <dt className="sr-only">{label}</dt>
-      <Icon aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground', tone)} />
+      {media ?? (!!Icon && <Icon aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground', tone)} />)}
       <dd className="min-w-0 flex-1 truncate text-foreground">{children}</dd>
     </div>
+  );
+}
+
+/** The author's GitHub avatar in the icon column; the person icon shows until it loads, and offline. */
+function AuthorAvatar({ author }: { author: NonNullable<RefState['author']> }) {
+  return (
+    <Avatar aria-hidden className="size-3.5">
+      <AvatarImage src={author.avatarUrl} alt="" />
+      <AvatarFallback className="bg-transparent">
+        <UserTick className="size-3.5 text-subtle-foreground" />
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
