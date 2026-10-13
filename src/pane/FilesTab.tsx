@@ -21,7 +21,7 @@ const SIDE_BY_SIDE_MIN_WIDTH = 640;
 export function FilesTab({ thread, tab }: PaneTabProps) {
   const root = threadCwd(thread);
   if (!root) return <NoFolderState />;
-  return <FilesBrowser key={root} threadId={thread.id} root={root} initial={tab.file} />;
+  return <FilesBrowser key={`${tab.id}:${root}`} threadId={thread.id} root={root} initial={tab.file} />;
 }
 
 function FilesBrowser({ threadId, root, initial }: { threadId: string; root: string; initial?: { path: string; line?: number } }) {
