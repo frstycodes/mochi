@@ -25,6 +25,8 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
         { threadId, type: 'tool', id, phase: 'end', text, ...(DEMO_LINKS[text] && { links: DEMO_LINKS[text] }) },
         { threadId, type: 'usage', inputTokens: 0, outputTokens: 0, contextUsed, contextMax: thread.context.max },
       );
+      // A word between bursts of calls, so a demo turn interleaves work groups with prose like a real agent's.
+      if (used % CALLS_PER_NOTE === CALLS_PER_NOTE - 1) events.push({ threadId, type: 'message', text: NOTES[Math.floor(used / CALLS_PER_NOTE) % NOTES.length], isDelta: false });
     }
     return { ...s, progress };
   });
@@ -74,6 +76,12 @@ export const SCRIPT = { overlapAt: NOW0 + 6, scopeAt: NOW0 + 40 };
 // A web search that asks first, so the demo's live turn shows an approval asked and answered inside its work log.
 const WEB_APPROVAL = { threadId: 'adm', at: NOW0 + 14, query: 'stream large CSV export node fastify backpressure', domains: 'github.com, nodejs.org +3 more' };
 const SPEED = 40;
+const CALLS_PER_NOTE = 3;
+const NOTES = [
+  'Read through what is there. The change is smaller than it looked, so I will make it in place.',
+  'First pass is in. Running the checks before I go further.',
+  'Checks pass. One more pass over the edge cases, then this step is done.',
+];
 const TOKENS_PER_TOOL = 900;
 const CONTEXT_CEILING = 0.97;
 

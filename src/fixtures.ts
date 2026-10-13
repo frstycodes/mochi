@@ -2,7 +2,8 @@
 
 export interface RunResult {
   exitCode: number;
-  ms: number;
+  /** Known for the demo's scripted runs; live agents don't report it. */
+  ms?: number;
   lines: { tone: 'plain' | 'dim' | 'pass' | 'fail'; text: string }[];
 }
 
