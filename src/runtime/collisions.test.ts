@@ -15,12 +15,13 @@ test('two live threads of one project editing the same file get one Queue item; 
   let s = base();
   const [a, b] = s.threads.filter((t) => t.repo?.project === 'latitude' && t.status !== 'settled');
   s = edit(s, a.id, 'apps/api/limits.ts', 't1');
-  assert.equal(s.queue.filter((q) => q.kind === 'collision').length, 0, 'one thread alone');
+  assert.equal(s.queue.filter((q) => q.kind === 'collision' && q.threadId === a.id).length, 0, 'one thread alone');
   s = edit(s, b.id, 'apps/api/limits.ts', 't2');
   s = edit(s, b.id, 'apps/api/limits.ts', 't3');
-  const items = s.queue.filter((q) => q.kind === 'collision');
+  // Only this pair: the seed data has other threads that genuinely share files.
+  const items = s.queue.filter((q) => q.kind === 'collision' && [a.id, b.id].includes(q.threadId) && [a.id, b.id].includes(q.collision!.otherThreadId));
   assert.equal(items.length, 1, 'once per pair');
   assert.deepEqual(items[0].collision, { otherThreadId: a.id, files: ['apps/api/limits.ts'] });
   s = queueReducer(s, { type: 'answer', queueId: items[0].id });
-  assert.equal(s.queue.some((q) => q.kind === 'collision'), false);
+  assert.equal(s.queue.some((q) => q.id === items[0].id), false);
 });
