@@ -384,7 +384,7 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
   if (workspace.mode === 'folder') {
     const top = await topLevel(root).catch(() => null);
     if (!top) return { cwd: root };
-    if (workspace.isExisting) await switchBranch(top, workspace.branch);
+    if (workspace.isExisting) await switchBranch(top, workspace.branch, { changes: 'refuse' });
     const branch = (await runGit(top, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] })).trim();
     if (branch) broadcast({ threadId, type: 'branch', branch });
     return { cwd: root };

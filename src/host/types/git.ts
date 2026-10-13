@@ -88,10 +88,21 @@ export interface BranchList {
   current: string | null;
   /** origin's default branch, else main or master. */
   defaultBranch: string;
-  /** Uncommitted changes in the checkout the list was read from. */
-  isDirty: boolean;
+  /** Uncommitted changes in the checkout the list was read from; `files` is 0 when it's clean. */
+  changes: ChangeStat;
   /** Current first, then most recently committed. */
   branches: Branch[];
+}
+
+export interface ChangeStat {
+  files: number;
+  added: number;
+  removed: number;
+}
+
+/** What a branch switch does with uncommitted changes: throw, stash them (named), commit them as work in progress, carry them over, or throw them away. */
+export interface SwitchOptions {
+  changes: 'refuse' | 'stash' | 'commit' | 'bring' | 'discard';
 }
 
 /** How a thread's worktree is made: a new `branch` from `base` (default branch when unset), or an existing `branch` checked out. */
@@ -148,6 +159,8 @@ export interface GitHost {
   branches(root: string): Promise<BranchList>;
   /** Why `name` can't be a new branch (`git check-ref-format`, already exists), or null. */
   branchNameError(root: string, name: string): Promise<string | null>;
+  /** Switches the project checkout to `branch` now; refuses a branch checked out elsewhere, naming where. */
+  switchBranch(root: string, branch: string, options: SwitchOptions): Promise<void>;
   worktrees(root: string): Promise<Worktree[]>;
   removeWorktree(path: string): Promise<void>;
   diskUsage(path: string): Promise<number>;
@@ -204,6 +217,7 @@ export const gitMethods = {
   addWorktree: 'invoke',
   branches: 'invoke',
   branchNameError: 'invoke',
+  switchBranch: 'invoke',
   worktrees: 'invoke',
   removeWorktree: 'invoke',
   diskUsage: 'invoke',
