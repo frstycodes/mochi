@@ -30,7 +30,6 @@ export function BurnUp({
   now,
   scale,
   live,
-  projection,
   scrubAt,
   onScrub,
 }: {
@@ -38,7 +37,6 @@ export function BurnUp({
   now: number;
   scale: TimeScale;
   live: Progress;
-  projection: { t: number; value: number } | null;
   scrubAt: number | null;
   onScrub: (t: number | null) => void;
 }) {
@@ -56,7 +54,6 @@ export function BurnUp({
   const livePoint = { x: scale.x(now), y: y(live.done + live.partial) };
   const doneArea = `${step('done')} H${livePoint.x} V${livePoint.y} V${y(0)} H${scale.x(series[0].t)} Z`;
 
-  const ahead = projection && projection.t > now && { x2: scale.x(projection.t), y2: y(projection.value) };
   const xTicks = clockTicks(scale.t0, Math.max(now, scale.t1));
   const readT = scrubAt ?? hoverT;
   const readout = readT !== null && progressAt(thread, readT, readT >= now);
@@ -95,12 +92,6 @@ export function BurnUp({
         <path d={doneArea} fill={color} fillOpacity={0.16} />
         <path d={`${step('done')} H${livePoint.x} V${livePoint.y}`} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
         <path d={`${step('scope')} H${scale.x(now)}`} fill="none" stroke="var(--muted-foreground)" strokeWidth={2} strokeLinejoin="round" />
-        {ahead && (
-          <>
-            <line x1={livePoint.x} y1={livePoint.y} x2={ahead.x2} y2={ahead.y2} stroke={color} strokeWidth={2} strokeDasharray="4 4" />
-            <line x1={scale.x(now)} y1={y(live.scope)} x2={ahead.x2} y2={y(live.scope)} stroke="var(--muted-foreground)" strokeWidth={2} strokeDasharray="4 4" />
-          </>
-        )}
         <circle cx={livePoint.x} cy={livePoint.y} r={4.5} fill={color} stroke="var(--background)" strokeWidth={2} />
         {readT !== null && <line x1={scale.x(readT)} x2={scale.x(readT)} y1={PAD.top - 4} y2={y(0)} stroke="var(--foreground)" strokeWidth={scrubAt !== null ? 1.5 : 1} strokeOpacity={scrubAt !== null ? 1 : 0.4} />}
         <rect

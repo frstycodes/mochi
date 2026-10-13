@@ -124,12 +124,6 @@ const BADGE = [
 
 const HOURS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: hourLabel(h) }));
 
-const STEP_SIZES = [
-  { value: '1', label: 'S' },
-  { value: '2', label: 'M' },
-  { value: '3', label: 'L' },
-] as const;
-
 type PrefKey = { [K in keyof Prefs]: Prefs[K] extends string | number | boolean ? K : never }[keyof Prefs];
 
 /** A pref whose stored value is the control's own value: a string option, a number, a boolean switch or text. */
@@ -249,14 +243,6 @@ const APP_SETTINGS: Setting[] = [
   hostSetting('concurrency', 'Agents running at once', 'defaults', { type: 'number', ...CONCURRENCY_RANGE, step: 1 }),
   pref('driftGuard', 'Drift guard', 'goals', SWITCH),
   pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM)),
-  {
-    key: 'stepSize',
-    label: 'New step size',
-    section: 'goals',
-    control: choice(STEP_SIZES),
-    read: ({ prefs }) => String(prefs.stepSize),
-    write: (value) => (STEP_SIZES.some((s) => s.value === value) ? { to: 'prefs', patch: { stepSize: Number(value) as Prefs['stepSize'] } } : null),
-  },
   hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.harness/worktrees', isPath: true }),
   hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH),
   pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES)),

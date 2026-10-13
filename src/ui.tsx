@@ -1,5 +1,4 @@
 import { type ComponentProps, type CSSProperties, type ReactNode } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -128,15 +127,6 @@ export function ProgressRing({ pct, slot, size = 16, isWorking }: { pct: number;
   );
 }
 
-export function SizeBadge({ size }: { size: 1 | 2 | 3 }) {
-  return (
-    <Badge variant="secondary" aria-label={`Size ${SIZE_LABEL[size]}`}>
-      {SIZE_LABEL[size]}
-    </Badge>
-  );
-}
-
-const SIZE_LABEL = { 1: 'S', 2: 'M', 3: 'L' } satisfies Record<1 | 2 | 3, string>;
 
 /**
  * Icon-only button with a real tooltip (never a native `title`). `label` is also its accessible name; `hint` adds a second line.

@@ -31,7 +31,6 @@ export interface Prefs {
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
   whileWorking: 'queue' | 'steer';
   branchFrom: 'current' | 'base';
-  stepSize: 1 | 2 | 3;
   branchPrefix: string;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
@@ -79,7 +78,6 @@ export const DEFAULT_PREFS: Prefs = {
   driftGuard: true,
   whileWorking: 'queue',
   branchFrom: 'current',
-  stepSize: 2,
   branchPrefix: '',
   workspaceMode: 'worktree',
   diffStyle: 'unified',

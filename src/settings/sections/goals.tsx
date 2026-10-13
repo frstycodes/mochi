@@ -10,9 +10,6 @@ export function GoalsSection() {
       <SettingsGroup>
         <CatalogRow settingKey="branchFrom" />
       </SettingsGroup>
-      <SettingsGroup footer="Size counts toward the goal's progress and ETA: S is 1 point, M 2, L 3. Applies to steps you add and to plan items the agent leaves unsized.">
-        <CatalogRow settingKey="stepSize" />
-      </SettingsGroup>
     </div>
   );
 }
