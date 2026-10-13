@@ -27,11 +27,11 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Console errors surface as a badge on the tab and can be sent to the agent
 - [x] Element picker: click an element, send its selector + screenshot + outerHTML to the composer ("comment on page"). GAP: source location needs a dev-server plugin (React owner stack / sourcemaps)
 - [x] Screenshot / full-page screenshot into the composer as an attachment. GAP: screen recording
-- [ ] Annotate a screenshot (draw, arrow, note) before sending
+- [x] Annotate a screenshot (draw, arrow, note) before sending: every capture opens in the pane's annotation editor (pen, arrow, box, note, undo/redo, five token colours, Esc cancels), "Add to composer" attaches the PNG with the marks baked in. GAP: notes render in the system font in the PNG (an SVG drawn as an image can't load the app's web font); no move/resize of a placed mark
 - [x] Agent driving indicator (already designed: "driving" state) with take-over / give-back
 - [x] Per-space browser profiles (cookies, logins isolated like spaces' accounts)
-- [ ] Auto-reload on HMR / file change; keep scroll position (GAP: dev servers with HMR already reload; needs `fs` watch for the rest)
-- [ ] Before / after compare: same URL on base branch vs thread branch, side by side or slider (GAP: needs the `git` worktree manager to serve the base branch)
+- [x] Auto-reload on HMR / file change; keep scroll position: toolbar toggle watches the thread's worktree (recursive `fs.watch`, 250ms debounce, skips node_modules/.git/build/cache dirs and editor temp files) and reloads when the dev server didn't hot-update or reload within 1.2s (read from its `[vite]`/`[HMR]`/`[Fast Refresh]` console lines); every reload of the same URL gets its scroll back. GAP: window scroll only, not inner scroll containers; macOS/Windows (`fs.watch` recursive)
+- [x] Before / after compare: same URL on base branch vs thread branch, side by side or slider (More › Compare with base). Works for projects with a dev script (package.json `dev`, then `start`/`serve`/`preview`, else `.claude/launch.json`): reuses a server already running in the project folder when it's on the base, else checks the base out into a temporary worktree (borrowing the project's `node_modules`) and runs the script; closing stops it and removes the worktree. No dev script: the pane says so and the fallback is to run the base yourself and open it in a second tab. Side by side is live and scroll-synced; the slider compares full-page captures. GAP: one compare per thread; a base with different dependencies needs its own install; captures wait while Mochi's window is hidden
 
 ### Ports and previews
 - [x] Detect listening ports from the thread's processes (lsof / netstat on the worktree's PIDs)

@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Pip, Refresh, TriangleWarning, X } from 'reicon-react';
+import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Pip, Refresh, RefreshCircle, TriangleWarning, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -21,12 +21,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { host } from '@/host';
+import { threadCwd } from '@/host/cwd';
 import type { BrowserCommand, BrowserDevtools } from '@/host/types/browser';
 import { cn } from '@/lib/utils';
 import type { Thread } from '@/model';
 import { useHarness } from '@/store';
 import { ProviderMark } from '@/ui';
-import { consoleReport, screenshot, togglePick } from './actions';
+import { consoleReport, openCompare, screenshot, toggleAutoReload, togglePick } from './actions';
 import { DEVICES, RESPONSIVE } from './devices';
 import { deviceSize, isDemoUrl } from './PageSurface';
 import { reloadPage, updatePage, useAddressHistory, type Page } from './pages';
@@ -70,11 +71,12 @@ export function BrowserToolbar({ thread, pageId, page, onPopOut }: { thread: Thr
       <IconAction label={page.device === RESPONSIVE ? 'Emulate a device' : 'Stop emulating'} pressed={page.device !== RESPONSIVE} onClick={() => updatePage(pageId, { device: page.device === RESPONSIVE ? DEVICES[1].id : RESPONSIVE })}>
         <Mobile />
       </IconAction>
-      <ScreenshotMenu thread={thread} page={page} />
+      <AutoReloadToggle thread={thread} pageId={pageId} page={page} />
+      <ScreenshotMenu pageId={pageId} page={page} />
       <IconAction label="Pop out into a floating window" onClick={onPopOut}>
         <Pip />
       </IconAction>
-      <MoreMenu pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
+      <MoreMenu thread={thread} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
     </div>
   );
 }
@@ -179,7 +181,17 @@ function ConsoleButton({ thread, pageId, page }: { thread: Thread; pageId: strin
   );
 }
 
-function ScreenshotMenu({ thread, page }: { thread: Thread; page: Page }) {
+function AutoReloadToggle({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
+  const hasFolder = !!threadCwd(thread);
+  const label = !page.hostId ? DESKTOP_ONLY : !hasFolder ? 'Auto-reload needs a project folder' : page.isAutoReloading ? 'Stop reloading on file changes' : 'Reload when files change';
+  return (
+    <IconAction label={label} pressed={page.isAutoReloading} disabled={!page.hostId || !hasFolder} onClick={() => toggleAutoReload(pageId, page, thread)}>
+      <RefreshCircle />
+    </IconAction>
+  );
+}
+
+function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
   const isNative = !!page.hostId;
   return (
     <DropdownMenu>
@@ -191,18 +203,19 @@ function ScreenshotMenu({ thread, page }: { thread: Thread; page: Page }) {
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>{isNative ? 'Screenshot into the composer' : DESKTOP_ONLY}</TooltipContent>
+        <TooltipContent>{isNative ? 'Screenshot to annotate and add to the composer' : DESKTOP_ONLY}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => screenshot(page, thread, false)}>Visible area</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => screenshot(page, thread, true)}>Full page</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => screenshot(pageId, page, false)}>Visible area</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => screenshot(pageId, page, true)}>Full page</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function MoreMenu({ pageId, page, onHardReload }: { pageId: string; page: Page; onHardReload: () => void }) {
+function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; pageId: string; page: Page; onHardReload: () => void }) {
   const isNative = !!page.hostId;
+  const canCompare = isNative && !!threadCwd(thread) && !page.compare;
   const zoomBy = (step: 1 | -1) => {
     const i = ZOOM_STEPS.findIndex((z) => z >= page.zoom - 1e-3);
     updatePage(pageId, { zoom: ZOOM_STEPS[Math.min(Math.max(i + step, 0), ZOOM_STEPS.length - 1)] });
@@ -227,6 +240,9 @@ function MoreMenu({ pageId, page, onHardReload }: { pageId: string; page: Page; 
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onSelect={onHardReload}>
           Hard reload
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canCompare} onSelect={() => openCompare(pageId, thread)}>
+          Compare with {thread.repo?.base ?? 'the base branch'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!isNative} onSelect={(e) => (e.preventDefault(), zoomBy(1))}>

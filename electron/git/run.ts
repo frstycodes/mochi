@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { relative, resolve, sep } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 import { userPath } from '../shellPath.ts';
 
 const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
@@ -36,4 +36,10 @@ export function inside(top: string, file: string) {
   const abs = resolve(top, file);
   if (!abs.startsWith(top + sep)) throw new Error(`${file} is outside the worktree`);
   return relative(top, abs);
+}
+
+// Worktrees share the main repo's common dir; worktree commands run from the main checkout.
+export async function mainRepo(path: string) {
+  const common = (await runGit(await topLevel(path), ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
+  return dirname(common);
 }
