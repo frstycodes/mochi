@@ -259,7 +259,7 @@ const APP_SETTINGS: Setting[] = [
   hostSetting('worktreeInclude', 'Ignored files to copy', 'git', { type: 'text', placeholder: '.env*, .claude/settings.local.json', isMono: true }),
   pref('worktreeCleanup', 'Remove settled worktrees', 'git', select(WORKTREE_CLEANUP)),
   pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES)),
-  pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: DEFAULT_PREFS.branchPrefix, fallback: DEFAULT_PREFS.branchPrefix, isMono: true }),
+  pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: 'None', fallback: DEFAULT_PREFS.branchPrefix, isMono: true }),
   pref('diffStyle', 'Diffs', 'git', choice(DIFF_STYLES)),
   hostSetting('shell', 'Shell', 'terminal', { type: 'text', placeholder: '$SHELL', isMono: true }),
   pref('restoreTerminals', 'Restore terminals on launch', 'terminal', SWITCH),

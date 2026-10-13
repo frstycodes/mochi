@@ -13,7 +13,7 @@ export function GitSection() {
           <CatalogRow settingKey="prDrafts" />
         </SettingsGroup>
       </DesktopOnly>
-      <SettingsGroup footer="A new worktree keeps a thread's changes out of your checkout; the project folder works right in it, on its current branch. The worktree checkbox in the new-thread composer changes it too, and keeps your last choice. New branches are this prefix, then the prompt's first words.">
+      <SettingsGroup footer="A new worktree keeps a thread's changes out of your checkout; the project folder works right in it, on its current branch. The worktree checkbox in the new-thread composer changes it too, and keeps your last choice. New branches read type/words from your prompt, like fix/login-bug, after the prefix if you set one. Agents' commits must follow Conventional Commits, type(scope): subject; the repo's own hooks still run.">
         <CatalogRow settingKey="workspaceMode" />
         <CatalogRow settingKey="branchPrefix" />
       </SettingsGroup>

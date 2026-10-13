@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { hooksEnv } from '../../git/hooks.ts';
 import { PR_GUARD } from './prGuard.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -156,7 +157,7 @@ async function launch(session: Session) {
     const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
     if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
     // A consequential Mochi call waits on the user's card; Claude Code's own MCP timeout would cut it short.
-    const base = withPlanTools({ ...accountEnv('claude', configDir), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
+    const base = withPlanTools({ ...hooksEnv(accountEnv('claude', configDir)), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
     const key = options.useApiKey ? apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');

@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { host } from '../host';
 import type { Branch, BranchList } from '../host/types/git';
-import type { Thread } from '../model';
+import { firstPrompt, type Thread } from '../model';
 import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
 import { getPrefs } from '../settings/prefs';
@@ -52,7 +52,7 @@ export function useThreadWorkspace(thread: Thread): Workspace | null {
   const isOpen = !!repo && isUnstarted(thread);
   const draft: WorkspaceDraft = { mode: repo?.mode ?? 'worktree', base: repo?.base, isExisting: repo?.isExisting, branch: repo?.branch };
   const change = (next: WorkspaceDraft) => dispatch({ type: 'workspace', threadId: thread.id, workspace: { ...next, branch: next.branch ?? (next.mode === 'folder' ? (workspace.branches.list?.current ?? undefined) : undefined) } });
-  const workspace = useWorkspace(isOpen ? projectRef(repo)! : '', draft, change, thread.goal, thread.id);
+  const workspace = useWorkspace(isOpen ? projectRef(repo)! : '', draft, change, firstPrompt(thread), thread.id);
   return isOpen ? workspace : null;
 }
 

@@ -23,20 +23,38 @@ export function repoWorkspace(draft: WorkspaceDraft): Pick<Repo, 'mode' | 'base'
 const MAX_SLUG_WORDS = 5;
 const MAX_SLUG_CHARS = 40;
 
-/** `prefix` + the first words of `text`, lowercased and dashed: "Fix the login bug!" → `mochi/fix-the-login-bug`. Empty slug → `fallback`. */
+// The first word that says what kind of change it is; anything else is a feature. Same types as the commit hook.
+const TYPE_CUES: [RegExp, string][] = [
+  [/^(fix|fixes|fixed|bug|broken|crash|crashes|repair|resolve)$/, 'fix'],
+  [/^(docs?|document|readme|changelog)$/, 'docs'],
+  [/^(refactor|clean|cleanup|rename|move|extract|simplify|tidy)$/, 'refactor'],
+  [/^(tests?|testing|cover|coverage)$/, 'test'],
+  [/^(chore|bump|upgrade|deps|dependencies)$/, 'chore'],
+  [/^(perf|speed|optimize|optimise)$/, 'perf'],
+];
+const FILLER = new Set(['the', 'a', 'an', 'please', 'can', 'you', 'could', 'we', 'lets', 'let', 'us', 'to', 'add', 'make', 'implement', 'create', 'build']);
+
+/**
+ * `prefix` + Conventional Commits type + the words that matter, dashed: "Fix the login bug!" → `fix/login-bug`,
+ * "Add a dark mode toggle" → `feat/dark-mode-toggle`. Empty slug → `prefix` + `fallback`.
+ */
 export function branchName(prefix: string, text: string, fallback: string) {
-  const slug = text
+  const words = text
     .normalize('NFKD')
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .split(/[\s-]+/)
-    .filter(Boolean)
+    .filter(Boolean);
+  const cue = words.findIndex((w) => !FILLER.has(w));
+  const type = TYPE_CUES.find(([re]) => re.test(words[cue] ?? ''))?.[1];
+  const slug = words
+    .filter((w, i) => !(type && i === cue) && !FILLER.has(w))
     .slice(0, MAX_SLUG_WORDS)
     .join('-')
     .slice(0, MAX_SLUG_CHARS)
     .replace(/-+$/, '');
-  return `${prefix}${slug || fallback}`;
+  return slug ? `${prefix}${type ?? 'feat'}/${slug}` : `${prefix}${fallback}`;
 }
 
 /** `name`, or `name-2`, `name-3`… when taken. */
