@@ -78,7 +78,7 @@ export const TOOL_TABLE = {
     shape: { threadIds },
   },
   // {GOALS}
-  get_goal: { tier: 'read', description: "Read a thread's goal and its steps, with each step's id, status, size and acceptance criteria.", shape: { threadId } },
+  get_goal: { tier: 'read', description: "Read a thread's goal (empty for a question or chat), what done means (criteria), and its steps with each step's id, status, size and acceptance criteria.", shape: { threadId } },
   set_step_status: {
     tier: 'change',
     quiet: true,
