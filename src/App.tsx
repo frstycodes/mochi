@@ -99,13 +99,14 @@ function Shell() {
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
-      <SidebarToggle />
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
           {isSettingsOpen ? <SettingsPage /> : review.isOpen ? <ReviewView /> : <Stage />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
+      {/* Last on purpose: Electron applies app-region in document order, so the headers' drag regions after it would swallow its clicks. */}
+      <SidebarToggle />
     </SidebarProvider>
   );
 }
