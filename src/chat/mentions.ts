@@ -28,13 +28,13 @@ export function withoutQuery(text: string) {
   return text.replace(/(^|\s)@[^\s@]*$/, '$1');
 }
 
-/** Threads (not `selfId`), windows, skills, then MCP servers whose name contains the query, at most six of each. */
+/** Threads (not `selfId`, none settled), windows, skills, then MCP servers whose name contains the query, at most six of each. */
 export function mentionOptions(query: string, threads: Thread[], windows: AppWindow[], selfId: string, skills: AgentCommand[] = [], servers: McpServer[] = []): MentionOption[] {
   const q = query.toLowerCase();
   const hit = (title: string) => title.toLowerCase().includes(q);
   return [
     ...threads
-      .filter((t) => t.id !== selfId && hit(t.title))
+      .filter((t) => t.id !== selfId && t.status !== 'settled' && hit(t.title))
       .slice(0, MAX_OPTIONS)
       .map((thread) => ({ kind: 'thread' as const, thread })),
     ...windows

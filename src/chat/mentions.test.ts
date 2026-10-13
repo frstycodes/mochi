@@ -45,6 +45,11 @@ test('options list other threads, then windows, by title', () => {
     mentionOptions('LOG', [other], windows, 'x').map((o) => o.kind),
     ['thread'],
   );
+  assert.deepEqual(
+    mentionOptions('LOG', [{ ...other, status: 'settled' }], windows, 'x').map((o) => o.kind),
+    [],
+    'settled threads are not offered',
+  );
 });
 
 test('a thread reference becomes a digest and a window reference its screenshot, in the prompt the agent gets', () => {
