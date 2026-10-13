@@ -7,7 +7,7 @@ import type { ProfileConfig } from '../host/types/settings';
 import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
 import { HARNESSES } from '../settings/harnesses';
 import { ProviderMark } from '../ui';
-import { moveToFront, resolveToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
+import { insertToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
 
 /** Above the composer while the caret ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
 export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
@@ -21,11 +21,6 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   const groups = [menu.matches.filter((m) => m.source === 'mochi'), menu.matches.filter((m) => m.source !== 'mochi')].filter((g) => g.length);
   return (
     <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-popover">
-      {!!menu.replaces && (
-        <p className="px-2 pt-1.5 pb-0.5 type-caption text-muted-foreground">
-          Replaces <span className="text-info">/{menu.replaces.name}</span> at the start: one command per message
-        </p>
-      )}
       {groups.map((group) => (
         <div key={group[0].source} role="group" aria-label={groupName(group[0].source)} className="flex flex-col gap-0.5">
           <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
@@ -46,6 +41,7 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
               <span className="shrink-0 font-medium">/{item.name}</span>
               {!!item.argumentHint && <span className="shrink-0 text-subtle-foreground max-sm:hidden">{item.argumentHint}</span>}
               <span className="min-w-0 truncate text-muted-foreground">{item.description}</span>
+              {menu.isMidText && !item.isSkill && <span className="ml-auto shrink-0 type-caption text-warning">Runs only at the start of a message</span>}
             </div>
           ))}
         </div>
@@ -59,7 +55,7 @@ const optionId = (listId: string, item: SlashItem) => `${listId}-${item.source}-
 
 /**
  * The menu's state and the textarea props that drive it: arrows move, Enter or Tab picks, Esc closes until the text changes.
- * Picking moves the command to the start of the message, the rest staying as its arguments. Needs the composer's `PromptInputProvider`.
+ * Picking puts the name where it was typed, nothing else moves. Needs the composer's `PromptInputProvider`.
  */
 export function useSlashMenu(items: SlashItem[]) {
   const listId = useId();
@@ -75,15 +71,19 @@ export function useSlashMenu(items: SlashItem[]) {
   const matches = range ? slashMatches(range.query, items) : [];
   const isOpen = matches.length > 0 && dismissedAt !== text;
   const index = Math.min(active, matches.length - 1);
-  const existing = range && range.start > 0 ? resolveToken(text, items) : null;
 
   const choose = (item: SlashItem) => {
     if (!range) return;
-    const next = moveToFront(text, range, item, items);
-    textInput.setInput(next);
+    const next = insertToken(text, range, item);
+    textInput.setInput(next.text);
     setActive(0);
-    // After React writes the value: the caret goes to the end, after the arguments.
-    requestAnimationFrame(() => textarea.current?.setSelectionRange(next.length, next.length));
+    // With text right after it, the caret ends the full name and would reopen the menu on it.
+    setDismissedAt(next.text);
+    // After React writes the value, which puts the caret at the end: back to just after the name.
+    requestAnimationFrame(() => {
+      textarea.current?.setSelectionRange(next.caret, next.caret);
+      setCaret({ text: next.text, at: next.caret });
+    });
   };
 
   const track = (e: SyntheticEvent<HTMLTextAreaElement>) => {
@@ -112,7 +112,7 @@ export function useSlashMenu(items: SlashItem[]) {
     'aria-controls': isOpen ? listId : undefined,
     'aria-activedescendant': isOpen ? optionId(listId, matches[index]) : undefined,
   };
-  return { listId, matches, active: index, isOpen, replaces: isOpen ? existing?.item : undefined, choose, textareaProps };
+  return { listId, matches, active: index, isOpen, isMidText: !!range && range.start > 0, choose, textareaProps };
 }
 
 /**
@@ -121,7 +121,7 @@ export function useSlashMenu(items: SlashItem[]) {
  */
 export function useSlashItems(provider: Provider, spaceId: string, agent?: AgentInfo) {
   const configured = useConfiguredSkills(provider, spaceId, !agent?.commands);
-  return slashItems(agent?.commands ?? configured, provider);
+  return agent?.commands ? slashItems(agent.commands, provider, agent.skills) : slashItems(configured, provider);
 }
 
 /** The thread's harness skills for `@`: the live agent's (its skill names picked out of its commands) or the profile's enabled ones. */
