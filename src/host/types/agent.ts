@@ -162,7 +162,8 @@ export type SetupChoice = 'retry' | 'skip';
 
 /** Base64 without the `data:` prefix. */
 export interface AgentImage {
-  mediaType: 'image/jpeg' | 'image/png';
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  /** Base64, no `data:` prefix. */
   data: string;
 }
 

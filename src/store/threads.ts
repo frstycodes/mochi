@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import type { CheckRun } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type QueuedMessage, type Similar, type Source, type Step, type StepStatus, type Thread, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type TurnReport } from '../model.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
@@ -53,7 +53,7 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[] }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[] }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
   | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
@@ -65,7 +65,7 @@ export type ThreadsAction =
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
    * `queuedId`: the queued message this sends, which leaves the queue. `interrupts`: ends the turn in flight first (the queue's Send now).
    */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; skills?: string[]; queuedId?: string; interrupts?: boolean }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; interrupts?: boolean }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
   /** Edit and remove both take a message out; Edit puts its text back in the composer itself. */
   | { type: 'queued-remove'; threadId: string; id: string }
@@ -462,7 +462,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     steps,
     activity: [
       ...(action.branchFrom ? [{ at: now, who: 'harness' as const, kind: 'event' as const, text: `Branched off ${action.branchFrom}` }] : []),
-      { at: now, who: 'you', kind: 'message', text: action.title },
+      { at: now, who: 'you', kind: 'message', text: action.title, ...(action.images?.length && { images: action.images.map((i) => i.thumb) }) },
     ],
     prs: [],
     sources: [],
@@ -520,7 +520,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
       const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
-      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }) });
+      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.thumbs?.length && { images: action.thumbs }) });
       return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
     }),
   };

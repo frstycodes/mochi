@@ -1,4 +1,4 @@
-import type { AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
+import type { AgentImage, AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -113,6 +113,8 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
+  /** Your messages: thumbnails (data URLs) of the images sent with it. */
+  images?: string[];
 }
 
 export interface McpCall {
@@ -249,12 +251,18 @@ export interface QueuedMessage {
   id: string;
   /** The text as typed: what the transcript shows, and what Edit puts back in the composer. */
   draft: string;
-  files: number;
+  /** Unset on messages queued before images were sent. */
+  images?: SentImage[];
   mentions: Mention[];
   /** The text starts with a `/` command, so mention tags go after it. */
   isCommand: boolean;
   /** Skills typed as `/name` later in the text. */
   typedSkills: string[];
+}
+
+/** An image you sent: what the agent gets, and the small copy (`thumb`, a data URL) the transcript shows. */
+export interface SentImage extends AgentImage {
+  thumb: string;
 }
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';

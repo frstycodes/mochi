@@ -35,14 +35,14 @@ const MAX_CONTEXT_CHARS = 50_000;
 const MAX_IMAGES = 8;
 // Claude rejects images over 5 MB; base64 runs 4/3 of that.
 const MAX_IMAGE_CHARS = 6_900_000;
-const IMAGE_TYPES = ['image/jpeg', 'image/png'];
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 function images(value: unknown) {
   if (value === undefined) return;
   if (!Array.isArray(value) || value.length > MAX_IMAGES) throw new TypeError(`images must be an array of up to ${MAX_IMAGES}`);
   for (const v of value) {
     const image = record(v, 'image');
-    if (!IMAGE_TYPES.includes(image.mediaType as string)) throw new TypeError('image.mediaType must be image/jpeg or image/png');
+    if (!IMAGE_TYPES.includes(image.mediaType as string)) throw new TypeError(`image.mediaType must be one of ${IMAGE_TYPES.join(', ')}`);
     string(image.data, 'image.data', MAX_IMAGE_CHARS);
   }
 }
