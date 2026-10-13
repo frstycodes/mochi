@@ -81,6 +81,16 @@ export const REF_TONE_CLASS = {
   info: 'text-info',
 } satisfies Record<RefTone, string>;
 
+// Text mixes toward foreground so success and destructive clear 4.5:1 on the light tint; --ref-surface keeps the conflict mark's ring matched to the tinted fill.
+export const REF_CHIP_CLASS = {
+  success: 'bg-success/12 text-[color-mix(in_oklab,var(--success)_75%,var(--foreground))] hover:bg-success/20 [--ref-surface:color-mix(in_oklab,var(--success)_12%,var(--background))]',
+  muted: 'bg-muted text-muted-foreground hover:bg-accent [--ref-surface:var(--muted)]',
+  merged: 'bg-merged/12 text-[color-mix(in_oklab,var(--merged)_75%,var(--foreground))] hover:bg-merged/20 [--ref-surface:color-mix(in_oklab,var(--merged)_12%,var(--background))]',
+  destructive: 'bg-destructive/12 text-[color-mix(in_oklab,var(--destructive)_75%,var(--foreground))] hover:bg-destructive/20 [--ref-surface:color-mix(in_oklab,var(--destructive)_12%,var(--background))]',
+  warning: 'bg-warning/12 text-[color-mix(in_oklab,var(--warning)_75%,var(--foreground))] hover:bg-warning/20 [--ref-surface:color-mix(in_oklab,var(--warning)_12%,var(--background))]',
+  info: 'bg-info/12 text-[color-mix(in_oklab,var(--info)_75%,var(--foreground))] hover:bg-info/20 [--ref-surface:color-mix(in_oklab,var(--info)_12%,var(--background))]',
+} satisfies Record<RefTone, string>;
+
 /** A thread's PR (sidebar card, summary row, ship bar) in its state's icon and colour. */
 export function PrStateIcon({ state, className }: { state: RefStatus; className?: string }) {
   const tone = refTone(state === 'unknown' ? null : bareState('pr', state, '', ''));

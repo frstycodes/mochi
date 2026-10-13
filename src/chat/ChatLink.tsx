@@ -12,7 +12,8 @@ import { useGithubScope } from '../git/useThreadPrs';
 import { useHarness, useThread } from '../store';
 import { useVizThreadId } from '../viz/WidgetVisual';
 import { RefHoverCard, RefIcon } from './RefHoverCard';
-import { refDescription, refFromUrl, refLabel, refUrl, type GithubRef } from './refs';
+import { refDescription, refFromUrl, refLabel, refTone, refUrl, type GithubRef } from './refs';
+import { REF_CHIP_CLASS } from '@/icons/github';
 import { useRefState, useRepoSlug } from './useRefState';
 
 const DefaultLink = defaultComponents.a!;
@@ -63,7 +64,7 @@ export function RefChip({ githubRef, children }: { githubRef: GithubRef; childre
               dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url });
             }}
             aria-label={`${children ? textOf(children) : label}: ${state?.title ? `${state.title}, ` : ''}${description}`}
-            className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 align-baseline font-medium text-foreground no-underline transition-colors [--ref-surface:var(--muted)] hover:bg-accent hover:[--ref-surface:var(--accent)]"
+            className={cn('inline-flex max-w-full items-center gap-1 rounded-md px-1.5 align-baseline font-medium no-underline transition-colors', REF_CHIP_CLASS[refTone(state)])}
           >
             <RefIcon item={{ githubRef, label, state }} className="size-3.5" />
             <span className="truncate tabular">{children ?? label}</span>

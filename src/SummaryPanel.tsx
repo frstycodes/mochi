@@ -20,7 +20,8 @@ import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors
 import { openFiles } from './files/viewer';
 import { withLivePr } from './git/prs';
 import { RefHoverCard, RefIcon } from './chat/RefHoverCard';
-import { refDescription } from './chat/refs';
+import { refDescription, refTone } from './chat/refs';
+import { REF_CHIP_CLASS } from './icons/github';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { usePr } from './git/useGit';
 import type { McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
@@ -197,7 +198,7 @@ function ChangesRow({ thread, summary, prs, open }: SectionProps) {
 /** A PR GitHub can't place (no URL, no repo) still previews on hover and focus, but opens nothing. */
 function PrChip({ item, onOpen }: { item: ThreadPr; onOpen: (url: string) => void }) {
   const url = item.state.url;
-  const chip = 'inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 type-caption font-medium text-foreground';
+  const chip = cn('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 type-caption font-medium transition-colors', REF_CHIP_CLASS[refTone(item.state)]);
   const label = `${item.label}: ${item.state.title}, ${refDescription('pr', item.state)}`;
   const content = (
     <>
@@ -208,7 +209,7 @@ function PrChip({ item, onOpen }: { item: ThreadPr; onOpen: (url: string) => voi
   return (
     <RefHoverCard item={item}>
       {url ? (
-        <button type="button" onClick={() => onOpen(url)} aria-label={label} className={cn(chip, 'transition-colors hover:bg-accent')}>
+        <button type="button" onClick={() => onOpen(url)} aria-label={label} className={chip}>
           {content}
         </button>
       ) : (
