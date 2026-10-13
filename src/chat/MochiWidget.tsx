@@ -4,15 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
-import type { ActivityEntry, QueueItem } from '../model';
+import type { ActivityEntry, ProfileChange, QueueItem } from '../model';
 import { clock } from '../progress';
 import { decideTool } from '../runtime/tools';
+import { FileDiffs } from '../settings/FileDiffs';
+import { HARNESSES } from '../settings/harnesses';
 import { SettingsSelect } from '../settings/parts';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { isSwitch, isWidgetSetting, optionLabel, settingPatch, settingValue, WIDGET_SETTINGS, type WidgetSettingKey } from '../settings/settingOptions';
 import { useHarness } from '../store';
+import { SPACE_ICONS } from '../ui';
 
 /** A Mochi widget where the agent asked: the live card while it waits, then its one-line record. */
 export function CardEntry({ entry, card }: { entry: ActivityEntry; card: NonNullable<ActivityEntry['card']> }) {
@@ -48,7 +53,7 @@ function MochiWidget({ item }: { item: QueueItem }) {
   const decide = useDecision(item);
   const [options, setOptions] = useState<string[]>([]);
   const setting = item.tool?.setting ?? (item.setting && { id: item.setting.id, value: item.setting.suggested ?? '' });
-  const kind = setting ? 'setting' : item.tool?.isDestructive ? 'delete' : 'confirm';
+  const kind = item.tool?.isDestructive ? 'delete' : setting || item.tool?.changes || item.tool?.edits ? 'setting' : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
   const onKeyDown = (e: KeyboardEvent) => {
@@ -68,7 +73,16 @@ function MochiWidget({ item }: { item: QueueItem }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!!setting && isWidgetSetting(setting.id) && <SettingChange id={setting.id} value={setting.value} />}
+        {item.tool?.changes?.map((c) => <ProfileChangeRow key={c.kind === 'switch' ? c.label : c.kind} change={c} />)}
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
+        {!!item.tool?.notes?.length && (
+          <ul className="flex flex-col gap-1 type-caption text-muted-foreground">
+            {item.tool.notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        )}
+        {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
         {!!item.code && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
         {item.tool?.options?.map((o) => (
           <Field key={o.id} orientation="horizontal">
@@ -103,6 +117,37 @@ function SettingChange({ id, value }: { id: WidgetSettingKey; value: string }) {
         <ReadOnlyControl id={id} value={value} label={`Proposed: ${optionLabel(id, value)}`} />
       </span>
     </div>
+  );
+}
+
+/** A profile change with the control Settings › Profiles uses for it, read-only: as it is now, and as it would be. */
+function ProfileChangeRow({ change }: { change: ProfileChange }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="min-w-32 flex-1 type-body">{changeLabel(change)}</span>
+      <span className="flex items-center gap-2">
+        <ProfileControl change={change} side="from" className="text-muted-foreground" />
+        <ArrowRight aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />
+        <ProfileControl change={change} side="to" />
+      </span>
+    </div>
+  );
+}
+
+const changeLabel = (c: ProfileChange) => (c.kind === 'name' ? 'Name' : c.kind === 'icon' ? 'Icon' : c.kind === 'account' ? `${HARNESSES[c.provider].name} account` : c.label);
+
+function ProfileControl({ change, side, className }: { change: ProfileChange; side: 'from' | 'to'; className?: string }) {
+  const label = `${side === 'from' ? 'Now' : 'Proposed'}: ${String(change[side])}`;
+  if (change.kind === 'switch') return <Switch checked={change[side]} disabled aria-label={`${side === 'from' ? 'Now' : 'Proposed'}: ${change[side] ? 'on' : 'off'}`} className={READ_ONLY} />;
+  if (change.kind === 'name') return <Input value={change[side]} readOnly aria-label={label} className={cn('h-7 w-36', className)} />;
+  if (change.kind === 'account') return <SettingsSelect value={change[side]} options={[{ value: change[side], label: change[side] }]} onChange={() => {}} disabled aria-label={label} className={cn('w-auto max-w-44', READ_ONLY, className)} />;
+  const Icon = SPACE_ICONS[change[side]];
+  return (
+    <ToggleGroup type="single" size="sm" variant="outline" value={change[side]} disabled aria-label={label}>
+      <ToggleGroupItem value={change[side]} className={cn('size-7 px-0', READ_ONLY)}>
+        <Icon aria-hidden />
+      </ToggleGroupItem>
+    </ToggleGroup>
   );
 }
 

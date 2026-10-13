@@ -2,14 +2,17 @@ import { z } from 'zod';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type StepStatus, type Subagent, type Thread } from '../model.ts';
+import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
+import { authorName, PIN_SLOTS, type ProfileChange, type Provider, type QueueItem, type Size, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
+import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
 import { AGENT_SETTING_KEYS, AGENT_SETTINGS, type AgentSettingKey, optionLabel, settingPatch, settingValue, THREAD_MODELS } from '../settings/settingOptions.ts';
 import { AGENT_CONTROLS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { BROWSER_TOOLS } from './browserTools.ts';
+import { PROFILE_TOOLS } from './profileTools.ts';
 import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { defaultModelOf, effortRank, modelTier } from './models.ts';
 import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type Tier, type ToolName } from './toolTable.ts';
@@ -34,6 +37,10 @@ export interface ToolEnv {
   cwdOf: (thread: Thread) => string | null | undefined;
   /** The models `provider` offers the profile's account; empty when they couldn't be read. */
   models: (provider: Provider, spaceId: string) => Promise<AgentModel[]>;
+  /** Profiles (`src/profiles.ts`); removing one leaves its accounts and browser data on disk. */
+  profiles: { list: () => Space[]; update: (id: string, patch: Partial<Pick<Space, 'name' | 'icon'>>) => void; remove: (id: string) => void };
+  /** The profile tools' slice of `host.settings`: nothing that creates, signs in or stores a credential. */
+  settings: Pick<SettingsHost, 'accounts' | 'detect' | 'linkAccount' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   isDesktop: boolean;
   now?: () => number;
 }
@@ -48,6 +55,8 @@ export interface ToolContext<A = Record<string, unknown>> {
   confirm: (approval: Approval) => Promise<string[]>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
+  /** A config write `ask` previewed: `run` applies exactly these changes, refused if a file changed since (`befores`). */
+  write?: { spaceId: string; changes: ConfigChange[]; befores: Record<string, string> };
 }
 
 /** The widget's text says exactly what happens; `options` are checkboxes, off by default, whose ids come back when approved. */
@@ -63,6 +72,9 @@ export interface Approval {
   isDestructive?: boolean;
   /** The record line when the user says no, like "Kept \"Fix e2e\"". */
   denied?: string;
+  changes?: ProfileChange[];
+  edits?: FileEdit[];
+  notes?: string[];
 }
 
 export interface Outcome {
@@ -76,12 +88,12 @@ export interface Outcome {
   undo?: () => void;
 }
 
-type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
+export type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
 
 export interface ToolSpec<K extends ToolName> {
   run: (ctx: ToolContext<Args<K>>, options: string[]) => Outcome | Promise<Outcome>;
   /** Tools in an asking tier: what the widget says. */
-  ask?: (ctx: ToolContext<Args<K>>) => Approval;
+  ask?: (ctx: ToolContext<Args<K>>) => Approval | Promise<Approval>;
 }
 
 type Specs = { [K in ToolName]: ToolSpec<K> };
@@ -107,7 +119,9 @@ export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentT
   const tier = tierOf(name);
   try {
     gate(ctx, name, LEVEL[tier]);
-    const options = spec.ask ? await ask(ctx, spec.ask(ctx)) : [];
+    const approval = spec.ask?.(ctx);
+    // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.
+    const options = approval ? await ask(ctx, approval instanceof Promise ? await approval : approval) : [];
     const before = env.getState();
     const outcome = await Promise.resolve()
       .then(() => spec.run(ctx, options))
@@ -157,7 +171,8 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = cardId('tool', ctx.caller.id);
-  const tool = { callId: id, options: approval.options, setting: approval.setting, isDestructive: approval.isDestructive };
+  const { options, setting, isDestructive, changes, edits, notes } = approval;
+  const tool = { callId: id, options, setting, isDestructive, changes, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
     const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
@@ -556,7 +571,7 @@ const AGENT_SPECS = {
   },
 } satisfies Partial<Specs>;
 
-const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...SETTING_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS } satisfies Specs;
+const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...SETTING_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, ...PROFILE_TOOLS } satisfies Specs;
 
 // {HELPERS}
 

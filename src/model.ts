@@ -1,5 +1,6 @@
 import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
 import type { Mention } from './chat/mentions.ts';
+import type { FileEdit } from './host/types/settings.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
@@ -292,7 +293,19 @@ export interface ToolWidget {
   options?: { id: string; label: string }[];
   setting?: { id: string; value: string };
   isDestructive?: boolean;
+  /** A profile change, drawn with the control Settings › Profiles uses for it: current → proposed. */
+  changes?: ProfileChange[];
+  /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
+  edits?: FileEdit[];
+  /** Mochi's own facts under the agent's reason, like which other profiles share the account. */
+  notes?: string[];
 }
+
+export type ProfileChange =
+  | { kind: 'name'; from: string; to: string }
+  | { kind: 'icon'; from: SpaceIconName; to: SpaceIconName }
+  | { kind: 'account'; provider: Provider; from: string; to: string }
+  | { kind: 'switch'; label: string; from: boolean; to: boolean };
 
 /** Mochi's own widgets render inline in the thread where the agent asked, not in the composer tray. */
 export const isMochiCard = (item: QueueItem) => !!item.tool || item.kind === 'setting';

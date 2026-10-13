@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { MultiFileDiff } from '@pierre/diffs/react';
-import { useTheme } from 'next-themes';
 import { Add, Download, Flash, FolderOpen, InfoCircle, Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -21,9 +19,9 @@ import { useHarness, useView } from '../store';
 import { OverflowIcon } from '../ui';
 import { INSTRUCTIONS_FILE, parseServerCommand, parseServerJson, serverSummary, type ConfigChange, type McpEntry } from './agentConfig';
 import { ipcMessage } from './AgentSettings';
+import { FileDiffs } from './FileDiffs';
 import { HARNESS_IDS, HARNESSES } from './harnesses';
 import { takeRequestedHarness, useSettingsRoute } from './open';
-import { usePrefs } from './prefs';
 import { SettingsRow } from './parts';
 
 /**
@@ -482,8 +480,6 @@ function AccountNote({ config }: { config: ProviderConfig }) {
 }
 
 function ReviewDialog({ pending, isWriting, onWrite, onCancel }: { pending: { title: string; preview: ConfigPreview } | null; isWriting: boolean; onWrite: () => void; onCancel: () => void }) {
-  const { resolvedTheme } = useTheme();
-  const { diffStyle } = usePrefs();
   const preview = pending?.preview;
   const isEmpty = !!preview && !preview.edits.length && !preview.copies.length;
   return (
@@ -507,24 +503,7 @@ function ReviewDialog({ pending, isWriting, onWrite, onCancel }: { pending: { ti
                 </AlertDescription>
               </Alert>
             )}
-            {preview.edits.map((e) => (
-              <section key={e.path} className="flex flex-col gap-1.5">
-                <h4 className="flex items-center gap-2 type-meta text-muted-foreground [overflow-wrap:anywhere]">
-                  {e.path}
-                  {!e.before && <Badge variant="outline">New file</Badge>}
-                </h4>
-                <div className="overflow-hidden rounded-xl border bg-card">
-                  <MultiFileDiff
-                    oldFile={{ name: e.path, contents: e.before }}
-                    newFile={{ name: e.path, contents: e.after }}
-                    disableWorkerPool
-                    options={{ diffStyle, disableFileHeader: true, overflow: 'wrap', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
-                    style={{ '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties}
-                    className="max-h-80 overflow-auto"
-                  />
-                </div>
-              </section>
-            ))}
+            <FileDiffs edits={preview.edits} />
             {preview.copies.map((c) => (
               <p key={c.to} className="type-meta [overflow-wrap:anywhere]">
                 Copies the skill folder <span className="font-mono text-xs">{c.from}</span> to <span className="font-mono text-xs">{c.to}</span>
