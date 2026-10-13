@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { dirname, normalize, relative, resolve, sep } from 'node:path';
+import { parseWorktrees } from '../../src/git/parse.ts';
 import { userPath } from '../shellPath.ts';
 
 const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GIT_EDITOR: 'true' };
@@ -25,6 +26,11 @@ export function run(
 }
 
 export const runGit = (cwd: string, args: string[], options?: Parameters<typeof run>[3]) => run('git', cwd, ['-c', 'core.quotePath=false', ...args], options);
+
+/** Every worktree of the repo at `top`, its main checkout included. git prints `C:/…` on Windows; paths come back the way the OS writes them. */
+export async function listWorktrees(top: string) {
+  return parseWorktrees(await runGit(top, ['worktree', 'list', '--porcelain'])).map((w) => ({ ...w, path: normalize(w.path) }));
+}
 
 /** The work tree's top level; throws when `cwd` is not inside a git work tree. */
 export async function topLevel(cwd: string) {

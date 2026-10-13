@@ -3,9 +3,9 @@ import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, WorktreeOptions } from '../../src/host/types/git.ts';
-import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
+import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, snapshot, snapshotCommit } from '../git/checkpoints.ts';
-import { inside, mainRepo, run, runGit, topLevel } from '../git/run.ts';
+import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
 import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
@@ -154,7 +154,7 @@ export const git = {
 
   async worktrees(_sender, root) {
     const top = await mainRepo(string(root, 'root'));
-    return parseWorktrees(await runGit(top, ['worktree', 'list', '--porcelain'])).filter((w) => isUnderWorktreeRoot(w.path));
+    return (await listWorktrees(top)).filter((w) => isUnderWorktreeRoot(w.path));
   },
 
   async removeWorktree(_sender, path) {

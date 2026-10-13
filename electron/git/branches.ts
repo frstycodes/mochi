@@ -1,7 +1,5 @@
-import { normalize } from 'node:path';
-import { parseWorktrees } from '../../src/git/parse.ts';
 import type { Branch, BranchList } from '../../src/host/types/git.ts';
-import { runGit } from './run.ts';
+import { listWorktrees, runGit } from './run.ts';
 
 const MAX_BRANCHES = 500;
 
@@ -12,7 +10,7 @@ export async function listBranches(top: string): Promise<BranchList> {
     baseRef(top),
     runGit(top, ['for-each-ref', '--sort=-committerdate', `--count=${MAX_BRANCHES}`, '--format=%(refname)%00%(committerdate:unix)', 'refs/heads', 'refs/remotes']),
     runGit(top, ['status', '--porcelain=v1', '--untracked-files=normal']),
-    runGit(top, ['worktree', 'list', '--porcelain']).then(parseWorktrees),
+    listWorktrees(top),
   ]);
   const checkedOut = new Map(worktrees.flatMap((w) => (w.branch ? [[w.branch, w.path] as const] : [])));
   const all = refs
@@ -45,10 +43,9 @@ export async function branchNameError(top: string, name: string) {
 
 /** Throws, naming the folder, when `branch` is checked out in any worktree of the repo (its main checkout included); git allows one checkout per branch. */
 export async function assertFreeBranch(top: string, branch: string) {
-  const worktrees = parseWorktrees(await runGit(top, ['worktree', 'list', '--porcelain']));
+  const worktrees = await listWorktrees(top);
   const at = worktrees.find((w) => w.branch === branch);
-  // git prints `C:/…` on Windows; the message shows the folder the way the OS does.
-  if (at) throw new Error(`${branch} is already checked out in ${normalize(at.path)}`);
+  if (at) throw new Error(`${branch} is already checked out in ${at.path}`);
 }
 
 /** Switches the checkout at `top` to `branch` (a remote one gets a tracking branch); refuses with uncommitted changes, so nothing of yours is carried over or lost. */
