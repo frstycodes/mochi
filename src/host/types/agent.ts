@@ -59,6 +59,8 @@ export type AgentEvent =
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   /** What the harness itself says about the account's usage as it goes (Claude's limit warning, its switch to extra usage); a line in the transcript, nothing more. */
   | { threadId: string; type: 'limit-notice'; text: string }
+  /** What the harness did on its own to keep the thread going (a fork it couldn't make); a line in the transcript. */
+  | { threadId: string; type: 'notice'; text: string }
   /**
    * The account hit a plan window's limit. `label` names the window ("5-hour"). `isTurnHeld`: the harness keeps the turn and
    * continues it at the reset (Claude Code); otherwise the turn ended (Codex).

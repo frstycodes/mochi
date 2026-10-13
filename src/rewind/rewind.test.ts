@@ -5,7 +5,7 @@ import { initialQueue } from '../store/queue.ts';
 import { initialThreads, mapThread, threadsReducer } from '../store/threads.ts';
 import type { Action } from '../store/index.tsx';
 import { applyAgentEvent } from '../runtime/apply.ts';
-import { agentCalls } from '../runtime/live.ts';
+import { agentCalls, resumeAfterLostProcess } from '../runtime/live.ts';
 import { rewindBlockedReason, threadAt } from './checkpoints.ts';
 import { forkRelatives } from './fork.ts';
 import { handoffSummary } from './handoff.ts';
@@ -190,6 +190,21 @@ test('rewind chat: transcript back, files untouched, the agent stops and its nex
   const [start] = calls(s, { type: 'send', threadId: id, text: 'Now write 2', drift: 'on-goal', reason: '' });
   assert.equal(start.method, 'start');
   assert.deepEqual(start.method === 'start' && [start.options.resume, start.options.forkAt, start.options.prompt], ['sess-1', 'uuid-after-one', 'Now write 2']);
+});
+
+test('rewind → fork fails → send again, or the process is lost: the fork point goes to main once, never on a later start', () => {
+  const { s: s0, id, index } = liveThread();
+  let s = threadsReducer(s0, { type: 'rewind-message', threadId: id, index, mode: 'chat', forkAt: 'uuid-after-one' });
+  const send: Action = { type: 'send', threadId: id, text: 'Now write 2', drift: 'on-goal', reason: '' };
+  const [fork] = calls(s, send);
+  assert.equal(fork.method === 'start' && fork.options.forkAt, 'uuid-after-one');
+  s = threadsReducer(s, send);
+  s = applyAgentEvent(s, { threadId: id, type: 'turn-end', status: 'failed', error: 'No message found with message.uuid of: uuid-after-one' });
+  assert.equal(thread(s, id).live!.restart, undefined);
+  const again: Action = { type: 'send', threadId: id, text: 'try again', drift: 'on-goal', reason: '' };
+  assert.deepEqual(calls(s, again), [{ method: 'send', threadId: id, text: 'try again' }], 'the same process; main relaunches it without the fork');
+  const [restart] = resumeAfterLostProcess(thread(threadsReducer(s, again), id), { method: 'send', threadId: id, text: 'try again' });
+  assert.deepEqual(restart.method === 'start' && [restart.options.resume, restart.options.forkAt], ['sess-1', undefined]);
 });
 
 test('rewind chat and files: files are restored too, and a session main cannot cut starts fresh with the transcript', () => {

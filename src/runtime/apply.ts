@@ -70,6 +70,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         session: t.session && event.inputTokens + event.outputTokens > 0 ? { ...t.session, usage: addUsage(t.session.usage, event) } : t.session,
       }));
     case 'limit-notice':
+    case 'notice':
       return update((t) => log(t, { at: now, who: 'harness', kind: 'event', text: event.text }));
     case 'limit':
       return update((t) => hitLimit(t, event, now));
