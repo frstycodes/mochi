@@ -2,18 +2,7 @@ import type { ActivityEntry, Provider, Space, Thread } from '../model.ts';
 
 // GAP: only live threads carry reported usage (`Thread.session.usage` and `Thread.live.usage`, from `host.agent` usage events);
 // demo threads are estimated from the activity log. The plan window counts in simulation minutes, which live samples share.
-
-export type ModelId = 'opus-5.5' | 'sonnet-5.5' | 'gpt-5.5-codex';
-
-/** USD per million tokens. TODO(notify): unverified placeholders from earlier generations' list prices; check against the providers' published pricing before showing $ as real. */
-export const MODEL_PRICES = {
-  'opus-5.5': { input: 5, output: 25 },
-  'sonnet-5.5': { input: 3, output: 15 },
-  'gpt-5.5-codex': { input: 1.25, output: 10 },
-} satisfies Record<ModelId, { input: number; output: number }>;
-
-/** Priced stand-in for a model without a price, by provider. */
-export const DEFAULT_MODEL = { claude: 'opus-5.5', codex: 'gpt-5.5-codex' } satisfies Record<Provider, ModelId>;
+// Cost is only ever what the harness reported (Claude's `total_cost_usd`); Codex reports tokens alone, so its threads have none.
 
 /** Tokens per rolling window by plan name (`Space.plans`). TODO(notify): made up; neither provider publishes token budgets, the real remaining figure comes from rate-limit headers via `host.agent`. */
 export const PLAN_LIMITS: Record<string, number> = {
@@ -43,7 +32,8 @@ const REASONING_TOKENS_PER_SECOND = 45;
 export interface Usage {
   input: number;
   output: number;
-  costUsd: number;
+  /** null when the harness reported no spend (Codex, demo threads): show the tokens instead. */
+  costUsd: number | null;
 }
 
 export interface PlanUsage {
@@ -60,14 +50,18 @@ export interface PlanUsage {
 
 export function threadUsage(thread: Thread): Usage {
   const reported = thread.session?.usage;
-  if (reported) return { ...reported, costUsd: reported.costUsd ?? cost(reported, pricedModel(thread, thread.session!.provider)) };
+  if (reported) return { input: reported.input, output: reported.output, costUsd: reported.costUsd ?? null };
   const tokens = agentEntries(thread).reduce((sum, e) => add(sum, entryTokens(e)), { input: 0, output: 0 });
-  return { ...tokens, costUsd: cost(tokens, pricedModel(thread, thread.providers[0])) };
+  return { ...tokens, costUsd: null };
 }
 
+/** `costUsd` sums the threads that reported one; null when none did. */
 export function spaceUsage(threads: Thread[], space: Space, now: number) {
   const own = threads.filter((t) => t.spaceId === space.id);
-  const total = own.map(threadUsage).reduce((sum, u) => ({ input: sum.input + u.input, output: sum.output + u.output, costUsd: sum.costUsd + u.costUsd }), { input: 0, output: 0, costUsd: 0 });
+  const total = own.map(threadUsage).reduce<Usage>(
+    (sum, u) => ({ input: sum.input + u.input, output: sum.output + u.output, costUsd: u.costUsd === null ? sum.costUsd : (sum.costUsd ?? 0) + u.costUsd }),
+    { input: 0, output: 0, costUsd: null },
+  );
   const plans = (['claude', 'codex'] as const).filter((p) => isKnownPlan(space.plans[p])).map((p) => planUsage(own, p, space.plans[p], now));
   return { ...total, plans };
 }
@@ -88,16 +82,6 @@ export function planUsage(threads: Thread[], provider: Provider, plan: string, n
   const minutesLeft = perMinute > 0 ? remaining / perMinute : null;
   const isWarning = used / limit >= WARN_SHARE || (minutesLeft !== null && minutesLeft < WARN_MINUTES);
   return { provider, plan, used, limit, remaining, perMinute, minutesLeft, isWarning };
-}
-
-export function cost(tokens: { input: number; output: number }, model: ModelId) {
-  const price = MODEL_PRICES[model];
-  return (tokens.input * price.input + tokens.output * price.output) / 1_000_000;
-}
-
-function pricedModel(thread: Thread, provider: Provider): ModelId {
-  const model = thread.controls?.model;
-  return model && model in MODEL_PRICES ? (model as ModelId) : DEFAULT_MODEL[provider];
 }
 
 function agentEntries(thread: Thread) {

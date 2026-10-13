@@ -172,7 +172,7 @@ The main session (or split) sits centered; pinned sessions hover at both screen 
 - [x] Goal templates (e.g. "API endpoint", "migration") per space (fixtures, applied from the goal editor)
 - [x] Goal history diff: what changed between v2 and v3
 - [x] Acceptance criteria per step, checked by the agent (tests named, command to run); the check is simulated until the agent runtime exists
-- [ ] Settled-goal archive with outcome summary, PRs, time spent, cost (outcome summary, PRs and time spent done in the summary panel; cost and a dedicated archive view open)
+- [ ] Settled-goal archive with outcome summary, PRs, time spent, cost (outcome summary, PRs, time spent and cost done in the summary panel: cost is what Claude reports, Codex shows tokens since it reports no spend; a dedicated archive view open)
 
 ## 5. Drift guard (prompt deviates from the goal)
 
@@ -205,7 +205,6 @@ Ranked by how much they help running many agents at once.
 - [x] **Scheduled and background threads**: run nightly, on a PR event, or on a cron; land in the Queue when done. One trigger per thread, owned by main (`electron/schedule/scheduler.ts`, `schedules.json`): cron with presets (nightly, weekdays, hourly) and a preview of the next three runs (`src/schedule/cron.ts`, local time, DST-aware), or a PR event (opened, review requested, CI failed; branch pattern or label) polled through gh every 2 minutes. Runs go through the same `startAgent` as the renderer (concurrency cap, profile account, limit pauses), never overlap, and missed ones run once on launch or are skipped. A finished run is a `run` Queue item (Open, Settle), a notification and an entry in the thread's history; while no window is open, run and agent events wait in an outbox for the next one. Editor in the thread menu and the new-thread composer's clock (also Run in background); clock badge on sidebar rows; Settings › Schedules. GAP: with no window open, the OS notification waits until a window opens; a run that started while windows were closed replays its agent output when one opens, so a window opened mid-run can show that run's early output after its later output; PR polling uses the profile's GitHub account but not webhooks.
 - [ ] **Shared / team spaces**: see teammates' threads on the metro board so overlaps catch cross-person duplication too.
 - [ ] **Session recording / replay** of a thread for demos and debugging.
-- [ ] **Voice**: dictate is designed; add push-to-talk global hotkey and spoken status ("Rate limiting is 60% done, waiting on you").
 - [ ] **Mobile companion / Remote control**: answer Queue items from the phone.
 - [ ] **Settings sync and import** of `CLAUDE.md`, MCP servers, skills per space. Built (SETTINGS.md, Workspace → Profiles); open until a new thread on a signed-in test account shows a profile-enabled server in its context panel on both providers.
 
@@ -219,7 +218,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [x] Interactive widgets can send a prompt back to the chat (like `sendPrompt`)
 - [x] Tables: sortable, copy as CSV / Markdown
 - [x] Image output: rendered with a lightbox, can be dropped into the composer
-- [ ] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). Copy, download and fullscreen done; side-pane tab and PiP wait for a visual tab kind in the pane registry
+- [x] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). The `visual` pane tab kind re-renders the fence; Pop out opens it as a floating tab
 - [x] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
 - [x] Theme-aware: re-render on light / dark switch; contrast checked in both (colours come from the theme tokens; no separate contrast measurement)
 - [x] Mochi-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card

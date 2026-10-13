@@ -61,7 +61,7 @@ test('a real turn maps to streamed messages, a plan, a command, an approval and 
   const usage = events.filter((e) => e.type === 'usage');
   assert.deepEqual(usage.map((u) => [u.inputTokens, u.outputTokens]), [[21292, 164], [42776 - 21292, 209 - 164], [64329 - 42776, 214 - 209]], 'usage carries per-update differences, since the store sums them');
   assert.deepEqual([usage[0].contextUsed, usage[0].contextMax], [21456, 258400]);
-  assert.ok(usage.every((u) => u.costUsd! >= 0));
+  assert.ok(usage.every((u) => u.costUsd === undefined), 'Codex reports no spend, so none is made up');
 
   assert.deepEqual(events.at(-1), { threadId: 'h1', type: 'turn-end', status: 'done' });
 });

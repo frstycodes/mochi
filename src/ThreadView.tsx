@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { BranchUp, ChevronDown, Laptop, Monitor, SidebarRight } from 'reicon-react';
+import { BranchUp, ChevronDown, Laptop, SidebarRight } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,8 +10,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -20,10 +18,8 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTabKind, Thread } from './model';
-import { DEVICES } from './Composer';
 import { PANE_TABS } from './pane/tabs';
 import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop } from './pane/headerPins';
-import { getPrefs, type Prefs } from './settings/prefs';
 import { AgentLoader } from './AgentLoader';
 import { agentPhase, isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
@@ -56,12 +52,8 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const isPaneShown = isWide ? isPaneOpen : isPaneTabOpen;
 
   const showTab = (kind: PaneTabKind) => {
-    const tab = pane?.tabs.find((t) => t.kind === kind && !t.isPopped);
-    // pane-open-tab opens the pane itself; selecting an existing tab doesn't.
-    if (tab) dispatch({ type: 'pane-select-tab', threadId: thread.id, tabId: tab.id });
-    else dispatch({ type: 'pane-open-tab', threadId: thread.id, kind });
+    dispatch({ type: 'pane-show-tab', threadId: thread.id, kind });
     if (!isWide) setPaneTabOpen(true);
-    else if (tab && !isPaneOpen) dispatch({ type: 'pane-toggle', threadId: thread.id });
   };
 
   // Narrow splits show the side pane as a tab in place of the chat instead of docking it.
@@ -104,7 +96,14 @@ export function ThreadView({ thread }: { thread: Thread }) {
         <Sheet open={isSummarySheetOpen} onOpenChange={setSummarySheetOpen}>
           <SheetContent side="right" className="w-[300px] p-0 sm:max-w-[300px]">
             <SheetTitle className="sr-only">Thread summary</SheetTitle>
-            <SummaryPanel thread={thread} className="h-full" />
+            <SummaryPanel
+              thread={thread}
+              className="h-full"
+              onPaneOpened={() => {
+                setSummarySheetOpen(false);
+                setPaneTabOpen(true);
+              }}
+            />
           </SheetContent>
         </Sheet>
       </div>
@@ -258,7 +257,7 @@ function ThreadHeader({
       <header ref={header} data-pin-drop className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3 transition-colors duration-150', reservesToggle && TOGGLE_RESERVE, pinDrop.isOver && 'bg-accent/40')}>
         {hasTrigger && <SidebarTrigger className="-ml-1" />}
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
-        <DeviceMenu />
+        <DeviceIndicator />
         <ThreadMenu thread={thread} />
         {!!thread.repo && (
           <span className="hidden min-w-0 items-center gap-1 truncate type-caption text-subtle-foreground @2xl:flex">
@@ -298,38 +297,20 @@ function ThreadHeader({
   );
 }
 
-// GAP: only This Mac runs anything; the choice isn't kept or sent to an agent.
-function DeviceMenu() {
-  const [device, setDevice] = useState(() => getPrefs().runsOn);
-  const Icon = device === 'Cloud sandbox' ? Monitor : Laptop;
+/** Where the agent runs. Only this Mac exists yet, so it states that rather than offering choices that do nothing. */
+function DeviceIndicator() {
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={`Runs on ${device}`} className="-mr-1 text-muted-foreground">
-              <Icon />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent className="flex-col items-start gap-0.5">
-          <span className="block font-medium">Runs on {device}</span>
-          <span className="block opacity-80">Choose where this thread's agent runs</span>
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="start" className="w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Run on</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={device} onValueChange={(v) => setDevice(v as Prefs['runsOn'])}>
-            {DEVICES.map((d) => (
-              <DropdownMenuRadioItem key={d} value={d}>
-                {d}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} aria-label="Runs on this Mac" className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
+          <Laptop className="size-4" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="flex-col items-start gap-0.5">
+        <span className="block font-medium">Runs on this Mac</span>
+        <span className="block opacity-80">The agent works in this thread's folder on your machine</span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

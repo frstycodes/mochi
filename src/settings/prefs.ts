@@ -21,7 +21,6 @@ export interface Prefs {
   effort: string;
   agent: 'claude' | 'codex';
   permissions: SharedAccess;
-  runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
   /** Side pane tabs pinned as icons in the thread header, in order. */
   headerPins: PaneTabKind[];
   /** Off sends every message straight through: no local score, no classifier call. */
@@ -65,7 +64,6 @@ export const DEFAULT_PREFS: Prefs = {
   effort: 'high',
   agent: 'claude',
   permissions: 'Auto',
-  runsOn: 'This Mac',
   headerPins: ['browser', 'terminal'],
   driftGuard: true,
   branchFrom: 'current',

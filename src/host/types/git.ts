@@ -60,6 +60,7 @@ export interface PrCheck {
 export interface PrInfo {
   number: number;
   url: string;
+  title: string;
   state: string;
   checks: PrCheck[];
 }
