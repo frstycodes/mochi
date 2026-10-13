@@ -3,7 +3,8 @@ import { PANE_TAB_KINDS, type PaneTabKind } from '../model.ts';
 import { useDragSession } from '../layout/drag.ts';
 import { getPrefs, setPrefs, usePrefs } from '../settings/prefs.ts';
 
-const isPinnable = (kind: string): kind is Exclude<PaneTabKind, 'new'> => kind !== 'new' && (PANE_TAB_KINDS as readonly string[]).includes(kind);
+// A new-tab page and a visual (which needs a chat visual to show) can't open from a pin.
+const isPinnable = (kind: string): kind is Exclude<PaneTabKind, 'new' | 'visual'> => kind !== 'new' && kind !== 'visual' && (PANE_TAB_KINDS as readonly string[]).includes(kind);
 
 export const PINNABLE_KINDS = PANE_TAB_KINDS.filter(isPinnable);
 

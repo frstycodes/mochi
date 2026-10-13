@@ -141,3 +141,19 @@ test('workspace per mode: a new worktree from a chosen base, an existing branch 
   const moved = run(scheduled, { type: 'workspace', threadId: thread.id, workspace: { mode: 'worktree', base: 'dev', branch: 'mochi/nightly' } });
   assert.deepEqual(scheduledStart(moved.threads.at(-1)!)?.workspace, { mode: 'worktree', branch: 'mochi/nightly', base: 'dev' });
 });
+
+test('adding a source tells a live agent in your name; a demo thread only logs it, and a duplicate does nothing', () => {
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true };
+  const [start] = calls(base(), create);
+  const s = run(base(), create);
+  const add: Action = { type: 'source-add', threadId: start.threadId, source: { kind: 'link', label: 'redis.io/docs' } };
+  assert.deepEqual(calls(s, add), [{ method: 'send', threadId: start.threadId, text: 'I added a source to this thread: redis.io/docs. Read it where it helps with the goal.' }]);
+  const added = run(s, add).threads.find((t) => t.id === start.threadId)!;
+  assert.deepEqual(added.sources, [{ kind: 'link', label: 'redis.io/docs' }]);
+  assert.equal(added.activity.at(-1)?.who, 'you');
+  assert.equal(calls(run(s, add), add).length, 0, 'already a source');
+
+  const demo = run(base(), { type: 'source-add', threadId: 'adm', source: { kind: 'file', label: 'docs/x.md' } }).threads.find((t) => t.id === 'adm')!;
+  assert.deepEqual(demo.activity.at(-1), { at: base().now, who: 'harness', kind: 'event', text: 'Added source docs/x.md' });
+  assert.deepEqual(calls(base(), { type: 'source-add', threadId: 'adm', source: { kind: 'file', label: 'docs/x.md' } }), []);
+});
