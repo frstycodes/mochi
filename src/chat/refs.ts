@@ -27,8 +27,8 @@ export interface RefState {
   review: ReviewState | null;
   /** Issues closed as not planned read as muted, not done. */
   isNotPlanned: boolean;
-  /** Login; null for a deleted account. */
-  author: string | null;
+  /** Null for a deleted account. */
+  author: { login: string; avatarUrl: string } | null;
   /** ISO timestamp. */
   updatedAt: string | null;
   /** PR only. */
