@@ -105,3 +105,13 @@ test('a queue saved across a restart comes back paused, so launching never spend
   const restored = parseSaved(JSON.stringify(toSaved(s)))!.threads.find((t) => t.id === id)!;
   assert.deepEqual([restored.queuePause, restored.queued?.length], ['restart', 3]);
 });
+
+test('a message you send mid-stream stays whole: the rest of the agent\'s streamed text joins its message, not a new one after yours', () => {
+  let { s, id } = working();
+  s = event(s, { threadId: id, type: 'message', text: 'I can start ', isDelta: false });
+  s = run(s, { type: 'send', threadId: id, text: 'hi', reason: '' });
+  s = event(s, { threadId: id, type: 'message', text: 'from here.', isDelta: true });
+  assert.deepEqual(thread(s, id).activity.filter((e) => e.kind === 'message').slice(-2).map((e) => [e.who, e.text]), [['claude', 'I can start from here.'], ['you', 'hi']]);
+  s = event(s, { threadId: id, type: 'message', text: 'Next block.', isDelta: false });
+  assert.equal(thread(s, id).activity.at(-1)!.text, 'Next block.', 'a new block is still its own message');
+});

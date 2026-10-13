@@ -30,9 +30,10 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => ({ ...t, agent: mergeInfo(t.agent, event.info) }));
     case 'message':
       return update((t) => {
-        const last = t.activity.at(-1);
-        if (!event.isDelta || last?.kind !== 'message' || last.who !== who) return log(t, { at: now, who, kind: 'message', text: event.text });
-        return { ...t, activity: [...t.activity.slice(0, -1), { ...last, text: last.text + event.text }] };
+        // A delta continues the block the agent is streaming, even when your message (a steer) or an event landed after it.
+        const i = event.isDelta ? t.activity.findLastIndex((e) => e.kind === 'message' && e.who === who) : -1;
+        if (i < 0) return log(t, { at: now, who, kind: 'message', text: event.text });
+        return { ...t, activity: t.activity.map((e, j) => (j === i ? { ...e, text: e.text + event.text } : e)) };
       });
     case 'reasoning':
       return update((t) => log(t, { at: now, who, kind: 'reasoning', text: event.text }));
