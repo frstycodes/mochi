@@ -116,11 +116,11 @@ Always on, no mode and no extra chrome: pinned threads sit side by side and the 
 
 - [x] Pinned threads are full-width pages of one native horizontal scroller in pin order; CSS `scroll-snap` (`snap-mandatory`, `snap-always`) stops each gesture at the next page, no JS spring (`src/pager/PinnedPager.tsx`)
 - [x] Non-pinned views open as before; one sits on the page before pin 1 (or, when it's a pinned thread, at its own position). Other threads open in the focused split group leave the pager
-- [x] Two-finger horizontal swipe moves 1:1 (native); haptic per detent like the model dock
+- [x] Two-finger horizontal swipe moves 1:1 (native), at most one page per swipe (Chromium lets a long 1:1 swipe run past `snap-stop: always`, so the offset is held within a page of where the swipe started); haptic per detent like the model dock
 - [x] Mouse press-and-drag on empty space pages 1:1 after a 6px axis lock, releasing to the next page by distance (half a page) or flick; never starts on text (selection keeps working) or controls, a vertical lock lets go, the click after a drag is swallowed (`useDragToSwipe`)
-- [x] Ctrl ← / → (Alt on Windows/Linux) steps one pinned thread, instantly; inside a split group the arrows move split focus first. Cmd 1–9 jumps to pinned N. Listed in Settings › Keyboard
+- [x] Cmd Shift [ / ] (Ctrl Shift on Windows/Linux) steps one pinned thread, instantly: macOS's own previous/next tab keys, since Ctrl ← / → belongs to Mission Control. Cmd 1–9 jumps to pinned N. Listed in Settings › Keyboard
 - [x] Reduced motion: a drag release lands instantly
-- [x] The current page and its pinned neighbours stay mounted and hot, keyed by thread, so landing on a neighbour flips it from read-only preview to live without a remount; the rest unmount and remember their scroll (offset + row measurements)
+- [x] Every pinned page stays mounted (pins cap at five), keyed by thread, so landing flips a read-only preview to live without a remount and a quick run of swipes never shows an empty page; when the set changes the current page and its neighbours mount first, the rest in a background render. Threads that leave the pager remember their scroll (offset + row measurements)
 - [x] Off-screen neighbours: `content-visibility: auto` (no style, layout or paint, shimmers paused); Mochi's frame loop stops while off screen
 - [x] Long threads: the transcript is virtualized (`@tanstack/react-virtual`, `src/chat/Transcript.tsx`). 2,000 entries in a production build: mount 1.1 s → 0.18 s, remount 1.0 s → 0.09 s, DOM 38k → 0.3k nodes, heap +219 MB → +37 MB, scroll 45–49 → 60 fps
 - [ ] Find in thread over virtualized rows (none exists yet; search the store's rows, then `scrollToIndex`)
@@ -129,6 +129,7 @@ Always on, no mode and no extra chrome: pinned threads sit side by side and the 
 - Pager order is pinned order, not recency: positions never move (same rule as Orbit).
 - Unpinned running threads stay off the pager; the Queue covers them.
 - No ⌥1–9: on macOS it types characters into the composer (⌥5 is `[` on a German layout). Cmd 1–9 already jumps to pinned N.
+- No Ctrl ← / →: macOS keeps Control-arrows for Mission Control, so the pager uses the system's previous/next tab keys, Cmd Shift [ / ].
 - Portrait windows page horizontally too: vertical is the chat's own scroll axis (Stage Manager switched vertically there).
 - [x] Multi-window: tear a split into its own OS window, one per monitor (split menu → Move to a new window; the main window's store is the only one, torn windows mirror it over `host.windows` broadcasts; web opens a tab at `#/window/<id>`)
 - [x] Mission-control overview (Cmd ↑): all sessions as a grid of live cards

@@ -11,12 +11,12 @@ import { useSnapPager } from '../useSnapPager';
 import { isHot, OFF_PIN, slotsOf } from './slots';
 import { usePagerKeys } from './usePagerKeys';
 import { useDragToSwipe } from './useDragToSwipe';
+import { useOnePagePerSwipe } from './useOnePagePerSwipe';
 
 /**
  * The main area: pinned threads side by side as full-width pages of one native horizontal scroller, the focused view on its page.
  * `snap-mandatory` + `snap-always` stop a gesture at the next page; the browser owns tracking and momentum, so a two-finger swipe
- * is 1:1 and nothing here springs. The current page and its neighbours stay mounted (keyed by thread, so landing never remounts);
- * the rest unmount and remember their scroll.
+ * is 1:1 and nothing here springs. Pages are keyed by thread, so landing on one flips it from preview to live without a remount.
  */
 export function PinnedPager() {
   const { state, dispatch } = useHarness();
@@ -24,18 +24,24 @@ export function PinnedPager() {
   const reduce = !!useReducedMotionConfig();
   const slots = slotsOf(state);
   const live = liveLeaf(state, slots.ids[slots.center]);
-  // The page you land on commits first; the neighbour that just came into range mounts in a background render after it.
-  const settled = slots.ids.indexOf(useDeferredValue(slots.ids[slots.center]));
-  const isMounted = (i: number) => isHot(i, slots.center) && (i === slots.center || settled < 0 || isHot(i, settled));
+  // Every pinned page stays mounted (pins cap at five, and a virtualized thread is cheap), so a quick run of swipes never lands on an empty page.
+  // When the set changes (launch, a pin, another space) the current page and its neighbours commit first and the rest mount in a background render.
+  const ids = slots.ids.join();
+  const isWarm = useDeferredValue(ids, '') === ids;
+  const isMounted = (i: number) => isWarm || isHot(i, slots.center);
   const scroller = useRef<HTMLDivElement>(null);
   const open = (id: string | undefined) => {
     if (id && id !== OFF_PIN) dispatch({ type: 'go', view: { kind: 'thread', id } });
   };
-  // A mouse drag commits on release (`useDragToSwipe` fires the scrollend), not on the scrollend each step of the hand can raise.
-  const onSettle = (page: number) => scroller.current?.dataset.swiping === undefined && open(slots.ids[page]);
+  // A swipe commits once it's over (`useDragToSwipe` and `useOnePagePerSwipe` fire that scrollend), not on the ones raised along the way.
+  const onSettle = (page: number) => {
+    const el = scroller.current;
+    if (el && el.dataset.swiping === undefined && el.dataset.wheeling === undefined) open(slots.ids[page]);
+  };
   useSnapPager(scroller, { axis: 'x', index: slots.center, onSettle, onCross: haptic });
   usePagerKeys();
   useDragToSwipe(scroller, reduce);
+  useOnePagePerSwipe(scroller);
   useCaretFollowsPage(slots.ids[slots.center]);
   const pages = slots.ids.length;
 

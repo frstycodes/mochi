@@ -128,8 +128,8 @@ export const ACTIONS = [
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),
-  { id: 'pinned-previous', group: 'Layout', title: 'Previous pinned thread', icon: ArrowLeft, shortcut: ['nav', 'left'], keywords: 'swipe switch', run: ({ state, dispatch }) => goPinned(state, dispatch, -1) },
-  { id: 'pinned-next', group: 'Layout', title: 'Next pinned thread', icon: ArrowRight, shortcut: ['nav', 'right'], keywords: 'swipe switch', run: ({ state, dispatch }) => goPinned(state, dispatch, 1) },
+  { id: 'pinned-previous', group: 'Layout', title: 'Previous pinned thread', icon: ArrowLeft, shortcut: ['mod', 'shift', '['], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, -1) },
+  { id: 'pinned-next', group: 'Layout', title: 'Next pinned thread', icon: ArrowRight, shortcut: ['mod', 'shift', ']'], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, 1) },
   { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, shortcut: ['mod', 'up'], keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
   { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, shortcut: ['mod', '\\'], run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
   { id: 'layout-split-down', group: 'Layout', title: 'Split down', icon: RowHorizontal, run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId, side: 'bottom' }) },

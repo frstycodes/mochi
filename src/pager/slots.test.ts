@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { OFF_PIN, isHot, pagerSlots, pinnedNeighbour, releasePage } from './slots.ts';
+import { OFF_PIN, clampToNeighbours, isHot, pagerSlots, pinnedNeighbour, releasePage, swipeStarts } from './slots.ts';
 
 const PINS = ['a', 'b', 'c', 'd', 'e'];
 
@@ -39,4 +39,38 @@ test('a drag release turns one page on a flick or past half, else springs back',
 test('a release never leaves the pages', () => {
   assert.equal(releasePage(0, -600, 1000, -1, 5), 0);
   assert.equal(releasePage(4, 600, 1000, 1, 5), 4);
+});
+
+test('a swipe is held within one page of where it started', () => {
+  assert.equal(clampToNeighbours(2600, 0, 1000), 1000);
+  assert.equal(clampToNeighbours(-300, 2, 1000), 1000);
+  assert.equal(clampToNeighbours(2400, 2, 1000), 2400);
+  assert.equal(clampToNeighbours(3700, 2, 1000), 3000);
+});
+
+/** Feeds horizontal deltas 16ms apart (after `startAt`) and returns the indices that started a swipe. */
+function starts(deltas: number[], startAt = 0) {
+  const isStart = swipeStarts(400);
+  return deltas.flatMap((dx, i) => (isStart(startAt + i * 16, dx, 0) ? [i] : []));
+}
+
+test('a swipe and its momentum are one swipe', () => {
+  const fingers = [4, 12, 30, 48, 52, 47, 53, 49];
+  const momentum = [44, 38, 31, 25, 19, 14, 10, 7, 4, 2, 1, 1];
+  assert.deepEqual(starts([...fingers, ...momentum]), [0]);
+});
+
+test('new fingers during momentum start a second swipe with no gap', () => {
+  const momentum = [44, 38, 31, 25, 19];
+  assert.deepEqual(starts([20, 45, 50, ...momentum, 6, 18, 40]), [0, 9]);
+});
+
+test('a pile-up behind a busy frame stays the same swipe; a gentle start after a pause is a new one', () => {
+  const isStart = swipeStarts(400);
+  assert.equal(isStart(0, 20, 0), true);
+  assert.equal(isStart(16, 50, 0), false);
+  assert.equal(isStart(200, 434, 0), false);
+  assert.equal(isStart(216, 50, 0), false);
+  assert.equal(isStart(400, 10, 0), true);
+  assert.equal(isStart(1000, 120, 0), true);
 });

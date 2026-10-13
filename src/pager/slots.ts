@@ -37,9 +37,39 @@ export function pinnedNeighbour({ ids, center }: PagerSlots, step: 1 | -1) {
   return id && id !== OFF_PIN ? id : undefined;
 }
 
-/** Pages kept mounted: the current one and one each side, so a swipe slides real content in. */
+/** Pages mounted first when the set of pages changes: the current one and one each side, so a swipe slides real content in. */
 export function isHot(page: number, center: number) {
   return Math.abs(page - center) <= 1;
+}
+
+/** A scroll offset held within one page of `home`, so one swipe never turns more than one page. */
+export function clampToNeighbours(left: number, home: number, pageWidth: number) {
+  return Math.min((home + 1) * pageWidth, Math.max((home - 1) * pageWidth, left));
+}
+
+// A wheel stream that resumes after this long is a new swipe, if it starts gently: a bigger first delta is events piled up behind a busy frame.
+const NEW_SWIPE_GAP_MS = 100;
+const SWIPE_START_MAX_PX = 40;
+// Momentum only shrinks; a delta jumping back up after this many shrinking ones is new fingers, which cut momentum off with no gap at all.
+const DECAY_RUN = 3;
+
+/**
+ * Tells, per wheel event, whether it starts a new swipe. DOM wheel events carry no gesture phase, so: a long pause, a gentle start after a
+ * short one, or a rise out of momentum's decay.
+ */
+export function swipeStarts(tailMs: number) {
+  let last = -Infinity;
+  let previous = 0;
+  let decaying = 0;
+  return (t: number, dx: number, dy: number) => {
+    const gap = t - last;
+    const size = Math.abs(dx);
+    const isStart = gap > tailMs || (gap > NEW_SWIPE_GAP_MS && size > Math.abs(dy) && size <= SWIPE_START_MAX_PX) || (decaying >= DECAY_RUN && size > previous * 1.5 + 2);
+    decaying = isStart || size > previous ? 0 : size < previous ? decaying + 1 : decaying;
+    previous = size;
+    last = t;
+    return isStart;
+  };
 }
 
 /** Hand speed (px/ms) that turns the page on release however short the drag. */

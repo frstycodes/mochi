@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 import { pageSize } from '../useSnapPager';
-import { releasePage } from './slots';
+import { clampToNeighbours, releasePage } from './slots';
 
 const AXIS_LOCK_PX = 6;
 
@@ -36,7 +36,8 @@ export function useDragToSwipe(ref: RefObject<HTMLElement | null>, reduce: boole
       if (dt > 0) drag.velocity = (e.clientX - drag.lastX) / dt;
       drag.lastX = e.clientX;
       drag.lastT = e.timeStamp;
-      el.scrollLeft = drag.left - dx;
+      const width = pageSize(el, 'x');
+      el.scrollLeft = clampToNeighbours(drag.left - dx, Math.round(drag.left / width), width);
     };
     const onUp = (e: PointerEvent) => {
       if (!drag || e.pointerId !== drag.id) return;

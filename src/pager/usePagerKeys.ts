@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useHarness } from '../store';
-import { isMod, isNav } from '../keys';
+import { isMod } from '../keys';
 import { pinnedNeighbour, slotsOf } from './slots';
 
 /**
- * nav ←/→ steps to the previous or next pinned thread, instantly; the split keys run first, so inside a split group the arrows move between
- * splits and only step at the group's edge. mod ↑ toggles the overview, Esc closes it.
+ * mod Shift [ / ] steps to the previous or next pinned thread, instantly: macOS's own previous/next tab keys (⌃←/→ belongs to Mission Control
+ * and never reaches the app). Digits and brackets use `e.code`, so they work on any layout. mod ↑ toggles the overview, Esc closes it.
  */
 export function usePagerKeys() {
   const { state, dispatch } = useHarness();
@@ -24,8 +24,8 @@ export function usePagerKeys() {
         e.preventDefault();
         return dispatch({ type: 'overview-toggle', isOpen: false });
       }
-      if (!isNav(e) || e.shiftKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-      const id = pinnedNeighbour(slotsOf(s), e.key === 'ArrowLeft' ? -1 : 1);
+      if (!isMod(e) || !e.shiftKey || e.altKey || (e.code !== 'BracketLeft' && e.code !== 'BracketRight')) return;
+      const id = pinnedNeighbour(slotsOf(s), e.code === 'BracketLeft' ? -1 : 1);
       if (!id) return;
       e.preventDefault();
       dispatch({ type: 'go', view: { kind: 'thread', id } });
