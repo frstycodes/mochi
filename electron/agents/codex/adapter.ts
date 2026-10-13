@@ -284,9 +284,6 @@ export class CodexAdapter {
     const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
     const attached = skillInputs(text, skills, listed);
     const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
-    // Mid-turn, the message steers the running turn (schema `TurnSteerParams`, 0.155.1) instead of waiting for a new one. Steer takes no
-    // `serviceTier`, so a speed change made while steering applies from the next turn/start.
-    if (live.turnId) return void (await rpc.request('turn/steer', { threadId: live.codexId, expectedTurnId: live.turnId, input }));
     const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
@@ -321,10 +318,7 @@ export class CodexAdapter {
   private notification(server: CodexServer, method: string, params: unknown) {
     if (method === 'account/rateLimits/updated') {
       this.onLimits?.(server.account.id, codexWindows((params as { rateLimits?: Parameters<typeof codexWindows>[0] }).rateLimits));
-      const window = updateLimits(server.limits, params);
-      // Account-wide, so every thread mid-turn on this account hears it; the store logs each window once.
-      if (window) for (const live of server.byCodex.values()) if (live.turnId) this.emit({ threadId: live.state.threadId, type: 'limit-warning', window });
-      return;
+      return updateLimits(server.limits, params);
     }
     const ask = server.asks.get(codexThreadId(params) ?? '');
     if (ask) return ask.notify(method, params);

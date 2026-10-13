@@ -39,9 +39,7 @@ import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
-import { HeldHint, LimitEntry } from './chat/LimitCard';
-import { heldBy, type AccountHold } from './runtime/limits';
-import { resetLabel } from './usage/limits';
+import { LimitEntry, LimitHint } from './chat/LimitCard';
 import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
@@ -258,11 +256,10 @@ function Composer({
   onToggleTray: () => void;
   handoff: ReturnType<typeof useComposerHandoff>;
 }) {
-  const { state, dispatch } = useHarness();
+  const { dispatch } = useHarness();
   const { whileWorking } = usePrefs();
   const [isHeld, setIsHeld] = useState(false);
-  const held = heldBy(state.threads, thread);
-  const isQueueing = !!held || shouldQueue(thread, whileWorking, isHeld);
+  const isQueueing = shouldQueue(thread, whileWorking, isHeld);
   const queued = thread.queued ?? [];
   const { textInput } = usePromptInputController();
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -323,7 +320,7 @@ function Composer({
                 dispatch({ type: 'queued-add', threadId: thread.id, message });
                 mention.clear();
               }}
-              placeholder={held ? heldPlaceholder(thread, held) : placeholder(thread, decisions.length > 0, isQueueing)}
+              placeholder={placeholder(thread, decisions.length > 0, isQueueing)}
               autoFocus={handoff.isHandoff}
               {...menuProps}
               onKeyDown={(e) => {
@@ -343,7 +340,7 @@ function Composer({
         <ComposerMeta>
           <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
-          {held ? <HeldHint held={held} /> : isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
+          {thread.live?.limit ? <LimitHint limit={thread.live.limit} /> : isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
         </ComposerMeta>
         {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
@@ -356,11 +353,6 @@ function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
   if (isAsking) return 'Answer above, or steer with a message';
   if (isQueueing) return `Queue a message for when ${name} finishes`;
   return isWorking(thread) ? `Steer ${name} while it works` : `Message ${name}`;
-}
-
-function heldPlaceholder(thread: Thread, held: AccountHold) {
-  const name = authorName(thread.providers[0]);
-  return `Queue a message for when ${name}'s limit resets${held.resetsAt ? ` at ${resetLabel(held.resetsAt)}` : ''}`;
 }
 
 /** What holding mod does to this send: the setting's other choice. */
