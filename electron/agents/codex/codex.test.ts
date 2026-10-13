@@ -153,9 +153,8 @@ test('side chat asks on the profile account, streams once per delta, and says wh
 
 test('a thread runs at the speed it started with, and a message changes it for its turn and the ones after', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
+  const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'tiers.log');
-  writeFileSync(fake, TIER_CODEX, { mode: 0o755 });
   const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
   // Lets each turn end before the next send.
   const settle = () => new Promise((r) => setTimeout(r, 150));
