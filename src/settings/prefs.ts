@@ -43,6 +43,8 @@ export interface Prefs {
   agentControl: AgentControl;
   /** What model and effort `create_thread` may give a new thread (RUNTIME.md › Mochi tools). */
   threadModels: ThreadModels;
+  /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
+  recordReplays: boolean;
 }
 
 export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
@@ -57,7 +59,7 @@ export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
   projectsFolder: '~/dev',
   restoreLayout: true,
-  alertKinds: ['needs-you', 'review', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
+  alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
@@ -79,6 +81,7 @@ export const DEFAULT_PREFS: Prefs = {
   demoData: false,
   agentControl: 'everything',
   threadModels: 'cheaper',
+  recordReplays: true,
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';

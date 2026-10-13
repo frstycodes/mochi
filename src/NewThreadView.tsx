@@ -18,6 +18,8 @@ import { projectName } from './projects';
 import { host } from './host';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
+import { contextMax } from './runtime/models';
+import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
 import { toast } from 'sonner';
 import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
@@ -59,8 +61,9 @@ function NewThread() {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
+  const spaceId = useSpace().id;
   // /side needs a thread to ask about.
-  const slashItems = useSlashItems(provider, useSpace().id).filter((i) => i.source !== 'mochi');
+  const slashItems = useSlashItems(provider, spaceId).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
@@ -132,6 +135,7 @@ function NewThread() {
               {...slash.textareaProps}
               onSend={start}
               submitLabel={submitLabel(run, !!linked)}
+              meter={<ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
               placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
             />
           </ComposerCard>

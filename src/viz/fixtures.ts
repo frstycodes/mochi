@@ -17,7 +17,6 @@ export function vizGalleryThread(): Thread {
     steps: [],
     activity: GALLERY.map((entry, i) => ({ ...entry, at: s + i })),
     prs: [],
-    skills: [],
     sources: [],
     context: { used: 24_000, max: 200_000 },
   };

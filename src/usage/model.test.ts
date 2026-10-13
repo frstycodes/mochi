@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ActivityEntry, Thread } from '../model.ts';
-import { planUsage, spaceUsage, threadUsage, WINDOW_MINUTES } from './model.ts';
+import { spaceUsage, threadUsage } from './model.ts';
 
 const thread = (activity: ActivityEntry[], providers: Thread['providers'] = ['claude']) => ({ id: 't', spaceId: 'x', providers, activity }) as Thread;
 const tool = (at: number, who: ActivityEntry['who'] = 'claude'): ActivityEntry => ({ at, who, kind: 'tool', text: 'Read a.ts' });
@@ -20,21 +20,6 @@ test('reported cost is passed through; a space sums the threads that reported on
   assert.deepEqual(threadUsage(claude), { input: 10, output: 2, costUsd: 0.5 });
   assert.deepEqual(threadUsage(codex), { input: 30, output: 4, costUsd: null });
   const space = { id: 'x', plans: {} } as Parameters<typeof spaceUsage>[1];
-  assert.equal(spaceUsage([claude, codex], space, 0).costUsd, 0.5);
-  assert.equal(spaceUsage([codex], space, 0).costUsd, null);
-});
-
-test('plan usage rolls off outside the window and warns before running dry', () => {
-  const now = 1000;
-  const old = tool(now - WINDOW_MINUTES - 1);
-  const idle = planUsage([thread([old])], 'claude', 'Team', now);
-  assert.equal(idle.used, 0);
-  assert.equal(idle.minutesLeft, null);
-  assert.equal(idle.isWarning, false);
-
-  const busy = planUsage([thread(Array.from({ length: 50 }, (_, i) => tool(now - (i % 10))))], 'claude', 'Team', now);
-  assert.equal(busy.used, 50 * 6_350);
-  assert.ok(busy.minutesLeft !== null && busy.minutesLeft < 45);
-  assert.equal(busy.isWarning, true);
-  assert.equal(planUsage([thread([tool(now, 'codex')])], 'claude', 'Team', now).used, 0);
+  assert.equal(spaceUsage([claude, codex], space).costUsd, 0.5);
+  assert.equal(spaceUsage([codex], space).costUsd, null);
 });

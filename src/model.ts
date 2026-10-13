@@ -68,6 +68,15 @@ export interface ActivityEntry {
   subagentId?: string;
   /** Wall-clock milliseconds, stamped on live agents' entries; `at` is the app clock's minute. */
   ms?: number;
+  /** Tool entries: the skill this call loaded. */
+  skill?: string;
+  /** Tool entries: the MCP server tool this call ran. */
+  mcp?: McpCall;
+}
+
+export interface McpCall {
+  server: string;
+  tool: string;
 }
 
 export interface WebLink {
@@ -77,11 +86,6 @@ export interface WebLink {
 
 export function authorName(who: Author) {
   return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Mochi' }[who];
-}
-
-export interface SkillUse {
-  name: string;
-  uses: number;
 }
 
 export interface Source {
@@ -158,14 +162,13 @@ export interface Thread {
   revisions: Revision[];
   activity: ActivityEntry[];
   prs: PullRequest[];
-  skills: SkillUse[];
   sources: Source[];
   context: { used: number; max: number };
   orbitSlot?: number;
   settledAt?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };
-  session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
+  session?: { provider: Provider; id: string; usage?: { input: number; output: number; cached?: number; costUsd?: number } };
   controls?: ThreadControls;
   /** From the live agent's session start; reset each time a session (re)starts. */
   agent?: AgentInfo;
@@ -230,8 +233,6 @@ export interface LiveRun {
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
-  /** Reported tokens per usage event, for the plan window. */
-  usage: { at: number; provider: Provider; tokens: number }[];
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
@@ -252,6 +253,8 @@ export interface QueueItem {
   tool?: ToolWidget;
   /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
   setting?: { id: string; suggested?: string };
+  /** A `ci` card: the PR and the first failed check, whose log "Send failing log to agent" fetches. */
+  ci?: { pr: number; url: string; check?: { name: string; link?: string } };
   createdAt: number;
 }
 
@@ -390,6 +393,8 @@ function rateLimiting(): Thread {
       { at: at(s, 2), who: 'claude', kind: 'message', text: 'Plan: tiers doc, schema, gateway wiring, Redis-backed token bucket, load test, docs. I will rate limit by API key, not IP, since every public route needs a key.' },
       { at: at(s, 92), who: 'you', kind: 'message', text: 'Also add per-key overrides, sales wants to raise limits for a few customers.' },
       { at: at(s, 93), who: 'harness', kind: 'event', text: 'Goal v2: +1 step "Per-key overrides"' },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Skill sizing-the-change', skill: 'sizing-the-change' },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp linear: get_issue', mcp: { server: 'linear', tool: 'get_issue' } },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Search redis token bucket rate limiter lua script atomic', links: DEMO_LINKS['Search redis token bucket rate limiter lua script atomic'] },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', links: DEMO_LINKS['Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/'] },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts' },
@@ -398,18 +403,22 @@ function rateLimiting(): Thread {
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Read src/logo.svg' },
       { at: at(s, 101), who: 'claude', kind: 'tool', text: 'Edit packages/cache/redis.ts  +38 −0' },
       { at: at(s, 104), who: 'claude', kind: 'tool', text: 'Run pnpm --filter cache test' },
+      { at: at(s, 105), who: 'claude', kind: 'tool', text: 'Skill code-review', skill: 'code-review' },
     ],
     prs: [],
-    skills: [
-      { name: 'sizing-the-change', uses: 1 },
-      { name: 'code-review', uses: 1 },
-    ],
     sources: [
       { kind: 'mcp', label: 'Linear · LAT-198 Rate limits' },
       { kind: 'file', label: 'docs/api/limits.md' },
       { kind: 'link', label: 'redis.io/docs/latest/develop/use/patterns' },
     ],
     context: { used: 84_000, max: 200_000 },
+    // What @ offers with tool counts; no session, so the summary's live-agent sections stay hidden.
+    agent: {
+      mcpServers: [
+        { name: 'linear', status: 'connected', toolCount: 23 },
+        { name: 'github', status: 'needs-auth' },
+      ],
+    },
   };
 }
 
@@ -435,6 +444,8 @@ function adminDashboard(): Thread {
     ],
     activity: [
       { at: s, who: 'you', kind: 'message', text: 'Build the admin usage dashboard. Per key, per day, exportable. It has to stay fast at 10k keys.' },
+      { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Skill ui', skill: 'ui' },
+      { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Mcp linear: get_issue', mcp: { server: 'linear', tool: 'get_issue' } },
       { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Read packages/db/schema/usage.ts' },
       { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Read apps/web/components/charts/BarChart.tsx' },
       { at: at(s, 2), who: 'codex', kind: 'reasoning', seconds: 14, text: 'api_usage_daily is append-only and partitioned by day, so grouping by key and day is cheap if the query filters on the partition first. Offset pagination would drift while new rows land; a (key_id, day) cursor stays stable at 10k keys.' },
@@ -443,15 +454,15 @@ function adminDashboard(): Thread {
       { at: at(s, 10), who: 'codex', kind: 'tool', text: 'Write apps/api/routes/admin/usage.ts  +18 −0' },
       { at: at(s, 24), who: 'codex', kind: 'tool', text: 'Run pnpm --filter api test usage' },
       { at: at(s, 38), who: 'codex', kind: 'message', text: 'Endpoint is done and paginated by cursor. p95 is 140ms on the 10k-key seed database. Setup notes are in `README.md`, the page mounts from `src/App.tsx` and the scripts live in `package.json`. Moving on to the charts page.' },
+      { at: at(s, 39), who: 'codex', kind: 'message', text: 'Related work: #45 is open, #49 is still a draft, #47 merged and #30 was closed. #46 has conflicts with main and #48 is failing CI. Issues: #12 is open, #9 was fixed, #8 closed as not planned, and #999 is one gh cannot read. Upstream there is vercel/streamdown#120 and https://github.com/frstycodes/mochi/pull/45. The header lives in src/App.tsx:3 and styles in [the stylesheet](src/index.css); src/missing.ts stays plain, and this is our #1 priority. On GitHub: frstycodes/mochi#45, frstycodes/mochi#47, frstycodes/mochi#7 and frstycodes/mochi#50.' },
       { at: at(s, 40), who: 'harness', kind: 'event', text: 'Finished "Usage query endpoint"' },
+      { at: at(s, 41), who: 'codex', kind: 'tool', text: 'Skill dataviz', skill: 'dataviz' },
+      { at: at(s, 41), who: 'codex', kind: 'tool', text: 'Skill ui', skill: 'ui' },
+      { at: at(s, 42), who: 'codex', kind: 'tool', text: 'Mcp figma: get_design_context', mcp: { server: 'figma', tool: 'get_design_context' } },
+      { at: at(s, 42), who: 'codex', kind: 'tool', text: 'Mcp figma: get_screenshot', mcp: { server: 'figma', tool: 'get_screenshot' } },
       { at: at(s, 44), who: 'codex', kind: 'tool', text: 'Edit apps/web/routes/admin/usage.tsx  +120 −4' },
     ],
     prs: [],
-    skills: [
-      { name: 'ui', uses: 3 },
-      { name: 'dataviz', uses: 2 },
-      { name: 'shadcn', uses: 1 },
-    ],
     sources: [
       { kind: 'mcp', label: 'Linear · LAT-212 Admin usage' },
       { kind: 'mcp', label: 'Figma · Admin / Usage' },
@@ -484,11 +495,11 @@ function flakyCheckout(): Thread {
       { at: s, who: 'you', kind: 'message', text: 'checkout.spec fails about 1 in 6 runs on CI only. Find out why and fix it.' },
       { at: at(s, 2), who: 'codex', kind: 'tool', text: 'Read e2e/checkout.spec.ts' },
       { at: at(s, 3), who: 'codex', kind: 'tool', text: 'Read e2e/fixtures/stripe.ts' },
+      { at: at(s, 4), who: 'codex', kind: 'tool', text: 'Skill run', skill: 'run' },
       { at: at(s, 5), who: 'codex', kind: 'tool', text: 'Run pnpm e2e checkout.spec --repeat-each 6' },
       { at: at(s, 47), who: 'codex', kind: 'message', text: 'The flake is the Stripe webhook arriving after the success page asserts. I can either stub webhooks in e2e, or record real fixtures and replay them. Which do you prefer?' },
     ],
     prs: [],
-    skills: [{ name: 'run', uses: 2 }],
     sources: [{ kind: 'link', label: 'github.com/latitude-media/latitude/actions/runs/1182' }],
     context: { used: 46_000, max: 272_000 },
   };
@@ -533,10 +544,6 @@ function authMigration(): Thread {
       { number: 479, state: 'merged', title: 'Better Auth core' },
       { number: 482, state: 'open', title: 'Session backfill + legacy removal' },
     ],
-    skills: [
-      { name: 'security-review', uses: 1 },
-      { name: 'code-review', uses: 2 },
-    ],
     sources: [
       { kind: 'link', label: 'better-auth.com/docs/concepts/session-management' },
       { kind: 'file', label: 'apps/api/legacy-auth/' },
@@ -564,7 +571,6 @@ function onboardingEmails(): Thread {
     ],
     activity: [],
     prs: [{ number: 471, state: 'merged', title: 'Onboarding sequence' }],
-    skills: [],
     sources: [],
     context: { used: 52_000, max: 200_000 },
   };
@@ -591,7 +597,6 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
     }),
     activity: [{ at: s, who: 'you', kind: 'message', text: title }],
     prs: [],
-    skills: [],
     sources: [],
     context: { used: 30_000, max: 200_000 },
   };

@@ -4,12 +4,12 @@ import { useTheme } from 'next-themes';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Flag, Global, GlobalSearch, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Flag, Global, GlobalSearch, Note, Server, TerminalSquare, X } from 'reicon-react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
-import type { ActivityEntry, WebLink } from './model';
+import type { ActivityEntry, AgentCommand, WebLink } from './model';
 import { clock } from './progress';
 import { usePrefs } from './settings/prefs';
 import { eventLine, isApprovalChatter, parseTool, toolCall, turnSummary, type ToolCall } from './summary';
@@ -29,9 +29,9 @@ const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 /**
  * One work group (the calls between two messages), folded to a line like Claude's: while live the line names the current
  * action and rolls to each new one; once done it settles into a summary. Open, it lists each call as a plain sentence
- * that opens in place to its command and output, diff, results or file.
+ * that opens in place to its command and output, diff, results or file. `skills` describe the skills the group used.
  */
-export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?: CurrentAction }) {
+export function WorkLog({ entries, skills = [], action }: { entries: ActivityEntry[]; skills?: AgentCommand[]; action?: CurrentAction }) {
   const [isOpen, setOpen] = useState(false);
   const isLive = !!action;
   const tools = entries.filter((e) => e.kind === 'tool');
@@ -85,6 +85,8 @@ export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?
             // The live title says what it waits on; once answered, the call's own row is the record.
             if (e.kind === 'event' && isApprovalChatter(e.text)) return null;
             if (e.kind !== 'tool') return <EventRow key={i} entry={e} />;
+            const call = parseTool(e.text);
+            if (call.verb === 'Skill') return <SkillRow key={i} name={call.target} description={skills.find((s) => s.name === call.target)?.description} />;
             return <CallRow key={i} entry={e} isRunning={isLive && i === lastTool} files={files} />;
           })}
         </CallList>
@@ -368,7 +370,7 @@ function TitleContent({ value }: { value: CurrentAction | string }) {
 
 const FAVICONS_SHOWN = 4;
 
-/** Favicons of the pages a search returned (stacked, each fading in as it arrives), the read page's, or the file's type icon. */
+/** Favicons of the pages a search returned (stacked, each fading in as it arrives), the read page's, the file's type icon, or a skill's or MCP server's glyph. */
 function ActionIcon({ action }: { action: CurrentAction }) {
   const { call, links = [] } = action;
   if (!call) return null;
@@ -388,6 +390,8 @@ function ActionIcon({ action }: { action: CurrentAction }) {
     );
   }
   if (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-3.5 shrink-0" />;
+  if (call.verb === 'Skill') return <Note aria-hidden className="size-3.5 shrink-0 text-info" />;
+  if (call.verb === 'Mcp') return <Server aria-hidden className="size-3.5 shrink-0" />;
   return null;
 }
 
@@ -462,9 +466,22 @@ export function Expand({ isOpen, children }: { isOpen: boolean; children: ReactN
   );
 }
 
+/** A skill the agent loaded: its name in the resolved-token colour and what it is for. */
+function SkillRow({ name, description }: { name: string; description?: string }) {
+  return (
+    <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta">
+      <Note className="size-4 shrink-0 text-info" aria-hidden />
+      <span className="shrink-0 text-subtle-foreground">Using skill</span>
+      <span className="shrink-0 font-medium text-info">{name}</span>
+      {!!description && <span className="min-w-0 truncate text-muted-foreground" title={description}>{description}</span>}
+    </li>
+  );
+}
+
 function ToolGlyph({ call }: { call: ToolCall }) {
   if (call.verb === 'Run') return <TerminalSquare className="size-4 shrink-0 text-muted-foreground" />;
   if (call.verb === 'Browser') return <Global className="size-4 shrink-0 text-muted-foreground" />;
+  if (call.verb === 'Mcp') return <Server className="size-4 shrink-0 text-muted-foreground" />;
   return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-4 shrink-0" />;
 }
 

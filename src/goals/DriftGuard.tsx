@@ -20,7 +20,7 @@ interface Pending {
 }
 
 /** What the agent gets in place of the shown message, when the composer added referenced threads or windows. */
-type References = { prompt: string; images: AgentImage[] };
+type References = { prompt: string; images: AgentImage[]; skills: string[] };
 
 type BranchFrom = 'current' | 'base';
 

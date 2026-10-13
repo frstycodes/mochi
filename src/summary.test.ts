@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ActivityEntry } from './model.ts';
-import { describeApproval, eventLine, isApprovalChatter, toolCall, turnSummary } from './summary.ts';
+import { describeApproval, eventLine, isApprovalChatter, summarize, toolCall, turnSummary } from './summary.ts';
 
-const tool = (text: string): ActivityEntry => ({ at: 0, who: 'claude', kind: 'tool', text });
+const tool = (text: string, at = 0): ActivityEntry => ({ at, who: 'claude', kind: 'tool', text });
 
 test('a finished work group reads as counts by importance, plural-aware, like Claude', () => {
   const entries = [
@@ -39,4 +39,21 @@ test('approvals read as sentences, never raw JSON', () => {
   assert.equal(eventLine('Waiting on you: WebSearch'), 'Waiting on you: WebSearch');
   assert.equal(eventLine('Goal v2: +1 step'), 'Goal v2: +1 step');
   assert.deepEqual(['Waiting on you: x', 'Approved: x', 'Denied: x', 'Goal v2: +1 step'].map(isApprovalChatter), [true, true, false, false]);
+});
+
+test('skills used and MCP calls by server come from the log, out of the built-in tool counts', () => {
+  const skill = (name: string, at: number): ActivityEntry => ({ ...tool(`Skill ${name}`, at), skill: name });
+  const mcp = (server: string, name: string): ActivityEntry => ({ ...tool(`Mcp ${server}: ${name}`), mcp: { server, tool: name } });
+  const summary = summarize([skill('ui', 1), tool('Run pnpm test'), skill('dataviz', 2), skill('ui', 5), mcp('linear', 'get_issue'), mcp('figma', 'get_screenshot'), mcp('linear', 'get_issue'), mcp('linear', 'list_issues')]);
+  assert.deepEqual(summary.skills, [
+    { name: 'ui', uses: 2, lastAt: 5 },
+    { name: 'dataviz', uses: 1, lastAt: 2 },
+  ]);
+  assert.deepEqual(summary.servers, [
+    { server: 'linear', calls: 3, tools: ['get_issue', 'list_issues'] },
+    { server: 'figma', calls: 1, tools: ['get_screenshot'] },
+  ]);
+  assert.deepEqual(summary.tools, [{ verb: 'Run', count: 1 }], 'MCP calls no longer count as commands');
+  assert.equal(summary.toolTotal, 5);
+  assert.equal(turnSummary([skill('ui', 0), skill('ui', 0), mcp('linear', 'get_issue'), tool('Run x')]), 'Ran 1 command, used 1 skill, called 1 MCP tool');
 });

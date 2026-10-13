@@ -9,8 +9,8 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  /** `isPopped` adds it as a floating window, leaving the pane and its selection as they are. */
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean }
+  /** `isPopped` adds it as a floating window, `isBackground` as a docked tab; both leave the pane and its selection as they are. */
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean; isBackground?: boolean }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   /** The thread's docked tab of this kind, selected with the pane open; a new one when there is none. */
   | { type: 'pane-show-tab'; threadId: string; kind: PaneTabKind }
@@ -50,6 +50,7 @@ export function panesReducer(state: State, action: Action): State {
         ...(action.visual && { visual: action.visual }),
       };
       if (action.isPopped) return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), { ...existing, tabs: [...existing.tabs, { ...tab, isPopped: true }] }] };
+      if (action.isBackground) return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), { ...existing, tabs: [...existing.tabs, tab] }] };
       const tabs = existing.tabs.flatMap((t) => (t.kind !== 'new' ? [t] : t.id === existing.activeTab ? [tab] : []));
       const pane = { ...existing, isOpen: true, tabs: tabs.includes(tab) ? tabs : [...tabs, tab], activeTab: tab.id };
       return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
@@ -59,6 +60,8 @@ export function panesReducer(state: State, action: Action): State {
       if (!tab) return panesReducer(state, { type: 'pane-open-tab', threadId: action.threadId, kind: action.kind });
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: tab.id })) };
     }
+    case 'layout-return-tab':
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: action.tabId })) };
     case 'pane-select-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, activeTab: action.tabId })) };
     case 'pane-pop':

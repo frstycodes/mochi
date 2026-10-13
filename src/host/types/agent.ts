@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, Provider, Size, StepStatus, Thread, WebLink } from '../../model.ts';
+import type { AgentInfo, McpCall, Provider, Size, StepStatus, Thread, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
@@ -13,6 +13,8 @@ export interface AgentStartOptions {
   prompt: string;
   /** Sent with the first prompt. */
   images?: AgentImage[];
+  /** Skills the first prompt asks for by name, for harnesses that attach a skill to the message (Codex) rather than load it by name. */
+  skills?: string[];
   model?: string;
   effort?: string;
   permissionMode?: string;
@@ -33,10 +35,12 @@ export type AgentEvent =
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
   | { threadId: string; type: 'reasoning'; text: string }
   /**
-   * `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills the query in late).
-   * `description`: the agent's own plain-language line for the call (Claude's Bash). `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
+   * `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills
+   * the query in late). `skill`: the call loaded this skill (Claude's Skill tool, a skill Codex got with the message). `mcp`: the
+   * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
+   * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[] }
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
@@ -44,9 +48,28 @@ export type AgentEvent =
   | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
   | { threadId: string; type: 'resolved'; requestId: string }
-  | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
+  | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
+
+/** One plan rate-limit window of an account, as the provider reported it. */
+export interface LimitWindow {
+  /** Stable per window so sparse updates replace it: Claude's `rateLimitType`, Codex's `primary` / `secondary`. */
+  id: string;
+  label: string;
+  /** 0–100. */
+  usedPct: number;
+  resetsAt?: string;
+}
+
+/** The latest windows main knows for one account; `updatedAt` is when the provider last reported any of them, unset before it ever has. */
+export interface AccountLimits {
+  accountId: string;
+  provider: Provider;
+  windows: LimitWindow[];
+  updatedAt?: string;
+}
 
 export type SubagentStatus = 'running' | 'done' | 'failed' | 'stopped';
 
@@ -196,7 +219,8 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  send(threadId: string, text: string, images?: AgentImage[]): Promise<void>;
+  /** `skills`: as `AgentStartOptions.skills`, for this message. */
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[]): Promise<void>;
   interrupt(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
@@ -217,6 +241,9 @@ export interface AgentHost {
   warm(spaceId: string): Promise<void>;
   /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
   models(provider: Provider, spaceId: string): Promise<AgentModel[]>;
+  /** The latest plan windows main keeps for the profile's `provider` account; `refresh` reads them from the provider first (throttled). */
+  limits(provider: Provider, spaceId: string, refresh?: boolean): Promise<AccountLimits>;
+  onLimits(listener: (limits: AccountLimits) => void): () => void;
   onToolCall(listener: (call: AgentToolCall) => void): () => void;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
 }
@@ -237,6 +264,8 @@ export const agentMethods = {
   stopSubagent: 'invoke',
   warm: 'invoke',
   models: 'invoke',
+  limits: 'invoke',
+  onLimits: 'event',
   onToolCall: 'event',
   toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;

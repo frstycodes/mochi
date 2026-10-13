@@ -25,7 +25,7 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   const bash = events.find((e) => e.type === 'tool' && e.phase === 'end' && e.exitCode !== undefined);
   assert.equal(bash?.type === 'tool' && bash.exitCode, 2);
   const usage = events.find((e) => e.type === 'usage');
-  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
+  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, cachedTokens: 200, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
 });
 
@@ -82,7 +82,7 @@ test('usage after a second result is the difference from the first, since result
     ({ type: 'result', subtype: 'success', parent_tool_use_id: null, total_cost_usd: cost, modelUsage: { m: { inputTokens: input, outputTokens: 10, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, contextWindow: 1000 } } }) as unknown as SDKMessage;
   map(result(100, 0.5));
   const [usage] = map(result(250, 0.75));
-  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 150, outputTokens: 0, costUsd: 0.25 });
+  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 150, outputTokens: 0, cachedTokens: 0, costUsd: 0.25 });
 });
 
 test('a result after interrupt ends the turn as interrupted, not failed', () => {
@@ -244,10 +244,42 @@ test('work-group rows: Bash keeps its own description, file paths read relative 
   assert.equal(callDescription('Bash', { command: 'gh run watch 1', description: "Waited for PR 42's CI run to finish" }), "Waited for PR 42's CI run to finish");
   assert.equal(callDescription('Grep', { pattern: 'describeTool', path: '/repo/src' }), 'Searched for “describeTool” in src');
   assert.equal(callDescription('Read', { file_path: '/repo/a.ts' }), undefined);
-  assert.equal(describeTool('Read', { file_path: '/repo/src/math.js' }, '/repo'), 'Read src/math.js');
-  assert.equal(describeTool('Read', { file_path: '/elsewhere/x.js' }, '/repo'), 'Read /elsewhere/x.js');
+  assert.equal(describeTool('Read', { file_path: '/repo/src/math.js' }, [], '/repo'), 'Read src/math.js');
+  assert.equal(describeTool('Read', { file_path: '/elsewhere/x.js' }, [], '/repo'), 'Read /elsewhere/x.js');
   const patch = patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: [' a', '+b'] }] });
   assert.equal(patch, 'diff --git a/math.js b/math.js\n--- a/math.js\n+++ b/math.js\n@@ -1,1 +1,2 @@\n a\n+b');
   assert.equal(parsePatchFiles(patch!)[0].files[0].type, 'change');
   assert.equal(patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [] }), undefined);
+});
+
+test('a Skill call is a skill load and an mcp__ call names its server and tool, read back through init', () => {
+  const { map } = createMapper('t1', CWD);
+  map({ type: 'system', subtype: 'init', session_id: 's', parent_tool_use_id: null, cwd: CWD, tools: [], mcp_servers: [{ name: 'claude.ai Linear', status: 'connected' }, { name: 'git', status: 'connected' }, { name: 'github', status: 'connected' }] } as unknown as SDKMessage);
+  const call = (id: string, name: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input }] } } as unknown as SDKMessage);
+  const result = (id: string) => map({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'Launching skill: ui' }] }, tool_use_result: { success: true, commandName: 'ui' } } as unknown as SDKMessage);
+
+  assert.deepEqual(call('k1', 'Skill', { skill: '/ui', args: 'the header' }), [{ threadId: 't1', type: 'tool', id: 'k1', phase: 'start', text: 'Skill ui', skill: 'ui' }]);
+  assert.deepEqual(result('k1'), [{ threadId: 't1', type: 'tool', id: 'k1', phase: 'end', text: 'Skill ui' }]);
+  assert.deepEqual(call('m1', 'mcp__claude_ai_Linear__get_issue', { id: 'LAT-1' })[0], { threadId: 't1', type: 'tool', id: 'm1', phase: 'start', text: 'Mcp claude.ai Linear: get_issue', mcp: { server: 'claude.ai Linear', tool: 'get_issue' } });
+  const github = call('m2', 'mcp__github__list_prs', {})[0];
+  assert.deepEqual(github.type === 'tool' && github.mcp, { server: 'github', tool: 'list_prs' }, 'the longer server name wins over a prefix of it');
+  const unknown = call('m3', 'mcp__later__do_it', {})[0];
+  assert.deepEqual(unknown.type === 'tool' && unknown.mcp, { server: 'later', tool: 'do_it' }, 'a server init did not list splits at its first __');
+  assert.deepEqual(call('b1', 'Skill', {})[0], { threadId: 't1', type: 'tool', id: 'b1', phase: 'start', text: 'Skill' }, 'no skill name, no skill load');
+});
+
+test('a message opening with a /skill reports the load itself, once init has listed the skills (2.1.296 emits nothing for it)', () => {
+  const mapper = createMapper('t1', CWD);
+  assert.deepEqual(mapper.sent('/shout what is 2+2?'), [], 'init not in yet: held');
+  const init = mapper.map({ type: 'system', subtype: 'init', session_id: 's', parent_tool_use_id: null, cwd: CWD, tools: [], mcp_servers: [], skills: ['shout'] } as unknown as SDKMessage);
+  assert.deepEqual(
+    init.filter((e) => e.type === 'tool').map((e) => e.type === 'tool' && [e.phase, e.text, e.skill]),
+    [
+      ['start', 'Skill shout', 'shout'],
+      ['end', 'Skill shout', 'shout'],
+    ],
+  );
+  assert.equal(mapper.sent('/shout again').length, 2, 'known now: reported at once');
+  assert.deepEqual(mapper.sent('/compact'), [], 'a command that is not a skill');
+  assert.deepEqual(mapper.sent('no command'), []);
 });

@@ -79,3 +79,24 @@ export function parseCsv(text: string, delimiter = ','): string[][] {
   if (field || row.length) rows.push([...row, field]);
   return rows;
 }
+
+/**
+ * A path from chat (`./src/a.ts:12`, `/abs/root/src/a.ts`, `/src/a.ts`, `src/a.ts#L12`) → the viewer link `src/a.ts:12` when that file exists
+ * in `files` (relative to `root`); null otherwise, so only real files become links.
+ */
+export function worktreeLink(text: string, root: string, files: ReadonlySet<string>) {
+  const m = text.match(/^(.*?)(?::(\d+)(?::\d+)?|#L(\d+)(?:-L\d+)?)?$/)!;
+  const line = m[2] ?? m[3];
+  let path = m[1];
+  try {
+    path = decodeURI(path);
+  } catch {
+    // A stray `%` in a plain-text path: use it as written.
+  }
+  if (path.startsWith(`${root}/`)) path = path.slice(root.length + 1);
+  // Harden turns a markdown link's `./src/a.ts` into the root-relative `/src/a.ts`.
+  else if (path.startsWith('/')) path = path.slice(1);
+  path = path.replace(/^(?:\.\/)+/, '');
+  if (!files.has(path)) return null;
+  return line ? `${path}:${line}` : path;
+}

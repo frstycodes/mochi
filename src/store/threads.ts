@@ -11,6 +11,7 @@ import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
+import { contextMax } from '../runtime/models.ts';
 import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
@@ -55,7 +56,7 @@ export type ThreadsAction =
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
   | { type: 'resume'; threadId: string; onApiKey?: boolean }
   /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers. */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; skills?: string[] }
   /** A link or file you added in the summary; a live agent is told in a message of yours. */
   | { type: 'source-add'; threadId: string; source: Source }
   | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
@@ -336,7 +337,6 @@ function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State
       line: freeLine(state.threads.filter((t) => t.spaceId === owner.spaceId)),
       startedAt: now,
       revisions: [{ n: 1, at: now, label: 'Extracted from 2 threads', by: 'harness' }],
-      skills: [],
       sources: owner.sources.filter((src) => src.kind === 'link'),
       context: { used: 12_000, max: 200_000 },
       steps: [{ ...ownerStep, id: `${ownerStep.id}-x`, addedAt: now, startedAt: now, addedBy: 'harness', revision: 1, sharedKey: key, link: { mode: 'provides-for', threadIds: [otherThreadId, threadId] }, note: undefined }],
@@ -401,12 +401,11 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
       { at: now, who: 'you', kind: 'message', text: action.title },
     ],
     prs: [],
-    skills: [],
     sources: [],
-    context: { used: isLive ? 0 : 4_000, max: action.provider === 'codex' ? 272_000 : 200_000 },
+    context: { used: isLive ? 0 : 4_000, max: contextMax(action.provider) },
     controls: action.controls,
   };
-  if (isLive) thread.live = { isWorking: true, usage: [], cwd: threadCwd(thread) ?? undefined };
+  if (isLive) thread.live = { isWorking: true, cwd: threadCwd(thread) ?? undefined };
   // Detached: a message before the first run starts the agent the way a restored thread does.
   if (isLive && action.schedule) {
     thread.live = { ...thread.live!, isWorking: false, isDetached: true };

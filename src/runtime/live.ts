@@ -13,7 +13,7 @@ export const QUEUED_PREFIX = 'Queued: ';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
-  | { method: 'send'; threadId: string; text: string; images?: AgentImage[] }
+  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[] }
   | { method: 'interrupt' | 'stop'; threadId: string }
   | { method: 'stopSubagent'; threadId: string; subagentId: string };
 
@@ -34,7 +34,8 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       if (!thread?.live) return [];
       const text = withNotes(thread, action.prompt ?? action.text.replace(QUEUED_PREFIX, ''));
       const images = action.images?.length ? { images: action.images } : {};
-      return thread.live.isDetached ? reattach(thread, text, undefined, images.images) : [{ method: 'send', threadId: thread.id, text, ...images }];
+      const skills = action.skills?.length ? { skills: action.skills } : {};
+      return thread.live.isDetached ? reattach(thread, text, undefined, images.images, skills.skills) : [{ method: 'send', threadId: thread.id, text, ...images, ...skills }];
     }
     case 'source-add': {
       const thread = state.threads.find((t) => t.id === action.threadId);
@@ -92,7 +93,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'workspace' | 'images'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
@@ -114,9 +115,9 @@ function runFolder(thread: Thread) {
 }
 
 /** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */
-function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[]) {
+function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[], skills?: string[]) {
   const provider = thread.session?.provider ?? thread.providers[0];
-  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }) });
+  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }) });
 }
 
 /** Mochi background agents of these threads that are still running. */

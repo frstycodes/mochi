@@ -3,7 +3,7 @@ import type { ActivityEntry, Thread, WebLink } from './model.ts';
 import { HARNESSES } from './settings/harnesses.ts';
 import { parseTool, toolVerb, type ToolCall, type ToolVerb } from './summary.ts';
 
-const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse' } satisfies Record<ToolVerb, AgentPhase>;
+const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse', Skill: 'read', Mcp: 'run' } satisfies Record<ToolVerb, AgentPhase>;
 
 export const PHASE_LABELS = { idle: 'Idle', start: 'Starting', think: 'Thinking', read: 'Reading', edit: 'Editing', run: 'Running', browse: 'Browsing', wait: 'Waiting on you' } satisfies Record<AgentPhase, string>;
 
@@ -86,6 +86,8 @@ function waitingLabel(call: ToolCall) {
     Browser: 'use the browser',
     Search: 'search the web',
     Fetch: `read ${hostname(call.target)}`,
+    Skill: `use the ${call.target} skill`,
+    Mcp: `call ${mcpLabel(call.target)}`,
   }[call.verb];
   return `Waiting for your approval to ${action}`;
 }
@@ -102,8 +104,16 @@ export function toolLabel(call: ToolCall) {
     Browser: 'Using the browser',
     Search: `Searching ${call.target}`,
     Fetch: `Reading ${hostname(call.target)}`,
+    Skill: `Using skill ${call.target}`,
+    Mcp: `Calling ${mcpLabel(call.target)}`,
   }[call.verb];
 }
+
+/** `linear: get_issue` → `get_issue on linear`. */
+const mcpLabel = (target: string) => {
+  const [server, tool] = target.split(': ');
+  return tool ? `${tool} on ${server}` : target;
+};
 
 export function hostname(url: string) {
   try {

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
 import type { Thread } from '../model';
-import { Edit, Inbox, Route } from 'reicon-react';
+import { Edit, Forbidden, Inbox, Route } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -17,6 +17,7 @@ import { useHarness } from '../store';
 import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
+import { useSplitTabDrag } from './useSplitTabDrag';
 import { LeafBar } from './SplitControls';
 import { PreviewContext, SplitContext } from './SplitContext';
 import { displayRoot, equalSizes, findLeaf, leaves, snapSizes, type Leaf, type LayoutNode, type Split, type View, type Zone } from './tree';
@@ -166,14 +167,17 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
   const thread = state.threads.find((t) => t.id === threadId);
   const pane = state.panes.find((p) => p.threadId === threadId);
   const tab = pane?.tabs.find((t) => t.id === tabId);
+  const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind ?? 'new', tab ? tabTitle(tab) : '');
   if (!thread || !pane || !tab) return <ClosedTab />;
   const { icon: Icon, component: Content } = PANE_TABS[tab.kind];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <LeafBar>
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="truncate">{tabTitle(tab)}</span>
+        <span onPointerDown={onDragHandle} className="app-no-drag flex min-w-0 cursor-grab items-center gap-2 select-none active:cursor-grabbing">
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">{tabTitle(tab)}</span>
+        </span>
         <button type="button" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })} className="min-w-0 cursor-default truncate font-normal text-subtle-foreground hover:text-foreground">
           {thread.title}
         </button>
@@ -213,16 +217,28 @@ const ZONE_RECT = {
 
 const ZONE_LABEL = { left: 'Open on the left', right: 'Open on the right', top: 'Open above', bottom: 'Open below', center: 'Replace this split' } satisfies Record<Zone, string>;
 
-/** While something is dragged over this split, shows the region it would take. */
+/** While something is dragged over this split, shows the region it would take, or why it can't open here. */
 function DropZone({ leafId }: { leafId: string }) {
   const drag = useDragSession();
   const hit = drag?.hit?.leafId === leafId ? drag.hit : null;
   if (!hit) return null;
+  if (drag?.refusal) return <RefusedZone reason={drag.refusal} />;
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 z-50 bg-background/40">
-      <div className={cn('absolute flex items-center justify-center rounded-xl bg-foreground/8 ring-1 ring-foreground/25', ZONE_RECT[hit.zone])}>
+      <div className={cn('absolute flex items-center justify-center rounded-xl border border-foreground/25 bg-foreground/8', ZONE_RECT[hit.zone])}>
         <span className="rounded-full bg-popover px-2.5 py-1 type-caption text-foreground shadow-popover">{ZONE_LABEL[hit.zone]}</span>
       </div>
+    </div>
+  );
+}
+
+function RefusedZone({ reason }: { reason: string }) {
+  return (
+    <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/40 p-4">
+      <span className="flex max-w-72 items-center gap-1.5 rounded-xl bg-popover px-3 py-2 type-caption text-foreground shadow-popover">
+        <Forbidden className="size-3.5 shrink-0 text-muted-foreground" />
+        {reason}
+      </span>
     </div>
   );
 }

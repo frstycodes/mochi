@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
-import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
@@ -11,10 +11,26 @@ export function createMapper(threadId: string, cwd: string) {
   const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
   const agents = new Map<string, { taskId?: string }>();
-  const reported = { input: 0, output: 0, costUsd: 0 };
+  const reported = { input: 0, output: 0, cached: 0, costUsd: 0 };
   let context = { used: 0, max: 0 };
   let isNewBlock = false;
   let isInterrupting = false;
+  /** MCP server names from init, to read a server back out of `mcp__<server>__<tool>`. */
+  let servers: string[] = [];
+  /** Skill names from init; until it arrives, skills sent messages open with wait in `typed`. */
+  let skills: string[] | undefined;
+  const typed: string[] = [];
+
+  // A message opening with `/skill` loads it with no event of its own in the stream (2.1.296), so the load is reported here.
+  function typedSkills(): AgentEvent[] {
+    if (!skills) return [];
+    const known = new Set(skills);
+    return typed.splice(0).flatMap((name, i) => {
+      if (!known.has(name)) return [];
+      const call = { threadId, type: 'tool' as const, id: `skill:${Date.now()}:${i}:${name}`, text: `Skill ${name}`, skill: name };
+      return [{ ...call, phase: 'start' as const }, { ...call, phase: 'end' as const }];
+    });
+  }
 
   const planFromTasks = (): AgentEvent => ({ threadId, type: 'plan', items: tasks.map(({ title, status }) => ({ title, status })) });
 
@@ -28,7 +44,7 @@ export function createMapper(threadId: string, cwd: string) {
       return [subagent(id, 'start', { toolId: id, name: description || 'Agent', ...(prompt && { prompt }), ...(model && { model }), isBackground: run_in_background === true })];
     }
     const description = callDescription(name, input);
-    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, cwd), ...(description && { description }) };
+    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) };
     if (name === 'TodoWrite') return [start, { threadId, type: 'plan', items: planFromTodos(input) }];
     if (name !== 'TaskUpdate') return [start];
     const task = tasks.find((t) => t.id === input.taskId);
@@ -55,7 +71,7 @@ export function createMapper(threadId: string, cwd: string) {
 
   /** What a finished call reports, the thread's own or a subagent's: its line, edited files, a command's exit code and output tail, an edit's patch. */
   function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock, result: unknown) {
-    const outcome: { text: string; files?: string[]; exitCode?: number; output?: string; patch?: string } = { text: describeTool(tool.name, tool.input, cwd) };
+    const outcome: { text: string; files?: string[]; exitCode?: number; output?: string; patch?: string } = { text: describeTool(tool.name, tool.input, servers, cwd) };
     const file = tool.input.file_path ?? tool.input.notebook_path;
     if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [path.relative(cwd, path.resolve(cwd, file))];
     if (tool.name === 'Bash') Object.assign(outcome, { exitCode: exitCode(block), output: tail(resultText(block)) });
@@ -84,7 +100,7 @@ export function createMapper(threadId: string, cwd: string) {
         const input = block.input as Record<string, unknown>;
         tools.set(block.id, { name: block.name, input });
         const description = callDescription(block.name, input);
-        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input, cwd), ...(description && { description }) } })];
+        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input, servers, cwd), ...(description && { description }) } })];
       });
     if (message.type !== 'user' || typeof message.message.content === 'string') return [];
     return message.message.content.flatMap((block): AgentEvent[] => {
@@ -121,8 +137,9 @@ export function createMapper(threadId: string, cwd: string) {
     const models = Object.values(modelUsage);
     const input = sum(models.map((m) => m.inputTokens + m.cacheReadInputTokens + m.cacheCreationInputTokens));
     const output = sum(models.map((m) => m.outputTokens));
-    const event: AgentEvent = { threadId, type: 'usage', inputTokens: input - reported.input, outputTokens: output - reported.output, costUsd: costUsd - reported.costUsd };
-    Object.assign(reported, { input, output, costUsd });
+    const cached = sum(models.map((m) => m.cacheReadInputTokens));
+    const event: AgentEvent = { threadId, type: 'usage', inputTokens: input - reported.input, outputTokens: output - reported.output, cachedTokens: cached - reported.cached, costUsd: costUsd - reported.costUsd };
+    Object.assign(reported, { input, output, cached, costUsd });
     context = { ...context, max: Math.max(...models.map((m) => m.contextWindow), context.max) };
     return context.used ? { ...event, contextUsed: context.used, contextMax: context.max || undefined } : event;
   }
@@ -132,7 +149,11 @@ export function createMapper(threadId: string, cwd: string) {
     switch (message.type) {
       case 'system':
         if (message.subtype.startsWith('task_')) return mapTask(message);
-        if (message.subtype === 'init') return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }];
+        if (message.subtype === 'init') {
+          servers = (message.mcp_servers ?? []).map((s) => s.name);
+          skills = message.skills ?? [];
+          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }, ...typedSkills()];
+        }
         if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name), commands: commandsFrom(message.commands) } }];
         return [];
       case 'stream_event': {
@@ -176,6 +197,12 @@ export function createMapper(threadId: string, cwd: string) {
 
   return {
     map,
+    /** A message handed to Claude Code: a leading `/skill` is a skill load, reported once init has listed the skills. */
+    sent(text: string): AgentEvent[] {
+      const name = /^\/(\S+)/.exec(text)?.[1];
+      if (name) typed.push(name);
+      return typedSkills();
+    },
     /** The task id `query.stopTask` takes for a subagent, once Claude Code has registered it. */
     taskOf: (subagentId: string) => agents.get(subagentId)?.taskId,
     markInterrupting() {
@@ -254,8 +281,14 @@ export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
   return todos.flatMap((t) => (typeof t.content === 'string' ? [{ title: t.content, status: STATUS[t.status as keyof typeof STATUS] ?? 'pending' }] : []));
 }
 
-/** One line for the work log: the command for Bash, the path for file tools (relative to `cwd` when inside it), the tool name otherwise. Tools the work log knows get its verb ("Run pnpm test"). */
-export function describeTool(name: string, input: Record<string, unknown>, cwd?: string) {
+/**
+ * One line for the work log: the command for Bash, the path for file tools (relative to `cwd` when inside it), the tool name otherwise.
+ * Tools the work log knows get its verb ("Run pnpm test", "Skill ui", "Mcp linear: list_issues").
+ */
+export function describeTool(name: string, input: Record<string, unknown>, servers: string[] = [], cwd?: string) {
+  const kind = toolKind(name, input, servers);
+  if (kind.skill) return `Skill ${kind.skill}`;
+  if (kind.mcp) return `Mcp ${kind.mcp.server}: ${kind.mcp.tool}`;
   const file = input.file_path ?? input.notebook_path;
   const inside = typeof file === 'string' && cwd ? path.relative(cwd, path.resolve(cwd, file)) : undefined;
   const target = input.command ?? (inside && !inside.startsWith('..') ? inside : file) ?? input.pattern ?? input.url ?? input.query ?? input.subject ?? input.description;
@@ -287,6 +320,18 @@ export function patchOf(input: Record<string, unknown>, result: unknown) {
   if (!Array.isArray(hunks) || !hunks.length || typeof file !== 'string') return undefined;
   const name = path.basename(file);
   return [`diff --git a/${name} b/${name}`, `--- a/${name}`, `+++ b/${name}`, ...hunks.flatMap((h) => [`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`, ...h.lines])].join('\n');
+}
+
+/** The skill a Skill call loads (its `skill` input, a leading `/` allowed) or the MCP server and tool an `mcp__` call runs. */
+export function toolKind(name: string, input: Record<string, unknown>, servers: string[] = []): { skill?: string; mcp?: McpCall } {
+  if (name === 'Skill' && typeof input.skill === 'string' && input.skill.trim()) return { skill: input.skill.trim().replace(/^\//, '') };
+  if (!name.startsWith('mcp__')) return {};
+  const rest = name.slice('mcp__'.length);
+  // Longest first: a server whose name runs into another's (`git`, `github`) matches by its own full prefix.
+  const server = [...servers].sort((a, b) => b.length - a.length).find((s) => rest.startsWith(`${mcpToolPrefix(s)}__`));
+  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2) } };
+  const split = rest.indexOf('__');
+  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2) } } : {};
 }
 
 const VERBS = { Bash: 'Run', Read: 'Read', Edit: 'Edit', MultiEdit: 'Edit', Write: 'Write', NotebookEdit: 'Edit', WebSearch: 'Search', WebFetch: 'Fetch' } as const;

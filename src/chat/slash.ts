@@ -20,16 +20,34 @@ export function parseSlash(text: string) {
   return command ? { command, arg: (match[2] ?? '').trim() } : null;
 }
 
-/** What the menu lists while the input is only `/` and part of a name: prefix hits, then substring, then in-order letters. */
-export function slashMatches(text: string, items: SlashItem[]): SlashItem[] {
-  const match = /^\/(\S*)$/.exec(text);
-  if (!match) return [];
-  const query = match[1].toLowerCase();
+/** The `/word` the caret is at the end of, typed at the start of the text or a line or after a space: `fix /rev|` → `rev`. */
+export function slashQueryAt(text: string, caret = text.length) {
+  const match = /(?:^|\s)\/([^\s/]*)$/.exec(text.slice(0, caret));
+  if (!match || /^\S/.test(text.slice(caret))) return null;
+  return { start: caret - match[1].length - 1, end: caret, query: match[1] };
+}
+
+/** What the menu lists for a query: prefix hits, then substring, then in-order letters. */
+export function slashMatches(query: string, items: SlashItem[]): SlashItem[] {
+  const q = query.toLowerCase();
   return items
-    .map((item, i) => ({ item, i, rank: fuzzyRank(item.name.toLowerCase(), query) }))
+    .map((item, i) => ({ item, i, rank: fuzzyRank(item.name.toLowerCase(), q) }))
     .filter((m) => m.rank !== null)
     .sort((a, b) => a.rank! - b.rank! || a.i - b.i)
     .map((m) => m.item);
+}
+
+/**
+ * The text once `item` is picked for the `/query` at `range`: the command moves to the very start (the harness only runs one
+ * there) and the rest of your text becomes its arguments. A command already at the start is replaced.
+ */
+export function moveToFront(text: string, range: { start: number; end: number }, item: SlashItem, items: SlashItem[]) {
+  const existing = range.start > 0 ? resolveToken(text, items) : null;
+  const before = text.slice(existing?.end ?? 0, range.start).replace(/[ \t]+$/, '');
+  // A token on a line of its own takes its line break with it.
+  const after = text.slice(range.end).replace(before.endsWith('\n') ? /^[ \t]*\n?/ : /^[ \t]+/, '');
+  const seam = before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : '';
+  return `/${item.name} ${`${before}${seam}${after}`.trimStart()}`;
 }
 
 function fuzzyRank(name: string, query: string) {

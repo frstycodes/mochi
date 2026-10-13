@@ -20,6 +20,12 @@ export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description'>)
       return `Read ${hostname(call.target)}`;
     case 'Browser':
       return 'Used the browser';
+    case 'Skill':
+      return `Used the ${call.target} skill`;
+    case 'Mcp': {
+      const [server, tool] = call.target.split(': ');
+      return tool ? `Called ${tool} on ${server}` : `Called ${server}`;
+    }
     case 'Run':
       return describeCommand(call.target);
   }

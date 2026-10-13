@@ -18,7 +18,7 @@ export interface ThreadState {
   limits: AccountLimits;
 }
 
-type Totals = { input: number; output: number };
+type Totals = { input: number; output: number; cached: number };
 
 /** When the account's most-used rate-limit window resets, in unix seconds. */
 export interface AccountLimits {
@@ -26,7 +26,7 @@ export interface AccountLimits {
 }
 
 export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits } = {}): ThreadState {
-  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0 }, account, limits };
+  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits };
 }
 
 /** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
@@ -148,13 +148,24 @@ export function commandsFromSkills(reply: unknown): AgentCommand[] {
 }
 
 /**
- * The `skill` input item that makes Codex load the skill a message opens with (`/name args`): app-server takes no slash
- * commands in text, its TUI attaches the skill the same way. Null for a message that doesn't name one.
+ * The `skill` input items that make Codex load the skill a message opens with (`/name args`) and the ones named alongside it
+ * (`@` in the composer): app-server takes no slash commands in text, its TUI attaches skills the same way. Unknown names are left out.
  */
-export function skillInput(text: string, skills: AgentCommand[]) {
-  const name = /^\/(\S+)/.exec(text)?.[1];
-  const skill = name && skills.find((s) => s.name === name && s.path);
-  return skill ? { type: 'skill' as const, name: skill.name, path: skill.path! } : null;
+export function skillInputs(text: string, names: string[], skills: AgentCommand[]) {
+  const leading = /^\/(\S+)/.exec(text)?.[1];
+  const wanted = [...new Set([...(leading ? [leading] : []), ...names])];
+  return wanted.flatMap((name) => {
+    const skill = skills.find((s) => s.name === name && s.path);
+    return skill ? [{ type: 'skill' as const, name: skill.name, path: skill.path! }] : [];
+  });
+}
+
+/** One finished skill-load per attached skill, as the work log shows a Claude Skill tool call. */
+export function skillEvents(threadId: string, turnId: string, attached: { name: string }[]): AgentEvent[] {
+  return attached.flatMap(({ name }) => {
+    const call = { threadId, type: 'tool' as const, id: `skill:${turnId}:${name}`, text: `Skill ${name}`, skill: name };
+    return [{ ...call, phase: 'start' as const }, { ...call, phase: 'end' as const }];
+  });
 }
 
 /** Server requests that become queue cards. Anything else gets a JSON-RPC error reply from the caller. */
@@ -230,7 +241,7 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       return [{ threadId, type: 'tool', id, phase, text: `Edit ${files.join(', ') || 'files'}`, ...(phase === 'end' && item.status === 'completed' && { files }) }];
     }
     case 'mcpToolCall':
-      return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `${item.server}: ${item.tool}` }] : [];
+      return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `Mcp ${item.server}: ${item.tool}`, mcp: { server: item.server, tool: item.tool } }] : [];
     case 'webSearch': {
       const { text, links } = webSearch(item);
       return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && links.length > 0 && { links }) }];
@@ -328,16 +339,17 @@ function mapUsage(usage: Record<string, unknown> | undefined, s: ThreadState): A
   const total = obj(usage?.total);
   const last = obj(usage?.last);
   if (typeof total?.inputTokens !== 'number' || typeof total.outputTokens !== 'number') return [];
-  const now = { input: total.inputTokens, output: total.outputTokens };
+  const now = { input: total.inputTokens, output: total.outputTokens, cached: num(total.cachedInputTokens) };
   // After a resume, count only the request this update reports.
-  const before = s.total ?? { input: now.input - num(last?.inputTokens), output: now.output - num(last?.outputTokens) };
+  const before = s.total ?? { input: now.input - num(last?.inputTokens), output: now.output - num(last?.outputTokens), cached: now.cached - num(last?.cachedInputTokens) };
   s.total = now;
   const inputTokens = Math.max(0, now.input - before.input);
   const outputTokens = Math.max(0, now.output - before.output);
+  const cachedTokens = Math.max(0, now.cached - before.cached);
   const contextMax = typeof usage?.modelContextWindow === 'number' ? usage.modelContextWindow : undefined;
   const contextUsed = typeof last?.totalTokens === 'number' ? last.totalTokens : undefined;
   // Codex reports tokens, never spend; the summary shows tokens for it rather than a price Mochi would have to guess.
-  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
+  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, cachedTokens, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
 }
 
 /** Upstream API errors arrive as their raw JSON body; show the message inside. */

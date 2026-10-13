@@ -94,6 +94,7 @@ Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name
 
 ### Data
 Show demo data (desktop only, off by default; the web build and the artifact always show it): the fixture threads, queue and profiles next to your own, unsaved, applied with a reload. Storage used, Clear pins / side chats / terminal history / everything (each with an undo toast where possible, a confirm only for "everything"). About: version, Electron/Chromium, links to RUNTIME and docs. now.
+Replay: Record threads for replay (on by default; `recordReplays` in prefs) and Recordings, the threads recorded and their size on disk, cleared behind a confirm. now.
 
 ## Not settings
 Internal caps and timings (patch size, poll intervals, animation durations, drift cut-offs, pin slots) stay constants. Usage budgets and prices come from the providers, not the user.

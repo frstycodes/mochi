@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Clock, BranchDown as GitMerge, BranchUp as GitPullRequest, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
+import { Clock, BranchDown as GitMerge, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { progressAt } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
 import { Kbd } from '@/components/ui/kbd';
+import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import { ProviderMark, ProgressRing, lineColor } from './ui';
 import { isWorking } from './agentPhase';
@@ -24,8 +25,8 @@ type OrbitItem =
 const QUEUE_ICONS = {
   approval: ShieldCheck,
   question: MessageCircleQuestion,
-  review: GitPullRequest,
-  ci: GitPullRequest,
+  review: GitPullRequestIcon,
+  ci: GitPullRequestIcon,
   overlap: GitMerge,
   run: Clock,
   setting: Setting2,
@@ -289,8 +290,9 @@ function clamp(v: number, lo: number, hi: number) {
   return Math.min(Math.max(v, lo), Math.max(lo, hi));
 }
 
+// `data-no-orbit`: surfaces where holding the pointer still is part of the gesture (drawing on a screenshot).
 function isInteractive(target: EventTarget | null) {
-  return target instanceof Element && !!target.closest('button, a, input, textarea, select, [role="button"], [role="radio"], pre, code, p, h1, h2');
+  return target instanceof Element && !!target.closest('button, a, input, textarea, select, [role="button"], [role="radio"], [role="slider"], [data-no-orbit], pre, code, p, h1, h2');
 }
 
 function useOrbitTriggers(handlers: {

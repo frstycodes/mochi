@@ -8,6 +8,8 @@ export interface DragSession {
   hasOwnGhost: boolean;
   /** Sources that only ever open beside a split (Stage Manager cards) turn the replace zone into this side. */
   centerAs?: Side;
+  /** Why this view can't open in a split; the drop zone says so and the drop does nothing. */
+  refusal?: string;
   x: number;
   y: number;
   hit: { leafId: string; zone: Zone } | null;
@@ -21,8 +23,10 @@ function emit(next: DragSession | null) {
   for (const l of listeners) l();
 }
 
-export function startDrag(view: View, label: string, x: number, y: number, hasOwnGhost = false, centerAs?: Side) {
-  emit({ view, label, hasOwnGhost, centerAs, x, y, hit: hitLeaf(x, y, view, centerAs) });
+type DragOptions = Partial<Pick<DragSession, 'hasOwnGhost' | 'centerAs' | 'refusal'>>;
+
+export function startDrag(view: View, label: string, x: number, y: number, { hasOwnGhost = false, centerAs, refusal }: DragOptions = {}) {
+  emit({ view, label, hasOwnGhost, centerAs, refusal, x, y, hit: hitLeaf(x, y, view, centerAs) });
 }
 
 export function moveDrag(x: number, y: number) {
@@ -31,28 +35,38 @@ export function moveDrag(x: number, y: number) {
 
 /** Ends the drag and returns where it landed on a split, if anywhere. */
 export function endDrag() {
-  const landed = session?.hit ? { ...session.hit, view: session.view } : null;
+  const landed = session?.hit && !session.refusal ? { ...session.hit, view: session.view } : null;
   emit(null);
   return landed;
 }
 
+/** Esc: the drop zones go away and the release lands nowhere. */
+export function cancelDrag() {
+  emit(null);
+}
+
 export function useDragSession() {
+  return useDragSelector((s) => s);
+}
+
+/** Re-renders only when `select`'s result changes, not on every pointer move. `select` must return a primitive or a stable reference. */
+export function useDragSelector<T>(select: (s: DragSession | null) => T) {
   return useSyncExternalStore(
     (l) => {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    () => session,
+    () => select(session),
   );
 }
 
-/** Drag ghosts are `pointer-events: none`, so the topmost leaf under the pointer is the target. Tab strips and the sidebar are never targets, nor a thread header for a pane tab (it pins there instead). */
+/** Drag ghosts are `pointer-events: none`, so the topmost leaf under the pointer is the target. Tab strips and the sidebar are never targets; for a pane tab neither is a thread header (it pins there instead) nor a side pane. A pane tab never replaces a split, it always opens beside one. */
 function hitLeaf(x: number, y: number, view: View, centerAs?: Side): DragSession['hit'] {
   const els = document.elementsFromPoint(x, y);
-  const blocked = view.kind === 'tab' ? '[role=tablist], [data-sidebar=sidebar], [data-pin-drop]' : '[role=tablist], [data-sidebar=sidebar]';
+  const blocked = view.kind === 'tab' ? '[role=tablist], [data-sidebar=sidebar], [data-pin-drop], [data-side-pane]' : '[role=tablist], [data-sidebar=sidebar]';
   if (els.some((el) => el.closest(blocked))) return null;
   const leafEl = els.map((el) => el.closest<HTMLElement>('[data-leaf-id]')).find(Boolean);
   if (!leafEl) return null;
-  const zone = zoneAt(leafEl.getBoundingClientRect(), x, y);
+  const zone = zoneAt(leafEl.getBoundingClientRect(), x, y, view.kind !== 'tab');
   return { leafId: leafEl.dataset.leafId!, zone: zone === 'center' && centerAs ? centerAs : zone };
 }

@@ -1,4 +1,5 @@
 import type { AgentEvent, AgentStartOptions } from './agent.ts';
+import type { CiResult } from '../../notify/watch.ts';
 import type { Manifest } from './manifest.ts';
 
 export const PR_EVENTS = ['opened', 'review-requested', 'ci-failed'] as const;
@@ -60,6 +61,8 @@ export interface ScheduleRun {
 export type ScheduleEvent =
   | { type: 'run-start'; run: ScheduleRun; name: string; prompt: string }
   | { type: 'run-end'; run: ScheduleRun; name: string }
+  /** A watched thread's PR checks settled (`src/notify/watch.ts`); a failure becomes a Queue item. */
+  | { type: 'ci'; threadId: string; result: CiResult }
   /** An agent event that happened while no window was open. */
   | { type: 'agent'; event: AgentEvent };
 

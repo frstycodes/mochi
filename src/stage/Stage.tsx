@@ -219,7 +219,7 @@ function useCardDrag(snap: ThreadSnapshot, side: Side, onOpen: () => void) {
       if (s.isDragging) return moveDrag(e.clientX, e.clientY);
       if (Math.hypot(e.clientX - s.x, e.clientY - s.y) < DRAG_SLOP_PX) return;
       s.isDragging = true;
-      startDrag({ kind: 'thread', id: snap.id }, snap.title, e.clientX, e.clientY, false, side);
+      startDrag({ kind: 'thread', id: snap.id }, snap.title, e.clientX, e.clientY, { centerAs: side });
     },
     onPointerUp: () => {
       const s = start.current;

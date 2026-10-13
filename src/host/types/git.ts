@@ -1,3 +1,4 @@
+import type { GithubRef, RefState, RepoSlug } from '../../chat/refs.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface GitFileStatus {
@@ -126,6 +127,12 @@ export interface GitHost {
   /** `githubUser` (`login` on github.com, `host/login` elsewhere) runs gh as the profile's GitHub account; omitted, gh's active account. */
   createPr(cwd: string, pr: { title: string; body: string }, githubUser?: string): Promise<string>;
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
+  /** The tail of a failed GitHub Actions job's log, from the check's `link`; throws for a check that isn't an Actions job. */
+  ciLog(cwd: string, checkLink: string, githubUser?: string): Promise<string>;
+  /** origin's `owner/repo` when it's on github.com; null otherwise (no origin, another host, not a repo). */
+  repoSlug(cwd: string): Promise<RepoSlug | null>;
+  /** Live state of PRs and issues in one `gh api graphql` call, keyed by `refKey`. Never throws: refs gh can't read are left out. */
+  refStates(cwd: string | null, refs: GithubRef[], githubUser?: string): Promise<Record<string, RefState>>;
   /** gh's logins on every host it knows, for picking a profile's account. Never carries tokens. */
   ghAccounts(): Promise<GhAccount[]>;
   sync(cwd: string, base?: string): Promise<SyncResult>;
@@ -142,6 +149,8 @@ export interface GitHost {
   checkpoint(cwd: string, threadId: string, n: number): Promise<string>;
   /** Resets the worktree's branch and files to checkpoint `n`, after saving the current files as the `undo` checkpoint. */
   restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo'): Promise<void>;
+  /** What checkpoint `n` held against the branch's base: the thread's changes as they stood then. Throws when its files weren't saved. */
+  checkpointDiff(cwd: string, threadId: string, n: number): Promise<GitDiff>;
   /** New worktree for `threadId` on `branch`, starting from `from`'s checkpoint, or from `cwd`'s HEAD without one. */
   forkWorktree(cwd: string, threadId: string, branch: string, from?: { threadId: string; n: number }): Promise<string>;
 }
@@ -156,6 +165,9 @@ export const gitMethods = {
   push: 'invoke',
   createPr: 'invoke',
   pr: 'invoke',
+  ciLog: 'invoke',
+  repoSlug: 'invoke',
+  refStates: 'invoke',
   ghAccounts: 'invoke',
   sync: 'invoke',
   addWorktree: 'invoke',
@@ -166,5 +178,6 @@ export const gitMethods = {
   diskUsage: 'invoke',
   checkpoint: 'invoke',
   restoreCheckpoint: 'invoke',
+  checkpointDiff: 'invoke',
   forkWorktree: 'invoke',
 } satisfies Manifest<GitHost>;

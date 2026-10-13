@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, Clock, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, Clock, BellOff, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -12,6 +12,7 @@ import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
 import { openSettings } from '../settings/open';
 import { useHarness } from '../store';
+import { GitPullRequestIcon } from '@/icons/github';
 import { groupBursts, hourLabel, type Burst, type NoticeKind } from './model';
 import { useJump } from './useNotifications';
 
@@ -20,7 +21,7 @@ const KIND_ICONS = {
   'step-done': { icon: CheckCircle, className: 'text-success' },
   review: { icon: Eye, className: 'text-muted-foreground' },
   ci: { icon: CloseCircle, className: 'text-destructive' },
-  'pr-review': { icon: BranchUp, className: 'text-muted-foreground' },
+  'pr-review': { icon: GitPullRequestIcon, className: 'text-muted-foreground' },
   overlap: { icon: TriangleWarning, className: 'text-warning' },
   'race-lost': { icon: Flash, className: 'text-muted-foreground' },
   run: { icon: Clock, className: 'text-muted-foreground' },
