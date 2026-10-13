@@ -237,7 +237,8 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       const files = Array.isArray(item.changes) ? item.changes.flatMap((c) => (typeof obj(c)?.path === 'string' ? [relative(s.cwd, obj(c)!.path as string)] : [])) : [];
       if (phase === 'start') s.changes.set(id, files);
       else s.changes.delete(id);
-      return [{ threadId, type: 'tool', id, phase, text: `Edit ${files.join(', ') || 'files'}`, ...(phase === 'end' && item.status === 'completed' && { files }) }];
+      const patch = phase === 'end' && item.status === 'completed' ? changesPatch(item.changes, s.cwd) : '';
+      return [{ threadId, type: 'tool', id, phase, text: `Edit ${files.join(', ') || 'files'}`, ...(phase === 'end' && item.status === 'completed' && { files }), ...(patch && { patch }) }];
     }
     case 'mcpToolCall':
       return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `Mcp ${item.server}: ${item.tool}`, mcp: { server: item.server, tool: item.tool } }] : [];
@@ -363,6 +364,32 @@ export function apiMessage(message: string) {
 
 function num(value: unknown) {
   return typeof value === 'number' ? value : 0;
+}
+
+/**
+ * A fileChange item's changes as one unified diff, a `diff --git` section per file, so the work log and the turn's changes card count and
+ * show each file. An update's `diff` is already a unified diff (its hunks are kept, its headers replaced); an add or delete carries the
+ * file's content, written as all added or all removed lines.
+ */
+export function changesPatch(changes: unknown, cwd: string) {
+  if (!Array.isArray(changes)) return '';
+  return changes
+    .flatMap((c) => {
+      const change = obj(c);
+      if (typeof change?.path !== 'string' || typeof change.diff !== 'string') return [];
+      const file = relative(cwd, change.path);
+      const kind = obj(change.kind)?.type;
+      const hunks = /^@@/m.exec(change.diff);
+      const header = [`diff --git a/${file} b/${file}`, `--- ${kind === 'add' ? '/dev/null' : `a/${file}`}`, `+++ ${kind === 'delete' ? '/dev/null' : `b/${file}`}`];
+      if (hunks) return [[...header, change.diff.slice(hunks.index).trimEnd()].join('\n')];
+      if (kind !== 'add' && kind !== 'delete') return [];
+      // An empty file is created or deleted without a hunk.
+      if (!change.diff) return [header.join('\n')];
+      const lines = change.diff.replace(/\n$/, '').split('\n');
+      const hunk = kind === 'add' ? `@@ -0,0 +1,${lines.length} @@` : `@@ -1,${lines.length} +0,0 @@`;
+      return [[...header, hunk, ...lines.map((l) => (kind === 'add' ? '+' : '-') + l)].join('\n')];
+    })
+    .join('\n');
 }
 
 function relative(cwd: string, file: string) {

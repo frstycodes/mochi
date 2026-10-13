@@ -149,6 +149,11 @@ export interface GitHost {
   checkpoint(cwd: string, threadId: string, n: number | 'turn' | 'undo'): Promise<string>;
   /** Resets the worktree's branch and files to checkpoint `n`, after saving the current files as the `undo` checkpoint. */
   restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo', hasUndo?: boolean): Promise<void>;
+  /**
+   * Puts only `paths` (relative to the worktree) back to checkpoint `n`, after saving the current files as the `undo` checkpoint: one
+   * turn's file changes undone, nothing else touched. `n = 'undo'` puts those paths back as that save held them.
+   */
+  restoreFiles(cwd: string, threadId: string, n: number | 'undo', paths: string[]): Promise<void>;
   /** Before a rewind with files: the files checkpoint `n` changes back, and those changed since the agent's last turn ended (made outside the agent). */
   rewindPreview(cwd: string, threadId: string, n: number): Promise<RewindPreview>;
   /** What checkpoint `n` held against the branch's base: the thread's changes as they stood then. Throws when its files weren't saved. */
@@ -197,6 +202,7 @@ export const gitMethods = {
   diskUsage: 'invoke',
   checkpoint: 'invoke',
   restoreCheckpoint: 'invoke',
+  restoreFiles: 'invoke',
   rewindPreview: 'invoke',
   checkpointDiff: 'invoke',
   forkWorktree: 'invoke',

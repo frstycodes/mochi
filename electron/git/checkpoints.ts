@@ -48,6 +48,21 @@ export async function applyFiles(top: string, commit: string) {
   await runGit(top, ['reset', '--quiet']);
 }
 
+/**
+ * Puts only `paths` back to how the commit held them: files it had are checked out (and left unstaged), files it didn't have
+ * are deleted. Every other file stays as it is. `paths` are relative to `top`.
+ */
+export async function restorePaths(top: string, commit: string, paths: string[]) {
+  // Agents name files, not patterns: a path like `app/[id].tsx` must not match as a glob.
+  const held = new Set((await runGit(top, ['--literal-pathspecs', 'ls-tree', '-r', '-z', '--name-only', commit, '--', ...paths])).split('\0').filter(Boolean));
+  const back = paths.filter((p) => held.has(p));
+  if (back.length) {
+    await runGit(top, ['--literal-pathspecs', 'checkout', commit, '--', ...back]);
+    await runGit(top, ['--literal-pathspecs', 'reset', '--quiet', '--', ...back]);
+  }
+  await Promise.all(paths.filter((p) => !held.has(p)).map((p) => rm(join(top, p), { force: true })));
+}
+
 export async function resolveCommit(top: string, ref: string) {
   // --quiet exits 1 for a missing ref: that's an answer (''), not a failure.
   return (await runGit(top, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { okCodes: [1] })).trim();
