@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Trash3, Undo } from 'reicon-react';
+import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Sparkles, Trash3, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,6 +17,8 @@ import { useHarness } from '../store';
 import { StepStatusIcon, TooltipIconButton } from '../ui';
 import { applyDraft, draftFrom, type DraftStep, type GoalDraft } from './edit';
 import { templatesFor } from './templates';
+import { goalPrompt, parseSteps } from '../utility/prompts';
+import { useDraft } from '../utility/useDraft';
 
 /** Every save is one goal revision. Mount it only while open so the draft starts fresh from the thread. */
 export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () => void }) {
@@ -28,6 +30,11 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
   const hasDriftEdits = isDriftMuted !== !!thread.drift?.isMuted;
   const nextVersion = thread.revisions.length + 1;
   const templates = templatesFor(thread.spaceId);
+  const stepsDraft = useDraft('goal', thread.spaceId);
+  const draftSteps = async () => {
+    const text = await stepsDraft.draft(goalPrompt(draft.goal));
+    if (text) addSteps(parseSteps(text).map((title) => ({ title, size: getPrefs().stepSize, gate: false })));
+  };
 
   const add = () => {
     if (!newTitle.trim()) return;
@@ -57,6 +64,17 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
         <section aria-label="Steps" className="flex min-h-0 flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <h3 className="flex-1 type-body font-medium">Steps</h3>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button variant="ghost" size="sm" onClick={draftSteps} disabled={!draft.goal.trim() || stepsDraft.isDrafting}>
+                    <Sparkles data-icon="inline-start" />
+                    {stepsDraft.isDrafting ? 'Drafting…' : 'Draft steps'}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-60">Adds steps for the goal above, written on your Background tasks model. Review them before you save.</TooltipContent>
+            </Tooltip>
             {templates.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -153,6 +153,10 @@ export interface Thread {
   /** null: a chat with no folder, so no files, branch or PRs. */
   repo: Repo | null;
   title: string;
+  /** Renamed by you (or by the agent at your request): a generated title never replaces it. */
+  isTitleRenamed?: boolean;
+  /** A model named the thread after its first exchange (`useAutoTitles`). */
+  isTitleGenerated?: boolean;
   goal: string;
   providers: Provider[];
   status: ThreadStatus;

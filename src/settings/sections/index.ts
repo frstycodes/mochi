@@ -1,8 +1,10 @@
 import type { ComponentType } from 'react';
-import { BranchUp, Clock, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
+import { BranchUp, Clock, Sparkles, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
+import { UTILITY_TASKS } from '../../utility/prompts';
+import { BackgroundSection, UTILITY_TASK_LABELS } from './background';
 import { BrowserSection } from './browser';
 import { DataSection } from './data';
 import { DefaultsSection } from './defaults';
@@ -104,6 +106,14 @@ export const SETTINGS_SECTIONS = [
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
     ],
+  },
+  {
+    id: 'background',
+    group: 'Agents',
+    title: 'Background tasks',
+    icon: Sparkles,
+    component: BackgroundSection,
+    settings: UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title commit pull request pr goal steps handoff summary' })),
   },
   {
     id: 'tools',
