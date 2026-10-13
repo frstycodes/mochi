@@ -159,7 +159,7 @@ test('a thread runs at the speed it started with; a message changes it for its t
   writeFileSync(fake, TIER_CODEX, { mode: 0o755 });
   const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
   // Lets turn/completed land, so the next send starts a turn instead of steering.
-  const settle = () => new Promise((r) => setTimeout(r, 50));
+  const settle = () => new Promise((r) => setTimeout(r, 150));
   try {
     await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority' });
     await settle();
@@ -186,7 +186,8 @@ const TIER_CODEX = `#!/usr/bin/env node
 const fs = require('node:fs');
 let buf = '', n = 0;
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
-const done = (threadId, id) => send({ method: 'turn/completed', params: { threadId, turn: { id, status: 'completed' } } });
+// Later than the reply, as a real turn ends: the adapter records the turn id from the reply.
+const done = (threadId, id) => setTimeout(() => send({ method: 'turn/completed', params: { threadId, turn: { id, status: 'completed' } } }), 20);
 process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
   if (['thread/start', 'turn/start', 'turn/steer'].includes(m.method)) fs.appendFileSync(process.env.TIER_LOG, m.method + ' ' + m.params.serviceTier + '\\n');
   if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
