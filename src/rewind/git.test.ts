@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../../electron/git/checkpoints.ts';
+import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, snapshot, snapshotCommit } from '../../electron/git/checkpoints.ts';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
@@ -72,4 +72,21 @@ test('checkpointRef rejects names that could escape the refs/harness namespace',
   assert.throws(() => checkpointRef('../heads/main', 1));
   assert.throws(() => checkpointRef('t1', -1));
   assert.equal(checkpointRef('t1', 'undo'), 'refs/harness/checkpoints/t1/undo');
+});
+
+test('a rewind preview lists the files a checkpoint changes back, and tells the agent’s changes from later ones', async () => {
+  const dir = scratchRepo();
+  try {
+    assert.equal(await resolveCommit(dir, checkpointRef('t1', 'turn')), '', 'a missing checkpoint resolves empty instead of throwing');
+    const before = await snapshot(dir, checkpointRef('t1', 0), 'before message');
+    writeFileSync(join(dir, 'a.txt'), 'agent edit\n');
+    writeFileSync(join(dir, 'b.txt'), 'agent new file\n');
+    await snapshot(dir, checkpointRef('t1', 'turn'), 'turn end');
+    assert.deepEqual(await changedPaths(dir, before, await snapshotCommit(dir, 'now')), ['a.txt', 'b.txt']);
+    assert.deepEqual(await changedPaths(dir, await resolveCommit(dir, checkpointRef('t1', 'turn')), await snapshotCommit(dir, 'now')), [], 'nothing changed since the turn');
+    writeFileSync(join(dir, 'c.txt'), 'yours\n');
+    assert.deepEqual(await changedPaths(dir, await resolveCommit(dir, checkpointRef('t1', 'turn')), await snapshotCommit(dir, 'now')), ['c.txt'], 'your file reads as an outside change');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

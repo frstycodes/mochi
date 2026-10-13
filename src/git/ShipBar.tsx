@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUpRight, BranchUp, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
+import { ArrowUp, ArrowUpRight, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -97,7 +97,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
       )}
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={push}>
-          <BranchUp data-icon="inline-start" />
+          <ArrowUp data-icon="inline-start" />
           Push
         </Button>
         {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading}>Create pull request</Button>}

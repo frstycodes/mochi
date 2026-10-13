@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { BranchUp, ChevronDown, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
+import { ChevronDown, Hierarchy2, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -266,7 +266,7 @@ function ThreadHeader({
         <ThreadMenu thread={thread} />
         {!!thread.repo && (
           <span className="hidden min-w-0 items-center gap-1 truncate type-caption text-subtle-foreground @2xl:flex">
-            <BranchUp className="size-3.5 shrink-0" />
+            <Hierarchy2 className="size-3.5 shrink-0" />
             {thread.repo.branch}
           </span>
         )}

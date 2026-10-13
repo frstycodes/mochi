@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactElement, ReactNode } from 'react';
-import { ArrowRight, ArrowUpRight, BranchUp, ClockCircle, CloseCircle, Edit, Eye, MessageEdit, TickCircle, UserTick, type IconComponent } from 'reicon-react';
+import { ArrowRight, ArrowUpRight, ClockCircle, CloseCircle, Edit, Eye, Hierarchy2, MessageEdit, TickCircle, UserTick, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
@@ -100,7 +100,7 @@ function RefFacts({ state }: { state: RefState }) {
         </Fact>
       )}
       {!!state.branch && (
-        <Fact icon={BranchUp} label="Branch">
+        <Fact icon={Hierarchy2} label="Branch">
           <span className="flex min-w-0 items-center gap-1">
             <span className="min-w-0 truncate">{state.branch.head}</span>
             <ArrowRight aria-label="into" className="size-3 shrink-0 text-subtle-foreground" />

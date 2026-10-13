@@ -10,6 +10,7 @@ export function useCheckpointFiles() {
   const { state, dispatch } = useHarness();
   const paths = useWorktreePaths();
   const inFlight = useRef(new Set<string>());
+  const wasWorking = useRef(new Map<string, boolean>());
   useEffect(() => {
     for (const [threadId, list] of Object.entries(state.checkpoints)) {
       const cwd = paths[threadId];
@@ -25,4 +26,15 @@ export function useCheckpointFiles() {
       }
     }
   }, [state.checkpoints, paths, dispatch]);
+
+  // The files as each finished turn left them: a files rewind compares against these to find changes made outside the agent.
+  useEffect(() => {
+    for (const t of state.threads) {
+      const isWorking = !!t.live?.isWorking;
+      const was = wasWorking.current.get(t.id);
+      wasWorking.current.set(t.id, isWorking);
+      const cwd = paths[t.id];
+      if (was && !isWorking && cwd) host.git.checkpoint(cwd, t.id, 'turn').catch((error) => console.warn('Could not save the turn checkpoint', error));
+    }
+  }, [state.threads, paths]);
 }

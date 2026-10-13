@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { draftFrom } from '../goals/edit.ts';
 import type { Action, State } from './index.tsx';
 import { initialQueue } from './queue.ts';
 import { initialThreads, threadsReducer } from './threads.ts';
@@ -33,26 +34,33 @@ test('a late verdict for a message that is already tagged changes nothing', () =
   assert.equal(thread(s, id), before);
 });
 
-test('a thread started with a greeting takes its goal and title from the first concrete message', () => {
+test('a new thread has no goal until one is drafted; a draft never replaces a goal', () => {
   let s = run(demoState(), { type: 'create', title: 'hi', provider: 'claude', project: null, isLive: true });
   const id = s.threads.at(-1)!.id;
-  s = run(s, { type: 'send', threadId: id, text: 'thanks', drift: 'on-goal', reason: 'No goal yet' });
-  assert.equal(thread(s, id).goal, 'hi');
+  assert.equal(thread(s, id).goal, '');
+  assert.deepEqual(thread(s, id).revisions, []);
   s = run(s, { type: 'send', threadId: id, text: 'fix the login bug on the signup page', drift: 'on-goal', reason: 'No goal yet' });
-  assert.equal(thread(s, id).goal, 'fix the login bug on the signup page');
-  assert.equal(thread(s, id).title, 'fix the login bug on the signup page');
-  assert.equal(thread(s, id).revisions.at(-1)!.label, 'Goal set from your message');
-  s = run(s, { type: 'send', threadId: id, text: 'and add a test for it', drift: 'on-goal', reason: 'r' });
-  assert.equal(thread(s, id).goal, 'fix the login bug on the signup page', 'set once');
+  assert.equal(thread(s, id).goal, '', 'sending never sets the goal');
+  s = run(s, { type: 'goal-drafted', threadId: id, outcome: 'Signup login bug fixed', criteria: ['Signing up then logging in works', 'pnpm test passes'] });
+  const t = thread(s, id);
+  assert.deepEqual([t.goal, t.criteria!.map((c) => c.text), t.revisions.map((r) => [r.n, r.label, r.by])], ['Signup login bug fixed', ['Signing up then logging in works', 'pnpm test passes'], [[1, 'Goal drafted', 'harness']]]);
+  assert.equal(t.title, 'hi', 'the title is not the goal');
+  s = run(s, { type: 'goal-drafted', threadId: id, outcome: 'Something else', criteria: [] });
+  assert.equal(thread(s, id).goal, 'Signup login bug fixed');
 });
 
-test('a renamed thread keeps its title when the goal is set', () => {
-  let s = run(demoState(), { type: 'create', title: 'hey', provider: 'claude', project: null, isLive: true });
+test('a removed goal stays off for drafts; an edit brings it back as a revision', () => {
+  let s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: null, isLive: true });
   const id = s.threads.at(-1)!.id;
-  s = run(s, { type: 'rename', threadId: id, title: 'Auth work' });
-  s = run(s, { type: 'send', threadId: id, text: 'migrate auth to Better Auth', drift: 'on-goal', reason: 'r' });
-  assert.equal(thread(s, id).title, 'Auth work');
-  assert.equal(thread(s, id).goal, 'migrate auth to Better Auth');
+  s = run(s, { type: 'goal-drafted', threadId: id, outcome: 'README added', criteria: [] });
+  s = run(s, { type: 'goal-remove', threadId: id });
+  assert.deepEqual([thread(s, id).goal, thread(s, id).isGoalOff, thread(s, id).activity.at(-1)!.text], ['', true, 'Goal removed']);
+  s = run(s, { type: 'goal-drafted', threadId: id, outcome: 'README added', criteria: [] });
+  assert.equal(thread(s, id).goal, '');
+  const draft = { ...draftFrom(thread(s, id)), goal: 'README with setup steps', criteria: [{ text: 'README lists install and run commands' }] };
+  s = run(s, { type: 'edit-goal', threadId: id, draft });
+  const t = thread(s, id);
+  assert.deepEqual([t.goal, t.isGoalOff, t.revisions.at(-1)!.diff], ['README with setup steps', undefined, ['+ Goal: README with setup steps', '+ Done when: README lists install and run commands']]);
 });
 
 test('the second Keep here mutes the guard for that thread', () => {

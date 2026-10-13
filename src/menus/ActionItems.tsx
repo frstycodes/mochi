@@ -82,7 +82,8 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
 }
 
 // Not Radix `disabled`: that drops the item from keyboard focus and pointer events, so its reason could never show.
-function SkippedItem({ menu, icon, title, reason }: { menu: MenuKind; icon: ReactNode; title: string; reason: string }) {
+/** A menu item that can't run right now, its reason in a tooltip. */
+export function SkippedItem({ menu, icon, title, reason }: { menu: MenuKind; icon: ReactNode; title: string; reason: string }) {
   const { Item, tooltipSide } = MENU_PARTS[menu];
   return (
     <Tooltip>

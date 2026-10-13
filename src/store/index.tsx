@@ -17,6 +17,7 @@ import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesStat
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
 import { initialSideChat, saveSideChats, sidechatReducer, type SideChatAction, type SideChatState } from './sidechat.ts';
 import { getRestored, saveThreads, toSaved } from './persist.ts';
+import { pruneDrafts } from '../chat/drafts.ts';
 import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState } from './threads.ts';
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
 import { reviewsReducer, type ReviewAction } from '../secondOpinion/slice.ts';
@@ -26,6 +27,7 @@ import { scheduleReducer, type ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
+import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
 
 export type { View } from './layout.ts';
 export type { OverlapMode } from './threads.ts';
@@ -144,7 +146,9 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   useAutoTitles(state.threads, dispatch);
+  useGoalDrafts(state.threads, dispatch);
   useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
+  useEffect(() => pruneDrafts(new Set(state.threads.map((t) => t.id))), [state.threads]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
 }
 
