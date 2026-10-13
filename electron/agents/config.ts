@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, mergeSettings, migrateSettings, type Account, type Ac
 import type { Provider } from '../../src/model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/settings/accounts.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
+import { fallbackShell } from '../platform.ts';
 import { userPath } from '../shellPath.ts';
 
 export { userPath };
@@ -46,7 +47,7 @@ export function worktreeRoots(): string[] {
 
 /** The terminal's shell: the user's choice, else `$SHELL`. */
 export function terminalShell(): string {
-  return expandHome(load().shell) || process.env.SHELL || '/bin/zsh';
+  return expandHome(load().shell) || process.env.SHELL || fallbackShell();
 }
 
 export function prDrafts(): boolean {

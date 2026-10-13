@@ -202,7 +202,7 @@ const APP_SETTINGS: Setting[] = [
   pref('watchedToasts', 'Toasts for watched threads', 'notifications', SWITCH),
   {
     key: 'dockBadge',
-    label: 'Dock badge counts',
+    label: 'App icon badge counts',
     section: 'notifications',
     control: choice(BADGE),
     read: ({ prefs }) => (prefs.dockBadge ? 'on' : 'off'),

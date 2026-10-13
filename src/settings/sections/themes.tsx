@@ -23,7 +23,7 @@ export function ThemesSection() {
   useEffect(() => () => setThemePreview(null), []);
   return (
     <div className="flex flex-col gap-8">
-      <SettingsGroup id="colorTheme" footer="System switches between these with your Mac's appearance. Hover a theme to preview it; nothing changes until you pick one.">
+      <SettingsGroup id="colorTheme" footer="System switches between these with your system's appearance. Hover a theme to preview it; nothing changes until you pick one.">
         <SettingsRow id="lightTheme" label="Light" control={<SlotSelect slot="light" />} />
         <SettingsRow id="darkTheme" label="Dark" control={<SlotSelect slot="dark" />} />
       </SettingsGroup>
