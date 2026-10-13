@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { ArrowUp, BranchDown, CheckCircle, InfoCircle, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { ArrowUp, CheckCircle, InfoCircle, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -24,9 +25,10 @@ import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { BoardView } from '../BoardView';
-import { seedQueue } from '../model';
+import { seedQueue, type Thread } from '../model';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
+import { ReportCard } from '../goals/ReportCard';
 import { PipLayer } from '../Browser';
 import { SidePane } from '../SidePane';
 import { AppSidebar } from '../Sidebar';
@@ -340,7 +342,7 @@ function Actions() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline">
-              <BranchDown data-icon="inline-start" />
+              <Link data-icon="inline-start" />
               Link step
             </Button>
             <Button>
@@ -361,7 +363,7 @@ function Actions() {
             <Badge variant="secondary">M</Badge>
             <Badge variant="outline">v3</Badge>
             <Badge variant="secondary">
-              <BranchDown />
+              <GitPullRequestIcon />
               #482
             </Badge>
             <Badge variant="destructive">Failed</Badge>
@@ -420,7 +422,7 @@ function Display() {
           <div className="flex flex-col gap-2">
             <Item variant="outline">
               <ItemMedia variant="icon">
-                <BranchDown />
+                <Link />
               </ItemMedia>
               <ItemContent>
                 <ItemTitle>
@@ -610,6 +612,9 @@ function Recipes() {
             <SummaryPanel thread={rl} className="m-3 w-[300px] rounded-xl bg-popover shadow-popover" />
           </div>
         </Block>
+        <Block title="Report card" use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes." wide>
+          <ReportCard thread={reportFixture(rl)} />
+        </Block>
         <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
           <QueueDecision item={decision} showThread />
         </Block>
@@ -706,4 +711,18 @@ function Pair({ rule, children }: { rule: string; children: [ReactNode, ReactNod
       </div>
     </div>
   );
+}
+
+/** A goal thread as it looks after its agent claimed one criterion and reported. */
+function reportFixture(rl: Thread): Thread {
+  const at = rl.activity.at(-1)?.at ?? 0;
+  return {
+    ...rl,
+    live: undefined,
+    criteria: [
+      { id: 'c1', text: 'Every 429 carries Retry-After', claim: { evidence: 'curl -i /v1/search shows Retry-After: 30', at, by: 'claude' } },
+      { id: 'c2', text: 'pnpm test passes', command: 'pnpm test' },
+    ],
+    report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'], left: ['Per-key overrides in the admin UI'], question: 'Switch the 429 body to JSON now, or in a follow-up?' },
+  };
 }

@@ -1,15 +1,15 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type QueuedMessage, type Source, type Step, type StepStatus, type Thread } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type QueuedMessage, type Similar, type Source, type Step, type StepStatus, type Thread, type TurnReport } from '../model.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
-import { hasGoal, isConcrete, KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
+import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
-import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
+import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindMode, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import { contextMax } from '../runtime/models.ts';
@@ -76,12 +76,18 @@ export type ThreadsAction =
   | { type: 'drift-settings'; threadId: string; isMuted: boolean }
   | { type: 'drift-keep'; threadId: string }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
+  /** The background model's goal for a thread that had none; dropped when one was set meanwhile or you removed it. */
+  | { type: 'goal-drafted'; threadId: string; outcome: string; criteria: string[]; similar?: Similar[] }
+  | { type: 'similar-dismiss'; threadId: string; otherId: string }
+  | { type: 'goal-remove'; threadId: string }
+  | { type: 'criterion-claim'; threadId: string; criterionId: string; evidence: string; by: Provider }
+  | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
-  | { type: 'rewind'; threadId: string; n: number }
-  | { type: 'rewind-message'; threadId: string; index: number }
+  | { type: 'rewind'; threadId: string; n: number; mode?: RewindMode; forkAt?: string | null }
+  | { type: 'rewind-message'; threadId: string; index: number; mode?: RewindMode; forkAt?: string | null }
   | { type: 'rewind-undo' }
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
@@ -194,6 +200,16 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { ...t.drift, isMuted: action.isMuted } })) };
     case 'drift-keep':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => keepHere(t, state.now)) };
+    case 'goal-drafted':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => setDraftedGoal(t, action.outcome, action.criteria, action.similar ?? [], state.now)) };
+    case 'similar-dismiss':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, similar: t.similar?.filter((s) => s.threadId !== action.otherId) })) };
+    case 'criterion-claim':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => claimCriterion(t, action, state.now)) };
+    case 'report':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now } })) };
+    case 'goal-remove':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => removeGoal(t, state.now)) };
     case 'edit-goal':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now, action.by)) };
     case 'step-status':
@@ -205,9 +221,9 @@ function reduce(state: State, action: Action): State {
     case 'restore':
       return { ...state, ...action.snapshot };
     case 'rewind':
-      return rewind(state, action.threadId, action.n);
+      return rewind(state, action.threadId, action.n, action.mode, action.forkAt);
     case 'rewind-message':
-      return rewindToMessage(state, action.threadId, action.index);
+      return rewindToMessage(state, action.threadId, action.index, action.mode, action.forkAt);
     case 'rewind-undo':
       return undoRewind(state);
     case 'checkpoint-ref':
@@ -420,12 +436,12 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     spaceId: state.spaceId,
     repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, branchName(getPrefs().branchPrefix, '', id)) : null,
     title: titleFrom(action.title),
-    goal: action.title,
+    goal: '',
     providers: [action.provider],
     status: 'running',
     line: freeLine(state.threads.filter((t) => t.spaceId === state.spaceId)),
     startedAt: now,
-    revisions: [{ n: 1, at: now, label: 'Goal set', by: 'you' }],
+    revisions: [],
     steps,
     activity: [
       ...(action.branchFrom ? [{ at: now, who: 'harness' as const, kind: 'event' as const, text: `Branched off ${action.branchFrom}` }] : []),
@@ -484,11 +500,10 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
-      const live = t.live && { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
+      const live = t.live && { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
       const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }) });
-      const goaled = setGoalFrom(said, action.text, now);
-      return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
+      return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
     }),
   };
 }
@@ -503,13 +518,23 @@ function addSource(state: State, action: Extract<Action, { type: 'source-add' }>
 
 const titleFrom = (text: string) => (text.length > 48 ? `${text.slice(0, 47)}…` : text);
 
-/** A thread started with "hi" has no goal yet: the first concrete message becomes it, and the title too unless you renamed the thread. */
-function setGoalFrom(t: Thread, text: string, now: number): Thread {
-  if (hasGoal(t) || !isConcrete(text)) return t;
-  const n = t.revisions.length + 1;
-  const title = t.title === titleFrom(t.goal) ? titleFrom(text) : t.title;
-  const set = { ...t, goal: text, title, revisions: [...t.revisions, { n, at: now, label: 'Goal set from your message', by: 'you' as const, diff: [`~ Goal: "${t.goal}" → "${text}"`] }] };
-  return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: set from your message` });
+function setDraftedGoal(t: Thread, outcome: string, criteria: string[], similar: Similar[], now: number): Thread {
+  if (t.goal || t.isGoalOff) return t;
+  const n = (t.revisions.at(-1)?.n ?? 0) + 1;
+  const set = { ...t, goal: outcome, ...(similar.length && { similar }), criteria: criteria.map((text, i) => ({ id: `${t.id}-c${n}-${i}`, text })), revisions: [...t.revisions, { n, at: now, label: 'Goal drafted', by: 'harness' as const, diff: [`+ Goal: ${outcome}`, ...criteria.map((c) => `+ Done when: ${c}`)] }] };
+  return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal: ${outcome}` });
+}
+
+function claimCriterion(t: Thread, action: Extract<Action, { type: 'criterion-claim' }>, now: number): Thread {
+  const criterion = t.criteria?.find((c) => c.id === action.criterionId);
+  if (!criterion) return t;
+  const criteria = t.criteria!.map((c) => (c.id === criterion.id ? { ...c, claim: { evidence: action.evidence, at: now, by: action.by } } : c));
+  return log({ ...t, criteria }, { at: now, who: action.by, kind: 'event', text: `Done: ${criterion.text}`, detail: action.evidence });
+}
+
+function removeGoal(t: Thread, now: number): Thread {
+  if (!t.goal) return { ...t, isGoalOff: true };
+  return log({ ...t, goal: '', criteria: [], isGoalOff: true }, { at: now, who: 'harness', kind: 'event', text: 'Goal removed' });
 }
 
 function keepHere(t: Thread, now: number): Thread {

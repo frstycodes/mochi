@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react';
-import { BranchUp, ChevronDown, Warning } from 'reicon-react';
+import { ChevronDown, Hierarchy2, Warning } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -101,7 +101,7 @@ function BranchPicker({ workspace }: { workspace: Workspace }) {
     >
       <PopoverTrigger asChild>
         <Button variant="ghost" size="xs" className="max-w-48 text-subtle-foreground hover:text-foreground" aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}>
-          <BranchUp />
+          <Hierarchy2 />
           <span className="truncate">{isNew ? `from ${label ?? '…'}` : (label ?? 'Pick a branch')}</span>
           <ChevronDown data-icon="inline-end" />
         </Button>

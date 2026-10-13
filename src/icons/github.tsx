@@ -21,7 +21,7 @@
  */
 import { forwardRef, type SVGProps } from 'react';
 import { cn } from '@/lib/utils';
-import { refTone, type RefKind, type RefStatus, type RefTone } from '@/chat/refs';
+import { bareState, refTone, type RefKind, type RefStatus, type RefTone } from '@/chat/refs';
 
 type OcticonProps = SVGProps<SVGSVGElement>;
 
@@ -83,7 +83,7 @@ export const REF_TONE_CLASS = {
 
 /** A thread's PR (sidebar card, summary row, ship bar) in its state's icon and colour. */
 export function PrStateIcon({ state, className }: { state: RefStatus; className?: string }) {
-  const tone = refTone(state === 'unknown' ? null : { kind: 'pr', status: state, title: '', url: '', hasConflicts: false, isFailing: false, isNotPlanned: false });
+  const tone = refTone(state === 'unknown' ? null : bareState('pr', state, '', ''));
   return <GithubStateIcon kind="pr" status={state} className={cn(className, REF_TONE_CLASS[tone])} />;
 }
 

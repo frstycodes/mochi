@@ -82,7 +82,7 @@ export const TOOL_TABLE = {
     shape: { threadIds },
   },
   // {GOALS}
-  get_goal: { tier: 'read', description: "Read a thread's goal and its steps, with each step's id, status, size and acceptance criteria.", shape: { threadId } },
+  get_goal: { tier: 'read', description: "Read a thread's goal (empty for a question or chat), what done means (criteria), and its steps with each step's id, status, size and acceptance criteria.", shape: { threadId } },
   set_step_status: {
     tier: 'change',
     quiet: true,
@@ -92,7 +92,7 @@ export const TOOL_TABLE = {
   add_step: {
     tier: 'change',
     quiet: true,
-    description: "Add a step to a thread's goal, as a new goal revision.",
+    description: "Add a step to a thread's plan. Plan changes don't change the goal's version.",
     shape: { title: z.string(), size: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe('1 small, 2 medium, 3 large'), threadId },
   },
   edit_goal: {
@@ -108,6 +108,28 @@ export const TOOL_TABLE = {
   },
   reorder_steps: { tier: 'change', description: 'Reorder goal steps. List step ids top first; steps left out keep their place after them.', shape: { threadId, order: z.array(z.string()).min(1) } },
   drop_step: { tier: 'change', description: "Drop a step that's no longer needed. Done steps can't be dropped.", shape: { threadId, stepId, reason: z.string().optional() } },
+  claim_criterion: {
+    tier: 'change',
+    quiet: true,
+    description: "Say one of your goal's criteria is met, with one line of evidence the user can check (a command and its result, a file, a URL). Call it as soon as each criterion is met; get_goal lists the criterion ids.",
+    shape: { criterionId: z.string().describe('A criterion id from get_goal'), evidence: z.string().min(1).max(240) },
+  },
+  report_turn: {
+    tier: 'change',
+    quiet: true,
+    description:
+      'At the end of a turn where you changed anything for a goal, report once so the user can skip reading your reply: decisions you made, what is left, and at most one question that needs them. Short lines, no prose.',
+    shape: {
+      decisions: z.array(z.string().max(160)).max(5).describe('Choices you made that the user should know about'),
+      left: z.array(z.string().max(160)).max(5).describe('What is still not done'),
+      question: z.string().max(240).optional().describe('The one thing you need from the user, if anything'),
+    },
+  },
+  get_report: {
+    tier: 'read',
+    description: "Read a thread's latest report as data: goal, criteria with claims, decisions, what's left, the open question, PRs and status. For coordinating other threads without reading their transcripts.",
+    shape: { threadId },
+  },
   settle_goal: {
     tier: 'change',
     description: 'Close out a goal: drops every open step with your reason and settles the thread. Use when the goal is met or no longer wanted. Not your own thread.',

@@ -21,6 +21,8 @@ export interface AgentStartOptions {
   permissionMode?: string;
   /** Provider session id from an earlier `session` event. */
   resume?: string;
+  /** With `resume`: continue a fork of that session holding only what came up to this point (`rewindPoint`), leaving the original as it was. */
+  forkAt?: string;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
 }
@@ -241,6 +243,8 @@ export interface AgentHost {
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
   rewindFiles(threadId: string, text: string): Promise<void>;
+  /** Where the thread's live session stood just before `text` was sent, for `forkAt`: Claude's last chain entry, Codex's previous turn. Null when this run doesn't know (restarted, or it was the session's first message). */
+  rewindPoint(threadId: string, text: string): Promise<string | null>;
   /** Stops one of a thread's native subagents (Claude task, Codex spawned agent); it ends with status `stopped`. */
   stopSubagent(threadId: string, subagentId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
@@ -268,6 +272,7 @@ export const agentMethods = {
   classify: 'invoke',
   utility: 'invoke',
   rewindFiles: 'invoke',
+  rewindPoint: 'invoke',
   stopSubagent: 'invoke',
   warm: 'invoke',
   models: 'invoke',

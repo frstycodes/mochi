@@ -2,9 +2,8 @@ import { type ComponentProps, type CSSProperties, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
-import { Book, Briefcase, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, Hand, Link as Link2, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
+import { Book, Briefcase, ClipboardTick, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, Hand, Link as Link2, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
@@ -62,7 +61,7 @@ export function LiveDot({ className, style }: { className?: string; style?: CSSP
 export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
   if (status === 'running') return <LiveDot className="mx-1 text-success" />;
   if (status === 'needs-you') return <MessageCircleQuestion aria-label="Needs you" className="size-4 shrink-0 text-warning" />;
-  if (status === 'review') return <GitPullRequestIcon aria-label="Ready for review" aria-hidden={false} className="size-4 shrink-0 text-muted-foreground" />;
+  if (status === 'review') return <ClipboardTick aria-label="Ready for review" className="size-4 shrink-0 text-muted-foreground" />;
   return <CircleCheck aria-label="Settled" className="size-4 shrink-0 text-subtle-foreground" />;
 }
 

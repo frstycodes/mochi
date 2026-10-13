@@ -11,6 +11,8 @@ export interface Notice {
   kind: NoticeKind;
   threadId: string;
   queueId?: string;
+  /** `pr-review`: the PR it's about, for its preview card. */
+  prNumber?: number;
   title: string;
   body: string;
   /** Simulation minutes, same clock as `State.now`. */
@@ -80,7 +82,7 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
     // GAP: a real review request comes from GitHub (review_requested webhook via host.git); the simulation only ever opens PRs.
     const prs = new Set(p.prs.map((pr) => pr.number));
     for (const pr of t.prs) {
-      if (pr.state === 'open' && !prs.has(pr.number)) add({ id: `pr-review-${t.id}-${pr.number}`, kind: 'pr-review', threadId: t.id, title: `Review requested on #${pr.number}`, body: pr.title });
+      if (pr.state === 'open' && !prs.has(pr.number)) add({ id: `pr-review-${t.id}-${pr.number}`, kind: 'pr-review', threadId: t.id, prNumber: pr.number, title: `Review requested on #${pr.number}`, body: pr.title });
     }
   }
 
