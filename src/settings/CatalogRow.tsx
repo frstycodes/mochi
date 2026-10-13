@@ -1,5 +1,6 @@
 import { useTheme } from 'next-themes';
 import { TickCircle } from 'reicon-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { ModelPicker, useUnavailableHarnesses } from '../ModelControls';
@@ -15,6 +16,9 @@ import { InstructionsRow, useConfigWriter, useProfileConfig } from './ProfileAge
 import { AccountSelect, GitHubAccountSelect, IconPicker } from './sections/profiles';
 import { ModelSelect, StarredModelsRow } from './sections/harnesses';
 import { SimulatorSelect } from './sections/browser';
+import { SlotSelect } from './sections/themes';
+import { useRemoteStatus } from '../remote/useRemoteStatus';
+import { useThemesState } from '../themes/store';
 
 /** An agent's value for a row: shown under it with Use, until the setting holds it. */
 export interface RowSuggestion {
@@ -28,23 +32,31 @@ export interface RowSuggestion {
  * ids unique when the same setting shows twice (two widgets in one thread).
  */
 export function CatalogRow({ settingKey, profile, suggestion, idPrefix = '' }: { settingKey: string; profile?: Space; suggestion?: RowSuggestion; idPrefix?: string }) {
-  const { sources, reload } = useSettingSources(profile, isConfigKey(settingKey));
+  const { sources, reload } = useSettingSources(profile, isConfigKey(settingKey), REMOTE_KEYS.has(settingKey));
   const setting = findSetting(settingsCatalog({ profile, config: sources.config }), settingKey);
   if (!setting) return <SettingsRow label={settingKey} description="Not a setting here any more" />;
   return <SettingRow setting={setting} sources={sources} profile={profile} rowId={idPrefix + rowIdOf(setting, profile)} suggestion={suggestion} onConfigWritten={reload} />;
 }
 
+/** Settings › Devices lives in main's remote server; only its rows read it. */
+const REMOTE_KEYS = new Set(['remoteEnabled', 'remoteNetwork', 'machineName']);
+
 /** Instructions, MCP servers and skills live in the profile's config files; nothing else needs them read. */
 export const isConfigKey = (key: string) => /^profile\.\w+\.(instructions|mcp|skill)\b/.test(key);
 
-/** Every source a catalog setting reads, live: prefs, theme, quiet hours, main's settings and accounts, and the profile's files when `withConfig`. */
-export function useSettingSources(profile: Space | undefined, withConfig: boolean) {
+/**
+ * Every source a catalog setting reads, live: prefs, theme, color themes, quiet hours, main's settings and accounts, the
+ * profile's files when `withConfig`, Settings › Devices when `withRemote`.
+ */
+export function useSettingSources(profile: Space | undefined, withConfig: boolean, withRemote = false) {
   const prefs = usePrefs();
   const { theme = 'system' } = useTheme();
   const { state } = useHarness();
   const { settings, accounts } = useAgentSettings();
   const { config, reload } = useProfileConfig(withConfig ? profile?.id : undefined);
-  const sources: SettingSources = { prefs, theme, quiet: state.notifications.quiet, host: settings, profile, accounts, config };
+  const { installed, isLoaded } = useThemesState();
+  const { status } = useRemoteStatus(withRemote);
+  const sources: SettingSources = { prefs, theme, quiet: state.notifications.quiet, host: settings, profile, accounts, config, colorThemes: isLoaded ? installed : undefined, remote: status?.settings };
   return { sources, reload };
 }
 
@@ -52,6 +64,7 @@ export function useSettingSources(profile: Space | undefined, withConfig: boolea
 function rowIdOf(setting: Setting, profile?: Space) {
   if (setting.key.startsWith('profile.') && profile) return `${profile.id}-${setting.key.slice('profile.'.length)}`;
   if (setting.key.startsWith('alert.')) return `alert-${setting.key.slice('alert.'.length)}`;
+  if (setting.key.startsWith('utility.')) return `utility-${setting.key.slice('utility.'.length)}`;
   return setting.key.replace(/\.(\w)/g, (_, c: string) => c.toUpperCase());
 }
 
@@ -115,6 +128,8 @@ function SettingControl({ setting, value, rowId, onChange }: { setting: Setting;
     case 'model':
       if (control.provider) return <ModelSelect id={rowId} provider={control.provider} value={value} emptyLabel={control.emptyLabel} onChange={onChange} />;
       return <SideChatModelPicker id={id} value={value} onChange={onChange} />;
+    case 'colorTheme':
+      return <SlotSelect slot={control.slot} />;
     case 'simulator':
       return <SimulatorSelect id={rowId} value={value} onChange={onChange} />;
     case 'icon':
@@ -180,6 +195,11 @@ function useSettingWriter(profile: Space | undefined, onConfigWritten: () => voi
         return true;
       case 'host':
         return (await agent.update(w.patch)) !== false;
+      case 'remote':
+        return host.remote.set(w.patch).then(
+          () => true,
+          (error: Error) => (toast.error('Couldn’t change Settings › Devices', { description: error.message }), false),
+        );
       case 'profile':
         updateProfile(profile!.id, w.patch);
         return true;

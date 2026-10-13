@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, patchOf, permissionResult, planFromTodos, userContent, withPlanTools } from './map.ts';
+import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, planFromTodos, userContent, withPlanTools } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
@@ -298,4 +298,16 @@ test('images become base64 image blocks ahead of the text in the user message', 
     { type: 'image', source: { type: 'base64', media_type: 'image/gif', data: 'R0lGOD==' } },
     { type: 'text', text: 'what is this?' },
   ]);
+});
+
+test('MCP status keeps an http or SSE server’s URL, never a claude.ai proxy’s', () => {
+  const servers = mcpServersFromStatus([
+    { name: 'linear', status: 'connected', config: { type: 'http', url: 'https://mcp.linear.app/mcp' } },
+    { name: 'claude.ai Gmail', status: 'connected', config: { type: 'claudeai-proxy', url: 'https://proxy.example/x', id: 'g' } },
+    { name: 'git', status: 'connected', config: { type: 'stdio', command: 'uvx' } },
+  ]);
+  assert.deepEqual(
+    servers.map((s) => s.url),
+    ['https://mcp.linear.app/mcp', undefined, undefined],
+  );
 });

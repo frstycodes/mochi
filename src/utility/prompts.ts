@@ -8,6 +8,16 @@ export const UTILITY_TASKS = ['title', 'outcome', 'simplify', 'commit', 'pr', 'g
 
 export type UtilityTask = (typeof UTILITY_TASKS)[number];
 
+export const UTILITY_TASK_LABELS = {
+  title: 'Thread titles',
+  outcome: 'Goals',
+  simplify: 'Simplify',
+  commit: 'Commit messages',
+  pr: 'Pull requests',
+  goal: 'Goal steps',
+  handoff: 'Handoff summaries',
+} satisfies Record<UtilityTask, string>;
+
 /** Each provider's cheapest model: every task's default, and the fallback when the chosen one can't answer. */
 export const CHEAP_MODELS = { claude: 'claude-haiku-5-5', codex: 'gpt-6-luna' } satisfies Record<Provider, string>;
 

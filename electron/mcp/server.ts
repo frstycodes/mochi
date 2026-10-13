@@ -5,7 +5,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, type ToolName } from '../../src/runtime/toolTable.ts';
+import { MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, type ToolName } from '../../src/runtime/toolTable.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
 
@@ -13,7 +13,7 @@ import { toolCalls } from './calls.ts';
  * Mochi's own tools for the agent in a thread. Each call goes to the renderer, which runs it as the store action the UI
  * dispatches for the same change (`src/runtime/tools.ts`), so the thread view updates as if you had done it.
  */
-export const SERVER = 'mochi';
+export const SERVER = MOCHI_SERVER;
 
 const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
 

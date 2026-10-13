@@ -26,6 +26,8 @@ const sources: SettingSources = {
   profile: DEFAULT_SPACES[0],
   accounts: { accounts: DEFAULT_ACCOUNTS, links: {} },
   config,
+  colorThemes: [{ id: 'ext:a.b:Night', label: 'Night', kind: 'dark' }],
+  remote: { isEnabled: false, allowsNetwork: false, machineName: '' },
 };
 
 test('every setting reads its default and takes that value back', () => {
@@ -53,6 +55,10 @@ test('writes land where the setting lives, and a value outside the control is re
   });
   assert.equal(write('concurrency', '99'), null);
   assert.equal(write('theme', 'sepia'), null);
+  assert.deepEqual(write('darkTheme', 'ext:a.b:Night'), { to: 'prefs', patch: { darkTheme: 'ext:a.b:Night' } });
+  assert.equal(write('lightTheme', 'ext:a.b:Night'), null, 'a dark theme in the light slot');
+  assert.deepEqual(write('utility.commit', 'codex:gpt-6-luna'), { to: 'host', patch: { utilityModels: { commit: { provider: 'codex', model: 'gpt-6-luna' } } } });
+  assert.deepEqual(write('machineName', 'studio'), { to: 'remote', patch: { machineName: 'studio' } });
   assert.equal(write('profile.name', '  '), null);
   assert.equal(write('profile.claudeAccount', 'codex-default'), null, 'another harness’s account');
 });

@@ -7,6 +7,8 @@ import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/a
 import type { BrowserHost } from '../host/types/browser.ts';
 import type { BranchList } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
+import type { RemoteHost } from '../host/types/remote.ts';
+import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
@@ -51,6 +53,9 @@ export interface ToolEnv {
    * in or stores a credential, and nothing that sets a setting: only the user does that, on the widget.
    */
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
+  /** Installed color themes and Settings › Devices, read for `get_settings`. */
+  themes: Pick<ThemesHost, 'list'>;
+  remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
   git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };

@@ -182,6 +182,8 @@ export interface McpServer {
   name: string;
   status: 'connected' | 'pending' | 'needs-auth' | 'failed' | 'disabled';
   toolCount?: number;
+  /** An http or SSE server's endpoint, whose site's favicon marks its calls. */
+  url?: string;
 }
 
 export interface PullRequest {
@@ -524,6 +526,8 @@ function rateLimiting(): Thread {
       { at: at(s, 93), who: 'harness', kind: 'event', text: 'Goal v2: +1 step "Per-key overrides"' },
       { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Skill sizing-the-change', skill: 'sizing-the-change' },
       { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp linear: get_issue', mcp: { server: 'linear', tool: 'get_issue' } },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp mochi: get_goal', mcp: { server: 'mochi', tool: 'get_goal' } },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp mochi: add_step', mcp: { server: 'mochi', tool: 'add_step' } },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Search redis token bucket rate limiter lua script atomic', links: DEMO_LINKS['Search redis token bucket rate limiter lua script atomic'] },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', links: DEMO_LINKS['Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/'] },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts' },
@@ -547,7 +551,7 @@ function rateLimiting(): Thread {
     // What @ offers with tool counts; no session, so the summary's live-agent sections stay hidden.
     agent: {
       mcpServers: [
-        { name: 'linear', status: 'connected', toolCount: 23 },
+        { name: 'linear', status: 'connected', toolCount: 23, url: 'https://mcp.linear.app/mcp' },
         { name: 'github', status: 'needs-auth' },
       ],
     },

@@ -3,9 +3,9 @@ import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Devices, Global, K
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { UTILITY_TASKS } from '../../utility/prompts';
+import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
 import { AccountSection } from './account';
-import { BackgroundSection, UTILITY_TASK_LABELS } from './background';
+import { BackgroundSection } from './background';
 import { BrowserSection } from './browser';
 import { DataSection } from './data';
 import { DefaultsSection } from './defaults';

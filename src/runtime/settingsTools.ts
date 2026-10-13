@@ -4,6 +4,7 @@ import { linkedAccountId, profilesUsing } from '../settings/accounts.ts';
 import { REDACTED, redactSecrets, stripSecrets, type ConfigChange, type McpEntry, type McpServerDef } from '../settings/agentConfig.ts';
 import { findSetting, recordValue, settingsCatalog, valueLabel, type Setting, type SettingSources } from '../settings/catalog.ts';
 import { HARNESSES } from '../settings/harnesses.ts';
+import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
 
 type SettingsToolName = 'get_settings' | 'update_settings' | 'list_profiles' | 'add_mcp_server' | 'remove_mcp_server' | 'remove_profile';
@@ -133,8 +134,14 @@ type Ctx<K extends SettingsToolName> = ToolContext<Args<K>>;
 /** Everything a setting's value can live in, read now. Host settings and accounts are main's; a profile's files only when asked. */
 async function sourcesFor(ctx: ToolContext<unknown>, profile: Space): Promise<SettingSources> {
   const { env } = ctx;
-  const [host, accounts, config] = await Promise.all([env.settings.get().catch(() => undefined), env.settings.accounts().catch(() => undefined), env.settings.agentConfig(profile.id).catch(() => undefined)]);
-  return { prefs: env.prefs.get(), theme: env.theme(), quiet: ctx.state().notifications.quiet, host: env.isDesktop ? host : undefined, profile, accounts, config };
+  const [host, accounts, config, colorThemes, remote] = await Promise.all([
+    env.settings.get().catch(() => undefined),
+    env.settings.accounts().catch(() => undefined),
+    env.settings.agentConfig(profile.id).catch(() => undefined),
+    env.themes.list().catch(() => undefined),
+    env.remote.status().then((s) => s.settings, () => undefined),
+  ]);
+  return { prefs: env.prefs.get(), theme: env.theme(), quiet: ctx.state().notifications.quiet, host: env.isDesktop ? host : undefined, profile, accounts, config, colorThemes, remote: env.isDesktop ? remote : undefined };
 }
 
 /** Another profile than the caller's: its settings show only after the user lets the agent see them. */
@@ -168,6 +175,7 @@ async function settingView(ctx: ToolContext<unknown>, setting: Setting, sources:
     value: value === undefined ? null : control.type === 'instructions' ? redactSecrets(value) : value,
     ...((control.type === 'choice' || control.type === 'select') && { allowed: control.options.map((o) => o.value) }),
     ...(control.type === 'number' && { min: control.min, max: control.max }),
+    ...(control.type === 'colorTheme' && { allowed: [MOCHI_THEME_ID, ...(sources.colorThemes ?? []).filter((t) => slotOf(t.kind) === control.slot).map((t) => t.id)] }),
     ...((control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') && { allowed: ['true', 'false'] }),
     ...(setting.description && { description: setting.description }),
     ...(setting.locked && { locked: setting.locked }),

@@ -23,6 +23,9 @@ const profileId = z.string().optional().describe('A profile id from list_profile
 const configProvider = z.enum(['claude', 'codex']).optional().describe("Which harness's config; defaults to your own");
 const reason = z.string().min(1).max(240).describe('Why, in a sentence the user reads on the widget');
 
+/** The MCP server Mochi's tools are on: agents see them as `mcp__mochi__<tool>`. */
+export const MOCHI_SERVER = 'mochi';
+
 export const TOOL_TABLE = {
   // {THREADS}
   list_threads: {

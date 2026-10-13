@@ -1,7 +1,5 @@
 import type { ActivityEntry, Thread, ThreadRef } from '../model.ts';
-
-/** Mochi's own MCP server, as both harnesses name it (`electron/mcp/server.ts`, Codex's `mcp_servers.mochi`). */
-const MOCHI_SERVER = 'mochi';
+import { MOCHI_SERVER } from '../runtime/toolTable.ts';
 
 export const isSendCall = (entry: Pick<ActivityEntry, 'mcp'>) => entry.mcp?.server === MOCHI_SERVER && entry.mcp.tool === 'send_to_thread';
 

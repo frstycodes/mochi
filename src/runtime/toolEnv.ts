@@ -32,6 +32,8 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     profiles: { list: getProfiles, update: updateProfile, remove: (id) => void removeProfile(id) },
     theme: storedTheme,
     settings: host.settings,
+    themes: host.themes,
+    remote: host.remote,
     isDesktop: host.isDesktop,
     git: host.git,
   };

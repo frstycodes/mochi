@@ -5,6 +5,7 @@ import { revealIn } from '@/lib/revealIn';
 import { host } from '../host';
 import type { ProfileConfig } from '../host/types/settings';
 import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
+import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { ProviderMark } from '../ui';
 import { insertToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
@@ -142,9 +143,6 @@ export function useThreadServers(provider: Provider, spaceId: string, agent?: Ag
   const servers = config ? config[provider].mcpServers.filter((m) => m.enabled).map(({ def }) => live.get(def.name) ?? { name: def.name, status: 'pending' as const }) : [...live.values()];
   return servers.filter((s) => s.name !== MOCHI_SERVER && s.status !== 'disabled');
 }
-
-// electron/mcp/server.ts `SERVER`: Mochi's own tools, which the agent already uses for goal steps.
-const MOCHI_SERVER = 'mochi';
 
 // GAP: the config fallback lists skills only; custom and plugin commands appear once the agent reports its own list.
 function useConfiguredSkills(provider: Provider, spaceId: string, isNeeded: boolean) {

@@ -1,6 +1,7 @@
 import { hostname } from '../agentPhase.ts';
 import type { ActivityEntry } from '../model.ts';
 import { parseTool } from '../summary.ts';
+import { mochiCall } from './mochiCalls.ts';
 
 /** A tool call as a plain sentence for its work-group row: the agent's own description when it sent one (Claude's Bash), else one derived from the call. */
 export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description' | 'sent'>) {
@@ -24,6 +25,8 @@ export function describeCall(entry: Pick<ActivityEntry, 'text' | 'description' |
     case 'Skill':
       return `Used the ${call.target} skill`;
     case 'Mcp': {
+      const mochi = mochiCall(call);
+      if (mochi) return mochi[1];
       const [server, tool] = call.target.split(': ');
       return tool ? `Called ${tool} on ${server}` : `Called ${server}`;
     }

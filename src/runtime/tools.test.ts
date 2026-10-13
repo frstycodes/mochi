@@ -80,6 +80,8 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     },
     theme: () => 'system',
     settings: settings.host,
+    themes: { list: async () => [] },
+    remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '' }, hostName: 'mac', addresses: [], devices: [] }) },
     isDesktop: true,
     git: {
       branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
