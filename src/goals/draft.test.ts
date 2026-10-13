@@ -4,6 +4,8 @@ import type { State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { parseOutcome } from '../utility/prompts.ts';
 import { goalDraftRequest, localGoalDraft } from './draft.ts';
+import { draftFrom } from './edit.ts';
+import { currentReport, reportHeadline } from './report.ts';
 
 test('parseOutcome reads a task with criteria, a chat, and rejects anything else', () => {
   assert.deepEqual(parseOutcome('```json\n{"kind":"task","outcome":"Dark mode toggle in settings.","criteria":["Toggle switches theme"," ","pnpm test passes","a","b"]}\n```'), {
@@ -55,4 +57,22 @@ test('a drafted goal keeps its similar threads until you dismiss one', () => {
   assert.deepEqual(s.threads.at(-1)!.similar, [{ threadId: 'rl', relation: 'same' }]);
   s = threadsReducer(s, { type: 'similar-dismiss', threadId: id, otherId: 'rl' });
   assert.deepEqual(s.threads.at(-1)!.similar, []);
+});
+
+test('a report counts until you write again; rewording a criterion drops its claim', () => {
+  const state = { ...initialThreads(), queue: [], spaceId: 'latitude', views: {} } as unknown as State;
+  let s = threadsReducer(state, { type: 'create', title: 'add retry-after', provider: 'claude', project: null, isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = threadsReducer(s, { type: 'goal-drafted', threadId: id, outcome: '429s carry Retry-After', criteria: ['Header present', 'Tests pass'] });
+  const [first] = s.threads.at(-1)!.criteria!;
+  s = threadsReducer(s, { type: 'criterion-claim', threadId: id, criterionId: first.id, evidence: 'curl shows it', by: 'claude' });
+  s = threadsReducer(s, { type: 'report', threadId: id, report: { by: 'claude', decisions: [], left: ['Tests'] } });
+  const idle = (t: (typeof s.threads)[number]) => ({ ...t, live: { ...t.live!, isWorking: false } });
+  assert.equal(reportHeadline(idle(s.threads.at(-1)!)), '1 of 2 criteria done');
+  s = threadsReducer({ ...s, now: s.now + 1 }, { type: 'send', threadId: id, text: 'also log it', reason: '' });
+  assert.equal(currentReport(idle(s.threads.at(-1)!)), null, 'your newer message starts a turn the report no longer describes');
+  const draft = draftFrom(s.threads.at(-1)!);
+  draft.criteria[0].text = 'Header present on every 429';
+  s = threadsReducer(s, { type: 'edit-goal', threadId: id, draft });
+  assert.equal(s.threads.at(-1)!.criteria![0].claim, undefined);
 });

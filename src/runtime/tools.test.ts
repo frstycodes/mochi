@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
+import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '../layout/tree.ts';
 import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
 import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
@@ -874,4 +875,18 @@ test('Read only and Changes block every settings suggestion and delete with no w
     assert.equal(t.state().queue.some((q) => q.tool || (q.settings && q.settings.by !== 'harness')), false);
     assert.deepEqual(t.settings.calls, [], 'not even a read');
   }
+});
+
+test('claim_criterion records evidence; report and get_report give the turn as data', async () => {
+  const t = setup();
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }] } });
+  const [criterion] = t.thread('rl').criteria!;
+  assert.match(await t.err('claim_criterion', { criterionId: 'nope', evidence: 'x' }), /get_goal lists them/);
+  await t.ok('claim_criterion', { criterionId: criterion.id, evidence: 'curl -i shows Retry-After: 30' });
+  assert.deepEqual(t.thread('rl').criteria![0].claim, { evidence: 'curl -i shows Retry-After: 30', at: t.state().now, by: 'claude' });
+  await t.ok('report_turn', { decisions: ['Kept the old 429 body'], left: [], question: 'Switch the 429 body to JSON?' });
+  const r = await t.ok('get_report', {}, 'adm');
+  assert.equal(r.threadId, 'adm');
+  const mine = await t.ok('get_report');
+  assert.deepEqual([mine.criteria[0].claimed, mine.report.question, mine.report.decisions], ['curl -i shows Retry-After: 30', 'Switch the 429 body to JSON?', ['Kept the old 429 body']]);
 });

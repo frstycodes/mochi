@@ -30,6 +30,7 @@ import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
+import { ReportCard } from './goals/ReportCard';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
@@ -87,6 +88,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
                   <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
+              <ReportCard thread={thread} />
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
           </ConversationContent>

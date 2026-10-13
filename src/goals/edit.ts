@@ -94,7 +94,7 @@ export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Au
   };
 }
 
-/** Pushes one diff line per criterion added, reworded or removed; ids survive rewording so claims and evidence stay attached. */
+/** Pushes one diff line per criterion added, reworded or removed; ids survive rewording. */
 function criteriaFrom(thread: Thread, draft: GoalDraft, n: number, diff: string[]): Criterion[] {
   const old = thread.criteria ?? [];
   const next: Criterion[] = [];
@@ -104,7 +104,8 @@ function criteriaFrom(thread: Thread, draft: GoalDraft, n: number, diff: string[
     const before = old.find((o) => o.id === c.id);
     if (!before) diff.push(`+ Done when: ${text}`);
     else if (before.text !== text) diff.push(`~ Done when: "${before.text}" → "${text}"`);
-    next.push(before ? { ...before, text } : { id: `${thread.id}-c${n}-${i}`, text });
+    // A reworded criterion is a different promise: its old claim no longer counts.
+    next.push(before ? (before.text === text ? before : { id: before.id, text }) : { id: `${thread.id}-c${n}-${i}`, text });
   });
   for (const o of old) if (!next.some((c) => c.id === o.id)) diff.push(`− Done when: ${o.text}`);
   return next;
