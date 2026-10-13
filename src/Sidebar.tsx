@@ -510,7 +510,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
           <span className={cn('ml-auto shrink-0 tabular group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
         </span>
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
-        {/* overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line. */}
+        {/* overflow-visible: the button truncates its last line, which would clip the PR stack's focus ring. */}
         <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
           <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>

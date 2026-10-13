@@ -1,4 +1,5 @@
-import type { ComponentProps, ReactElement, ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactElement, type ReactNode, type RefObject } from 'react';
+import { useReducedMotionConfig } from 'motion/react';
 import { ArrowRight, ArrowUpRight, BranchUp, ClockCircle, CloseCircle, Edit, Eye, MessageEdit, TickCircle, UserTick, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -36,20 +37,13 @@ export function ThreadPrHoverCard({ thread, pr, ...props }: Placement & { thread
   return <RefHoverCard item={useThreadPr(thread, pr)} {...props} />;
 }
 
-/** Every ref in `items` as one compact list, for a stack that shows only some of them. */
-export function RefListHoverCard({ items, title, side, align, children }: Placement & { items: RefItem[]; title: string; children: ReactElement }) {
+/** Several refs as one card that pages vertically, one preview per page (native scroll snap); `index` is the page to show. */
+export function RefCarouselHoverCard({ items, index, side, align, children }: Placement & { items: RefItem[]; index: number; children: ReactElement }) {
   return (
     <HoverCard openDelay={OPEN_DELAY} closeDelay={CLOSE_DELAY}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent side={side} align={align} collisionPadding={8} className={cn('flex w-80 flex-col gap-1 p-1.5', REDUCED_MOTION)}>
-        <p className="px-1.5 pt-0.5 type-caption text-subtle-foreground">{title}</p>
-        <ul className="flex flex-col gap-0.5">
-          {items.map((item) => (
-            <li key={item.label}>
-              <RefListRow item={item} />
-            </li>
-          ))}
-        </ul>
+      <HoverCardContent side={side} align={align} collisionPadding={8} className={cn('w-80 p-0', REDUCED_MOTION)}>
+        <RefCarousel items={items} index={index} />
       </HoverCardContent>
     </HoverCard>
   );
@@ -78,7 +72,7 @@ function RefPreview({ item }: { item: RefItem }) {
       </div>
       {!!state && <RefFacts state={state} />}
       {!!url && (
-        <Button variant="outline" size="sm" className="self-start" onClick={() => window.open(url, '_blank', 'noreferrer')}>
+        <Button variant="outline" size="sm" className="mt-auto self-start" onClick={() => window.open(url, '_blank', 'noreferrer')}>
           Open on GitHub
           <ArrowUpRight data-icon="inline-end" />
         </Button>
@@ -86,6 +80,80 @@ function RefPreview({ item }: { item: RefItem }) {
     </>
   );
 }
+
+function RefCarousel({ items, index }: { items: RefItem[]; index: number }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const hasScrolled = useRef(false);
+  const [page, setPage] = useState(index);
+  const reduceMotion = useReducedMotionConfig();
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    // Opening lands on the page at once; moving to another disc while open pages there.
+    el.scrollTo({ top: index * el.clientHeight, behavior: hasScrolled.current && !reduceMotion ? 'smooth' : 'instant' });
+    hasScrolled.current = true;
+  }, [index, reduceMotion]);
+  useWheelPaging(scroller, !reduceMotion);
+  return (
+    <div className="relative">
+      <div
+        ref={scroller}
+        onScroll={(e) => setPage(Math.round(e.currentTarget.scrollTop / e.currentTarget.clientHeight))}
+        style={{ scrollbarWidth: 'none' }}
+        className="h-61 snap-y snap-mandatory overflow-y-auto overscroll-contain"
+      >
+        {items.map((item, i) => (
+          <div key={item.label} role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${items.length}`} className="flex h-full snap-start snap-always flex-col gap-3 p-3 pr-6">
+            <RefPreview item={item} />
+          </div>
+        ))}
+      </div>
+      <div aria-hidden className="absolute top-1/2 right-2.5 flex -translate-y-1/2 flex-col gap-1">
+        {items.map((item, i) => (
+          <span key={item.label} className={cn('size-1 rounded-full transition-colors', i === page ? 'bg-foreground' : 'bg-muted-foreground/40')} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One page per wheel gesture. Chromium snaps a mouse-wheel tick (100px) to the nearest page, which is the one it left, so a
+ * plain snap scroller never pages with a mouse; trackpad momentum keeps the gesture alive until it stops, so a fling is one page.
+ * On the element, not `window`, so no other wheel in the app waits on it.
+ */
+function useWheelPaging(scroller: RefObject<HTMLDivElement | null>, isSmooth: boolean) {
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    let distance = 0;
+    let isPaged = false;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      clearTimeout(quiet);
+      quiet = setTimeout(() => {
+        distance = 0;
+        isPaged = false;
+      }, GESTURE_END_MS);
+      if (isPaged) return;
+      distance += e.deltaY;
+      if (Math.abs(distance) < WHEEL_PAGE_PX) return;
+      isPaged = true;
+      const pages = Math.round(el.scrollHeight / el.clientHeight);
+      const next = Math.min(pages - 1, Math.max(0, Math.round(el.scrollTop / el.clientHeight) + Math.sign(distance)));
+      el.scrollTo({ top: next * el.clientHeight, behavior: isSmooth ? 'smooth' : 'instant' });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      clearTimeout(quiet);
+    };
+  }, [scroller, isSmooth]);
+}
+
+const WHEEL_PAGE_PX = 24;
+const GESTURE_END_MS = 200;
 
 function RefFacts({ state }: { state: RefState }) {
   const isPr = state.kind === 'pr';
@@ -150,25 +218,6 @@ function Fact({ icon: Icon, tone, label, children }: { icon: IconComponent; tone
   );
 }
 
-function RefListRow({ item }: { item: RefItem }) {
-  const url = itemUrl(item);
-  const content = (
-    <>
-      <RefIcon item={item} className="size-3.5" />
-      <span className="shrink-0 tabular text-muted-foreground">{item.label}</span>
-      <span className="min-w-0 flex-1 truncate text-foreground">{item.state?.title}</span>
-      <ListStatus state={item.state} />
-    </>
-  );
-  const row = 'flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left type-meta';
-  if (!url) return <div className={row}>{content}</div>;
-  return (
-    <button type="button" onClick={() => window.open(url, '_blank', 'noreferrer')} className={cn(row, 'transition-colors hover:bg-accent')}>
-      {content}
-    </button>
-  );
-}
-
 /** The ref's state icon in its tone; `hasConflicts` adds GitHub's corner mark. */
 export function RefIcon({ item, className }: { item: RefItem; className?: string }) {
   const { state } = item;
@@ -182,20 +231,6 @@ function statusWords(state: RefState | null | undefined) {
   const status = state.isNotPlanned ? 'Not planned' : STATUS_WORDS[state.status];
   return state.status === 'open' && state.hasConflicts ? `${status}, has conflicts` : status;
 }
-
-/** A list row names only the most pressing thing about an open PR, in that thing's colour. */
-function ListStatus({ state }: { state: RefState | null | undefined }) {
-  const flag = state?.status === 'open' ? OPEN_FLAGS.find(([is]) => is(state)) : undefined;
-  if (!flag) return <span className={cn('shrink-0 type-caption', REF_TONE_CLASS[refTone(state)])}>{statusWords(state)}</span>;
-  return <span className={cn('shrink-0 type-caption', flag[2])}>{flag[1]}</span>;
-}
-
-const OPEN_FLAGS: [(state: RefState) => boolean, string, string][] = [
-  [(s) => s.hasConflicts, 'Conflicts', 'text-warning'],
-  [(s) => s.checks === 'fail', 'Checks failing', 'text-destructive'],
-  [(s) => s.review === 'changes', 'Changes requested', 'text-warning'],
-  [(s) => s.review === 'required', 'Review requested', 'text-muted-foreground'],
-];
 
 function itemUrl({ state, githubRef }: RefItem) {
   return state?.url || (githubRef ? refUrl(githubRef) : null);
