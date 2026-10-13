@@ -3,7 +3,6 @@ import { noteCollisions } from './collisions.ts';
 import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
-import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
@@ -11,8 +10,8 @@ import { applySubagent, fromBackground } from './subagents.ts';
 
 /** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
-  // Any word from the agent means it's up.
-  if (state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
+  // Any word from the agent means it's up; its folder being made and set up is main's, not the agent's.
+  if (event.type !== 'worktree' && event.type !== 'setup' && state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
     state = { ...state, threads: mapThread(state.threads, event.threadId, (t) => ({ ...t, live: { ...t.live!, starting: undefined } })) };
   }
   const thread = state.threads.find((t) => t.id === event.threadId);
@@ -24,6 +23,9 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
   switch (event.type) {
     case 'worktree':
       return update((t) => ({ ...t, live: t.live && { ...t.live, cwd: event.path } }));
+    case 'setup':
+      // A failed step waits on you like an approval does; Retry or Skip setup puts it back to running.
+      return update((t) => ({ ...t, setup: event.setup, status: event.setup.status === 'failed' ? 'needs-you' : t.setup?.status === 'failed' && t.status === 'needs-you' ? 'running' : t.status }));
     case 'branch':
       return update((t) => ({ ...t, repo: t.repo && { ...t.repo, branch: event.branch } }));
     case 'session':
@@ -165,7 +167,7 @@ function addScope(state: State, threadId: string, provider: Provider, added: { i
     const step: Step = {
       id: `${thread.id}-s${steps.length}`,
       title: item.title,
-      size: item.size ?? getPrefs().stepSize,
+      size: item.size ?? 1,
       status: item.status === 'pending' ? 'ready' : item.status,
       progress: item.status === 'done' ? 1 : (item.progress ?? 0),
       footprint: item.files ?? [],

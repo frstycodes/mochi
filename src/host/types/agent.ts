@@ -30,6 +30,8 @@ export interface AgentStartOptions {
 export type AgentEvent =
   /** Main made the thread's worktree and runs the agent there. */
   | { threadId: string; type: 'worktree'; path: string }
+  /** Main is preparing the new worktree before the agent's first turn; each event carries the whole setup so far. */
+  | { threadId: string; type: 'setup'; setup: WorktreeSetup }
   /** A project folder thread's agent runs on this branch of the project's checkout. */
   | { threadId: string; type: 'branch'; branch: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
@@ -127,6 +129,34 @@ export interface StartWorkspace {
   base?: string;
   isExisting?: boolean;
 }
+
+/**
+ * A new worktree's preparation (`electron/git/setup.ts`): copy the project's ignored local files, install dependencies, run the
+ * project's setup command. `failed` waits for `setupChoice`; `cancelled` was stopped by an interrupt and the agent never started.
+ */
+export interface WorktreeSetup {
+  status: 'running' | 'failed' | 'ready' | 'skipped' | 'cancelled';
+  /** Wall-clock ms. */
+  startedAt: number;
+  endedAt?: number;
+  steps: SetupStep[];
+}
+
+export interface SetupStep {
+  id: string;
+  /** "Copy .env, .env.local", "Install dependencies with pnpm", "Run setup command". */
+  label: string;
+  /** The command as it ran, for commands. */
+  command?: string;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+  startedAt?: number;
+  endedAt?: number;
+  /** Tail-capped stdout and stderr, interleaved; for a failed copy, the error. */
+  output?: string;
+  exitCode?: number;
+}
+
+export type SetupChoice = 'retry' | 'skip';
 
 /** Base64 without the `data:` prefix. */
 export interface AgentImage {
@@ -232,7 +262,10 @@ export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
   /** `skills`: as `AgentStartOptions.skills`, for this message. */
   send(threadId: string, text: string, images?: AgentImage[], skills?: string[]): Promise<void>;
+  /** Stops a turn; during worktree setup, stops the setup and the agent doesn't start. */
   interrupt(threadId: string): Promise<void>;
+  /** After a failed setup step: run the failed step again, or start the agent without the rest of the setup. */
+  setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
@@ -267,6 +300,7 @@ export const agentMethods = {
   start: 'invoke',
   send: 'invoke',
   interrupt: 'invoke',
+  setupChoice: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
   onEvent: 'event',

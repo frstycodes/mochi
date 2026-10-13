@@ -93,6 +93,10 @@ Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name
 | Branch prefix | text | `harness/` | now | — |
 | Open pull requests as drafts | switch | off | now | electron/ipc/git.ts:74 |
 | Diffs | Unified / Split (Changes tab and work log) | Unified | now | src/pane/ChangesTab.tsx:36 |
+| Prepare worktrees before starting | switch | on | done | electron/git/setup.ts (RUNTIME.md › Worktree setup) |
+| Ignored files to copy | text, gitignore patterns, comma separated; the project's `.worktreeinclude` adds to them | `.env*` | done | electron/git/setup.ts |
+| Setup command, per project folder | one text row per project your threads use; empty runs the project's `.mochi/setup.sh` | — | done | `setupCommands` in agent settings |
+| Remove settled worktrees | Never / After 1, 7, 30 days | After 7 days | done | src/git/useWorktreeManager.ts |
 
 ### Terminal
 | Setting | Control | Default | Status | Today |

@@ -22,6 +22,7 @@ export const agent: AgentHost = {
   interrupt: endTurn,
   stop: endTurn,
   async resolve() {},
+  async setupChoice() {},
   onEvent(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);

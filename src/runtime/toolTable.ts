@@ -93,7 +93,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description: "Add a step to a thread's plan. Plan changes don't change the goal's version.",
-    shape: { title: z.string(), size: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe('1 small, 2 medium, 3 large'), threadId },
+    shape: { title: z.string(), threadId },
   },
   edit_goal: {
     tier: 'change',

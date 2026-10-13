@@ -6,7 +6,7 @@ import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
-import { progressAt } from '../progress.ts';
+import { goalProgress } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
@@ -581,7 +581,7 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   const source = state.threads.find((t) => t.id === action.threadId);
   if (!source) return state;
   const now = state.now;
-  const isGoalDone = source.status === 'review' || progressAt(source, now, true).pct >= 1;
+  const isGoalDone = goalProgress(source, now).phase === 'ready';
   const hasOpenPr = source.prs.some((p) => p.state === 'open');
   const short = action.prompt.length > 40 ? `${action.prompt.slice(0, 39)}…` : action.prompt;
   let next: State = state;
