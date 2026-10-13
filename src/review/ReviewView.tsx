@@ -20,6 +20,7 @@ import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
+import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
 export function ReviewView() {
@@ -103,11 +104,13 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
             ) : (
               <ul className="flex flex-col gap-1">
                 {thread.prs.map((pr) => (
-                  <li key={pr.number} className="flex min-w-0 items-center gap-2">
-                    <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
-                    <span className="min-w-0 truncate">{pr.title}</span>
-                    <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
-                  </li>
+                  <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr} align="start">
+                    <li tabIndex={0} className="flex min-w-0 items-center gap-2">
+                      <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
+                      <span className="min-w-0 truncate">{pr.title}</span>
+                      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
+                    </li>
+                  </ThreadPrHoverCard>
                 ))}
               </ul>
             )}

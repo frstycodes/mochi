@@ -10,6 +10,7 @@ import { usePorts } from '../terminal/ports';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { useRecentFiles } from './recentFiles';
 import { PANE_TABS, type PaneTabProps } from './tabs';
+import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 // A visual tab opens from its chat visual, never empty from here.
 const OPENABLE = PANE_TAB_KINDS.filter((k) => k !== 'new' && k !== 'visual');
@@ -46,17 +47,19 @@ export function NewTab({ thread }: PaneTabProps) {
           <section className="flex flex-col gap-1">
             <h3 className="type-caption text-subtle-foreground">Pull requests</h3>
             {thread.prs.map((pr) => (
-              <Item key={pr.number} size="sm" className="px-2">
-                <ItemMedia>
-                  <GitPullRequestIcon className="size-4 text-muted-foreground" />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle className="font-normal">{pr.title}</ItemTitle>
-                  <ItemDescription>
-                    #{pr.number} · {pr.state}
-                  </ItemDescription>
-                </ItemContent>
-              </Item>
+              <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr} side="left" align="start">
+                <Item size="sm" tabIndex={0} className="px-2">
+                  <ItemMedia>
+                    <GitPullRequestIcon className="size-4 text-muted-foreground" />
+                  </ItemMedia>
+                  <ItemContent>
+                    <ItemTitle className="font-normal">{pr.title}</ItemTitle>
+                    <ItemDescription>
+                      #{pr.number} · {pr.state}
+                    </ItemDescription>
+                  </ItemContent>
+                </Item>
+              </ThreadPrHoverCard>
             ))}
           </section>
         )}

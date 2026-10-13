@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Eye, EyeOff } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -13,16 +13,22 @@ const PEEK_OPEN_MS = 500;
 const PEEK_CLOSE_MS = 240;
 const TAIL = 3;
 const THUMB_SCALE = 1 / 3;
+// A part of the row with its own hover card (the PR stack) keeps the peek shut, so the two cards never stack.
+const NESTED_PREVIEW = '[data-nested-preview]';
+const NESTED_PREVIEW_ACTIVE = `${NESTED_PREVIEW}:hover, ${NESTED_PREVIEW}:focus-within`;
 
 /** Hover a pinned thread: its transcript tail and preview without switching to it, plus the watch toggle. */
 export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread: Thread; pinNumber: number; isDisabled: boolean; children: ReactNode }) {
   const { state, dispatch } = useHarness();
   const isWatched = state.watched.includes(thread.id);
   const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
+  const [isOpen, setOpen] = useState(false);
 
   return (
-    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={isDisabled ? false : undefined}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={!isDisabled && isOpen} onOpenChange={(open) => setOpen(open && !document.querySelector(NESTED_PREVIEW_ACTIVE))}>
+      <HoverCardTrigger asChild onPointerOver={(e) => e.target instanceof Element && e.target.closest(NESTED_PREVIEW) && setOpen(false)}>
+        {children}
+      </HoverCardTrigger>
       <HoverCardContent side="right" align="start" sideOffset={12} className="flex w-80 flex-col gap-2.5 p-3">
         <div className="flex items-center gap-2">
           <ThreadStatusIcon status={thread.status} />
