@@ -2,12 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useReducer, useRef, 
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
-import type { AgentEvent } from '../host/types/agent.ts';
+import { NO_AGENT_PROCESS, type AgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
-import { agentCalls, type AgentCall } from '../runtime/live.ts';
+import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { runTool } from '../runtime/tools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
 import { applyUndo, type ToolUndo } from '../runtime/undo.ts';
@@ -81,7 +81,15 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     if (action.type === 'delete') for (const id of action.threadIds) host.schedule.remove(id).catch((error: unknown) => console.error('Removing the schedule failed', error));
     for (const call of calls) {
       // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
-      callAgent(call).catch((error: unknown) => apply({ type: 'agent', event: failed(call.threadId, error) }));
+      callAgent(call).catch((error: unknown) => {
+        const thread = call.method === 'send' && isLostProcess(error) ? latest.current.threads.find((t) => t.id === call.threadId) : undefined;
+        const retry = thread && call.method === 'send' ? resumeAfterLostProcess(thread, call) : [];
+        if (retry.length === 0) return apply({ type: 'agent', event: failed(call.threadId, error) });
+        for (const again of retry) {
+          if (again.method === 'start') applyNow({ type: 'agent-starting', threadId: again.threadId, provider: again.options.provider });
+          callAgent(again).catch((e: unknown) => apply({ type: 'agent', event: failed(again.threadId, e) }));
+        }
+      });
     }
     applyNow(action);
     // After the action: a new thread only exists once it has applied.
@@ -149,6 +157,10 @@ function callAgent(call: AgentCall) {
   const next = pending.then(run);
   pending = next.catch(() => {});
   return next;
+}
+
+function isLostProcess(error: unknown) {
+  return error instanceof Error && error.message.includes(NO_AGENT_PROCESS);
 }
 
 function failed(threadId: string, error: unknown): AgentEvent {

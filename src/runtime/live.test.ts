@@ -5,7 +5,7 @@ import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { applyAgentEvent } from './apply.ts';
 import { agentOptions, initialControls } from './controls.ts';
-import { agentCalls, CONTINUE_PROMPT, scheduledStart } from './live.ts';
+import { agentCalls, CONTINUE_PROMPT, resumeAfterLostProcess, scheduledStart } from './live.ts';
 import { isUnstarted, type WorkspaceDraft } from '../git/workspace.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { threadCwd } from '../host/cwd.ts';
@@ -156,4 +156,31 @@ test('adding a source tells a live agent in your name; a demo thread only logs i
   const demo = run(base(), { type: 'source-add', threadId: 'adm', source: { kind: 'file', label: 'docs/x.md' } }).threads.find((t) => t.id === 'adm')!;
   assert.deepEqual(demo.activity.at(-1), { at: base().now, who: 'harness', kind: 'event', text: 'Added source docs/x.md' });
   assert.deepEqual(calls(base(), { type: 'source-add', threadId: 'adm', source: { kind: 'file', label: 'docs/x.md' } }), []);
+});
+
+test('settling stops the agent once; after reactivating, the next message restarts it with resume instead of sending to a gone process', () => {
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
+  let s = run(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-1' });
+
+  assert.deepEqual(calls(s, { type: 'settle', threadId: id }).filter((c) => c.threadId === id), [{ method: 'stop', threadId: id }]);
+  s = run(s, { type: 'settle', threadId: id });
+  assert.equal(s.threads.find((t) => t.id === id)!.live?.isDetached, true);
+  assert.deepEqual(calls(s, { type: 'settle', threadId: id }), [], 'settling again never stops a process that is already gone');
+
+  s = run(s, { type: 'unsettle', threadId: id });
+  const [restart] = calls(s, { type: 'send', threadId: id, text: 'and add a test', drift: 'on-goal', reason: '' });
+  assert.equal(restart.method, 'start');
+  assert.equal(restart.method === 'start' && restart.options.resume, 'sess-1');
+  assert.equal(restart.method === 'start' && restart.options.prompt, 'and add a test');
+});
+
+test('a send that finds no agent process restarts the agent with resume, carrying the same message', () => {
+  let s = run(base(), { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-2' });
+  const [again] = resumeAfterLostProcess(s.threads.find((t) => t.id === id)!, { method: 'send', threadId: id, text: 'still there?' });
+  assert.equal(again.method === 'start' && again.options.resume, 'sess-2');
+  assert.equal(again.method === 'start' && again.options.prompt, 'still there?');
 });

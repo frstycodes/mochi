@@ -122,7 +122,8 @@ function reduce(state: State, action: Action): State {
     case 'settle':
       return {
         ...state,
-        threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: 'settled', settledAt: state.now })),
+        // Settling stops the agent process; the next message after reactivating starts it again with `resume`.
+        threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true } }) })),
         queue: state.queue.filter((q) => q.threadId !== action.threadId),
       };
     case 'unsettle':

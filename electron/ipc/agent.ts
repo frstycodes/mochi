@@ -2,7 +2,7 @@ import { mkdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { app } from 'electron';
-import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentReviewEvent, AgentReviewRequest, AgentRunOptions, StartWorkspace } from '../../src/host/types/agent.ts';
+import { NO_AGENT_PROCESS, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentDecision, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
@@ -80,16 +80,16 @@ export const agent = {
     string(text, 'text', 100_000);
     images(pictures);
     skillNames(skills);
+    if (!hasClaudeSession(threadId as string) && !codex.owns(threadId as string)) throw new Error(NO_AGENT_PROCESS);
     markBusy(threadId as string);
     if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined);
-    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined);
-    return runtime();
+    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined);
   },
   async interrupt(_sender, threadId) {
     string(threadId, 'threadId', 256);
     if (hasClaudeSession(threadId as string)) return interruptClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.interrupt(threadId as string);
-    return runtime();
+    // Nothing running for this thread (already stopped, or never started this launch): nothing to interrupt.
   },
   async resolve(_sender, requestId, decision) {
     return resolveRequest(requestId, decision);
@@ -99,14 +99,14 @@ export const agent = {
     markIdle(threadId as string);
     if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.stop(threadId as string);
-    return runtime();
+    // Stopping a thread with no agent process is a no-op, so settling twice or settling then deleting never errors.
   },
   async stopSubagent(_sender, threadId, subagentId) {
     string(threadId, 'threadId', 256);
     string(subagentId, 'subagentId', 256);
     if (hasClaudeSession(threadId as string)) return stopClaudeSubagent(threadId as string, subagentId as string);
     if (codex.owns(threadId as string)) return codex.stopSubagent(threadId as string, subagentId as string);
-    return runtime();
+    // Its parent's process is gone, so the subagent already stopped with it.
   },
   async warm(_sender, spaceId) {
     return warmClaude(string(spaceId, 'spaceId', 256));

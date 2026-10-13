@@ -269,3 +269,6 @@ export const agentMethods = {
   onToolCall: 'event',
   toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;
+
+/** What main throws for a send to a thread with no agent process this launch; the renderer restarts it with `resume` instead. */
+export const NO_AGENT_PROCESS = 'This thread has no running agent process';
