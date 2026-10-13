@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { argumentSlots, parseSlash, resolveToken, slashItems, slashMatches, slotPlaceholder } from './slash.ts';
+import { argumentSlots, moveToFront, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slotPlaceholder } from './slash.ts';
 
 test('parses /side with its question, keeping line breaks', () => {
   assert.deepEqual(parseSlash('/side why Redis?')?.arg, 'why Redis?');
@@ -34,7 +34,10 @@ test('lists Mochi commands first and leaves a shared name to Mochi', () => {
 });
 
 test('menu filters while the name is typed: prefix, then substring, then in-order letters', () => {
-  const names = (text: string) => slashMatches(text, items).map((c) => c.name);
+  const names = (text: string) => {
+    const range = slashQueryAt(text);
+    return range ? slashMatches(range.query, items).map((c) => c.name) : [];
+  };
   assert.deepEqual(names('/'), ['side', 'fix-lint', 'review', 'frontend-design:audit']);
   assert.deepEqual(names('/si'), ['side', 'frontend-design:audit']);
   assert.deepEqual(names('/fi'), ['fix-lint', 'frontend-design:audit']);
@@ -44,6 +47,28 @@ test('menu filters while the name is typed: prefix, then substring, then in-orde
   assert.deepEqual(names('/zq'), []);
   assert.deepEqual(names('/side '), []);
   assert.deepEqual(names('side'), []);
+});
+
+test('a / opens the menu mid-message after a space or at a line start, not inside a word or path', () => {
+  assert.deepEqual(slashQueryAt('fix this /rev'), { start: 9, end: 13, query: 'rev' });
+  assert.deepEqual(slashQueryAt('first line\n/'), { start: 11, end: 12, query: '' });
+  assert.deepEqual(slashQueryAt('fix /rev later', 8), { start: 4, end: 8, query: 'rev' });
+  assert.equal(slashQueryAt('fix /rev later', 6), null, 'caret inside the word');
+  assert.equal(slashQueryAt('and/or'), null);
+  assert.equal(slashQueryAt('see /usr/bin'), null);
+  assert.equal(slashQueryAt('fix /rev '), null, 'a space closes it');
+});
+
+test('picking moves the command to the front and keeps the rest as its arguments', () => {
+  const review = items.find((i) => i.name === 'review')!;
+  const pick = (text: string, caret = text.length) => moveToFront(text, slashQueryAt(text, caret)!, review, items);
+  assert.equal(pick('/re'), '/review ');
+  assert.equal(pick('check the auth flow /re'), '/review check the auth flow');
+  assert.equal(pick('check /re the auth flow', 9), '/review check the auth flow');
+  assert.equal(pick('line one\n/re\nline two', 12), '/review line one\nline two');
+  assert.equal(pick('/fix-lint a.ts and /rev'), '/review a.ts and', 'a command already at the start is replaced');
+  assert.equal(pick('/re rest', 3), '/review rest', 'editing the leading token keeps its arguments');
+  assert.equal(resolveToken(pick('please /re'), items)?.item.name, 'review');
 });
 
 test('resolves only an exact known name at the very start', () => {

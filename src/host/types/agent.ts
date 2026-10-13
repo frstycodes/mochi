@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, Provider, Size, StepStatus, Thread, WebLink } from '../../model.ts';
+import type { AgentInfo, McpCall, Provider, Size, StepStatus, Thread, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface AgentStartOptions {
@@ -13,6 +13,8 @@ export interface AgentStartOptions {
   prompt: string;
   /** Sent with the first prompt. */
   images?: AgentImage[];
+  /** Skills the first prompt asks for by name, for harnesses that attach a skill to the message (Codex) rather than load it by name. */
+  skills?: string[];
   model?: string;
   effort?: string;
   permissionMode?: string;
@@ -32,8 +34,12 @@ export type AgentEvent =
   | { threadId: string; type: 'info'; info: AgentInfo }
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
   | { threadId: string; type: 'reasoning'; text: string }
-  /** `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills the query in late). */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number; links?: WebLink[] }
+  /**
+   * `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills
+   * the query in late). `skill`: the call loaded this skill (Claude's Skill tool, a skill Codex got with the message). `mcp`: the
+   * call ran this tool of this MCP server.
+   */
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number; links?: WebLink[]; skill?: string; mcp?: McpCall }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
@@ -192,7 +198,8 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  send(threadId: string, text: string, images?: AgentImage[]): Promise<void>;
+  /** `skills`: as `AgentStartOptions.skills`, for this message. */
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[]): Promise<void>;
   interrupt(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;

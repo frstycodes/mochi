@@ -132,7 +132,7 @@ let pending: Promise<unknown> = Promise.resolve();
 function callAgent(call: AgentCall) {
   const run = () => {
     if (call.method === 'start') return host.agent.start(call.threadId, call.options);
-    if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images);
+    if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images, call.skills);
     if (call.method === 'stopSubagent') return host.agent.stopSubagent(call.threadId, call.subagentId);
     return host.agent[call.method](call.threadId);
   };

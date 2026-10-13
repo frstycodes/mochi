@@ -29,17 +29,17 @@ import { profileById } from './profiles';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
 import { GoalEditor } from './goals/GoalEditor';
 import { outcomeOf } from './goals/outcome';
-import { burnSeries, duration, minutesLeft, progressAt } from './progress';
+import { burnSeries, clock, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
-import { summarize, type ToolVerb } from './summary';
+import { summarize, type CountedVerb, type ThreadSummary } from './summary';
 import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon, TooltipIconButton } from './ui';
 import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
 
 const LIST_LIMIT = 3;
 
-const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global, Search: GlobalSearch, Fetch: Global } satisfies Record<ToolVerb, IconComponent>;
-const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser', Search: 'Searched the web', Fetch: 'Read web pages' } satisfies Record<ToolVerb, string>;
+const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global, Search: GlobalSearch, Fetch: Global } satisfies Record<CountedVerb, IconComponent>;
+const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser', Search: 'Searched the web', Fetch: 'Read web pages' } satisfies Record<CountedVerb, string>;
 const SOURCE_ICONS = { link: Link, mcp: Setting, file: Document } satisfies Record<Source['kind'], IconComponent>;
 
 /** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. */
@@ -71,20 +71,27 @@ export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thre
             </LimitedList>
           </Section>
 
-          <Section label="Skills used" empty={thread.skills.length === 0 ? 'No skills loaded' : undefined}>
-            <LimitedList items={thread.skills}>
+          <Section label="Skills used" empty={summary.skills.length === 0 ? 'No skills used yet' : undefined}>
+            <LimitedList items={summary.skills}>
               {(skill) => (
-                <SummaryRow key={skill.name} icon={Note} label={<span className="font-mono type-caption">{skill.name}</span>}>
-                  <span className="tabular type-caption text-subtle-foreground">×{skill.uses}</span>
+                <SummaryRow key={skill.name} icon={Note} label={skill.name} onClick={() => openProfileConfig(thread.spaceId, 'skills', thread.session?.provider ?? thread.providers[0])}>
+                  <span className="tabular type-caption text-subtle-foreground">
+                    ×{skill.uses} · {clock(skill.lastAt)}
+                  </span>
                 </SummaryRow>
               )}
             </LimitedList>
           </Section>
 
-          <Section label={`Tools called · ${summary.toolTotal}`} empty={summary.tools.length === 0 ? 'No tool calls yet' : undefined}>
+          <Section label={`Tools called · ${summary.toolTotal}`} empty={summary.toolTotal === 0 ? 'No tool calls yet' : undefined}>
             {summary.tools.map((t) => (
               <SummaryRow key={t.verb} icon={TOOL_ICONS[t.verb]} label={TOOL_LABELS[t.verb]}>
                 <span className="tabular type-caption text-subtle-foreground">{t.count}</span>
+              </SummaryRow>
+            ))}
+            {summary.servers.map((s) => (
+              <SummaryRow key={s.server} icon={Server} label={<McpServerLabel usage={s} />}>
+                <span className="tabular type-caption text-subtle-foreground">{s.calls}</span>
               </SummaryRow>
             ))}
           </Section>
@@ -96,6 +103,16 @@ export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thre
         </div>
       </ScrollArea>
     </aside>
+  );
+}
+
+/** An MCP server's calls: its name, then the tools it ran, muted. */
+function McpServerLabel({ usage }: { usage: ThreadSummary['servers'][number] }) {
+  return (
+    <span title={usage.tools.join(', ')}>
+      {usage.server}
+      <span className="text-subtle-foreground"> · {usage.tools.join(', ')}</span>
+    </span>
   );
 }
 

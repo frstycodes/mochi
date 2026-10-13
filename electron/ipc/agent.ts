@@ -42,6 +42,14 @@ function images(value: unknown) {
   }
 }
 
+const MAX_SKILLS = 16;
+
+function skillNames(value: unknown) {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length > MAX_SKILLS) throw new TypeError(`skills must be an array of up to ${MAX_SKILLS}`);
+  for (const v of value) string(v, 'skill', 256);
+}
+
 // Threads without a Claude or Codex session run on the renderer's demo adapter.
 const runtime = notImplemented('agent runtime');
 const broadcast = emitAgentEvent;
@@ -64,13 +72,14 @@ export const agent = {
   async start(_sender, threadId, options) {
     return startAgent(threadId, options);
   },
-  async send(_sender, threadId, text, pictures) {
+  async send(_sender, threadId, text, pictures, skills) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
     images(pictures);
+    skillNames(skills);
     markBusy(threadId as string);
     if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined);
-    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined);
+    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined);
     return runtime();
   },
   async interrupt(_sender, threadId) {
@@ -200,6 +209,7 @@ export async function startAgent(threadId: unknown, options: unknown) {
   if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
   if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
   images(o.images);
+  skillNames(o.skills);
   const { workspace, worktree, ...rest } = o;
   const folder = await agentFolder(threadId as string, o.cwd);
   const cwd = await workspaceFolder(threadId as string, folder, startWorkspace(workspace, worktree));
