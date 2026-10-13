@@ -12,7 +12,7 @@
     "test": "node --test 'src/**/*.test.ts' 'electron/**/*.test.ts'",
     "artifact": "pnpm build && node scripts/artifact.mjs",
     "electron:dev": "vp dev --mode electron",
-    "electron:build": "tsc -b && tsc -p electron && vp build --mode electron && electron-builder --mac --dir"
+    "electron:build": "tsc -b && tsc -p electron && vp build --mode electron && node scripts/build-haptic.mjs && electron-builder --mac --dir"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.296",
@@ -108,7 +108,13 @@
     "mac": {
       "target": "dir",
       "icon": "build/icon.icns",
-      "identity": null
+      "identity": null,
+      "extraResources": [
+        {
+          "from": "build/native/haptic",
+          "to": "haptic"
+        }
+      ]
     }
   }
 }
