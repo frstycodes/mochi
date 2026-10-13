@@ -163,13 +163,13 @@ export const git: GitHost = {
     return { base: 'origin/main', conflicts: [] };
   },
   async branches(root) {
-    // One fixture project has uncommitted changes, so the project folder warning and the refused switch can be seen.
-    const isDirty = root.endsWith('latitude');
+    // One fixture project has uncommitted changes, so the project folder warning and the switch dialog can be seen.
+    const changes = root.endsWith('latitude') ? { files: 10, added: 59, removed: 38 } : { files: 0, added: 0, removed: 0 };
     const now = Date.now();
     return {
       current: 'main',
       defaultBranch: 'main',
-      isDirty,
+      changes,
       branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.harness/worktrees/latitude/adm' : undefined })),
     };
   },
@@ -177,6 +177,9 @@ export const git: GitHost = {
     if (!name.trim()) return 'Name the branch';
     if (BAD_REF.test(name)) return `"${name}" isn't a valid branch name`;
     return FIXTURE_BRANCHES.some(([b]) => b === name) ? `A branch named ${name} already exists` : null;
+  },
+  async switchBranch(_root, branch, { changes }) {
+    if (changes === 'bring' && branch === 'feat/api-rate-limits') throw new Error('error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/limits/schema.ts\nPlease commit your changes or stash them before you switch branches.\nAborting');
   },
   async addWorktree(_root, threadId) {
     return `~/.harness/worktrees/demo/${threadId}`;
