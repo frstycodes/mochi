@@ -6,6 +6,8 @@ import { similarity } from './progress';
 import { getPrefs, setPrefs } from './settings/prefs';
 import { useHarness, useSpace, useSpaceThreads } from './store';
 import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
+import { resolveToken, typedSkills } from './chat/slash';
+import { withReferences } from './chat/mentions';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -94,7 +96,8 @@ function NewThread() {
       toast.error(workspace.error);
       return false;
     }
-    const create = { type: 'create', title, provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
+    const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(trimmed, slashItems), provider, typedSkills: typedSkills(trimmed, slashItems) });
+    const create = { type: 'create', title, ...(skills.length > 0 && { prompt, skills }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
     if (run.mode === 'now') {
       handOffComposer(leafId, layoutId);
       return dispatch(create);

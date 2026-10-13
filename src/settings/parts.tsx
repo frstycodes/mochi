@@ -206,3 +206,26 @@ export function SettingsChoice<T extends string>({ id, value, options, onChange,
     </ToggleGroup>
   );
 }
+
+/** A whole number that saves on blur or Enter, clamped to its range. */
+export function NumberInput({ id, value, min, max, step, onCommit }: { id: string; value: number; min: number; max: number; step: number; onCommit: (value: number) => void }) {
+  const commit = (raw: string) => {
+    const next = Math.min(max, Math.max(min, Math.round(Number(raw) || value)));
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <Input
+      id={id}
+      key={value}
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      step={step}
+      defaultValue={value}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      className="w-24 tabular"
+    />
+  );
+}

@@ -32,8 +32,9 @@ test('a plan matches steps by title, starts and completes them, and keeps provid
   assert.equal(thread(s, 'adm').steps.find((x) => x.id === 'ad4')!.status, 'done', 'provided-by link resolved through completeStep');
 });
 
-test('an unknown plan item lands through the scope-add revision flow, after the item it follows', () => {
+test('an unknown plan item lands as a plan step, no revision, after the item it follows', () => {
   let s = base();
+  const before = thread(s, 'adm').revisions;
   const items = titles(s, 'adm').map((title) => ({ title, status: 'pending' as const }));
   items.splice(1, 0, { title: 'Index api_usage_daily by key', status: 'pending' as const });
   s = applyAgentEvent(s, { threadId: 'adm', type: 'plan', items });
@@ -41,8 +42,8 @@ test('an unknown plan item lands through the scope-add revision flow, after the 
   const added = adm.steps[1];
   assert.equal(added.title, 'Index api_usage_daily by key');
   assert.deepEqual([added.addedBy, added.size, added.status, added.revision], ['codex', 2, 'ready', adm.revisions.length]);
-  assert.equal(adm.revisions.at(-1)!.by, 'codex');
-  assert.equal(adm.activity.at(-1)!.text, `Goal v${adm.revisions.length}: +1 step`);
+  assert.equal(adm.revisions, before);
+  assert.equal(adm.activity.at(-1)!.text, 'Plan: Codex added "Index api_usage_daily by key"');
 });
 
 test('a step the agent drops is marked dropped; steps you added stay', () => {
@@ -142,7 +143,7 @@ test('the demo adapter adds rl scope at the scripted minute', () => {
     ['Return RateLimit-* headers', 1, 'claude'],
     ['Stricter limits for /search', 2, 'claude'],
   ]);
-  assert.equal(rl.revisions.at(-1)!.label, 'Claude found 2 more steps');
+  assert.equal(rl.activity.findLast((e) => e.text.startsWith('Plan:'))!.text, 'Plan: Claude found 2 more steps');
   s = tick(s, 5);
   assert.equal(thread(s, 'rl').steps.length, rl.steps.length, 'fires once');
 });

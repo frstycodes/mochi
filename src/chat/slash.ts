@@ -3,14 +3,18 @@ import type { AgentCommand, Provider } from '../model.ts';
 /** Commands Mochi runs itself from the thread composer. Anything else starting with `/` goes to the agent as typed. */
 export const SLASH_COMMANDS = [{ name: 'side', argumentHint: '<question>', description: 'Ask in side chat, with this thread as context' }] as const;
 
-/** One row of the `/` menu: Mochi's own command or the harness's skill or command. */
-export type SlashItem = AgentCommand & { source: 'mochi' | Provider };
+/**
+ * One row of the `/` menu: Mochi's own command or the harness's skill or command. A skill works anywhere in the message
+ * (its name goes to the agent separately); a command runs only when it opens the message.
+ */
+export type SlashItem = AgentCommand & { source: 'mochi' | Provider; isSkill: boolean };
 
-/** Mochi's commands first, then the harness's, a name the harness shares with Mochi left to Mochi. */
-export function slashItems(commands: AgentCommand[], provider: Provider): SlashItem[] {
-  const own = SLASH_COMMANDS.map((c) => ({ ...c, source: 'mochi' as const }));
+/** Mochi's commands first, then the harness's, a name the harness shares with Mochi left to Mochi. `skills` unset: all are skills. */
+export function slashItems(commands: AgentCommand[], provider: Provider, skills?: string[]): SlashItem[] {
+  const own = SLASH_COMMANDS.map((c) => ({ ...c, source: 'mochi' as const, isSkill: false }));
   const taken = new Set<string>(own.map((c) => c.name));
-  return [...own, ...commands.filter((c) => !taken.has(c.name)).map((c) => ({ ...c, source: provider }))];
+  const isSkill = (name: string) => !skills || skills.includes(name);
+  return [...own, ...commands.filter((c) => !taken.has(c.name)).map((c) => ({ ...c, source: provider, isSkill: isSkill(c.name) }))];
 }
 
 /** `/side why redis?` → `{ command, arg: 'why redis?' }`; plain text or a command Mochi doesn't own → null. */
@@ -37,17 +41,11 @@ export function slashMatches(query: string, items: SlashItem[]): SlashItem[] {
     .map((m) => m.item);
 }
 
-/**
- * The text once `item` is picked for the `/query` at `range`: the command moves to the very start (the harness only runs one
- * there) and the rest of your text becomes its arguments. A command already at the start is replaced.
- */
-export function moveToFront(text: string, range: { start: number; end: number }, item: SlashItem, items: SlashItem[]) {
-  const existing = range.start > 0 ? resolveToken(text, items) : null;
-  const before = text.slice(existing?.end ?? 0, range.start).replace(/[ \t]+$/, '');
-  // A token on a line of its own takes its line break with it.
-  const after = text.slice(range.end).replace(before.endsWith('\n') ? /^[ \t]*\n?/ : /^[ \t]+/, '');
-  const seam = before && after && !before.endsWith('\n') && !after.startsWith('\n') ? ' ' : '';
-  return `/${item.name} ${`${before}${seam}${after}`.trimStart()}`;
+/** The text once `item` is picked for the `/query` at `range`: the name goes exactly where it was typed, the rest untouched. */
+export function insertToken(text: string, range: { start: number; end: number }, item: SlashItem) {
+  const after = text.slice(range.end);
+  const token = `/${item.name}${/^\s/.test(after) ? '' : ' '}`;
+  return { text: `${text.slice(0, range.start)}${token}${after}`, caret: range.start + token.length };
 }
 
 function fuzzyRank(name: string, query: string) {
@@ -59,6 +57,19 @@ function fuzzyRank(name: string, query: string) {
     if (at === 0) return null;
   }
   return 2;
+}
+
+/** Every known `/name` in the text, at its start or after whitespace, in order: what the composer colours. */
+export function slashTokens(text: string, items: SlashItem[]) {
+  return [...text.matchAll(/(?<=^|\s)\/(\S+)/g)].flatMap((m) => {
+    const item = items.find((i) => i.name === m[1]);
+    return item ? [{ item, start: m.index, end: m.index + m[0].length }] : [];
+  });
+}
+
+/** The skills a message names after its start, for the agent to load: a leading one the harness runs itself. */
+export function typedSkills(text: string, items: SlashItem[]) {
+  return [...new Set(slashTokens(text, items).flatMap((t) => (t.start > 0 && t.item.isSkill ? [t.item.name] : [])))];
 }
 
 /** The known `/name` that opens the text, with what follows it; an unknown name or none → null. */

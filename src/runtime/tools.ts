@@ -2,14 +2,17 @@ import { z } from 'zod';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type StepStatus, type Subagent, type Thread } from '../model.ts';
+import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
+import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
-import { AGENT_SETTING_KEYS, AGENT_SETTINGS, type AgentSettingKey, optionLabel, settingPatch, settingValue, THREAD_MODELS } from '../settings/settingOptions.ts';
+import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
+import { AGENT_CONTROL, THREAD_MODELS } from '../settings/settingOptions.ts';
 import { AGENT_CONTROLS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { BROWSER_TOOLS } from './browserTools.ts';
+import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { defaultModelOf, effortRank, modelTier } from './models.ts';
 import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type Tier, type ToolName } from './toolTable.ts';
@@ -20,7 +23,7 @@ export interface ToolEnv {
   getState: () => State;
   /** Applies `action`; `getState` returns the state after it straight away. */
   dispatch: (action: Action) => void;
-  /** Mochi's prefs: the agent-control level, and the settings `update_setting` changes. */
+  /** Mochi's prefs: the agent-control level, and what `get_settings` reads. */
   prefs: { get: () => Prefs; set: (patch: Partial<Prefs>) => void };
   /** A toast for a change; `onUndo` set when it can be undone. */
   toast: (text: string, onUndo?: () => void) => void;
@@ -34,6 +37,15 @@ export interface ToolEnv {
   cwdOf: (thread: Thread) => string | null | undefined;
   /** The models `provider` offers the profile's account; empty when they couldn't be read. */
   models: (provider: Provider, spaceId: string) => Promise<AgentModel[]>;
+  /** Profiles (`src/profiles.ts`); removing one leaves its accounts and browser data on disk. */
+  profiles: { list: () => Space[]; update: (id: string, patch: Partial<Pick<Space, 'name' | 'icon'>>) => void; remove: (id: string) => void };
+  /** The app theme (next-themes' stored choice), which `get_settings` reads. */
+  theme: () => string;
+  /**
+   * The settings tools' slice of `host.settings`: reads, and the delete card's config write. Nothing that creates, signs
+   * in or stores a credential, and nothing that sets a setting: only the user does that, on the widget.
+   */
+  settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   isDesktop: boolean;
   now?: () => number;
 }
@@ -48,6 +60,8 @@ export interface ToolContext<A = Record<string, unknown>> {
   confirm: (approval: Approval) => Promise<string[]>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
+  /** A config write `ask` previewed: `run` applies exactly these changes, refused if a file changed since (`befores`). */
+  write?: { spaceId: string; changes: ConfigChange[]; befores: Record<string, string> };
 }
 
 /** The widget's text says exactly what happens; `options` are checkboxes, off by default, whose ids come back when approved. */
@@ -57,12 +71,12 @@ export interface Approval {
   options?: { id: string; label: string }[];
   /** Shown whole on the widget, like a script about to run. */
   code?: string;
-  /** A settings widget: the pref and the value it would get. */
-  setting?: { id: string; value: string };
   /** A delete: the widget's primary is a red Delete. */
   isDestructive?: boolean;
   /** The record line when the user says no, like "Kept \"Fix e2e\"". */
   denied?: string;
+  edits?: FileEdit[];
+  notes?: string[];
 }
 
 export interface Outcome {
@@ -76,12 +90,12 @@ export interface Outcome {
   undo?: () => void;
 }
 
-type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
+export type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
 
 export interface ToolSpec<K extends ToolName> {
   run: (ctx: ToolContext<Args<K>>, options: string[]) => Outcome | Promise<Outcome>;
   /** Tools in an asking tier: what the widget says. */
-  ask?: (ctx: ToolContext<Args<K>>) => Approval;
+  ask?: (ctx: ToolContext<Args<K>>) => Approval | Promise<Approval>;
 }
 
 type Specs = { [K in ToolName]: ToolSpec<K> };
@@ -89,7 +103,7 @@ type Specs = { [K in ToolName]: ToolSpec<K> };
 /** The least agent-control level each tier runs under; asking tiers (and browser escalations) still wait on their widget. */
 const LEVEL = { read: 'read', change: 'changes', destructive: 'everything', setting: 'everything' } satisfies Record<Tier, AgentControl>;
 
-const levelLabel = (control: AgentControl) => optionLabel('agentControl', control);
+const levelLabel = (control: AgentControl) => AGENT_CONTROL.options.find((o) => o.value === control)!.label;
 
 /**
  * Runs a Mochi tool an agent called (RUNTIME.md › Mochi tools): checks scope and the level the setting allows, asks on
@@ -107,7 +121,9 @@ export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentT
   const tier = tierOf(name);
   try {
     gate(ctx, name, LEVEL[tier]);
-    const options = spec.ask ? await ask(ctx, spec.ask(ctx)) : [];
+    const approval = spec.ask?.(ctx);
+    // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.
+    const options = approval ? await ask(ctx, approval instanceof Promise ? await approval : approval) : [];
     const before = env.getState();
     const outcome = await Promise.resolve()
       .then(() => spec.run(ctx, options))
@@ -131,7 +147,7 @@ const waiting = new Map<string, (decision: { isApproved: boolean; options?: stri
 let nextCard = 0;
 // Widget ids land in saved thread activity, so they must not repeat after a reload resets the counter.
 const RUN = Date.now().toString(36);
-const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
+export const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
 
 function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): ToolContext<A> {
   const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), cards: [] };
@@ -143,21 +159,23 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
   const control = ctx.env.prefs.get().agentControl;
   if (AGENT_CONTROLS.indexOf(control) >= AGENT_CONTROLS.indexOf(needs)) return;
   const verb = name.replaceAll('_', ' ');
-  const shown = ctx.state().queue.find((q) => q.threadId === ctx.caller.id && q.setting?.id === 'agentControl');
+  const shown = ctx.state().queue.find((q) => q.threadId === ctx.caller.id && q.settings?.changes.some((c) => c.key === 'agentControl'));
   const item = card(ctx, shown?.id ?? cardId('setting', ctx.caller.id), 'setting', {
     title: `${authorName(ctx.caller.providers[0])} wants to ${verb}`,
     detail: `${verb[0].toUpperCase()}${verb.slice(1)} needs "${levelLabel(needs)}". Ask it to try again after you change this.`,
-    setting: { id: 'agentControl', suggested: needs },
+    settings: { by: 'harness', changes: [{ key: 'agentControl', value: needs }], before: { agentControl: control } },
   });
   // One widget per thread while it's open: a later call that needs more raises it in place.
+  const suggested = shown?.settings?.changes.find((c) => c.key === 'agentControl')?.value as AgentControl | undefined;
   if (!shown) open(ctx, item);
-  else if (AGENT_CONTROLS.indexOf(needs) > AGENT_CONTROLS.indexOf(shown.setting!.suggested as AgentControl)) ctx.dispatch({ type: 'queue-add', item });
+  else if (AGENT_CONTROLS.indexOf(needs) > AGENT_CONTROLS.indexOf(suggested!)) ctx.dispatch({ type: 'queue-add', item });
   throw new Error(`Blocked by the user's setting "Agents can change Mochi: ${levelLabel(control)}". ${name} needs "${levelLabel(needs)}". The user now sees that setting in this thread; ask them to change it, then call again.`);
 }
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = cardId('tool', ctx.caller.id);
-  const tool = { callId: id, options: approval.options, setting: approval.setting, isDestructive: approval.isDestructive };
+  const { options, isDestructive, edits, notes } = approval;
+  const tool = { callId: id, options, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
     const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
@@ -173,12 +191,12 @@ async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<strin
 }
 
 /** A widget joins the queue and the caller's thread, at the point the agent asked. */
-function open(ctx: ToolContext<unknown>, item: QueueItem) {
+export function open(ctx: ToolContext<unknown>, item: QueueItem) {
   ctx.dispatch({ type: 'queue-add', item });
   ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text: item.title, card: { id: item.id, isOpen: true } } });
 }
 
-function card(ctx: ToolContext<unknown>, id: string, kind: QueueItem['kind'], item: Pick<QueueItem, 'title' | 'detail' | 'code' | 'tool' | 'setting'>): QueueItem {
+export function card(ctx: ToolContext<unknown>, id: string, kind: QueueItem['kind'], item: Pick<QueueItem, 'title' | 'detail' | 'code' | 'tool' | 'settings'>): QueueItem {
   return { id, kind, threadId: ctx.caller.id, blocks: { steps: 0, threads: 1 }, createdAt: ctx.state().now, ...item };
 }
 
@@ -505,29 +523,6 @@ const USER_SPECS = {
   },
 } satisfies Partial<Specs>;
 
-const SETTING_SPECS = {
-  get_settings: {
-    run: ({ env }) => ({
-      result: AGENT_SETTING_KEYS.map((key) => ({ key, label: AGENT_SETTINGS[key].label, value: settingValue(env.prefs.get(), key), allowed: AGENT_SETTINGS[key].options.map((o) => o.value) })),
-    }),
-  },
-  update_setting: {
-    ask: ({ env, args }) => {
-      const key = agentSetting(args.key);
-      const { label, options } = AGENT_SETTINGS[key];
-      if (!settingPatch(key, args.value)) throw new Error(`"${args.value}" isn't a value of ${key}; allowed: ${options.map((o) => o.value).join(', ')}`);
-      const current = settingValue(env.prefs.get(), key);
-      if (current === args.value) throw new Error(`${label} is already ${optionLabel(key, current)}; nothing to change`);
-      return { title: `Change ${label} to ${optionLabel(key, args.value)}?`, detail: args.reason, setting: { id: key, value: args.value }, denied: `Kept ${label}: ${optionLabel(key, current)}` };
-    },
-    run: ({ env, args }) => {
-      const key = agentSetting(args.key);
-      env.prefs.set(settingPatch(key, args.value)!);
-      return { changed: `set ${AGENT_SETTINGS[key].label} to ${optionLabel(key, args.value)}`, result: { key, value: args.value } };
-    },
-  },
-} satisfies Partial<Specs>;
-
 const AGENT_SPECS = {
   start_background_agent: {
     run: ({ state, caller, args, dispatch }) => {
@@ -556,7 +551,7 @@ const AGENT_SPECS = {
   },
 } satisfies Partial<Specs>;
 
-const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...SETTING_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS } satisfies Specs;
+const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, ...SETTINGS_TOOLS } satisfies Specs;
 
 // {HELPERS}
 
@@ -584,19 +579,14 @@ function stepIn(thread: Thread, stepId: string) {
   return step;
 }
 
-/** True when the draft changed the goal (a new revision landed). */
+/** True when the draft changed the goal or its plan. */
 function editGoal(dispatch: (a: Action) => void, thread: Thread, caller: Thread, draft: GoalDraft, state?: () => State) {
   dispatch({ type: 'edit-goal', threadId: thread.id, draft, by: caller.providers[0] });
-  return !state || state().threads.find((t) => t.id === thread.id)!.revisions.length > thread.revisions.length;
+  return !state || state().threads.find((t) => t.id === thread.id) !== thread;
 }
 
 function sidebar(state: State, caller: Thread) {
   return { pinned: pinnedThreads(state.threads, caller.spaceId).map((t) => t.id), unpinned: activeThreads(state.threads, caller.spaceId).map((t) => t.id) };
-}
-
-function agentSetting(key: string) {
-  if (!(AGENT_SETTING_KEYS as string[]).includes(key)) throw new Error(`${key} isn't a setting agents can change; get_settings lists them`);
-  return key as AgentSettingKey;
 }
 
 const isPinned = (t: Thread) => t.orbitSlot !== undefined && t.status !== 'settled';

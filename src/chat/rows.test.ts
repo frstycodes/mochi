@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ActivityEntry } from '../model.ts';
-import { chatRows, liveWorkIndex } from './rows.ts';
+import { chatRows, finalReplies, liveWorkIndex } from './rows.ts';
 
 const e = (kind: ActivityEntry['kind'], who: ActivityEntry['who'], text: string): ActivityEntry => ({ at: 0, who, kind, text });
 const shape = (activity: ActivityEntry[]) => chatRows(activity).map((r) => (r.kind === 'work' ? `work(${r.entries.map((x) => x.text).join(', ')})` : r.kind === 'review' ? 'review' : r.entry.text));
@@ -73,4 +73,20 @@ test('a subagent is its own row where it started, and the turn goes on in a new 
   const agent: ActivityEntry = { ...e('subagent', 'claude', 'Load test'), subagentId: 'toolu_1' };
   assert.deepEqual(shape([e('message', 'you', 'go'), e('tool', 'claude', 'Read a.ts'), agent, e('tool', 'claude', 'Edit a.ts')]), ['go', 'work(Read a.ts)', 'Load test', 'work(Edit a.ts)']);
   assert.deepEqual(chatRows([agent]).map((r) => r.kind), ['subagent']);
+});
+
+test('message actions go on the agent\'s last reply of each turn, and on the newest turn only once it is idle', () => {
+  const activity = [
+    e('message', 'you', 'fix it'),
+    e('message', 'claude', 'Looking.'),
+    e('tool', 'claude', 'Read a.ts'),
+    e('message', 'claude', 'Fixed.'),
+    e('event', 'harness', 'Goal v2'),
+    e('message', 'you', 'thanks, now tests'),
+    e('message', 'claude', 'Running them.'),
+  ];
+  const rows = chatRows(activity);
+  const text = (set: Set<number>) => [...set].map((i) => (rows[i].kind === 'message' ? rows[i].entry.text : '?'));
+  assert.deepEqual(text(finalReplies(rows, true)), ['Fixed.'], 'mid-turn replies and the working turn get none');
+  assert.deepEqual(text(finalReplies(rows, false)), ['Fixed.', 'Running them.']);
 });

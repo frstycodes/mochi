@@ -2,6 +2,8 @@
 
 A dedicated page, not a dialog, styled like Apple's System Settings. Opening it (⌘, / Ctrl+,, the profile menu, the palette) swaps the app sidebar for a settings sidebar in the same spot and width; the content column shows one section. "Back to app" at the bottom of the settings sidebar (and Esc) returns to the exact layout you left. The sidebar toggle stays where it is.
 
+Every setting lives once in `src/settings/catalog.ts` (label, control, where its value lives, read and write); sections lay rows out in groups with their footers and render each row with `CatalogRow`, which the settings widget agents open in a thread renders too (RUNTIME.md › Mochi tools).
+
 Sidebar: a search field (filters sections and individual settings by label), the sections below in three groups, "Back to app" at the bottom. Content: inset grouped lists (`SettingsGroup` / `SettingsRow` in `src/settings/parts.tsx`): rows on one card surface split by inset hairlines, label (and a short secondary line) left, control right, the explanation as a footnote under the group. A section scrolls on its own; deep links (`openSettings('git', 'branchPrefix')`) scroll to and flash the row.
 
 Status: **now** = a value exists in code today (hardcoded or local state) and only needs wiring; **R1** = built by the runtime sessions; **later** = depends on unbuilt features, show nothing until then.
@@ -51,6 +53,9 @@ One section for every agent harness, rendered from the registry in `src/settings
 | Runs on | This Mac / … | This Mac | now | src/Composer.tsx:137 |
 | Agents running at once | stepper 1–16 | 6 | R1 | RUNTIME.md:91 |
 | When a usage limit hits | Pause until reset (fixed copy; API key / handoff are per-thread choices) | — | R1 | RUNTIME.md Auth |
+
+### Background tasks
+One model per task, each a picker over both harnesses' models (`src/settings/sections/background.tsx`): Thread titles, Commit messages, Pull requests, Goal steps, Handoff summaries. Default Haiku 5.5; a task falls back to Haiku 5.5, then GPT-6-Luna, then Mochi's own text (RUNTIME.md › Background tasks). Stored in agent settings (`utilityModels`), since main runs the calls. Done.
 
 ### Goals and drift
 | Setting | Control | Default | Status | Today |

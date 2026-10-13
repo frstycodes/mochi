@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useConfirm } from '../git/useConfirm';
@@ -15,6 +14,7 @@ import { ChangesTab } from '../pane/ChangesTab';
 import { useUndoable } from '../QueueView';
 import { useHarness } from '../store';
 import { summarize } from '../summary';
+import { TitleBar } from '../TitleBar';
 import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
@@ -49,10 +49,8 @@ export function ReviewView() {
 }
 
 function ReviewHeader({ position, onClose }: { position?: string; onClose: () => void }) {
-  const { state, isMobile } = useSidebar();
   return (
-    <div className="app-drag flex h-11 shrink-0 items-center gap-2 px-3">
-      {(isMobile || state === 'collapsed') && <SidebarTrigger className="-ml-1" />}
+    <TitleBar>
       <TaskSquare className="size-4 text-muted-foreground" />
       <span className="type-meta font-medium">Review</span>
       {!!position && <span className="tabular type-caption text-subtle-foreground">{position}</span>}
@@ -67,7 +65,7 @@ function ReviewHeader({ position, onClose }: { position?: string; onClose: () =>
       <Button variant="ghost" size="icon-sm" aria-label="Close review" onClick={onClose} className="text-muted-foreground">
         <X />
       </Button>
-    </div>
+    </TitleBar>
   );
 }
 

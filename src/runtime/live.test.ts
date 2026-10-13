@@ -28,7 +28,7 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
   assert.equal(thread.live?.isWorking, true);
   assert.equal(run(s, { type: 'tick' }).threads.find((t) => t.id === id)!.activity.length, thread.activity.length, 'the demo tick leaves live threads alone');
 
-  assert.deepEqual(calls(s, { type: 'send', threadId: id, text: 'Queued: and add a test', drift: 'on-goal', reason: '' }), [{ method: 'send', threadId: id, text: 'and add a test' }]);
+  assert.deepEqual(calls(s, { type: 'send', threadId: id, text: 'and add a test', drift: 'on-goal', reason: '' }), [{ method: 'send', threadId: id, text: 'and add a test' }]);
   assert.deepEqual(calls(s, { type: 'interrupt', threadId: id }), [{ method: 'interrupt', threadId: id }]);
 
   assert.deepEqual(calls(base(), { type: 'create', title: 'demo', provider: 'claude', project: 'harness' }), []);

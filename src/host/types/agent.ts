@@ -1,6 +1,7 @@
 import type { DriftVerdict } from '../../drift.ts';
 import type { AgentInfo, McpCall, Provider, Size, StepStatus, Thread, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
+import type { UtilityTask } from '../../utility/prompts.ts';
 
 export interface AgentStartOptions {
   provider: Provider;
@@ -233,6 +234,8 @@ export interface AgentHost {
   /** Starts a review run beside the thread's agent, never touching its session. Events arrive on `onReviewEvent`. */
   review(request: AgentReviewRequest): Promise<{ id: string }>;
   onReviewEvent(listener: (event: AgentReviewEvent) => void): () => void;
+  /** A background task's raw answer (prompt from `src/utility/prompts.ts`) on its Settings model, then the cheapest ones; null when none answers in time. */
+  utility(task: UtilityTask, spaceId: string, prompt: string): Promise<string | null>;
   /** Drift guard's model pass for prompts the local `similarity()` pass can't settle. */
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
@@ -264,6 +267,7 @@ export const agentMethods = {
   review: 'invoke',
   onReviewEvent: 'event',
   classify: 'invoke',
+  utility: 'invoke',
   rewindFiles: 'invoke',
   rewindPoint: 'invoke',
   stopSubagent: 'invoke',
