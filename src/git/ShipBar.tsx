@@ -19,6 +19,8 @@ import { useDraft } from '../utility/useDraft';
 import { PrDialog } from './PrDialog';
 import { RefHoverCard } from '../chat/RefHoverCard';
 import { useThreadPr } from './useThreadPrs';
+import { openedPr } from './prs';
+import { useHarness } from '../store';
 
 interface ShipBarProps {
   thread: Thread;
@@ -35,6 +37,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   const [isChecksOpen, setChecksOpen] = useState(false);
   const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
   const prQuery = usePr(cwd, githubUser);
+  const { dispatch } = useHarness();
   const pr = prQuery.data;
   const stagedCount = diff.files.filter((f) => f.staged).length;
 
@@ -113,6 +116,8 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
           githubUser={githubUser}
           onCreate={async (pr) => {
             const url = await run('Create pull request', () => host.git.createPr(cwd, pr, githubUser));
+            const opened = url && openedPr(url, pr.title);
+            if (opened) dispatch({ type: 'prs-seen', threadId: thread.id, prs: [opened] });
             if (url) toast.success('Pull request opened', { description: url });
             await prQuery.refresh();
           }}

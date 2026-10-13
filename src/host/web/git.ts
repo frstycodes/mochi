@@ -142,6 +142,9 @@ export const git: GitHost = {
   async refStates(_cwd, refs) {
     return Object.fromEntries(refs.flatMap((ref) => (DEMO_REFS[ref.number] ? [[refKey(ref), DEMO_REFS[ref.number]]] : [])));
   },
+  async worktreePrs() {
+    return [];
+  },
   async pr() {
     return {
       number: 490,

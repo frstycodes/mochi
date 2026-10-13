@@ -12,18 +12,14 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
 import { openFiles } from './files/viewer';
-import { withLivePr } from './git/prs';
 import { RefHoverCard, RefIcon } from './chat/RefHoverCard';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
-import { usePr } from './git/useGit';
 import type { McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
-import { useProfiles } from './profiles';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
@@ -52,29 +48,17 @@ const SOURCE_ICONS = { link: Link, mcp: Setting, file: Document } satisfies Reco
 
 /** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. */
 export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thread; className?: string; onPaneOpened?: () => void }) {
-  const cwd = host.isDesktop && thread.live ? threadCwd(thread) : null;
   return (
     <aside aria-label="Thread summary" className={cn('flex min-h-0 flex-col', className)}>
       <ScrollArea className="min-h-0 flex-1">
-        {cwd ? (
-          <LiveSummary thread={thread} cwd={cwd} onPaneOpened={onPaneOpened} />
-        ) : (
-          <SummaryBody thread={thread} prs={thread.prs} onPaneOpened={onPaneOpened} />
-        )}
+        <SummaryBody thread={thread} onPaneOpened={onPaneOpened} />
       </ScrollArea>
     </aside>
   );
 }
 
-/** A live thread on the desktop also lists its branch's PR from `gh`; the web build's mock would give every thread the same one. */
-function LiveSummary({ thread, cwd, onPaneOpened }: { thread: Thread; cwd: string; onPaneOpened?: () => void }) {
-  const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
-  const prQuery = usePr(cwd, githubUser);
-  return <SummaryBody thread={thread} prs={withLivePr(thread.prs, prQuery.data)} onPaneOpened={onPaneOpened} />;
-}
-
 /** The base panel says where the thread stands, what needs you and what shipped; everything else waits in collapsed sections. */
-function SummaryBody({ thread, prs, onPaneOpened }: { thread: Thread; prs: PullRequest[]; onPaneOpened?: () => void }) {
+function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
   const summary = summarize(thread.activity);
   const sections = useSummarySections(thread, summary);
   const open = useSummaryOpeners(thread, onPaneOpened);
@@ -92,7 +76,7 @@ function SummaryBody({ thread, prs, onPaneOpened }: { thread: Thread; prs: PullR
       <NeedsYou thread={thread} />
       <RateLimitWarning thread={thread} />
       <ChangesRow {...props} />
-      <PullRequests thread={thread} prs={prs} onOpen={open.url} />
+      <PullRequests thread={thread} prs={thread.prs} onOpen={open.url} />
       {sections.length > 0 && <SummarySections sections={sections} {...props} />}
     </div>
   );

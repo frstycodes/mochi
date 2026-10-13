@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
+import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
@@ -439,12 +440,14 @@ const GOAL_SPECS = {
     },
   },
   open_pr: {
-    run: async ({ env, caller, args }) => {
+    run: async ({ env, caller, args, dispatch }) => {
       const cwd = caller.repo && env.cwdOf(caller);
       if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
       const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
       await env.git.push(cwd, githubUser);
       const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
+      const opened = openedPr(url, args.title.trim());
+      if (opened) dispatch({ type: 'prs-seen', threadId: caller.id, prs: [opened] });
       return { changed: `opened ${url}`, result: { url } };
     },
   },

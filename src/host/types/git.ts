@@ -1,5 +1,6 @@
 import type { GithubRef, RefState, RepoSlug } from '../../chat/refs.ts';
 import type { Manifest } from './manifest.ts';
+import type { PullRequest } from '../../model.ts';
 
 export interface GitFileStatus {
   path: string;
@@ -127,6 +128,11 @@ export interface GitHost {
   /** `githubUser` (`login` on github.com, `host/login` elsewhere) runs gh as the profile's GitHub account; omitted, gh's active account. */
   createPr(cwd: string, pr: { title: string; body: string }, githubUser?: string): Promise<string>;
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
+  /**
+   * The open, draft and merged PRs from the branch each of `worktrees` (one repo's) has checked out now, which the agent may have
+   * switched: one `gh pr list` for them all. Never throws: no gh, no login or offline is none.
+   */
+  worktreePrs(worktrees: string[], githubUser?: string): Promise<{ worktree: string; pr: PullRequest }[]>;
   /** The tail of a failed GitHub Actions job's log, from the check's `link`; throws for a check that isn't an Actions job. */
   ciLog(cwd: string, checkLink: string, githubUser?: string): Promise<string>;
   /** origin's `owner/repo` when it's on github.com; null otherwise (no origin, another host, not a repo). */
@@ -189,6 +195,7 @@ export const gitMethods = {
   push: 'invoke',
   createPr: 'invoke',
   pr: 'invoke',
+  worktreePrs: 'invoke',
   ciLog: 'invoke',
   repoSlug: 'invoke',
   refStates: 'invoke',
