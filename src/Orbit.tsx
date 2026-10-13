@@ -290,7 +290,7 @@ function clamp(v: number, lo: number, hi: number) {
 }
 
 function isInteractive(target: EventTarget | null) {
-  return target instanceof Element && !!target.closest('button, a, input, textarea, select, [role="button"], [role="radio"], pre, code, p, h1, h2');
+  return target instanceof Element && !!target.closest('button, a, input, textarea, select, [role="button"], [role="radio"], pre, code, p, h1, h2, [data-drag-surface]');
 }
 
 function useOrbitTriggers(handlers: {

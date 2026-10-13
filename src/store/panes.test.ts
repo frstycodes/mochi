@@ -59,3 +59,13 @@ test('closing several tabs keeps a survivor active, and restoring brings the pan
   assert.equal(right.activeTab, 'a');
   assert.deepEqual(run(others, { type: 'pane-restore', pane: pane() }), pane());
 });
+
+test("an agent's quiet browser tab leaves the pane closed and your tab in front", () => {
+  const fresh = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:3000', isQuiet: true });
+  assert.equal(fresh.isOpen, false);
+  assert.equal(fresh.activeTab, fresh.tabs[0].id);
+  const beside = run(pane({ activeTab: 'b', isOpen: true }), { type: 'pane-open-tab', threadId: 't', kind: 'browser', isQuiet: true });
+  assert.equal(beside.isOpen, true);
+  assert.equal(beside.activeTab, 'b');
+  assert.equal(beside.tabs.length, 4);
+});

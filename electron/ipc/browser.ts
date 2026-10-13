@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path';
 import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
-import { actOnView, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { actOnView, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 // Under main's 30s limit for one Mochi call.
@@ -24,6 +24,10 @@ export const browser = {
   },
   async setBounds(sender, id, bounds) {
     setViewBounds(sender, viewId(id), bounds === null ? null : rect(bounds));
+  },
+  async mirror(sender, id, viewport) {
+    const v = viewport === null ? null : record(viewport, 'viewport');
+    await setViewMirror(sender, viewId(id), v && { width: number(v.width, 'width', 1, 8192), height: number(v.height, 'height', 1, 8192) });
   },
   async setZoom(sender, id, factor) {
     setViewZoom(sender, viewId(id), number(factor, 'factor', 0.1, 5));

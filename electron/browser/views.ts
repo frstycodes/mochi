@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { stat } from 'node:fs/promises';
-import { BrowserWindow, session, WebContentsView, type WebContents } from 'electron';
+import { BrowserWindow, screen, session, WebContentsView, type WebContents } from 'electron';
 import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserSnapshot, PickedElement } from '../../src/host/types/browser.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
 import { clickScript, focusScript, hoverScript, locateScript, markScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
@@ -11,6 +11,8 @@ interface Entry {
   win: BrowserWindow;
   owner: WebContents;
   bounds: BrowserBounds | null;
+  mirror: { width: number; height: number; timer: NodeJS.Timeout | null } | null;
+  emulation: BrowserEmulation | null;
   zoom: number;
   devtools: WebContentsView | null;
   error: string | null;
@@ -28,6 +30,10 @@ const LOG_LIMIT = 200;
 const LOG_LEVELS = ['debug', 'info', 'warning', 'error'] as const;
 // Chromium refuses captures taller than this.
 const MAX_CAPTURE_HEIGHT = 16384;
+// The floating window is at most ~480 CSS px wide, so frames past 2x that are wasted bytes.
+const MIRROR_MAX_WIDTH = 960;
+const MIRROR_INTERVAL_MS = 100;
+const MIRROR_QUALITY = 70;
 
 const views = new Map<string, Entry>();
 const hardenedSessions = new Set<string>();
@@ -51,7 +57,7 @@ export function createView(owner: WebContents, url: string, spaceId: string) {
     webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
   });
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, zoom: 1, devtools: null, error: null, logs: [] };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [] };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
@@ -63,6 +69,7 @@ export function createView(owner: WebContents, url: string, spaceId: string) {
 
 export function destroyView(owner: WebContents, id: string) {
   const entry = get(owner, id);
+  stopMirror(entry);
   views.delete(id);
   closeDevtools(entry);
   entry.win.contentView.removeChildView(entry.view);
@@ -88,6 +95,42 @@ export function setViewBounds(owner: WebContents, id: string, bounds: BrowserBou
   layout(entry);
 }
 
+/** The page hidden at `viewport` and sent as frames: the floating window draws it in the DOM, scaled down, with controls over it. */
+export async function setViewMirror(owner: WebContents, id: string, viewport: { width: number; height: number } | null) {
+  const entry = get(owner, id);
+  stopMirror(entry);
+  entry.mirror = viewport && { ...viewport, timer: null };
+  layout(entry);
+  const e = entry.emulation;
+  const dbg = await debuggerFor(entry.view.webContents);
+  if (!entry.mirror) return e ? applyEmulation(entry, e) : void (await dbg.sendCommand('Emulation.clearDeviceMetricsOverride'));
+  // A hidden view lays out at 0 × 0, so the viewport is emulated; the page's own pixel ratio and mobile mode carry over.
+  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: Math.round(viewport!.width), height: Math.round(viewport!.height), deviceScaleFactor: e?.dpr ?? 0, mobile: !!e?.mobile });
+  void sendFrame(id, entry);
+}
+
+async function sendFrame(id: string, entry: Entry) {
+  const mirror = entry.mirror;
+  if (!mirror || entry.owner.isDestroyed() || entry.view.webContents.isDestroyed()) return;
+  const dbg = await debuggerFor(entry.view.webContents);
+  // CDP, not capturePage: the view is hidden, and CDP renders it anyway. Screencast sends no frames for a hidden view.
+  const scale = Math.min(1, MIRROR_MAX_WIDTH / (mirror.width * screen.getDisplayMatching(entry.win.getBounds()).scaleFactor));
+  const shot = await (async () => {
+    // The clip is in document coordinates, so it follows the scroll position to stay on the viewport.
+    const { cssVisualViewport: v } = (await dbg.sendCommand('Page.getLayoutMetrics')) as { cssVisualViewport: { pageX: number; pageY: number; clientWidth: number; clientHeight: number } };
+    const clip = { x: v.pageX, y: v.pageY, width: v.clientWidth, height: v.clientHeight, scale };
+    return (await dbg.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: MIRROR_QUALITY, clip })) as { data: string };
+  })().catch(() => null);
+  if (entry.mirror !== mirror) return;
+  if (shot && !entry.owner.isDestroyed()) entry.owner.send('browser:onEvent', { id, type: 'frame', data: `data:image/jpeg;base64,${shot.data}` } satisfies BrowserEvent);
+  mirror.timer = setTimeout(() => void sendFrame(id, entry), MIRROR_INTERVAL_MS);
+}
+
+function stopMirror(entry: Entry) {
+  if (entry.mirror?.timer) clearTimeout(entry.mirror.timer);
+  entry.mirror = null;
+}
+
 export function setViewZoom(owner: WebContents, id: string, factor: number) {
   const entry = get(owner, id);
   entry.zoom = factor;
@@ -95,7 +138,13 @@ export function setViewZoom(owner: WebContents, id: string, factor: number) {
 }
 
 export async function emulateView(owner: WebContents, id: string, e: BrowserEmulation) {
-  const dbg = await debuggerFor(get(owner, id).view.webContents);
+  const entry = get(owner, id);
+  entry.emulation = e;
+  if (!entry.mirror) await applyEmulation(entry, e);
+}
+
+async function applyEmulation(entry: Entry, e: BrowserEmulation) {
+  const dbg = await debuggerFor(entry.view.webContents);
   if (e.width || e.dpr || e.mobile)
     await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: e.width, height: e.height, scale: e.scale, deviceScaleFactor: e.dpr, mobile: e.mobile });
   else await dbg.sendCommand('Emulation.clearDeviceMetricsOverride');
@@ -354,9 +403,10 @@ function wire(id: string, entry: Entry) {
   wc.on('will-redirect', (event) => guard(event, event.url));
 }
 
-function layout({ view, devtools, bounds }: Entry) {
-  view.setVisible(!!bounds);
-  devtools?.setVisible(!!bounds);
+function layout({ view, devtools, bounds, mirror }: Entry) {
+  view.setVisible(!!bounds && !mirror);
+  devtools?.setVisible(!!bounds && !mirror);
+  if (mirror) return view.setBounds({ x: 0, y: 0, width: Math.round(mirror.width), height: Math.round(mirror.height) });
   if (!bounds) return;
   view.setBorderRadius(Math.round(bounds.radius));
   const r = round(bounds);

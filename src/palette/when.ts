@@ -55,6 +55,8 @@ export const when = {
   tab: (s: ActionScope) => !!s.tab,
   /** A real tab, not the new-tab page: it can float or take a split of its own. */
   contentTab: (s: ActionScope) => !!s.tab && s.tab.kind !== 'new',
+  /** Browser tabs float only while an agent drives them. */
+  poppableTab: (s: ActionScope) => !!s.tab && s.tab.kind !== 'new' && s.tab.kind !== 'browser',
   browserTab: (s: ActionScope) => s.tab?.kind === 'browser',
   otherTabs: (s: ActionScope) => tabIndex(s) >= 0 && s.tabs.length > 1,
   tabsToRight: (s: ActionScope) => tabIndex(s) >= 0 && tabIndex(s) < s.tabs.length - 1,

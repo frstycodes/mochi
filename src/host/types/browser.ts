@@ -70,7 +70,8 @@ export type BrowserEvent =
   | { id: string; type: 'state'; url: string; title: string; isLoading: boolean; canGoBack: boolean; canGoForward: boolean; error: string | null }
   | { id: string; type: 'console'; level: 'error' | 'warning'; message: string; source: string; line: number }
   | { id: string; type: 'open'; url: string }
-  | { id: string; type: 'devtools'; mode: BrowserDevtools };
+  | { id: string; type: 'devtools'; mode: BrowserDevtools }
+  | { id: string; type: 'frame'; data: string };
 
 export interface BrowserHost {
   /** `spaceId` picks the persistent profile (`persist:space-<id>`): cookies and logins are isolated per space. */
@@ -81,6 +82,8 @@ export interface BrowserHost {
   /** Window content coordinates in CSS px. `null` hides the view without destroying it. */
   setBounds(id: string, bounds: BrowserBounds | null): Promise<void>;
   setZoom(id: string, factor: number): Promise<void>;
+  /** Hides the view at `viewport` CSS px and streams it as `frame` events (JPEG data URLs) until called with `null`. */
+  mirror(id: string, viewport: { width: number; height: number } | null): Promise<void>;
   emulate(id: string, emulation: BrowserEmulation): Promise<void>;
   devtools(id: string, mode: BrowserDevtools): Promise<void>;
   /** PNG data URL of the viewport, or of the whole scrollable page. */
@@ -109,6 +112,7 @@ export const browserMethods = {
   command: 'invoke',
   setBounds: 'invoke',
   setZoom: 'invoke',
+  mirror: 'invoke',
   emulate: 'invoke',
   devtools: 'invoke',
   capture: 'invoke',

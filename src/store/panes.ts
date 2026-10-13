@@ -9,12 +9,14 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number } }
+  /** `isQuiet` adds the tab without opening the pane or switching to it: the agent's browser floats instead. */
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; isQuiet?: boolean }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   | { type: 'pane-close-tab'; threadId: string; tabId: string }
   | { type: 'pane-close-tabs'; threadId: string; tabIds: string[] }
   | { type: 'pane-restore'; pane: Pane }
   | { type: 'pane-pop'; threadId: string; tabId: string; isPopped: boolean }
+  | { type: 'pane-drive'; threadId: string; tabId: string | undefined }
   | { type: 'pane-reorder'; threadId: string; order: string[] }
   | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> }
   /** The thread's Agents tab, selected, with this agent expanded. */
@@ -37,14 +39,19 @@ export function panesReducer(state: State, action: Action): State {
     }
     case 'pane-open-tab': {
       const thread = state.threads.find((t) => t.id === action.threadId);
-      const existing = state.panes.find((p) => p.threadId === action.threadId) ?? newPane(action.threadId);
+      const current = state.panes.find((p) => p.threadId === action.threadId);
+      const existing = current ?? newPane(action.threadId);
       const tab: PaneTab = { id: nextTabId(existing.tabs), kind: action.kind, url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined), file: action.file, title: action.file?.path.split('/').pop() };
       const tabs = existing.tabs.flatMap((t) => (t.kind !== 'new' ? [t] : t.id === existing.activeTab ? [tab] : []));
-      const pane = { ...existing, isOpen: true, tabs: tabs.includes(tab) ? tabs : [...tabs, tab], activeTab: tab.id };
+      const nextTabs = tabs.includes(tab) ? tabs : [...tabs, tab];
+      const keepsActive = action.isQuiet && nextTabs.some((t) => t.id === existing.activeTab);
+      const pane = { ...existing, isOpen: action.isQuiet ? !!current?.isOpen : true, tabs: nextTabs, activeTab: keepsActive ? existing.activeTab : tab.id };
       return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
     }
     case 'pane-select-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, activeTab: action.tabId })) };
+    case 'pane-drive':
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, drivenTab: action.tabId })) };
     case 'pane-pop':
       return {
         ...state,
@@ -108,7 +115,8 @@ function loadPanes(): Pane[] {
   try {
     const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
     const panes: Pane[] = raw ? JSON.parse(raw) : [];
-    return panes.map((p) => ({ ...p, tabs: p.tabs.filter((t) => PANE_TAB_KINDS.includes(t.kind)) }));
+    // Browser tabs float only while an agent drives them, so an old manual pop-out goes back in the pane.
+    return panes.map((p) => ({ ...p, tabs: p.tabs.filter((t) => PANE_TAB_KINDS.includes(t.kind)).map((t) => (t.kind === 'browser' ? { ...t, isPopped: false } : t)) }));
   } catch {
     return [];
   }

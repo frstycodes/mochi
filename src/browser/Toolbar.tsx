@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Pip, Refresh, TriangleWarning, X } from 'reicon-react';
+import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Refresh, TriangleWarning, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -37,7 +37,7 @@ const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const DPRS = [0, 1, 2, 3];
 const DESKTOP_ONLY = 'Needs the desktop app';
 
-export function BrowserToolbar({ thread, pageId, page, onPopOut }: { thread: Thread; pageId: string; page: Page; onPopOut: () => void }) {
+export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
   const isNative = !!page.hostId;
   const canPick = isNative || isDemoUrl(page.url);
   const command = (c: BrowserCommand) => {
@@ -71,9 +71,6 @@ export function BrowserToolbar({ thread, pageId, page, onPopOut }: { thread: Thr
         <Mobile />
       </IconAction>
       <ScreenshotMenu thread={thread} page={page} />
-      <IconAction label="Pop out into a floating window" onClick={onPopOut}>
-        <Pip />
-      </IconAction>
       <MoreMenu pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
     </div>
   );

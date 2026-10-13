@@ -67,7 +67,7 @@ function TabStrip({ thread, tabs, active }: { thread: Thread; tabs: PaneTab[]; a
     [next[from], next[to]] = [next[to], next[from]];
     reorder(next);
   };
-  const canPop = !!active && active.kind !== 'new';
+  const canPop = !!active && active.kind !== 'new' && active.kind !== 'browser';
 
   return (
     <div className="app-drag flex h-11 shrink-0 items-center gap-1 px-2">

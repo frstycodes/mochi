@@ -616,12 +616,12 @@ function Recipes() {
         <Block title="Side pane" use="Docked to the right of the chat, like Codex: Preview, Changes, Terminal and a new-tab page. The preview pops out into a floating window." wide>
           <div className="h-[460px] overflow-hidden rounded-xl border">{admPane && <SidePane thread={adm} pane={admPane} />}</div>
         </Block>
-        <Block title="Floating preview" use="Chromeless, like Codex: hover to reveal close, put back and comment over a blurred corner. Drag anywhere and throw it to a corner, past the edge to tuck it away." wide>
+        <Block title="Floating window" use="Chromeless, like Codex: hover to reveal close and put back over a blurred corner that spills past the edge. Drag anywhere and throw it to a corner, past the edge to tuck it away. The browser floats on its own while the agent drives it off screen, as a scaled-down, view-only mirror." wide>
           <div className="relative h-[560px] overflow-hidden rounded-xl border bg-[repeating-linear-gradient(135deg,var(--muted)_0_8px,transparent_8px_16px)]">
             <PipLayer thread={adm} />
-            {!admPane?.tabs.some((t) => t.isPopped) && (
+            {!admPane?.tabs.some((t) => t.isPopped && t.kind !== 'browser') && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Button onClick={() => admPane && dispatch({ type: 'pane-pop', threadId: 'adm', tabId: admPane.tabs[0].id, isPopped: true })}>Pop out the preview</Button>
+                <Button onClick={() => admPane && dispatch({ type: 'pane-pop', threadId: 'adm', tabId: admPane.tabs[1].id, isPopped: true })}>Pop out the changes</Button>
               </div>
             )}
           </div>

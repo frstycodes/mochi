@@ -39,7 +39,7 @@ export const BROWSER_TOOLS = {
         const { key, page } = await live(ctx, existing);
         env.pages.update(key, { url, error: null });
         await env.browser.navigate(page.hostId!, url);
-      } else dispatch({ type: 'pane-open-tab', threadId: caller.id, kind: 'browser', url });
+      } else dispatch({ type: 'pane-open-tab', threadId: caller.id, kind: 'browser', url, isQuiet: true });
       const tab = existing || browserTabs(ctx).at(-1)!;
       const { key } = await live(ctx, tab);
       const page = await loaded(ctx, key);
@@ -192,8 +192,8 @@ function browserTabs({ state, caller }: Pick<Ctx, 'state' | 'caller'>) {
 
 function activeBrowserTab(ctx: Pick<Ctx, 'state' | 'caller'>) {
   const tabs = browserTabs(ctx);
-  const active = ctx.state().panes.find((p) => p.threadId === ctx.caller.id)?.activeTab;
-  return tabs.find((t) => t.id === active) ?? tabs.at(-1);
+  const pane = ctx.state().panes.find((p) => p.threadId === ctx.caller.id);
+  return tabs.find((t) => t.id === pane?.drivenTab) ?? tabs.find((t) => t.id === pane?.activeTab) ?? tabs.at(-1);
 }
 
 function tabFor(ctx: Ctx) {
@@ -208,16 +208,14 @@ function tabFor(ctx: Ctx) {
   return tab;
 }
 
-/** Brings the tab forward in the caller's pane and waits for its native view. Needs the thread on screen: a hidden view has no size. */
+/** Marks the tab as driven, so it floats unless it's already in front, and waits for its native view. Needs the thread on screen: the floating window is what renders it. */
 async function live(ctx: Ctx, tab: PaneTab) {
   const { state, caller, dispatch, env } = ctx;
   const key = pageKey(caller.id, tab.id);
   const layout = state().layouts[caller.spaceId];
   const isShown = state().spaceId === caller.spaceId && !!layout && leaves(layout.root).some((l) => (l.view.kind === 'thread' && l.view.id === caller.id) || (l.view.kind === 'tab' && l.view.threadId === caller.id && l.view.tabId === tab.id));
-  if (!isShown && !tab.isPopped) throw new Error(`Your thread isn't on screen, so its browser can't render. Call focus_thread with threadId "${caller.id}" first.`);
-  const pane = state().panes.find((p) => p.threadId === caller.id);
-  if (pane && !pane.isOpen) dispatch({ type: 'pane-toggle', threadId: caller.id });
-  if (pane?.activeTab !== tab.id && !tab.isPopped) dispatch({ type: 'pane-select-tab', threadId: caller.id, tabId: tab.id });
+  if (!isShown) throw new Error(`Your thread isn't on screen, so its browser can't render. Call focus_thread with threadId "${caller.id}" first.`);
+  if (state().panes.find((p) => p.threadId === caller.id)?.drivenTab !== tab.id) dispatch({ type: 'pane-drive', threadId: caller.id, tabId: tab.id });
   const page = await until(() => env.pages.get(key)?.hostId && env.pages.get(key), VIEW_TIMEOUT_MS);
   if (!page) throw new Error(env.isDesktop ? 'The browser tab did not start in time; try again' : 'Driving the browser needs the Mochi desktop app');
   return { key, tab, page };
