@@ -47,6 +47,12 @@ export interface Criterion {
   command?: string;
 }
 
+/** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
+export interface Similar {
+  threadId: string;
+  relation: 'same' | 'related';
+}
+
 export interface Revision {
   n: number;
   at: number;
@@ -177,6 +183,8 @@ export interface Thread {
   /** The drafted or edited outcome; '' while the thread has no goal (a question, a chat). */
   goal: string;
   criteria?: Criterion[];
+  /** Open until you dismiss them on the goal card. */
+  similar?: Similar[];
   /** You removed the goal: drafts don't bring it back, an edit does. */
   isGoalOff?: boolean;
   providers: Provider[];
