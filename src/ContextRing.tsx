@@ -4,7 +4,7 @@ import { Context, ContextContent, ContextContentBody, ContextContentHeader, Cont
 import type { Provider } from './model';
 import { ProviderMark } from './ui';
 import { LimitBars, UpdatedAt } from './usage/LimitBars';
-import { TONE_COLORS, toneFor } from './usage/limits';
+import { hottest, TONE_COLORS, toneFor } from './usage/limits';
 import type { Usage } from './usage/model';
 import { useAccountLimits } from './usage/useAccountLimits';
 
@@ -35,11 +35,15 @@ export function ContextRing({
   };
   const share = context.max ? Math.min(1, context.used / context.max) : 0;
   const pct = Math.round(share * 100);
+  // A plan window only takes the outer arc once it's worth a glance (warning tone and up).
+  const top = hottest(limits?.windows ?? []);
+  const plan = top && toneFor(top.usedPct / 100) !== 'normal' ? top : undefined;
+  const label = `Context ${pct}% used${plan ? `, ${plan.label.toLowerCase()} limit ${Math.round(plan.usedPct)}% used` : ''}`;
   return (
     <Context usedTokens={context.used} maxTokens={context.max} open={isOpen} onOpenChange={open} openDelay={150} closeDelay={100}>
       <ContextTrigger>
-        <Button variant="ghost" size="icon-sm" aria-label={`Context ${pct}% used`} className="rounded-full" onClick={() => !isOpen && open(true)}>
-          <Ring share={share} />
+        <Button variant="ghost" size="icon-sm" aria-label={label} className="rounded-full" onClick={() => !isOpen && open(true)}>
+          <Ring share={share} planShare={plan && plan.usedPct / 100} />
         </Button>
       </ContextTrigger>
       <ContextContent side="top" align="end" className="w-72">
@@ -92,26 +96,28 @@ function Section({ label, aside, children }: { label: ReactNode; aside?: ReactNo
 }
 
 const SIZE = 16;
-const R = SIZE / 2 - 2;
-const C = 2 * Math.PI * R;
+const C = (r: number) => 2 * Math.PI * r;
 
-/** No text: the arc and its colour step (normal, warning at 70%, destructive above 90%) say it. */
-function Ring({ share }: { share: number }) {
+/**
+ * No text: the arc and its colour step (normal, warning at 70%, destructive above 90%) say it. With `planShare`, the plan
+ * window takes the outer arc and the context shrinks inside it.
+ */
+function Ring({ share, planShare }: { share: number; planShare?: number }) {
+  const hasPlan = planShare !== undefined;
   return (
     <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden className="-rotate-90">
-      <circle cx={SIZE / 2} cy={SIZE / 2} r={R} fill="none" stroke="var(--border)" strokeWidth={2} />
-      {share > 0 && (
-        <circle
-          cx={SIZE / 2}
-          cy={SIZE / 2}
-          r={R}
-          fill="none"
-          stroke={TONE_COLORS[toneFor(share)]}
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeDasharray={`${C * share} ${C}`}
-        />
-      )}
+      {hasPlan && <Arc r={7} width={1.5} share={planShare} />}
+      <Arc r={hasPlan ? 3.75 : 6} width={hasPlan ? 1.75 : 2} share={share} />
     </svg>
+  );
+}
+
+function Arc({ r, width, share }: { r: number; width: number; share: number }) {
+  const c = SIZE / 2;
+  return (
+    <>
+      <circle cx={c} cy={c} r={r} fill="none" stroke="var(--border)" strokeWidth={width} />
+      {share > 0 && <circle cx={c} cy={c} r={r} fill="none" stroke={TONE_COLORS[toneFor(share)]} strokeWidth={width} strokeLinecap="round" strokeDasharray={`${C(r) * Math.min(1, share)} ${C(r)}`} />}
+    </>
   );
 }

@@ -22,7 +22,35 @@ Status labels: **verified** = read in this repo; **docs** = read in the vendor's
 - **Codex: the user's `codex login`.** One `codex app-server` started from the user's install, reading the user's own credentials (`~/.codex/auth.json` or the keyring). `account/read` reports the state; if logged out, Mochi tells the user to run `codex login` rather than calling `account/login/start` itself. Whether app-server picks up an existing login with no extra step: not verified, check first.
 - **Distribution:** before shipping Mochi to other people, re-check Anthropic's current legal page (the Agent SDK overview says products should use API keys unless approved; reports from October 2026 say the subscription rules were relaxed) and OpenAI's terms.
 - **Accounts per profile (decision, 2026-10-12):** an account is one Claude Code or Codex login, kept in its own config directory so several can coexist, each signed in by the user in the tool itself. A profile (space) links **at most one Claude account and one Codex account**; one account may be linked to several profiles. Every thread runs on its profile's account for that provider, and nothing ever switches a thread to another account of the same provider (that would be working around usage limits, which both providers' terms forbid). `Space.accounts` in `src/model.ts` becomes `{ claude?: AccountId; codex?: AccountId }` against an account registry.
-- **When an account hits its limit:** the thread pauses with "limit reached, resumes at <reset time>" (a needs-you-style state) and continues on the same account after the reset. The user can instead choose, explicitly and per thread, to continue on their API key (pay per use) or to hand the thread off to the other provider (existing handoff). Never automatic, never silent.
+- **When an account hits its limit:** the thread pauses until the reset and continues on the same account after it (you resume, or chose Resume at reset). The user can instead choose, explicitly and per thread, to continue on their API key (pay per use) or to hand the thread off to the other provider (existing handoff). Never automatic, never silent. States and sources in [Usage limits](#usage-limits).
+
+## Usage limits
+
+What each harness says as a plan window (5-hour, weekly) fills, and what Mochi does in each state. Sources checked 2026-10-13 against Agent SDK 0.3.296 / Claude Code 2.1.296 and codex-cli 0.155.1.
+
+**Claude (verified in `sdk.d.ts` unless marked).**
+- `rate_limit_event` → `rate_limit_info: { status: 'allowed' | 'allowed_warning' | 'rejected', resetsAt?, rateLimitType?: 'five_hour' | 'seven_day' | 'seven_day_opus' | 'seven_day_sonnet' | 'seven_day_overage_included' | 'overage', utilization?, overageStatus?, isUsingOverage?, surpassedThreshold?, … }` (`sdk.d.ts:5704`). `resetsAt` is unix seconds and `utilization` 0–1 (read in the 2.1.296 binary, which compares it to 0.95 / 0.99 / 0.9975).
+- Wrap-up is Claude Code's own: the 2.1.296 binary holds the hidden hint "[Usage limit approaching. Checkpoint now: finish the current step, then list up to 3 short bullets of the most impactful remaining work. …]" and the notice "Claude will wrap up the current step", at utilization 0.95 (0.99 on Max 5x, 0.9975 on Max 20x), skipped while overage is allowed. Not verified: that it fires in a headless SDK session.
+- `rejected`: the next request is refused. Inferred, not run: the turn ends with an error (`SDKAssistantMessage.error: 'rate_limit'`, `USAGE_LIMIT_ERROR_PREFIXES` "You've hit your…" at `sdk.d.ts:9916`). No result subtype for it.
+- `autoContinueAtUsageLimit` (Claude Code setting, `sdk.d.ts:9334`) waits for the reset and continues by itself. Mochi doesn't set it; whether a user's own setting applies in SDK sessions is not verified.
+
+**Codex (verified in the app-server schema, `codex app-server generate-json-schema`).**
+- `account/rateLimits/updated` (sparse; merge into the last snapshot) and `account/rateLimits/read`: `RateLimitSnapshot { primary, secondary: { usedPercent, windowDurationMins, resetsAt } | null, credits, planType, limitId, limitName, rateLimitReachedType, … }`. `resetsAt` units aren't in the schema; Mochi reads unix seconds (matches a live reading).
+- Hitting it: `turn/completed` with `status: 'failed'` and `turn.error.codexErrorInfo: 'usageLimitExceeded'` (also `rateLimitExceeded`, `sessionBudgetExceeded`); an `error` notification carries `willRetry`. No warning status and no wrap-up of its own found.
+- `turn/steer { threadId, expectedTurnId, input }` adds input to the running turn; Mochi's sends mid-turn now use it.
+
+**States** (`src/runtime/limits.ts`, tests in `limits.test.ts` with simulated events).
+
+| State | Enters on | Mochi does | You see |
+|---|---|---|---|
+| Approaching | Claude `allowed_warning`; a Codex window at 90% (`WARN_PCT`) → `limit-warning` event | logs the window once; turns still run | a line in the transcript, the context ring's outer arc (any window ≥70%) |
+| Wrapping up | a warning at ≥95% (`WRAP_PCT`) while a turn runs | Claude: nothing, Claude Code checkpoints itself; Codex: steers `WRAP_PROMPT` into the turn, once | header chip and sidebar "Wrapping up · 5-hour limit 96%" |
+| Paused until reset | Claude `rejected`; Codex `usageLimitExceeded` → `limit` event | ends the turn, holds the queue and every send on that thread; any other thread on the same profile and harness (one account) queues sends until the reset; a new thread there is refused with a reason; never sets `ANTHROPIC_API_KEY`, never rotates accounts | the limit card in the transcript where it happened (countdown, Resume at reset, Hand off, Use API key only when a key is stored), header chip and sidebar "Paused · resets 3:40 PM", the composer saying why send queues, a notification |
+| Resumed | Resume after the reset, or the reset passing with Resume at reset chosen | sends "Continue where you left off." on the same account; the queue goes on after that turn | "Resumed after the 5-hour limit reset", a notification when it resumed by itself |
+
+Use API key and Hand off stay per-thread choices from the card; neither is ever automatic. Resume at reset is off unless you press it for that thread.
+
+GAP: the account hold is per profile and harness; two profiles sharing one account don't hold each other. A `send_to_thread` from another agent isn't held. Scheduled runs on a paused account aren't held by Mochi (the provider refuses them).
 
 ## Event contract
 
@@ -38,6 +66,8 @@ type AgentEvent =
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  | { threadId: string; type: 'limit-warning'; window: LimitWindow }
+  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 ```
 

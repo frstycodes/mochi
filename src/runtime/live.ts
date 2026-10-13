@@ -5,6 +5,7 @@ import { startWorkspace } from '../git/workspace.ts';
 import { sourcePrompt } from '../sources.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
+import { WRAP_PROMPT } from './limits.ts';
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
@@ -84,8 +85,9 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       return hasAgent(state, action.threadId) ? [{ method: 'stopSubagent', threadId: action.threadId, subagentId: subagent.id }] : [];
     }
     case 'agent': {
-      // A background agent's session ends with its first turn: the report is in, nobody will send it more.
       const { event } = action;
+      if (event.type === 'limit-warning') return wrapUp(state, next(), event.threadId);
+      // A background agent's session ends with its first turn: the report is in, nobody will send it more.
       if (event.type !== 'turn-end' && event.type !== 'limit') return [];
       const isBackground = state.threads.some((t) => t.subagents?.some((s) => s.sessionId === event.threadId && isRunning(s)));
       return isBackground ? [{ method: 'stop', threadId: event.threadId }] : [];
@@ -124,6 +126,14 @@ function runFolder(thread: Thread) {
 }
 
 /** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */
+/** Codex has no wrap-up of its own: the turn that just crossed `WRAP_PCT` gets Mochi's, steered into the running turn. */
+function wrapUp(state: State, next: State, threadId: string): AgentCall[] {
+  const was = state.threads.find((t) => t.id === threadId);
+  const now = next.threads.find((t) => t.id === threadId);
+  if (!now?.live?.isWrappingUp || was?.live?.isWrappingUp || now.providers[0] !== 'codex') return [];
+  return [{ method: 'send', threadId, text: WRAP_PROMPT }];
+}
+
 /** A send that found no agent process (it ended without Mochi noticing): start it again with `resume`, carrying the same message. */
 export function resumeAfterLostProcess(thread: Thread, call: Extract<AgentCall, { method: 'send' }>): AgentCall[] {
   return thread.live ? reattach(thread, call.text, undefined, call.images, call.skills) : [];
