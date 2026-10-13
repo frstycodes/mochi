@@ -9,14 +9,15 @@ import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/c
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
-import { accountFor, secondOpinionModel } from '../agents/config.ts';
+import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
 import { limitsOf, recordLimits } from '../agents/limits.ts';
 import { claudeUsageWindows } from '../../src/usage/limits.ts';
 import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
-import { ask as askAgent } from '../agents/ask.ts';
+import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall } from '../mcp/server.ts';
+import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
 import { addWorktree } from './git.ts';
 import { switchBranch } from '../git/branches.ts';
@@ -180,6 +181,16 @@ export const agent = {
     string(r.text, 'result.text', MAX_CONTEXT_CHARS);
     if (r.isError !== undefined && typeof r.isError !== 'boolean') throw new TypeError('result.isError must be a boolean');
     resolveToolCall(id as string, { text: r.text as string, isError: r.isError as boolean | undefined, ...(r.image !== undefined && { image: imageOf(r.image) }) });
+  },
+  async utility(_sender, task, spaceId, prompt) {
+    if (!(UTILITY_TASKS as readonly unknown[]).includes(task)) throw new TypeError('task must be a background task');
+    string(spaceId, 'spaceId', 256);
+    string(prompt, 'prompt', 40_000);
+    const offers = (provider: Provider) => models(codex, provider, spaceId as string).then((list) => list.map((m) => m.id), () => []);
+    const startedAt = performance.now();
+    const answer = await utility(ASKERS, offers, agentSettings().utilityModels[task as UtilityTask], spaceId as string, task as UtilityTask, prompt as string);
+    console.info(`utility ${task as string}: ${answer ? `${answer.provider} ${answer.model}` : 'no model answered, local fallback'} in ${Math.round(performance.now() - startedAt)}ms`);
+    return answer?.text ?? null;
   },
   async classify(_sender, prompt, thread) {
     string(prompt, 'prompt', 20_000);

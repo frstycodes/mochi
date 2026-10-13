@@ -1,4 +1,4 @@
-import type { SideChatModel } from '../host/types/settings.ts';
+import type { ModelChoice } from '../host/types/settings.ts';
 import type { Provider, Thread } from '../model.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { accessOf, permissionModeOf, type Access } from './access.ts';
@@ -17,7 +17,7 @@ export interface ThreadControls {
 }
 
 /** A saved side chat choice with an old catalog id read as the provider's own. */
-export const sideChatChoice = (choice: SideChatModel): SideChatModel => ({ ...choice, model: modelId(choice.model) });
+export const sideChatChoice = (choice: ModelChoice): ModelChoice => ({ ...choice, model: modelId(choice.model) });
 
 export const DEFAULT_CONTROLS = {
   claude: { model: '', effort: 'high', access: 'Auto' },

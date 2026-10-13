@@ -3,6 +3,7 @@ import { CONCURRENCY_RANGE, type AgentSettingsPatch, type HarnessSettings, type 
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
 import { fromClaude, SERVER_NAME, type ConfigChange, type ConfigPart } from '../../src/settings/agentConfig.ts';
+import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '../agents/profileConfig.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
 import { detect } from '../settings/detect.ts';
@@ -149,6 +150,16 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
     const model = string(side.model, 'sideChatModel.model', MAX_MODEL_CHARS).trim();
     if (!model) throw new TypeError('Pick a side chat model');
     patch.sideChatModel = { provider: validProvider(side.provider as string), model };
+  }
+  if (p.utilityModels !== undefined) {
+    patch.utilityModels = {};
+    for (const [task, value] of Object.entries(record(p.utilityModels, 'utilityModels'))) {
+      if (!(UTILITY_TASKS as readonly string[]).includes(task)) throw new TypeError(`utilityModels.${task} is not a background task`);
+      const choice = record(value, `utilityModels.${task}`);
+      const model = string(choice.model, `utilityModels.${task}.model`, MAX_MODEL_CHARS).trim();
+      if (!model) throw new TypeError('Pick a model');
+      patch.utilityModels[task as UtilityTask] = { provider: validProvider(choice.provider as string), model };
+    }
   }
   if (p.harnesses === undefined) return patch;
   patch.harnesses = {};
