@@ -179,7 +179,7 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
 
   useEffect(() => {
     const p = panel.current;
-    // Mounting (opening a thread, a Stage swipe landing) never animates the pane: the swiped-in preview already shows it at full size.
+    // Mounting (opening a thread, a pinned page mounting beside the current one) never animates the pane: the swiped-in preview already shows it at full size.
     const isToggle = isMounted.current;
     isMounted.current = true;
     if (!p || p.isCollapsed() === !isPaneOpen) return;

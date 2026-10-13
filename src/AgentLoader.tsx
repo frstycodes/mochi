@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type CSSProperties } from 'react';
-import { useAnimationFrame, useReducedMotionConfig } from 'motion/react';
+import { useAnimationFrame, useInView, useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { blendPose, BODY, GROUND, oneHot, PHASES, poseAttributes, propShapes, stepWeights, VIEW_BOX, type AgentPhase, type Shape } from './agentShape';
 import { PHASE_LABELS } from './agentPhase';
@@ -24,6 +24,9 @@ export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: A
   const reduce = useReducedMotionConfig();
   const id = `mochi${useId().replace(/\W/g, '')}`;
   const refs = useFrameRefs();
+  const svg = useRef<SVGSVGElement>(null);
+  // Offscreen (a pinned page beside the one in view, a row scrolled away), the pose holds still instead of costing a frame callback.
+  const isOnScreen = useInView(svg);
   const [morph] = useState(() => ({ weights: oneHot(phase), velocities: new Float32Array(PHASES.length) }));
   const [first] = useState(() => frameAt(PHASES.map(() => 1), 0, morph.weights));
   // Animated, React keeps the first frame so a re-render never snaps the pose back; the frame loop owns the attributes.
@@ -31,7 +34,7 @@ export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: A
   const weights = reduce ? oneHot(phase) : morph.weights;
 
   useAnimationFrame((time, delta) => {
-    if (reduce) return;
+    if (reduce || !isOnScreen) return;
     stepWeights(morph.weights, morph.velocities, phase, Math.min(delta, 100) / 1000);
     paint(refs, morph.weights, frameAt(morph.weights, time / 1000));
   });
@@ -40,7 +43,7 @@ export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: A
   const style = { '--mochi-light': colors.light, '--mochi-base': colors.base, '--mochi-shade': colors.shade } as CSSProperties;
 
   return (
-    <svg viewBox={VIEW_BOX} role="img" aria-label={PHASE_LABELS[phase]} className={cn('size-5 shrink-0 overflow-visible', className)} style={style}>
+    <svg ref={svg} viewBox={VIEW_BOX} role="img" aria-label={PHASE_LABELS[phase]} className={cn('size-5 shrink-0 overflow-visible', className)} style={style}>
       <defs>
         <radialGradient id={`${id}-body`} cx="0.36" cy="0.3" r="0.9">
           <stop offset="0" style={{ stopColor: 'var(--mochi-light)' }} />

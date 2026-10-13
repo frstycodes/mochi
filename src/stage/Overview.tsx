@@ -3,8 +3,6 @@ import { Grid, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Kbd } from '@/components/ui/kbd';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { ARROW_SIDE, neighbourInDirection, type Side } from '../layout/tree';
 import { activeThreads, pinnedThreads } from '../reorder';
 import { TitleBar } from '../TitleBar';
@@ -40,10 +38,6 @@ export function Overview() {
         <h2 className="type-title">All sessions</h2>
         <span className="type-meta text-subtle-foreground tabular">{pinned.length + others.length}</span>
         <span className="flex-1" />
-        <Label className="gap-2 type-meta font-normal text-muted-foreground">
-          <Switch size="sm" checked={state.isNeedsYouNear} onCheckedChange={() => dispatch({ type: 'stage-needs-you-near' })} />
-          Stage Manager: needs-you cards nearest the center
-        </Label>
         <Button variant="ghost" size="sm" onClick={close} className="gap-1.5 text-muted-foreground">
           <X />
           Close

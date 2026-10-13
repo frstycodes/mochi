@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowSwapHorizontal, CarouselH, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
+import { ArrowSwapHorizontal, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { host } from '@/host';
 import {
@@ -15,7 +15,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import { useToggleSlot } from '../SidebarToggle';
 import { DragStrip, TitleBar } from '../TitleBar';
 import { useHarness } from '../store';
@@ -25,11 +24,11 @@ import { Shortcut } from '../Shortcut';
 import { SPLIT_MENU } from '../menus/menus';
 import { TargetContextMenu } from '../menus/TargetContextMenu';
 
-/** Per-split actions in a split's header: the Stage Manager toggle (first split only), the layout menu and close. */
+/** Per-split actions in a split's header: the layout menu and close. */
 export function SplitControls() {
   const { state, dispatch } = useHarness();
-  const { leafId, isMulti, isZoomed, isFirst } = useSplit();
-  if (!isMulti) return isFirst && <StageToggle />;
+  const { leafId, isMulti, isZoomed } = useSplit();
+  if (!isMulti) return null;
   const run = (action: Parameters<typeof dispatch>[0]) => {
     dispatch({ type: 'layout-focus', leafId });
     dispatch(action);
@@ -42,7 +41,6 @@ export function SplitControls() {
 
   return (
     <>
-      {isFirst && <StageToggle />}
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -95,25 +93,6 @@ export function SplitControls() {
         <TooltipContent>Close split</TooltipContent>
       </Tooltip>
     </>
-  );
-}
-
-function StageToggle() {
-  const { state, dispatch } = useHarness();
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Stage Manager" aria-pressed={state.isStage} onClick={() => dispatch({ type: 'stage-toggle' })} className={cn('text-muted-foreground', state.isStage && 'bg-accent text-foreground')}>
-          <CarouselH />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent className="flex items-center gap-2">
-        {state.isStage ? 'Leave Stage Manager' : 'Stage Manager'}
-        <Shortcut keys={['mod', 'shift', 'S']} />
-        <span className="text-subtle-foreground">All sessions</span>
-        <Shortcut keys={['mod', 'up']} />
-      </TooltipContent>
-    </Tooltip>
   );
 }
 

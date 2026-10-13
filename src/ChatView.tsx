@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useSimplifyReveal } from './simplify/useSimplify';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
@@ -52,6 +52,7 @@ import type { Mention } from './chat/mentions';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
+import { rememberedScroll, Transcript, type TranscriptHandle } from './chat/Transcript';
 
 /** `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread. */
 export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: boolean }) {
@@ -76,21 +77,21 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   usePinHighlights(messages, pins);
   const handoff = useComposerHandoff(useSplit().leafId);
   const slashItems = useSlashItems(thread.providers[0], thread.spaceId, thread.agent);
+  const transcript = useRef<TranscriptHandle | null>(null);
+  const [remembered] = useState(() => rememberedScroll.get(thread.id));
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" style={isReadOnly ? ({ '--composer-h': '0px' } as React.CSSProperties) : undefined}>
-      {/* Instant while opening: a thread opens at its latest message, and a Stage swipe lands on the live view already where the preview was. */}
-      <Conversation data-photo-scope initial="instant" resize={resize} className="min-h-0 flex-1">
+      {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
+      <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
           <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
               {hasGoal(thread) && <GoalCard thread={thread} />}
               {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
-              {rows.map((row, i) => (
-                <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
-                </div>
-              ))}
+              <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
+                {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
+              </Transcript>
               <ReportCard thread={thread} />
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
@@ -98,7 +99,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
         </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
-        <ThreadMinimap items={outline(rows, pins)} className="absolute top-6 left-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
+        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-6 left-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
         {!isReadOnly && <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />}
       </Conversation>
       {!isReadOnly && (
@@ -129,8 +130,8 @@ function useComposerHeightVar() {
   return ref;
 }
 
-// isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; hasActions: boolean; action?: CurrentAction }) {
+// isLive: the newest row of a running thread, the one still being written. Memoized: a scroll re-renders the virtualized list, and only rows that just mounted should render.
+const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; hasActions: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'subagent') {
@@ -180,7 +181,7 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, 
       {message}
     </MessageContextMenu>
   );
-}
+});
 
 /** An agent's reply, or its Simplify bullets: they come in with the word reveal, and the reply pulses while they're made. */
 function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {

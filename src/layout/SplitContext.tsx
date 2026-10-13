@@ -14,7 +14,7 @@ export interface SplitInfo {
 
 export const SplitContext = createContext<SplitInfo | null>(null);
 
-/** Inside a read-only preview (Stage Manager's neighbouring pages): native overlays such as browser views must not attach. */
+/** Inside a read-only preview (a pinned page beside the one in view): native overlays such as browser views must not attach. */
 export const PreviewContext = createContext(false);
 
 export function useSplit() {

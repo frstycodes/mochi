@@ -13,7 +13,7 @@ export function reorderThreads(threads: Thread[], pinned: string[], unpinned: st
   return threads.map((t) => (rank(t) >= 0 ? moved[i++] : t));
 }
 
-/** A space's pinned threads in pin order: the order behind Orbit slots, mod 1–9 and Stage Manager. */
+/** A space's pinned threads in pin order: the order behind Orbit slots, mod 1–9 and the pinned pager. */
 export function pinnedThreads(threads: Thread[], spaceId: string) {
   return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot !== undefined && t.status !== 'settled').sort((a, b) => a.orbitSlot! - b.orbitSlot!);
 }
