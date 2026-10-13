@@ -120,9 +120,17 @@ export class CodexAdapter {
     await this.start(threadId, { ...options, permissionMode: 'review' });
   }
 
-  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[]) {
-    if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
+  /** `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. */
+  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string) {
+    const live = this.threads.get(threadId);
+    if (!live) throw new Error('No live Codex session for this thread; resume it first');
+    if (speed !== undefined) live.options = { ...live.options, speed: speed || undefined };
     await this.report(threadId, () => this.turn(threadId, text, images, skills));
+  }
+
+  /** What a live thread runs on, with the speed its latest message set. */
+  runOptions(threadId: string) {
+    return this.threads.get(threadId)?.options;
   }
 
   /** The turn before the latest one started with this text, for `forkAt`; null when unknown or it was the first. */
@@ -239,7 +247,7 @@ export class CodexAdapter {
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
-    const params = { cwd: options.cwd, model: options.model ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume
@@ -276,7 +284,7 @@ export class CodexAdapter {
     const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
     const attached = skillInputs(text, skills, listed);
     const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, outputSchema: this.schemas.get(threadId) ?? null });
+    const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
     if (typeof turnId === 'string') live.turns.push({ id: turnId, text });

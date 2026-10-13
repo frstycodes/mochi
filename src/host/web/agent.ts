@@ -1,7 +1,7 @@
 import { localClassifier } from '../../drift.ts';
 import { demoReviewer } from '../../secondOpinion/demo.ts';
 import { chunks, mockAnswer } from '../../sidechat/mockAnswer.ts';
-import { CLAUDE_FALLBACK_MODELS } from '../../runtime/models.ts';
+import { CLAUDE_FALLBACK_MODELS, claudeFast } from '../../runtime/models.ts';
 import { demoLimits } from '../../usage/demoLimits.ts';
 import type { AgentAskEvent, AgentEvent, AgentHost, AgentModel } from '../types/agent.ts';
 
@@ -60,14 +60,17 @@ export const agent: AgentHost = {
   },
   onLimits: () => () => {},
   async models(provider) {
-    return provider === 'claude' ? CLAUDE_FALLBACK_MODELS : DEMO_CODEX_MODELS;
+    return provider === 'claude' ? DEMO_CLAUDE_MODELS : DEMO_CODEX_MODELS;
   },
 };
 
 // GAP: demo data. The desktop build reads each account's real list from `codex app-server` (`model/list`).
 const CODEX_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+// Tiers shaped like 0.155.1's `serviceTiers`.
 const DEMO_CODEX_MODELS: AgentModel[] = [
-  { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: [...CODEX_EFFORTS, 'ultra'], defaultEffort: 'low', isDefault: true },
-  { id: 'gpt-6-sol', name: 'GPT-6-Sol', description: 'Previous generation workhorse model.', efforts: [...CODEX_EFFORTS, 'ultra'], defaultEffort: 'medium', isDefault: false },
-  { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: CODEX_EFFORTS, defaultEffort: 'medium', isDefault: false },
+  { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: [...CODEX_EFFORTS, 'ultra'], defaultEffort: 'low', speeds: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }], isDefault: true },
+  { id: 'gpt-6-sol', name: 'GPT-6-Sol', description: 'Previous generation workhorse model.', efforts: [...CODEX_EFFORTS, 'ultra'], defaultEffort: 'medium', speeds: [{ id: 'priority', name: 'Fast', description: '1.5x speed, increased usage' }, { id: 'ultrafast', name: 'Ultrafast', description: 'The fastest available responses for latency-sensitive work.' }], isDefault: false },
+  { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: CODEX_EFFORTS, defaultEffort: 'medium', speeds: [], isDefault: false },
 ];
+// GAP: demo data; on desktop fast mode shows only where the account's `supportedModels()` reports it.
+const DEMO_CLAUDE_MODELS = CLAUDE_FALLBACK_MODELS.map((m) => (m.id === 'claude-opus-5-5' ? { ...m, speeds: [claudeFast(m.id)] } : m));

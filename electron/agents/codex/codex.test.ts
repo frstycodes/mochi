@@ -153,6 +153,47 @@ test('side chat asks on the profile account, streams once per delta, and says wh
   }
 });
 
+test('a thread runs at the speed it started with, and a message changes it for its turn and the ones after', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = path.join(home, 'codex');
+  const log = path.join(home, 'tiers.log');
+  writeFileSync(fake, TIER_CODEX, { mode: 0o755 });
+  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  // Lets each turn end before the next send.
+  const settle = () => new Promise((r) => setTimeout(r, 150));
+  try {
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority' });
+    await settle();
+    await codex.send('t', 'again');
+    await settle();
+    await codex.send('t', 'slower', undefined, undefined, '');
+    await settle();
+    await codex.send('t', 'faster', undefined, undefined, 'priority');
+    await settle();
+    await codex.start('u', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
+    const expected = ['thread/start priority', 'turn/start priority', 'turn/start priority', 'turn/start null', 'turn/start priority', 'thread/start null', 'turn/start null'];
+    assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), expected);
+  } finally {
+    codex.dispose();
+  }
+});
+
+/** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG; each turn completes shortly after its reply. */
+const TIER_CODEX = `#!/usr/bin/env node
+const fs = require('node:fs');
+let buf = '', n = 0;
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+// Later than the reply, as a real turn ends: the adapter records the turn id from the reply.
+const done = (threadId, id) => setTimeout(() => send({ method: 'turn/completed', params: { threadId, turn: { id, status: 'completed' } } }), 20);
+process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+  if (['thread/start', 'turn/start'].includes(m.method)) fs.appendFileSync(process.env.TIER_LOG, m.method + ' ' + m.params.serviceTier + '\\n');
+  if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
+  else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c' + ++n } } });
+  else if (m.method === 'turn/start') { const id = 'u' + ++n; send({ id: m.id, result: { turn: { id } } }); done(m.params.threadId, id); }
+  else if (m.id !== undefined) send({ id: m.id, result: {} });
+} });
+`;
+
 /** A stand-in `codex` speaking just enough app-server: thread ids carry its pid and CODEX_HOME, each turn echoes its thread. */
 const FAKE_CODEX = `#!/usr/bin/env node
 let n = 0, buf = '';
@@ -268,19 +309,19 @@ test('webSearch items name the query on completion and carry pages as links', ()
   assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: opened }, s), [{ threadId: 'h1', type: 'tool', id: 'w2', phase: 'end', text: 'Fetch https://redis.io/docs/', links: [{ url: 'https://redis.io/docs/' }] }]);
 });
 
-test('model/list maps to the picker: real ids, names, default flag and efforts; hidden models stay out', () => {
+test('model/list maps to the picker: real ids, names, default flag, efforts and speed tiers; hidden models stay out', () => {
   // Shape of a real 0.155.1 `model/list` result on a ChatGPT account, trimmed to two models plus a hidden one.
   const result = {
     data: [
-      { id: 'gpt-6-astra', model: 'gpt-6-astra', displayName: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', hidden: false, isDefault: true, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low', description: '' }, { reasoningEffort: 'ultra', description: '' }] },
+      { id: 'gpt-6-astra', model: 'gpt-6-astra', displayName: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', hidden: false, isDefault: true, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low', description: '' }, { reasoningEffort: 'ultra', description: '' }], additionalSpeedTiers: ['fast'], serviceTiers: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }], defaultServiceTier: null },
       { id: 'gpt-6-luna', model: 'gpt-6-luna', displayName: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', hidden: false, isDefault: false, defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: '' }] },
       { id: 'internal', model: 'internal', displayName: 'Internal', description: '', hidden: true, isDefault: false, defaultReasoningEffort: 'low', supportedReasoningEfforts: [] },
     ],
     nextCursor: null,
   };
   assert.deepEqual(codexModels(result), [
-    { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: ['low', 'ultra'], defaultEffort: 'low', isDefault: true },
-    { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: ['medium'], defaultEffort: 'medium', isDefault: false },
+    { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: ['low', 'ultra'], defaultEffort: 'low', speeds: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }], isDefault: true },
+    { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: ['medium'], defaultEffort: 'medium', speeds: [], isDefault: false },
   ]);
   assert.deepEqual(codexModels(null), []);
 });

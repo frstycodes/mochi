@@ -6,7 +6,7 @@ import { NO_AGENT_PROCESS, type AgentAskContext, type AgentAskModel, type AgentI
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, claudeRunOptions, hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
@@ -81,17 +81,21 @@ export const agent = {
   async start(_sender, threadId, options) {
     return startAgent(threadId, options);
   },
-  async send(_sender, threadId, text, pictures, skills) {
+  async send(_sender, threadId, text, pictures, skills, speed) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
     images(pictures);
     skillNames(skills);
+    if (speed !== undefined) string(speed, 'speed', 256);
     // Sent while the worktree is being set up: it goes to the agent once that start is through.
     await starts.wait(threadId as string);
-    if (!hasClaudeSession(threadId as string) && !codex.owns(threadId as string)) throw new Error(NO_AGENT_PROCESS);
+    const run = claudeRunOptions(threadId as string) ?? codex.runOptions(threadId as string);
+    if (!run) throw new Error(NO_AGENT_PROCESS);
+    // '' is standard; a tier the running model doesn't list runs standard too.
+    const tier = speed === undefined ? undefined : ((await offered(run.provider, run.spaceId, run.model, undefined, speed as string)).speed ?? '');
     markBusy(threadId as string);
-    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined);
-    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined);
+    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier);
+    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier);
   },
   async interrupt(_sender, threadId) {
     string(threadId, 'threadId', 256);
@@ -250,17 +254,18 @@ export async function startAgent(threadId: unknown, options: unknown) {
   if (!PROVIDERS.includes(o.provider as string)) throw new TypeError('options.provider must be claude or codex');
   string(o.spaceId, 'options.spaceId', 256);
   string(o.prompt, 'options.prompt', 100_000);
-  for (const key of ['model', 'effort', 'permissionMode', 'resume', 'forkAt']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
+  for (const key of ['model', 'effort', 'speed', 'permissionMode', 'resume', 'forkAt']) if (o[key] !== undefined) string(o[key], `options.${key}`, 256);
   if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
   if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
   images(o.images);
   skillNames(o.skills);
-  const { workspace, worktree, ...rest } = o;
+  // `speed` goes only through `offered`, which drops one the model doesn't list.
+  const { workspace, worktree, speed, ...rest } = o;
   const id = threadId as string;
   const start = starts.begin(id);
   markBusy(id);
   const launch = async (cwd: string) => {
-    const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined)) } as unknown as AgentRunOptions;
+    const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined, speed as string | undefined)) } as unknown as AgentRunOptions;
     if (o.provider === 'claude') return startClaude(id, run);
     return codex.start(id, run);
   };
@@ -307,9 +312,12 @@ async function refreshLimits(provider: Provider, spaceId: string) {
   if (read) await recordLimits(read.accountId, 'claude', claudeUsageWindows(read.rateLimits), true);
 }
 
-/** The model and effort a run sends: always an explicit model the account offers. A list that can't be read passes the choice through; the run then reports the provider's own error. */
-async function offered(provider: Provider, spaceId: string, model: string | undefined, effort: string | undefined) {
-  return resolveRun(await models(codex, provider, spaceId).catch(() => []), model, effort);
+/**
+ * The model, effort and speed a run sends: always an explicit model the account offers, and a speed only that model lists.
+ * A list that can't be read passes model and effort through (the run then reports the provider's own error) and drops the speed.
+ */
+async function offered(provider: Provider, spaceId: string, model: string | undefined, effort: string | undefined, speed?: string) {
+  return resolveRun(await models(codex, provider, spaceId).catch(() => []), model, effort, speed);
 }
 
 /** A Codex review on a thread of its own: tool starts become steps, the turn's last message is the answer. */
