@@ -29,11 +29,11 @@ import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
-import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
+import { GoalTimeline, StepLinkLine } from './GoalTimeline';
 import { openGoalEditor } from './goals/GoalEditor';
 import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
-import { burnSeries, clock, duration, minutesLeft, progressAt } from './progress';
+import { burnSeries, clock, duration, GOAL_PHASE_LABELS, goalProgress, progressAt, progressLabel } from './progress';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
@@ -654,8 +654,7 @@ function GoalSection({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const live = progressAt(thread, state.now, true);
-  const eta = minutesLeft(thread, state.now);
+  const progress = goalProgress(thread, state.now);
   const latest = thread.revisions[thread.revisions.length - 1];
   const now = thread.steps.filter((s) => s.status === 'running' || s.status === 'blocked');
   const waiting = thread.steps.filter((s) => s.status === 'waiting');
@@ -684,10 +683,8 @@ function GoalSection({ thread }: { thread: Thread }) {
           <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
           {!!thread.criteria?.length && <CriteriaList thread={thread} />}
           <div className="flex items-end justify-between gap-2">
-            <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
-            <span className="tabular pb-1 type-caption text-subtle-foreground">
-              {Math.round(live.done + live.partial)} of {live.scope} pts · {etaLabel(eta).toLowerCase()}
-            </span>
+            <span className="tabular type-display">{Math.round(progress.pct * 100)}%</span>
+            <span className="tabular pb-1 type-caption text-subtle-foreground">{progress.total ? progressLabel(progress) : GOAL_PHASE_LABELS[progress.phase]}</span>
           </div>
           <Sparkline thread={thread} now={state.now} />
           {now.map((s) => (

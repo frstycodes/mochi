@@ -2,7 +2,6 @@ import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/age
 import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
-import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
@@ -156,7 +155,7 @@ function addScope(state: State, threadId: string, provider: Provider, added: { i
     const step: Step = {
       id: `${thread.id}-s${steps.length}`,
       title: item.title,
-      size: item.size ?? getPrefs().stepSize,
+      size: item.size ?? 1,
       status: item.status === 'pending' ? 'ready' : item.status,
       progress: item.status === 'done' ? 1 : (item.progress ?? 0),
       footprint: item.files ?? [],

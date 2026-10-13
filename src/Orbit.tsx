@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ClipboardTick, Clock, Hierarchy3, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
-import { progressAt } from './progress';
+import { goalProgress, progressLabel } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -260,15 +260,15 @@ function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
 }
 
 function ThreadPeek({ thread, now }: { thread: Thread; now: number }) {
-  const { pct } = progressAt(thread, now, true);
+  const progress = goalProgress(thread, now);
   const running = thread.steps.find((s) => s.status === 'running');
   const last = thread.activity[thread.activity.length - 1];
   return (
     <>
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
-        <ProgressRing pct={pct} slot={thread.line} size={18} isWorking={isWorking(thread)} />
-        <span className="tabular font-medium text-foreground">{Math.round(pct * 100)}%</span>
+        <ProgressRing pct={progress.pct} slot={thread.line} size={18} isWorking={isWorking(thread)} />
+        <span className="tabular font-medium text-foreground">{progressLabel(progress)}</span>
         <span className="truncate text-muted-foreground">{running ? running.title : 'Nothing running'}</span>
       </div>
       {last && <div className="line-clamp-2 text-xs text-subtle-foreground">{last.text}</div>}

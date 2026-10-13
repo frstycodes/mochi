@@ -8,11 +8,9 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { getPrefs } from '../settings/prefs';
-import type { Size, Thread } from '../model';
+import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { StepStatusIcon, TooltipIconButton } from '../ui';
 import { applyDraft, draftFrom, type DraftCriterion, type DraftStep, type GoalDraft } from './edit';
@@ -58,12 +56,12 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
   const stepsDraft = useDraft('goal', thread.spaceId);
   const draftSteps = async () => {
     const text = await stepsDraft.draft(goalPrompt(draft.goal));
-    if (text) addSteps(parseSteps(text).map((title) => ({ title, size: getPrefs().stepSize, gate: false })));
+    if (text) addSteps(parseSteps(text).map((title) => ({ title, size: 1, gate: false })));
   };
 
   const add = () => {
     if (!newTitle.trim()) return;
-    addSteps([{ title: newTitle.trim(), size: getPrefs().stepSize, gate: false }]);
+    addSteps([{ title: newTitle.trim(), size: 1, gate: false }]);
     setNewTitle('');
   };
 
@@ -209,8 +207,6 @@ function useGoalDraft(thread: Thread) {
   return { draft, setGoal, setCriterion, removeCriterion, addCriterion, updateStep, moveStep, addSteps };
 }
 
-const SIZES = ['1', '2', '3'] as const;
-const SIZE_NAMES = { '1': 'Small', '2': 'Medium', '3': 'Large' } satisfies Record<(typeof SIZES)[number], string>;
 
 function StepEditRow({
   step,
@@ -241,21 +237,6 @@ function StepEditRow({
         ) : (
           <Input value={step.title} disabled={!isEditable} onChange={(e) => onChange({ title: e.target.value })} aria-label="Step title" className={cn('h-7 min-w-0 flex-1', step.isRemoved && 'line-through')} />
         )}
-        <ToggleGroup type="single" size="sm" variant="outline" spacing={0} value={String(step.size)} disabled={!isEditable} onValueChange={(v) => v && onChange({ size: Number(v) as Size })} aria-label="Step size">
-          {SIZES.map((s) => (
-            <Tooltip key={s}>
-              <TooltipTrigger asChild>
-                <ToggleGroupItem value={s} aria-label={`${SIZE_NAMES[s]} step`}>
-                  {SIZE_NAMES[s][0]}
-                </ToggleGroupItem>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-60 flex-col items-start gap-0.5">
-                <span className="block font-medium">{SIZE_NAMES[s]} step</span>
-                <span className="block opacity-80">Counts {s} {s === '1' ? 'point' : 'points'} toward the goal's progress and ETA.</span>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </ToggleGroup>
         <TooltipIconButton
           label={step.gate ? 'Pauses before this step' : 'Pause before this step'}
           hint="The agent stops and asks you in the Queue before it starts this step."

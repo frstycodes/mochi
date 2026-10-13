@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Step, Thread } from './model.ts';
-import { boardColumns, progressAt, similarity, statusAt, timeAgo } from './progress.ts';
+import { boardColumns, progressAt, similarity, statusAt, timeAgo, goalProgress, progressLabel } from './progress.ts';
 
 function step(id: string, rest: Partial<Step> = {}): Step {
   return { id, title: id, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: 0, addedBy: 'you', revision: 1, ...rest };
@@ -26,11 +26,23 @@ test('statusAt replays a step through time', () => {
   assert.equal(statusAt(thread.steps[2], 5), 'dropped');
 });
 
-test('progress weights by size, ignores dropped, grows scope over time', () => {
-  assert.deepEqual(progressAt(thread, 15, false), { scope: 4, done: 2, partial: 0, pct: 0.5 });
+test('every step counts the same, dropped ones are left out, scope grows over time', () => {
+  assert.deepEqual(progressAt(thread, 15, false), { scope: 2, done: 1, partial: 0, pct: 0.5 });
   const live = progressAt(thread, 30, true);
-  assert.equal(live.scope, 5);
-  assert.equal(live.pct, (2 + 1) / 5);
+  assert.equal(live.scope, 3);
+  assert.equal(live.pct, (1 + 0.5) / 3);
+});
+
+test('the ring follows criteria when the goal has them, and the phase follows what happened', () => {
+  const goal = { ...thread, goal: 'Keys rate limited', status: 'running' as const, activity: [], criteria: [{ id: 'c1', text: 'Header' }, { id: 'c2', text: 'Tests' }] };
+  assert.deepEqual(goalProgress({ ...goal, steps: [] }, 30), { pct: 0, met: 0, total: 2, phase: 'planning' });
+  assert.equal(goalProgress(goal, 30).phase, 'building', 'a step done');
+  const claimed = { ...goal, criteria: [{ ...goal.criteria[0], claim: { evidence: 'curl', at: 1, by: 'claude' as const } }, goal.criteria[1]] };
+  assert.deepEqual(goalProgress(claimed, 30), { pct: 0.5, met: 1, total: 2, phase: 'verifying' });
+  assert.equal(progressLabel(goalProgress(claimed, 30)), 'Verifying · 1/2');
+  const passed = { ...claimed, criteria: claimed.criteria.map((c) => ({ ...c, check: { status: 'passed' as const, at: 2 } })) };
+  assert.equal(progressLabel(goalProgress(passed, 30)), 'Ready for review · 2/2');
+  assert.equal(progressLabel(goalProgress({ ...thread, goal: 'x', criteria: [] }, 30)), 'Building · 50%');
 });
 
 test('shared steps align to one column and push later stations right', () => {

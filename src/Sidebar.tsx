@@ -42,7 +42,7 @@ import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
 import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
-import { duration, progressAt } from './progress';
+import { duration, goalProgress } from './progress';
 import { openSettings } from './settings/open';
 import { hasGoal } from './drift';
 import { reportHeadline } from './goals/report';
@@ -515,7 +515,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
         {/* overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line. */}
         <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
-          {hasGoal(thread) && <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>}
+          {hasGoal(thread) && <span className="shrink-0 tabular">{row.met}</span>}
           {row.isWorking ? (
             <span className="flex min-w-0 flex-1" title={row.detail}>
               <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
@@ -560,11 +560,11 @@ const AGENTS_LABEL = new Intl.PluralRules('en');
 /** What a thread row says under its title: the step in flight, or what it is waiting for. */
 function useThreadRow(thread: Thread) {
   const { state } = useHarness();
-  const { pct } = progressAt(thread, state.now, true);
+  const progress = goalProgress(thread, state.now);
   const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { pct: progress.pct, met: progress.total ? `${progress.met}/${progress.total}` : `${Math.round(progress.pct * 100)}%`, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {
