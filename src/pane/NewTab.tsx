@@ -1,5 +1,6 @@
 import { FileIcon } from '@react-symbols/icons/utils';
-import { BranchUp, Global } from 'reicon-react';
+import { Global } from 'reicon-react';
+import { GitPullRequestIcon } from '@/icons/github';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { threadCwd } from '@/host/cwd';
@@ -47,7 +48,7 @@ export function NewTab({ thread }: PaneTabProps) {
             {thread.prs.map((pr) => (
               <Item key={pr.number} size="sm" className="px-2">
                 <ItemMedia>
-                  <BranchUp className="size-4 text-muted-foreground" />
+                  <GitPullRequestIcon className="size-4 text-muted-foreground" />
                 </ItemMedia>
                 <ItemContent>
                   <ItemTitle className="font-normal">{pr.title}</ItemTitle>
