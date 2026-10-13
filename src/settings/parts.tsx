@@ -31,11 +31,12 @@ export function SettingsGroup({ id, title, footer, children }: { id?: string; ti
  * One row: label (and a short secondary line) on the left, control on the right, wrapping under on narrow screens.
  * `id` is the deep-link target and names the control `setting-<id>` for the label; `children` expand under the row.
  */
-export function SettingsRow({ id, label, description, control, children }: { id?: string; label: ReactNode; description?: ReactNode; control?: ReactNode; children?: ReactNode }) {
+export function SettingsRow({ id, label, description, control, children, className, ...props }: { id?: string; label: ReactNode; description?: ReactNode; control?: ReactNode } & Omit<React.ComponentProps<'div'>, 'id'>) {
   return (
     <div
       data-setting-id={id}
-      className="relative flex flex-col gap-2.5 px-3.5 py-2.5 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-3.5 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent"
+      {...props}
+      className={cn("relative flex flex-col gap-2.5 px-3.5 py-2.5 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-3.5 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent", className)}
     >
       <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 *:not-first:shrink-0">
         <div className="min-w-40 flex-1">

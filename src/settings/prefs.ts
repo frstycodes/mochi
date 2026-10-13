@@ -9,6 +9,9 @@ import { effortId, modelId } from '../runtime/models.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
+  /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
+  lightTheme: string;
+  darkTheme: string;
   projectsFolder: string;
   restoreLayout: boolean;
   /** NoticeKind values that raise an OS notification while the window is in the background. */
@@ -47,6 +50,8 @@ export interface Prefs {
   threadModels: ThreadModels;
   /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
   recordReplays: boolean;
+  /** The rewind mode you last ran, offered first next time. */
+  rewindMode: 'chat' | 'files';
 }
 
 export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
@@ -59,6 +64,8 @@ export type AgentControl = (typeof AGENT_CONTROLS)[number];
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
+  lightTheme: 'mochi',
+  darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
   alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
@@ -85,6 +92,7 @@ export const DEFAULT_PREFS: Prefs = {
   agentControl: 'everything',
   threadModels: 'cheaper',
   recordReplays: true,
+  rewindMode: 'files',
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';

@@ -1,5 +1,5 @@
 import { parseDiff } from '../../git/parse.ts';
-import { refKey, type RefState } from '../../chat/refs.ts';
+import { bareState, refKey, type RefState } from '../../chat/refs.ts';
 import type { GitHost } from '../types/git.ts';
 
 // Fixture paths match the `adm` thread's step footprints, so the per-step filter has something to show.
@@ -189,10 +189,17 @@ export const git: GitHost = {
     return `${threadId}${n}`.padEnd(40, '0');
   },
   async restoreCheckpoint() {},
+  async rewindPreview() {
+    return { files: ['src/limits/schema.ts', 'src/gateway/config.ts'], outside: [] };
+  },
   /** Later checkpoints hold more of the fixture's changes, so scrubbing a replay shows the diff growing. */
   async checkpointDiff(cwd, _threadId, n) {
     const { files, ...diff } = await git.diff(cwd, 'branch');
     return { ...diff, files: files.slice(0, (n % files.length) + 1) };
+  },
+  async runCheck(_cwd, command) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return { exitCode: 0, output: `$ ${command}\n(demo) passed`, ms: 1200 };
   },
   async forkWorktree(_cwd, threadId) {
     return `~/.harness/worktrees/demo/${threadId}`;
@@ -201,25 +208,28 @@ export const git: GitHost = {
 
 // One of every chip state, by number on any repo; other numbers stay unknown, as without gh.
 const demoRef = (kind: RefState['kind'], status: RefState['status'], number: number, title: string, extra: Partial<RefState> = {}): RefState => ({
-  kind,
-  status,
-  title,
-  url: `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`,
-  hasConflicts: false,
-  isFailing: false,
-  isNotPlanned: false,
+  ...bareState(kind, status, title, `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`),
+  author: 'frstycodes',
+  updatedAt: new Date(Date.now() - (number % 9) * 47 * 60_000).toISOString(),
+  ...(kind === 'pr' && { branch: { head: `feat/demo-${number}`, base: 'main' }, diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 }, checks: 'pass', review: 'approved' }),
   ...extra,
 });
 
 const DEMO_REFS: Record<number, RefState> = {
   45: demoRef('pr', 'open', 45, 'fix(header): restore the side pane and sidebar toggles'),
   46: demoRef('pr', 'open', 46, 'feat(composer): slash anywhere, @ skills and MCP servers', { hasConflicts: true }),
-  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', { isFailing: true }),
-  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links'),
+  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', { checks: 'fail' }),
+  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links', { checks: 'pending', review: null }),
   47: demoRef('pr', 'merged', 47, 'fix: replace prototype stubs with working actions'),
   30: demoRef('pr', 'closed', 30, 'feat: experimental orbit gestures'),
   7: demoRef('pr', 'closed', 7, 'An early PR that was closed'),
   50: demoRef('pr', 'open', 50, 'A PR that conflicts with main', { hasConflicts: true }),
+  // The Better Auth demo thread's PRs: one of each attention rank, so its sidebar stack overflows.
+  479: demoRef('pr', 'merged', 479, 'Better Auth core', { branch: { head: 'feat/better-auth', base: 'main' } }),
+  482: demoRef('pr', 'open', 482, 'Session backfill + legacy removal', { branch: { head: 'feat/better-auth-backfill', base: 'main' }, checks: 'fail', review: 'changes' }),
+  484: demoRef('pr', 'open', 484, 'Keep the latitude.sid cookie name', { branch: { head: 'fix/session-cookie', base: 'feat/better-auth-backfill' }, checks: 'pending', review: 'required' }),
+  485: demoRef('pr', 'draft', 485, 'Passkeys on the login page', { branch: { head: 'feat/passkeys', base: 'main' }, checks: null, review: null }),
+  487: demoRef('pr', 'open', 487, 'Docs: migrating to Better Auth', { branch: { head: 'docs/better-auth', base: 'main' } }),
   12: demoRef('issue', 'open', 12, 'Sidebar loses scroll position on space switch'),
   9: demoRef('issue', 'closed', 9, 'Composer drops pasted images'),
   8: demoRef('issue', 'closed', 8, 'Support Windows titlebar', { isNotPlanned: true }),

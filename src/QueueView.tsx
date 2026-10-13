@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, BranchDown, CheckCircle, Clock, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
@@ -37,9 +37,10 @@ import { useSendCiLog } from './notify/useSendCiLog';
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
   question: { icon: MessageQuestion, label: 'Question' },
-  review: { icon: GitPullRequestIcon, label: 'Review' },
+  review: { icon: ClipboardTick, label: 'Ready for review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
-  overlap: { icon: BranchDown, label: 'Overlap' },
+  overlap: { icon: Hierarchy3, label: 'Overlap' },
+  collision: { icon: Copy3, label: 'Same files' },
   run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Setting2, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
@@ -136,13 +137,19 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
       <CardContent className="flex flex-col gap-3">
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
         {isMochiCard(item) && <ShowCard item={item} />}
-        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} />}
+        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} canOpenThread={!!showThread} />}
         {item.kind === 'question' && <QuestionChoices item={item} />}
         {item.kind === 'overlap' && <OverlapChoices item={item} />}
+        {!!item.collision && <SharedFiles files={item.collision.files} />}
       </CardContent>
       {item.kind === 'review' && (
         <CardFooter className="gap-2">
-          <ReviewActions item={item} />
+          <ReviewActions item={item} canOpenThread={!!showThread} />
+        </CardFooter>
+      )}
+      {!!item.collision && (
+        <CardFooter className="gap-2">
+          <CollisionActions item={item} otherId={item.collision.otherThreadId} />
         </CardFooter>
       )}
       {item.kind === 'run' && (
@@ -178,7 +185,8 @@ export function useUndoable() {
   };
 }
 
-function ApprovalRequest({ item }: { item: QueueItem }) {
+/** `canOpenThread`: false inside the thread itself (the composer's tray), where Open thread would go nowhere. */
+function ApprovalRequest({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
   return (
@@ -192,9 +200,11 @@ function ApprovalRequest({ item }: { item: QueueItem }) {
       )}
       <ConfirmationRequest>
         <ConfirmationActions>
-          <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
-            Open thread
-          </ConfirmationAction>
+          {canOpenThread && (
+            <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+              Open thread
+            </ConfirmationAction>
+          )}
           <ConfirmationAction onClick={() => withUndo('Approved', () => dispatch({ type: 'answer', queueId: item.id }))}>Approve and run</ConfirmationAction>
         </ConfirmationActions>
       </ConfirmationRequest>
@@ -215,17 +225,42 @@ function ShowCard({ item }: { item: QueueItem }) {
   );
 }
 
-function ReviewActions({ item }: { item: QueueItem }) {
+function ReviewActions({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
   return (
     <>
-      <Button onClick={() => withUndo('Merged', () => dispatch({ type: 'answer', queueId: item.id }))}>
+      <Button onClick={() => withUndo('Marked done', () => dispatch({ type: 'answer', queueId: item.id }))}>
         <CheckCircle data-icon="inline-start" />
-        Approve and merge
+        Mark done
       </Button>
-      <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
-        Open thread
+      {canOpenThread && (
+        <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+          Open thread
+        </Button>
+      )}
+    </>
+  );
+}
+
+function SharedFiles({ files }: { files: string[] }) {
+  return (
+    <p className="type-caption text-subtle-foreground">
+      Both edited <code className="rounded-sm bg-muted px-1 font-mono text-muted-foreground">{files.join(', ')}</code>
+    </p>
+  );
+}
+
+/** Never pauses an agent: open the other thread to coordinate, or keep both going. */
+function CollisionActions({ item, otherId }: { item: QueueItem; otherId: string }) {
+  const { state, dispatch } = useHarness();
+  const withUndo = useUndoable();
+  const other = state.threads.find((t) => t.id === otherId);
+  return (
+    <>
+      {!!other && <Button onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: other.id } })}>Open "{other.title}"</Button>}
+      <Button variant="outline" onClick={() => withUndo('Kept both', () => dispatch({ type: 'answer', queueId: item.id }))}>
+        Keep both
       </Button>
     </>
   );

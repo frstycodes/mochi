@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
+import { Archive, Flag, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
@@ -10,8 +10,11 @@ import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import type { Provider, Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
+import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
 import { openSchedule } from '../schedule/ScheduleDialog';
+import { openGoalEditor } from '../goals/GoalEditor';
+import { hasGoal } from '../drift';
 import { startRename } from '../rename';
 import { openSettings } from '../settings/open';
 import { openReplay } from '../replay/open';
@@ -76,10 +79,12 @@ export const ACTIONS = [
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
   { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, keywords: 'title name', when: when.thread, run: inThread((t) => startRename(t.id)) },
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
-  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
+  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, disabledReason: (s) => s.thread && rewindBlockedReason(s.thread), run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-replay', group: 'Thread', title: 'Replay thread', icon: VideoPlay, keywords: 'recording session playback demo debug', when: when.thread, run: onThread((t) => openReplay(t.id)) },
   { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Export, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
+  { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
+  { id: 'thread-goal-remove', group: 'Thread', title: 'Remove goal', icon: CloseSquare, keywords: 'goal chat question untrack progress', when: (s) => when.thread(s) && hasGoal(s.thread!), run: onThread((t, { dispatch }) => dispatch({ type: 'goal-remove', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   {
     id: 'thread-second-opinion',
@@ -95,7 +100,7 @@ export const ACTIONS = [
   },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
-  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
+  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: Hierarchy2, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
   { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },
 

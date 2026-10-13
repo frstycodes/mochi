@@ -35,9 +35,10 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): Cha
       return rows.push({ kind: 'subagent', key, entry });
     }
     if (entry.kind === 'event') {
-      if (turn && isMidWork && !entry.card) return turn.entries.push(entry);
-      // Mochi's widgets (a delete or settings approval) stay in view: the turn continues in a new accordion after one.
-      if (entry.card) turn = undefined;
+      const isWidget = !!entry.card || !!entry.isLimit;
+      if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
+      // Mochi's widgets (a delete or settings approval, a usage limit) stay in view: the turn continues in a new accordion after one.
+      if (isWidget) turn = undefined;
       return rows.push({ kind: 'event', key, entry });
     }
     turn = undefined;

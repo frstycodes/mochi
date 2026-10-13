@@ -20,6 +20,7 @@ import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
+import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
 export function ReviewView() {
@@ -103,11 +104,13 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
             ) : (
               <ul className="flex flex-col gap-1">
                 {thread.prs.map((pr) => (
-                  <li key={pr.number} className="flex min-w-0 items-center gap-2">
-                    <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
-                    <span className="min-w-0 truncate">{pr.title}</span>
-                    <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
-                  </li>
+                  <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr} align="start">
+                    <li tabIndex={0} className="flex min-w-0 items-center gap-2">
+                      <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
+                      <span className="min-w-0 truncate">{pr.title}</span>
+                      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
+                    </li>
+                  </ThreadPrHoverCard>
                 ))}
               </ul>
             )}
@@ -140,14 +143,14 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
 
   const approve = async () => {
     const ok = await confirm({
-      title: `Approve "${thread.title}"?`,
-      description: openPrs.length ? `${openPrs.map((p) => `#${p.number}`).join(', ')} merge and the thread settles.` : 'There is no open pull request; the thread settles as it is.',
-      confirm: openPrs.length ? 'Approve and merge' : 'Approve and settle',
+      title: `Mark "${thread.title}" done?`,
+      description: openPrs.length ? `The thread settles. ${openPrs.map((p) => `#${p.number}`).join(', ')} stay open on GitHub; merge them there.` : 'The thread settles.',
+      confirm: 'Mark done',
       cancel: 'Not yet',
     });
     if (!ok) return;
     const item = state.queue.find((q) => q.kind === 'review' && q.threadId === thread.id);
-    withUndo(`Approved ${thread.title}`, () => {
+    withUndo(`Marked ${thread.title} done`, () => {
       if (item) dispatch({ type: 'answer', queueId: item.id });
       dispatch({ type: 'settle', threadId: thread.id });
     });

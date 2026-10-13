@@ -1,4 +1,4 @@
-import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
+import type { AgentQuestion, LimitWindow, SubagentStatus } from './host/types/agent.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -7,6 +7,7 @@ import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 import { longThreadFromUrl } from './longThread.ts';
+import { limitPausedThread } from './usage/limitDemo.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
 export type Size = 1 | 2 | 3;
@@ -41,6 +42,36 @@ export interface Step {
   owner?: Provider;
 }
 
+/** What done means for a goal: checkable (a command Mochi can run) or judged (a sentence). */
+export interface Criterion {
+  id: string;
+  text: string;
+  command?: string;
+  /** The agent says it's met (`claim_criterion`), with one line of evidence; checking it is yours or Mochi's. */
+  claim?: { evidence: string; at: number; by: Provider };
+  /** Mochi ran `command` in the worktree when you asked; a failed check outweighs a claim. */
+  check?: { status: 'running' | 'passed' | 'failed'; at: number; ms?: number; output?: string };
+}
+
+/** Met when its check passed, or the agent claimed it and no check failed since. */
+export const isMet = (c: Criterion) => c.check?.status === 'passed' || (!!c.claim && c.check?.status !== 'failed');
+
+/** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
+export interface TurnReport {
+  at: number;
+  by: Provider;
+  decisions: string[];
+  left: string[];
+  /** The one thing that needs you, if anything. */
+  question?: string;
+}
+
+/** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
+export interface Similar {
+  threadId: string;
+  relation: 'same' | 'related';
+}
+
 export interface Revision {
   n: number;
   at: number;
@@ -65,6 +96,8 @@ export interface ActivityEntry {
   output?: string;
   exitCode?: number;
   patch?: string;
+  /** Events only: the thread paused here on a usage limit; the latest such entry renders the live limit card while the pause lasts. */
+  isLimit?: boolean;
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
@@ -88,6 +121,11 @@ export interface McpCall {
 export interface WebLink {
   url: string;
   title?: string;
+}
+
+/** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
+export function firstPrompt(thread: Thread) {
+  return thread.activity.find((e) => e.who === 'you' && e.kind === 'message')?.text ?? thread.goal;
 }
 
 export function authorName(who: Author) {
@@ -163,7 +201,15 @@ export interface Thread {
   isTitleRenamed?: boolean;
   /** A model named the thread after its first exchange (`useAutoTitles`). */
   isTitleGenerated?: boolean;
+  /** The drafted or edited outcome; '' while the thread has no goal (a question, a chat). */
   goal: string;
+  criteria?: Criterion[];
+  /** Open until you dismiss them on the goal card. */
+  similar?: Similar[];
+  /** You removed the goal: drafts don't bring it back, an edit does. */
+  isGoalOff?: boolean;
+  /** The latest `report`; a newer message from you starts a turn it no longer describes. */
+  report?: TurnReport;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;
@@ -254,20 +300,26 @@ export interface LiveRun {
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
   cwd?: string;
-  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
-  limit?: { resetsAt?: string };
+  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. `label` names the window ("5-hour"); `autoResume`: you chose Resume at reset. */
+  limit?: { resetsAt?: string; label?: string; autoResume?: boolean };
+  /** The account is close to a plan window's limit; turns still run. Cleared by the limit itself or a resume. */
+  limitWarning?: LimitWindow;
+  /** Mochi asked the agent to wrap up before the limit; cleared when that turn ends. */
+  isWrappingUp?: boolean;
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
+  /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
+  restart?: { forkAt: string } | { seed: string };
   /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
   isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting' | 'run';
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'collision' | 'setting' | 'run';
 
 export interface QueueItem {
   id: string;
@@ -279,6 +331,8 @@ export interface QueueItem {
   blocks: { steps: number; threads: number };
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
+  /** Two live threads of one project edited the same files (repo-relative). */
+  collision?: { otherThreadId: string; files: string[] };
   requestId?: string;
   /** A Mochi tool call waiting on this widget (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
   tool?: ToolWidget;
@@ -595,6 +649,9 @@ function authMigration(): Thread {
     prs: [
       { number: 479, state: 'merged', title: 'Better Auth core' },
       { number: 482, state: 'open', title: 'Session backfill + legacy removal' },
+      { number: 484, state: 'open', title: 'Keep the latitude.sid cookie name' },
+      { number: 485, state: 'draft', title: 'Passkeys on the login page' },
+      { number: 487, state: 'open', title: 'Docs: migrating to Better Auth' },
     ],
     sources: [
       { kind: 'link', label: 'better-auth.com/docs/concepts/session-management' },
@@ -657,6 +714,7 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
 export function seedThreads(): Thread[] {
   return [
     rateLimiting(),
+    limitPausedThread(),
     adminDashboard(),
     flakyCheckout(),
     authMigration(),

@@ -66,13 +66,19 @@ export function Transcript({ ref, threadId, rows, remembered, children }: { ref:
 
 type Virtualizer = ReturnType<typeof useVirtualizer<HTMLElement, Element>>;
 
-/** The list's distance from the top of the scroller's content (the chat's top padding): the virtualizer's `scrollMargin`. */
+/** The list's distance from the top of the scroller's content (the chat's top padding and the goal card above it): the virtualizer's `scrollMargin`. */
 function useOffsetIn(list: RefObject<HTMLElement | null>, scrollRef: RefObject<HTMLElement | null>) {
   const [offset, setOffset] = useState(0);
   useLayoutEffect(() => {
     const el = list.current;
     const scroller = scrollRef.current;
-    if (el && scroller) setOffset(el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop);
+    if (!el || !scroller) return;
+    const measure = () => setOffset(el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop);
+    measure();
+    // The goal card above the list grows and folds; the content box resizing is when the list may have moved.
+    const ro = new ResizeObserver(measure);
+    if (el.parentElement) ro.observe(el.parentElement);
+    return () => ro.disconnect();
   }, [list, scrollRef]);
   return offset;
 }
