@@ -47,6 +47,18 @@ test('an item that is gone, a missing thread and an idle agent are refused witho
   assert.deepEqual(dispatched, []);
 });
 
+test('a device answers only approvals and questions, and a question needs answers', () => {
+  const { state, threadId } = machine();
+  const review = { id: 'q-review', threadId, kind: 'review', title: 'Review', detail: '' } as QueueItem;
+  const question = { id: 'q-ask', threadId, kind: 'question', title: 'Which?', detail: '', requestId: 'ask' } as QueueItem;
+  const withItems = { ...state, queue: [...state.queue, review, question] };
+  const dispatched: Action[] = [];
+  assert.deepEqual(runRemoteCommand({ type: 'resolve', queueId: 'q-review' }, device(withItems, 'Laptop', dispatched)), { isOk: false, error: 'Only approvals and questions can be answered from a device' });
+  assert.deepEqual(runRemoteCommand({ type: 'resolve', queueId: 'q-ask' }, device(withItems, 'Laptop', dispatched)), { isOk: false, error: 'A question needs answers' });
+  assert.deepEqual(dispatched, []);
+  assert.deepEqual(runRemoteCommand({ type: 'resolve', queueId: 'q-ask', answers: [['A']] }, device(withItems, 'Laptop', dispatched)), { isOk: true });
+});
+
 test('send goes out now to an idle agent and queues behind a working one, like the composer', () => {
   const { state, threadId } = machine();
   const idle: Action[] = [];

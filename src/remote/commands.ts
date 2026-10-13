@@ -17,7 +17,11 @@ export function runRemoteCommand(command: RemoteCommand, { state, dispatch, devi
   if (command.type === 'resolve') {
     const by = answeredBy(command.queueId);
     if (by !== undefined) return { isOk: false, error: `Already answered on ${by}` };
-    if (!state.queue.some((q) => q.id === command.queueId)) return { isOk: false, error: 'This is no longer waiting for an answer' };
+    const item = state.queue.find((q) => q.id === command.queueId);
+    if (!item) return { isOk: false, error: 'This is no longer waiting for an answer' };
+    // `operate` answers the agent; settling reviews, runs and collisions is the thread's own business (`manage`).
+    if (item.kind !== 'approval' && item.kind !== 'question') return { isOk: false, error: 'Only approvals and questions can be answered from a device' };
+    if (item.kind === 'question' && !command.answers?.length) return { isOk: false, error: 'A question needs answers' };
     // Before the dispatch: the store applies it on the next render, and a second answer can arrive before that.
     markAnswered(command.queueId, deviceName);
     dispatch({ type: 'answer', queueId: command.queueId, answers: command.answers });
