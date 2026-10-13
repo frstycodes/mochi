@@ -1,17 +1,24 @@
 import { ClipboardText } from 'reicon-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
+import { RefChip } from '../chat/ChatLink';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
+import { useThreadPrs } from '../git/useThreadPrs';
+import { useHarness } from '../store';
 import { CriteriaList } from './CriteriaList';
-import { currentReport } from './report';
+import { currentReport, NEXT_STEP_TITLES, nextStep, type NextStep } from './report';
 
 /** The end of a turn of work, read in seconds: what needs you, what's done, what's left; the reply stays above. */
 export function ReportCard({ thread }: { thread: Thread }) {
+  const prs = useThreadPrs(thread);
   const view = currentReport(thread);
   if (!view) return null;
   const { report, criteria, met, isReady, changes } = view;
-  const status = isReady ? 'Ready for review' : criteria.length ? `${met} of ${criteria.length} criteria done` : 'Turn done';
+  const next = isReady ? nextStep(prs.map((p) => p.state.status)) : null;
+  const status = next ? NEXT_STEP_TITLES[next] : criteria.length ? `${met} of ${criteria.length} criteria done` : 'Turn done';
+  const hasAction = !!next && next !== 'review' && !!thread.repo && thread.status !== 'settled';
   return (
     <Card size="sm" role="group" aria-label="Report">
       <CardHeader>
@@ -35,9 +42,34 @@ export function ReportCard({ thread }: { thread: Thread }) {
         <ReportList label="Decided" items={report.decisions} />
         <ReportList label="Left" items={report.left} />
         {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
-        {thread.prs.length > 0 && <p className="tabular type-caption text-subtle-foreground">{thread.prs.map((p) => `#${p.number} ${p.state}`).join(', ')}</p>}
+        {prs.length > 0 && (
+          <p className="flex flex-wrap gap-1.5">
+            {prs.map((p) => !!p.githubRef && <RefChip key={p.pr.number} githubRef={p.githubRef} />)}
+          </p>
+        )}
       </CardContent>
+      {hasAction && (
+        <CardFooter className="justify-end">
+          <NextStepButton thread={thread} step={next} />
+        </CardFooter>
+      )}
     </Card>
+  );
+}
+
+/** The one thing a met goal waits on that you can do from here; a PR under review waits on GitHub, so its chip is enough. */
+function NextStepButton({ thread, step }: { thread: Thread; step: Exclude<NextStep, 'review'> }) {
+  const { dispatch } = useHarness();
+  if (step === 'settle')
+    return (
+      <Button size="sm" onClick={() => dispatch({ type: 'settle', threadId: thread.id })}>
+        Settle thread
+      </Button>
+    );
+  return (
+    <Button size="sm" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: 'Open the pull request for this work with open_pr.', reason: 'Open pull request from the report' })}>
+      Open pull request
+    </Button>
   );
 }
 
