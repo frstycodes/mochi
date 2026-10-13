@@ -1,3 +1,4 @@
+import type { GithubRef, RefState, RepoSlug } from '../../chat/refs.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface GitFileStatus {
@@ -126,6 +127,10 @@ export interface GitHost {
   /** `githubUser` (`login` on github.com, `host/login` elsewhere) runs gh as the profile's GitHub account; omitted, gh's active account. */
   createPr(cwd: string, pr: { title: string; body: string }, githubUser?: string): Promise<string>;
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
+  /** origin's `owner/repo` when it's on github.com; null otherwise (no origin, another host, not a repo). */
+  repoSlug(cwd: string): Promise<RepoSlug | null>;
+  /** Live state of PRs and issues in one `gh api graphql` call, keyed by `refKey`. Never throws: refs gh can't read are left out. */
+  refStates(cwd: string | null, refs: GithubRef[], githubUser?: string): Promise<Record<string, RefState>>;
   /** gh's logins on every host it knows, for picking a profile's account. Never carries tokens. */
   ghAccounts(): Promise<GhAccount[]>;
   sync(cwd: string, base?: string): Promise<SyncResult>;
@@ -156,6 +161,8 @@ export const gitMethods = {
   push: 'invoke',
   createPr: 'invoke',
   pr: 'invoke',
+  repoSlug: 'invoke',
+  refStates: 'invoke',
   ghAccounts: 'invoke',
   sync: 'invoke',
   addWorktree: 'invoke',

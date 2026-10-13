@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
-import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
+import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -24,6 +24,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
+import { PrStateIcon } from './icons/github';
 import { PIN_SLOTS, type PullRequest, type Thread } from './model';
 import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
@@ -537,12 +538,10 @@ function ProjectAvatar({ name }: { name: string }) {
   return <span aria-hidden className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[0.625rem] font-semibold text-foreground uppercase">{name[0]}</span>;
 }
 
-const PR_TONE = { open: 'text-success', merged: 'text-subtle-foreground', draft: 'text-subtle-foreground' } satisfies Record<PullRequest['state'], string>;
-
 function PrBadge({ pr }: { pr: PullRequest }) {
   return (
-    <span className={cn('flex shrink-0 items-center gap-0.5 tabular', PR_TONE[pr.state])} title={`${pr.title} (${pr.state})`}>
-      <BranchUp className="size-3" />
+    <span className="flex shrink-0 items-center gap-0.5 tabular" title={`${pr.title} (${pr.state})`}>
+      <PrStateIcon state={pr.state} className="size-3" />
       {pr.number}
     </span>
   );

@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
@@ -8,6 +9,8 @@ import { inside, run, runGit, topLevel } from '../git/run.ts';
 import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
+import { GITHUB_COM, parseRemote } from '../../src/git/github.ts';
+import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
@@ -15,6 +18,8 @@ const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
 // ponytail: untracked files diff one process each; capped so a missing .gitignore can't fork thousands.
 const MAX_UNTRACKED = 200;
 const MAX_PATCH = 8 * 1024 * 1024;
+// ponytail: one query per batch; GitHub's GraphQL node limit is far above this.
+const MAX_REFS = 50;
 
 export const git = {
   async status(_sender, cwd) {
@@ -92,6 +97,29 @@ export const git = {
 
   async ghAccounts() {
     return ghAccounts();
+  },
+
+  async repoSlug(_sender, cwd) {
+    const url = await runGit(string(cwd, 'cwd'), ['remote', 'get-url', 'origin']).catch(() => '');
+    const remote = parseRemote(url);
+    if (!remote || remote.host !== GITHUB_COM) return null;
+    const [owner, repo] = remote.path.split('/');
+    return { owner, repo };
+  },
+
+  async refStates(_sender, cwd, value, user) {
+    if (!Array.isArray(value)) throw new TypeError('refs must be an array');
+    const refs = value.slice(0, MAX_REFS).map(validRef).filter((r) => r !== null);
+    if (refs.length === 0) return {};
+    const dir = cwd === null ? homedir() : string(cwd, 'cwd');
+    const account = cwd === null ? undefined : githubAccount(user);
+    // gh exits 1 when any ref doesn't resolve and still prints the others; no gh, no login or offline leaves every ref unknown.
+    const json = await runGh(dir, refsQuery(refs), account, { okCodes: [0, 1] }).catch(() => '');
+    try {
+      return parseRefs(json, refs);
+    } catch {
+      return {};
+    }
   },
 
   async sync(_sender, cwd, chosenBase) {

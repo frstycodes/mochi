@@ -1,5 +1,5 @@
-import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { isValidElement, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextInputUsage, ContextOutputUsage, ContextTrigger } from '@/components/ai-elements/context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
 import { openFiles } from './files/viewer';
 import { withLivePr } from './git/prs';
+import { PrStateIcon } from './icons/github';
 import { usePr } from './git/useGit';
 import type { AgentInfo, McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
 import { useProfiles } from './profiles';
@@ -206,7 +207,7 @@ function PullRequestList({ prs, onOpen }: { prs: PullRequest[]; onOpen: (url: st
 function PullRequestRow({ pr, onOpen }: { pr: PullRequest; onOpen: (url: string) => void }) {
   const { url } = pr;
   const row = (
-    <SummaryRow icon={pr.state === 'merged' ? BranchDown : BranchUp} label={pr.title} onClick={url ? () => onOpen(url) : undefined}>
+    <SummaryRow icon={<PrStateIcon state={pr.state} className="size-4" />} label={pr.title} onClick={url ? () => onOpen(url) : undefined}>
       <span className="tabular type-caption text-subtle-foreground">#{pr.number}</span>
     </SummaryRow>
   );
@@ -272,11 +273,12 @@ function Section({ label, action, empty, children }: { label: string; action?: R
   );
 }
 
-function SummaryRow({ icon: Icon, label, onClick, children }: { icon: IconComponent; label: ReactNode; onClick?: () => void; children?: ReactNode }) {
+/** `icon`: a reicon drawn muted, or an element that brings its own colour (a PR's state icon). */
+function SummaryRow({ icon: Icon, label, onClick, children }: { icon: IconComponent | ReactElement; label: ReactNode; onClick?: () => void; children?: ReactNode }) {
   const content = (
     <>
       <ItemMedia>
-        <Icon className="size-4 text-muted-foreground" />
+        {isValidElement(Icon) ? Icon : <Icon className="size-4 text-muted-foreground" />}
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="w-full min-w-0 truncate font-normal">{label}</ItemTitle>
