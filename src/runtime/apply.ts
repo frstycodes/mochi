@@ -104,14 +104,25 @@ export function applyAgentEvents(state: State, events: AgentEvent[]): State {
   return events.reduce(applyAgentEvent, state);
 }
 
+type Resolution = { threadId: string; title: string; requestId: string; decision: AgentDecision };
+
 /** What answering a queue item tells the agent that asked. Demo threads have no session and resolve in the store alone. */
-export function resolution(state: State, action: Action): { requestId: string; decision: AgentDecision } | null {
+export function resolution(state: State, action: Action): Resolution | null {
   if (action.type !== 'answer') return null;
   const item = state.queue.find((q) => q.id === action.queueId);
   if (!item?.requestId) return null;
   if (!state.threads.find((t) => t.id === item.threadId)?.session) return null;
-  if (item.kind !== 'question') return { requestId: item.requestId, decision: { kind: 'allow' } };
-  return { requestId: item.requestId, decision: { kind: 'answer', answers: action.answers ?? [] } };
+  const { threadId, title, requestId } = item;
+  if (item.kind !== 'question') return { threadId, title, requestId, decision: { kind: 'allow' } };
+  return { threadId, title, requestId, decision: { kind: 'answer', answers: action.answers ?? [] } };
+}
+
+/** The transcript line for an answer main couldn't deliver; the card is already gone, so it keeps what you answered. */
+export function undelivered({ title, decision }: Resolution, error: unknown): Omit<ActivityEntry, 'at'> {
+  const why = error instanceof Error ? error.message : String(error);
+  if (decision.kind !== 'answer') return { who: 'harness', kind: 'event', text: `Your approval of "${title}" didn't reach the agent: ${why}.` };
+  const answers = decision.answers.map((a) => a.join(', ')).filter(Boolean).join('; ');
+  return { who: 'harness', kind: 'event', text: `Your answer to "${title}" didn't reach the agent: ${why}. Send it as a message if it still applies: ${answers}` };
 }
 
 const MATCH = 0.6;

@@ -338,3 +338,6 @@ export const agentMethods = {
 
 /** What main throws for a send to a thread with no agent process this launch; the renderer restarts it with `resume` instead. */
 export const NO_AGENT_PROCESS = 'This thread has no running agent process';
+
+/** What main throws for an answer to a request the agent no longer waits on (it withdrew it, or the process ended). */
+export const NO_PENDING_REQUEST = 'The agent is no longer waiting on this request';
