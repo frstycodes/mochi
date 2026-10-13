@@ -38,6 +38,7 @@ const RECORDED = [
   'edit-goal',
   'goal-drafted',
   'goal-remove',
+  'similar-dismiss',
   'step-status',
   'drift-verdict',
   'drift-keep',

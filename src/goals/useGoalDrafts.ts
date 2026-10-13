@@ -12,7 +12,7 @@ const asked = new Set<string>();
 export function useGoalDrafts(threads: Thread[], dispatch: Dispatch<Action>) {
   useEffect(() => {
     for (const t of threads) {
-      const request = goalDraftRequest(t);
+      const request = goalDraftRequest(t, threads);
       if (!request || asked.has(request.key)) continue;
       asked.add(request.key);
       const answer = host.isDesktop ? host.agent.utility('outcome', t.spaceId, request.prompt) : Promise.resolve(null);
@@ -22,8 +22,10 @@ export function useGoalDrafts(threads: Thread[], dispatch: Dispatch<Action>) {
           return null;
         })
         .then((text) => {
-          const proposal = (text && parseOutcome(text)) || localGoalDraft(request.text);
-          if (proposal.kind === 'task') dispatch({ type: 'goal-drafted', threadId: t.id, outcome: proposal.outcome, criteria: proposal.criteria });
+          const proposal = (text && parseOutcome(text)) || { ...localGoalDraft(request.text), similar: request.related };
+          // Only threads it was shown: a model inventing an id can't point you at a thread it never saw.
+          const similar = proposal.similar.filter((s) => request.others.includes(s.threadId));
+          if (proposal.kind === 'task') dispatch({ type: 'goal-drafted', threadId: t.id, outcome: proposal.outcome, criteria: proposal.criteria, similar });
         });
     }
   }, [threads, dispatch]);
