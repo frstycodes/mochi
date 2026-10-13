@@ -385,7 +385,8 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
     const top = await topLevel(root).catch(() => null);
     if (!top) return { cwd: root };
     if (workspace.isExisting) await switchBranch(top, workspace.branch, { changes: 'refuse' });
-    const branch = (await runGit(top, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] })).trim();
+    // On a detached HEAD the thread shows the commit, as git does, never the name it was created with: that branch doesn't exist.
+    const branch = (await runGit(top, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] })).trim() || (await runGit(top, ['rev-parse', '--short', 'HEAD'], { okCodes: [128] })).trim();
     if (branch) broadcast({ threadId, type: 'branch', branch });
     return { cwd: root };
   }

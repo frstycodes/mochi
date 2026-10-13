@@ -448,6 +448,9 @@ const GOAL_SPECS = {
     run: async ({ env, caller, args, dispatch }) => {
       const cwd = caller.repo && env.cwdOf(caller);
       if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
+      const { current, defaultBranch } = await env.git.branches(cwd);
+      if (!current) throw new Error(`${cwd} is on a detached HEAD, so there is no branch to push. Commit on this thread's own branch, not in another worktree`);
+      if (current === defaultBranch) throw new Error(`${cwd} is on ${defaultBranch}; open_pr would push straight to it. Commit on a branch of its own first`);
       const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
       await env.git.push(cwd, githubUser);
       const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
@@ -636,17 +639,17 @@ const isPinned = (t: Thread) => t.orbitSlot !== undefined && t.status !== 'settl
 
 const providerOf = (provider: Provider | undefined, caller: Thread) => provider ?? caller.providers[0];
 
-/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Tools allows them. */
-/** A worktree thread's branch named from its prompt and unique among the repo's branches, as the new-thread composer picks it. */
+/**
+ * An agent-started thread always gets its own worktree, whatever the composer's Worktree box says: parallel agents sharing
+ * one folder trip over each other's changes and make worktrees Mochi can't see. Its branch is named from the prompt.
+ */
 async function newWorktree(env: ToolEnv, project: string, prompt: string) {
-  const { workspaceMode, branchPrefix } = env.prefs.get();
-  if (workspaceMode !== 'worktree') return undefined;
   const list = await env.git.branches(project).catch(() => null);
-  if (!list) return undefined;
-  const taken = new Set(list.branches.filter((b) => !b.isRemote).map((b) => b.name));
-  return { mode: workspaceMode, branch: uniqueBranch(branchName(branchPrefix, prompt, 'thread'), taken) };
+  const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
+  return { mode: 'worktree' as const, branch: uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken) };
 }
 
+/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Tools allows them. */
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
   const inherited = provider === caller.providers[0] ? caller.controls : undefined;
   if (!picked.model && !picked.effort) return inherited;
