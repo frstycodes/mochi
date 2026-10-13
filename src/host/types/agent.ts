@@ -18,9 +18,13 @@ export interface AgentStartOptions {
   skills?: string[];
   model?: string;
   effort?: string;
+  /** A speed id from the model's `speeds`; unset runs at standard speed. Main drops one the model doesn't list. */
+  speed?: string;
   permissionMode?: string;
   /** Provider session id from an earlier `session` event. */
   resume?: string;
+  /** With `resume`: continue a fork of that session holding only what came up to this point (`rewindPoint`), leaving the original as it was. */
+  forkAt?: string;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
 }
@@ -28,6 +32,8 @@ export interface AgentStartOptions {
 export type AgentEvent =
   /** Main made the thread's worktree and runs the agent there. */
   | { threadId: string; type: 'worktree'; path: string }
+  /** Main is preparing the new worktree before the agent's first turn; each event carries the whole setup so far. */
+  | { threadId: string; type: 'setup'; setup: WorktreeSetup }
   /** A project folder thread's agent runs on this branch of the project's checkout. */
   | { threadId: string; type: 'branch'; branch: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
@@ -51,7 +57,17 @@ export type AgentEvent =
   | { threadId: string; type: 'resolved'; requestId: string }
   /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
-  | { threadId: string; type: 'limit'; resetsAt?: string }
+  /** What the harness itself says about the account's usage as it goes (Claude's limit warning, its switch to extra usage); a line in the transcript, nothing more. */
+  | { threadId: string; type: 'limit-notice'; text: string }
+  /** What the harness did on its own to keep the thread going (a fork it couldn't make); a line in the transcript. */
+  | { threadId: string; type: 'notice'; text: string }
+  /**
+   * The account hit a plan window's limit. `label` names the window ("5-hour"). `isTurnHeld`: the harness keeps the turn and
+   * continues it at the reset (Claude Code); otherwise the turn ended (Codex).
+   */
+  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string; isTurnHeld?: boolean }
+  /** The harness reports the window open again while it held the turn: the turn goes on. */
+  | { threadId: string; type: 'limit-cleared' }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** One plan rate-limit window of an account, as the provider reported it. */
@@ -118,9 +134,38 @@ export interface StartWorkspace {
   isExisting?: boolean;
 }
 
+/**
+ * A new worktree's preparation (`electron/git/setup.ts`): copy the project's ignored local files, install dependencies, run the
+ * project's setup command. `failed` waits for `setupChoice`; `cancelled` was stopped by an interrupt and the agent never started.
+ */
+export interface WorktreeSetup {
+  status: 'running' | 'failed' | 'ready' | 'skipped' | 'cancelled';
+  /** Wall-clock ms. */
+  startedAt: number;
+  endedAt?: number;
+  steps: SetupStep[];
+}
+
+export interface SetupStep {
+  id: string;
+  /** "Copy .env, .env.local", "Install dependencies with pnpm", "Run setup command". */
+  label: string;
+  /** The command as it ran, for commands. */
+  command?: string;
+  status: 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+  startedAt?: number;
+  endedAt?: number;
+  /** Tail-capped stdout and stderr, interleaved; for a failed copy, the error. */
+  output?: string;
+  exitCode?: number;
+}
+
+export type SetupChoice = 'retry' | 'skip';
+
 /** Base64 without the `data:` prefix. */
 export interface AgentImage {
-  mediaType: 'image/jpeg' | 'image/png';
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+  /** Base64, no `data:` prefix. */
   data: string;
 }
 
@@ -180,7 +225,17 @@ export interface AgentModel {
   efforts: string[];
   /** The provider's default effort for this model; unset leaves it to the harness. */
   defaultEffort?: string;
+  /** Faster tiers than standard the model reports (Claude fast mode, Codex `serviceTiers`); empty when it reports none. */
+  speeds: AgentSpeed[];
   isDefault: boolean;
+}
+
+/** One speed tier above standard. `description` carries the provider's own note on what it costs. */
+export interface AgentSpeed {
+  /** Sent as-is: Claude's `fast`, a Codex service tier id (`priority`). */
+  id: string;
+  name: string;
+  description: string;
 }
 
 export interface AgentAskMessage {
@@ -220,9 +275,12 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  /** `skills`: as `AgentStartOptions.skills`, for this message. */
-  send(threadId: string, text: string, images?: AgentImage[], skills?: string[]): Promise<void>;
+  /** `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it. */
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string): Promise<void>;
+  /** Stops a turn; during worktree setup, stops the setup and the agent doesn't start. */
   interrupt(threadId: string): Promise<void>;
+  /** After a failed setup step: run the failed step again, or start the agent without the rest of the setup. */
+  setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
@@ -238,6 +296,8 @@ export interface AgentHost {
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
   rewindFiles(threadId: string, text: string): Promise<void>;
+  /** Where the thread's live session stood just before `text` was sent, for `forkAt`: Claude's last chain entry, Codex's previous turn. Null when this run doesn't know (restarted, or it was the session's first message). */
+  rewindPoint(threadId: string, text: string): Promise<string | null>;
   /** Stops one of a thread's native subagents (Claude task, Codex spawned agent); it ends with status `stopped`. */
   stopSubagent(threadId: string, subagentId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
@@ -255,6 +315,7 @@ export const agentMethods = {
   start: 'invoke',
   send: 'invoke',
   interrupt: 'invoke',
+  setupChoice: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
   onEvent: 'event',
@@ -265,6 +326,7 @@ export const agentMethods = {
   classify: 'invoke',
   utility: 'invoke',
   rewindFiles: 'invoke',
+  rewindPoint: 'invoke',
   stopSubagent: 'invoke',
   warm: 'invoke',
   models: 'invoke',

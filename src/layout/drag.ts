@@ -1,13 +1,11 @@
 import { useSyncExternalStore } from 'react';
-import { zoneAt, type Side, type View, type Zone } from './tree.ts';
+import { zoneAt, type View, type Zone } from './tree.ts';
 
 export interface DragSession {
   view: View;
   label: string;
   /** Sources that draw their own lifted copy (sidebar rows) skip the shared chip. */
   hasOwnGhost: boolean;
-  /** Sources that only ever open beside a split (Stage Manager cards) turn the replace zone into this side. */
-  centerAs?: Side;
   /** Why this view can't open in a split; the drop zone says so and the drop does nothing. */
   refusal?: string;
   x: number;
@@ -23,14 +21,14 @@ function emit(next: DragSession | null) {
   for (const l of listeners) l();
 }
 
-type DragOptions = Partial<Pick<DragSession, 'hasOwnGhost' | 'centerAs' | 'refusal'>>;
+type DragOptions = Partial<Pick<DragSession, 'hasOwnGhost' | 'refusal'>>;
 
-export function startDrag(view: View, label: string, x: number, y: number, { hasOwnGhost = false, centerAs, refusal }: DragOptions = {}) {
-  emit({ view, label, hasOwnGhost, centerAs, refusal, x, y, hit: hitLeaf(x, y, view, centerAs) });
+export function startDrag(view: View, label: string, x: number, y: number, { hasOwnGhost = false, refusal }: DragOptions = {}) {
+  emit({ view, label, hasOwnGhost, refusal, x, y, hit: hitLeaf(x, y, view) });
 }
 
 export function moveDrag(x: number, y: number) {
-  if (session) emit({ ...session, x, y, hit: hitLeaf(x, y, session.view, session.centerAs) });
+  if (session) emit({ ...session, x, y, hit: hitLeaf(x, y, session.view) });
 }
 
 /** Ends the drag and returns where it landed on a split, if anywhere. */
@@ -61,12 +59,11 @@ export function useDragSelector<T>(select: (s: DragSession | null) => T) {
 }
 
 /** Drag ghosts are `pointer-events: none`, so the topmost leaf under the pointer is the target. Tab strips and the sidebar are never targets; for a pane tab neither is a thread header (it pins there instead) nor a side pane. A pane tab never replaces a split, it always opens beside one. */
-function hitLeaf(x: number, y: number, view: View, centerAs?: Side): DragSession['hit'] {
+function hitLeaf(x: number, y: number, view: View): DragSession['hit'] {
   const els = document.elementsFromPoint(x, y);
   const blocked = view.kind === 'tab' ? '[role=tablist], [data-sidebar=sidebar], [data-pin-drop], [data-side-pane]' : '[role=tablist], [data-sidebar=sidebar]';
   if (els.some((el) => el.closest(blocked))) return null;
   const leafEl = els.map((el) => el.closest<HTMLElement>('[data-leaf-id]')).find(Boolean);
   if (!leafEl) return null;
-  const zone = zoneAt(leafEl.getBoundingClientRect(), x, y, view.kind !== 'tab');
-  return { leafId: leafEl.dataset.leafId!, zone: zone === 'center' && centerAs ? centerAs : zone };
+  return { leafId: leafEl.dataset.leafId!, zone: zoneAt(leafEl.getBoundingClientRect(), x, y, view.kind !== 'tab') };
 }

@@ -12,7 +12,7 @@ import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
 import { SidebarToggle } from './SidebarToggle';
-import { Stage } from './stage/Stage';
+import { PinnedPager } from './pager/PinnedPager';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
 import { useGlobalKeys } from './palette/useGlobalKeys';
@@ -25,11 +25,13 @@ import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
+import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
-import { useWorktreeManager } from './git/useWorktreeManager';
+import { useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
 import { useReplayRoute } from './replay/open';
 import { ReplayPage, ReplayView } from './replay/ReplayView';
+import { ColorThemeController } from './themes/ColorThemeController';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
@@ -39,6 +41,7 @@ export function App() {
   useIdleScrollbars();
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ColorThemeController />
       <ReducedMotion>
         <TooltipProvider delayDuration={400}>
           {embeddedReplay ? (
@@ -56,6 +59,7 @@ export function App() {
               <PhotoViewer />
               <FileViewer />
               <ScheduleLayer />
+              <GoalEditorLayer />
               <Toaster position="bottom-right" />
             </HarnessProvider>
           )}
@@ -93,6 +97,7 @@ function Shell() {
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
   useWorktreeManager();
+  useWorktreeCleanup();
   const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
   const isReplayOpen = !!useReplayRoute();
@@ -110,7 +115,7 @@ function Shell() {
       )}
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : review.isOpen ? <ReviewView /> : <Stage />}
+          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />

@@ -1,3 +1,4 @@
+import { account as desktopAccount } from './desktop/account.ts';
 import { agent as desktopAgent } from './desktop/agent.ts';
 import { data as desktopData } from './desktop/data.ts';
 import { browser as desktopBrowser } from './desktop/browser.ts';
@@ -6,11 +7,14 @@ import { git as desktopGit } from './desktop/git.ts';
 import { notify as desktopNotify } from './desktop/notify.ts';
 import { ports as desktopPorts } from './desktop/ports.ts';
 import { pty as desktopPty } from './desktop/pty.ts';
+import { remote as desktopRemote } from './desktop/remote.ts';
 import { schedule as desktopSchedule } from './desktop/schedule.ts';
 import { settings as desktopSettings } from './desktop/settings.ts';
 import { sim as desktopSim } from './desktop/sim.ts';
+import { themes as desktopThemes } from './desktop/themes.ts';
 import { windows as desktopWindows } from './desktop/windows.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
+import { account as webAccount } from './web/account.ts';
 import { agent as webAgent } from './web/agent.ts';
 import { data as webData } from './web/data.ts';
 import { browser as webBrowser } from './web/browser.ts';
@@ -19,9 +23,11 @@ import { git as webGit } from './web/git.ts';
 import { notify as webNotify } from './web/notify.ts';
 import { ports as webPorts } from './web/ports.ts';
 import { pty as webPty } from './web/pty.ts';
+import { remote as webRemote } from './web/remote.ts';
 import { schedule as webSchedule } from './web/schedule.ts';
 import { settings as webSettings } from './web/settings.ts';
 import { sim as webSim } from './web/sim.ts';
+import { themes as webThemes } from './web/themes.ts';
 import { windows as webWindows } from './web/windows.ts';
 
 export type { HostBridge, Namespace } from './types/index.ts';
@@ -43,6 +49,9 @@ export const registry: Registry = {
   settings: { web: webSettings, desktop: desktopSettings },
   data: { web: webData, desktop: desktopData },
   schedule: { web: webSchedule, desktop: desktopSchedule },
+  themes: { web: webThemes, desktop: desktopThemes },
+  remote: { web: webRemote, desktop: desktopRemote },
+  account: { web: webAccount, desktop: desktopAccount },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -63,4 +72,7 @@ export const host = {
   settings: pick('settings'),
   data: pick('data'),
   schedule: pick('schedule'),
+  themes: pick('themes'),
+  remote: pick('remote'),
+  account: pick('account'),
 } satisfies HostBridge & { isDesktop: boolean };

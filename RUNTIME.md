@@ -22,7 +22,35 @@ Status labels: **verified** = read in this repo; **docs** = read in the vendor's
 - **Codex: the user's `codex login`.** One `codex app-server` started from the user's install, reading the user's own credentials (`~/.codex/auth.json` or the keyring). `account/read` reports the state; if logged out, Mochi tells the user to run `codex login` rather than calling `account/login/start` itself. Whether app-server picks up an existing login with no extra step: not verified, check first.
 - **Distribution:** before shipping Mochi to other people, re-check Anthropic's current legal page (the Agent SDK overview says products should use API keys unless approved; reports from October 2026 say the subscription rules were relaxed) and OpenAI's terms.
 - **Accounts per profile (decision, 2026-10-12):** an account is one Claude Code or Codex login, kept in its own config directory so several can coexist, each signed in by the user in the tool itself. A profile (space) links **at most one Claude account and one Codex account**; one account may be linked to several profiles. Every thread runs on its profile's account for that provider, and nothing ever switches a thread to another account of the same provider (that would be working around usage limits, which both providers' terms forbid). `Space.accounts` in `src/model.ts` becomes `{ claude?: AccountId; codex?: AccountId }` against an account registry.
-- **When an account hits its limit:** the thread pauses with "limit reached, resumes at <reset time>" (a needs-you-style state) and continues on the same account after the reset. The user can instead choose, explicitly and per thread, to continue on their API key (pay per use) or to hand the thread off to the other provider (existing handoff). Never automatic, never silent.
+- **When an account hits its limit:** the thread waits for the reset on the same account, the way its harness does it (Claude Code holds the turn and continues; Codex stops until you resume, or the Resume at reset you chose). The user can instead choose, explicitly and per thread, to continue on their API key (pay per use) or to hand the thread off to the other provider (existing handoff). Never automatic, never silent. States and sources in [Usage limits](#usage-limits).
+
+## Usage limits
+
+Mochi relays what each harness does as a plan window (5-hour, weekly) fills and runs out, and adds no logic of its own: no thresholds, no wrap-up prompts, no holding other threads (decision, 2026-10-13). Sources checked 2026-10-13 against Agent SDK 0.3.296 / Claude Code 2.1.296, codex-cli 0.155.1, and T3 Code's adapters (`pingdotgg/t3code` at `98a6246`).
+
+**Claude** (verified in `sdk.d.ts` unless marked).
+- `rate_limit_event` → `rate_limit_info: { status: 'allowed' | 'allowed_warning' | 'rejected', resetsAt?, rateLimitType?: 'five_hour' | 'seven_day' | …, utilization?, overageStatus?, isUsingOverage?, overageInUse?, … }` (`sdk.d.ts:5704`). `resetsAt` is unix seconds, `utilization` 0–1 (read in the 2.1.296 binary).
+- Claude Code wraps up by itself near the limit: the 2.1.296 binary holds the hint "[Usage limit approaching. Checkpoint now: finish the current step, …]", at utilization 0.95 (0.99 on Max 5x, 0.9975 on Max 20x), skipped while extra usage is allowed. Not verified: that it fires in an SDK session.
+- `rejected` without extra usage: Claude Code holds the turn and continues it after the reset. Source: T3 Code's adapter ("Rejected windows pause the SDK without ending its turn", `ClaudeAdapterV2.ts:6682`) and its docs; not verified here. With `overageStatus` allowed or extra usage in use it keeps running, billed.
+
+**Codex** (verified in the app-server schema).
+- `account/rateLimits/updated` (sparse) / `read`: `RateLimitSnapshot { primary, secondary: { usedPercent, windowDurationMins, resetsAt } | null, … }`. No warning of its own.
+- At the limit the turn ends: `turn/completed` `failed`, `turn.error.codexErrorInfo` `usageLimitExceeded` (or `rateLimitExceeded`, which T3 Code treats the same). Codex doesn't continue by itself.
+
+**What Mochi shows** (`src/runtime/limits.ts`, tests in `limits.test.ts`, mappers in `electron/agents/*/map.ts`).
+
+| Harness says | Event | Mochi |
+|---|---|---|
+| Claude `allowed_warning` | `limit-notice` | a transcript line ("Claude's 5-hour limit is 92% used"), once per window and reset |
+| Claude `rejected` with extra usage | `limit-notice` | a line: "Claude is past its 5-hour limit and using extra usage, billed per use"; nothing stops |
+| Claude `rejected` | `limit` `isTurnHeld` | the turn stays working; the limit card says Claude Code continues after the reset; queued messages wait for the turn as usual |
+| Claude window open again | `limit-cleared` | "The limit reset; the turn continues"; a notification |
+| Codex `usageLimitExceeded` / `rateLimitExceeded` | `limit` + `turn-end` | the thread stops (needs you), queue paused; the card offers Resume, Resume at reset (sends "Continue where you left off." then, only if you chose it), Hand off |
+| plan windows | `onLimits` | the context ring's outer arc for the fullest window at 70% and up |
+
+Everywhere: the limit card in the transcript where it happened (countdown), header chip and sidebar/summary line ("Waiting · resets 3:40 PM" / "Stopped · resets …"), the composer's note, a notification. Use API key (Claude, when a key is stored) and Hand off are per-thread clicks; nothing is automatic. Your own message or settling cancels a Codex Resume at reset. Other threads and new threads on the same account are not held: each harness answers for itself.
+
+GAP: Claude's held turn and `limit-cleared` follow T3 Code's reading; if a real run ends the turn with an error instead, the card goes with the turn and the error shows as the turn's failure.
 
 ## Event contract
 
@@ -38,6 +66,9 @@ type AgentEvent =
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: { text: string; options: string[] }[] }
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  | { threadId: string; type: 'limit-notice'; text: string }
+  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string; isTurnHeld?: boolean }
+  | { threadId: string; type: 'limit-cleared' }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 ```
 
@@ -87,18 +118,34 @@ Being replaced by Goals v2 below: steps mirror the plan with no sizes, and new p
 ## Checkpoints, rewind, handoff
 
 - Rewind already snapshots thread state and git refs under `refs/harness/checkpoints/` (verified, `src/rewind/`). Claude adds real file rewind: `enableFileCheckpointing: true` + `query.rewindFiles(userMessageId)`; it tracks Write/Edit/NotebookEdit only, not Bash edits, and restores files, not the conversation (docs). Keep git refs as the source of truth and use the SDK rewind only to keep Claude's own view consistent. Codex: git refs only.
-- Built (`rewindClaude`, `electron/agents/claude/sessions.ts`): each sent message carries a uuid we generate; `rewindToMessage` calls `host.agent.rewindFiles` before the git restore. GAP: not verified against a real thread that edited a file; matched by message text until activity entries carry the uuid.
+- Built (`rewindClaude`, `electron/agents/claude/sessions.ts`): each sent message carries a uuid we generate; a files rewind saves the git `undo` snapshot, calls `host.agent.rewindFiles`, then restores the git checkpoint. Verified against a real thread (Claude Code 2.1.296, 2026-10-13): our client uuid is accepted, a dry run listed the edited file and the rewind returned `canRewind: true`. It only works for messages sent to the live session this launch. GAP: matched by message text until activity entries carry the uuid.
+- Two rewind modes (`src/rewind/`): **Rewind chat** (transcript, steps and the agent's session go back, files stay) and **Rewind chat and files** (the worktree too, after a preview of the files and a confirm when files changed since the agent's last turn, tracked by the `turn` ref). Every rewind and undo is refused while the agent works. The session goes back by forking: Claude `resume` + `resumeSessionAt` + `forkSession` (verified: the fork lacked the dropped request), Codex `thread/fork` with `lastTurnId` (not run yet); when this launch doesn't know the point, a fresh session gets the transcript as its first message. Undo resumes the original session, which the fork left whole (verified for Claude).
 - Handoff (`src/rewind/handoff.ts`, verified GAP) becomes: stop the current agent, start the other provider in the same worktree with the generated summary as its first prompt.
 
 ## Side chat, drift guard, usage
 
 - Side chat `ask` (built, `electron/agents/ask.ts`): one model setting for either provider (Settings › Defaults, migrated from the Claude-only one), switchable per chat; same context and caps both ways. Claude: an Agent SDK query on the profile's Claude account with `tools: []`, no settings files and no saved transcript (`oneshot.ts`). Codex: an ephemeral, read-only, never-approve thread on the account's app-server with the tool features off (`CodexAdapter.ask`); no prewarm, first token ~7–9s measured on 0.155.1.
-- Models (built, `electron/agents/models.ts`): `host.agent.models(provider, spaceId)` lists the profile's account's own models: Claude from the Agent SDK's `supportedModels()` (built-in fallback list when it fails), Codex from app-server `model/list` (ids, names, default, reasoning efforts). Cached per account, dropped when detection sees that account's login change. Every thread start and side chat ask sends an explicit model the account offers: a stored model it no longer offers (or none) becomes the account default, an effort the model doesn't take becomes the model's own default; the picker shows such a model as Unavailable.
+- Models (built, `electron/agents/models.ts`): `host.agent.models(provider, spaceId)` lists the profile's account's own models: Claude from the Agent SDK's `supportedModels()` (built-in fallback list when it fails), Codex from app-server `model/list` (ids, names, default, reasoning efforts). Cached per account, dropped when detection sees that account's login change. Every thread start and side chat ask sends an explicit model the account offers: a stored model it no longer offers (or none) becomes the account default, an effort the model doesn't take becomes the model's own default, and a speed goes only to a model that lists it (`speeds`: Claude's `supportsFastMode`, Codex's `serviceTiers`); the picker shows such a model as Unavailable.
 - Background tasks (built, `utility` in `electron/agents/ask.ts`): thread titles (after the first exchange with a real goal; never over a title you or the agent renamed, `isTitleRenamed`), commit messages and PR title/body (drafts in the ship flow, editable), goal steps (goal editor's Draft steps) and handoff summaries. Each task has a model in Settings › Background tasks (`utilityModels`, default `claude-haiku-5-5`); a call tries it, then `claude-haiku-5-5`, then `gpt-6-luna` (`utilityCandidates`), skipping a model the account doesn't list, on the side chat askers (no API key, Claude through the prewarm spare), within 20s; null keeps the local text (truncated title, the thread's title and goal for a PR, the handoff template). Measured 2026-10-13: Haiku 2.2–3.5s warm, Luna 10.4s. Drift classify keeps its fixed Haiku: its 4s budget fits no Codex start. GAP: in dev, StrictMode runs a dialog's draft effect twice, so the PR and handoff drafts cost two calls.
 - Codex `model/list` (checked 2026-10-13, codex-cli 0.155.1, ChatGPT Plus): `gpt-6-astra` (default), `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`; hidden: `gpt-reserve`, `gpt-5.5`, `codex-auto-review`. `gpt-6.1-sol` is absent even with `includeHidden`, and `codex exec -m gpt-6.1-sol` fails with "not supported when using Codex with a ChatGPT account": it needs an API key login. The picker's Codex row says "Some models need an API key" on ChatGPT logins.
 - Drift classifier (built): `classify` in main with `claude-haiku-5-5`, answering `{ verdict: 'on-goal' | 'scope-add' | 'off-goal', reason }` as JSON within 4s, else the local classifier (`classifyWithModel`, `src/drift.ts`). The local `similarity()` pass still decides clear cases first. Not `outputFormat`: it is fixed at prewarm and the spare is shared with side chat.
 - Startup: a cold Claude Code start costs ~3–5s, more than the 4s budget, so both share one SDK `prewarm()` spare per account (parked when a side chat opens, a Claude thread starts, and after every claim; closed after 10 min unused and on quit). `prewarm` is `@alpha`; without it both fall back to cold starts.
 - Usage: Claude reports cost; Codex reports tokens only, so Codex cost comes from a pricing constant marked TODO until checked against OpenAI's published prices.
+
+## Worktree setup
+
+A new worktree gets ready before the agent's first turn (`prepareWorktree`, `electron/git/setup.ts`), between `createWorktree` and the agent start in `startAgent` (`electron/ipc/agent.ts`). Only when main just made the worktree and Settings › Git › Prepare worktrees before starting is on; project-folder threads, restarts and a reused worktree skip it.
+
+1. **Copy** ignored files matching Settings › Git › Ignored files to copy (default `.env*`) plus the project's `.worktreeinclude`, gitignore patterns. Only files git ignores are copied (`git ls-files --others --ignored --exclude-standard --directory`, so `node_modules/` is never walked), so a copy never lands in a commit. `.worktreeinclude` is Claude Code's convention for the same thing (docs, code.claude.com/docs/en/worktrees); its `WorktreeCreate` hook replaces worktree creation entirely, so it's not matched. Codex's setup scripts live in `.codex` but their file format isn't documented: not read.
+2. **Install** from the lockfile at the worktree's top, in the manager's frozen mode: pnpm (`--frozen-lockfile --prefer-offline`, links from the global store: 6s for this repo, measured 2026-10-13), bun, yarn (Berry `--immutable`), npm `ci`, uv, Poetry, Bundler, `go mod download`, `cargo fetch --locked` (`installCommand`).
+3. **Setup command**: Settings › Git's command for the project folder, else the project's `.mochi/setup.sh`; `/bin/sh -c` in the worktree with `MOCHI_ROOT_PATH` and `MOCHI_WORKTREE_PATH`.
+
+Each step streams as a `setup` agent event carrying the whole setup (status, steps, elapsed, tail-capped output; 250ms throttle) into `Thread.setup`, shown as the "Setting up worktree" row at the top of the thread (`src/chat/SetupRow.tsx`) and "Setting up worktree…" on the sidebar row and header. Commands run in their own process group.
+
+- **Gating.** `start` returns once the worktree exists; setup and the agent launch go on in main and report through events (a failure is `turn-end failed`). It can't wait the setup out: the renderer runs agent calls one after another (`callAgent`), so a Stop, and every other thread's calls, would queue behind it. A `send` meanwhile waits on the start (`Starts`, `electron/agents/starts.ts`), so a steer isn't lost or turned into a second start.
+- **Failure.** A failed step waits for `setupChoice`: Retry runs it again, Skip setup starts the agent without the rest; Open terminal opens the worktree's terminal. The thread is needs-you meanwhile. A background agent's setup skips a failed step on its own.
+- **Cancel.** Stop (`interrupt`) or settling during setup kills the running command, the setup ends `cancelled`, the turn ends interrupted and the thread stays. The next message starts the agent in the worktree as it is. A setup Mochi quit during restores as cancelled. GAP: a worktree whose setup never finished (quit mid-setup) isn't set up again.
+- **Cleanup.** Settings › Git › Remove settled worktrees (default after 7 days; `useWorktreeCleanup`): on launch and hourly, worktrees of threads settled that long (counted from when cleanup first saw them settled, wall clock) are removed with `git worktree remove`, which keeps any with uncommitted changes; branches stay. A message to such a thread makes the worktree again on its branch at the same path, so Claude's `resume` finds the session, and runs the setup again.
 
 ## Concurrency and lifecycle
 

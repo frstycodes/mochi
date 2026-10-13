@@ -1,5 +1,6 @@
 import type { PointerEvent, ReactNode } from 'react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { SkippedItem } from '../menus/ActionItems';
 import type { Thread } from '../model';
 import { useMessageActions } from './MessageActions';
 
@@ -12,12 +13,16 @@ export function MessageContextMenu({ thread, index, children }: { thread: Thread
         {children}
       </ContextMenuTrigger>
       <ContextMenuContent className="w-52">
-        {actions.map((a) => (
-          <ContextMenuItem key={a.id} onSelect={a.run}>
-            <a.icon />
-            {a.label}
-          </ContextMenuItem>
-        ))}
+        {actions.map((a) =>
+          a.disabledReason ? (
+            <SkippedItem key={a.id} menu="context" icon={<a.icon />} title={a.label} reason={a.disabledReason} />
+          ) : (
+            <ContextMenuItem key={a.id} onSelect={a.run}>
+              <a.icon />
+              {a.label}
+            </ContextMenuItem>
+          ),
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

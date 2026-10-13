@@ -8,7 +8,7 @@ import { sendMessage, setDriftPending, useDriftPending } from '../chat/outbox';
 import type { DriftKind } from '../drift';
 import type { QueuedMessage, Thread } from '../model';
 import { isMod, isNav } from '../keys';
-import { progressAt } from '../progress';
+import { goalProgress } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { Shortcut } from '../Shortcut';
 import { snapshot, useHarness } from '../store';
@@ -71,7 +71,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
 export type DriftGuard = ReturnType<typeof useDriftGuard>;
 
 function isDone(thread: Thread, now: number) {
-  return thread.status === 'review' || progressAt(thread, now, true).pct >= 1;
+  return goalProgress(thread, now).phase === 'ready';
 }
 
 // Undo covers two changes at once, so it stays up longer than a plain toast.

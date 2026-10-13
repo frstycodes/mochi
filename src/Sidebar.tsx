@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
@@ -24,8 +25,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
-import { PrStateIcon } from './icons/github';
-import { PIN_SLOTS, type PullRequest, type Thread } from './model';
+import { PrStack } from './git/PrStack';
+import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
@@ -42,8 +43,10 @@ import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
 import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
-import { duration, progressAt } from './progress';
+import { duration, goalProgress } from './progress';
 import { openSettings } from './settings/open';
+import { hasGoal } from './drift';
+import { reportHeadline } from './goals/report';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
@@ -481,7 +484,6 @@ function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: Re
 function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
-  const pr = thread.prs[thread.prs.length - 1];
   return (
     <>
       <SidebarMenuButton
@@ -511,9 +513,10 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
           <span className={cn('ml-auto shrink-0 tabular group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
         </span>
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
-        <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
+        {/* overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line. */}
+        <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
-          <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>
+          {hasGoal(thread) && <span className="shrink-0 tabular">{row.met}</span>}
           {row.isWorking ? (
             <span className="flex min-w-0 flex-1" title={row.detail}>
               <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
@@ -522,7 +525,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             <span className="min-w-0 flex-1 truncate">{row.detail}</span>
           )}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
-          {!!pr && <PrBadge pr={pr} />}
+          <PrStack thread={thread} />
           <AgentsBadge thread={thread} />
           <NextRunBadge threadId={thread.id} />
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
@@ -538,15 +541,6 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
 
 function ProjectAvatar({ name }: { name: string }) {
   return <span aria-hidden className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[0.625rem] font-semibold text-foreground uppercase">{name[0]}</span>;
-}
-
-function PrBadge({ pr }: { pr: PullRequest }) {
-  return (
-    <span className="flex shrink-0 items-center gap-0.5 tabular" title={`${pr.title} (${pr.state})`}>
-      <PrStateIcon state={pr.state} className="size-3" />
-      {pr.number}
-    </span>
-  );
 }
 
 /** How many background agents the thread has running; nothing when none do. */
@@ -567,20 +561,22 @@ const AGENTS_LABEL = new Intl.PluralRules('en');
 /** What a thread row says under its title: the step in flight, or what it is waiting for. */
 function useThreadRow(thread: Thread) {
   const { state } = useHarness();
-  const { pct } = progressAt(thread, state.now, true);
+  const progress = goalProgress(thread, state.now);
   const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { pct: progress.pct, met: progress.total ? `${progress.met}/${progress.total}` : `${Math.round(progress.pct * 100)}%`, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {
+  const limit = limitStatus(thread);
+  if (limit) return limit;
   if (thread.status === 'needs-you') return question ?? 'Waiting on you';
   if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];
   if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : 'Ready for review';
-  // A live agent reports what it's doing; demo threads are told by their goal steps.
-  if (thread.live) return workingLabel(thread) ?? 'Idle';
+  // A live agent reports what it's doing; idle, its last report says where things stand; demo threads are told by their goal steps.
+  if (thread.live) return workingLabel(thread) ?? reportHeadline(thread) ?? 'Idle';
   const step = thread.steps.find((s) => s.status === 'running') ?? thread.steps.find((s) => s.status === 'ready');
   return step?.title ?? 'Idle';
 }

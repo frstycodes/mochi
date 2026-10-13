@@ -7,7 +7,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
 import { CodexAdapter, reply } from './adapter.ts';
-import { codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
+import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
 // Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
@@ -87,7 +87,15 @@ test('file changes report paths relative to the worktree and name them on the ap
   assert.deepEqual(mapNotification('item/started', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'tool', id: 'f1', phase: 'start', text: 'Edit src/a.ts, b.ts' }]);
   const approval = mapRequest('item/fileChange/requestApproval', { threadId: 't', turnId: 'u', itemId: 'f1' }, 'codex:string:9', s);
   assert.equal(approval?.type === 'approval' && approval.title, 'Edit src/a.ts, b.ts');
-  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: { ...item, status: 'completed' } }, s).at(0), { threadId: 'h1', type: 'tool', id: 'f1', phase: 'end', text: 'Edit src/a.ts, b.ts', files: ['src/a.ts', 'b.ts'] });
+  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: { ...item, status: 'completed' } }, s).at(0), {
+    threadId: 'h1',
+    type: 'tool',
+    id: 'f1',
+    phase: 'end',
+    text: 'Edit src/a.ts, b.ts',
+    files: ['src/a.ts', 'b.ts'],
+    patch: ['diff --git a/b.ts b/b.ts', '--- /dev/null', '+++ b/b.ts'].join('\n'),
+  });
 });
 
 test('after a resume only the reported request counts, not the whole history', () => {
@@ -99,22 +107,24 @@ test('after a resume only the reported request counts, not the whole history', (
 
 test('a usage limit pauses the thread with the account-wide reset time, then ends the turn', () => {
   const limits = {};
-  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } });
+  updateLimits(limits, { rateLimits: { primary: { usedPercent: 89, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } });
+  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 } } });
   updateLimits(limits, { rateLimits: { primary: null, secondary: null } });
   const s = threadState('h1', '/x', { limits });
   const turn = { id: 'u', status: 'failed', error: { message: 'You hit your usage limit.', codexErrorInfo: 'usageLimitExceeded' } };
   assert.deepEqual(mapNotification('turn/completed', { threadId: 't', turn }, s), [
-    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z' },
+    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z', label: '5-hour' },
     { threadId: 'h1', type: 'turn-end', status: 'failed', error: 'You hit your usage limit.' },
   ]);
+  const rate = mapNotification('turn/completed', { threadId: 't', turn: { ...turn, error: { message: 'x', codexErrorInfo: 'rateLimitExceeded' } } }, s);
+  assert.deepEqual(rate.map((e) => e.type), ['limit', 'turn-end']);
   const other = mapNotification('turn/completed', { threadId: 't', turn: { ...turn, error: { message: 'x', codexErrorInfo: 'serverOverloaded' } } }, s);
   assert.deepEqual(other.map((e) => e.type), ['turn-end']);
 });
 
 test('one app-server per account: threads route to their profile account and never share a server', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
-  writeFileSync(fake, FAKE_CODEX, { mode: 0o755 });
+  const fake = fakeCodex(home, FAKE_CODEX);
   const events: AgentEvent[] = [];
   const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, side: { id: 'work', configDir: path.join(home, 'work') }, home: { id: 'default' } };
   const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
@@ -135,8 +145,7 @@ test('one app-server per account: threads route to their profile account and nev
 
 test('side chat asks on the profile account, streams once per delta, and says when that account is signed out', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
-  writeFileSync(fake, FAKE_CODEX, { mode: 0o755 });
+  const fake = fakeCodex(home, FAKE_CODEX);
   const events: AgentEvent[] = [];
   const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, out: { id: 'out', configDir: path.join(home, 'out') } };
   const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
@@ -150,7 +159,81 @@ test('side chat asks on the profile account, streams once per delta, and says wh
   }
 });
 
+test('a thread runs at the speed it started with, and a message changes it for its turn and the ones after', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = fakeCodex(home, TIER_CODEX);
+  const log = path.join(home, 'tiers.log');
+  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  // Lets each turn end before the next send.
+  const settle = () => new Promise((r) => setTimeout(r, 150));
+  try {
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority' });
+    await settle();
+    await codex.send('t', 'again');
+    await settle();
+    await codex.send('t', 'slower', undefined, undefined, '');
+    await settle();
+    await codex.send('t', 'faster', undefined, undefined, 'priority');
+    await settle();
+    await codex.start('u', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
+    const expected = ['thread/start priority', 'turn/start priority', 'turn/start priority', 'turn/start null', 'turn/start priority', 'thread/start null', 'turn/start null'];
+    assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), expected);
+  } finally {
+    codex.dispose();
+  }
+});
+
+test('images go to turn/start as data-URL image inputs ahead of the text, on the first prompt and on a send', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = fakeCodex(home, TIER_CODEX);
+  const log = path.join(home, 'inputs.log');
+  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: path.join(home, 'tiers.log'), INPUT_LOG: log } }));
+  const png = { mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
+  try {
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'what is this?', images: [png] });
+    await new Promise((r) => setTimeout(r, 150));
+    await codex.send('t', 'and this?', [{ mediaType: 'image/webp', data: 'UklGRg==' }]);
+    const inputs = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(inputs, [
+      [{ type: 'image', url: 'data:image/png;base64,iVBORw0KGgo=' }, { type: 'text', text: 'what is this?', text_elements: [] }],
+      [{ type: 'image', url: 'data:image/webp;base64,UklGRg==' }, { type: 'text', text: 'and this?', text_elements: [] }],
+    ]);
+  } finally {
+    codex.dispose();
+  }
+});
+
+/** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG (and turn/start's input to $INPUT_LOG); each turn completes shortly after its reply. */
+const TIER_CODEX = `#!/usr/bin/env node
+const fs = require('node:fs');
+let buf = '', n = 0;
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+// Later than the reply, as a real turn ends: the adapter records the turn id from the reply.
+const done = (threadId, id) => setTimeout(() => send({ method: 'turn/completed', params: { threadId, turn: { id, status: 'completed' } } }), 20);
+process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+  if (['thread/start', 'turn/start'].includes(m.method)) fs.appendFileSync(process.env.TIER_LOG, m.method + ' ' + m.params.serviceTier + '\\n');
+  if (m.method === 'turn/start' && process.env.INPUT_LOG) fs.appendFileSync(process.env.INPUT_LOG, JSON.stringify(m.params.input) + '\\n');
+  if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
+  else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c' + ++n } } });
+  else if (m.method === 'turn/start') { const id = 'u' + ++n; send({ id: m.id, result: { turn: { id } } }); done(m.params.threadId, id); }
+  else if (m.id !== undefined) send({ id: m.id, result: {} });
+} });
+`;
+
 /** A stand-in `codex` speaking just enough app-server: thread ids carry its pid and CODEX_HOME, each turn echoes its thread. */
+/**
+ * A fake `codex` from a node script. Windows can't run a shebang script, so there it is a `.cmd` shim next to the script,
+ * the same shape as an npm-installed codex, which also exercises how the adapter spawns shims.
+ */
+function fakeCodex(home: string, source: string) {
+  const script = path.join(home, 'codex.cjs');
+  writeFileSync(script, source, { mode: 0o755 });
+  if (process.platform !== 'win32') return script;
+  const shim = path.join(home, 'codex.cmd');
+  writeFileSync(shim, `@node "%~dp0codex.cjs" %*\r\n`);
+  return shim;
+}
+
 const FAKE_CODEX = `#!/usr/bin/env node
 let n = 0, buf = '';
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
@@ -265,27 +348,26 @@ test('webSearch items name the query on completion and carry pages as links', ()
   assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: opened }, s), [{ threadId: 'h1', type: 'tool', id: 'w2', phase: 'end', text: 'Fetch https://redis.io/docs/', links: [{ url: 'https://redis.io/docs/' }] }]);
 });
 
-test('model/list maps to the picker: real ids, names, default flag and efforts; hidden models stay out', () => {
+test('model/list maps to the picker: real ids, names, default flag, efforts and speed tiers; hidden models stay out', () => {
   // Shape of a real 0.155.1 `model/list` result on a ChatGPT account, trimmed to two models plus a hidden one.
   const result = {
     data: [
-      { id: 'gpt-6-astra', model: 'gpt-6-astra', displayName: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', hidden: false, isDefault: true, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low', description: '' }, { reasoningEffort: 'ultra', description: '' }] },
+      { id: 'gpt-6-astra', model: 'gpt-6-astra', displayName: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', hidden: false, isDefault: true, defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low', description: '' }, { reasoningEffort: 'ultra', description: '' }], additionalSpeedTiers: ['fast'], serviceTiers: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }], defaultServiceTier: null },
       { id: 'gpt-6-luna', model: 'gpt-6-luna', displayName: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', hidden: false, isDefault: false, defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: '' }] },
       { id: 'internal', model: 'internal', displayName: 'Internal', description: '', hidden: true, isDefault: false, defaultReasoningEffort: 'low', supportedReasoningEfforts: [] },
     ],
     nextCursor: null,
   };
   assert.deepEqual(codexModels(result), [
-    { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: ['low', 'ultra'], defaultEffort: 'low', isDefault: true },
-    { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: ['medium'], defaultEffort: 'medium', isDefault: false },
+    { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: 'Frontier intelligence for the most demanding work.', efforts: ['low', 'ultra'], defaultEffort: 'low', speeds: [{ id: 'priority', name: 'Fast', description: '2x speed, increased usage' }], isDefault: true },
+    { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: ['medium'], defaultEffort: 'medium', speeds: [], isDefault: false },
   ]);
   assert.deepEqual(codexModels(null), []);
 });
 
 test('a spawned agent becomes a subagent of its thread with its own steps, result and tokens (real 0.155.1 trace)', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
-  writeFileSync(fake, REPLAY_CODEX, { mode: 0o755 });
+  const fake = fakeCodex(home, REPLAY_CODEX);
   const events: AgentEvent[] = [];
   const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/subagent.jsonl', import.meta.url)) } }));
   try {
@@ -360,4 +442,23 @@ test('skills/list becomes / commands, and a message opening with one attaches it
   );
   assert.deepEqual(infoFromLists(null, reply, null).skills, ['fix-lint', 'plain']);
   assert.deepEqual(commandsFromSkills(null), []);
+});
+
+test("a completed file change carries one patch with a section per file, so each file's +/− and diff show", () => {
+  const changes = [
+    { path: '/repo/src/a.ts', kind: { type: 'update', move_path: null }, diff: '--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@\n-old\n+new\n same\n' },
+    { path: '/repo/src/new.ts', kind: { type: 'add' }, diff: 'one\ntwo\n' },
+    { path: '/repo/gone.ts', kind: { type: 'delete' }, diff: 'bye\n' },
+  ];
+  const s = threadState('h1', '/repo');
+  const [end] = mapNotification('item/completed', { threadId: 't', item: { type: 'fileChange', id: 'f2', status: 'completed', changes } }, s);
+  assert.equal(
+    end.type === 'tool' && end.patch,
+    [
+      'diff --git a/src/a.ts b/src/a.ts', '--- a/src/a.ts', '+++ b/src/a.ts', '@@ -1,2 +1,2 @@', '-old', '+new', ' same',
+      'diff --git a/src/new.ts b/src/new.ts', '--- /dev/null', '+++ b/src/new.ts', '@@ -0,0 +1,2 @@', '+one', '+two',
+      'diff --git a/gone.ts b/gone.ts', '--- a/gone.ts', '+++ /dev/null', '@@ -1,1 +0,0 @@', '-bye',
+    ].join('\n'),
+  );
+  assert.equal(changesPatch([{ path: '/repo/x.ts', kind: { type: 'update', move_path: null }, diff: '' }], '/repo'), '', 'an update without hunks adds nothing');
 });

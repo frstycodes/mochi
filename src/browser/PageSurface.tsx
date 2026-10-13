@@ -32,7 +32,7 @@ export function PageSurface({ thread, pageId, page, isDriving, className }: { th
       {page.error && <PageError error={page.error} onRetry={() => page.hostId && host.browser.command(page.hostId, 'reload')} />}
       {!host.isDesktop && size.w > 0 && (
         <div
-          className={cn('absolute origin-top-left overflow-hidden', fit && 'rounded-lg shadow-popover')}
+          className={cn('absolute origin-top-left overflow-hidden', fit && 'shadow-popover')}
           style={fit ? { left: fit.x, top: fit.y, width: fit.cssWidth, height: fit.cssHeight, transform: `scale(${fit.scale})` } : { inset: 0 }}
         >
           {isDemoUrl(page.url) ? (
@@ -111,7 +111,7 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
       const r = el.getBoundingClientRect();
       const isHidden = !!page.error || r.width < 1 || r.height < 1 || isCovered(el);
       const fit = device ? fitDevice({ width: r.width, height: r.height }, device, page.isRotated) : null;
-      const bounds = isHidden ? null : fit ? { x: r.x + fit.x, y: r.y + fit.y, width: fit.width, height: fit.height, radius: DEVICE_RADIUS } : { x: r.x, y: r.y, width: r.width, height: r.height, radius: roundRadius(el) };
+      const bounds = isHidden ? null : fit ? { x: r.x + fit.x, y: r.y + fit.y, width: fit.width, height: fit.height, radius: 0 } : { x: r.x, y: r.y, width: r.width, height: r.height, radius: roundRadius(el) };
       const zoom = page.zoom;
       const next = JSON.stringify([bounds, zoom]);
       if (next === last) return;
@@ -150,9 +150,6 @@ export function useSize(ref: RefObject<HTMLElement | null>) {
   }, [ref]);
   return size;
 }
-
-// Round fallback of the device frame's `rounded-lg`.
-const DEVICE_RADIUS = 12;
 
 /** The frame's CSS radius as a round corner: native views can't draw squircles, and a squircle at the scaled radius looks like a round one at radius / --corner-scale. */
 function roundRadius(el: HTMLElement) {

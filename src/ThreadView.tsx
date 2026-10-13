@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
-import { BranchUp, ChevronDown, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
+import { ChevronDown, Hierarchy2, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
 import { ChatView } from './ChatView';
-import { progressAt } from './progress';
+import { goalProgress, progressLabel } from './progress';
 import { SidePane, useSplitTabIds } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
 import { THREAD_ACTIONS_MENU, THREAD_HEADER_MENU } from './menus/menus';
@@ -39,6 +40,7 @@ import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { ThreadPrHoverCard } from './chat/RefHoverCard';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -177,7 +179,7 @@ function DockedLayout({ chat, thread, pane, isPaneOpen }: { chat: React.ReactNod
 
   useEffect(() => {
     const p = panel.current;
-    // Mounting (opening a thread, a Stage swipe landing) never animates the pane: the swiped-in preview already shows it at full size.
+    // Mounting (opening a thread, a pinned page mounting beside the current one) never animates the pane: the swiped-in preview already shows it at full size.
     const isToggle = isMounted.current;
     isMounted.current = true;
     if (!p || p.isCollapsed() === !isPaneOpen) return;
@@ -253,7 +255,7 @@ function ThreadHeader({
 }) {
   const { state } = useHarness();
   const { isFirst, leafId } = useSplit();
-  const { pct } = progressAt(thread, state.now, true);
+  const progress = goalProgress(thread, state.now);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
@@ -263,16 +265,19 @@ function ThreadHeader({
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <DeviceIndicator />
         <ThreadMenu thread={thread} />
+        <LimitChip thread={thread} />
         {!!thread.repo && (
           <span className="hidden min-w-0 items-center gap-1 truncate type-caption text-subtle-foreground @2xl:flex">
-            <BranchUp className="size-3.5 shrink-0" />
+            <Hierarchy2 className="size-3.5 shrink-0" />
             {thread.repo.branch}
           </span>
         )}
         {thread.prs.map((pr) => (
-          <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden @xl:inline-flex">
-            #{pr.number}
-          </Badge>
+          <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr}>
+            <Badge variant="secondary" tabIndex={0} aria-label={`#${pr.number}: ${pr.title}`} className="hidden @xl:inline-flex">
+              #{pr.number}
+            </Badge>
+          </ThreadPrHoverCard>
         ))}
         <span className="flex-1" />
         <Tooltip>
@@ -280,8 +285,8 @@ function ThreadHeader({
             <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
               {hasGoal(thread) ? (
                 <>
-                  <ProgressRing pct={pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
-                  <span className="tabular">{Math.round(pct * 100)}%</span>
+                  <ProgressRing pct={progress.pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+                  <span className="tabular">{progressLabel(progress)}</span>
                 </>
               ) : (
                 <TextalignLeft className="size-4" aria-hidden />
@@ -307,17 +312,17 @@ function ThreadHeader({
   );
 }
 
-/** Where the agent runs. Only this Mac exists yet, so it states that rather than offering choices that do nothing. */
+/** Where the agent runs. Only this computer exists yet, so it states that rather than offering choices that do nothing. */
 function DeviceIndicator() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span tabIndex={0} aria-label="Runs on this Mac" className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
+        <span tabIndex={0} aria-label="Runs on this computer" className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
           <Laptop className="size-4" />
         </span>
       </TooltipTrigger>
       <TooltipContent className="flex-col items-start gap-0.5">
-        <span className="block font-medium">Runs on this Mac</span>
+        <span className="block font-medium">Runs on this computer</span>
         <span className="block opacity-80">The agent works in this thread's folder on your machine</span>
       </TooltipContent>
     </Tooltip>

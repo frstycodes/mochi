@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, nativeTheme, screen, shell, type Rectangle } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
 const background = () => (nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9');
@@ -10,7 +11,7 @@ export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json');
 
 export const isTrustedUrl = (url: string) =>
-  devServerUrl ? url.startsWith(devServerUrl) : url.startsWith(`file://${indexHtml.split(path.sep).join('/')}`);
+  devServerUrl ? url.startsWith(devServerUrl) : url.startsWith(pathToFileURL(indexHtml).href);
 
 const routed = new Map<string, BrowserWindow>();
 
@@ -26,7 +27,17 @@ export function openRoute(route: string) {
   win.on('closed', () => routed.delete(route));
 }
 
-export function createWindow(route = '', bounds?: Rectangle) {
+/** Brings the main window back, hidden or minimized, or opens one. */
+export function showMainWindow() {
+  const win = mainWindow();
+  if (!win) return void createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+/** `isHidden`: the main window that keeps the store running for remote devices while no window is open. */
+export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
   const win = new BrowserWindow({
     width: 1280,
@@ -46,7 +57,7 @@ export function createWindow(route = '', bounds?: Rectangle) {
       nodeIntegration: false,
     },
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => win.webContents.send('windows:onFullScreenChange', true));
   win.on('leave-full-screen', () => win.webContents.send('windows:onFullScreenChange', false));
   if (isMain) win.on('close', () => writeFileSync(stateFile(), JSON.stringify(win.getNormalBounds())));

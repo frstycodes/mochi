@@ -9,6 +9,9 @@ import { effortId, modelId } from '../runtime/models.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
+  /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
+  lightTheme: string;
+  darkTheme: string;
   projectsFolder: string;
   restoreLayout: boolean;
   /** NoticeKind values that raise an OS notification while the window is in the background. */
@@ -19,6 +22,8 @@ export interface Prefs {
   starredModels: string[];
   /** A provider effort id; a model that doesn't take it runs its own default. */
   effort: string;
+  /** New threads' speed: '' standard or `fast`, which runs only on models that report a faster tier. */
+  speed: '' | 'fast';
   agent: 'claude' | 'codex';
   permissions: SharedAccess;
   /** Side pane tabs pinned as icons in the thread header, in order. */
@@ -27,12 +32,18 @@ export interface Prefs {
   driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
   whileWorking: 'queue' | 'steer';
+  simplifyLength: 'short' | 'detailed';
+  simplifyNeedsFirst: boolean;
+  simplifyRules: string;
+  simplifyAuto: boolean;
+  simplifyAutoWords: number;
   branchFrom: 'current' | 'base';
-  stepSize: 1 | 2 | 3;
   branchPrefix: string;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
   diffStyle: 'unified' | 'split';
+  /** Days after settling that a thread's worktree is removed (`useWorktreeCleanup`); `never` keeps them. */
+  worktreeCleanup: 'never' | '1' | '7' | '30';
   terminalFontSize: number;
   terminalScrollback: number;
   restoreTerminals: boolean;
@@ -47,6 +58,8 @@ export interface Prefs {
   threadModels: ThreadModels;
   /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
   recordReplays: boolean;
+  /** The rewind mode you last ran, offered first next time. */
+  rewindMode: 'chat' | 'files';
 }
 
 export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
@@ -59,6 +72,8 @@ export type AgentControl = (typeof AGENT_CONTROLS)[number];
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
+  lightTheme: 'mochi',
+  darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
   alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
@@ -66,16 +81,22 @@ export const DEFAULT_PREFS: Prefs = {
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
   effort: 'high',
+  speed: '',
   agent: 'claude',
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
   driftGuard: true,
   whileWorking: 'queue',
+  simplifyLength: 'short',
+  simplifyNeedsFirst: true,
+  simplifyRules: '',
+  simplifyAuto: false,
+  simplifyAutoWords: 150,
   branchFrom: 'current',
-  stepSize: 2,
-  branchPrefix: 'mochi/',
+  branchPrefix: '',
   workspaceMode: 'worktree',
   diffStyle: 'unified',
+  worktreeCleanup: '7',
   terminalFontSize: 12,
   terminalScrollback: 5000,
   restoreTerminals: true,
@@ -85,6 +106,7 @@ export const DEFAULT_PREFS: Prefs = {
   agentControl: 'everything',
   threadModels: 'cheaper',
   recordReplays: true,
+  rewindMode: 'files',
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';
@@ -137,9 +159,12 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) saved = parsed as Record<string, unknown>;
   } catch {}
   if (saved.branchFrom === undefined && legacyBranchFrom === 'base') saved.branchFrom = 'base';
+  // 'mochi/' was the old default; branches are now `type/slug` and a prefix is something you add.
+  if (saved.branchPrefix === 'mochi/') delete saved.branchPrefix;
   // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
   if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
+  if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];

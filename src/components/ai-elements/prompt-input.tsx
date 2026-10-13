@@ -571,22 +571,24 @@ export const PromptInput = ({
   const addLocal = useCallback(
     (fileList: File[] | FileList) => {
       const incoming = [...fileList];
+      // Reports any file left out, not only when all are: a mixed drop would otherwise lose some silently.
       const accepted = incoming.filter((f) => matchesAccept(f));
-      if (incoming.length && accepted.length === 0) {
+      if (accepted.length < incoming.length) {
         onError?.({
           code: "accept",
-          message: "No files match the accepted types.",
+          message: "Some files don't match the accepted types.",
         });
-        return;
       }
       const withinSize = (f: File) =>
         maxFileSize ? f.size <= maxFileSize : true;
       const sized = accepted.filter(withinSize);
-      if (accepted.length > 0 && sized.length === 0) {
+      if (sized.length < accepted.length) {
         onError?.({
           code: "max_file_size",
-          message: "All files exceed the maximum size.",
+          message: "Some files exceed the maximum size.",
         });
+      }
+      if (sized.length === 0) {
         return;
       }
 
@@ -635,22 +637,24 @@ export const PromptInput = ({
   const addWithProviderValidation = useCallback(
     (fileList: File[] | FileList) => {
       const incoming = [...fileList];
+      // Reports any file left out, not only when all are: a mixed drop would otherwise lose some silently.
       const accepted = incoming.filter((f) => matchesAccept(f));
-      if (incoming.length && accepted.length === 0) {
+      if (accepted.length < incoming.length) {
         onError?.({
           code: "accept",
-          message: "No files match the accepted types.",
+          message: "Some files don't match the accepted types.",
         });
-        return;
       }
       const withinSize = (f: File) =>
         maxFileSize ? f.size <= maxFileSize : true;
       const sized = accepted.filter(withinSize);
-      if (accepted.length > 0 && sized.length === 0) {
+      if (sized.length < accepted.length) {
         onError?.({
           code: "max_file_size",
-          message: "All files exceed the maximum size.",
+          message: "Some files exceed the maximum size.",
         });
+      }
+      if (sized.length === 0) {
         return;
       }
 

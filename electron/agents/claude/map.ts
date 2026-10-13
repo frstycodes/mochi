@@ -1,9 +1,12 @@
 import path from 'node:path';
-import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
+import { claudeFast } from '../../../src/runtime/models.ts';
+import { claudeEventWindow } from '../../../src/usage/limits.ts';
+import { posixPath } from '../../platform.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
@@ -15,6 +18,9 @@ export function createMapper(threadId: string, cwd: string) {
   let context = { used: 0, max: 0 };
   let isNewBlock = false;
   let isInterrupting = false;
+  /** Windows Claude Code reported `rejected` (it holds the turn until they reopen), and notices already relayed, by window and reset. */
+  const blocked = new Set<string>();
+  const told = new Set<string>();
   /** MCP server names from init, to read a server back out of `mcp__<server>__<tool>`. */
   let servers: string[] = [];
   /** Skill names from init; until it arrives, skills sent messages open with wait in `typed`. */
@@ -73,7 +79,7 @@ export function createMapper(threadId: string, cwd: string) {
   function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock, result: unknown) {
     const outcome: { text: string; files?: string[]; exitCode?: number; output?: string; patch?: string } = { text: describeTool(tool.name, tool.input, servers, cwd) };
     const file = tool.input.file_path ?? tool.input.notebook_path;
-    if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [path.relative(cwd, path.resolve(cwd, file))];
+    if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [posixPath(path.relative(cwd, path.resolve(cwd, file)))];
     if (tool.name === 'Bash') Object.assign(outcome, { exitCode: exitCode(block), output: tail(resultText(block)) });
     const patch = !block.is_error && EDIT_TOOLS.has(tool.name) ? patchOf(tool.input, result) : undefined;
     if (patch) outcome.patch = patch;
@@ -179,11 +185,8 @@ export function createMapper(threadId: string, cwd: string) {
         if (typeof content === 'string') return [];
         return content.flatMap((block) => (block.type === 'tool_result' ? toolEnd(block as ToolResultBlock, message.tool_use_result) : []));
       }
-      case 'rate_limit_event': {
-        const { status, resetsAt } = message.rate_limit_info;
-        if (status !== 'rejected') return [];
-        return [{ threadId, type: 'limit', ...(resetsAt !== undefined && { resetsAt: resetTime(resetsAt) }) }];
-      }
+      case 'rate_limit_event':
+        return limitEvents(message.rate_limit_info);
       case 'result': {
         const status = isInterrupting ? 'interrupted' : message.subtype === 'success' ? 'done' : 'failed';
         isInterrupting = false;
@@ -193,6 +196,28 @@ export function createMapper(threadId: string, cwd: string) {
       default:
         return [];
     }
+  }
+
+  /**
+   * Relays Claude Code's own limit states. `rejected` without extra usage: it holds the turn and continues at the reset (T3 Code's
+   * adapter and docs say so; not verified here). With extra usage allowed or in use it keeps running, billed. Warnings and the
+   * switch to extra usage are lines in the transcript, once per window and reset.
+   */
+  function limitEvents(info: SDKRateLimitInfo): AgentEvent[] {
+    const type = info.rateLimitType ?? 'unknown';
+    const window = claudeEventWindow(info);
+    const name = window ? `${window.label.toLowerCase()} ` : '';
+    const isOverage = info.overageStatus === 'allowed' || info.overageStatus === 'allowed_warning' || !!info.isUsingOverage || !!info.overageInUse;
+    const once = (key: string, event: AgentEvent): AgentEvent[] => (told.has(`${key}:${type}:${info.resetsAt}`) ? [] : (told.add(`${key}:${type}:${info.resetsAt}`), [event]));
+    if (info.status === 'rejected' && !isOverage) {
+      if (blocked.has(type)) return [];
+      blocked.add(type);
+      return [{ threadId, type: 'limit', isTurnHeld: true, ...(info.resetsAt !== undefined && { resetsAt: resetTime(info.resetsAt) }), ...(window && { label: window.label }) }];
+    }
+    const cleared: AgentEvent[] = blocked.delete(type) && !blocked.size ? [{ threadId, type: 'limit-cleared' }] : [];
+    if (info.status === 'rejected') return [...cleared, ...once('overage', { threadId, type: 'limit-notice', text: `Claude is past its ${name}limit and using extra usage, billed per use` })];
+    if (info.status === 'allowed_warning' && window) return [...cleared, ...once('warning', { threadId, type: 'limit-notice', text: `Claude's ${name}limit is ${Math.round(window.usedPct)}% used` })];
+    return cleared;
   }
 
   return {
@@ -290,7 +315,7 @@ export function describeTool(name: string, input: Record<string, unknown>, serve
   if (kind.skill) return `Skill ${kind.skill}`;
   if (kind.mcp) return `Mcp ${kind.mcp.server}: ${kind.mcp.tool}`;
   const file = input.file_path ?? input.notebook_path;
-  const inside = typeof file === 'string' && cwd ? path.relative(cwd, path.resolve(cwd, file)) : undefined;
+  const inside = typeof file === 'string' && cwd ? posixPath(path.relative(cwd, path.resolve(cwd, file))) : undefined;
   const target = input.command ?? (inside && !inside.startsWith('..') ? inside : file) ?? input.pattern ?? input.url ?? input.query ?? input.subject ?? input.description;
   if (typeof target !== 'string') return name;
   const verb = VERBS[name as keyof typeof VERBS];
@@ -374,7 +399,7 @@ export function claudeModels(infos: ModelInfo[]): AgentModel[] {
   const rows = infos.filter((m) => m !== defaultRow);
   const defaultId = defaultRow ? idOf(defaultRow) : rows[0] && idOf(rows[0]);
   const models = new Map<string, AgentModel>();
-  for (const m of rows) if (!models.has(idOf(m))) models.set(idOf(m), { id: idOf(m), name: m.displayName, description: m.description, efforts: m.supportedEffortLevels ?? [], isDefault: idOf(m) === defaultId });
+  for (const m of rows) if (!models.has(idOf(m))) models.set(idOf(m), { id: idOf(m), name: m.displayName, description: m.description, efforts: m.supportedEffortLevels ?? [], speeds: m.supportsFastMode ? [claudeFast(idOf(m))] : [], isDefault: idOf(m) === defaultId });
   return [...models.values()];
 }
 
@@ -395,4 +420,10 @@ export const PERMISSION_MODES = {
 export function permissionOptions(mode: PermissionMode) {
   // The SDK refuses bypassPermissions without this opt-in; Full access is the user's explicit, confirmed choice in the composer.
   return { permissionMode: mode, allowDangerouslySkipPermissions: mode === 'bypassPermissions', allowedTools: PERMISSION_MODES[mode] };
+}
+
+/** A message for Claude Code: image blocks ahead of the text, or the text alone. */
+export function userContent(text: string, images?: AgentImage[]): SDKUserMessage['message']['content'] {
+  if (!images?.length) return text;
+  return [...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType, data: i.data } })), { type: 'text' as const, text }];
 }

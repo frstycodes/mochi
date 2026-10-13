@@ -1,10 +1,12 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions, LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
+import { killTree, spawnable } from '../../platform.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 interface Live {
@@ -15,6 +17,8 @@ interface Live {
   /** Server generation the thread was opened on; after a crash it is resumed on the new server before the next turn. */
   gen: number;
   turnId?: string;
+  /** Turns this thread started on this Codex thread, oldest first, for `rewindPoint`. */
+  turns: { id: string; text: string }[];
   options: AgentRunOptions;
 }
 
@@ -118,9 +122,24 @@ export class CodexAdapter {
     await this.start(threadId, { ...options, permissionMode: 'review' });
   }
 
-  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[]) {
-    if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
+  /** `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. */
+  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string) {
+    const live = this.threads.get(threadId);
+    if (!live) throw new Error('No live Codex session for this thread; resume it first');
+    if (speed !== undefined) live.options = { ...live.options, speed: speed || undefined };
     await this.report(threadId, () => this.turn(threadId, text, images, skills));
+  }
+
+  /** What a live thread runs on, with the speed its latest message set. */
+  runOptions(threadId: string) {
+    return this.threads.get(threadId)?.options;
+  }
+
+  /** The turn before the latest one started with this text, for `forkAt`; null when unknown or it was the first. */
+  rewindPoint(threadId: string, text: string) {
+    const turns = this.threads.get(threadId)?.turns ?? [];
+    const index = turns.findLastIndex((t) => t.text.includes(text));
+    return index > 0 ? turns[index - 1].id : null;
   }
 
   async interrupt(threadId: string) {
@@ -225,16 +244,21 @@ export class CodexAdapter {
   }
 
   private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions) {
+    // A reopen after a server crash keeps the turns it knew; a fork starts a new Codex thread whose turns it doesn't.
+    const prior = this.threads.get(threadId);
+    const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
-    const params = { cwd: options.cwd, model: options.model ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
-    const result = options.resume
-      ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
-      : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const result = options.resume && options.forkAt
+      ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
+      : options.resume
+        ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
+        : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
     const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
     if (typeof codexId !== 'string') throw new Error(`codex ${options.resume ? 'thread/resume' : 'thread/start'} returned no thread id`);
     const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits });
-    const live: Live = { codexId, server, state, gen: server.gen, options: { ...options, resume: codexId } };
+    const live: Live = { codexId, server, state, gen: server.gen, turns, options: { ...options, resume: codexId, forkAt: undefined } };
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
@@ -262,9 +286,10 @@ export class CodexAdapter {
     const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
     const attached = skillInputs(text, skills, listed);
     const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, outputSchema: this.schemas.get(threadId) ?? null });
+    const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
+    if (typeof turnId === 'string') live.turns.push({ id: turnId, text });
     // Codex reports no skill load of its own: an attached skill is loaded with the turn.
     for (const event of skillEvents(threadId, typeof turnId === 'string' ? turnId : String(Date.now()), attached)) this.emit(event);
   }
@@ -384,7 +409,7 @@ class CodexServer {
   }
 
   dispose() {
-    this.child?.kill();
+    if (this.child) killTree(this.child);
   }
 
   private async boot(): Promise<RpcClient> {
@@ -394,7 +419,8 @@ class CodexServer {
 
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
-    const child = spawn(install.path, ['app-server'], { cwd: os.homedir(), env: accountEnv(this.account, install.env), stdio: ['pipe', 'pipe', 'pipe'] });
+    const target = spawnable(install.path, ['app-server']);
+    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: hooksEnv(accountEnv(this.account, install.env)), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
     const gen = ++this.gen;
     this.child = child;
     this.stderr = '';

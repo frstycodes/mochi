@@ -1,5 +1,6 @@
 import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
+import type { TurnChanges } from './turnChanges.ts';
 
 export type ChatRow =
   | { kind: 'message'; key: string; entry: ActivityEntry; index: number; showAuthor: boolean }
@@ -7,20 +8,25 @@ export type ChatRow =
   | { kind: 'work'; key: string; who: Author; entries: ActivityEntry[] }
   | { kind: 'review'; key: string; review: Review }
   /** A subagent where it was started (`entry.subagentId`). */
-  | { kind: 'subagent'; key: string; entry: ActivityEntry };
+  | { kind: 'subagent'; key: string; entry: ActivityEntry }
+  /** The files a finished turn changed, after its last row. */
+  | { kind: 'changes'; key: string; turn: TurnChanges };
 
 /**
  * Work groups interleave with prose like Claude's: the tool calls and reasoning between two messages (anyone's) are one
  * group, plus the events logged while the agent was mid-work (approvals, their answers, goal changes). Events before a
  * group's first work (drift tags on your message) or after prose stay rows of their own.
  */
-export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): ChatRow[] {
+export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], changes: TurnChanges[] = []): ChatRow[] {
   const rows: ChatRow[] = [];
   let turn: Extract<ChatRow, { kind: 'work' }> | undefined;
   let isMidWork = false;
   const pushReviews = (at: number) => reviews.filter((r) => (at < activity.length ? r.afterIndex === at : r.afterIndex >= at)).forEach((review) => rows.push({ kind: 'review', key: review.id, review }));
 
+  const pushChanges = (at: number) => changes.filter((t) => t.end === at - 1).forEach((turn) => rows.push({ kind: 'changes', key: `changes-${turn.start}`, turn }));
+
   activity.forEach((entry, i) => {
+    pushChanges(i);
     pushReviews(i);
     const key = `${entry.at}-${i}`;
     if (entry.kind === 'tool' || entry.kind === 'reasoning') {
@@ -35,9 +41,10 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): Cha
       return rows.push({ kind: 'subagent', key, entry });
     }
     if (entry.kind === 'event') {
-      if (turn && isMidWork && !entry.card) return turn.entries.push(entry);
-      // Mochi's widgets (a delete or settings approval) stay in view: the turn continues in a new accordion after one.
-      if (entry.card) turn = undefined;
+      const isWidget = !!entry.card || !!entry.isLimit;
+      if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
+      // Mochi's widgets (a delete or settings approval, a usage limit) stay in view: the turn continues in a new accordion after one.
+      if (isWidget) turn = undefined;
       return rows.push({ kind: 'event', key, entry });
     }
     turn = undefined;
@@ -46,6 +53,7 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = []): Cha
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
     rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });
   });
+  pushChanges(activity.length);
   pushReviews(activity.length);
   return rows;
 }

@@ -49,7 +49,7 @@ export function QueueTray({ thread, onSendNow, onEdit }: { thread: Thread; onSen
 }
 
 function QueueStatus({ thread, preview }: { thread: Thread; preview?: string }) {
-  if (thread.queuePause) return <span className="min-w-0 truncate text-warning">Paused: {PAUSE_REASONS[thread.queuePause]}{thread.queuePause === 'limit' && ', sends after you resume'}</span>;
+  if (thread.queuePause) return <span className="min-w-0 truncate text-warning">Paused: {PAUSE_REASONS[thread.queuePause]}{thread.queuePause === 'limit' && ', sends when the thread resumes'}</span>;
   return <span className="min-w-0 truncate text-muted-foreground">{preview ?? 'Sends when this turn ends'}</span>;
 }
 
@@ -69,7 +69,7 @@ function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: Q
       className="group/queued relative flex h-9 cursor-grab items-center gap-2 rounded-lg pr-1 pl-3 outline-none hover:bg-accent/60 focus-visible:bg-accent/60 active:cursor-grabbing data-[dragging]:z-10"
     >
       <span className={cn('min-w-0 flex-1 truncate type-meta', !message.draft && 'text-muted-foreground')}>{message.draft || 'No text'}</span>
-      <ExtraCount icon={Paperclip} count={message.files} label="attached" />
+      <ExtraCount icon={Paperclip} count={message.images?.length ?? 0} label="attached" />
       <ExtraCount icon={MentionCircle} count={message.mentions.length} label="referenced" />
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 pointer-coarse:opacity-100">
         <Button variant="ghost" size="xs" className="rounded-full" onClick={() => onSendNow(message)}>

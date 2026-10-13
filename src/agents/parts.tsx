@@ -64,7 +64,7 @@ export function SubagentMeta({ subagent, className }: { subagent: Subagent; clas
 
 const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
-function useElapsed(startedAt: number, endedAt?: number) {
+export function useElapsed(startedAt: number, endedAt?: number) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (endedAt !== undefined) return;

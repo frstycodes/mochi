@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { hooksEnv } from '../../git/hooks.ts';
+import { PR_GUARD } from './prGuard.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
@@ -6,12 +8,13 @@ import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/ho
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
-import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, withPlanTools } from './map.ts';
+import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { FORK_MISSING_NOTICE, FORK_REFUSED_NOTICE, forkPoint, MISSING_FORK_POINT, takeForkAt, transcriptUuids } from './fork.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -22,8 +25,10 @@ interface Session {
   threadId: string;
   options: AgentRunOptions;
   inbox: { text: string; images?: AgentImage[] }[];
-  /** Every message handed to Claude Code, with the uuid `rewindFiles` takes. */
-  sent: { uuid: string; text: string }[];
+  /** Every message handed to Claude Code, with the uuid `rewindFiles` takes and the chain entry before it (`rewindPoint`). */
+  sent: { uuid: string; text: string; images?: AgentImage[]; after: string | null }[];
+  /** The newest entry of the main conversation chain; undefined while a resumed session hasn't shown one yet. */
+  lastUuid?: string | null;
   wake: EventEmitter;
   mapper: ReturnType<typeof createMapper>;
   query?: Query;
@@ -44,20 +49,29 @@ const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
 
+/** What a live session runs on, with the speed its latest message set. */
+export const claudeRunOptions = (threadId: string) => sessions.get(threadId)?.options;
+
 export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.permissionMode && !(options.permissionMode in PERMISSION_MODES)) throw new TypeError(`permissionMode must be one of ${Object.keys(PERMISSION_MODES).join(', ')}`);
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
+  if (options.speed && options.speed !== 'fast') throw new TypeError('speed must be fast');
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
   sessions.set(threadId, session);
   void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
 }
 
-export async function sendClaude(threadId: string, text: string, images?: AgentImage[]) {
+/** `speed`: '' standard, 'fast' fast mode, unset keeps it; a live process switches before reading the message. */
+export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string) {
   const session = sessions.get(threadId);
   if (!session) throw new Error('No Claude session for this thread in this run of Harness; start it again with resume');
+  if (speed !== undefined && speed !== (session.options.speed ?? '')) {
+    session.options = { ...session.options, speed: speed || undefined };
+    await session.query?.applyFlagSettings({ fastMode: !!speed });
+  }
   session.inbox.push({ text, images });
   session.isBusy = true;
   if (session.query) session.wake.emit('push');
@@ -90,13 +104,20 @@ export function stopClaude(threadId: string) {
  */
 // GAP: matched by text because activity entries carry no message id yet; pass the uuid once the entry stores it. Two
 // identical messages rewind to the later one.
-// GAP: not run against a real thread yet; whether Claude Code accepts our client uuids here is unverified.
 export async function rewindClaude(threadId: string, text: string) {
   const session = sessions.get(threadId);
-  const uuid = session?.sent.findLast((m) => m.text === text)?.uuid;
+  const uuid = session?.sent.findLast((m) => m.text.includes(text))?.uuid;
   if (!session?.query || !uuid) return;
   const result = await session.query.rewindFiles(uuid);
   if (!result.canRewind) console.warn(`Claude rewind skipped for ${threadId}: ${result.error ?? 'no checkpoint'}`);
+}
+
+/** The transcript entry just before the latest sent message with this text, for `forkAt`; null when unknown or it was the first. */
+export async function claudeRewindPoint(threadId: string, text: string) {
+  const session = sessions.get(threadId);
+  const index = session?.sent.findLastIndex((m) => m.text.includes(text)) ?? -1;
+  if (!session?.sessionId || index < 0) return null;
+  return forkPoint(session.sent, index, await transcriptUuids(session.account.configDir, session.sessionId));
 }
 
 /** Stops one subagent (Agent tool task) of a live session; Claude Code then reports it `stopped`. */
@@ -134,13 +155,15 @@ async function schedule(session: Session) {
 async function launch(session: Session) {
   const { threadId, options } = session;
   const abort = new AbortController();
+  const sentBefore = session.sent.length;
+  let isForkRefused = false;
   try {
     const { accountEnv, apiKeyFor, defaultModel, userPath } = await config();
     const { configDir = null } = session.account;
     const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
     if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
     // A consequential Mochi call waits on the user's card; Claude Code's own MCP timeout would cut it short.
-    const base = withPlanTools({ ...accountEnv('claude', configDir), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
+    const base = withPlanTools({ ...hooksEnv(accountEnv('claude', configDir)), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
     const key = options.useApiKey ? apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
@@ -148,6 +171,8 @@ async function launch(session: Session) {
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
+    const { forkAt, isMissing } = await takeForkAt(session);
+    if (isMissing) emit({ threadId, type: 'notice', text: FORK_MISSING_NOTICE });
     const mode = (options.permissionMode as PermissionMode | undefined) ?? 'default';
     const permissions = permissionOptions(mode);
     session.query = query({
@@ -157,19 +182,29 @@ async function launch(session: Session) {
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
+        // The flag layer is also the Agent SDK's opt-in: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
+        ...(options.speed && { settings: { fastMode: true } }),
         ...permissions,
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
+        // `takeForkAt` gives it to one launch only: init then hands back the fork's own id, and later launches resume that whole.
+        ...(forkAt && { resumeSessionAt: forkAt, forkSession: true }),
         env,
         includePartialMessages: true,
         enableFileCheckpointing: true,
         abortController: abort,
         canUseTool: approve(threadId),
         mcpServers: { [SERVER]: claudeServer(threadId) },
+        hooks: PR_GUARD,
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },
     });
     for await (const message of session.query) {
+      if (forkAt && message.type === 'result' && message.subtype !== 'success' && message.errors.some((e) => e.includes(MISSING_FORK_POINT))) {
+        isForkRefused = true;
+        break;
+      }
+      if ((message.type === 'assistant' || message.type === 'user') && !message.parent_tool_use_id && message.uuid) session.lastUuid = message.uuid;
       if (message.type === 'system' && message.subtype === 'init') {
         session.sessionId = message.session_id;
         void session.query.supportedCommands().then((list) => emit({ threadId, type: 'info', info: { commands: commandsFrom(list) } }), () => {});
@@ -188,6 +223,17 @@ async function launch(session: Session) {
   } finally {
     if (session.abort === abort) release(session);
   }
+  if (isForkRefused && sessions.get(threadId) === session) await resumeWhole(session, sentBefore);
+}
+
+/** Claude Code refused the fork before running anything: the same messages go again on the whole session (its `forkAt` is spent). */
+async function resumeWhole(session: Session, sentBefore: number) {
+  const unread = session.sent.splice(sentBefore);
+  session.lastUuid = unread[0]?.after ?? session.lastUuid;
+  session.inbox.unshift(...unread.map(({ text, images }) => ({ text, images })));
+  session.isBusy = true;
+  emit({ threadId: session.threadId, type: 'notice', text: FORK_REFUSED_NOTICE });
+  await schedule(session);
 }
 
 /** Ends a session's process and hands its slot to the next waiting thread. The record stays for `send` unless stopped. */
@@ -215,7 +261,8 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
     const next = session.inbox.shift();
     if (next) {
       const uuid = randomUUID();
-      session.sent.push({ uuid, text: next.text });
+      session.sent.push({ uuid, text: next.text, images: next.images, after: session.lastUuid ?? null });
+      session.lastUuid = uuid;
       session.mapper.sent(next.text).forEach(emit);
       yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid };
       continue;
@@ -249,8 +296,3 @@ function dropApprovals(threadId: string, message: string) {
 const config = () => import('../config.ts');
 
 const emit = emitAgentEvent;
-
-function userContent(text: string, images?: AgentImage[]): SDKUserMessage['message']['content'] {
-  if (!images?.length) return text;
-  return [...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType, data: i.data } })), { type: 'text' as const, text }];
-}

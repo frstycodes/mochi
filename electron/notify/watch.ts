@@ -3,6 +3,7 @@ import type { AgentEvent } from '../../src/host/types/agent.ts';
 import type { WatchConfig } from '../../src/host/types/notify.ts';
 import type { ScheduleEvent } from '../../src/host/types/schedule.ts';
 import { isQuiet } from '../../src/notify/model.ts';
+import { resetLabel } from '../../src/usage/limits.ts';
 import { ciTitle, ciTransition, coalesce, type CiSeen, type OsNotice } from '../../src/notify/watch.ts';
 import { emitAgentEvent, onAgentEvent } from '../agents/events.ts';
 import { githubAccount } from '../git/gh.ts';
@@ -20,6 +21,8 @@ let config: WatchConfig = { threads: [], kinds: [], quiet: { isOn: false, start:
 const requests = new Map<string, Set<string>>();
 let needsYou = new Set<string>();
 let pendingOpen: string | null = null;
+/** Threads whose last word was a limit: a failed turn-end right after it (Codex) is the limit itself, already alerted. */
+const limited = new Set<string>();
 
 // A turn ending often lands with its last approval or a CI result; one beat folds them into one notification.
 const BURST_MS = 1500;
@@ -53,7 +56,10 @@ function onEvent(event: AgentEvent) {
   trackRequests(event);
   const thread = config.threads.find((t) => t.id === event.threadId);
   if (!thread) return;
-  const notice = noticeFor(event, thread.title);
+  const isLimitEnd = event.type === 'turn-end' && event.status === 'failed' && limited.has(event.threadId);
+  if (event.type === 'limit') limited.add(event.threadId);
+  else if (event.type === 'turn-end') limited.delete(event.threadId);
+  const notice = isLimitEnd ? null : noticeFor(event, thread.title);
   if (notice) alert(notice);
 }
 
@@ -61,7 +67,10 @@ function noticeFor(event: AgentEvent, title: string): OsNotice | null {
   const base = { threadId: event.threadId, title };
   if (event.type === 'approval') return { ...base, kind: 'needs-you', body: `Wants to ${event.title.charAt(0).toLowerCase()}${event.title.slice(1)}`, requestId: event.requestId };
   if (event.type === 'question') return { ...base, kind: 'needs-you', body: event.questions[0]?.text ?? 'Has a question for you' };
-  if (event.type === 'limit') return { ...base, kind: 'limit', body: event.resetsAt ? `Hit the usage limit, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Hit the usage limit' };
+  if (event.type === 'limit') {
+    const reset = event.resetsAt ? ` at ${resetLabel(event.resetsAt)}` : '';
+    return { ...base, kind: 'limit', body: `Hit the ${event.label ? `${event.label.toLowerCase()} ` : ''}usage limit; ${event.isTurnHeld ? `continues after the reset${reset}` : `stopped until the reset${reset}`}` };
+  }
   if (event.type !== 'turn-end' || event.status === 'interrupted') return null;
   return event.status === 'done' ? { ...base, kind: 'done', body: 'Turn finished, ready for review' } : { ...base, kind: 'failed', body: event.error ?? 'The agent stopped with an error' };
 }
@@ -71,7 +80,7 @@ function trackRequests(event: AgentEvent) {
   if (event.type === 'approval' || event.type === 'question') open.add(event.requestId);
   else if (event.type === 'resolved') open.delete(event.requestId);
   // A turn's end or limit withdraws whatever it was still asking.
-  else if (event.type === 'turn-end' || event.type === 'limit') open.clear();
+  else if (event.type === 'turn-end' || (event.type === 'limit' && !event.isTurnHeld)) open.clear();
   else return;
   requests.set(event.threadId, open);
   if (open.size) needsYou.add(event.threadId);

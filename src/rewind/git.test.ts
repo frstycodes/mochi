@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../../electron/git/checkpoints.ts';
+import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../../electron/git/checkpoints.ts';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 
@@ -13,6 +13,8 @@ function scratchRepo() {
   git(dir, 'init', '-q', '-b', 'main');
   git(dir, 'config', 'user.email', 'test@example.com');
   git(dir, 'config', 'user.name', 'test');
+  // Windows runners set core.autocrlf, which would check `two\n` back out as `two\r\n`.
+  git(dir, 'config', 'core.autocrlf', 'false');
   writeFileSync(join(dir, '.gitignore'), 'ignored.txt\n');
   writeFileSync(join(dir, 'a.txt'), 'one\n');
   git(dir, 'add', '-A');
@@ -72,4 +74,45 @@ test('checkpointRef rejects names that could escape the refs/harness namespace',
   assert.throws(() => checkpointRef('../heads/main', 1));
   assert.throws(() => checkpointRef('t1', -1));
   assert.equal(checkpointRef('t1', 'undo'), 'refs/harness/checkpoints/t1/undo');
+});
+
+test('a rewind preview lists the files a checkpoint changes back, and tells the agent’s changes from later ones', async () => {
+  const dir = scratchRepo();
+  try {
+    assert.equal(await resolveCommit(dir, checkpointRef('t1', 'turn')), '', 'a missing checkpoint resolves empty instead of throwing');
+    const before = await snapshot(dir, checkpointRef('t1', 0), 'before message');
+    writeFileSync(join(dir, 'a.txt'), 'agent edit\n');
+    writeFileSync(join(dir, 'b.txt'), 'agent new file\n');
+    await snapshot(dir, checkpointRef('t1', 'turn'), 'turn end');
+    assert.deepEqual(await changedPaths(dir, before, await snapshotCommit(dir, 'now')), ['a.txt', 'b.txt']);
+    assert.deepEqual(await changedPaths(dir, await resolveCommit(dir, checkpointRef('t1', 'turn')), await snapshotCommit(dir, 'now')), [], 'nothing changed since the turn');
+    writeFileSync(join(dir, 'c.txt'), 'yours\n');
+    assert.deepEqual(await changedPaths(dir, await resolveCommit(dir, checkpointRef('t1', 'turn')), await snapshotCommit(dir, 'now')), ['c.txt'], 'your file reads as an outside change');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("undoing a turn puts back only that turn's files: edits revert, files it created go, everything else stays", async () => {
+  const dir = scratchRepo();
+  try {
+    writeFileSync(join(dir, 'b.txt'), 'b before\n');
+    writeFileSync(join(dir, '[id].txt'), 'route before\n');
+    const before = await snapshot(dir, checkpointRef('t1', 2), 'before message');
+    const head = git(dir, 'rev-parse', 'HEAD');
+    // The turn edits a.txt, creates new.txt; you edit b.txt meanwhile.
+    writeFileSync(join(dir, 'a.txt'), 'agent edit\n');
+    writeFileSync(join(dir, 'new.txt'), 'agent file\n');
+    writeFileSync(join(dir, '[id].txt'), 'agent route\n');
+    writeFileSync(join(dir, 'b.txt'), 'yours\n');
+    await restorePaths(dir, before, ['a.txt', 'new.txt', '[id].txt']);
+    assert.equal(readFileSync(join(dir, '[id].txt'), 'utf8'), 'route before\n', 'a path is a name, not a glob');
+    assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), 'one\n');
+    assert.ok(!existsSync(join(dir, 'new.txt')), 'a file the turn created is deleted');
+    assert.equal(readFileSync(join(dir, 'b.txt'), 'utf8'), 'yours\n', 'files outside the turn are untouched');
+    assert.equal(git(dir, 'rev-parse', 'HEAD'), head, 'the branch stays where it is');
+    assert.equal(git(dir, 'diff', '--cached', '--name-only'), '', 'nothing is left staged');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

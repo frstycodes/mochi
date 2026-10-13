@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { existsSync, lstatSync, symlinkSync, unlinkSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
@@ -8,6 +8,7 @@ import { worktreeRoot } from '../agents/config.ts';
 import { baseRef, localName } from '../git/branches.ts';
 import { mainRepo, runGit, topLevel } from '../git/run.ts';
 import { isFree, listeningPorts, runTargets } from '../ipc/ports.ts';
+import { killTree, spawnShell } from '../platform.ts';
 import { userPath } from '../shellPath.ts';
 
 interface Session {
@@ -56,14 +57,13 @@ async function serve(threadId: string, session: Session, cwd: string, branch: st
   }
   // GAP: borrows the project's installed deps; a base branch whose dependencies differ needs its own install.
   const deps = [join(main, 'node_modules'), join(await topLevel(cwd), 'node_modules')].find(existsSync);
-  if (deps && !existsSync(join(dir, 'node_modules'))) symlinkSync(deps, join(dir, 'node_modules'), 'dir');
+  if (deps && !existsSync(join(dir, 'node_modules'))) symlinkSync(deps, join(dir, 'node_modules'), 'junction');
 
   const target = devTarget(runTargets(dir));
   if (!target) throw new Error(`${branch} has no dev script (package.json "dev", "start", "serve" or "preview", or .claude/launch.json) to serve it with`);
   const port = target.port ?? (await pickPort(FIRST_COMPARE_PORT, new Set(), isFree));
-  const shell = process.env.SHELL || '/bin/zsh';
   // Detached: the dev server and its children form one process group, stopped together.
-  const child = spawn(shell, ['-lc', target.command], { cwd: dir, detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH: await userPath(), PORT: String(port), BROWSER: 'none' } });
+  const child = spawnShell(target.command, { cwd: dir, detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PATH: await userPath(), PORT: String(port), BROWSER: 'none' } });
   session.child = child;
   let log = '';
   const keep = (chunk: Buffer) => (log = (log + chunk.toString()).slice(-LOG_TAIL));
@@ -100,10 +100,5 @@ export function stopAllCompares() {
 }
 
 function killGroup(child: ChildProcess | null) {
-  if (!child?.pid || child.exitCode !== null) return;
-  try {
-    process.kill(-child.pid, 'SIGTERM');
-  } catch {
-    // Already gone.
-  }
+  if (child) killTree(child);
 }

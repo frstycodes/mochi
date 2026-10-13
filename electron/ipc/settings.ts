@@ -145,6 +145,18 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
     if (typeof p.prDrafts !== 'boolean') throw new TypeError('prDrafts must be true or false');
     patch.prDrafts = p.prDrafts;
   }
+  if (p.prepareWorktrees !== undefined) {
+    if (typeof p.prepareWorktrees !== 'boolean') throw new TypeError('prepareWorktrees must be true or false');
+    patch.prepareWorktrees = p.prepareWorktrees;
+  }
+  if (p.worktreeInclude !== undefined) patch.worktreeInclude = string(p.worktreeInclude, 'worktreeInclude', 4096);
+  if (p.setupCommands !== undefined) {
+    patch.setupCommands = {};
+    for (const [folder, command] of Object.entries(record(p.setupCommands, 'setupCommands'))) {
+      const text = string(command, 'setup command', 4096).trim();
+      if (text) patch.setupCommands[absolutePath(folder, 'project folder')] = text;
+    }
+  }
   if (p.sideChatModel !== undefined) {
     const side = record(p.sideChatModel, 'sideChatModel');
     const model = string(side.model, 'sideChatModel.model', MAX_MODEL_CHARS).trim();

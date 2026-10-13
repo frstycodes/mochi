@@ -1,5 +1,4 @@
 import { watch } from 'node:fs';
-import { sep } from 'node:path';
 
 // Build output, caches and VCS data change on every build; a reload for them would loop with the dev server's own writes.
 const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'dist-electron', 'build', 'out', 'coverage', '.next', '.nuxt', '.svelte-kit', '.turbo', '.cache', '.vite', '.parcel-cache', '.output', 'target']);
@@ -16,7 +15,7 @@ const SCROLL_FRESH_MS = 10_000;
 
 /** `rel` is relative to the watched root, in the platform's separators. */
 export function isIgnored(rel: string) {
-  const parts = rel.split(sep).filter(Boolean);
+  const parts = rel.split(/[\\/]/).filter(Boolean);
   return parts.some((p) => IGNORED_DIRS.has(p)) || IGNORED_FILE.test(parts.at(-1) ?? '');
 }
 

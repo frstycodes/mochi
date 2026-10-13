@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
+import { Archive, Flag, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
@@ -10,8 +10,11 @@ import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import type { Provider, Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
+import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
 import { openSchedule } from '../schedule/ScheduleDialog';
+import { openGoalEditor } from '../goals/GoalEditor';
+import { hasGoal } from '../drift';
 import { startRename } from '../rename';
 import { openSettings } from '../settings/open';
 import { openReplay } from '../replay/open';
@@ -21,6 +24,7 @@ import { askSecondOpinion } from '../secondOpinion/run';
 import { reviewerFor } from '../secondOpinion/reviewer';
 import { providerName } from '../secondOpinion/verdict';
 import { pinMany } from '../reorder';
+import { pinnedNeighbour, slotsOf } from '../pager/slots';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
@@ -75,10 +79,12 @@ export const ACTIONS = [
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
   { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, keywords: 'title name', when: when.thread, run: inThread((t) => startRename(t.id)) },
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
-  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
+  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, disabledReason: (s) => s.thread && rewindBlockedReason(s.thread), run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-replay', group: 'Thread', title: 'Replay thread', icon: VideoPlay, keywords: 'recording session playback demo debug', when: when.thread, run: onThread((t) => openReplay(t.id)) },
   { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Export, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
+  { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
+  { id: 'thread-goal-remove', group: 'Thread', title: 'Remove goal', icon: CloseSquare, keywords: 'goal chat question untrack progress', when: (s) => when.thread(s) && hasGoal(s.thread!), run: onThread((t, { dispatch }) => dispatch({ type: 'goal-remove', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   {
     id: 'thread-second-opinion',
@@ -94,7 +100,7 @@ export const ACTIONS = [
   },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
-  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
+  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: Hierarchy2, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
   { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },
 
@@ -122,7 +128,8 @@ export const ACTIONS = [
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),
-  { id: 'layout-stage', group: 'Layout', title: 'Toggle Stage Manager', icon: Layers, shortcut: ['mod', 'shift', 'S'], run: ({ dispatch }) => dispatch({ type: 'stage-toggle' }) },
+  { id: 'pinned-previous', group: 'Layout', title: 'Previous pinned thread', icon: ArrowLeft, shortcut: ['mod', 'shift', '['], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, -1) },
+  { id: 'pinned-next', group: 'Layout', title: 'Next pinned thread', icon: ArrowRight, shortcut: ['mod', 'shift', ']'], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, 1) },
   { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, shortcut: ['mod', 'up'], keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
   { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, shortcut: ['mod', '\\'], run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
   { id: 'layout-split-down', group: 'Layout', title: 'Split down', icon: RowHorizontal, run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId, side: 'bottom' }) },
@@ -132,7 +139,7 @@ export const ACTIONS = [
   { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
   { id: 'layout-close', group: 'Layout', title: 'Close split', icon: X, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-close', leafId: scope.leafId }) },
 
-  // One per ⌥ digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
+  // One per `nav` + digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
   ...Array.from({ length: MAX_PROFILES }, (_, i) => ({
     id: `space-${i + 1}`,
     group: 'Space',
@@ -151,6 +158,12 @@ export const ACTIONS = [
   { id: 'theme-system', group: 'Appearance', title: 'System theme', icon: Monitor, run: ({ setTheme }) => setTheme('system') },
   { id: 'sim-pause', group: 'Appearance', title: 'Pause or resume agents', icon: Pause, keywords: 'simulation tick', run: ({ dispatch }) => dispatch({ type: 'pause' }) },
 ] satisfies PaletteAction[];
+
+/** The pinned pager's keys: the next or previous pinned thread, instantly (keyboard navigation never animates). */
+function goPinned(state: State, dispatch: Dispatch<Action>, step: 1 | -1) {
+  const id = pinnedNeighbour(slotsOf(state), step);
+  if (id) dispatch({ type: 'go', view: { kind: 'thread', id } });
+}
 
 function onThread(fn: (thread: Thread, ctx: ActionContext) => void) {
   return (ctx: ActionContext) => ctx.scope.thread && fn(ctx.scope.thread, ctx);

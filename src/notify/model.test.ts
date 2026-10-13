@@ -50,3 +50,20 @@ test('quiet hours wrap past midnight', () => {
   assert.equal(isQuiet({ isOn: true, start: 9, end: 17 }, at(12)), true);
   assert.equal(isQuiet({ ...night, isOn: false }, at(23)), false);
 });
+
+test('a usage limit notifies what the harness does; going on by itself notifies too, your own stop does not', () => {
+  const working = { isWorking: true };
+  const running = thread({ status: 'running', live: working });
+  const held = thread({ status: 'running', live: { ...working, limit: { resetsAt: '2026-10-13T15:40:00.000Z', label: '5-hour', isTurnHeld: true } } });
+  const [notice] = diffNotices({ threads: [running], queue: [] }, { threads: [held], queue: [] }, 10);
+  assert.equal(notice.kind, 'limit');
+  assert.equal(notice.title, 'Rate limits is waiting');
+  assert.match(notice.body, /hit the 5-hour usage limit and continues after the reset at /);
+  assert.deepEqual(diff(held, running), ['limit'], 'Claude Code went on after the reset');
+  assert.deepEqual(diff(held, thread({ status: 'running', live: { isWorking: false } })), [], 'you stopped it');
+
+  const stopped = thread({ status: 'needs-you', live: { isWorking: false, limit: { resetsAt: '2026-10-13T15:40:00.000Z', autoResume: true } } });
+  assert.deepEqual(diff(running, stopped), ['limit'], 'no second "needs you" for the same stop');
+  assert.deepEqual(diff(stopped, running), ['limit'], 'Resume at reset went out');
+  assert.deepEqual(diff(stopped, thread({ status: 'running', live: { ...working, isOnApiKey: true } })), [], 'moving to the API key is your own click');
+});

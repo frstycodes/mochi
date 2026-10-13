@@ -30,9 +30,12 @@ export function isWorking(thread: Thread) {
   return thread.live ? thread.live.isWorking : thread.status === 'running';
 }
 
+export const SETUP_LABEL = 'Setting up worktree…';
+
 /** Between your message and the agent's first output, which would otherwise show nothing: what it's waiting on. */
 export function pendingWork(thread: Thread): { phase: AgentPhase; label: string } | undefined {
   if (!thread.live?.isWorking || thread.status === 'needs-you') return;
+  if (thread.setup?.status === 'running') return { phase: 'start', label: SETUP_LABEL };
   const last = [...thread.activity].reverse().find((e) => e.kind !== 'event');
   if (last?.who !== 'you') return;
   if (thread.live.starting) return { phase: 'start', label: `Starting ${HARNESSES[thread.live.starting].name}` };
@@ -57,6 +60,7 @@ export interface CurrentAction {
 export function currentAction(thread: Thread): CurrentAction | undefined {
   const isWaiting = thread.status === 'needs-you';
   if (!isWorking(thread) && !isWaiting) return;
+  if (thread.setup?.status === 'failed' && isWaiting) return { label: 'Worktree setup failed', isWaiting };
   const pending = pendingWork(thread);
   if (pending) return { label: pending.label };
   const last = thread.activity.findLast((e) => e.kind === 'tool' || e.kind === 'reasoning' || e.kind === 'message' || (isWaiting && isWaitEvent(e)));

@@ -41,7 +41,7 @@ test('an unknown plan item lands as a plan step, no revision, after the item it 
   const adm = thread(s, 'adm');
   const added = adm.steps[1];
   assert.equal(added.title, 'Index api_usage_daily by key');
-  assert.deepEqual([added.addedBy, added.size, added.status, added.revision], ['codex', 2, 'ready', adm.revisions.length]);
+  assert.deepEqual([added.addedBy, added.status, added.revision], ['codex', 'ready', adm.revisions.length]);
   assert.equal(adm.revisions, before);
   assert.equal(adm.activity.at(-1)!.text, 'Plan: Codex added "Index api_usage_daily by key"');
 });
@@ -167,4 +167,16 @@ test("a tool's end with links fills in the entry its start logged", () => {
   const entry = thread(s, 'rl').activity.at(-1)!;
   assert.equal(entry.text, 'Search token bucket');
   assert.deepEqual(entry.links, [{ url: 'https://redis.io/' }]);
+});
+
+test("the agent's gh pr create records its PR on the thread at once; a known one keeps the state gh gave it", () => {
+  let s = base();
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'tool', id: 'p1', phase: 'start', text: 'Run gh pr create --title "Rate limits"' });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'tool', id: 'p1', phase: 'end', text: '', output: 'https://github.com/o/r/pull/95\n', exitCode: 0 });
+  assert.deepEqual(thread(s, 'rl').prs.at(-1), { number: 95, state: 'open', title: 'Rate limits', url: 'https://github.com/o/r/pull/95' });
+  s = threadsReducer(s, { type: 'prs-seen', threadId: 'rl', prs: [{ number: 95, state: 'merged', title: 'Rate limits for the API', url: 'https://github.com/o/r/pull/95' }] });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'tool', id: 'p2', phase: 'start', text: 'Run gh pr create --fill' });
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'tool', id: 'p2', phase: 'end', text: '', output: 'already exists:\nhttps://github.com/o/r/pull/95', exitCode: 1 });
+  assert.deepEqual(thread(s, 'rl').prs.filter((p) => p.number === 95), [{ number: 95, state: 'merged', title: 'Rate limits for the API', url: 'https://github.com/o/r/pull/95' }]);
+  assert.equal(threadsReducer(s, { type: 'prs-seen', threadId: 'rl', prs: [...thread(s, 'rl').prs] }), s, 'nothing new: the same state');
 });

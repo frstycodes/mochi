@@ -537,6 +537,67 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-header-sidebar-redesign-c0e17b/927fa2dc-97ea-4104-9007-f1e06ab5de5c/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-themes",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5687",
+        "--strictPort"
+      ],
+      "port": 5687
+    },
+    {
+      "name": "mochi-turn-changes",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5497",
+        "--strictPort"
+      ],
+      "port": 5497
+    },
+    {
+      "name": "mochi-turn-changes-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5499",
+        "--strictPort"
+      ],
+      "port": 5499,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-clever-herschel-816e43/f0d4847e-badc-4af5-a236-eb6f29460500/scratchpad/mochi-userdata"
+      }
+    },
+    {
+      "name": "mochi-virtualizer",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5507",
+        "--strictPort"
+      ],
+      "port": 5507
+    },
+    {
+      "name": "mochi-virtualizer-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5509",
+        "--strictPort"
+      ],
+      "port": 5509,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-affectionate-chebyshev-aed0cb/c31c499f-0033-4847-bf6c-c5ed47fe718b/scratchpad/mochi-userdata"
+      }
     }
   ]
 }

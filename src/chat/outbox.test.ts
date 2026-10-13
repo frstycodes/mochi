@@ -12,7 +12,7 @@ const run = (s: State, action: Action) => threadsReducer(s, action);
 const event = (s: State, e: AgentEvent) => run(s, { type: 'agent', event: e });
 const thread = (s: State, id: string) => s.threads.find((t) => t.id === id)!;
 const drafts = (s: State, id: string) => (thread(s, id).queued ?? []).map((m) => m.draft);
-const message = (draft: string) => queuedMessage(draft, { files: 0, mentions: [], isCommand: false, typedSkills: [] });
+const message = (draft: string) => queuedMessage(draft, { mentions: [], isCommand: false, typedSkills: [] });
 
 /** A live thread mid-turn with "first", "second", "third" queued. */
 function working() {
@@ -73,7 +73,8 @@ test('a failed or interrupted turn and a usage limit pause the queue; Resume or 
     let s = event(start, { threadId: id, ...e } as AgentEvent);
     assert.equal(thread(s, id).queuePause, pause);
     assert.deepEqual(dueQueued(s), [], `${pause}: nothing sent`);
-    s = run(s, { type: 'queued-resume', threadId: id });
+    // A limit's Resume is the agent's own (it holds every send until then); the others resume the queue.
+    s = pause === 'limit' ? event(run(s, { type: 'resume', threadId: id }), { threadId: id, type: 'turn-end', status: 'done' }) : run(s, { type: 'queued-resume', threadId: id });
     assert.equal(drafts(runQueue(s), id).length, 2, `${pause}: Resume sends the next one`);
     const sent = run(event(start, { threadId: id, ...e } as AgentEvent), { type: 'send', threadId: id, text: 'go on', reason: '' });
     assert.equal(thread(sent, id).queuePause, undefined, `${pause}: a send of yours clears the pause`);
@@ -114,4 +115,39 @@ test('a message you send mid-stream stays whole: the rest of the agent\'s stream
   assert.deepEqual(thread(s, id).activity.filter((e) => e.kind === 'message').slice(-2).map((e) => [e.who, e.text]), [['claude', 'I can start from here.'], ['you', 'hi']]);
   s = event(s, { threadId: id, type: 'message', text: 'Next block.', isDelta: false });
   assert.equal(thread(s, id).activity.at(-1)!.text, 'Next block.', 'a new block is still its own message');
+});
+
+const IMAGE = { mediaType: 'image/png' as const, data: 'iVBORw0KGgo=', thumb: 'data:image/webp;base64,UklGRg==' };
+
+/** Sends through `sendMessage` like the composer and the queue runner do, collecting the agent calls each dispatch makes. */
+function sendCollecting(s: State, id: string, m: ReturnType<typeof queuedMessage>, extra?: { queuedId: string }) {
+  const calls: unknown[] = [];
+  sendMessage((a) => (calls.push(...agentCalls(s, a, () => run(s, a))), (s = run(s, a))), s, thread(s, id), m, extra);
+  return { s, calls };
+}
+
+test('attached images reach the agent call on a send, a queued send and a new thread; the transcript keeps thumbnails', () => {
+  const withImage = queuedMessage('what is this?', { images: [IMAGE], mentions: [], isCommand: false, typedSkills: [] });
+  const agentImage = { mediaType: IMAGE.mediaType, data: IMAGE.data };
+  const base = { ...initialThreads(undefined, false), ...initialQueue(), spaceId: 'latitude', views: {} } as unknown as State;
+  const create: Action = { type: 'create', title: 'what is this?', images: [IMAGE], provider: 'codex', project: null, isLive: true };
+  const [start] = agentCalls(base, create, () => run(base, create));
+  assert.ok(start.method === 'start');
+  assert.deepEqual(start.options.images, [agentImage], 'new thread');
+  const created = run(base, create);
+  const id = created.threads.at(-1)!.id;
+  assert.deepEqual(thread(created, id).activity.at(-1)!.images, [IMAGE.thumb]);
+
+  const idle = event(created, { threadId: id, type: 'turn-end', status: 'done' });
+  const sent = sendCollecting(idle, id, withImage);
+  assert.deepEqual(sent.calls, [{ method: 'send', threadId: id, text: 'what is this?', images: [agentImage] }], 'send');
+  assert.deepEqual(thread(sent.s, id).activity.at(-1)!.images, [IMAGE.thumb]);
+  assert.equal(thread(sent.s, id).activity.at(-1)!.text, 'what is this?', 'no "(1 attached)" stands in for the image');
+
+  const waiting = run(sent.s, { type: 'queued-add', threadId: id, message: withImage });
+  const [due] = dueQueued(event(waiting, { threadId: id, type: 'turn-end', status: 'done' }));
+  const queued = sendCollecting(event(waiting, { threadId: id, type: 'turn-end', status: 'done' }), id, due.message, { queuedId: due.message.id });
+  assert.deepEqual(queued.calls, [{ method: 'send', threadId: id, text: 'what is this?', images: [agentImage] }], 'queued send');
+  assert.equal(thread(queued.s, id).activity.at(-1)!.wasQueued, true);
+  assert.deepEqual(thread(queued.s, id).queued ?? [], []);
 });

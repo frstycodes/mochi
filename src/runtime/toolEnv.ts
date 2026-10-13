@@ -33,6 +33,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     theme: storedTheme,
     settings: host.settings,
     isDesktop: host.isDesktop,
+    git: host.git,
   };
 }
 

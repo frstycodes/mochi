@@ -1,4 +1,4 @@
-import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
+import type { AgentImage, AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -6,6 +6,8 @@ import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
+import { longThreadFromUrl } from './longThread.ts';
+import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
 export type Size = 1 | 2 | 3;
@@ -40,6 +42,36 @@ export interface Step {
   owner?: Provider;
 }
 
+/** What done means for a goal: checkable (a command Mochi can run) or judged (a sentence). */
+export interface Criterion {
+  id: string;
+  text: string;
+  command?: string;
+  /** The agent says it's met (`claim_criterion`), with one line of evidence; checking it is yours or Mochi's. */
+  claim?: { evidence: string; at: number; by: Provider };
+  /** Mochi ran `command` in the worktree when you asked; a failed check outweighs a claim. */
+  check?: { status: 'running' | 'passed' | 'failed'; at: number; ms?: number; output?: string };
+}
+
+/** Met when its check passed, or the agent claimed it and no check failed since. */
+export const isMet = (c: Criterion) => c.check?.status === 'passed' || (!!c.claim && c.check?.status !== 'failed');
+
+/** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
+export interface TurnReport {
+  at: number;
+  by: Provider;
+  decisions: string[];
+  left: string[];
+  /** The one thing that needs you, if anything. */
+  question?: string;
+}
+
+/** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
+export interface Similar {
+  threadId: string;
+  relation: 'same' | 'related';
+}
+
 export interface Revision {
   n: number;
   at: number;
@@ -53,6 +85,8 @@ export interface ActivityEntry {
   who: Author;
   kind: 'message' | 'tool' | 'event' | 'reasoning' | 'subagent';
   text: string;
+  /** A reply rewritten as bullets for you (Simplify). Display only: never sent to an agent. `rulesKey`: the settings it was made with. */
+  simplified?: { text: string; rulesKey: string; isShown: boolean };
   /** Events only: the why, shown muted under the label. */
   detail?: string;
   seconds?: number;
@@ -64,6 +98,8 @@ export interface ActivityEntry {
   output?: string;
   exitCode?: number;
   patch?: string;
+  /** Events only: the thread paused here on a usage limit; the latest such entry renders the live limit card while the pause lasts. */
+  isLimit?: boolean;
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
@@ -77,6 +113,10 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
+  /** Your messages: thumbnails (data URLs) of the images sent with it. */
+  images?: string[];
+  /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
+  turnUndo?: { start: number; isUndone: boolean };
 }
 
 export interface McpCall {
@@ -87,6 +127,11 @@ export interface McpCall {
 export interface WebLink {
   url: string;
   title?: string;
+}
+
+/** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
+export function firstPrompt(thread: Thread) {
+  return thread.activity.find((e) => e.who === 'you' && e.kind === 'message')?.text ?? thread.goal;
 }
 
 export function authorName(who: Author) {
@@ -162,7 +207,15 @@ export interface Thread {
   isTitleRenamed?: boolean;
   /** A model named the thread after its first exchange (`useAutoTitles`). */
   isTitleGenerated?: boolean;
+  /** The drafted or edited outcome; '' while the thread has no goal (a question, a chat). */
   goal: string;
+  criteria?: Criterion[];
+  /** Open until you dismiss them on the goal card. */
+  similar?: Similar[];
+  /** You removed the goal: drafts don't bring it back, an edit does. */
+  isGoalOff?: boolean;
+  /** The latest `report`; a newer message from you starts a turn it no longer describes. */
+  report?: TurnReport;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;
@@ -183,6 +236,8 @@ export interface Thread {
   agent?: AgentInfo;
   /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
   live?: LiveRun;
+  /** Its new worktree's preparation before the agent's first turn; unset when there was nothing to prepare. */
+  setup?: WorktreeSetup;
   /** Second opinions from the other provider, oldest first. */
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
@@ -198,12 +253,18 @@ export interface QueuedMessage {
   id: string;
   /** The text as typed: what the transcript shows, and what Edit puts back in the composer. */
   draft: string;
-  files: number;
+  /** Unset on messages queued before images were sent. */
+  images?: SentImage[];
   mentions: Mention[];
   /** The text starts with a `/` command, so mention tags go after it. */
   isCommand: boolean;
   /** Skills typed as `/name` later in the text. */
   typedSkills: string[];
+}
+
+/** An image you sent: what the agent gets, and the small copy (`thumb`, a data URL) the transcript shows. */
+export interface SentImage extends AgentImage {
+  thumb: string;
 }
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
@@ -253,20 +314,25 @@ export interface LiveRun {
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
   cwd?: string;
-  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
-  limit?: { resetsAt?: string };
+  /**
+   * The account hit its usage limit. `isTurnHeld`: Claude Code holds the turn and continues it at the reset. Otherwise (Codex)
+   * the turn ended and the thread waits for you to resume (`autoResume`: you chose Resume at reset), use an API key, or hand off.
+   */
+  limit?: { resetsAt?: string; label?: string; isTurnHeld?: boolean; autoResume?: boolean };
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
+  /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
+  restart?: { forkAt: string } | { seed: string };
   /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
   isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting' | 'run';
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'collision' | 'setting' | 'run';
 
 export interface QueueItem {
   id: string;
@@ -278,6 +344,8 @@ export interface QueueItem {
   blocks: { steps: number; threads: number };
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
+  /** Two live threads of one project edited the same files (repo-relative). */
+  collision?: { otherThreadId: string; files: string[] };
   requestId?: string;
   /** A Mochi tool call waiting on this widget (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
   tool?: ToolWidget;
@@ -594,6 +662,9 @@ function authMigration(): Thread {
     prs: [
       { number: 479, state: 'merged', title: 'Better Auth core' },
       { number: 482, state: 'open', title: 'Session backfill + legacy removal' },
+      { number: 484, state: 'open', title: 'Keep the latitude.sid cookie name' },
+      { number: 485, state: 'draft', title: 'Passkeys on the login page' },
+      { number: 487, state: 'open', title: 'Docs: migrating to Better Auth' },
     ],
     sources: [
       { kind: 'link', label: 'better-auth.com/docs/concepts/session-management' },
@@ -656,16 +727,19 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
 export function seedThreads(): Thread[] {
   return [
     rateLimiting(),
+    claudeLimitThread(),
     adminDashboard(),
     flakyCheckout(),
     authMigration(),
     onboardingEmails(),
     vizGalleryThread(),
     simpleThread('lobby', 'personal', 'map-veto', 'Realtime veto lobby', 'claude', 1, 700, ['Presence channel', 'Lobby state machine', 'Veto turn timer', 'Reconnect handling'], 2, 1),
+    codexLimitThread(),
     simpleThread('timer', 'personal', 'focus-mode', 'Sync timer across devices', 'codex', 2, 760, ['CRDT timer state', 'Sync over relay', 'Conflict UI'], 1),
     simpleThread('queues', 'personal', null, 'Compare Postgres job queues', 'claude', 3, 790, ['Collect the options', 'Compare tradeoffs'], 1),
     simpleThread('cfg', 'liane', 'liane', 'Per-space config dirs', 'claude', 1, 720, ['Materialize CODEX_HOME per space', 'Materialize CLAUDE_CONFIG_DIR per space', 'Stop global writes', 'Migration for existing users'], 1, 1),
     simpleThread('tele', 'liane', 'liane', 'Skill telemetry', 'codex', 2, 800, ['Log skill loads per thread', 'Dead skill report'], 0),
+    ...[longThreadFromUrl()].filter((t) => !!t),
   ];
 }
 

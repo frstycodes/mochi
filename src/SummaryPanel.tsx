@@ -1,5 +1,6 @@
 import { isValidElement, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
-import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { limitStatus } from './chat/LimitCard';
+import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Hourglass, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,27 +12,24 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
 import { openFiles } from './files/viewer';
-import { withLivePr } from './git/prs';
-import { PrStateIcon } from './icons/github';
-import { usePr } from './git/useGit';
+import { RefHoverCard, RefIcon } from './chat/RefHoverCard';
+import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import type { McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
-import { useProfiles } from './profiles';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
-import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
-import { GoalEditor } from './goals/GoalEditor';
+import { GoalTimeline, StepLinkLine } from './GoalTimeline';
+import { openGoalEditor } from './goals/GoalEditor';
+import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
-import { burnSeries, clock, duration, minutesLeft, progressAt } from './progress';
+import { burnSeries, clock, duration, GOAL_PHASE_LABELS, goalProgress, progressAt, progressLabel } from './progress';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
@@ -40,7 +38,7 @@ import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { isPrChip, openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
+import { openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
 
 const LIST_LIMIT = 3;
 
@@ -50,66 +48,53 @@ const SOURCE_ICONS = { link: Link, mcp: Setting, file: Document } satisfies Reco
 
 /** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. */
 export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thread; className?: string; onPaneOpened?: () => void }) {
-  const cwd = host.isDesktop && thread.live ? threadCwd(thread) : null;
   return (
     <aside aria-label="Thread summary" className={cn('flex min-h-0 flex-col', className)}>
       <ScrollArea className="min-h-0 flex-1">
-        {cwd ? (
-          <LiveSummary thread={thread} cwd={cwd} onPaneOpened={onPaneOpened} />
-        ) : (
-          <SummaryBody thread={thread} prs={thread.prs} onPaneOpened={onPaneOpened} />
-        )}
+        <SummaryBody thread={thread} onPaneOpened={onPaneOpened} />
       </ScrollArea>
     </aside>
   );
 }
 
-/** A live thread on the desktop also lists its branch's PR from `gh`; the web build's mock would give every thread the same one. */
-function LiveSummary({ thread, cwd, onPaneOpened }: { thread: Thread; cwd: string; onPaneOpened?: () => void }) {
-  const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
-  const prQuery = usePr(cwd, githubUser);
-  return <SummaryBody thread={thread} prs={withLivePr(thread.prs, prQuery.data)} onPaneOpened={onPaneOpened} />;
-}
-
-/** The base panel says where the thread stands and what needs you; everything else waits in collapsed sections. */
-function SummaryBody({ thread, prs, onPaneOpened }: { thread: Thread; prs: PullRequest[]; onPaneOpened?: () => void }) {
+/** The base panel says where the thread stands, what needs you and what shipped; everything else waits in collapsed sections. */
+function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
   const summary = summarize(thread.activity);
-  const sections = useSummarySections(thread, summary, prs);
+  const sections = useSummarySections(thread, summary);
   const open = useSummaryOpeners(thread, onPaneOpened);
-  const props = { thread, summary, prs, open };
+  const props = { thread, summary, open };
 
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-3">
       <PanelHeader thread={thread} />
-      {hasGoal(thread) && <GoalSection thread={thread} />}
+      {hasGoal(thread) && (
+        <>
+          <GoalSection thread={thread} />
+          <Separator className="mx-2 my-2 w-auto!" />
+        </>
+      )}
       <NeedsYou thread={thread} />
       <RateLimitWarning thread={thread} />
       <ChangesRow {...props} />
-      {sections.length > 0 && (
-        <>
-          <Separator className="mx-2 my-2 w-auto!" />
-          <SummarySections sections={sections} {...props} />
-        </>
-      )}
+      <PullRequests thread={thread} prs={thread.prs} onOpen={open.url} />
+      {sections.length > 0 && <SummarySections sections={sections} {...props} />}
     </div>
   );
 }
 
-function useSummarySections(thread: Thread, summary: ThreadSummary, prs: PullRequest[]) {
+function useSummarySections(thread: Thread, summary: ThreadSummary) {
   const { state } = useHarness();
-  return summarySections({ thread, summary, prs, threads: state.threads, space: profileById(thread.spaceId) });
+  return summarySections({ thread, summary, threads: state.threads, space: profileById(thread.spaceId) });
 }
 
 interface SectionProps {
   thread: Thread;
   summary: ThreadSummary;
-  prs: PullRequest[];
   open: ReturnType<typeof useSummaryOpeners>;
 }
 
 const SECTION_BODIES = {
   outcome: OutcomeDetails,
-  prs: PullRequestRows,
   sources: SourceRows,
   skills: SkillRows,
   tools: ToolRows,
@@ -125,7 +110,7 @@ function SummarySections({ sections, ...props }: SectionProps & { sections: Summ
       type="multiple"
       value={openSectionIds(sections, remembered, props.thread.status === 'settled')}
       onValueChange={(ids) => rememberOpen(sections, ids)}
-      className="gap-0.5"
+      className="gap-0.5 pt-2"
     >
       {sections.map((section) => {
         const Body = SECTION_BODIES[section.id];
@@ -149,7 +134,8 @@ function SummarySections({ sections, ...props }: SectionProps & { sections: Summ
 
 /** Pending approval or question; blocked steps say so in the goal block. */
 function NeedsYou({ thread }: { thread: Thread }) {
-  if (thread.status !== 'needs-you') return null;
+  // A limit's own line is `RateLimitWarning`'s.
+  if (thread.status !== 'needs-you' || thread.live?.limit) return null;
   return (
     <p role="status" className="flex items-center gap-2.5 px-2 py-1 type-meta text-warning">
       <span className="flex w-4 shrink-0 justify-center" aria-hidden>
@@ -160,66 +146,32 @@ function NeedsYou({ thread }: { thread: Thread }) {
   );
 }
 
-function ChangesRow({ thread, summary, prs, open }: SectionProps) {
-  const chips = prs.filter(isPrChip);
-  if (!thread.repo && summary.files.length === 0 && chips.length === 0) return null;
+function ChangesRow({ thread, summary, open }: SectionProps) {
+  if (!thread.repo && summary.files.length === 0) return null;
   return (
-    <>
-      <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
-        <span className="tabular type-caption text-subtle-foreground">
-          {summary.files.length === 0 ? (
-            (thread.status === 'settled' ? 'None' : 'None yet')
-          ) : (
-            <>
-              <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
-              {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
-            </>
-          )}
-        </span>
-      </SummaryRow>
-      {chips.length > 0 && (
-        <ul aria-label="Open pull requests" className="flex flex-wrap gap-1 pt-0.5 pr-2 pb-1 pl-[34px]">
-          {chips.map((pr) => (
-            <li key={pr.number}>
-              <PrChip pr={pr} onOpen={open.url} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-}
-
-/** A demo PR has no URL: the chip still names it on hover and focus, but opens nothing. */
-function PrChip({ pr, onOpen }: { pr: PullRequest; onOpen: (url: string) => void }) {
-  const { url } = pr;
-  const chip = 'inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 type-caption font-medium text-foreground';
-  const content = (
-    <>
-      <PrStateIcon state={pr.state} className="size-3.5" />
-      <span className="tabular">#{pr.number}</span>
-    </>
-  );
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {url ? (
-          <button type="button" onClick={() => onOpen(url)} aria-label={`#${pr.number}: ${pr.title}, ${pr.state}`} className={cn(chip, 'transition-colors hover:bg-accent')}>
-            {content}
-          </button>
+    <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
+      <span className="tabular type-caption text-subtle-foreground">
+        {summary.files.length === 0 ? (
+          (thread.status === 'settled' ? 'None' : 'None yet')
         ) : (
-          <span tabIndex={0} aria-label={`#${pr.number}: ${pr.title}, ${pr.state}`} className={chip}>
-            {content}
-          </span>
+          <>
+            <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
+            {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
+          </>
         )}
-      </TooltipTrigger>
-      <TooltipContent className="max-w-72">{pr.title}</TooltipContent>
-    </Tooltip>
+      </span>
+    </SummaryRow>
   );
 }
 
-function PullRequestRows({ prs, open }: SectionProps) {
-  return prs.map((pr) => <PullRequestRow key={pr.number} pr={pr} onOpen={open.url} />);
+function PullRequests({ thread, prs, onOpen }: { thread: Thread; prs: PullRequest[]; onOpen: (url: string) => void }) {
+  const items = useThreadPrs(thread, prs);
+  if (items.length === 0) return null;
+  return (
+    <Section label="Pull requests">
+      <LimitedList items={items}>{(item) => <PullRequestRow key={item.pr.number} item={item} onOpen={onOpen} />}</LimitedList>
+    </Section>
+  );
 }
 
 function SourceRows({ thread, open }: SectionProps) {
@@ -350,17 +302,27 @@ function OpenInEditorItems({ thread }: { thread: Thread }) {
   ));
 }
 
-function PullRequestRow({ pr, onOpen }: { pr: PullRequest; onOpen: (url: string) => void }) {
-  const { url } = pr;
+// SummaryRow doesn't forward props, so the hover card and context menu triggers sit on a wrapper.
+function PullRequestRow({ item, onOpen }: { item: ThreadPr; onOpen: (url: string) => void }) {
+  const url = item.state.url;
   const row = (
-    <SummaryRow icon={<PrStateIcon state={pr.state} className="size-4" />} label={pr.title} onClick={url ? () => onOpen(url) : undefined}>
-      <span className="tabular type-caption text-subtle-foreground">#{pr.number}</span>
-    </SummaryRow>
+    <div>
+      <SummaryRow icon={<RefIcon item={item} className="size-4" />} label={item.state.title} onClick={url ? () => onOpen(url) : undefined}>
+        <span className="tabular type-caption text-subtle-foreground">{item.label}</span>
+      </SummaryRow>
+    </div>
   );
-  if (!url) return row;
+  if (!url)
+    return (
+      <RefHoverCard item={item} side="left" align="start">
+        {row}
+      </RefHoverCard>
+    );
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <RefHoverCard item={item} side="left" align="start">
+        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      </RefHoverCard>
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => onOpen(url)}>Open in the side pane</ContextMenuItem>
         {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
@@ -476,7 +438,7 @@ function LimitedList<T>({ items, children }: { items: T[]; children: (item: T) =
       {shown.map(children)}
       {items.length > LIST_LIMIT && (
         <Button variant="ghost" size="xs" className="self-start text-subtle-foreground" onClick={() => setOpen((o) => !o)}>
-          {isOpen ? 'Show less' : `View all ${items.length}`}
+          {isOpen ? 'Show less' : `Show ${items.length - LIST_LIMIT} more`}
         </Button>
       )}
     </>
@@ -628,6 +590,14 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   const provider = thread.providers[0];
   const { limits } = useAccountLimits(provider, thread.spaceId);
   const tight = limits?.windows.find((w) => toneFor(w.usedPct / 100) === 'destructive');
+  const limit = limitStatus(thread);
+  if (limit)
+    return (
+      <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
+        <Hourglass className="size-4 shrink-0" aria-hidden />
+        {limit}
+      </p>
+    );
   if (thread.status !== 'running' || !tight) return null;
 
   const name = `${PROVIDER_NAMES[provider]} ${tight.label.toLowerCase()} limit`;
@@ -640,33 +610,11 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   );
 }
 
-/** Self-contained so the goals rethink (feat/goals-*) can swap it whole. */
 function GoalSection({ thread }: { thread: Thread }) {
-  if (!hasGoal(thread)) return <NoGoalState thread={thread} />;
-  return <GoalProgress thread={thread} />;
-}
-
-function NoGoalState({ thread }: { thread: Thread }) {
-  const [isEditing, setEditing] = useState(false);
-  return (
-    <section aria-label="Goal" className="flex items-center gap-2 px-2 py-2">
-      <h2 className="type-title">Goal</h2>
-      <span className="min-w-0 flex-1 truncate type-meta text-subtle-foreground">None yet</span>
-      <TooltipIconButton label="Set a goal" hint="Otherwise your first real request sets it" className="size-6" onClick={() => setEditing(true)}>
-        <Edit className="size-3.5" />
-      </TooltipIconButton>
-      {isEditing && <GoalEditor thread={thread} onClose={() => setEditing(false)} />}
-    </section>
-  );
-}
-
-function GoalProgress({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const [isEditing, setEditing] = useState(false);
-  const live = progressAt(thread, state.now, true);
-  const eta = minutesLeft(thread, state.now);
+  const progress = goalProgress(thread, state.now);
   const latest = thread.revisions[thread.revisions.length - 1];
   const now = thread.steps.filter((s) => s.status === 'running' || s.status === 'blocked');
   const waiting = thread.steps.filter((s) => s.status === 'waiting');
@@ -683,7 +631,7 @@ function GoalProgress({ thread }: { thread: Thread }) {
             </Badge>
             <span className="flex-1" />
             {/* z-10 lifts it above the stretched open-timeline button. */}
-            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => setEditing(true)}>
+            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => openGoalEditor(thread.id)}>
               <Edit />
             </Button>
             <PopoverTrigger asChild>
@@ -693,11 +641,10 @@ function GoalProgress({ thread }: { thread: Thread }) {
             </PopoverTrigger>
           </div>
           <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
+          {!!thread.criteria?.length && <CriteriaList thread={thread} />}
           <div className="flex items-end justify-between gap-2">
-            <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
-            <span className="tabular pb-1 type-caption text-subtle-foreground">
-              {Math.round(live.done + live.partial)} of {live.scope} pts · {etaLabel(eta).toLowerCase()}
-            </span>
+            <span className="tabular type-display">{Math.round(progress.pct * 100)}%</span>
+            <span className="tabular pb-1 type-caption text-subtle-foreground">{progress.total ? progressLabel(progress) : GOAL_PHASE_LABELS[progress.phase]}</span>
           </div>
           <Sparkline thread={thread} now={state.now} />
           {now.map((s) => (
@@ -736,7 +683,6 @@ function GoalProgress({ thread }: { thread: Thread }) {
         </div>
         <GoalTimeline thread={thread} />
       </PopoverContent>
-      {isEditing && <GoalEditor thread={thread} onClose={() => setEditing(false)} />}
     </Popover>
   );
 }

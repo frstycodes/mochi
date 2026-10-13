@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { refDescription, refFromUrl, refLabel, refTone, splitRefs, type RefState } from './refs.ts';
+import { byAttention, refDescription, refFromUrl, refLabel, refTone, splitRefs, type RefState } from './refs.ts';
 
 const home = { owner: 'frstycodes', repo: 'mochi' };
 const refs = (text: string, slug = home) => splitRefs(text, slug).filter((s) => s.type !== 'text');
@@ -48,12 +48,26 @@ test('the thread repo shows as #n, others as owner/repo#n', () => {
   assert.equal(refLabel({ owner: 'o', repo: 'r', number: 4 }, null), 'o/r#4');
 });
 
-const pr = (extra: Partial<RefState>): RefState => ({ kind: 'pr', status: 'open', title: 't', url: 'u', hasConflicts: false, isFailing: false, isNotPlanned: false, ...extra });
+const pr = (extra: Partial<RefState>): RefState => ({
+  kind: 'pr',
+  status: 'open',
+  title: 't',
+  url: 'u',
+  hasConflicts: false,
+  checks: null,
+  review: null,
+  isNotPlanned: false,
+  author: null,
+  updatedAt: null,
+  branch: null,
+  diff: null,
+  ...extra,
+});
 
 test('state maps to its semantic colour; unread state is the link colour', () => {
   assert.equal(refTone(pr({})), 'success');
   assert.equal(refTone(pr({ hasConflicts: true })), 'warning');
-  assert.equal(refTone(pr({ isFailing: true })), 'success', 'failing checks are a dot, not the colour');
+  assert.equal(refTone(pr({ checks: 'fail' })), 'success', 'failing checks are a dot, not the colour');
   assert.equal(refTone(pr({ status: 'draft' })), 'muted');
   assert.equal(refTone(pr({ status: 'merged' })), 'merged');
   assert.equal(refTone(pr({ status: 'closed' })), 'destructive');
@@ -65,8 +79,26 @@ test('state maps to its semantic colour; unread state is the link colour', () =>
 });
 
 test('the description names state, conflicts and failing checks', () => {
-  const ref = { owner: 'o', repo: 'r', number: 1 };
-  assert.equal(refDescription(ref, pr({ hasConflicts: true, isFailing: true })), 'Open pull request, has conflicts, checks failing');
-  assert.equal(refDescription(ref, pr({ kind: 'issue', status: 'closed', isNotPlanned: true })), 'Closed as not planned issue');
-  assert.equal(refDescription({ ...ref, kind: 'issue' }, null), 'GitHub issue');
+  assert.equal(refDescription(undefined, pr({ hasConflicts: true, checks: 'fail' })), 'Open pull request, has conflicts, checks failing');
+  assert.equal(refDescription(undefined, pr({ review: 'changes' })), 'Open pull request, changes requested');
+  assert.equal(refDescription(undefined, pr({ kind: 'issue', status: 'closed', isNotPlanned: true })), 'Closed as not planned issue');
+  assert.equal(refDescription('issue', null), 'GitHub issue');
+});
+
+test('PRs sort by what needs you: blocked, waiting on review, open, draft, merged, closed', () => {
+  const states = {
+    closed: pr({ status: 'closed' }),
+    merged: pr({ status: 'merged' }),
+    draft: pr({ status: 'draft' }),
+    open: pr({}),
+    unread: null,
+    review: pr({ review: 'required' }),
+    conflicts: pr({ hasConflicts: true }),
+    failing: pr({ checks: 'fail' }),
+    changes: pr({ review: 'changes' }),
+    approved: pr({ review: 'approved', checks: 'pass' }),
+  };
+  const sorted = byAttention(Object.keys(states) as (keyof typeof states)[], (k) => states[k]);
+  assert.deepEqual(sorted, ['conflicts', 'failing', 'changes', 'review', 'open', 'unread', 'approved', 'draft', 'merged', 'closed']);
+  assert.equal(byAttention([pr({ status: 'draft', hasConflicts: true })], (s) => s)[0].status, 'draft', 'a draft never jumps the queue');
 });

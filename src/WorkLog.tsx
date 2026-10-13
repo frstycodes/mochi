@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
-import { useTheme } from 'next-themes';
+import { useDiffTheme } from './themes/highlight';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
@@ -14,12 +14,14 @@ import { clock } from './progress';
 import { usePrefs } from './settings/prefs';
 import { eventLine, isApprovalChatter, parseTool, toolCall, turnSummary, type ToolCall } from './summary';
 import { hostname, type CurrentAction } from './agentPhase';
-import { loadViewerFile, useThreadFiles, type ThreadFiles } from './files/viewer';
+import { loadViewerFile, openFiles, useThreadFiles, type ThreadFiles } from './files/viewer';
+import { fileAt } from './files/fileAt';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { useVizThreadId } from './viz/WidgetVisual';
 import { fileLink } from './terminal/links';
 import { describeCall } from './chat/describe';
 import { PREVIEW_KINDS } from './files/kinds';
+import { patchSections } from './chat/turnChanges';
 import { imageMime } from './files/previews';
 import { outputLines } from './chat/output';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
@@ -39,7 +41,7 @@ export function WorkLog({ entries, skills = [], action }: { entries: ActivityEnt
   const failed = tools.filter((e) => (runOf(e)?.exitCode ?? 0) !== 0).length;
   const lastTool = entries.findLastIndex((e) => e.kind === 'tool');
   const title = action ? { key: `live:${action.label}`, value: action } : { key: 'done', value: turnSummary(entries) };
-  const files = useThreadFiles();
+  const files = useWorkLogFiles();
   const images = [...new Set(tools.map(toolCall).flatMap((c) => (c.verb === 'Read' && isImage(c.target) ? [c.target] : [])))].slice(0, THUMBS_SHOWN);
 
   return (
@@ -95,6 +97,15 @@ export function WorkLog({ entries, skills = [], action }: { entries: ActivityEnt
   );
 }
 
+// A folderless chat's folder isn't known here (main makes it and doesn't say), but a file the agent read by absolute path
+// still loads from its own folder (`fileAt`); a relative one fails to load and says so.
+function useWorkLogFiles(): ThreadFiles {
+  const threadId = useVizThreadId();
+  const files = useThreadFiles();
+  // Stable, like `useThreadFiles`: the image loaders' effects key on it.
+  return useMemo(() => files ?? { threadId, root: '' }, [files, threadId]);
+}
+
 /** The bordered list of calls: an open work group, a subagent's log. Inside border: an outside ring would be cut off by an expander's clip. */
 export function CallList({ className, ...props }: ComponentProps<'ol'>) {
   return <ol className={cn('flex flex-col divide-y overflow-hidden rounded-xl border', className)} {...props} />;
@@ -140,14 +151,14 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
 
 /** The row's sentence; for a file call ("Edited redis.ts") the name is a link that opens the file in the side pane's Files tab. */
 function CallText({ call, description, hasOwnDescription, files }: { call: ToolCall; description: string; hasOwnDescription: boolean; files: ThreadFiles | null }) {
-  const { openFile } = usePaneOpeners(useVizThreadId());
+  const openCallFile = useOpenCallFile(useVizThreadId());
   const name = call.target.split('/').pop() ?? call.target;
   const isFileLink = !!files && !hasOwnDescription && (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') && description.endsWith(name);
   if (!isFileLink) return <span className="min-w-0 flex-1 truncate text-foreground" title={call.verb === 'Run' ? call.target : undefined}>{description}</span>;
   return (
     <span className="min-w-0 flex-1 truncate text-foreground">
       {description.slice(0, -name.length)}
-      <button type="button" title={call.target} onClick={() => openFile(inRoot(files, call.target))} className="relative z-10 cursor-pointer underline-offset-2 hover:underline focus-visible:underline">
+      <button type="button" title={call.target} onClick={() => openCallFile(files, call.target)} className="relative z-10 cursor-pointer underline-offset-2 hover:underline focus-visible:underline">
         {name}
       </button>
     </span>
@@ -195,12 +206,12 @@ function CallGlyph({ call, links = [] }: { call: ToolCall; links?: WebLink[] }) 
 
 /** The first lines of a file the agent read, highlighted like the viewer; the whole file opens in the viewer. */
 function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
-  const { resolvedTheme } = useTheme();
+  const diffTheme = useDiffTheme();
   const [state, setState] = useState<{ text?: string; error?: string }>({});
   const isReady = useHighlighterReady();
   useEffect(() => {
     let isCurrent = true;
-    loadViewerFile({ source: 'workspace', ...files, ...fileLink(inRoot(files, path)) }).then(
+    loadViewerFile({ source: 'workspace', ...fileAt(files, fileLink(path).path) }).then(
       (content) => isCurrent && setState(content.kind === 'text' ? { text: content.text } : { error: 'Binary file' }),
       (e: Error) => isCurrent && setState({ error: e.message }),
     );
@@ -214,7 +225,7 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
       <File
         file={{ name: path.split('/').pop() ?? path, contents: lines.slice(0, PREVIEW_LINES).join('\n') }}
         disableWorkerPool
-        options={{ disableFileHeader: true, overflow: 'scroll', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
+        options={{ disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
         style={DIFF_STYLE}
         className="max-h-64 overflow-auto"
       />
@@ -225,8 +236,15 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
 
 const PREVIEW_LINES = 40;
 
-// Calls logged before paths were made relative carry the absolute path; the file host only takes paths inside the root.
-const inRoot = (files: ThreadFiles, path: string) => (path.startsWith(`${files.root}/`) ? path.slice(files.root.length + 1) : path);
+/** Inside the thread's folder a file opens in the side pane's Files tab; outside it, which that tab can't browse, in the viewer. */
+function useOpenCallFile(threadId: string) {
+  const { openFile } = usePaneOpeners(threadId);
+  return (files: ThreadFiles, path: string) => {
+    const at = fileAt(files, path);
+    if (at.root === files.root) return openFile(at.path);
+    openFiles({ files: [{ source: 'workspace', ...at, ...fileLink(at.path) }], index: 0 });
+  };
+}
 const THUMBS_SHOWN = 3;
 
 const isImage = (path: string) => PREVIEW_KINDS.image.test(path) || PREVIEW_KINDS.svg.test(path);
@@ -234,13 +252,13 @@ const isImage = (path: string) => PREVIEW_KINDS.image.test(path) || PREVIEW_KIND
 /** An image the agent read, small, opening in the side pane's Files tab. */
 function ImageThumb({ files, path }: { files: ThreadFiles; path: string }) {
   const url = useImageUrl(files, path);
-  const { openFile } = usePaneOpeners(files.threadId);
+  const openCallFile = useOpenCallFile(files.threadId);
   const name = path.split('/').pop() ?? path;
   return (
     <button
       type="button"
       aria-label={`Open ${name}`}
-      onClick={() => openFile(inRoot(files, path))}
+      onClick={() => openCallFile(files, path)}
       className="relative h-6 w-9 shrink-0 cursor-default overflow-hidden rounded-md bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
     >
       {!!url && <img src={url} alt="" className="size-full object-cover" />}
@@ -264,7 +282,7 @@ function useImageUrl(files: ThreadFiles, path: string) {
   useEffect(() => {
     let next: string | undefined;
     let isCurrent = true;
-    loadViewerFile({ source: 'workspace', ...files, ...fileLink(inRoot(files, path)) }).then(
+    loadViewerFile({ source: 'workspace', ...fileAt(files, fileLink(path).path) }).then(
       (content) => {
         if (!isCurrent) return;
         next = URL.createObjectURL(new Blob([(content.kind === 'text' ? content.text : content.bytes) as BlobPart], { type: PREVIEW_KINDS.svg.test(path) ? 'image/svg+xml' : imageMime(path) }));
@@ -283,7 +301,7 @@ function useImageUrl(files: ThreadFiles, path: string) {
 const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' } };
 
 /** After the title, so it sits flush with the prose like Claude's: the chevron, or the needs-you dot while paused on you (the chevron on hover, so it still reads as openable). Working needs no icon: Mochi under the chat and the shimmering title say it. */
-function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {
+export function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {
   const chevron = <ChevronRight className={cn('size-3 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />;
   return (
     <span className="grid size-3 shrink-0 place-items-center *:col-start-1 *:row-start-1">
@@ -438,7 +456,7 @@ export function ChatMochi({ phase, label }: { phase: AgentPhase; label?: string 
     // -mt-4 pulls it up into the transcript's 20px row gap: it belongs to the last message, not a row of its own.
     <div role="status" className="-mt-4 flex h-9 items-center gap-1.5 type-meta text-muted-foreground">
       <AgentLoader phase={phase} className="-ml-2 size-9 text-foreground" />
-      {!!label && <Shimmer as="span">{`${label}…`}</Shimmer>}
+      {!!label && <Shimmer as="span">{label.endsWith('…') ? label : `${label}…`}</Shimmer>}
     </div>
   );
 }
@@ -556,20 +574,25 @@ function useHighlighterReady() {
 
 const DIFF_STYLE = { '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties;
 
+/** One bordered diff per file in the patch. */
 export function DiffView({ patch }: { patch: string }) {
-  const { resolvedTheme } = useTheme();
+  const diffTheme = useDiffTheme();
   const { diffStyle } = usePrefs();
   const isReady = useHighlighterReady();
   if (!isReady) return null;
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <PatchDiff
-        patch={patch}
-        disableWorkerPool
-        options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
-        style={DIFF_STYLE}
-        className="max-h-80 overflow-auto"
-      />
+    <div className="flex flex-col gap-2">
+      {patchSections(patch).map((section, i) => (
+        <div key={i} className="overflow-hidden rounded-lg border bg-card">
+          <PatchDiff
+            patch={section}
+            disableWorkerPool
+            options={{ diffStyle, disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
+            style={DIFF_STYLE}
+            className="max-h-80 overflow-auto"
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -577,7 +600,7 @@ export function DiffView({ patch }: { patch: string }) {
 const TONE = { plain: 'text-foreground', dim: 'text-subtle-foreground', pass: 'text-success', fail: 'text-destructive' } satisfies Record<RunResult['lines'][number]['tone'], string>;
 
 /** The command, its exit badge, then its output in colour. */
-function RunOutput({ command, run }: { command: string; run?: RunResult }) {
+export function RunOutput({ command, run }: { command: string; run?: RunResult }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card font-mono text-xs leading-5">
       <div className="flex items-start gap-3 px-3 py-2">

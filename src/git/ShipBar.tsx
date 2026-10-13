@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUpRight, BranchUp, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
+import { ArrowUp, ArrowUpRight, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,6 +17,10 @@ import { TooltipIconButton } from '../ui';
 import { commitPrompt, localCommit, parseCommit } from '../utility/prompts';
 import { useDraft } from '../utility/useDraft';
 import { PrDialog } from './PrDialog';
+import { RefHoverCard } from '../chat/RefHoverCard';
+import { useThreadPr } from './useThreadPrs';
+import { openedPr } from './prs';
+import { useHarness } from '../store';
 
 interface ShipBarProps {
   thread: Thread;
@@ -33,6 +37,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   const [isChecksOpen, setChecksOpen] = useState(false);
   const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
   const prQuery = usePr(cwd, githubUser);
+  const { dispatch } = useHarness();
   const pr = prQuery.data;
   const stagedCount = diff.files.filter((f) => f.staged).length;
 
@@ -95,10 +100,10 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
       )}
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={push}>
-          <BranchUp data-icon="inline-start" />
+          <ArrowUp data-icon="inline-start" />
           Push
         </Button>
-        {pr ? <PrLink pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading}>Create pull request</Button>}
+        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading}>Create pull request</Button>}
         {!!pr && pr.checks.length > 0 && <ChecksSummary checks={pr.checks} isOpen={isChecksOpen} onToggle={() => setChecksOpen((o) => !o)} />}
       </div>
       {!!pr && isChecksOpen && <CheckList checks={pr.checks} />}
@@ -111,6 +116,8 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
           githubUser={githubUser}
           onCreate={async (pr) => {
             const url = await run('Create pull request', () => host.git.createPr(cwd, pr, githubUser));
+            const opened = url && openedPr(url, pr.title);
+            if (opened) dispatch({ type: 'prs-seen', threadId: thread.id, prs: [opened] });
             if (url) toast.success('Pull request opened', { description: url });
             await prQuery.refresh();
           }}
@@ -123,16 +130,19 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
 
 const PR_STATUS: Record<string, RefStatus | undefined> = { OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' };
 
-function PrLink({ pr }: { pr: PrInfo }) {
+function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
+  const item = useThreadPr(thread, { number: pr.number, state: pr.state === 'MERGED' ? 'merged' : 'open', title: pr.title, url: pr.url });
   return (
-    <Button variant="ghost" size="sm" asChild className="min-w-0">
-      <a href={pr.url} target="_blank" rel="noreferrer">
-        <PrStateIcon state={PR_STATUS[pr.state] ?? 'unknown'} />
-        <span className="tabular">#{pr.number}</span>
-        <span className="truncate text-muted-foreground lowercase">{pr.state}</span>
-        <ArrowUpRight data-icon="inline-end" className="text-subtle-foreground" />
-      </a>
-    </Button>
+    <RefHoverCard item={item}>
+      <Button variant="ghost" size="sm" asChild className="min-w-0">
+        <a href={pr.url} target="_blank" rel="noreferrer">
+          <PrStateIcon state={PR_STATUS[pr.state] ?? 'unknown'} />
+          <span className="tabular">#{pr.number}</span>
+          <span className="truncate text-muted-foreground lowercase">{pr.state}</span>
+          <ArrowUpRight data-icon="inline-end" className="text-subtle-foreground" />
+        </a>
+      </Button>
+    </RefHoverCard>
   );
 }
 

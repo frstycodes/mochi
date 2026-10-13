@@ -70,6 +70,11 @@ const ORDER = ['five_hour', 'primary', 'secondary', 'seven_day', 'seven_day_opus
 // Model windows (`model:<name>`) sort after the named ones.
 const order = (w: LimitWindow) => (ORDER.includes(w.id) ? ORDER.indexOf(w.id) : ORDER.length);
 
+/** The most-used window, the one that binds first. */
+export function hottest(windows: LimitWindow[]) {
+  return windows.reduce<LimitWindow | undefined>((top, w) => (!top || w.usedPct > top.usedPct ? w : top), undefined);
+}
+
 export type Tone = 'normal' | 'warning' | 'destructive';
 
 /** Shared by the context ring and the limit bars: under 70% normal, 70–90% warning, above 90% destructive. `share` is 0–1. */
@@ -91,6 +96,13 @@ export function untilLabel(ms: number) {
   if (d) return h ? `${d}d ${h}h` : `${d}d`;
   if (h) return m ? `${h}h ${m}m` : `${h}h`;
   return `${m}m`;
+}
+
+/** "3:40 PM" within a day, "Thu 3:40 PM" further out. */
+export function resetLabel(at: string, nowMs = Date.now()) {
+  const date = new Date(at);
+  const isSoon = date.getTime() - nowMs < 86_400_000;
+  return date.toLocaleString([], isSoon ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 }
 
 const clampPct = (pct: number) => Math.min(100, Math.max(0, pct));

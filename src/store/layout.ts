@@ -35,10 +35,7 @@ export interface LayoutState {
   layouts: Record<string, SpaceLayout>;
   orientation: Orientation;
   watched: string[];
-  isStage: boolean;
   isOverview: boolean;
-  /** Stage Manager setting: needs-you cards sort nearest the center on their side instead of strict pin order. */
-  isNeedsYouNear: boolean;
 }
 
 export type LayoutAction =
@@ -59,9 +56,7 @@ export type LayoutAction =
   | { type: 'layout-preset'; preset: Preset }
   | { type: 'layout-aspect'; orientation: Orientation }
   | { type: 'watch-toggle'; threadId: string }
-  | { type: 'stage-toggle' }
-  | { type: 'overview-toggle'; isOpen?: boolean }
-  | { type: 'stage-needs-you-near' };
+  | { type: 'overview-toggle'; isOpen?: boolean };
 
 const STORAGE_KEY = 'harness.layouts.v1';
 
@@ -69,12 +64,12 @@ const STORAGE_KEY = 'harness.layouts.v1';
 const DEMO_VIEWS: Record<string, View> = { latitude: { kind: 'thread', id: 'adm' }, personal: { kind: 'thread', id: 'lobby' }, liane: { kind: 'board' } };
 const NEW_THREAD: View = { kind: 'new' };
 
-export function initialLayout(saved: Pick<Saved, 'layouts' | 'watched'> & Partial<Saved> = loadLayouts()): LayoutState {
+export function initialLayout(saved: Saved = loadLayouts()): LayoutState {
   const orientation = typeof window === 'undefined' ? 'row' : window.innerWidth >= window.innerHeight ? 'row' : 'column';
   const profiles = getProfiles();
   const defaults = showsDemoData() ? DEMO_VIEWS : {};
   const layouts = Object.fromEntries(profiles.map(({ id }) => [id, saved.layouts[id] ?? singleLayout(defaults[id] ?? NEW_THREAD, orientation)]));
-  return { spaceId: profiles[0].id, views: mirror(layouts), layouts, orientation, watched: saved.watched, isStage: false, isOverview: false, isNeedsYouNear: saved.isNeedsYouNear ?? false };
+  return { spaceId: profiles[0].id, views: mirror(layouts), layouts, orientation, watched: saved.watched, isOverview: false };
 }
 
 export function layoutReducer(state: State, action: Action): State {
@@ -182,12 +177,8 @@ function reduce(state: State, action: Action): State {
       const isWatched = state.watched.includes(action.threadId);
       return { ...state, watched: isWatched ? state.watched.filter((id) => id !== action.threadId) : [...state.watched, action.threadId] };
     }
-    case 'stage-toggle':
-      return { ...state, isStage: !state.isStage };
     case 'overview-toggle':
       return { ...state, isOverview: action.isOpen ?? !state.isOverview };
-    case 'stage-needs-you-near':
-      return { ...state, isNeedsYouNear: !state.isNeedsYouNear };
     default:
       return state;
   }
@@ -234,11 +225,11 @@ function presetViews(state: State, count: number): View[] {
   return views.slice(0, count);
 }
 
-type Saved = Pick<LayoutState, 'layouts' | 'watched' | 'isNeedsYouNear'>;
+type Saved = Pick<LayoutState, 'layouts' | 'watched'>;
 
 export function saveLayouts(state: Saved) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ layouts: state.layouts, watched: state.watched, isNeedsYouNear: state.isNeedsYouNear }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ layouts: state.layouts, watched: state.watched }));
   } catch {
     // Storage blocked (private window, artifact preview): layouts just don't persist.
   }
@@ -249,9 +240,9 @@ function loadLayouts(): Saved {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
     const saved = getPrefs().restoreLayout ? (raw?.layouts ?? {}) : {};
     const layouts = Object.fromEntries(Object.entries(saved).filter(([, l]) => isValidLayout(l))) as Record<string, SpaceLayout>;
-    return { layouts, watched: Array.isArray(raw?.watched) ? raw.watched : [], isNeedsYouNear: raw?.isNeedsYouNear === true };
+    return { layouts, watched: Array.isArray(raw?.watched) ? raw.watched : [] };
   } catch {
-    return { layouts: {}, watched: [], isNeedsYouNear: false };
+    return { layouts: {}, watched: [] };
   }
 }
 

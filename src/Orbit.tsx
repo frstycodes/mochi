@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Clock, BranchDown as GitMerge, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
+import { ClipboardTick, Clock, Copy3, Hierarchy3, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
-import { progressAt } from './progress';
+import { goalProgress, progressLabel } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -25,9 +25,10 @@ type OrbitItem =
 const QUEUE_ICONS = {
   approval: ShieldCheck,
   question: MessageCircleQuestion,
-  review: GitPullRequestIcon,
+  review: ClipboardTick,
   ci: GitPullRequestIcon,
-  overlap: GitMerge,
+  overlap: Hierarchy3,
+  collision: Copy3,
   run: Clock,
   setting: Setting2,
 } satisfies Record<QueueKind, LucideIcon>;
@@ -241,7 +242,7 @@ function Peek({ item, center, now }: { item: OrbitItem; center: { x: number; y: 
 }
 
 function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
-  const choices = item.kind === 'overlap' ? ['Link', 'Extract', 'Race', 'Keep both'] : item.kind === 'question' ? (singleChoice(item) ?? []) : [item.kind === 'review' ? 'Approve and merge' : 'Approve'];
+  const choices = item.kind === 'overlap' ? ['Link', 'Extract', 'Race', 'Keep both'] : item.kind === 'question' ? (singleChoice(item) ?? []) : [item.kind === 'review' ? 'Mark done' : item.kind === 'collision' ? 'Keep both' : 'Approve'];
   return (
     <>
       <PeekHeader thread={thread} />
@@ -260,15 +261,15 @@ function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
 }
 
 function ThreadPeek({ thread, now }: { thread: Thread; now: number }) {
-  const { pct } = progressAt(thread, now, true);
+  const progress = goalProgress(thread, now);
   const running = thread.steps.find((s) => s.status === 'running');
   const last = thread.activity[thread.activity.length - 1];
   return (
     <>
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
-        <ProgressRing pct={pct} slot={thread.line} size={18} isWorking={isWorking(thread)} />
-        <span className="tabular font-medium text-foreground">{Math.round(pct * 100)}%</span>
+        <ProgressRing pct={progress.pct} slot={thread.line} size={18} isWorking={isWorking(thread)} />
+        <span className="tabular font-medium text-foreground">{progressLabel(progress)}</span>
         <span className="truncate text-muted-foreground">{running ? running.title : 'Nothing running'}</span>
       </div>
       {last && <div className="line-clamp-2 text-xs text-subtle-foreground">{last.text}</div>}

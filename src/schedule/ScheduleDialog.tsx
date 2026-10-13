@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { host } from '../host';
 import type { Trigger } from '../host/types/schedule';
-import type { Thread } from '../model';
+import { firstPrompt, type Thread } from '../model';
 import { useHarness } from '../store';
 import { triggerInput } from './calls';
 import { describeTrigger } from './describe';
@@ -44,14 +44,14 @@ export function ScheduleLayer() {
 function ScheduleDialog({ thread, trigger, onClose }: { thread: Thread; trigger: Trigger | undefined; onClose: () => void }) {
   const [form, setForm] = useState(() => (trigger ? fromWhen(trigger.when, trigger.missed) : DEFAULT_FORM));
   const [name, setName] = useState(trigger?.name ?? thread.title);
-  const [prompt, setPrompt] = useState(trigger?.prompt ?? thread.goal);
+  const [prompt, setPrompt] = useState(trigger?.prompt ?? firstPrompt(thread));
   const [error, setError] = useState<string | null>(null);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     const result = toWhen(form);
     if ('error' in result) return setError(result.error);
-    const input = triggerInput(thread, { when: result.when, missed: form.missed, name: name.trim() || thread.title, prompt: prompt.trim() || thread.goal });
+    const input = triggerInput(thread, { when: result.when, missed: form.missed, name: name.trim() || thread.title, prompt: prompt.trim() || firstPrompt(thread) });
     if (!input) return setError("This thread's project folder isn't on this computer, so it can't run here.");
     try {
       await host.schedule.set(input);

@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { prBody } from '../git/prBody.ts';
+import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
@@ -47,6 +49,8 @@ export interface ToolEnv {
    */
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   isDesktop: boolean;
+  /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
+  git: { push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
   now?: () => number;
 }
 
@@ -391,7 +395,7 @@ const GOAL_SPECS = {
       const title = args.title.trim();
       if (!title) throw new Error('title is required');
       const draft = draftFrom(thread);
-      draft.steps.push({ title, size: (args.size ?? 1) as Size, gate: false, isRemoved: false, isLocked: false });
+      draft.steps.push({ title, size: 1, gate: false, isRemoved: false, isLocked: false });
       editGoal(dispatch, thread, caller, draft);
       return { changed: `added the step "${title}"`, result: goalOf(target(state(), caller, thread.id)) };
     },
@@ -435,6 +439,35 @@ const GOAL_SPECS = {
       return { changed: `dropped "${step.title}"${args.reason ? `: ${args.reason}` : ''}`, result: goalOf(target(state(), caller, thread.id)) };
     },
   },
+  open_pr: {
+    run: async ({ env, caller, args, dispatch }) => {
+      const cwd = caller.repo && env.cwdOf(caller);
+      if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
+      const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
+      await env.git.push(cwd, githubUser);
+      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
+      const opened = openedPr(url, args.title.trim());
+      if (opened) dispatch({ type: 'prs-seen', threadId: caller.id, prs: [opened] });
+      return { changed: `opened ${url}`, result: { url } };
+    },
+  },
+  claim_criterion: {
+    run: ({ state, caller, args, dispatch }) => {
+      const criterion = caller.criteria?.find((c) => c.id === args.criterionId);
+      if (!caller.goal) throw new Error('This thread has no goal; nothing to claim');
+      if (!criterion) throw new Error(`No criterion ${args.criterionId}; get_goal lists them`);
+      dispatch({ type: 'criterion-claim', threadId: caller.id, criterionId: criterion.id, evidence: args.evidence.trim(), by: caller.providers[0] });
+      return { changed: `claimed "${criterion.text}"`, result: goalOf(target(state(), caller, caller.id)) };
+    },
+  },
+  report_turn: {
+    run: ({ state, caller, args, dispatch }) => {
+      if (!caller.goal) throw new Error('This thread has no goal; there is nothing to report against');
+      dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }) } });
+      return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
+    },
+  },
+  get_report: { run: ({ state, caller, args }) => ({ result: reportOf(target(state(), caller, args.threadId)) }) },
   settle_goal: {
     run: ({ state, caller, args, dispatch }) => {
       const [thread] = others(state(), caller, [args.threadId], 'settle');
@@ -573,6 +606,11 @@ function others(state: State, caller: Thread, ids: string[], verb: string) {
   return threads;
 }
 
+function reportOf(thread: Thread) {
+  const { goal, criteria = [], report, prs, status } = thread;
+  return { threadId: thread.id, title: thread.title, status, goal, criteria: criteria.map(({ id, text, claim }) => ({ id, text, claimed: claim?.evidence ?? null })), report: report ?? null, prs: prs.map(({ number, state, title }) => ({ number, state, title })) };
+}
+
 function stepIn(thread: Thread, stepId: string) {
   const step = thread.steps.find((s) => s.id === stepId);
   if (!step) throw new Error(`No step ${stepId} in "${thread.title}"; get_goal lists the step ids`);
@@ -634,7 +672,7 @@ function agentOf(s: Subagent, now = Date.now()) {
 }
 
 function goalOf(thread: Thread) {
-  return { threadId: thread.id, title: thread.title, goal: thread.goal, status: thread.status, steps: thread.steps.map(stepOf) };
+  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, steps: thread.steps.map(stepOf) };
 }
 
 function stepOf(s: Thread['steps'][number]) {

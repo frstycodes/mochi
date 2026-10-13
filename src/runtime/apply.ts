@@ -1,16 +1,18 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
+import { noteCollisions } from './collisions.ts';
 import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
-import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
-import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
+import { completeStep, hasOpenWork, log, mapStep, mapThread, seePrs } from '../store/threads.ts';
+import { createdPr } from '../git/prs.ts';
+import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
 
 /** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
-  // Any word from the agent means it's up.
-  if (state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
+  // Any word from the agent means it's up; its folder being made and set up is main's, not the agent's.
+  if (event.type !== 'worktree' && event.type !== 'setup' && state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
     state = { ...state, threads: mapThread(state.threads, event.threadId, (t) => ({ ...t, live: { ...t.live!, starting: undefined } })) };
   }
   const thread = state.threads.find((t) => t.id === event.threadId);
@@ -22,6 +24,9 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
   switch (event.type) {
     case 'worktree':
       return update((t) => ({ ...t, live: t.live && { ...t.live, cwd: event.path } }));
+    case 'setup':
+      // A failed step waits on you like an approval does; Retry or Skip setup puts it back to running.
+      return update((t) => ({ ...t, setup: event.setup, status: event.setup.status === 'failed' ? 'needs-you' : t.setup?.status === 'failed' && t.status === 'needs-you' ? 'running' : t.status }));
     case 'branch':
       return update((t) => ({ ...t, repo: t.repo && { ...t.repo, branch: event.branch } }));
     case 'session':
@@ -40,7 +45,9 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'tool':
       if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }) }));
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
+      state = recordCreatedPr(state, thread, event);
       if (!event.files?.length) return state;
+      if (event.patch) state = noteCollisions(state, thread.id);
       return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));
     case 'plan':
       return applyPlan(state, thread, event.items);
@@ -62,11 +69,18 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         context: { used: event.contextUsed ?? t.context.used, max: event.contextMax ?? t.context.max },
         session: t.session && event.inputTokens + event.outputTokens > 0 ? { ...t.session, usage: addUsage(t.session.usage, event) } : t.session,
       }));
+    case 'limit-notice':
+    case 'notice':
+      return update((t) => log(t, { at: now, who: 'harness', kind: 'event', text: event.text }));
     case 'limit':
-      return update((t) => log({ ...pauseQueue(t, 'limit'), status: 'needs-you', live: t.live && { ...t.live, isWorking: false, limit: { resetsAt: event.resetsAt } } }, { at: now, who: 'harness', kind: 'event', text: `Usage limit reached${event.resetsAt ? `, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` }));
+      return update((t) => hitLimit(t, event, now));
+    case 'limit-cleared':
+      return update((t) => clearLimit(t, now));
     case 'turn-end': {
       if (event.status === 'interrupted' && thread.live?.isReplacingTurn) return update((t) => log({ ...t, live: { ...t.live!, isReplacingTurn: undefined } }, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted for your queued message' }));
-      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false } })) : state;
+      // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
+      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } })) : state;
+      if (isLimitEnd(thread)) return ended;
       return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
     }
   }
@@ -76,6 +90,14 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
 function toolEnd(event: Extract<AgentEvent, { type: 'tool' }>): Partial<ActivityEntry> {
   const { text, links, output, exitCode, patch } = event;
   return { ...(links && { text, links }), ...(output !== undefined && { output }), ...(exitCode !== undefined && { exitCode }), ...(patch && { patch }) };
+}
+
+/** A `gh pr create` the agent ran puts its PR on the thread right away; one already recorded keeps the state gh gave it. */
+function recordCreatedPr(state: State, thread: Thread, event: Extract<AgentEvent, { type: 'tool' }>): State {
+  const command = thread.activity.find((e) => e.toolId === event.id)?.text;
+  const pr = command && createdPr(command, event.output);
+  if (!pr || thread.prs.some((p) => p.number === pr.number)) return state;
+  return seePrs(state, thread.id, [pr]);
 }
 
 export function applyAgentEvents(state: State, events: AgentEvent[]): State {
@@ -156,7 +178,7 @@ function addScope(state: State, threadId: string, provider: Provider, added: { i
     const step: Step = {
       id: `${thread.id}-s${steps.length}`,
       title: item.title,
-      size: item.size ?? getPrefs().stepSize,
+      size: item.size ?? 1,
       status: item.status === 'pending' ? 'ready' : item.status,
       progress: item.status === 'done' ? 1 : (item.progress ?? 0),
       footprint: item.files ?? [],

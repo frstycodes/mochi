@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { ArrowUp, BranchDown, CheckCircle, InfoCircle, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { ArrowUp, CheckCircle, InfoCircle, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -24,9 +25,12 @@ import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { BoardView } from '../BoardView';
-import { seedQueue } from '../model';
+import { seedQueue, type Thread } from '../model';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
+import { ReportCard } from '../goals/ReportCard';
+import { TurnChangesCard } from '../chat/TurnChangesCard';
+import { turnChanges } from '../chat/turnChanges';
 import { PipLayer } from '../Browser';
 import { SidePane } from '../SidePane';
 import { AppSidebar } from '../Sidebar';
@@ -45,6 +49,8 @@ import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
 import { StateMatrix, previewState } from './state-matrix';
 import { Shortcut } from '../Shortcut';
+import { SetupRow } from '../chat/SetupRow';
+import type { WorktreeSetup } from '../host/types/agent';
 
 const SECTIONS = [
   ['foundations', 'Foundations'],
@@ -340,7 +346,7 @@ function Actions() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline">
-              <BranchDown data-icon="inline-start" />
+              <Link data-icon="inline-start" />
               Link step
             </Button>
             <Button>
@@ -361,7 +367,7 @@ function Actions() {
             <Badge variant="secondary">M</Badge>
             <Badge variant="outline">v3</Badge>
             <Badge variant="secondary">
-              <BranchDown />
+              <GitPullRequestIcon />
               #482
             </Badge>
             <Badge variant="destructive">Failed</Badge>
@@ -420,7 +426,7 @@ function Display() {
           <div className="flex flex-col gap-2">
             <Item variant="outline">
               <ItemMedia variant="icon">
-                <BranchDown />
+                <Link />
               </ItemMedia>
               <ItemContent>
                 <ItemTitle>
@@ -578,6 +584,13 @@ function Conversation() {
             </QuestionnaireActions>
           </Questionnaire>
         </Block>
+        <Block wide title="Worktree setup" use="Tops a new worktree thread while its ignored files, dependencies and setup command get ready; the agent starts after. Open while it runs or waits on you, folded once done.">
+          <div className="flex flex-col gap-4">
+            {SETUP_SAMPLES.map((setup) => (
+              <SetupRow key={setup.status} thread={adm} setup={setup} />
+            ))}
+          </div>
+        </Block>
         <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, overlaps.">
           <Marker variant="separator">
             <MarkerContent className="type-caption">Goal v2: +1 step "Per-key overrides"</MarkerContent>
@@ -610,8 +623,21 @@ function Recipes() {
             <SummaryPanel thread={rl} className="m-3 w-[300px] rounded-xl bg-popover shadow-popover" />
           </div>
         </Block>
+        <Block title="Report card" use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes." wide>
+          <ReportCard thread={reportFixture(rl)} />
+        </Block>
+        <Block title="Turn changes" use="Under a finished turn that changed files, like Claude's: totals and Undo, a row per file opening to its diff, the first three then Show more. Undo is disabled here: these threads have no worktree." wide>
+          <div className="flex flex-col gap-3">
+            {turnChanges(changesFixture(rl).activity).map((turn) => (
+              <TurnChangesCard key={turn.start} thread={changesFixture(rl)} turn={turn} />
+            ))}
+          </div>
+        </Block>
         <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
           <QueueDecision item={decision} showThread />
+        </Block>
+        <Block title="Same files" use="Two live threads of one project edited the same file; never pauses either agent." wide>
+          <QueueDecision item={{ id: 'q-collision-demo', kind: 'collision', threadId: rl.id, title: `"${adm.title}" is editing the same file`, detail: '', blocks: { steps: 0, threads: 2 }, createdAt: rl.startedAt, collision: { otherThreadId: adm.id, files: ['apps/api/middleware/ratelimit.ts'] } }} showThread />
         </Block>
         <Block title="Side pane" use="Docked to the right of the chat, like Codex: Preview, Changes, Terminal and a new-tab page. The preview pops out into a floating window." wide>
           <div className="h-[460px] overflow-hidden rounded-xl border">{admPane && <SidePane thread={adm} pane={admPane} />}</div>
@@ -707,3 +733,49 @@ function Pair({ rule, children }: { rule: string; children: [ReactNode, ReactNod
     </div>
   );
 }
+
+/** A goal thread as it looks after its agent claimed one criterion and reported. */
+function reportFixture(rl: Thread): Thread {
+  const at = rl.activity.at(-1)?.at ?? 0;
+  return {
+    ...rl,
+    live: undefined,
+    criteria: [
+      { id: 'c1', text: 'Every 429 carries Retry-After', claim: { evidence: 'curl -i /v1/search shows Retry-After: 30', at, by: 'claude' } },
+      { id: 'c2', text: 'pnpm test passes', command: 'pnpm test' },
+    ],
+    report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'], left: ['Per-key overrides in the admin UI'], question: 'Switch the 429 body to JSON now, or in a follow-up?' },
+  };
+}
+
+const CHANGED_FILES = ['packages/cache/redis.ts', 'apps/api/routes/admin/usage.ts', 'apps/web/routes/admin/usage.tsx', 'apps/api/middleware/ratelimit.ts', 'apps/api/middleware/__tests__/ratelimit.integration.test.ts', 'apps/api/gateway.ts', 'packages/db/schema/limits.ts', 'packages/db/migrations/0042_api_limits.sql', 'docs/api/limits.md', 'apps/web/components/charts/BarChart.tsx', 'apps/web/routes/admin/usage.css', 'scripts/load/ratelimit.k6.js', 'package.json', 'README.md'];
+
+/** One turn that changed 14 files, then a small one whose changes were undone. */
+function changesFixture(rl: Thread): Thread {
+  const at = rl.activity.at(-1)?.at ?? 0;
+  const tool = (text: string): Thread['activity'][number] => ({ at, who: 'claude', kind: 'tool', text });
+  return {
+    ...rl,
+    live: undefined,
+    activity: [
+      { at, who: 'you', kind: 'message', text: 'Wire the limits through the gateway and the admin page' },
+      ...CHANGED_FILES.map((path, i) => tool(`${i % 4 === 1 ? 'Write' : 'Edit'} ${path}  +${(i * 37) % 210 + 4} −${i % 3 === 0 ? 0 : i * 2}`)),
+      { at, who: 'claude', kind: 'message', text: 'Wired through. Tests pass.' },
+      { at, who: 'you', kind: 'message', text: 'Bump the README too' },
+      tool('Edit README.md  +3 −1'),
+      { at, who: 'claude', kind: 'message', text: 'Done.' },
+      { at, who: 'harness', kind: 'event', text: 'Undid the changes to 1 file from "Bump the README too"', turnUndo: { start: CHANGED_FILES.length + 2, isUndone: true } },
+    ],
+  };
+}
+
+const AGO = Date.now();
+const COPY = { id: 'copy', label: 'Copy .env, .env.local', status: 'done', startedAt: AGO - 14_000, endedAt: AGO - 13_800, output: '.env\n.env.local' } as const;
+const INSTALL = { id: 'install', label: 'Install dependencies with pnpm', command: 'pnpm install --frozen-lockfile --prefer-offline', startedAt: AGO - 13_800 } as const;
+const SCRIPT = { id: 'script', label: 'Run setup command', command: 'pnpm build:native' } as const;
+
+const SETUP_SAMPLES: WorktreeSetup[] = [
+  { status: 'running', startedAt: AGO - 14_000, steps: [COPY, { ...INSTALL, status: 'running', output: 'Lockfile is up to date, resolution step is skipped\nProgress: resolved 812, reused 812, downloaded 0, added 640\n' }, { ...SCRIPT, status: 'pending' }] },
+  { status: 'failed', startedAt: AGO - 14_000, steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 9_000 }, { ...SCRIPT, status: 'failed', startedAt: AGO - 9_000, endedAt: AGO - 6_000, exitCode: 1, output: 'node-gyp rebuild\ngyp ERR! find Python Python is not set from command line or npm configuration\n' }] },
+  { status: 'ready', startedAt: AGO - 14_000, endedAt: AGO, steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 2_000 }, { ...SCRIPT, status: 'done', startedAt: AGO - 2_000, endedAt: AGO }] },
+];

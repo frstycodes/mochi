@@ -10,6 +10,11 @@ export interface GithubRef {
   kind?: RefKind;
 }
 
+/** The head commit's check rollup: `fail` covers failure and error, `pending` covers expected. */
+export type ChecksState = 'pass' | 'fail' | 'pending';
+/** GitHub's `reviewDecision`: `required` means a review is requested and none approved yet. */
+export type ReviewState = 'approved' | 'changes' | 'required';
+
 export interface RefState {
   kind: RefKind;
   status: Exclude<RefStatus, 'unknown'>;
@@ -17,10 +22,23 @@ export interface RefState {
   url: string;
   /** Open PR that can't merge cleanly (`mergeable: CONFLICTING`). */
   hasConflicts: boolean;
-  /** The head commit's check rollup failed or errored. */
-  isFailing: boolean;
+  /** Null when the PR has no checks, and for issues. */
+  checks: ChecksState | null;
+  review: ReviewState | null;
   /** Issues closed as not planned read as muted, not done. */
   isNotPlanned: boolean;
+  /** Null for a deleted account. */
+  author: { login: string; avatarUrl: string } | null;
+  /** ISO timestamp. */
+  updatedAt: string | null;
+  /** PR only. */
+  branch: { head: string; base: string } | null;
+  diff: { added: number; removed: number; files: number } | null;
+}
+
+/** A state with only what's known without GitHub: the thread's own record of a PR, demo fixtures. */
+export function bareState(kind: RefKind, status: RefState['status'], title: string, url: string): RefState {
+  return { kind, status, title, url, hasConflicts: false, checks: null, review: null, isNotPlanned: false, author: null, updatedAt: null, branch: null, diff: null };
 }
 
 /** The thread's own repository, for bare `#123` and for showing its refs without the `owner/repo` prefix. */
@@ -116,16 +134,36 @@ export function refStatus(state: RefState | null | undefined): RefStatus {
 }
 
 /** Words for the tooltip and screen readers: "Open pull request, has conflicts, checks failing". */
-export function refDescription(ref: GithubRef, state: RefState | null | undefined) {
-  const kind = state?.kind ?? ref.kind;
+export function refDescription(refKind: RefKind | undefined, state: RefState | null | undefined) {
+  const kind = state?.kind ?? refKind;
   const noun = kind === 'issue' ? 'issue' : kind === 'pr' ? 'pull request' : 'pull request or issue';
   if (!state) return `GitHub ${noun}`;
   const status = state.isNotPlanned ? 'Closed as not planned' : STATUS_WORDS[state.status];
-  const extras = [state.hasConflicts && 'has conflicts', state.isFailing && 'checks failing'].filter(Boolean);
+  const extras = [state.hasConflicts && 'has conflicts', state.checks === 'fail' && 'checks failing', state.review === 'changes' && 'changes requested'].filter(Boolean);
   return [`${status} ${noun}`, ...extras].join(', ');
 }
 
-const STATUS_WORDS = { open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed' } satisfies Record<RefState['status'], string>;
+/**
+ * Lower ranks need you sooner: an open PR with conflicts, failing checks or changes requested, then one waiting on review,
+ * then open, draft, merged, closed. Unread state ranks with open, since it may still need you.
+ */
+export function refAttention(state: RefState | null | undefined) {
+  if (!state || state.status === 'open') {
+    if (state && (state.hasConflicts || state.checks === 'fail' || state.review === 'changes')) return 0;
+    if (state?.review === 'required') return 1;
+    return 2;
+  }
+  return ATTENTION_RANK[state.status];
+}
+
+const ATTENTION_RANK = { draft: 3, merged: 4, closed: 5 } satisfies Record<Exclude<RefState['status'], 'open'>, number>;
+
+/** `items` most-needs-you first; equal ranks keep their order. */
+export function byAttention<T>(items: T[], stateOf: (item: T) => RefState | null | undefined) {
+  return [...items].sort((a, b) => refAttention(stateOf(a)) - refAttention(stateOf(b)));
+}
+
+export const STATUS_WORDS = { open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed' } satisfies Record<RefState['status'], string>;
 
 function isRanking(text: string, at: number) {
   return RANKING_AFTER.test(text.slice(at)) && RANKING_BEFORE.test(text.slice(0, at));
