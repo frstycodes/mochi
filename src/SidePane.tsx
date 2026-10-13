@@ -21,7 +21,7 @@ export function SidePane({ thread, pane }: { thread: Thread; pane: Pane }) {
   const onKeyDown = usePaneKeys(thread.id, docked, active);
 
   return (
-    <section aria-label="Side pane" tabIndex={-1} onKeyDown={onKeyDown} className="flex h-full min-w-0 flex-col bg-sidebar outline-none">
+    <section aria-label="Side pane" tabIndex={-1} onKeyDown={onKeyDown} className="flex h-full min-w-0 flex-col border-l border-sidebar-border bg-sidebar outline-none">
       <TabStrip thread={thread} tabs={docked} active={active} />
       <div className="min-h-0 flex-1">{active ? <ActiveTab thread={thread} pane={pane} tab={active} /> : <PoppedOut thread={thread} pane={pane} />}</div>
     </section>
