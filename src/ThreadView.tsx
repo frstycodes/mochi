@@ -101,7 +101,8 @@ export function ThreadView({ thread }: { thread: Thread }) {
             <SheetTitle className="sr-only">Thread summary</SheetTitle>
             <SummaryPanel
               thread={thread}
-              className="h-full"
+              // Room for the sheet's close button, which otherwise covers the summary's menu.
+              className="h-full pt-8"
               onPaneOpened={() => {
                 setSummarySheetOpen(false);
                 setPaneTabOpen(true);
