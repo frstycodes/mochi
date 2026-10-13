@@ -70,6 +70,14 @@ export function packageScripts(pkg: unknown, runner: string): RunTarget[] {
     .map(([name]) => ({ name, command: `${runner} run ${name}`, source: 'package.json' }));
 }
 
+const DEV_SCRIPTS = ['dev', 'start', 'serve', 'preview'];
+
+/** What serves the project for a before/after compare: the `dev` script, then start, serve, preview, other matches, then launch.json. */
+export function devTarget(targets: RunTarget[]) {
+  const rank = (t: RunTarget) => (t.source === 'launch.json' ? DEV_SCRIPTS.length + 1 : DEV_SCRIPTS.includes(t.name) ? DEV_SCRIPTS.indexOf(t.name) : DEV_SCRIPTS.length);
+  return [...targets].sort((a, b) => rank(a) - rank(b))[0] ?? null;
+}
+
 export function launchConfigs(launch: unknown): RunTarget[] {
   const configs = (launch as { configurations?: unknown[] } | null)?.configurations ?? [];
   return configs.flatMap((c) => {

@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { stopAllCompares } from './browser/compare.ts';
 import { registerIpc } from './ipc/index.ts';
 import { startScheduler } from './schedule/scheduler.ts';
 import { createWindow, isTrustedUrl } from './window.ts';
@@ -16,4 +17,5 @@ app.whenReady().then(() => {
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
 });
 
+app.on('will-quit', stopAllCompares);
 app.on('window-all-closed', () => process.platform !== 'darwin' && app.quit());

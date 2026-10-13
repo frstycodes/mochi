@@ -1,8 +1,9 @@
 import { toast } from 'sonner';
 import { host } from '@/host';
+import { threadCwd } from '@/host/cwd';
 import type { Thread } from '@/model';
 import { dataUrlToFile, sendToComposer } from './composer';
-import { updatePage, type Page } from './pages';
+import { basePageKey, destroyPage, getPage, updatePage, type CompareState, type Page } from './pages';
 import { displayUrl } from './url';
 
 /** Desktop: the next click in the page picks an element. Web demo page: toggles its own comment mode. */
@@ -32,14 +33,53 @@ export function pickDemoElement(key: string, thread: Thread, target: string) {
   deliver(thread, `On "${target}" in the preview: `, [], 'Element added to the composer');
 }
 
-export async function screenshot(page: Page, thread: Thread, fullPage: boolean) {
+/** Captures into the annotation editor; sending from there attaches it to the composer. */
+export async function screenshot(key: string, page: Page, fullPage: boolean) {
   if (!page.hostId) return;
   try {
-    const file = await dataUrlToFile(await host.browser.capture(page.hostId, { fullPage }), fullPage ? 'page-full.png' : 'page.png');
-    deliver(thread, '', [file], fullPage ? 'Full-page screenshot added to the composer' : 'Screenshot added to the composer');
+    updatePage(key, { annotating: { image: await host.browser.capture(page.hostId, { fullPage }), name: fullPage ? 'page-full.png' : 'page.png' } });
   } catch (error) {
     toast.error('Could not take the screenshot', { description: String(error) });
   }
+}
+
+export async function sendAnnotated(key: string, thread: Thread, png: Blob, name: string, isMarked: boolean) {
+  deliver(thread, '', [new File([png], name, { type: 'image/png' })], isMarked ? 'Annotated screenshot added to the composer' : 'Screenshot added to the composer');
+  updatePage(key, { annotating: null });
+}
+
+export async function toggleAutoReload(key: string, page: Page, thread: Thread) {
+  const cwd = threadCwd(thread);
+  if (!page.hostId || !cwd) return;
+  const isOn = !page.isAutoReloading;
+  updatePage(key, { isAutoReloading: isOn });
+  try {
+    await host.browser.autoReload(page.hostId, isOn ? cwd : null);
+  } catch (error) {
+    updatePage(key, { isAutoReloading: !isOn });
+    toast.error('Could not watch the worktree', { description: String(error) });
+  }
+}
+
+/** Serves the thread's base branch and shows it beside this page. */
+export async function openCompare(key: string, thread: Thread) {
+  const cwd = threadCwd(thread);
+  if (!cwd) return;
+  updatePage(key, { compare: { mode: 'split', status: 'starting' } });
+  const settle = (next: CompareState) => getPage(key)?.compare?.status === 'starting' && updatePage(key, { compare: next });
+  try {
+    const base = await host.browser.compareStart(thread.id, cwd, thread.repo?.base);
+    settle({ mode: 'split', status: 'ready', base });
+  } catch (error) {
+    // Electron prefixes errors thrown in main with the channel name.
+    settle({ mode: 'split', status: 'error', message: String(error instanceof Error ? error.message : error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') });
+  }
+}
+
+export function closeCompare(key: string, threadId: string) {
+  updatePage(key, { compare: null });
+  destroyPage(basePageKey(key));
+  void host.browser.compareStop(threadId);
 }
 
 export function consoleReport(page: Page) {

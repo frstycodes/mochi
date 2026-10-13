@@ -4,7 +4,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus, parseWorktrees } from '../../src/git/parse.ts';
 import { applyFiles, checkpointRef, resolveCommit, restore, snapshot } from '../git/checkpoints.ts';
-import { inside, run, runGit, topLevel } from '../git/run.ts';
+import { inside, mainRepo, run, runGit, topLevel } from '../git/run.ts';
 import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
@@ -226,11 +226,6 @@ async function currentBranch(top: string) {
   return (await runGit(top, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'HEAD')).trim();
 }
 
-// Worktrees share the main repo's common dir; worktree commands run from the main checkout.
-async function mainRepo(path: string) {
-  const common = (await runGit(await topLevel(path), ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
-  return dirname(common);
-}
 
 const BUCKETS = ['pass', 'fail', 'pending', 'skipping', 'cancel'] satisfies CheckState[];
 
