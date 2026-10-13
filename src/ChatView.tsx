@@ -59,7 +59,8 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   const liveWork = liveWorkIndex(rows);
   const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
-  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q));
+  // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
+  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q) && q.kind !== 'review');
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);

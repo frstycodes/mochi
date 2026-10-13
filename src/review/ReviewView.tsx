@@ -140,14 +140,14 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
 
   const approve = async () => {
     const ok = await confirm({
-      title: `Approve "${thread.title}"?`,
-      description: openPrs.length ? `${openPrs.map((p) => `#${p.number}`).join(', ')} merge and the thread settles.` : 'There is no open pull request; the thread settles as it is.',
-      confirm: openPrs.length ? 'Approve and merge' : 'Approve and settle',
+      title: `Mark "${thread.title}" done?`,
+      description: openPrs.length ? `The thread settles. ${openPrs.map((p) => `#${p.number}`).join(', ')} stay open on GitHub; merge them there.` : 'The thread settles.',
+      confirm: 'Mark done',
       cancel: 'Not yet',
     });
     if (!ok) return;
     const item = state.queue.find((q) => q.kind === 'review' && q.threadId === thread.id);
-    withUndo(`Approved ${thread.title}`, () => {
+    withUndo(`Marked ${thread.title} done`, () => {
       if (item) dispatch({ type: 'answer', queueId: item.id });
       dispatch({ type: 'settle', threadId: thread.id });
     });
