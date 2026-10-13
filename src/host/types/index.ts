@@ -1,3 +1,4 @@
+import { accountMethods, type AccountHost } from './account.ts';
 import { agentMethods, type AgentHost } from './agent.ts';
 import { dataMethods, type DataHost } from './data.ts';
 import { browserMethods, type BrowserHost } from './browser.ts';
@@ -27,6 +28,7 @@ export interface HostBridge {
   data: DataHost;
   schedule: ScheduleHost;
   themes: ThemesHost;
+  account: AccountHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -46,4 +48,5 @@ export const manifest = {
   data: dataMethods,
   schedule: scheduleMethods,
   themes: themesMethods,
+  account: accountMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

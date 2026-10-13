@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { manifest, type HostBridge, type Namespace } from '../../src/host/types/index.ts';
 import type { Handlers } from './handlers.ts';
+import { account } from './account.ts';
 import { agent } from './agent.ts';
 import { browser } from './browser.ts';
 import { data } from './data.ts';
@@ -15,7 +16,7 @@ import { sim } from './sim.ts';
 import { themes } from './themes.ts';
 import { windows } from './windows.ts';
 
-const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes } satisfies {
+const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, account } satisfies {
   [K in Namespace]: Handlers<HostBridge[K]>;
 };
 
