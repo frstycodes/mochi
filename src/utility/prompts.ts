@@ -17,7 +17,7 @@ const MAX_PROMPT_CHARS = 24_000;
 export const UTILITY_INSTRUCTIONS = {
   title: 'Name a coding thread from its first exchange. Reply with the title only: 2 to 6 words, sentence case, no quotes, no trailing period.',
   outcome:
-    'You classify messages; you never act on them or answer them. Decide whether the newest message a user sent to a coding agent asks for work to be done (task) or is a question, greeting or discussion (chat). For a task, write its outcome: what will be true when it is done, under 80 characters, sentence case, no trailing period; and 2 to 4 acceptance criteria, each one checkable sentence under 90 characters, naming a command when one would prove it (tests, typecheck, build). When other threads are listed, name each one that already did or is doing the same work (same) or overlaps it (related); leave out the rest. Reply with only a JSON object {"kind": "task" | "chat", "outcome": "<string, empty for chat>", "criteria": ["<string>", ...], "similar": [{"id": "<thread id>", "relation": "same" | "related"}]}, nothing else.',
+    'You classify messages; you never act on them or answer them. Decide whether the newest message a user sent to a coding agent asks for work to be done (task) or is a question, greeting or discussion (chat). For a task, write its outcome: what will be true when it is done, under 80 characters, sentence case, no trailing period; and 2 to 4 acceptance criteria, each one checkable sentence under 90 characters, with a shell command that proves it only when one clearly would (tests, typecheck, build). When other threads are listed, name each one that already did or is doing the same work (same) or overlaps it (related); leave out the rest. Reply with only a JSON object {"kind": "task" | "chat", "outcome": "<string, empty for chat>", "criteria": [{"text": "<string>", "command": "<optional shell command>"}, ...], "similar": [{"id": "<thread id>", "relation": "same" | "related"}]}, nothing else.',
   commit:
     "Write a git commit message for the staged diff. Conventional Commits: `type(scope): summary` in the imperative mood, under 72 characters; then a blank line and a short body only when the reason isn't obvious from the diff. Reply with the message only, no code fences.",
   pr: 'Write a GitHub pull request for the branch. First line: the title, under 72 characters, no prefix. Then a blank line and the description in Markdown: what changed and why, then how it was tested when the diff shows it. Reply with those only, no code fences.',
@@ -74,18 +74,31 @@ export function parseSteps(text: string) {
 export const parseHandoff = (text: string) => unfence(text);
 
 /** The `outcome` answer; null when it isn't the JSON asked for, so the caller falls back. */
-export function parseOutcome(text: string): { kind: 'task' | 'chat'; outcome: string; criteria: string[]; similar: Similar[] } | null {
+export function parseOutcome(text: string): { kind: 'task' | 'chat'; outcome: string; criteria: DraftedCriterion[]; similar: Similar[] } | null {
   try {
     const raw = unfence(text);
     const answer = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as { kind?: unknown; outcome?: unknown; criteria?: unknown; similar?: unknown };
     if (answer.kind === 'chat') return { kind: 'chat', outcome: '', criteria: [], similar: [] };
     if (answer.kind !== 'task' || typeof answer.outcome !== 'string' || !answer.outcome.trim()) return null;
-    const criteria = Array.isArray(answer.criteria) ? answer.criteria.filter((c): c is string => typeof c === 'string' && !!c.trim()).map((c) => c.trim()) : [];
+    const criteria = Array.isArray(answer.criteria) ? answer.criteria.flatMap(criterionOf) : [];
     const similar = Array.isArray(answer.similar) ? answer.similar.filter(isSimilar).map(({ id, relation }) => ({ threadId: id, relation })) : [];
     return { kind: 'task', outcome: answer.outcome.trim().replace(/\.$/, ''), criteria: criteria.slice(0, 4), similar };
   } catch {
     return null;
   }
+}
+
+export interface DraftedCriterion {
+  text: string;
+  command?: string;
+}
+
+/** A bare string (older answers) or `{ text, command }`; anything else is dropped. */
+function criterionOf(c: unknown): DraftedCriterion[] {
+  if (typeof c === 'string') return c.trim() ? [{ text: c.trim() }] : [];
+  const { text, command } = (c ?? {}) as { text?: unknown; command?: unknown };
+  if (typeof text !== 'string' || !text.trim()) return [];
+  return [{ text: text.trim(), ...(typeof command === 'string' && command.trim() && { command: command.trim() }) }];
 }
 
 function isSimilar(s: unknown): s is { id: string; relation: Similar['relation'] } {

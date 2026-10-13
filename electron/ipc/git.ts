@@ -12,6 +12,7 @@ import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
 import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
+import { runCheck } from '../git/check.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
@@ -191,6 +192,11 @@ export const git = {
     const [branch, base] = await Promise.all([currentBranch(top), baseRef(top)]);
     const from = await runGit(top, ['merge-base', commit, base]).then((s) => s.trim(), () => `${commit}^`);
     return { branch, base, files: parseDiff(await runGit(top, ['diff', from, commit, ...DIFF_FLAGS]), false) };
+  },
+
+  async runCheck(_sender, cwd, command) {
+    const top = await topLevel(string(cwd, 'cwd'));
+    return runCheck(top, string(command, 'command', 2000));
   },
 
   async forkWorktree(_sender, cwd, threadId, branch, from) {

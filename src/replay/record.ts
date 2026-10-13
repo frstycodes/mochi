@@ -39,6 +39,7 @@ const RECORDED = [
   'goal-drafted',
   'goal-remove',
   'criterion-claim',
+  'criterion-check',
   'report',
   'similar-dismiss',
   'step-status',

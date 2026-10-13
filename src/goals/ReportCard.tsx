@@ -9,8 +9,8 @@ import { currentReport } from './report';
 export function ReportCard({ thread }: { thread: Thread }) {
   const view = currentReport(thread);
   if (!view) return null;
-  const { report, criteria, claimed, isReady, changes } = view;
-  const status = isReady ? 'Ready for review' : criteria.length ? `${claimed} of ${criteria.length} criteria done` : 'Turn done';
+  const { report, criteria, met, isReady, changes } = view;
+  const status = isReady ? 'Ready for review' : criteria.length ? `${met} of ${criteria.length} criteria done` : 'Turn done';
   return (
     <Card size="sm" role="group" aria-label="Report">
       <CardHeader>
@@ -30,7 +30,7 @@ export function ReportCard({ thread }: { thread: Thread }) {
             </span>
           </p>
         )}
-        {criteria.length > 0 && <CriteriaList criteria={criteria} />}
+        {criteria.length > 0 && <CriteriaList thread={thread} />}
         <ReportList label="Decided" items={report.decisions} />
         <ReportList label="Left" items={report.left} />
         {changes.files.length > 0 && (
