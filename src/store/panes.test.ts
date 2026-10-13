@@ -60,11 +60,25 @@ test('closing several tabs keeps a survivor active, and restoring brings the pan
   assert.deepEqual(run(others, { type: 'pane-restore', pane: pane() }), pane());
 });
 
-test("an agent's quiet browser tab leaves the pane closed and your tab in front", () => {
-  const fresh = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:3000', isQuiet: true });
+test('showing a kind selects its docked tab and opens the pane, or opens a new tab when there is none', () => {
+  const shown = run(pane({ isOpen: false, tabs: [{ id: 'a', kind: 'browser' }, { id: 'b', kind: 'changes' }], activeTab: 'a' }), { type: 'pane-show-tab', threadId: 't', kind: 'changes' });
+  assert.deepEqual([shown.isOpen, shown.activeTab, shown.tabs.length], [true, 'b', 2]);
+  const added = run(pane({ tabs: [{ id: 'a', kind: 'changes', isPopped: true }], activeTab: '' }), { type: 'pane-show-tab', threadId: 't', kind: 'changes' });
+  assert.equal(added.tabs.length, 2);
+  assert.equal(added.activeTab, added.tabs[1].id);
+});
+
+test('a popped-out open adds a floating tab without opening the pane or changing its selection', () => {
+  const p = run(pane({ isOpen: false }), { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true });
+  assert.deepEqual([p.isOpen, p.activeTab], [false, 'a']);
+  assert.deepEqual(p.tabs.at(-1), { id: p.tabs.at(-1)!.id, kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true, url: undefined, file: undefined });
+});
+
+test("a background tab leaves the pane closed and your tab in front, and a thread with no pane gets a closed one", () => {
+  const fresh = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:3000', isBackground: true });
   assert.equal(fresh.isOpen, false);
   assert.equal(fresh.activeTab, fresh.tabs[0].id);
-  const beside = run(pane({ activeTab: 'b', isOpen: true }), { type: 'pane-open-tab', threadId: 't', kind: 'browser', isQuiet: true });
+  const beside = run(pane({ activeTab: 'b', isOpen: true }), { type: 'pane-open-tab', threadId: 't', kind: 'browser', isBackground: true });
   assert.equal(beside.isOpen, true);
   assert.equal(beside.activeTab, 'b');
   assert.equal(beside.tabs.length, 4);

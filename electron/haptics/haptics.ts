@@ -17,18 +17,10 @@ export function playHaptic() {
   void helper.then((child) => child?.stdin.write('\n'));
 }
 
-// GAP: compiled on first use like the simulator helper, so it needs Xcode's swiftc; a packaged build should ship the binary.
 async function start() {
   try {
-    const hash = createHash('sha256').update(helperSource).digest('hex').slice(0, 12);
-    const dir = path.join(app.getPath('userData'), 'haptics');
-    const binary = path.join(dir, `haptic-${hash}`);
-    if (!existsSync(binary)) {
-      await mkdir(dir, { recursive: true });
-      const source = path.join(dir, `haptic-${hash}.swift`);
-      await writeFile(source, helperSource);
-      await run('xcrun', ['swiftc', '-O', source, '-o', binary]);
-    }
+    const binary = app.isPackaged ? shippedBinary() : await compiledBinary();
+    if (!binary) return null;
     const child = spawn(binary);
     child.on('exit', () => (helper = undefined));
     app.on('will-quit', () => child.kill());
@@ -37,4 +29,23 @@ async function start() {
     console.warn('Haptics unavailable', error);
     return null;
   }
+}
+
+/** Built by scripts/build-haptic.mjs and copied in as a resource; a build made off macOS has none, which means no haptic. */
+function shippedBinary() {
+  const binary = path.join(process.resourcesPath, 'haptic');
+  return existsSync(binary) ? binary : null;
+}
+
+/** `pnpm electron:dev`: compiled on first use with Xcode's swiftc, like the simulator helper, and kept per source hash. */
+async function compiledBinary() {
+  const hash = createHash('sha256').update(helperSource).digest('hex').slice(0, 12);
+  const dir = path.join(app.getPath('userData'), 'haptics');
+  const binary = path.join(dir, `haptic-${hash}`);
+  if (existsSync(binary)) return binary;
+  await mkdir(dir, { recursive: true });
+  const source = path.join(dir, `haptic-${hash}.swift`);
+  await writeFile(source, helperSource);
+  await run('xcrun', ['swiftc', '-O', source, '-o', binary]);
+  return binary;
 }

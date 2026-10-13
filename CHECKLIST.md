@@ -10,12 +10,12 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Browser-style tab strip, `+` new tab, close, active chip
 - [x] Pop a Preview tab out to a PiP window
 - [x] Drag tabs to reorder (Alt ← / → from the keyboard)
-- [ ] Drag a tab out of the pane to make a split (ties into §3)
+- [x] Drag a tab out of the pane to make a split (ties into §3): over a split it previews the half it takes (a pane tab never replaces a split), the tab leaves the strip while it's a split, drag its title back onto the strip (or "Put back in the pane") to dock it, Esc cancels, a new tab says on hover it can't split. GAP: dropping on another thread's strip doesn't move a tab between threads
 - [x] Pop any tab kind out, not just Preview
 - [x] Tabs persist per thread across reloads
 - [x] Cmd 1–9 / Ctrl Tab to switch pane tabs; Cmd W closes the active one
 - [x] New-tab page lists every tab kind
-- [ ] New-tab page lists detected ports and recent files (needs `term`, `files`)
+- [x] New-tab page lists detected ports and recent files: running dev servers open in a Preview tab, recent files (work log reads and edits, files opened in a Files tab) open in a Files tab. GAP: files opened in a Files tab are remembered in memory only, so they drop off after a reload
 
 ### Browser
 - [x] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
@@ -27,11 +27,11 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Console errors surface as a badge on the tab and can be sent to the agent
 - [x] Element picker: click an element, send its selector + screenshot + outerHTML to the composer ("comment on page"). GAP: source location needs a dev-server plugin (React owner stack / sourcemaps)
 - [x] Screenshot / full-page screenshot into the composer as an attachment. GAP: screen recording
-- [ ] Annotate a screenshot (draw, arrow, note) before sending
+- [x] Annotate a screenshot (draw, arrow, note) before sending: every capture opens in the pane's annotation editor (pen, arrow, box, note, undo/redo, five token colours, Esc cancels), "Add to composer" attaches the PNG with the marks baked in. GAP: notes render in the system font in the PNG (an SVG drawn as an image can't load the app's web font); no move/resize of a placed mark
 - [x] Agent driving indicator (already designed: "driving" state) with take-over / give-back
 - [x] Per-space browser profiles (cookies, logins isolated like spaces' accounts)
-- [ ] Auto-reload on HMR / file change; keep scroll position (GAP: dev servers with HMR already reload; needs `fs` watch for the rest)
-- [ ] Before / after compare: same URL on base branch vs thread branch, side by side or slider (GAP: needs the `git` worktree manager to serve the base branch)
+- [x] Auto-reload on HMR / file change; keep scroll position: toolbar toggle watches the thread's worktree (recursive `fs.watch`, 250ms debounce, skips node_modules/.git/build/cache dirs and editor temp files) and reloads when the dev server didn't hot-update or reload within 1.2s (read from its `[vite]`/`[HMR]`/`[Fast Refresh]` console lines); every reload of the same URL gets its scroll back. GAP: window scroll only, not inner scroll containers; macOS/Windows (`fs.watch` recursive)
+- [x] Before / after compare: same URL on base branch vs thread branch, side by side or slider (More › Compare with base). Works for projects with a dev script (package.json `dev`, then `start`/`serve`/`preview`, else `.claude/launch.json`): reuses a server already running in the project folder when it's on the base, else checks the base out into a temporary worktree (borrowing the project's `node_modules`) and runs the script; closing stops it and removes the worktree. No dev script: the pane says so and the fallback is to run the base yourself and open it in a second tab. Side by side is live and scroll-synced; the slider compares full-page captures. GAP: one compare per thread; a base with different dependencies needs its own install; captures wait while Mochi's window is hidden
 
 ### Ports and previews
 - [x] Detect listening ports from the thread's processes (lsof / netstat on the worktree's PIDs)
@@ -54,7 +54,7 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Tap, swipe, type, hardware buttons (home, lock), deep link
 - [ ] Rotate: GAP, no host-side API found (Purple GSEvent and Indigo device-motion attempts didn't rotate; Xcode 27 ships no Simulator.app to script)
 - [x] Build & run the thread's app into it (first scheme, install + launch)
-- [ ] Build logs in a Terminal tab: GAP, shown inline in the Simulator tab until the `term` session's pty API lands
+- [x] Build logs in a Terminal tab: the build streams into a read-only Build session of the thread's Terminal tab (opened in the background if there's none); the Simulator tab keeps a one-line status with Show log. GAP: xcodebuild still runs as a child process in the main process, mirrored line by line, not inside a pty
 - [x] Screenshot / record into the composer, same as the browser (posted as the file path; GAP: chat entries can't carry attachments yet)
 - [x] Device picker (iPhone sizes, iPad), appearance toggle, Dynamic Type size
 - [ ] Android emulator through the same tab (`adb`, `emulator`) — later
@@ -109,7 +109,7 @@ Principles: no assumed orientation (portrait monitors are first class), every la
 - [x] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the Stage Manager cards)
 - [x] Cmd 1–9 jumps to pinned N; Cmd Opt 1–9 opens pinned N in a new split
 - [x] Hover a pinned thread → live peek (transcript tail + preview thumbnail) without switching
-- [ ] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (watch toggle + in-app toast for needs-you / done done; OS notifications and CI fail wait for `notify`)
+- [x] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (main owns the OS notifications, CI polling and dock badge, so they keep working with every window closed: `electron/notify/watch.ts`; a CI failure lands in the Queue with "Send failing log to agent")
 
 ### Stage Manager mode
 The main session (or split) sits centered; pinned sessions hover at both screen edges as 3D cards, sticking out slightly.
@@ -172,7 +172,7 @@ The main session (or split) sits centered; pinned sessions hover at both screen 
 - [x] Goal templates (e.g. "API endpoint", "migration") per space (fixtures, applied from the goal editor)
 - [x] Goal history diff: what changed between v2 and v3
 - [x] Acceptance criteria per step, checked by the agent (tests named, command to run); the check is simulated until the agent runtime exists
-- [ ] Settled-goal archive with outcome summary, PRs, time spent, cost (outcome summary, PRs and time spent done in the summary panel; cost and a dedicated archive view open)
+- [ ] Settled-goal archive with outcome summary, PRs, time spent, cost (outcome summary, PRs, time spent and cost done in the summary panel: cost is what Claude reports, Codex shows tokens since it reports no spend; a dedicated archive view open)
 
 ## 5. Drift guard (prompt deviates from the goal)
 
@@ -204,8 +204,7 @@ Ranked by how much they help running many agents at once.
 - [x] **Review mode**: walk all threads in `review` one after another — diff, preview, approve / request changes — like an inbox. From the sidebar, the Queue and Cmd K; J/K, Skip, Esc.
 - [x] **Scheduled and background threads**: run nightly, on a PR event, or on a cron; land in the Queue when done. One trigger per thread, owned by main (`electron/schedule/scheduler.ts`, `schedules.json`): cron with presets (nightly, weekdays, hourly) and a preview of the next three runs (`src/schedule/cron.ts`, local time, DST-aware), or a PR event (opened, review requested, CI failed; branch pattern or label) polled through gh every 2 minutes. Runs go through the same `startAgent` as the renderer (concurrency cap, profile account, limit pauses), never overlap, and missed ones run once on launch or are skipped. A finished run is a `run` Queue item (Open, Settle), a notification and an entry in the thread's history; while no window is open, run and agent events wait in an outbox for the next one. Editor in the thread menu and the new-thread composer's clock (also Run in background); clock badge on sidebar rows; Settings › Schedules. GAP: with no window open, the OS notification waits until a window opens; a run that started while windows were closed replays its agent output when one opens, so a window opened mid-run can show that run's early output after its later output; PR polling uses the profile's GitHub account but not webhooks.
 - [ ] **Shared / team spaces**: see teammates' threads on the metro board so overlaps catch cross-person duplication too.
-- [ ] **Session recording / replay** of a thread for demos and debugging.
-- [ ] **Voice**: dictate is designed; add push-to-talk global hotkey and spoken status ("Rate limiting is 60% done, waiting on you").
+- [x] **Session recording / replay** of a thread for demos and debugging. Recording (`src/replay/recorder.ts`): every store action that changes one of your threads (raw agent events, plus your messages, answers and goal edits) is appended to `replays/<thread>.jsonl` in main's userData with its wall clock and app clock, after a base line holding the thread and its queue items; runs of message deltas fold into one line, each thread caps at 8 MB (a `capped` line ends the replay there), deleting a thread deletes its recording, Settings › Data turns it off and shows the size. Replay (thread menu, ⌘K): the steps run through the store's own thread and queue slices into a scratch store (`src/replay/rebuild.ts`, snapshots every 32 steps for scrubbing) and the real chat view renders it read-only; play/pause, 1×/2×/4×/8×, skip idle gaps (pauses over 3 s play as 0.6 s), a scrubbable timeline marking your messages, tool calls, file edits, approvals and errors, and the diff at that point from the nearest checkpoint whose files were saved (`git.checkpointDiff`), else the files touched so far; Space/K, ←/→ (Shift for markers), J/L, Home/End, Esc. Export replay writes the app's own single-file page with the recording and every checkpoint diff inlined as JSON, each string passed through the profile import's secret patterns (`redactSecrets`); opened anywhere, the page renders only the replay, with no network. Demo threads replay a script built from their transcript (`src/replay/demo.ts`). GAP: a recording starts with the thread's next action, so threads from before this shipped replay from then on; a new session writes a fresh base and the replay jumps over the restart; export needs the built app (the dev server's page isn't self-contained).
 - [ ] **Mobile companion / Remote control**: answer Queue items from the phone.
 - [ ] **Settings sync and import** of `CLAUDE.md`, MCP servers, skills per space. Built (SETTINGS.md, Workspace → Profiles); open until a new thread on a signed-in test account shows a profile-enabled server in its context panel on both providers.
 
@@ -219,7 +218,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [x] Interactive widgets can send a prompt back to the chat (like `sendPrompt`)
 - [x] Tables: sortable, copy as CSV / Markdown
 - [x] Image output: rendered with a lightbox, can be dropped into the composer
-- [ ] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). Copy, download and fullscreen done; side-pane tab and PiP wait for a visual tab kind in the pane registry
+- [x] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). The `visual` pane tab kind re-renders the fence; Pop out opens it as a floating tab
 - [x] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
 - [x] Theme-aware: re-render on light / dark switch; contrast checked in both (colours come from the theme tokens; no separate contrast measurement)
 - [x] Mochi-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
@@ -231,7 +230,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 
 ## 9. Accounts and limits
 
-- [ ] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Mochi never handles credentials
-- [ ] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
-- [ ] Threads always run on their profile's account; never rotate to another account of the same provider
+- [x] Account registry: each Claude Code / Codex login in its own config directory, signed in by you in the tool itself; Mochi never handles credentials
+- [x] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
+- [x] Threads always run on their profile's account; never rotate to another account of the same provider
 - [x] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider

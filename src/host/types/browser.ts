@@ -59,6 +59,20 @@ export interface BrowserSnapshot {
   refs: Record<string, { role: string; name: string; isSubmit: boolean; isPassword: boolean }>;
 }
 
+export interface ScrollPosition {
+  x: number;
+  y: number;
+}
+
+/** The base branch's dev server for a before/after compare. */
+export interface CompareBase {
+  /** `http://localhost:<port>`; the thread page's path goes after it. */
+  origin: string;
+  branch: string;
+  /** An already running server in the project's own checkout; Mochi didn't start it and won't stop it. */
+  isReused: boolean;
+}
+
 export interface BrowserLog {
   level: 'debug' | 'info' | 'warning' | 'error';
   message: string;
@@ -102,6 +116,14 @@ export interface BrowserHost {
   /** Runs `script` in the page's own world (top-level await allowed): the last expression's JSON, capped at 20k chars; throws the page's error. */
   eval(id: string, script: string): Promise<{ value: string; isTruncated: boolean }>;
   waitFor(id: string, until: BrowserWait): Promise<{ isMet: boolean; waitedMs: number }>;
+  /** Reloads the page when a file under `root` changes and the dev server didn't hot-reload it, keeping scroll per URL. `null` stops. */
+  autoReload(id: string, root: string | null): Promise<void>;
+  /** The page's scroll position, after scrolling to `to` when given. */
+  scroll(id: string, to: ScrollPosition | null): Promise<ScrollPosition>;
+  /** Serves `base` (default branch when unset) of the repo at `cwd` for `threadId`; resolves once its dev server listens. */
+  compareStart(threadId: string, cwd: string, base?: string): Promise<CompareBase>;
+  /** Stops the server and removes the temporary worktree `compareStart` made. */
+  compareStop(threadId: string): Promise<void>;
   onEvent(listener: (event: BrowserEvent) => void): () => void;
 }
 
@@ -124,5 +146,9 @@ export const browserMethods = {
   logs: 'invoke',
   eval: 'invoke',
   waitFor: 'invoke',
+  autoReload: 'invoke',
+  scroll: 'invoke',
+  compareStart: 'invoke',
+  compareStop: 'invoke',
   onEvent: 'event',
 } satisfies Manifest<BrowserHost>;

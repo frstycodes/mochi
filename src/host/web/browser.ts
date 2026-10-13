@@ -40,6 +40,14 @@ export const browser: BrowserHost = {
   async waitFor() {
     throw new Error('Driving the browser needs the desktop app');
   },
+  async autoReload() {},
+  async scroll() {
+    return { x: 0, y: 0 };
+  },
+  async compareStart() {
+    throw new Error('Comparing branches needs the desktop app');
+  },
+  async compareStop() {},
   onEvent() {
     return () => {};
   },

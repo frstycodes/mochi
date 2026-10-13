@@ -5,11 +5,13 @@ import { app } from 'electron';
 import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentReviewEvent, AgentReviewRequest, AgentRunOptions, StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
-import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
+import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
-import { secondOpinionModel } from '../agents/config.ts';
+import { accountFor, secondOpinionModel } from '../agents/config.ts';
+import { limitsOf, recordLimits } from '../agents/limits.ts';
+import { claudeUsageWindows } from '../../src/usage/limits.ts';
 import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
@@ -42,6 +44,14 @@ function images(value: unknown) {
   }
 }
 
+const MAX_SKILLS = 16;
+
+function skillNames(value: unknown) {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length > MAX_SKILLS) throw new TypeError(`skills must be an array of up to ${MAX_SKILLS}`);
+  for (const v of value) string(v, 'skill', 256);
+}
+
 // Threads without a Claude or Codex session run on the renderer's demo adapter.
 const runtime = notImplemented('agent runtime');
 const broadcast = emitAgentEvent;
@@ -57,6 +67,7 @@ const codex = new CodexAdapter(
   undefined,
   codexUrl,
 );
+codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 
@@ -64,13 +75,14 @@ export const agent = {
   async start(_sender, threadId, options) {
     return startAgent(threadId, options);
   },
-  async send(_sender, threadId, text, pictures) {
+  async send(_sender, threadId, text, pictures, skills) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
     images(pictures);
+    skillNames(skills);
     markBusy(threadId as string);
     if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined);
-    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined);
+    if (codex.owns(threadId as string)) return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined);
     return runtime();
   },
   async interrupt(_sender, threadId) {
@@ -80,15 +92,7 @@ export const agent = {
     return runtime();
   },
   async resolve(_sender, requestId, decision) {
-    string(requestId, 'requestId', 256);
-    const d = record(decision, 'decision');
-    if (!DECISIONS.includes(d.kind as string)) throw new TypeError('decision.kind must be allow, deny or answer');
-    if (d.kind === 'answer' && (!Array.isArray(d.answers) || d.answers.some((a) => typeof a !== 'string'))) throw new TypeError('decision.answers must be strings');
-    if (d.kind === 'deny' && d.message !== undefined) string(d.message, 'decision.message', 4096);
-    if (resolveClaude(requestId as string, d as unknown as AgentDecision)) return;
-    for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
-    if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d as unknown as AgentDecision);
-    return runtime();
+    return resolveRequest(requestId, decision);
   },
   async stop(_sender, threadId) {
     string(threadId, 'threadId', 256);
@@ -110,6 +114,12 @@ export const agent = {
   async models(_sender, provider, spaceId) {
     if (!PROVIDERS.includes(provider as string)) throw new TypeError('provider must be claude or codex');
     return models(codex, provider as Provider, string(spaceId, 'spaceId', 256));
+  },
+  async limits(_sender, provider, spaceId, refresh) {
+    if (!PROVIDERS.includes(provider as string)) throw new TypeError('provider must be claude or codex');
+    string(spaceId, 'spaceId', 256);
+    if (refresh) await refreshLimits(provider as Provider, spaceId as string).catch((error) => console.warn(`Could not read ${provider as Provider} limits`, error));
+    return limitsOf((await accountFor(spaceId as string, provider as Provider)).account.id, provider as Provider);
   },
   async rewindFiles(_sender, threadId, text) {
     string(threadId, 'threadId', 256);
@@ -189,6 +199,19 @@ export const agent = {
   },
 } satisfies Handlers<AgentHost>;
 
+/** Answers a pending approval or question, from the renderer or a notification's buttons. */
+export async function resolveRequest(requestId: unknown, decision: unknown) {
+  string(requestId, 'requestId', 256);
+  const d = record(decision, 'decision');
+  if (!DECISIONS.includes(d.kind as string)) throw new TypeError('decision.kind must be allow, deny or answer');
+  if (d.kind === 'answer' && (!Array.isArray(d.answers) || d.answers.some((a) => typeof a !== 'string'))) throw new TypeError('decision.answers must be strings');
+  if (d.kind === 'deny' && d.message !== undefined) string(d.message, 'decision.message', 4096);
+  if (resolveClaude(requestId as string, d as unknown as AgentDecision)) return;
+  for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
+  if (codex.ownsRequest(requestId as string)) return codex.resolve(requestId as string, d as unknown as AgentDecision);
+  return runtime();
+}
+
 /** Starts a thread's agent from options the renderer (or the scheduler) built; both go through the same checks. */
 export async function startAgent(threadId: unknown, options: unknown) {
   string(threadId, 'threadId', 256);
@@ -200,6 +223,7 @@ export async function startAgent(threadId: unknown, options: unknown) {
   if (o.useApiKey !== undefined && typeof o.useApiKey !== 'boolean') throw new TypeError('options.useApiKey must be a boolean');
   if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
   images(o.images);
+  skillNames(o.skills);
   const { workspace, worktree, ...rest } = o;
   const folder = await agentFolder(threadId as string, o.cwd);
   const cwd = await workspaceFolder(threadId as string, folder, startWorkspace(workspace, worktree));
@@ -212,6 +236,22 @@ export async function startAgent(threadId: unknown, options: unknown) {
     markIdle(threadId as string);
     throw error;
   }
+}
+
+// Claude's read starts a Claude Code process, so a hover reads at most once a minute per profile.
+const REFRESH_MS = 60_000;
+const refreshedAt = new Map<string, number>();
+
+async function refreshLimits(provider: Provider, spaceId: string) {
+  const key = `${provider}:${spaceId}`;
+  if (Date.now() - (refreshedAt.get(key) ?? 0) < REFRESH_MS) return;
+  refreshedAt.set(key, Date.now());
+  if (provider === 'codex') {
+    const { accountId, windows } = await codex.readLimits(spaceId);
+    return recordLimits(accountId, 'codex', windows, true);
+  }
+  const read = await claudeLimits(spaceId);
+  if (read) await recordLimits(read.accountId, 'claude', claudeUsageWindows(read.rateLimits), true);
 }
 
 /** The model and effort a run sends: always an explicit model the account offers. A list that can't be read passes the choice through; the run then reports the provider's own error. */

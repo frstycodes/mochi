@@ -39,7 +39,7 @@ export const BROWSER_TOOLS = {
         const { key, page } = await live(ctx, existing);
         env.pages.update(key, { url, error: null });
         await env.browser.navigate(page.hostId!, url);
-      } else dispatch({ type: 'pane-open-tab', threadId: caller.id, kind: 'browser', url, isQuiet: true });
+      } else dispatch({ type: 'pane-open-tab', threadId: caller.id, kind: 'browser', url, isBackground: true });
       const tab = existing || browserTabs(ctx).at(-1)!;
       const { key } = await live(ctx, tab);
       const page = await loaded(ctx, key);

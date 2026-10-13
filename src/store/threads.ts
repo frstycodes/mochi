@@ -1,5 +1,6 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Step, type StepStatus, type Thread } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Source, type Step, type StepStatus, type Thread } from '../model.ts';
+import { sourcePrompt } from '../sources.ts';
 import { hasGoal, isConcrete, KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
@@ -10,6 +11,7 @@ import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
+import { contextMax } from '../runtime/models.ts';
 import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
@@ -54,7 +56,9 @@ export type ThreadsAction =
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
   | { type: 'resume'; threadId: string; onApiKey?: boolean }
   /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers. */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[] }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; skills?: string[] }
+  /** A link or file you added in the summary; a live agent is told in a message of yours. */
+  | { type: 'source-add'; threadId: string; source: Source }
   | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
   | { type: 'drift-new-thread'; threadId: string; prompt: string; branchFrom: 'current' | 'base' }
   | { type: 'drift-settings'; threadId: string; isMuted: boolean }
@@ -140,6 +144,8 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, '', t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':
       return send(state, action);
+    case 'source-add':
+      return addSource(state, action);
     case 'controls':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, controls: action.controls })) };
     case 'resume':
@@ -331,7 +337,6 @@ function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State
       line: freeLine(state.threads.filter((t) => t.spaceId === owner.spaceId)),
       startedAt: now,
       revisions: [{ n: 1, at: now, label: 'Extracted from 2 threads', by: 'harness' }],
-      skills: [],
       sources: owner.sources.filter((src) => src.kind === 'link'),
       context: { used: 12_000, max: 200_000 },
       steps: [{ ...ownerStep, id: `${ownerStep.id}-x`, addedAt: now, startedAt: now, addedBy: 'harness', revision: 1, sharedKey: key, link: { mode: 'provides-for', threadIds: [otherThreadId, threadId] }, note: undefined }],
@@ -396,12 +401,11 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
       { at: now, who: 'you', kind: 'message', text: action.title },
     ],
     prs: [],
-    skills: [],
     sources: [],
-    context: { used: isLive ? 0 : 4_000, max: action.provider === 'codex' ? 272_000 : 200_000 },
+    context: { used: isLive ? 0 : 4_000, max: contextMax(action.provider) },
     controls: action.controls,
   };
-  if (isLive) thread.live = { isWorking: true, usage: [], cwd: threadCwd(thread) ?? undefined };
+  if (isLive) thread.live = { isWorking: true, cwd: threadCwd(thread) ?? undefined };
   // Detached: a message before the first run starts the agent the way a restored thread does.
   if (isLive && action.schedule) {
     thread.live = { ...thread.live!, isWorking: false, isDetached: true };
@@ -454,6 +458,14 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
       return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
     }),
   };
+}
+
+function addSource(state: State, action: Extract<Action, { type: 'source-add' }>): State {
+  const thread = state.threads.find((t) => t.id === action.threadId);
+  if (!thread || thread.sources.some((s) => s.label === action.source.label)) return state;
+  const added = { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, sources: [...t.sources, action.source] })) };
+  if (thread.live) return send(added, { type: 'send', threadId: action.threadId, text: sourcePrompt(action.source), reason: '' });
+  return { ...added, threads: mapThread(added.threads, action.threadId, (t) => log(t, { at: state.now, who: 'harness', kind: 'event', text: `Added source ${action.source.label}` })) };
 }
 
 const titleFrom = (text: string) => (text.length > 48 ? `${text.slice(0, 47)}…` : text);

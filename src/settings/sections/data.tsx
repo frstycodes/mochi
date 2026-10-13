@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { PINS_STORAGE_KEY, replaceAllPins, useAllPins } from '../../chat/pins';
 import { useConfirm } from '../../git/useConfirm';
 import { host } from '../../host';
+import { forgetAllReplays } from '../../replay/recorder';
 import { useHarness } from '../../store';
 import { SIDECHAT_STORAGE_KEY } from '../../store/sidechat';
 import { clearTerminalHistory, TERMINAL_STORAGE_PREFIX } from '../../terminal/sessions';
@@ -18,7 +19,8 @@ export function DataSection() {
   const { state, dispatch } = useHarness();
   const { confirm, dialog } = useConfirm();
   const { usage, remeasure } = useStorageUsage();
-  const { demoData } = usePrefs();
+  const { demoData, recordReplays } = usePrefs();
+  const replays = useReplayUsage();
 
   const clearPins = () => {
     const previous = replaceAllPins({});
@@ -33,6 +35,19 @@ export function DataSection() {
     clearTerminalHistory();
     remeasure();
     toast('Terminal history cleared', { description: 'Open shells keep running.' });
+  };
+  const clearReplays = async () => {
+    const isConfirmed = await confirm({
+      title: 'Delete every replay recording?',
+      description: 'Threads stay as they are, but Replay can only show what they do from now on.',
+      confirm: 'Delete recordings',
+      cancel: 'Keep recordings',
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    forgetAllReplays();
+    await host.data.clearReplays().catch((error: unknown) => toast.error('Couldn’t delete the recordings', { description: String(error) }));
+    replays.remeasure();
   };
   const clearEverything = async () => {
     const isConfirmed = await confirm({
@@ -61,6 +76,14 @@ export function DataSection() {
           <SettingsRow id="demoData" label="Show demo data" control={<Switch id={settingControlId('demoData')} checked={demoData} onCheckedChange={setDemoData} />} />
         </SettingsGroup>
       )}
+      <SettingsGroup
+        id="replay"
+        title="Replay"
+        footer="Each of your threads keeps its agent's events, with your messages and answers, so Replay can rebuild it step by step. Up to 8 MB per thread; turning this off keeps what's already recorded."
+      >
+        <SettingsRow id="recordReplays" label="Record threads for replay" control={<Switch id={settingControlId('recordReplays')} checked={recordReplays} onCheckedChange={(isOn) => setPrefs({ recordReplays: isOn })} />} />
+        <ClearRow id="clearReplays" label="Recordings" area={replays.usage} onClear={() => void clearReplays()} />
+      </SettingsGroup>
       <SettingsGroup id="storage" title="Stored on this computer" footer={`${formatBytes(usage.total)} in all. Pins and side chats can be undone right after clearing.`}>
         <ClearRow id="clearPins" label="Pins" area={usage.pins} onClear={clearPins} />
         <ClearRow id="clearSideChats" label="Side chats" area={usage.sidechats} onClear={clearSideChats} />
@@ -166,6 +189,16 @@ function useStorageUsage() {
   } catch {}
   usage.total += usage.pins.bytes + usage.sidechats.bytes;
   return { usage, remeasure: () => setRevision((r) => r + 1) };
+}
+
+/** Recordings live in main's data folder, not local storage; read again after clearing. */
+function useReplayUsage() {
+  const [usage, setUsage] = useState({ threads: 0, bytes: 0 });
+  const remeasure = useCallback(() => {
+    host.data.replayUsage().then(setUsage, (error: unknown) => console.error('Reading replay storage failed', error));
+  }, []);
+  useEffect(remeasure, [remeasure]);
+  return { usage: { items: usage.threads, bytes: usage.bytes, noun: noun('thread', 'threads') } satisfies Area, remeasure };
 }
 
 function terminalCount(raw: string): number {

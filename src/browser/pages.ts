@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { host } from '@/host';
-import type { BrowserDevtools, BrowserEmulation } from '@/host/types/browser';
+import type { BrowserDevtools, BrowserEmulation, CompareBase } from '@/host/types/browser';
 import { DEVICES, RESPONSIVE } from './devices';
 import { pushHistory } from './url';
 
@@ -10,6 +10,8 @@ export interface ConsoleEntry {
   source: string;
   line: number;
 }
+
+export type CompareState = { mode: 'split' | 'slider' } & ({ status: 'starting' } | { status: 'ready'; base: CompareBase } | { status: 'error'; message: string });
 
 /** One browser tab's page. Lives outside React so it survives tab switches, splits and pop-outs. */
 export interface Page {
@@ -33,6 +35,10 @@ export interface Page {
   isPicking: boolean;
   hasTakenOver: boolean;
   reloads: number;
+  isAutoReloading: boolean;
+  /** A capture waiting in the annotation editor, as a PNG data URL. */
+  annotating: { image: string; name: string } | null;
+  compare: CompareState | null;
 }
 
 const CONSOLE_LIMIT = 50;
@@ -45,6 +51,9 @@ let openListener: ((key: string, url: string) => void) | null = null;
 let history = loadHistory();
 
 export const pageKey = (threadId: string, tabId: string) => `${threadId}/${tabId}`;
+/** The base branch's page in a before/after compare lives beside its tab's page and goes with it. */
+export const basePageKey = (key: string) => `${key}~base`;
+export const tabPageKey = (key: string) => key.split('~')[0];
 
 export function usePage(key: string, url: string) {
   return useSyncExternalStore(subscribe, () => pages.get(key) ?? seed(key, url));
@@ -99,8 +108,13 @@ export async function ensureView(key: string, spaceId: string) {
 const creating = new Set<string>();
 
 export function destroyPage(key: string) {
-  const id = pages.get(key)?.hostId;
+  const page = pages.get(key);
+  const id = page?.hostId;
   pages.delete(key);
+  if (page?.compare) {
+    destroyPage(basePageKey(key));
+    void host.browser.compareStop(key.split('/')[0]);
+  }
   if (id) {
     byHostId.delete(id);
     void host.browser.destroy(id);
@@ -181,6 +195,9 @@ function seed(key: string, url: string): Page {
     isPicking: false,
     hasTakenOver: false,
     reloads: 0,
+    isAutoReloading: false,
+    annotating: null,
+    compare: null,
   };
   // Seeding inside a getSnapshot must return the same object every call until it changes.
   pages.set(key, page);

@@ -501,6 +501,17 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-festive-gauss-02abb9/85d15694-fc1c-4e47-b798-b15f22ed90fb/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-pane-extras",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5481",
+        "--strictPort"
+      ],
+      "port": 5481
     }
   ]
 }

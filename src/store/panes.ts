@@ -1,4 +1,4 @@
-import { PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind } from '../model.ts';
+import { PANE_TAB_KINDS, seedPanes, type Pane, type PaneTab, type PaneTabKind, type PaneVisual } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { showsDemoData } from '../demoData.ts';
 import { runningBackground } from '../runtime/subagents.ts';
@@ -9,9 +9,11 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  /** `isQuiet` adds the tab without opening the pane or switching to it: the agent's browser floats instead. */
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; isQuiet?: boolean }
+  /** `isPopped` adds it as a floating window, `isBackground` as a docked tab; both leave the pane and its selection as they are (a thread with no pane gets a closed one). */
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean; isBackground?: boolean }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
+  /** The thread's docked tab of this kind, selected with the pane open; a new one when there is none. */
+  | { type: 'pane-show-tab'; threadId: string; kind: PaneTabKind }
   | { type: 'pane-close-tab'; threadId: string; tabId: string }
   | { type: 'pane-close-tabs'; threadId: string; tabIds: string[] }
   | { type: 'pane-restore'; pane: Pane }
@@ -41,13 +43,30 @@ export function panesReducer(state: State, action: Action): State {
       const thread = state.threads.find((t) => t.id === action.threadId);
       const current = state.panes.find((p) => p.threadId === action.threadId);
       const existing = current ?? newPane(action.threadId);
-      const tab: PaneTab = { id: nextTabId(existing.tabs), kind: action.kind, url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined), file: action.file, title: action.file?.path.split('/').pop() };
+      const tab: PaneTab = {
+        id: nextTabId(existing.tabs),
+        kind: action.kind,
+        url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined),
+        file: action.file,
+        title: action.title ?? action.file?.path.split('/').pop(),
+        ...(action.visual && { visual: action.visual }),
+      };
+      if (action.isPopped) return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), { ...existing, tabs: [...existing.tabs, { ...tab, isPopped: true }] }] };
+      if (action.isBackground) {
+        const pane = current ? { ...current, tabs: [...current.tabs, tab] } : { threadId: action.threadId, isOpen: false, tabs: [tab], activeTab: tab.id };
+        return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
+      }
       const tabs = existing.tabs.flatMap((t) => (t.kind !== 'new' ? [t] : t.id === existing.activeTab ? [tab] : []));
-      const nextTabs = tabs.includes(tab) ? tabs : [...tabs, tab];
-      const keepsActive = action.isQuiet && nextTabs.some((t) => t.id === existing.activeTab);
-      const pane = { ...existing, isOpen: action.isQuiet ? !!current?.isOpen : true, tabs: nextTabs, activeTab: keepsActive ? existing.activeTab : tab.id };
+      const pane = { ...existing, isOpen: true, tabs: tabs.includes(tab) ? tabs : [...tabs, tab], activeTab: tab.id };
       return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
     }
+    case 'pane-show-tab': {
+      const tab = state.panes.find((p) => p.threadId === action.threadId)?.tabs.find((t) => t.kind === action.kind && !t.isPopped);
+      if (!tab) return panesReducer(state, { type: 'pane-open-tab', threadId: action.threadId, kind: action.kind });
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: tab.id })) };
+    }
+    case 'layout-return-tab':
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: action.tabId })) };
     case 'pane-select-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, activeTab: action.tabId })) };
     case 'pane-drive':

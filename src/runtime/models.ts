@@ -12,6 +12,18 @@ export const CLAUDE_FALLBACK_MODELS: AgentModel[] = [
 
 const EFFORT_NAMES: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
 
+/** Efforts cheapest first; -1 for one Mochi doesn't know. */
+export const effortRank = (effort: string) => Object.keys(EFFORT_NAMES).indexOf(effort);
+
+// GAP: only Claude's families are ranked; a Codex model other than the default reads as unranked, so the ceiling refuses it.
+const CLAUDE_FAMILIES = ['haiku', 'sonnet', 'opus'];
+
+/** A model's cost tier, cheapest 0; undefined when Mochi can't rank it. */
+export function modelTier(id: string) {
+  const tier = CLAUDE_FAMILIES.findIndex((family) => id.includes(family));
+  return tier < 0 ? undefined : tier;
+}
+
 export const effortName = (effort: string) => EFFORT_NAMES[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1);
 
 /** Threads and prefs saved before efforts came from the provider hold the chip's label ('Extra high'). */
@@ -21,6 +33,9 @@ export const effortId = (effort: string) => Object.keys(EFFORT_NAMES).find((id) 
 const LEGACY_MODELS: Record<string, string> = { 'opus-5.5': 'claude-opus-5-5', 'sonnet-5.5': 'claude-sonnet-5-5', 'haiku-5.5': 'claude-haiku-5-5' };
 
 export const modelId = (id: string) => LEGACY_MODELS[id] ?? id;
+
+/** A context window to show before the agent reports its model's own (`usage` events carry `contextMax`). */
+export const contextMax = (provider: Provider) => (provider === 'codex' ? 272_000 : 200_000);
 
 export const defaultModelOf = (models: AgentModel[]) => models.find((m) => m.isDefault) ?? models[0];
 

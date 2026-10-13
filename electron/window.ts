@@ -6,7 +6,7 @@ import path from 'node:path';
 const background = () => (nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9');
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
+export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json');
 
 export const isTrustedUrl = (url: string) =>

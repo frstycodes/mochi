@@ -1,6 +1,8 @@
 import { isAbsolute } from 'node:path';
 import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
-import { actOnView, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { startCompare, stopCompare } from '../browser/compare.ts';
+import { resolveCwd } from '../pty/cwd.ts';
+import { actOnView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 // Under main's 30s limit for one Mochi call.
@@ -67,7 +69,26 @@ export const browser = {
     const optional = (v: unknown, name: string) => (v === undefined ? undefined : string(v, name, 2048));
     return waitForView(sender, viewId(id), { text: optional(u.text, 'text'), selector: optional(u.selector, 'selector'), url: optional(u.url, 'url'), timeoutMs: number(u.timeoutMs, 'timeoutMs', 0, MAX_WAIT_MS) });
   },
+  async autoReload(sender, id, root) {
+    setAutoReload(sender, viewId(id), root === null ? null : resolveCwd(root));
+  },
+  async scroll(sender, id, to) {
+    const pos = to === null ? null : record(to, 'to');
+    return scrollView(sender, viewId(id), pos && { x: number(pos.x, 'x', 0, 1e7), y: number(pos.y, 'y', 0, 1e7) });
+  },
+  async compareStart(_sender, threadId, cwd, base) {
+    return startCompare(threadKey(threadId), resolveCwd(cwd), base === undefined ? undefined : string(base, 'base', 255));
+  },
+  async compareStop(_sender, threadId) {
+    await stopCompare(threadKey(threadId));
+  },
 } satisfies Handlers<BrowserHost>;
+
+function threadKey(value: unknown) {
+  const s = string(value, 'threadId', 64);
+  if (!/^[\w-]+$/.test(s)) throw new TypeError('threadId must be letters, digits, - or _');
+  return s;
+}
 
 function actOf(value: unknown): BrowserAct {
   const a = record(value, 'act');

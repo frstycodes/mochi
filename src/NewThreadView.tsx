@@ -11,13 +11,15 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
-import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, RunOnMenu, handOffComposer, newComposerLayoutId } from './Composer';
+import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
 import { host } from './host';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
+import { contextMax } from './runtime/models';
+import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
 import { toast } from 'sonner';
 import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
@@ -59,8 +61,9 @@ function NewThread() {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
+  const spaceId = useSpace().id;
   // /side needs a thread to ask about.
-  const slashItems = useSlashItems(provider, useSpace().id).filter((i) => i.source !== 'mochi');
+  const slashItems = useSlashItems(provider, spaceId).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
@@ -132,6 +135,7 @@ function NewThread() {
               {...slash.textareaProps}
               onSend={start}
               submitLabel={submitLabel(run, !!linked)}
+              meter={<ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
               placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
             />
           </ComposerCard>
@@ -140,7 +144,6 @@ function NewThread() {
           <ProjectPicker value={project} onChange={changeProject} />
           {!!project && <WorkspaceControls workspace={workspace} />}
           <RunMenu value={run} onChange={setRun} />
-          {!!project && <RunOnMenu />}
           {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
         {!!project && <WorkspaceNotes workspace={workspace} />}

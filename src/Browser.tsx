@@ -4,9 +4,11 @@ import { animate, motion, useDragControls, useMotionValue, type PanInfo } from '
 import { ChevronLeft, ChevronRight, ExitPip, X } from 'reicon-react';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
+import { Annotator } from './browser/Annotate';
+import { ComparePane } from './browser/Compare';
 import { RESPONSIVE } from './browser/devices';
 import { deviceSize, PageSurface, useSize } from './browser/PageSurface';
-import { destroyPage, ensureView, getPage, onOpenTab, pageKey, pageKeys, usePage, viewportOf, type Page } from './browser/pages';
+import { destroyPage, ensureView, getPage, onOpenTab, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
 import { BrowserToolbar, DeviceBar, DriveBar } from './browser/Toolbar';
 import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
@@ -39,7 +41,13 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
       {page.device !== RESPONSIVE && <DeviceBar pageId={pageId} page={page} />}
       {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} />}
       <div className="min-h-0 flex-1">
-        <PageSurface thread={thread} pageId={pageId} page={page} isDriving={isDriving && !page.hasTakenOver} />
+        {page.annotating ? (
+          <Annotator thread={thread} pageId={pageId} image={page.annotating.image} name={page.annotating.name} />
+        ) : page.compare ? (
+          <ComparePane thread={thread} pageId={pageId} page={page} compare={page.compare} />
+        ) : (
+          <PageSurface thread={thread} pageId={pageId} page={page} isDriving={isDriving && !page.hasTakenOver} />
+        )}
       </div>
     </div>
   );
@@ -73,7 +81,7 @@ function useBrowserHousekeeping() {
   useEffect(() => {
     const live = new Set(state.panes.flatMap((p) => p.tabs.map((t) => pageKey(p.threadId, t.id))));
     pageKeys()
-      .filter((key) => !live.has(key))
+      .filter((key) => !live.has(tabPageKey(key)))
       .forEach(destroyPage);
   }, [state.panes]);
 }
@@ -207,7 +215,7 @@ function PipWindow({ thread, pane, tab, bounds }: { thread: Thread; pane: Pane; 
     <motion.section
       aria-label={`Floating ${tabTitle(tab)}`}
       // A pause before dragging shouldn't open Orbit's long-press menu.
-      data-drag-surface
+      data-no-orbit
       data-tucked={isTucked || undefined}
       drag
       dragControls={controls}

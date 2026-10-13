@@ -100,7 +100,6 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread' },
       { id: 'permissions', label: 'Permissions', keywords: 'manual ask auto edit full access bypass plan' },
-      { id: 'runsOn', label: 'Runs on', keywords: 'device machine cloud sandbox' },
       { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
@@ -200,6 +199,8 @@ export const SETTINGS_SECTIONS = [
     component: DataSection,
     settings: [
       { id: 'demoData', label: 'Show demo data', keywords: 'sample example fixture threads prototype' },
+      { id: 'recordReplays', label: 'Record threads for replay', keywords: 'replay recording session playback demo debug events' },
+      { id: 'clearReplays', label: 'Clear replay recordings', keywords: 'replay recording delete disk space' },
       { id: 'storage', label: 'Storage used', keywords: 'disk space size' },
       { id: 'clearPins', label: 'Clear pins', keywords: 'reset delete' },
       { id: 'clearSideChats', label: 'Clear side chats', keywords: 'reset delete' },

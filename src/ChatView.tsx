@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { ContextRing } from './ContextRing';
+import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { ChevronDown, ChevronUp } from 'reicon-react';
@@ -34,7 +36,7 @@ import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
 import { parseSlash, resolveToken, type SlashItem } from './chat/slash';
-import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
+import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
 import { withReferences } from './chat/mentions';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
@@ -43,7 +45,8 @@ import { controlsOf } from './runtime/controls';
 import { QUEUED_PREFIX } from './runtime/live';
 import { SubagentRow } from './agents/SubagentRow';
 
-export function ChatView({ thread }: { thread: Thread }) {
+/** `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread. */
+export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: boolean }) {
   const { state } = useHarness();
   const rows = chatRows(thread.activity, thread.reviews);
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
@@ -65,7 +68,7 @@ export function ChatView({ thread }: { thread: Thread }) {
   const slashItems = useSlashItems(thread.providers[0], thread.spaceId, thread.agent);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col" style={isReadOnly ? ({ '--composer-h': '0px' } as React.CSSProperties) : undefined}>
       {/* Instant while opening: a thread opens at its latest message, and a Stage swipe lands on the live view already where the preview was. */}
       <Conversation data-photo-scope initial="instant" resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
@@ -73,7 +76,7 @@ export function ChatView({ thread }: { thread: Thread }) {
             <div ref={messages} className="contents">
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
+                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
@@ -81,18 +84,20 @@ export function ChatView({ thread }: { thread: Thread }) {
           </ConversationContent>
         </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
-        <SelectionPin threadId={thread.id} scope={messages} />
+        {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
         <ThreadMinimap items={outline(rows, pins)} className="absolute top-6 left-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
-        <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />
+        {!isReadOnly && <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />}
       </Conversation>
-      <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
-        <PromptInputProvider key={thread.id}>
-          <ImageDropTarget>
-            <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
-          </ImageDropTarget>
-          <ComposerInbox threadId={thread.id} />
-        </PromptInputProvider>
-      </div>
+      {!isReadOnly && (
+        <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
+          <PromptInputProvider key={thread.id}>
+            <ImageDropTarget>
+              <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
+            </ImageDropTarget>
+            <ComposerInbox threadId={thread.id} />
+          </PromptInputProvider>
+        </div>
+      )}
     </div>
   );
 }
@@ -112,8 +117,8 @@ function useComposerHeightVar() {
 }
 
 // isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ thread, row, slashItems, isLive, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; action?: CurrentAction }) {
-  if (row.kind === 'work') return <WorkLog entries={row.entries} action={isLive ? action : undefined} />;
+function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; action?: CurrentAction }) {
+  if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'subagent') {
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
@@ -124,29 +129,33 @@ function ChatRowView({ thread, row, slashItems, isLive, action }: { thread: Thre
   const { entry } = row;
   const isYou = entry.who === 'you';
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
+  const message = (
+    <div data-activity-index={row.index} data-file-scope className="group/row flex flex-col gap-1">
+      <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
+        <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
+          {isAgent && row.showAuthor && (
+            <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
+              <ProviderMark provider={entry.who as Provider} size={14} />
+              {authorName(entry.who)}
+              <span className="tabular">{clock(entry.at)}</span>
+            </span>
+          )}
+          {isYou && resolveToken(entry.text, slashItems) ? (
+            <SlashTokenText text={entry.text} items={slashItems} />
+          ) : (
+            <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
+              {entry.text}
+            </MessageResponse>
+          )}
+        </MessageContent>
+      </Message>
+      {!isReadOnly && <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
+    </div>
+  );
+  if (isReadOnly) return message;
   return (
     <MessageContextMenu thread={thread} index={row.index}>
-      <div data-activity-index={row.index} data-file-scope className="group/row flex flex-col gap-1">
-        <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
-          <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
-            {isAgent && row.showAuthor && (
-              <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
-                <ProviderMark provider={entry.who as Provider} size={14} />
-                {authorName(entry.who)}
-                <span className="tabular">{clock(entry.at)}</span>
-              </span>
-            )}
-            {isYou && resolveToken(entry.text, slashItems) ? (
-              <SlashTokenText text={entry.text} items={slashItems} />
-            ) : (
-              <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
-                {entry.text}
-              </MessageResponse>
-            )}
-          </MessageContent>
-        </Message>
-        <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />
-      </div>
+      {message}
     </MessageContextMenu>
   );
 }
@@ -234,10 +243,11 @@ function Composer({
   const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
-  const mention = useMentionMenu(thread);
+  const mention = useMentionMenu(thread, useThreadSkills(provider, thread.spaceId, thread.agent), useThreadServers(provider, thread.spaceId, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
   const slash = useSlashMenu(slashItems);
-  const menuProps = mention.isOpen ? mention.textareaProps : slash.textareaProps;
+  // Slash tracks the caret always; the open menu owns the listbox attributes.
+  const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
   useSeedAttachment(thread.id === 'adm');
 
   return (
@@ -259,13 +269,14 @@ function Composer({
               slashItems={slashItems}
               onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
               submitLabel={isQueue ? 'Queue message' : 'Send'}
+              meter={<ContextRing provider={provider} spaceId={thread.spaceId} context={thread.context} usage={threadUsage(thread)} />}
               onSend={({ text, files }) => {
                 const trimmed = text.trim();
                 if (!trimmed && files.length === 0 && mention.mentions.length === 0) return;
                 const command = parseSlash(trimmed);
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
                 const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, !!resolveToken(trimmed, slashItems));
+                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, !!resolveToken(trimmed, slashItems), provider);
                 return drift.submit(shown, isQueue ? QUEUED_PREFIX : '', references);
               }}
               placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}

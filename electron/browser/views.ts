@@ -5,6 +5,7 @@ import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDev
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
 import { clickScript, focusScript, hoverScript, locateScript, markScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
 import { evalResult, EVAL_TIMEOUT_MS, withTimeout, type CdpEvaluate } from './evaluate.ts';
+import { HMR_GRACE_MS, isHmrLog, READ_SCROLL_SCRIPT, restoreScrollScript, ScrollMemory, watchTree, type ScrollPos } from './reload.ts';
 
 interface Entry {
   view: WebContentsView;
@@ -17,6 +18,13 @@ interface Entry {
   devtools: WebContentsView | null;
   error: string | null;
   logs: BrowserLog[];
+  stopAutoReload: (() => void) | null;
+  scroll: ScrollMemory;
+  /** Epoch ms of the last main-frame load start and the last HMR log, to tell whether the dev server handled a change itself. */
+  loadedAt: number;
+  hmrAt: number;
+  /** Scroll polling pauses while a restore settles, or it would record the top of the freshly loaded page. */
+  holdScrollUntil: number;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -34,6 +42,8 @@ const MAX_CAPTURE_HEIGHT = 16384;
 const MIRROR_MAX_WIDTH = 960;
 const MIRROR_INTERVAL_MS = 100;
 const MIRROR_QUALITY = 70;
+const SCROLL_POLL_MS = 300;
+const SCROLL_HOLD_MS = 2500;
 
 const views = new Map<string, Entry>();
 const hardenedSessions = new Set<string>();
@@ -57,12 +67,15 @@ export function createView(owner: WebContents, url: string, spaceId: string) {
     webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
   });
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [] };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0 };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
   wire(id, entry);
-  win.once('closed', () => views.delete(id));
+  win.once('closed', () => {
+    entry.stopAutoReload?.();
+    views.delete(id);
+  });
   void view.webContents.loadURL(url);
   return { id };
 }
@@ -71,6 +84,7 @@ export function destroyView(owner: WebContents, id: string) {
   const entry = get(owner, id);
   stopMirror(entry);
   views.delete(id);
+  entry.stopAutoReload?.();
   closeDevtools(entry);
   entry.win.contentView.removeChildView(entry.view);
   entry.view.webContents.close();
@@ -129,6 +143,44 @@ async function sendFrame(id: string, entry: Entry) {
 function stopMirror(entry: Entry) {
   if (entry.mirror?.timer) clearTimeout(entry.mirror.timer);
   entry.mirror = null;
+}
+
+/**
+ * Watches `root` (the thread's worktree) and reloads the page when a file changes and the dev server didn't hot-reload or reload
+ * it within the grace period; every load of the same URL gets its scroll position back. `null` stops.
+ */
+export function setAutoReload(owner: WebContents, id: string, root: string | null) {
+  const entry = get(owner, id);
+  entry.stopAutoReload?.();
+  entry.stopAutoReload = null;
+  if (!root) return;
+  const wc = entry.view.webContents;
+  let isOn = true;
+  const poll = setInterval(() => void rememberScroll(entry), SCROLL_POLL_MS);
+  const stopWatch = watchTree(root, (since) =>
+    setTimeout(() => {
+      if (isOn && !wc.isDestroyed() && entry.loadedAt < since && entry.hmrAt < since) wc.reload();
+    }, HMR_GRACE_MS),
+  );
+  entry.stopAutoReload = () => {
+    isOn = false;
+    clearInterval(poll);
+    stopWatch();
+  };
+}
+
+async function rememberScroll(entry: Entry) {
+  const wc = entry.view.webContents;
+  if (wc.isDestroyed() || wc.isLoading() || Date.now() < entry.holdScrollUntil) return;
+  const pos = (await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: READ_SCROLL_SCRIPT }]).catch(() => null)) as ScrollPos | null;
+  if (pos) entry.scroll.remember(wc.getURL(), pos);
+}
+
+/** Reads the page's scroll position, after moving it to `to` when given. */
+export async function scrollView(owner: WebContents, id: string, to: ScrollPos | null): Promise<ScrollPos> {
+  const wc = get(owner, id).view.webContents;
+  const code = to ? `(scrollTo(${to.x}, ${to.y}), ${READ_SCROLL_SCRIPT})` : READ_SCROLL_SCRIPT;
+  return (await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code }])) as ScrollPos;
 }
 
 export function setViewZoom(owner: WebContents, id: string, factor: number) {
@@ -374,7 +426,16 @@ function wire(id: string, entry: Entry) {
     });
 
   // Before `state` so the new load reports no stale error.
-  wc.on('did-start-loading', () => (entry.error = null));
+  wc.on('did-start-loading', () => {
+    entry.error = null;
+    entry.loadedAt = Date.now();
+  });
+  wc.on('did-finish-load', () => {
+    const pos = entry.stopAutoReload && entry.scroll.take(wc.getURL());
+    if (!pos) return;
+    entry.holdScrollUntil = Date.now() + SCROLL_HOLD_MS;
+    void wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: restoreScrollScript(pos) }]).catch(() => {});
+  });
   for (const name of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(name as 'did-start-loading', state);
   wc.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     if (!isMainFrame || code === ERR_ABORTED) return;
@@ -386,6 +447,7 @@ function wire(id: string, entry: Entry) {
   wc.on('console-message', ({ level, message, sourceId, lineNumber }) => {
     // Electron logs its own dev-only security warnings into every page; they're not the page's.
     if (sourceId.startsWith('node:electron/')) return;
+    if (isHmrLog(message)) entry.hmrAt = Date.now();
     entry.logs = [...entry.logs, { level: LOG_LEVELS.includes(level as BrowserLog['level']) ? (level as BrowserLog['level']) : 'info', message, source: sourceId, line: lineNumber }].slice(-LOG_LIMIT);
     if (level === 'error' || level === 'warning') emit({ id, type: 'console', level, message, source: sourceId, line: lineNumber });
   });

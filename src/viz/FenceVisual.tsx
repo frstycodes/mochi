@@ -12,11 +12,13 @@ import { SortableTable } from './SortableTable';
 import { VisualFrame, type VisualSource } from './VisualFrame';
 import { WidgetVisual } from './WidgetVisual';
 import { FileCode } from '../files/FileCode';
+import { ChatLink } from '../chat/ChatLink';
+import { rehypeRefs, rehypeRelativeLinks } from '../chat/rehypeRefs';
 
-/** Streamdown hooks for agent messages: fenced visuals plus table, image and file-path overrides. Widgets need a VizThreadProvider above. */
+/** Streamdown hooks for chat messages: fenced visuals plus table, image, file-path and PR/issue link overrides. Widgets need a VizThreadProvider above. */
 export const VIZ_PLUGINS = { renderers: [{ language: [...VIZ_LANGUAGES], component: FenceVisual }] } satisfies PluginConfig;
 
-export const VIZ_COMPONENTS = { table: SortableTable, img: ImageVisual, inlineCode: FileCode } satisfies Components;
+export const VIZ_COMPONENTS = { table: SortableTable, img: ImageVisual, inlineCode: FileCode, a: ChatLink } satisfies Components;
 
 type SanitizeSchema = { protocols?: Record<string, string[] | undefined> };
 const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, SanitizeSchema];
@@ -26,16 +28,22 @@ const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, SanitizeSc
 export const VIZ_REHYPE_PLUGINS = [
   defaultRehypePlugins.raw,
   [sanitize, { ...schema, protocols: { ...schema.protocols, src: [...(schema.protocols?.src ?? []), 'data'] } }],
+  rehypeRelativeLinks,
   defaultRehypePlugins.harden,
+  // After harden: the links it adds point at refs and paths the chip and path renderers check themselves.
+  rehypeRefs,
 ] as NonNullable<StreamdownProps['rehypePlugins']>;
 
 function FenceVisual({ code, isIncomplete, language, meta }: CustomRendererProps) {
-  const lang = language as VizLanguage;
-  const fence = parseFence(lang, code, isIncomplete);
-  const source = SOURCES[lang](code);
-  if (fence.status === 'pending') return <PendingVisual label={PENDING_LABELS[lang]} />;
-  if (fence.status === 'error') return <BrokenVisual language={lang} code={code} message={fence.message} />;
-  return <ReadyVisual language={lang} spec={fence.spec} source={source} code={code} title={metaTitle(meta)} />;
+  return <VisualContent language={language as VizLanguage} code={code} isIncomplete={isIncomplete} title={metaTitle(meta)} />;
+}
+
+/** One fenced visual from its source: a placeholder while it streams, the source on error. The side pane's visual tabs render it again. */
+export function VisualContent({ language, code, isIncomplete = false, title }: { language: VizLanguage; code: string; isIncomplete?: boolean; title?: string }) {
+  const fence = parseFence(language, code, isIncomplete);
+  if (fence.status === 'pending') return <PendingVisual label={PENDING_LABELS[language]} />;
+  if (fence.status === 'error') return <BrokenVisual language={language} code={code} message={fence.message} />;
+  return <ReadyVisual language={language} spec={fence.spec} source={SOURCES[language](code)} code={code} title={title} />;
 }
 
 function ReadyVisual({ language, spec, source, code, title }: { language: VizLanguage; spec: VizSpecs[VizLanguage]; source: VisualSource; code: string; title?: string }) {
@@ -46,7 +54,7 @@ function ReadyVisual({ language, spec, source, code, title }: { language: VizLan
     case 'chart': {
       const chart = spec as VizSpecs['chart'];
       return (
-        <VisualFrame title={title ?? chart.title ?? `${capitalize(chart.type)} chart`} source={source}>
+        <VisualFrame fence={{ language, code }} title={title ?? chart.title ?? `${capitalize(chart.type)} chart`} source={source}>
           <ChartVisual spec={chart} />
         </VisualFrame>
       );
@@ -56,7 +64,7 @@ function ReadyVisual({ language, spec, source, code, title }: { language: VizLan
       const markup = spec as string;
       const name = title ?? (language === 'svg' ? 'SVG' : 'Widget');
       return (
-        <VisualFrame title={name} source={source} canPicture={language === 'svg'} svg={() => withThemeVars(markup)}>
+        <VisualFrame fence={{ language, code }} title={name} source={source} canPicture={language === 'svg'} svg={() => withThemeVars(markup)}>
           <WidgetVisual source={markup} title={name} />
         </VisualFrame>
       );
@@ -65,7 +73,7 @@ function ReadyVisual({ language, spec, source, code, title }: { language: VizLan
       const thread = threadOf((spec as VizSpecs['harness-burnup']).thread);
       if (!thread) return <BrokenVisual language={language} code={code} message={`no thread "${(spec as VizSpecs['harness-burnup']).thread}"`} />;
       return (
-        <VisualFrame title={title ?? `Burn-up · ${thread.title}`} source={source}>
+        <VisualFrame fence={{ language, code }} title={title ?? `Burn-up · ${thread.title}`} source={source}>
           <BurnupVisual thread={thread} />
         </VisualFrame>
       );
@@ -75,7 +83,7 @@ function ReadyVisual({ language, spec, source, code, title }: { language: VizLan
       const missing = ids.filter((id) => !threadOf(id));
       if (missing.length) return <BrokenVisual language={language} code={code} message={`no thread ${missing.map((id) => `"${id}"`).join(', ')}`} />;
       return (
-        <VisualFrame title={title ?? 'Linked threads'} source={source}>
+        <VisualFrame fence={{ language, code }} title={title ?? 'Linked threads'} source={source}>
           <MetroVisual threads={ids.map((id) => threadOf(id)!)} />
         </VisualFrame>
       );
@@ -83,7 +91,7 @@ function ReadyVisual({ language, spec, source, code, title }: { language: VizLan
     case 'harness-diff': {
       const diff = spec as VizSpecs['harness-diff'];
       return (
-        <VisualFrame title={title ?? diff.title ?? 'Changes'} source={source} canPicture={false}>
+        <VisualFrame fence={{ language, code }} title={title ?? diff.title ?? 'Changes'} source={source} canPicture={false}>
           <DiffVisual spec={diff} />
         </VisualFrame>
       );

@@ -53,7 +53,10 @@ function writeZshRc() {
 export function ensureSpawnHelper() {
   if (process.platform !== 'darwin') return;
   const require = createRequire(import.meta.url);
-  const helper = path.join(path.dirname(require.resolve('node-pty/package.json')), 'prebuilds', `darwin-${process.arch}`, 'spawn-helper');
+  // Packaged, the helper lives in app.asar.unpacked (see scripts/after-pack.mjs); its asar entry reports the mode it had before packing.
+  const helper = path
+    .join(path.dirname(require.resolve('node-pty/package.json')), 'prebuilds', `darwin-${process.arch}`, 'spawn-helper')
+    .replace('app.asar', 'app.asar.unpacked');
   const stat = statSync(helper, { throwIfNoEntry: false });
   if (stat && !(stat.mode & 0o111)) chmodSync(helper, 0o755);
 }

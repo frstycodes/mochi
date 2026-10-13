@@ -13,6 +13,7 @@ import {
   singleLayout,
   snapSizes,
   splitLeaf,
+  splitTabIds,
   swapLeaves,
   zoneAt,
   type LayoutNode,
@@ -85,4 +86,23 @@ test('drop zones: outer quarter per side, middle replaces', () => {
   assert.equal(zoneAt(r, 10, 50), 'left');
   assert.equal(zoneAt(r, 50, 90), 'bottom');
   assert.equal(zoneAt(r, 50, 50), 'center');
+});
+
+test('drop zones without a centre: a pane tab always splits toward the nearest side', () => {
+  const r = { left: 0, top: 0, right: 200, bottom: 100 };
+  assert.equal(zoneAt(r, 100, 30, false), 'top');
+  assert.equal(zoneAt(r, 60, 50, false), 'left');
+  assert.equal(zoneAt(r, 140, 50, false), 'right');
+  assert.equal(zoneAt(r, 100, 70, false), 'bottom');
+  assert.equal(zoneAt(r, 60, 50), 'center');
+  assert.equal(zoneAt(r, 10, 50, false), 'left');
+});
+
+test("split tab ids: only that thread's tabs, across every space", () => {
+  const tab = (threadId: string, tabId: string): View => ({ kind: 'tab', threadId, tabId });
+  const one = singleLayout(th('a'));
+  const two = { ...one, root: splitLeaf(one.root, one.root.id, tab('a', 't1'), 'right').root };
+  const other = { ...singleLayout(tab('a', 't2')) };
+  const foreign = singleLayout(tab('b', 't3'));
+  assert.deepEqual([...splitTabIds([two, other, foreign], 'a')].sort(), ['t1', 't2']);
 });
