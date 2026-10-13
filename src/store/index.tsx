@@ -104,7 +104,10 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     [apply],
   );
   useEffect(() => {
-    const onSchedule = (event: ScheduleEvent) => apply(event.type === 'agent' ? { type: 'agent', event: event.event } : { type: 'schedule-run', event });
+    const onSchedule = (event: ScheduleEvent) => {
+      if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
+      apply(event.type === 'ci' ? { type: 'ci-result', event } : { type: 'schedule-run', event });
+    };
     const off = host.schedule.onEvent(onSchedule);
     // What happened while no window was open: runs and their agent's events, in order.
     void host.schedule.drain().then((events) => events.forEach(onSchedule), (error: unknown) => console.error('Reading scheduled runs failed', error));
@@ -139,7 +142,7 @@ let pending: Promise<unknown> = Promise.resolve();
 function callAgent(call: AgentCall) {
   const run = () => {
     if (call.method === 'start') return host.agent.start(call.threadId, call.options);
-    if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images);
+    if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images, call.skills);
     if (call.method === 'stopSubagent') return host.agent.stopSubagent(call.threadId, call.subagentId);
     return host.agent[call.method](call.threadId);
   };

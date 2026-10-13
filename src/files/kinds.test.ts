@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fileKind, hasTextSource, isFilePath, MAX_TEXT_PREVIEW, parseCsv, viewerBody } from './kinds.ts';
+import { fileKind, hasTextSource, isFilePath, MAX_TEXT_PREVIEW, parseCsv, viewerBody, worktreeLink } from './kinds.ts';
 
 const text = (t: string) => ({ kind: 'text' as const, text: t });
 const binary = { kind: 'binary' as const };
@@ -41,4 +41,18 @@ test('CSV parsing handles quotes, escaped quotes, embedded newlines and CRLF', (
     ['1', '2'],
   ]);
   assert.deepEqual(parseCsv(''), []);
+});
+
+test('a chat path links only when the file exists in the folder, normalised to the viewer link', () => {
+  const files = new Set(['src/a.ts', 'README.md', 'docs/my file.md']);
+  assert.equal(worktreeLink('src/a.ts', '/r', files), 'src/a.ts');
+  assert.equal(worktreeLink('./src/a.ts:12', '/r', files), 'src/a.ts:12');
+  assert.equal(worktreeLink('src/a.ts:12:4', '/r', files), 'src/a.ts:12');
+  assert.equal(worktreeLink('src/a.ts#L7-L9', '/r', files), 'src/a.ts:7');
+  assert.equal(worktreeLink('/r/README.md', '/r', files), 'README.md');
+  assert.equal(worktreeLink('/src/a.ts', '/r', files), 'src/a.ts', 'a markdown link after harden');
+  assert.equal(worktreeLink('docs/my%20file.md', '/r', files), 'docs/my file.md');
+  assert.equal(worktreeLink('src/missing.ts', '/r', files), null);
+  assert.equal(worktreeLink('/elsewhere/src/a.ts', '/r', files), null);
+  assert.equal(worktreeLink('100%.md', '/r', files), null);
 });

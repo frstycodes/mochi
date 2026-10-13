@@ -52,7 +52,7 @@ function answer(state: State, queueId: string, answers: string[][] = []): State 
   if (!item) return state;
   const now = state.now;
   const queue = state.queue.filter((q) => q.id !== queueId);
-  if (item.kind === 'run') return { ...state, queue, threads: mapThread(state.threads, item.threadId, (t) => log(t, { at: now, who: 'you', kind: 'event', text: `Settled: ${item.title}` })) };
+  if (item.kind === 'run' || item.kind === 'ci') return { ...state, queue, threads: mapThread(state.threads, item.threadId, (t) => log(t, { at: now, who: 'you', kind: 'event', text: `Settled: ${item.title}` })) };
 
   const threads = mapThread(state.threads, item.threadId, (t) => {
     if (item.kind === 'review') {

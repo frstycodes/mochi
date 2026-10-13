@@ -1,4 +1,5 @@
 import { parseDiff } from '../../git/parse.ts';
+import { refKey, type RefState } from '../../chat/refs.ts';
 import type { GitHost } from '../types/git.ts';
 
 // Fixture paths match the `adm` thread's step footprints, so the per-step filter has something to show.
@@ -129,13 +130,23 @@ export const git: GitHost = {
   async createPr() {
     return 'https://github.com/latitude-dev/latitude/pull/490';
   },
+  async ciLog() {
+    return 'Error: lint failed\n  src/index.ts:12:3  no-unused-vars';
+  },
   async ghAccounts() {
     return [];
+  },
+  async repoSlug() {
+    return { owner: 'frstycodes', repo: 'mochi' };
+  },
+  async refStates(_cwd, refs) {
+    return Object.fromEntries(refs.flatMap((ref) => (DEMO_REFS[ref.number] ? [[refKey(ref), DEMO_REFS[ref.number]]] : [])));
   },
   async pr() {
     return {
       number: 490,
       url: 'https://github.com/latitude-dev/latitude/pull/490',
+      title: 'Rate limits for the public API',
       state: 'OPEN',
       checks: [
         { name: 'typecheck', state: 'pass' },
@@ -186,4 +197,30 @@ export const git: GitHost = {
   async forkWorktree(_cwd, threadId) {
     return `~/.harness/worktrees/demo/${threadId}`;
   },
+};
+
+// One of every chip state, by number on any repo; other numbers stay unknown, as without gh.
+const demoRef = (kind: RefState['kind'], status: RefState['status'], number: number, title: string, extra: Partial<RefState> = {}): RefState => ({
+  kind,
+  status,
+  title,
+  url: `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`,
+  hasConflicts: false,
+  isFailing: false,
+  isNotPlanned: false,
+  ...extra,
+});
+
+const DEMO_REFS: Record<number, RefState> = {
+  45: demoRef('pr', 'open', 45, 'fix(header): restore the side pane and sidebar toggles'),
+  46: demoRef('pr', 'open', 46, 'feat(composer): slash anywhere, @ skills and MCP servers', { hasConflicts: true }),
+  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', { isFailing: true }),
+  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links'),
+  47: demoRef('pr', 'merged', 47, 'fix: replace prototype stubs with working actions'),
+  30: demoRef('pr', 'closed', 30, 'feat: experimental orbit gestures'),
+  7: demoRef('pr', 'closed', 7, 'An early PR that was closed'),
+  50: demoRef('pr', 'open', 50, 'A PR that conflicts with main', { hasConflicts: true }),
+  12: demoRef('issue', 'open', 12, 'Sidebar loses scroll position on space switch'),
+  9: demoRef('issue', 'closed', 9, 'Composer drops pasted images'),
+  8: demoRef('issue', 'closed', 8, 'Support Windows titlebar', { isNotPlanned: true }),
 };

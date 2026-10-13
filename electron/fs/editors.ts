@@ -16,12 +16,12 @@ export async function installedEditors() {
   return found.flat();
 }
 
-/** Opens the root as the workspace with `file` focused at `line`. */
+/** Opens the root as the workspace with `file` focused at `line`; an empty `file` opens just the root. */
 export async function openInEditor(editor: Editor, root: string, file: string, line?: number) {
   const cli = await findCli(editor);
   if (!cli) throw new Error(`${editor} is not installed`);
   const target = line ? `${file}:${line}` : file;
-  spawn(cli, [root, ...CLIS[editor].args(target)], { detached: true, stdio: 'ignore' }).unref();
+  spawn(cli, [root, ...(file ? CLIS[editor].args(target) : [])], { detached: true, stdio: 'ignore' }).unref();
 }
 
 async function findCli(editor: Editor) {

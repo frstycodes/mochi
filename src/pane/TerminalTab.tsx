@@ -49,7 +49,7 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
               onClick={() => showSession(key, s.id)}
               className="text-muted-foreground aria-selected:bg-accent aria-selected:text-foreground"
             >
-              {s.kind === 'agent' && <Lock aria-hidden />}
+              {s.kind !== 'shell' && <Lock aria-hidden />}
               {s.title}
               {!!s.failure && <AlertTriangle className="text-destructive" aria-label="Last command failed" />}
             </Button>

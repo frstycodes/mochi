@@ -1,19 +1,18 @@
 import { Input } from '@/components/ui/input';
-import { DEVICES } from '../../Composer';
 import { ModelPicker, useUnavailableHarnesses } from '../../ModelControls';
 import { useSpace } from '../../store';
 import { useSideChatDefault } from '../../sidechat/useSideChat';
 import { SHARED_ACCESS } from '../../runtime/access';
 import { CONCURRENCY_RANGE } from '../../host/types/settings';
 import { useAgentSettings } from '../AgentSettings';
-import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
+import { DesktopOnly, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 import { setPrefs, usePrefs } from '../prefs';
 import { AGENTS } from '../settingOptions';
 
 const FULL_ACCESS_TOGGLE = 'text-warning hover:text-warning data-[state=on]:border-warning/60 data-[state=on]:bg-warning/12 data-[state=on]:text-warning dark:data-[state=on]:bg-warning/12';
 
 export function DefaultsSection() {
-  const { agent, permissions, runsOn } = usePrefs();
+  const { agent, permissions } = usePrefs();
   return (
     <div className="flex flex-col gap-8">
       <SettingsGroup footer="Where a new thread starts; the composer can still change each one.">
@@ -22,11 +21,6 @@ export function DefaultsSection() {
           id="permissions"
           label="Permissions"
           control={<SettingsChoice id="permissions" value={permissions} options={SHARED_ACCESS.map((a) => ({ value: a, label: a, className: a === 'Full access' ? FULL_ACCESS_TOGGLE : undefined }))} onChange={(v) => setPrefs({ permissions: v })} />}
-        />
-        <SettingsRow
-          id="runsOn"
-          label="Runs on"
-          control={<SettingsSelect id="runsOn" value={runsOn} options={DEVICES.map((d) => ({ value: d, label: d }))} onChange={(v) => setPrefs({ runsOn: v })} />}
         />
       </SettingsGroup>
       <SideChatGroup />

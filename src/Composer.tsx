@@ -1,7 +1,6 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
-import { ArrowUp, BranchUp, ClipboardList, Folder, Hand, Laptop, Mic, Monitor, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
-import { toast } from 'sonner';
+import { ArrowUp, BranchUp, ClipboardList, Folder, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
 import { openPhotos } from './photo/photos';
@@ -13,7 +12,6 @@ import {
   PromptInputActionMenuContent,
   PromptInputActionMenuTrigger,
   PromptInputBody,
-  PromptInputButton,
   PromptInputFooter,
   PromptInputHeader,
   PromptInputSubmit,
@@ -31,7 +29,6 @@ import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
 import { accessFor, PERMISSIONS, type Access } from './runtime/access';
-import { getPrefs, type Prefs } from './settings/prefs';
 import type { SlashItem } from './chat/slash';
 import { TokenTextarea } from './chat/SlashToken';
 
@@ -85,9 +82,11 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
+  /** Beside send: the context ring. */
+  meter?: ReactNode;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, className, ...textareaProps }: ComposerInputProps) {
   const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
   return (
     <PromptInput multiple globalDrop onSubmit={(message) => hold(onSend(message))}>
@@ -110,9 +109,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
           <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
         </PromptInputTools>
         <PromptInputTools>
-          <PromptInputButton tooltip="Dictate" className="rounded-full" onClick={() => toast('Dictation is not in the prototype yet')}>
-            <Mic className="size-4" />
-          </PromptInputButton>
+          {meter}
           {onStop ? (
             <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent" className="rounded-full">
               <Stop className="size-4" />
@@ -186,14 +183,6 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   );
 }
 
-export const DEVICES = ['This Mac', 'Studio', 'Cloud sandbox'] as const satisfies Prefs['runsOn'][];
-
-// GAP: only This Mac runs anything; the choice isn't kept or sent to an agent.
-export function RunOnMenu() {
-  const [device, setDevice] = useState<string>(() => getPrefs().runsOn);
-  return <MetaMenu icon={device === 'Cloud sandbox' ? <Monitor /> : <Laptop />} label="Run on" value={device} options={DEVICES} onChange={setDevice} />;
-}
-
 /**
  * The harness's own modes with what each does there. Full access is warning-coloured wherever it shows, and the first pick
  * per thread asks for a second click inside the menu.
@@ -263,30 +252,5 @@ export function BranchLabel({ repo }: { repo: Repo }) {
       {isFolder ? <Folder className="size-3.5 shrink-0" aria-label="Project folder" /> : <BranchUp className="size-3.5 shrink-0" aria-label="Own worktree" />}
       <span className="truncate">{repo.branch}</span>
     </span>
-  );
-}
-
-function MetaMenu({ icon, label, value, options, onChange }: { icon: ReactNode; label: string; value: string; options: readonly string[]; onChange: (v: string) => void }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="xs" className="text-subtle-foreground hover:text-foreground" aria-label={`${label}: ${value}`}>
-          {icon}
-          {value}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>{label}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
-            {options.map((o) => (
-              <DropdownMenuRadioItem key={o} value={o}>
-                {o}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

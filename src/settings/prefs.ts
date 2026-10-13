@@ -21,7 +21,6 @@ export interface Prefs {
   effort: string;
   agent: 'claude' | 'codex';
   permissions: SharedAccess;
-  runsOn: 'This Mac' | 'Studio' | 'Cloud sandbox';
   /** Side pane tabs pinned as icons in the thread header, in order. */
   headerPins: PaneTabKind[];
   /** Off sends every message straight through: no local score, no classifier call. */
@@ -60,14 +59,13 @@ export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
   projectsFolder: '~/dev',
   restoreLayout: true,
-  alertKinds: ['needs-you', 'review', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
+  alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
   effort: 'high',
   agent: 'claude',
   permissions: 'Auto',
-  runsOn: 'This Mac',
   headerPins: ['browser', 'terminal'],
   driftGuard: true,
   branchFrom: 'current',

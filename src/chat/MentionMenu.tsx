@@ -1,38 +1,62 @@
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
-import { ChatRound, ShieldAlert, Window, X } from 'reicon-react';
+import { ChatRound, Note, Server, ShieldAlert, Window, X, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { host } from '../host';
 import type { AgentImage } from '../host/types/agent';
 import type { AppWindow, ScreenAccess } from '../host/types/windows';
-import type { Thread } from '../model';
+import type { AgentCommand, McpServer, Thread } from '../model';
 import { openPhotos } from '../photo/photos';
 import { useHarness } from '../store';
-import { mentionOptions, mentionQuery, withoutQuery, type Mention, type MentionOption } from './mentions';
+import { mentionFor, mentionOptions, mentionQuery, optionId, withoutQuery, type Mention, type MentionOption } from './mentions';
 
 type MenuItem = MentionOption | { kind: 'permission' };
 
-/** Above the thread composer while the text ends in `@` and part of a thread or window title. */
+/** Above the thread composer while the text ends in `@` and part of a name: threads, windows, skills and MCP servers, grouped. */
 export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> }) {
   if (!menu.isOpen) return null;
+  const groups = GROUPS.map((g) => ({ ...g, items: menu.items.filter((item) => groupOf(item) === g.kind) })).filter((g) => g.items.length);
   return (
-    <div id={menu.listId} role="listbox" aria-label="Reference a thread or window" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-popover">
-      {menu.items.map((item, i) => (
-        <div
-          key={itemKey(item)}
-          id={`${menu.listId}-${i}`}
-          role="option"
-          aria-selected={i === menu.active}
-          onPointerDown={(e) => e.preventDefault()}
-          onClick={() => menu.choose(item)}
-          className="flex h-8 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent"
-        >
-          <MentionItem item={item} />
+    <div id={menu.listId} role="listbox" aria-label="Reference a thread, window, skill or MCP server" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-popover">
+      {groups.map((group) => (
+        <div key={group.kind} role="group" aria-label={group.label} className="flex flex-col gap-0.5">
+          {groups.length > 1 && (
+            <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
+              {group.label}
+            </div>
+          )}
+          {group.items.map((item) => {
+            const i = menu.items.indexOf(item);
+            return (
+              <div
+                key={itemKey(item)}
+                id={`${menu.listId}-${i}`}
+                role="option"
+                aria-selected={i === menu.active}
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => menu.choose(item)}
+                className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent"
+              >
+                <MentionItem item={item} />
+              </div>
+            );
+          })}
         </div>
       ))}
     </div>
   );
 }
+
+const GROUPS = [
+  { kind: 'thread', label: 'Threads' },
+  { kind: 'window', label: 'Windows' },
+  { kind: 'skill', label: 'Skills' },
+  { kind: 'mcp', label: 'MCP servers' },
+] as const;
+
+// The screen-recording prompt belongs with the windows it would unlock.
+const groupOf = (item: MenuItem) => (item.kind === 'permission' ? 'window' : item.kind);
 
 function MentionItem({ item }: { item: MenuItem }) {
   if (item.kind === 'permission')
@@ -48,16 +72,37 @@ function MentionItem({ item }: { item: MenuItem }) {
       <>
         <WindowIcon icon={item.window.icon} />
         <span className="min-w-0 truncate">{item.window.title}</span>
-        <span className="ml-auto shrink-0 type-caption text-subtle-foreground">Window</span>
+      </>
+    );
+  if (item.kind === 'skill')
+    return (
+      <>
+        <Note className="size-4 shrink-0 text-info" aria-hidden />
+        <span className="shrink-0 font-medium">{item.skill.name}</span>
+        <span className="min-w-0 truncate text-muted-foreground">{item.skill.description}</span>
+      </>
+    );
+  if (item.kind === 'mcp')
+    return (
+      <>
+        <Server className="size-4 shrink-0 text-info" aria-hidden />
+        <span className="min-w-0 truncate font-medium">{item.server.name}</span>
+        <span className="ml-auto shrink-0 type-caption text-subtle-foreground tabular">{toolCountLabel(item.server)}</span>
       </>
     );
   return (
     <>
       <ChatRound className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="min-w-0 truncate">{item.thread.title}</span>
-      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.thread.repo?.project ?? 'Thread'}</span>
+      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.thread.repo?.project ?? 'No project'}</span>
     </>
   );
+}
+
+const TOOLS = new Intl.PluralRules('en');
+function toolCountLabel(server: Pick<McpServer, 'toolCount' | 'status'>) {
+  if (server.toolCount === undefined) return server.status === 'needs-auth' ? 'Needs sign-in' : 'Not started yet';
+  return `${server.toolCount} ${TOOLS.select(server.toolCount) === 'one' ? 'tool' : 'tools'}`;
 }
 
 function WindowIcon({ icon }: { icon?: string }) {
@@ -77,9 +122,12 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
               <img src={dataUrl(m.image)} alt="" className="size-full object-cover object-top" />
             </button>
           ) : (
-            <ChatRound className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <ChipIcon kind={m.kind} />
           )}
-          <span className="min-w-0 truncate">{m.title}</span>
+          <span className={cn('min-w-0 truncate', (m.kind === 'skill' || m.kind === 'mcp') && 'text-info')} title={m.kind === 'skill' ? m.description : undefined}>
+            {m.title}
+          </span>
+          {m.kind === 'mcp' && m.toolCount !== undefined && <span className="shrink-0 type-caption text-subtle-foreground tabular">{m.toolCount}</span>}
           <button type="button" aria-label={`Remove ${m.title}`} onClick={() => menu.remove(m.id)} className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
             <X className="size-3.5" />
           </button>
@@ -89,11 +137,18 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
   );
 }
 
+const CHIP_ICONS = { thread: ChatRound, skill: Note, mcp: Server } satisfies Record<Exclude<Mention['kind'], 'window'>, IconComponent>;
+
+function ChipIcon({ kind }: { kind: Exclude<Mention['kind'], 'window'> }) {
+  const Icon = CHIP_ICONS[kind];
+  return <Icon className={cn('size-4 shrink-0', kind === 'thread' ? 'text-muted-foreground' : 'text-info')} aria-hidden />;
+}
+
 /**
  * The menu's state, the picked references and the textarea props that drive them: arrows move, Enter or Tab picks, Esc
  * closes until the text changes, Backspace in an empty input drops the last reference. Needs the composer's `PromptInputProvider`.
  */
-export function useMentionMenu(thread: Thread) {
+export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: McpServer[]) {
   const listId = useId();
   const { state } = useHarness();
   const { textInput } = usePromptInputController();
@@ -105,7 +160,7 @@ export function useMentionMenu(thread: Thread) {
   const screen = useAppWindows(isQuerying);
 
   const picked = new Set(mentions.map((m) => m.id));
-  const options = mentionOptions(query ?? '', state.threads, screen.windows, thread.id).filter((o) => !picked.has(o.kind === 'thread' ? o.thread.id : o.window.id));
+  const options = mentionOptions(query ?? '', state.threads, screen.windows, thread.id, skills, servers).filter((o) => !picked.has(optionId(o)));
   const items: MenuItem[] = isBlocked(screen.access) ? [...options, { kind: 'permission' }] : options;
   const isOpen = isQuerying && items.length > 0;
   const current = items[Math.min(active, items.length - 1)];
@@ -115,7 +170,7 @@ export function useMentionMenu(thread: Thread) {
     if (item.kind === 'permission') return host.windows.openScreenRecordingSettings();
     textInput.setInput(withoutQuery(textInput.value));
     setActive(0);
-    if (item.kind === 'thread') return add({ kind: 'thread', id: item.thread.id, title: item.thread.title });
+    if (item.kind !== 'window') return add(mentionFor(item));
     const image = await host.windows.captureApp(item.window.id);
     if (!image) return toast(`Couldn't capture "${item.window.title}"`, { description: 'The window closed or Mochi lost screen recording access.' });
     add({ kind: 'window', id: item.window.id, title: item.window.title, icon: item.window.icon, image });
@@ -163,5 +218,5 @@ function useAppWindows(isOpen: boolean) {
 }
 
 const isBlocked = (access: ScreenAccess) => access === 'denied' || access === 'restricted';
-const itemKey = (item: MenuItem) => (item.kind === 'permission' ? 'permission' : item.kind === 'thread' ? item.thread.id : item.window.id);
+const itemKey = (item: MenuItem) => (item.kind === 'permission' ? 'permission' : optionId(item));
 const dataUrl = (image: AgentImage) => `data:${image.mediaType};base64,${image.data}`;

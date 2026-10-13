@@ -31,13 +31,16 @@ export const ports = {
     return allocated.get(id)!;
   },
   async targets(_sender, cwd) {
-    const dir = resolveCwd(cwd);
-    return [...packageScripts(readJson(path.join(dir, 'package.json')), runnerFor(dir)), ...launchConfigs(readJson(path.join(dir, '.claude', 'launch.json')))];
+    return runTargets(resolveCwd(cwd));
   },
 } satisfies Handlers<PortsHost>;
 
+export function runTargets(dir: string) {
+  return [...packageScripts(readJson(path.join(dir, 'package.json')), runnerFor(dir)), ...launchConfigs(readJson(path.join(dir, '.claude', 'launch.json')))];
+}
+
 // GAP: macOS/Linux only (lsof + ps); Windows needs netstat -ano.
-async function listeningPorts(root: string): Promise<ListeningPort[]> {
+export async function listeningPorts(root: string): Promise<ListeningPort[]> {
   const listening = parseListening(await run('lsof', ['-nP', '-iTCP', '-sTCP:LISTEN', '-Fpn'])).filter((l) => l.pid !== process.pid);
   if (listening.length === 0) return [];
   const pids = [...new Set(listening.map((l) => l.pid))].join(',');
@@ -54,7 +57,7 @@ async function run(file: string, args: string[]) {
   }
 }
 
-function isFree(port: number) {
+export function isFree(port: number) {
   return new Promise<boolean>((resolve) => {
     const server = createServer().once('error', () => resolve(false));
     server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)));
