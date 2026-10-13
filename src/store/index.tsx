@@ -17,6 +17,7 @@ import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesStat
 import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
 import { initialSideChat, saveSideChats, sidechatReducer, type SideChatAction, type SideChatState } from './sidechat.ts';
 import { getRestored, saveThreads, toSaved } from './persist.ts';
+import { pruneDrafts } from '../chat/drafts.ts';
 import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState } from './threads.ts';
 import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
 import { reviewsReducer, type ReviewAction } from '../secondOpinion/slice.ts';
@@ -145,6 +146,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   useAutoTitles(state.threads, dispatch);
   useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
+  useEffect(() => pruneDrafts(new Set(state.threads.map((t) => t.id))), [state.threads]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
 }
 

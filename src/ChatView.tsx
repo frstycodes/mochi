@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
@@ -42,6 +43,7 @@ import { queuedMessage, shouldQueue } from './chat/outbox';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
+import type { Mention } from './chat/mentions';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
@@ -261,7 +263,12 @@ function Composer({
   const slash = useSlashMenu(slashItems);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
   const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
-  useSeedAttachment(thread.id === 'adm');
+  const draftKey = threadDraftKey(thread.id);
+  useSeedAttachment(thread.id === 'adm' && !getDraft(draftKey));
+  const draftExtra = useMemo(() => (mention.mentions.length > 0 ? { mentions: mention.mentions } : undefined), [mention.mentions]);
+  useEffect(() => {
+    mention.restore(getDraft<{ mentions: Mention[] }>(draftKey)?.extra?.mentions ?? []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const edit = (message: QueuedMessage) => {
     dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id });
@@ -285,6 +292,8 @@ function Composer({
             <MentionChips menu={mention} />
             <ComposerInput
               ref={textarea}
+              draftKey={draftKey}
+              draftExtra={draftExtra}
               controls={controls}
               provider={provider}
               isLocked={!!thread.live}
