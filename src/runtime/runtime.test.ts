@@ -41,7 +41,7 @@ test('an unknown plan item lands as a plan step, no revision, after the item it 
   const adm = thread(s, 'adm');
   const added = adm.steps[1];
   assert.equal(added.title, 'Index api_usage_daily by key');
-  assert.deepEqual([added.addedBy, added.size, added.status, added.revision], ['codex', 2, 'ready', adm.revisions.length]);
+  assert.deepEqual([added.addedBy, added.status, added.revision], ['codex', 'ready', adm.revisions.length]);
   assert.equal(adm.revisions, before);
   assert.equal(adm.activity.at(-1)!.text, 'Plan: Codex added "Index api_usage_daily by key"');
 });

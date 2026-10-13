@@ -17,7 +17,7 @@ export function BurnupVisual({ thread }: { thread: Thread }) {
       <p className="tabular type-meta text-muted-foreground">
         {Math.round(live.pct * 100)}% · {live.done} of {live.scope} pts
       </p>
-      {width > 0 && <BurnUp thread={thread} now={state.now} scale={timeScale(thread.startedAt, state.now, width)} live={live} projection={null} scrubAt={scrubAt} onScrub={setScrubAt} />}
+      {width > 0 && <BurnUp thread={thread} now={state.now} scale={timeScale(thread.startedAt, state.now, width)} live={live} scrubAt={scrubAt} onScrub={setScrubAt} />}
     </div>
   );
 }
