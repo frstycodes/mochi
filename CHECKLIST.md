@@ -10,12 +10,12 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Browser-style tab strip, `+` new tab, close, active chip
 - [x] Pop a Preview tab out to a PiP window
 - [x] Drag tabs to reorder (Alt ← / → from the keyboard)
-- [ ] Drag a tab out of the pane to make a split (ties into §3)
+- [x] Drag a tab out of the pane to make a split (ties into §3): over a split it previews the half it takes (a pane tab never replaces a split), the tab leaves the strip while it's a split, drag its title back onto the strip (or "Put back in the pane") to dock it, Esc cancels, a new tab says on hover it can't split. GAP: dropping on another thread's strip doesn't move a tab between threads
 - [x] Pop any tab kind out, not just Preview
 - [x] Tabs persist per thread across reloads
 - [x] Cmd 1–9 / Ctrl Tab to switch pane tabs; Cmd W closes the active one
 - [x] New-tab page lists every tab kind
-- [ ] New-tab page lists detected ports and recent files (needs `term`, `files`)
+- [x] New-tab page lists detected ports and recent files: running dev servers open in a Preview tab, recent files (work log reads and edits, files opened in a Files tab) open in a Files tab. GAP: files opened in a Files tab are remembered in memory only, so they drop off after a reload
 
 ### Browser
 - [x] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
@@ -54,7 +54,7 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Tap, swipe, type, hardware buttons (home, lock), deep link
 - [ ] Rotate: GAP, no host-side API found (Purple GSEvent and Indigo device-motion attempts didn't rotate; Xcode 27 ships no Simulator.app to script)
 - [x] Build & run the thread's app into it (first scheme, install + launch)
-- [ ] Build logs in a Terminal tab: GAP, shown inline in the Simulator tab until the `term` session's pty API lands
+- [x] Build logs in a Terminal tab: the build streams into a read-only Build session of the thread's Terminal tab (opened in the background if there's none); the Simulator tab keeps a one-line status with Show log. GAP: xcodebuild still runs as a child process in the main process, mirrored line by line, not inside a pty
 - [x] Screenshot / record into the composer, same as the browser (posted as the file path; GAP: chat entries can't carry attachments yet)
 - [x] Device picker (iPhone sizes, iPad), appearance toggle, Dynamic Type size
 - [ ] Android emulator through the same tab (`adb`, `emulator`) — later
