@@ -10,7 +10,7 @@ import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, MOTION, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, MOTION, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -149,7 +149,7 @@ function pref(key: PrefKey, label: string, section: SettingSection, control: Con
 }
 
 /** A host (main-process) setting at the top level of `AgentSettings`. */
-function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
+function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
   return {
     key,
     label,
@@ -259,6 +259,9 @@ const APP_SETTINGS: Setting[] = [
   },
   hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.harness/worktrees', isPath: true }),
   hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH),
+  hostSetting('prepareWorktrees', 'Prepare worktrees before starting', 'git', SWITCH),
+  hostSetting('worktreeInclude', 'Ignored files to copy', 'git', { type: 'text', placeholder: '.env*, .claude/settings.local.json', isMono: true }),
+  pref('worktreeCleanup', 'Remove settled worktrees', 'git', select(WORKTREE_CLEANUP)),
   pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES)),
   pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: DEFAULT_PREFS.branchPrefix, fallback: DEFAULT_PREFS.branchPrefix, isMono: true }),
   pref('diffStyle', 'Diffs', 'git', choice(DIFF_STYLES)),

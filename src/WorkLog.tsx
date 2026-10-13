@@ -283,7 +283,7 @@ function useImageUrl(files: ThreadFiles, path: string) {
 const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' } };
 
 /** After the title, so it sits flush with the prose like Claude's: the chevron, or the needs-you dot while paused on you (the chevron on hover, so it still reads as openable). Working needs no icon: Mochi under the chat and the shimmering title say it. */
-function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {
+export function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {
   const chevron = <ChevronRight className={cn('size-3 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />;
   return (
     <span className="grid size-3 shrink-0 place-items-center *:col-start-1 *:row-start-1">
@@ -438,7 +438,7 @@ export function ChatMochi({ phase, label }: { phase: AgentPhase; label?: string 
     // -mt-4 pulls it up into the transcript's 20px row gap: it belongs to the last message, not a row of its own.
     <div role="status" className="-mt-4 flex h-9 items-center gap-1.5 type-meta text-muted-foreground">
       <AgentLoader phase={phase} className="-ml-2 size-9 text-foreground" />
-      {!!label && <Shimmer as="span">{`${label}…`}</Shimmer>}
+      {!!label && <Shimmer as="span">{label.endsWith('…') ? label : `${label}…`}</Shimmer>}
     </div>
   );
 }
@@ -577,7 +577,7 @@ export function DiffView({ patch }: { patch: string }) {
 const TONE = { plain: 'text-foreground', dim: 'text-subtle-foreground', pass: 'text-success', fail: 'text-destructive' } satisfies Record<RunResult['lines'][number]['tone'], string>;
 
 /** The command, its exit badge, then its output in colour. */
-function RunOutput({ command, run }: { command: string; run?: RunResult }) {
+export function RunOutput({ command, run }: { command: string; run?: RunResult }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card font-mono text-xs leading-5">
       <div className="flex items-start gap-3 px-3 py-2">

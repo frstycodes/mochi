@@ -33,6 +33,8 @@ export interface Prefs {
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
   diffStyle: 'unified' | 'split';
+  /** Days after settling that a thread's worktree is removed (`useWorktreeCleanup`); `never` keeps them. */
+  worktreeCleanup: 'never' | '1' | '7' | '30';
   terminalFontSize: number;
   terminalScrollback: number;
   restoreTerminals: boolean;
@@ -76,6 +78,7 @@ export const DEFAULT_PREFS: Prefs = {
   branchPrefix: 'mochi/',
   workspaceMode: 'worktree',
   diffStyle: 'unified',
+  worktreeCleanup: '7',
   terminalFontSize: 12,
   terminalScrollback: 5000,
   restoreTerminals: true,

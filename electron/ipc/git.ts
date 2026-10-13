@@ -216,18 +216,23 @@ export const git = {
  * `base` (the default branch when unset); one that already exists (a restart after cleanup, or `isExisting`) is checked out,
  * refused when another worktree has it.
  */
-export async function addWorktree(root: string, threadId: string, branch: string, { base, isExisting }: WorktreeOptions = {}) {
+export async function addWorktree(root: string, threadId: string, branch: string, options: WorktreeOptions = {}) {
+  return (await createWorktree(root, threadId, branch, options)).dir;
+}
+
+/** As `addWorktree`; `isNew` says this call made it, so it still needs its setup. */
+export async function createWorktree(root: string, threadId: string, branch: string, { base, isExisting }: WorktreeOptions = {}) {
   const top = await mainRepo(root);
   if (!/^[\w-]+$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
   const dir = join(worktreeRoot(), basename(top), threadId);
-  if (existsSync(dir)) return dir;
+  if (existsSync(dir)) return { dir, isNew: false };
   const name = (await runGit(top, ['check-ref-format', '--branch', isExisting ? await localName(top, branch) : branch])).trim();
   const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
   if (exists || isExisting) await assertFreeBranch(top, name);
   await mkdir(dirname(dir), { recursive: true });
   // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.
   await runGit(top, exists || isExisting ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, base ?? (await baseRef(top))]);
-  return dir;
+  return { dir, isNew: true };
 }
 
 export function worktreeOptions(value: unknown): WorktreeOptions {
