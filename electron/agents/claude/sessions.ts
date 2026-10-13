@@ -92,7 +92,6 @@ export function stopClaude(threadId: string) {
  */
 // GAP: matched by text because activity entries carry no message id yet; pass the uuid once the entry stores it. Two
 // identical messages rewind to the later one.
-// GAP: not run against a real thread yet; whether Claude Code accepts our client uuids here is unverified.
 export async function rewindClaude(threadId: string, text: string) {
   const session = sessions.get(threadId);
   const uuid = session?.sent.findLast((m) => m.text.includes(text))?.uuid;

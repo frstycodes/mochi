@@ -55,10 +55,12 @@ export function useRewindActions() {
     // Read before the rewind stops the agent: main only knows the point while the session is live.
     const forkAt = dropped && current.live ? await host.agent.rewindPoint(thread.id, dropped.text).catch(() => null) : undefined;
     const cwd = worktreePath(thread.id);
-    if (mode === 'files') {
-      if (dropped) await host.agent.rewindFiles(thread.id, dropped.text).catch((error) => console.warn('Claude file rewind failed', error));
+    if (mode === 'files' && checkpoint.ref && cwd) {
       try {
-        if (checkpoint.ref && cwd) await host.git.restoreCheckpoint(cwd, thread.id, checkpoint.n);
+        // The undo snapshot comes first: Claude's own rewind below already changes files.
+        await host.git.checkpoint(cwd, thread.id, 'undo');
+        if (dropped) await host.agent.rewindFiles(thread.id, dropped.text).catch((error) => console.warn('Claude file rewind failed', error));
+        await host.git.restoreCheckpoint(cwd, thread.id, checkpoint.n, true);
       } catch (error) {
         toast.error('Rewind failed, nothing changed', { description: gitError(error) });
         return;

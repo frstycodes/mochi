@@ -146,9 +146,9 @@ export interface GitHost {
   removeWorktree(path: string): Promise<void>;
   diskUsage(path: string): Promise<number>;
   /** Snapshots the worktree's files (untracked included) under `refs/harness/checkpoints/<threadId>/<n>` without touching HEAD, index or files; resolves to the commit. */
-  checkpoint(cwd: string, threadId: string, n: number | 'turn'): Promise<string>;
+  checkpoint(cwd: string, threadId: string, n: number | 'turn' | 'undo'): Promise<string>;
   /** Resets the worktree's branch and files to checkpoint `n`, after saving the current files as the `undo` checkpoint. */
-  restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo'): Promise<void>;
+  restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo', hasUndo?: boolean): Promise<void>;
   /** Before a rewind with files: the files checkpoint `n` changes back, and those changed since the agent's last turn ended (made outside the agent). */
   rewindPreview(cwd: string, threadId: string, n: number): Promise<RewindPreview>;
   /** What checkpoint `n` held against the branch's base: the thread's changes as they stood then. Throws when its files weren't saved. */

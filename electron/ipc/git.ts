@@ -169,17 +169,17 @@ export const git = {
   // Checkpoints and rewind only run in a Mochi worktree: resetting a branch is never done to the user's own checkout.
   async checkpoint(_sender, cwd, threadId, n) {
     const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
-    const ref = checkpointRef(string(threadId, 'threadId', 64), n === 'turn' ? 'turn' : integer(n, 'n', 0, 1_000_000));
+    const ref = checkpointRef(string(threadId, 'threadId', 64), n === 'turn' || n === 'undo' ? n : integer(n, 'n', 0, 1_000_000));
     return snapshot(top, ref, `harness checkpoint ${ref.split('/').pop()}`);
   },
 
-  async restoreCheckpoint(_sender, cwd, threadId, n) {
+  async restoreCheckpoint(_sender, cwd, threadId, n, hasUndo) {
     const top = insideWorktreeRoot(await topLevel(string(cwd, 'cwd')));
     const id = string(threadId, 'threadId', 64);
     const which = n === 'undo' ? 'undo' : integer(n, 'n', 0, 1_000_000);
     const commit = await resolveCommit(top, checkpointRef(id, which));
     if (!commit) throw new Error(`Checkpoint ${which} does not exist`);
-    if (which !== 'undo') await snapshot(top, checkpointRef(id, 'undo'), 'harness checkpoint before rewind');
+    if (which !== 'undo' && hasUndo !== true) await snapshot(top, checkpointRef(id, 'undo'), 'harness checkpoint before rewind');
     await restore(top, commit);
     // The restored files are the agent's baseline now, so the next rewind doesn't count them as someone else's changes.
     await snapshot(top, checkpointRef(id, 'turn'), 'harness checkpoint after rewind');
