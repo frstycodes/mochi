@@ -1,6 +1,6 @@
 import { isValidElement, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
-import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Hourglass, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -152,13 +152,14 @@ function SummarySections({ sections, ...props }: SectionProps & { sections: Summ
 
 /** Pending approval or question; blocked steps say so in the goal block. */
 function NeedsYou({ thread }: { thread: Thread }) {
-  if (thread.status !== 'needs-you') return null;
+  // A limit's own line is `RateLimitWarning`'s.
+  if (thread.status !== 'needs-you' || thread.live?.limit) return null;
   return (
     <p role="status" className="flex items-center gap-2.5 px-2 py-1 type-meta text-warning">
       <span className="flex w-4 shrink-0 justify-center" aria-hidden>
         <span className="size-1.5 rounded-full bg-warning" />
       </span>
-      {limitStatus(thread) ?? currentAction(thread)?.label ?? PHASE_LABELS.wait}
+      {currentAction(thread)?.label ?? PHASE_LABELS.wait}
     </p>
   );
 }
@@ -639,6 +640,14 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   const provider = thread.providers[0];
   const { limits } = useAccountLimits(provider, thread.spaceId);
   const tight = limits?.windows.find((w) => toneFor(w.usedPct / 100) === 'destructive');
+  const limit = limitStatus(thread);
+  if (limit)
+    return (
+      <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
+        <Hourglass className="size-4 shrink-0" aria-hidden />
+        {limit}
+      </p>
+    );
   if (thread.status !== 'running' || !tight) return null;
 
   const name = `${PROVIDER_NAMES[provider]} ${tight.label.toLowerCase()} limit`;

@@ -144,7 +144,7 @@ function reduce(state: State, action: Action): State {
       return {
         ...state,
         // Settling stops the agent process; the next message after reactivating starts it again with `resume`.
-        threads: mapThread(state.threads, action.threadId, (t) => pauseQueue({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true } }) }, 'interrupted')),
+        threads: mapThread(state.threads, action.threadId, (t) => pauseQueue({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true, limit: undefined } }) }, 'interrupted')),
         queue: state.queue.filter((q) => q.threadId !== action.threadId),
       };
     case 'unsettle':
@@ -187,7 +187,7 @@ function reduce(state: State, action: Action): State {
           t.live
             ? log(
                 // The queue waits for this turn to end, then goes on.
-                { ...t, status: 'running', queuePause: undefined, live: { ...t.live, isWorking: true, limit: undefined, limitWarning: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
+                { ...t, status: 'running', queuePause: undefined, live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
                 { at: state.now, who: 'harness', kind: 'event', text: resumeText(t, action) },
               )
             : t,
@@ -505,7 +505,8 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
-      const live = t.live && { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
+      // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
+      const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
       const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }) });
       return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;

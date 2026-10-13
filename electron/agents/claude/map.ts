@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKSystemMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKRateLimitInfo, SDKSystemMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
@@ -16,6 +16,9 @@ export function createMapper(threadId: string, cwd: string) {
   let context = { used: 0, max: 0 };
   let isNewBlock = false;
   let isInterrupting = false;
+  /** Windows Claude Code reported `rejected` (it holds the turn until they reopen), and notices already relayed, by window and reset. */
+  const blocked = new Set<string>();
+  const told = new Set<string>();
   /** MCP server names from init, to read a server back out of `mcp__<server>__<tool>`. */
   let servers: string[] = [];
   /** Skill names from init; until it arrives, skills sent messages open with wait in `typed`. */
@@ -180,13 +183,8 @@ export function createMapper(threadId: string, cwd: string) {
         if (typeof content === 'string') return [];
         return content.flatMap((block) => (block.type === 'tool_result' ? toolEnd(block as ToolResultBlock, message.tool_use_result) : []));
       }
-      case 'rate_limit_event': {
-        const info = message.rate_limit_info;
-        const window = claudeEventWindow(info);
-        if (info.status === 'allowed_warning') return window ? [{ threadId, type: 'limit-warning', window }] : [];
-        if (info.status !== 'rejected') return [];
-        return [{ threadId, type: 'limit', ...(info.resetsAt !== undefined && { resetsAt: resetTime(info.resetsAt) }), ...(window && { label: window.label }) }];
-      }
+      case 'rate_limit_event':
+        return limitEvents(message.rate_limit_info);
       case 'result': {
         const status = isInterrupting ? 'interrupted' : message.subtype === 'success' ? 'done' : 'failed';
         isInterrupting = false;
@@ -196,6 +194,28 @@ export function createMapper(threadId: string, cwd: string) {
       default:
         return [];
     }
+  }
+
+  /**
+   * Relays Claude Code's own limit states. `rejected` without extra usage: it holds the turn and continues at the reset (T3 Code's
+   * adapter and docs say so; not verified here). With extra usage allowed or in use it keeps running, billed. Warnings and the
+   * switch to extra usage are lines in the transcript, once per window and reset.
+   */
+  function limitEvents(info: SDKRateLimitInfo): AgentEvent[] {
+    const type = info.rateLimitType ?? 'unknown';
+    const window = claudeEventWindow(info);
+    const name = window ? `${window.label.toLowerCase()} ` : '';
+    const isOverage = info.overageStatus === 'allowed' || info.overageStatus === 'allowed_warning' || !!info.isUsingOverage || !!info.overageInUse;
+    const once = (key: string, event: AgentEvent): AgentEvent[] => (told.has(`${key}:${type}:${info.resetsAt}`) ? [] : (told.add(`${key}:${type}:${info.resetsAt}`), [event]));
+    if (info.status === 'rejected' && !isOverage) {
+      if (blocked.has(type)) return [];
+      blocked.add(type);
+      return [{ threadId, type: 'limit', isTurnHeld: true, ...(info.resetsAt !== undefined && { resetsAt: resetTime(info.resetsAt) }), ...(window && { label: window.label }) }];
+    }
+    const cleared: AgentEvent[] = blocked.delete(type) && !blocked.size ? [{ threadId, type: 'limit-cleared' }] : [];
+    if (info.status === 'rejected') return [...cleared, ...once('overage', { threadId, type: 'limit-notice', text: `Claude is past its ${name}limit and using extra usage, billed per use` })];
+    if (info.status === 'allowed_warning' && window) return [...cleared, ...once('warning', { threadId, type: 'limit-notice', text: `Claude's ${name}limit is ${Math.round(window.usedPct)}% used` })];
+    return cleared;
   }
 
   return {

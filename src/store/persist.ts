@@ -1,5 +1,5 @@
 import { pauseQueue } from '../chat/outbox.ts';
-import { LIMIT_DEMO_ID } from '../usage/limitDemo.ts';
+import { LIMIT_DEMO_IDS } from '../usage/limitDemo.ts';
 import { host } from '../host/index.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
@@ -19,8 +19,7 @@ export interface Saved {
 }
 
 export function toSaved(state: State): Saved {
-  // The usage limit demo is the one demo thread with a `live` run (its pause lives there); it starts fresh like the rest.
-  const threads = state.threads.filter((t) => t.live && t.id !== LIMIT_DEMO_ID);
+  const threads = state.threads.filter((t) => t.live && !LIMIT_DEMO_IDS.includes(t.id));
   const ids = new Set(threads.map((t) => t.id));
   const pick = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => ids.has(id)));
   return {

@@ -157,17 +157,19 @@ test('approvals: Bash is a command, file tools are edits, deny carries a message
   assert.deepEqual(permissionResult('Bash', { command: 'ls' }, { kind: 'allow' }), { behavior: 'allow', updatedInput: { command: 'ls' } });
 });
 
-test('a rejected rate limit pauses the thread with its reset time and window; a warning names the window it is close to', () => {
+test("Claude's limit states pass through as Claude Code reports them: held turn, extra usage, warning, reopened", () => {
   const { map } = createMapper('t1', CWD);
-  const event = (status: string, resetsAt?: number, extra?: object) => ({ type: 'rate_limit_event', rate_limit_info: { status, resetsAt, ...extra } }) as unknown as SDKMessage;
-  assert.deepEqual(map(event('allowed', 1_760_000_000, { rateLimitType: 'five_hour', utilization: 0.4 })), []);
-  assert.deepEqual(map(event('allowed_warning', 1_760_000_000)), [], 'a warning without a known window says nothing to show');
-  assert.deepEqual(map(event('allowed_warning', 1_760_000_000, { rateLimitType: 'five_hour', utilization: 0.92 })), [
-    { threadId: 't1', type: 'limit-warning', window: { id: 'five_hour', label: '5-hour', usedPct: 92, resetsAt: '2025-10-09T08:53:20.000Z' } },
-  ]);
-  assert.deepEqual(map(event('rejected', 1_760_000_000)), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z' }]);
-  assert.deepEqual(map(event('rejected', 1_760_000_000, { rateLimitType: 'seven_day' })), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z', label: 'Weekly' }]);
-  assert.deepEqual(map(event('rejected')), [{ threadId: 't1', type: 'limit' }]);
+  const event = (status: string, extra?: object) => map({ type: 'rate_limit_event', rate_limit_info: { status, resetsAt: 1_760_000_000, rateLimitType: 'five_hour', ...extra } } as unknown as SDKMessage);
+  assert.deepEqual(event('allowed', { utilization: 0.4 }), []);
+  assert.deepEqual(event('allowed_warning', { utilization: 0.92 }), [{ threadId: 't1', type: 'limit-notice', text: "Claude's 5-hour limit is 92% used" }]);
+  assert.deepEqual(event('allowed_warning', { utilization: 0.94 }), [], 'one warning per window and reset');
+  assert.deepEqual(event('rejected'), [{ threadId: 't1', type: 'limit', isTurnHeld: true, resetsAt: '2025-10-09T08:53:20.000Z', label: '5-hour' }]);
+  assert.deepEqual(event('rejected'), [], 'repeats of a held window say nothing');
+  assert.deepEqual(event('allowed', { utilization: 0 }), [{ threadId: 't1', type: 'limit-cleared' }]);
+
+  const { map: overage } = createMapper('t2', CWD);
+  const rejected = overage({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', rateLimitType: 'seven_day', overageStatus: 'allowed', resetsAt: 1_760_000_000 } } as unknown as SDKMessage);
+  assert.deepEqual(rejected, [{ threadId: 't2', type: 'limit-notice', text: 'Claude is past its weekly limit and using extra usage, billed per use' }], 'extra usage keeps running: no pause');
 });
 
 test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {

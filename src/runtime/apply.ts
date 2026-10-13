@@ -6,7 +6,7 @@ import { similarity } from '../progress.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
-import { hitLimit, isLimitEnd, warnLimit } from './limits.ts';
+import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
 
 /** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
@@ -65,13 +65,16 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         context: { used: event.contextUsed ?? t.context.used, max: event.contextMax ?? t.context.max },
         session: t.session && event.inputTokens + event.outputTokens > 0 ? { ...t.session, usage: addUsage(t.session.usage, event) } : t.session,
       }));
-    case 'limit-warning':
-      return update((t) => warnLimit(t, event.window, now, who));
+    case 'limit-notice':
+      return update((t) => log(t, { at: now, who: 'harness', kind: 'event', text: event.text }));
     case 'limit':
       return update((t) => hitLimit(t, event, now));
+    case 'limit-cleared':
+      return update((t) => clearLimit(t, now));
     case 'turn-end': {
       if (event.status === 'interrupted' && thread.live?.isReplacingTurn) return update((t) => log({ ...t, live: { ...t.live!, isReplacingTurn: undefined } }, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted for your queued message' }));
-      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false, isWrappingUp: undefined } })) : state;
+      // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
+      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } })) : state;
       if (isLimitEnd(thread)) return ended;
       return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
     }

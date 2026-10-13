@@ -25,10 +25,6 @@ import { contextMax } from './runtime/models';
 import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
 import { toast } from 'sonner';
-import { HeldHint } from './chat/LimitCard';
-import { accountHold } from './runtime/limits';
-import { PROVIDER_NAME } from './rewind/handoff';
-import { resetLabel } from './usage/limits';
 import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
 import { toWhen } from './schedule/form';
 import { describeTrigger } from './schedule/describe';
@@ -63,7 +59,7 @@ export function NewThreadView() {
 }
 
 function NewThread() {
-  const { state, dispatch } = useHarness();
+  const { dispatch } = useHarness();
   const { leafId } = useSplit();
   const [layoutId] = useState(() => newComposerLayoutId(leafId));
   const { textInput, attachments } = usePromptInputController();
@@ -79,8 +75,6 @@ function NewThread() {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
-  // A new thread on an account paused by a usage limit would start a turn there: it waits for the reset or another harness.
-  const held = host.isDesktop ? accountHold(state.threads, spaceId, provider) : undefined;
   // /side needs a thread to ask about.
   const slashItems = useSlashItems(provider, spaceId).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
@@ -118,10 +112,6 @@ function NewThread() {
     }
     const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(trimmed, slashItems), provider, typedSkills: typedSkills(trimmed, slashItems) });
     const create = { type: 'create', title, ...(skills.length > 0 && { prompt, skills }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
-    if (held && run.mode !== 'trigger') {
-      toast.error(`${PROVIDER_NAME[provider]}'s usage limit${held.resetsAt ? ` resets at ${resetLabel(held.resetsAt)}` : ' is reached'}. Pick a ${PROVIDER_NAME[provider === 'claude' ? 'codex' : 'claude']} model or schedule it for later.`);
-      return false;
-    }
     if (run.mode === 'now') {
       handOffComposer(leafId, layoutId);
       return dispatch(create);
@@ -174,7 +164,6 @@ function NewThread() {
           {!!project && <WorkspaceControls workspace={workspace} />}
           <RunMenu value={run} onChange={setRun} />
           {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
-          {!!held && <HeldHint held={held} />}
         </ComposerMeta>
         {!!project && <WorkspaceNotes workspace={workspace} />}
       </motion.div>

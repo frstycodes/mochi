@@ -3,13 +3,11 @@ import { Hourglass } from 'reicon-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
 import { host } from '../host';
 import type { ActivityEntry, Provider, Thread } from '../model';
 import { openRewind } from '../rewind/requests';
 import { PROVIDER_NAME } from '../rewind/handoff';
 import { HARNESSES } from '../settings/harnesses';
-import { limitPhase, type AccountHold } from '../runtime/limits';
 import { useHarness } from '../store';
 import { ProviderMark } from '../ui';
 import { resetLabel, untilLabel } from '../usage/limits';
@@ -23,7 +21,10 @@ export function LimitEntry({ thread, entry }: { thread: Thread; entry: ActivityE
   return <LimitCard thread={thread} title={entry.text} limit={limit} />;
 }
 
-/** Every way forward is a click: nothing resumes, bills or switches harness unless you chose it for this thread. */
+/**
+ * Says what the harness does: Claude Code waits out the reset in the same turn; Codex stopped and waits for you. Every other way
+ * forward is a click: nothing resumes, bills or switches harness unless you chose it for this thread.
+ */
 function LimitCard({ thread, title, limit }: { thread: Thread; title: string; limit: NonNullable<NonNullable<Thread['live']>['limit']> }) {
   const { dispatch } = useHarness();
   const provider = thread.providers[0];
@@ -40,19 +41,15 @@ function LimitCard({ thread, title, limit }: { thread: Thread; title: string; li
       <CardHeader>
         <CardDescription className="flex items-center gap-1 type-caption font-medium text-warning">
           <Hourglass aria-hidden className="size-3.5" />
-          Paused until reset
+          {limit.isTurnHeld ? 'Waiting for the reset' : 'Stopped until reset'}
         </CardDescription>
         <CardTitle className="text-pretty">{title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1 type-body text-muted-foreground">
-        {at ? (
-          <p className="tabular">
-            {isReset ? `Reset at ${at}.` : `Resets in ${untilLabel(until)}, at ${at}.`} {limit.autoResume && !isReset && 'Resumes on its own then.'}
-          </p>
-        ) : (
-          <p>No reset time was reported.</p>
-        )}
-        <p className="type-caption text-subtle-foreground text-pretty">Nothing starts on this account until then; messages you send wait in the queue.</p>
+        <p className="tabular">{at ? (isReset ? `Reset at ${at}.` : `Resets in ${untilLabel(until)}, at ${at}.`) : 'No reset time was reported.'}</p>
+        <p className="type-caption text-subtle-foreground text-pretty">
+          {limit.isTurnHeld ? 'Claude Code holds this turn and continues it on its own after the reset.' : limit.autoResume && !isReset ? 'Codex ended the turn. Mochi sends "Continue where you left off." at the reset.' : 'Codex ended the turn.'}
+        </p>
       </CardContent>
       <CardFooter className="flex-wrap justify-end gap-2 border-t-0 bg-transparent pt-0">
         <Button variant="ghost" size="sm" onClick={() => openRewind({ kind: 'handoff', threadId: thread.id })}>
@@ -65,7 +62,7 @@ function LimitCard({ thread, title, limit }: { thread: Thread; title: string; li
             <span className="text-subtle-foreground">· billed per use</span>
           </Button>
         )}
-        <ResumeButton isReset={isReset || !at} isArmed={!!limit.autoResume} at={at} onResume={() => resume()} onArm={arm} />
+        {!limit.isTurnHeld && <ResumeButton isReset={isReset || !at} isArmed={!!limit.autoResume} at={at} onResume={() => resume()} onArm={arm} />}
       </CardFooter>
     </Card>
   );
@@ -119,38 +116,34 @@ function useHasApiKey(provider: Provider) {
   return isSet;
 }
 
-/** The header's status chip while a limit shapes the thread: "Paused · resets 3:40 PM", or the wrap-up in flight. */
+/** The header's status chip while a limit stops the thread: "Waiting · resets 3:40 PM". */
 export function LimitChip({ thread }: { thread: Thread }) {
-  const phase = limitPhase(thread);
   const label = limitStatus(thread);
   if (!label) return null;
   return (
-    <Badge variant="secondary" className={cn('hidden tabular @md:inline-flex', phase === 'paused' && 'bg-warning/12 text-warning dark:bg-warning/20')}>
+    <Badge variant="secondary" className="hidden bg-warning/12 tabular text-warning @md:inline-flex dark:bg-warning/20">
       <Hourglass aria-hidden />
       {label}
     </Badge>
   );
 }
 
-/** One line while a limit stops or winds down the thread, shared by the header chip, the sidebar row and the summary; approaching says nothing here (the ring and the transcript do). */
+/** One line while a limit stops the thread, shared by the header chip, the sidebar row and the summary. */
 export function limitStatus(thread: Thread) {
-  const live = thread.live;
-  const phase = limitPhase(thread);
-  if (phase === 'paused') {
-    const at = live!.limit!.resetsAt;
-    if (!at) return 'Paused · usage limit';
-    return Date.parse(at) > Date.now() ? `Paused · resets ${resetLabel(at)}` : 'Paused · limit reset';
-  }
-  if (phase === 'wrapping-up') return `Wrapping up · ${live!.limitWarning!.label.toLowerCase()} limit ${Math.round(live!.limitWarning!.usedPct)}%`;
+  const limit = thread.live?.limit;
+  if (!limit) return;
+  const verb = limit.isTurnHeld ? 'Waiting' : 'Stopped';
+  if (!limit.resetsAt) return `${verb} · usage limit`;
+  return Date.parse(limit.resetsAt) > Date.now() ? `${verb} · resets ${resetLabel(limit.resetsAt)}` : `${verb} · limit reset`;
 }
 
-/** Why send waits instead of starting a turn: this thread's pause, or another thread's on the same account. */
-export function HeldHint({ held }: { held: AccountHold }) {
-  const until = useUntil(held.resetsAt);
+/** The composer's note while the thread's account is at its limit. */
+export function LimitHint({ limit }: { limit: NonNullable<NonNullable<Thread['live']>['limit']> }) {
+  const until = useUntil(limit.resetsAt);
   return (
     <span className="ml-auto flex min-w-0 items-center gap-1 text-warning">
       <Hourglass aria-hidden className="size-3.5 shrink-0" />
-      <span className="truncate tabular">{until > 0 ? `Usage limit · resets in ${untilLabel(until)}` : 'Usage limit · resume to send'}</span>
+      <span className="truncate tabular">{until > 0 ? `Usage limit · resets in ${untilLabel(until)}` : 'Usage limit reached'}</span>
     </span>
   );
 }
