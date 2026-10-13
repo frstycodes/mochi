@@ -4,6 +4,7 @@ import { BranchUp, ChevronDown, Laptop, SidebarRight } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -14,7 +15,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTabKind, Thread } from './model';
@@ -34,8 +34,9 @@ import { ActionItems } from './menus/ActionItems';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
-import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
+import { TitleBar } from './TitleBar';
 import { useHarness } from './store';
+import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 
 const PANE_ANIMATION_MS = 260;
@@ -101,7 +102,8 @@ export function ThreadView({ thread }: { thread: Thread }) {
             <SheetTitle className="sr-only">Thread summary</SheetTitle>
             <SummaryPanel
               thread={thread}
-              className="h-full"
+              // Room for the sheet's close button, which otherwise covers the summary's menu.
+              className="h-full pt-8"
               onPaneOpened={() => {
                 setSummarySheetOpen(false);
                 setPaneTabOpen(true);
@@ -251,14 +253,12 @@ function ThreadHeader({
   const { state } = useHarness();
   const { isFirst, leafId } = useSplit();
   const { pct } = progressAt(thread, state.now, true);
-  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
-      <header ref={header} data-pin-drop className={cn('app-drag @container flex h-11 shrink-0 items-center gap-2 px-3 transition-colors duration-150', reservesToggle && TOGGLE_RESERVE, pinDrop.isOver && 'bg-accent/40')}>
-        {hasTrigger && <SidebarTrigger className="-ml-1" />}
+      <TitleBar ref={header} isFirst={isFirst} data-pin-drop className={cn('@container transition-colors duration-150', pinDrop.isOver && 'bg-accent/40')}>
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <DeviceIndicator />
         <ThreadMenu thread={thread} />
@@ -295,7 +295,7 @@ function ThreadHeader({
         </TooltipIconButton>
         <PinsMenu />
         <RewindLayer thread={thread} />
-      </header>
+      </TitleBar>
     </TargetContextMenu>
   );
 }
@@ -319,6 +319,8 @@ function DeviceIndicator() {
 
 /** The title opens the thread's actions, like Claude's: the same registry actions as the header's right-click menu, plus rewind's undo and fork comparisons. */
 function ThreadMenu({ thread }: { thread: Thread }) {
+  const isRenaming = useIsRenaming(thread.id);
+  if (isRenaming) return <TitleField thread={thread} />;
   return (
     <DropdownMenu>
       <h1 className="flex min-w-0">
@@ -334,6 +336,43 @@ function ThreadMenu({ thread }: { thread: Thread }) {
         <RewindMenuItems thread={thread} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** The header title as a field: Enter or leaving it saves, Esc keeps the old title. */
+function TitleField({ thread }: { thread: Thread }) {
+  const { dispatch } = useHarness();
+  const ref = useRef<HTMLInputElement>(null);
+  // After the menu that started the rename has closed and handed focus back.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const isCancelled = useRef(false);
+  const save = (title: string) => {
+    startRename(null);
+    if (!isCancelled.current && title.trim() && title.trim() !== thread.title) dispatch({ type: 'rename', threadId: thread.id, title: title.trim() });
+  };
+  return (
+    <h1 className="flex min-w-0 flex-1">
+      <Input
+        ref={ref}
+        defaultValue={thread.title}
+        aria-label="Thread title"
+        maxLength={120}
+        onBlur={(e) => save(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          if (e.key !== 'Escape') return;
+          isCancelled.current = true;
+          startRename(null);
+        }}
+        className="h-7 max-w-md px-1.5 type-title"
+      />
+    </h1>
   );
 }
 

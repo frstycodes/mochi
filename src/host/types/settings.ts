@@ -1,6 +1,7 @@
 import type { Provider } from '../../model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../settings/harnesses.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../../settings/agentConfig.ts';
+import { CHEAP_MODELS, UTILITY_TASKS, type UtilityTask } from '../../utility/prompts.ts';
 import type { Manifest } from './manifest.ts';
 
 /** What the user's own install reports. Never carries credentials, emails or key material: only method and plan names. */
@@ -35,17 +36,19 @@ export interface AgentSettings {
   shell: string;
   prDrafts: boolean;
   /** The model new side chats start on, as the model chip names it; each side chat can switch, provider included. */
-  sideChatModel: SideChatModel;
+  sideChatModel: ModelChoice;
+  /** Per background task (titles, commit and PR drafts…), the model tried first; `utilityCandidates` adds the fallbacks. */
+  utilityModels: Record<UtilityTask, ModelChoice>;
 }
 
-export interface SideChatModel {
+export interface ModelChoice {
   provider: Provider;
   /** A model catalog id, or the harness's own id for one the catalog doesn't list. */
   model: string;
 }
 
-/** What `set` takes: any top-level field, and per harness any of its fields. */
-export type AgentSettingsPatch = Partial<Omit<AgentSettings, 'harnesses'>> & { harnesses?: Partial<Record<Provider, Partial<HarnessSettings>>> };
+/** What `set` takes: any top-level field, per harness any of its fields, and any task's model. */
+export type AgentSettingsPatch = Partial<Omit<AgentSettings, 'harnesses' | 'utilityModels'>> & { harnesses?: Partial<Record<Provider, Partial<HarnessSettings>>>; utilityModels?: Partial<Record<UtilityTask, ModelChoice>> };
 
 /** The renderer only ever learns whether a key is stored and its last four characters. */
 export interface ApiKeyState {
@@ -155,6 +158,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   shell: '',
   prDrafts: false,
   sideChatModel: { provider: 'claude', model: 'claude-sonnet-5-5' },
+  utilityModels: Object.fromEntries(UTILITY_TASKS.map((task) => [task, { provider: 'claude', model: CHEAP_MODELS.claude }])) as AgentSettings['utilityModels'],
 };
 
 /** Saved settings from before side chat could run on Codex held a bare Claude model id. */
@@ -163,12 +167,12 @@ export function migrateSettings(saved: Record<string, unknown>): Partial<AgentSe
   return typeof sideChatModel === 'string' ? { ...saved, sideChatModel: { provider: 'claude', model: sideChatModel } } : saved;
 }
 
-/** Deep enough for this shape: harness entries merge field by field, so a patch never drops a sibling field. */
+/** Deep enough for this shape: harness entries merge field by field and tasks one by one, so a patch never drops a sibling. */
 export function mergeSettings(base: AgentSettings, patch: AgentSettingsPatch): AgentSettings {
   const harnesses = { ...base.harnesses };
   for (const id of HARNESS_IDS) if (patch.harnesses?.[id]) harnesses[id] = { ...harnesses[id], ...patch.harnesses[id] };
-  const { harnesses: _, ...rest } = patch;
-  return { ...base, ...rest, harnesses };
+  const { harnesses: _, utilityModels, ...rest } = patch;
+  return { ...base, ...rest, harnesses, utilityModels: { ...base.utilityModels, ...utilityModels } };
 }
 
 export const CONCURRENCY_RANGE = { min: 1, max: 16 } as const;

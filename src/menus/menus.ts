@@ -1,7 +1,7 @@
 /** Which registry actions each context menu offers, grouped by separator. Ids that aren't available on the target drop out. */
 export const THREAD_MENU = [
   ['thread-open', 'thread-open-split'],
-  ['thread-pin', 'thread-unpin', 'thread-watch', 'thread-unwatch'],
+  ['thread-rename', 'thread-pin', 'thread-unpin', 'thread-watch', 'thread-unwatch'],
   ['thread-schedule', 'thread-fork', 'thread-handoff', 'thread-second-opinion', 'thread-rewind'],
   ['thread-replay', 'thread-export-replay'],
   ['thread-copy-branch', 'thread-reveal'],

@@ -137,6 +137,8 @@ The main session (or split) sits centered; pinned sessions hover at both screen 
 
 ## 4. Goal features (everything that exists, so nothing gets lost)
 
+Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the ETA, title-based overlap and the version bump per step go away as §10 lands.
+
 ### Goal model
 - [x] Each thread has a one-sentence goal and a list of steps
 - [x] Step: title, size (1–3), status (done / running / ready / waiting / blocked / dropped), progress, footprint (files it touches), who added it, which revision
@@ -234,3 +236,55 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [x] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
 - [x] Threads always run on their profile's account; never rotate to another account of the same provider
 - [x] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider
+
+## 10. Goals v2 (decided 2026-10-13)
+
+Why goals exist: you run many threads (often one coordinator plus workers) and need, at a glance, what each is for, whether it's really done, what needs you, and whether the work was already done elsewhere, without reading transcripts. A ring that lies (0% while working) is worse than none.
+
+### Goal model
+- [ ] Not every thread has a goal: a task-shaped message gets one, questions and chats get none (no ring, no %, no Goal section in the summary; the header's summary pill shows a summary icon instead of the ring). A chat whose later message is task-shaped gets a goal then. "Make this a goal" / "Remove goal" override both ways
+- [ ] The goal is drafted, never copied: the background-task model writes a short outcome plus 2 to 4 criteria from the message, applied silently; the goal card at the top of the thread has Edit. Drift no longer replaces the goal with your latest message (`setGoalFrom` goes)
+- [ ] Criteria live on the goal, not on steps: checkable (a command, PR open, CI green) or judged (a sentence)
+- [ ] A goal version is a change to what done means: only outcome or criteria edits (and rewind or fork restoring a different goal) bump it. Plan steps added, dropped or reordered (by the agent, a tool, drift or you), and handoffs, are timeline events, not versions
+- [ ] Settling keeps a record: outcome, criteria with evidence, PR, files changed, time, cost. It is the memory for duplicate detection and the archive
+
+### Overlap
+- [ ] Duplicate work, checked when the goal is drafted (before the agent starts): the new outcome and criteria against active goals and settled records, word overlap to shortlist, the background model to judge same work / related / different. The goal card shows "Similar: <title>, settled 3 days ago, PR #61 merged" with Open / Continue there / Link / Ignore
+- [ ] Collision, from real edits: two active threads editing the same file → overlap item in the Queue (existing link / extract / race / related). Replaces step-title matching in `holdOverlap`
+
+### Report card
+- [ ] When a goal thread ends a turn after doing work, a report card replaces reading the reply: criteria with status and evidence, "Needs you" (the one line that asks for anything), files changed with +/−, PR and its state; the agent's reply collapsed under "Full reply". Chats get none
+- [ ] Facts come from Mochi (checks it ran, diff stats, PR); judgment (decisions, what's left, the question) from the agent's `report` tool, or extracted by the background model when the agent didn't call it, marked as summarised
+- [ ] Mochi runs checkable criteria itself in the thread's worktree when the agent claims one or goes idle; judged criteria read "claimed" until you accept them. All criteria green → Ready for review
+- [ ] The sidebar card's detail line is the report's headline (Ready for review, Needs you: …, Docs not done)
+- [ ] `get_report` for coordinator threads: criteria, files, open question as data
+
+### Progress
+- [ ] The ring shows phase plus criteria met, not a percentage: Planning → Building → Verifying → Ready for review → Settled, Needs you / Blocked over any phase; derived from events Mochi sees, not the agent's self-report. Card text "Building · 1/3"
+- [ ] The plan is a mirror of the agent's own checklist (shows what it's doing), with no sizes, weights or versions
+- [ ] Remove step sizes (S/M/L), weighted progress, the ETA and the plan burn-up; the burn-up becomes a criteria timeline
+
+### PRs
+1. Goals: drafting, chats without a goal, summary without a goal, the version rule, the settled record
+2. Duplicate check at drafting
+3. Report card and verification
+4. Collision from real edits
+5. Phases on the ring; remove sizes, weighted progress, ETA
+
+## 11. Git conventions, enforced (decided 2026-10-13)
+
+Defaults; a repo's own `.github/pull_request_template.md`, commitlint config or branch pattern wins.
+
+- [ ] Branch names from the goal: `type/short-slug` (`feat/per-key-overrides`), validated by `branchNameError`
+- [ ] Commits checked by a `commit-msg` hook Mochi installs in its worktrees (plain git, every agent): Conventional `type(scope): subject`, subject ≤ 72 chars; rejected messages tell the agent why; tool attribution stripped when settings say none
+- [ ] PR descriptions written by Mochi from the report card: the agent calls `open_pr` with a title and one line of why; body is What / Why / Checks / Screenshots with hard length limits. Raw `gh pr create` is denied for Claude (hook pointing at `open_pr`); for Codex, a PR that appears in the thread gets its body replaced with the template
+- [ ] Before/after screenshots required when the diff touches UI files (`.tsx`, `.css`): captured through the browser pane on the base and the thread's branch; `open_pr` refuses without them
+
+## 12. Simplify (decided 2026-10-13)
+
+- [ ] Simplify action in a message's hover bar turns a long reply into bullets; optional auto-simplify of long replies once the thread is idle (off by default, word threshold)
+- [ ] Animation: shimmer while the model works, then the prose blurs out as the block's height eases and bullets arrive with the chat's word reveal; Show original reverses it; reduced motion crossfades
+- [ ] Code blocks, commands, file paths and PR links pass through verbatim; only prose is rewritten
+- [ ] Runs on the background-task model (needs `feat/utility-models` merged)
+- [ ] Settings › Simplify: model, length (Short ≤ 5 bullets / Detailed), "Put what needs me first", free-text rules, auto-simplify and threshold; changing rules marks stored simplifications stale
+- [ ] Stored on the message (`simplified: { text, model, rulesHash, at }`) for display only: never sent to an agent, left out of fork seeding, handoff summaries and `get_thread`

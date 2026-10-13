@@ -63,7 +63,7 @@ export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 
 export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'threads'>, thread: Thread, message: QueuedMessage, extra?: { queuedId?: string; interrupts?: boolean }) {
   const { draft, files } = message;
   const withFiles = files ? `${draft}${draft ? ' ' : ''}(${files} attached)` : draft;
-  const { text, ...references } = withReferences(withFiles, message.mentions, state.threads, message.isCommand, thread.providers[0]);
+  const { text, ...references } = withReferences(withFiles, message.mentions, state.threads, { isCommand: message.isCommand, provider: thread.providers[0], typedSkills: message.typedSkills });
   // A new message answers an open suggestion by ignoring it.
   setDriftPending(thread.id, null);
   const verdict = judgeDrift(text, thread);

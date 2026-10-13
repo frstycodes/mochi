@@ -12,7 +12,7 @@ const run = (s: State, action: Action) => threadsReducer(s, action);
 const event = (s: State, e: AgentEvent) => run(s, { type: 'agent', event: e });
 const thread = (s: State, id: string) => s.threads.find((t) => t.id === id)!;
 const drafts = (s: State, id: string) => (thread(s, id).queued ?? []).map((m) => m.draft);
-const message = (draft: string) => queuedMessage(draft, { files: 0, mentions: [], isCommand: false });
+const message = (draft: string) => queuedMessage(draft, { files: 0, mentions: [], isCommand: false, typedSkills: [] });
 
 /** A live thread mid-turn with "first", "second", "third" queued. */
 function working() {

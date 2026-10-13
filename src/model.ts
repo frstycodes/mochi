@@ -156,6 +156,10 @@ export interface Thread {
   /** null: a chat with no folder, so no files, branch or PRs. */
   repo: Repo | null;
   title: string;
+  /** Renamed by you (or by the agent at your request): a generated title never replaces it. */
+  isTitleRenamed?: boolean;
+  /** A model named the thread after its first exchange (`useAutoTitles`). */
+  isTitleGenerated?: boolean;
   goal: string;
   providers: Provider[];
   status: ThreadStatus;
@@ -196,6 +200,8 @@ export interface QueuedMessage {
   mentions: Mention[];
   /** The text starts with a `/` command, so mention tags go after it. */
   isCommand: boolean;
+  /** Skills typed as `/name` later in the text. */
+  typedSkills: string[];
 }
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';

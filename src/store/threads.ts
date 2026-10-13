@@ -47,9 +47,11 @@ export type ThreadsAction =
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
   | { type: 'rename'; threadId: string; title: string }
+  /** A model's name for the thread; dropped when you renamed it meanwhile. */
+  | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[] }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
   | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
@@ -138,7 +140,9 @@ function reduce(state: State, action: Action): State {
     case 'unsettle':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: hasOpenWork(t) ? 'running' : 'review' })) };
     case 'rename':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, title: action.title })) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, title: action.title, isTitleRenamed: true })) };
+    case 'title-generated':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.isTitleRenamed ? t : { ...t, title: action.title, isTitleGenerated: true })) };
     case 'delete': {
       const gone = (id: string) => action.threadIds.includes(id);
       return {
