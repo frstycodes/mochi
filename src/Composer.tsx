@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentProps } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { ArrowUp, BranchUp, ClipboardList, Folder, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
@@ -82,9 +82,11 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
+  /** Beside send: the context ring. */
+  meter?: ReactNode;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, className, ...textareaProps }: ComposerInputProps) {
   const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
   return (
     <PromptInput multiple globalDrop onSubmit={(message) => hold(onSend(message))}>
@@ -107,6 +109,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
           <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
         </PromptInputTools>
         <PromptInputTools>
+          {meter}
           {onStop ? (
             <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent" className="rounded-full">
               <Stop className="size-4" />

@@ -11,6 +11,7 @@ import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
+import { contextMax } from '../runtime/models.ts';
 import { handoff } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
@@ -403,10 +404,10 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     prs: [],
     skills: [],
     sources: [],
-    context: { used: isLive ? 0 : 4_000, max: action.provider === 'codex' ? 272_000 : 200_000 },
+    context: { used: isLive ? 0 : 4_000, max: contextMax(action.provider) },
     controls: action.controls,
   };
-  if (isLive) thread.live = { isWorking: true, usage: [], cwd: threadCwd(thread) ?? undefined };
+  if (isLive) thread.live = { isWorking: true, cwd: threadCwd(thread) ?? undefined };
   // Detached: a message before the first run starts the agent the way a restored thread does.
   if (isLive && action.schedule) {
     thread.live = { ...thread.live!, isWorking: false, isDetached: true };

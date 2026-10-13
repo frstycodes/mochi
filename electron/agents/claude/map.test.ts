@@ -24,7 +24,7 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   const bash = events.find((e) => e.type === 'tool' && e.phase === 'end' && e.exitCode !== undefined);
   assert.equal(bash?.type === 'tool' && bash.exitCode, 2);
   const usage = events.find((e) => e.type === 'usage');
-  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
+  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, cachedTokens: 200, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
 });
 
@@ -81,7 +81,7 @@ test('usage after a second result is the difference from the first, since result
     ({ type: 'result', subtype: 'success', parent_tool_use_id: null, total_cost_usd: cost, modelUsage: { m: { inputTokens: input, outputTokens: 10, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, contextWindow: 1000 } } }) as unknown as SDKMessage;
   map(result(100, 0.5));
   const [usage] = map(result(250, 0.75));
-  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 150, outputTokens: 0, costUsd: 0.25 });
+  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 150, outputTokens: 0, cachedTokens: 0, costUsd: 0.25 });
 });
 
 test('a result after interrupt ends the turn as interrupted, not failed', () => {

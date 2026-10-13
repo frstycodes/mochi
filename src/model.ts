@@ -160,7 +160,7 @@ export interface Thread {
   settledAt?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };
-  session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
+  session?: { provider: Provider; id: string; usage?: { input: number; output: number; cached?: number; costUsd?: number } };
   controls?: ThreadControls;
   /** From the live agent's session start; reset each time a session (re)starts. */
   agent?: AgentInfo;
@@ -222,8 +222,6 @@ export interface LiveRun {
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
-  /** Reported tokens per usage event, for the plan window. */
-  usage: { at: number; provider: Provider; tokens: number }[];
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */

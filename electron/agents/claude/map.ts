@@ -11,7 +11,7 @@ export function createMapper(threadId: string, cwd: string) {
   const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
   const agents = new Map<string, { taskId?: string }>();
-  const reported = { input: 0, output: 0, costUsd: 0 };
+  const reported = { input: 0, output: 0, cached: 0, costUsd: 0 };
   let context = { used: 0, max: 0 };
   let isNewBlock = false;
   let isInterrupting = false;
@@ -116,8 +116,9 @@ export function createMapper(threadId: string, cwd: string) {
     const models = Object.values(modelUsage);
     const input = sum(models.map((m) => m.inputTokens + m.cacheReadInputTokens + m.cacheCreationInputTokens));
     const output = sum(models.map((m) => m.outputTokens));
-    const event: AgentEvent = { threadId, type: 'usage', inputTokens: input - reported.input, outputTokens: output - reported.output, costUsd: costUsd - reported.costUsd };
-    Object.assign(reported, { input, output, costUsd });
+    const cached = sum(models.map((m) => m.cacheReadInputTokens));
+    const event: AgentEvent = { threadId, type: 'usage', inputTokens: input - reported.input, outputTokens: output - reported.output, cachedTokens: cached - reported.cached, costUsd: costUsd - reported.costUsd };
+    Object.assign(reported, { input, output, cached, costUsd });
     context = { ...context, max: Math.max(...models.map((m) => m.contextWindow), context.max) };
     return context.used ? { ...event, contextUsed: context.used, contextMax: context.max || undefined } : event;
   }

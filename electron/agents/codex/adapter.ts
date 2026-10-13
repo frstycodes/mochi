@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions, LimitWindow } from '../../../src/host/types/agent.ts';
+import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillInput, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
@@ -81,6 +82,8 @@ export class CodexAdapter {
   private accountFor: AccountFor;
   private findCodex: FindCodex;
   private toolsUrl?: (threadId: string) => Promise<string>;
+  /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
+  onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
   /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. */
   constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string) => Promise<string>) {
@@ -178,6 +181,15 @@ export class CodexAdapter {
       server.asks.delete(codexId);
       void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
     }
+  }
+
+  /** The profile's account's full `account/rateLimits/read` snapshot. Throws when logged out. */
+  async readLimits(spaceId: string) {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    const result = (await rpc.request('account/rateLimits/read', {})) as { rateLimits?: Parameters<typeof codexWindows>[0] } | null;
+    return { accountId: server.account.id, windows: codexWindows(result?.rateLimits) };
   }
 
   /** Every page of the profile's account's `model/list`. Throws when logged out. */
@@ -278,7 +290,10 @@ export class CodexAdapter {
   }
 
   private notification(server: CodexServer, method: string, params: unknown) {
-    if (method === 'account/rateLimits/updated') return updateLimits(server.limits, params);
+    if (method === 'account/rateLimits/updated') {
+      this.onLimits?.(server.account.id, codexWindows((params as { rateLimits?: Parameters<typeof codexWindows>[0] }).rateLimits));
+      return updateLimits(server.limits, params);
+    }
     const ask = server.asks.get(codexThreadId(params) ?? '');
     if (ask) return ask.notify(method, params);
     const turnId = (params as { turn?: { id?: unknown } }).turn?.id;

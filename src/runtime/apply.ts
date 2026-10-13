@@ -59,7 +59,6 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         ...t,
         context: { used: event.contextUsed ?? t.context.used, max: event.contextMax ?? t.context.max },
         session: t.session && event.inputTokens + event.outputTokens > 0 ? { ...t.session, usage: addUsage(t.session.usage, event) } : t.session,
-        live: t.live && event.inputTokens + event.outputTokens > 0 ? { ...t.live, usage: [...t.live.usage, { at: now, provider: who, tokens: event.inputTokens + event.outputTokens }] } : t.live,
       }));
     case 'limit':
       return update((t) => log({ ...t, status: 'needs-you', live: t.live && { ...t.live, isWorking: false, limit: { resetsAt: event.resetsAt } } }, { at: now, who: 'harness', kind: 'event', text: `Usage limit reached${event.resetsAt ? `, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` }));
@@ -261,7 +260,8 @@ function mergeInfo(info: AgentInfo = {}, update: AgentInfo): AgentInfo {
 
 const NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<Provider, string>;
 
-function addUsage(usage: { input: number; output: number; costUsd?: number } | undefined, event: Extract<AgentEvent, { type: 'usage' }>) {
+function addUsage(usage: { input: number; output: number; cached?: number; costUsd?: number } | undefined, event: Extract<AgentEvent, { type: 'usage' }>) {
   const costUsd = usage?.costUsd === undefined && event.costUsd === undefined ? undefined : (usage?.costUsd ?? 0) + (event.costUsd ?? 0);
-  return { input: (usage?.input ?? 0) + event.inputTokens, output: (usage?.output ?? 0) + event.outputTokens, costUsd };
+  const cached = usage?.cached === undefined && event.cachedTokens === undefined ? undefined : (usage?.cached ?? 0) + (event.cachedTokens ?? 0);
+  return { input: (usage?.input ?? 0) + event.inputTokens, output: (usage?.output ?? 0) + event.outputTokens, cached, costUsd };
 }

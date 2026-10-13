@@ -18,7 +18,7 @@ export interface ThreadState {
   limits: AccountLimits;
 }
 
-type Totals = { input: number; output: number };
+type Totals = { input: number; output: number; cached: number };
 
 /** When the account's most-used rate-limit window resets, in unix seconds. */
 export interface AccountLimits {
@@ -26,7 +26,7 @@ export interface AccountLimits {
 }
 
 export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits } = {}): ThreadState {
-  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0 }, account, limits };
+  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits };
 }
 
 /** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
@@ -322,16 +322,17 @@ function mapUsage(usage: Record<string, unknown> | undefined, s: ThreadState): A
   const total = obj(usage?.total);
   const last = obj(usage?.last);
   if (typeof total?.inputTokens !== 'number' || typeof total.outputTokens !== 'number') return [];
-  const now = { input: total.inputTokens, output: total.outputTokens };
+  const now = { input: total.inputTokens, output: total.outputTokens, cached: num(total.cachedInputTokens) };
   // After a resume, count only the request this update reports.
-  const before = s.total ?? { input: now.input - num(last?.inputTokens), output: now.output - num(last?.outputTokens) };
+  const before = s.total ?? { input: now.input - num(last?.inputTokens), output: now.output - num(last?.outputTokens), cached: now.cached - num(last?.cachedInputTokens) };
   s.total = now;
   const inputTokens = Math.max(0, now.input - before.input);
   const outputTokens = Math.max(0, now.output - before.output);
+  const cachedTokens = Math.max(0, now.cached - before.cached);
   const contextMax = typeof usage?.modelContextWindow === 'number' ? usage.modelContextWindow : undefined;
   const contextUsed = typeof last?.totalTokens === 'number' ? last.totalTokens : undefined;
   // Codex reports tokens, never spend; the summary shows tokens for it rather than a price Mochi would have to guess.
-  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
+  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, cachedTokens, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
 }
 
 /** Upstream API errors arrive as their raw JSON body; show the message inside. */

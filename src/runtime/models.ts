@@ -34,6 +34,9 @@ const LEGACY_MODELS: Record<string, string> = { 'opus-5.5': 'claude-opus-5-5', '
 
 export const modelId = (id: string) => LEGACY_MODELS[id] ?? id;
 
+/** A context window to show before the agent reports its model's own (`usage` events carry `contextMax`). */
+export const contextMax = (provider: Provider) => (provider === 'codex' ? 272_000 : 200_000);
+
 export const defaultModelOf = (models: AgentModel[]) => models.find((m) => m.isDefault) ?? models[0];
 
 /** The effort a run on `model` gets: the chosen one when the model takes it, else the provider's default for it. */

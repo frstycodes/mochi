@@ -41,9 +41,28 @@ export type AgentEvent =
   | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
   | { threadId: string; type: 'resolved'; requestId: string }
-  | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; costUsd?: number; contextUsed?: number; contextMax?: number }
+  /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
+  | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
   | { threadId: string; type: 'limit'; resetsAt?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
+
+/** One plan rate-limit window of an account, as the provider reported it. */
+export interface LimitWindow {
+  /** Stable per window so sparse updates replace it: Claude's `rateLimitType`, Codex's `primary` / `secondary`. */
+  id: string;
+  label: string;
+  /** 0–100. */
+  usedPct: number;
+  resetsAt?: string;
+}
+
+/** The latest windows main knows for one account; `updatedAt` is when the provider last reported any of them, unset before it ever has. */
+export interface AccountLimits {
+  accountId: string;
+  provider: Provider;
+  windows: LimitWindow[];
+  updatedAt?: string;
+}
 
 export type SubagentStatus = 'running' | 'done' | 'failed' | 'stopped';
 
@@ -213,6 +232,9 @@ export interface AgentHost {
   warm(spaceId: string): Promise<void>;
   /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
   models(provider: Provider, spaceId: string): Promise<AgentModel[]>;
+  /** The latest plan windows main keeps for the profile's `provider` account; `refresh` reads them from the provider first (throttled). */
+  limits(provider: Provider, spaceId: string, refresh?: boolean): Promise<AccountLimits>;
+  onLimits(listener: (limits: AccountLimits) => void): () => void;
   onToolCall(listener: (call: AgentToolCall) => void): () => void;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
 }
@@ -233,6 +255,8 @@ export const agentMethods = {
   stopSubagent: 'invoke',
   warm: 'invoke',
   models: 'invoke',
+  limits: 'invoke',
+  onLimits: 'event',
   onToolCall: 'event',
   toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;
