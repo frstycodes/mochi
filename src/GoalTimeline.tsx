@@ -10,11 +10,11 @@ import type { ActivityEntry, Step, StepStatus, Thread } from './model';
 import { BurnUp, timeScale, type TimeScale } from './BurnUp';
 import { revisionDiff } from './goals/edit';
 import { clock, duration, minutesLeft, progressAt, statusAt, type Progress } from './progress';
-import { checkpointAt, checkpointPhrase } from './rewind/checkpoints';
+import { checkpointAt, checkpointPhrase, rewindBlockedReason } from './rewind/checkpoints';
 import { PROVIDER_NAME, stepOwner } from './rewind/handoff';
 import { openRewind } from './rewind/requests';
 import { useHarness } from './store';
-import { ForkIcon, ProviderMark, SizeBadge, StepStatusIcon, lineColor, stepColor, stepLabel } from './ui';
+import { ForkIcon, ProviderMark, SizeBadge, StepStatusIcon, TooltipIconButton, lineColor, stepColor, stepLabel } from './ui';
 
 export function GoalTimeline({ thread }: { thread: Thread }) {
   const { state } = useHarness();
@@ -110,11 +110,18 @@ function RewindHere({ thread, at }: { thread: Thread; at: number }) {
   const { state } = useHarness();
   const checkpoint = checkpointAt(state.checkpoints[thread.id] ?? [], at);
   if (!checkpoint) return null;
-  return (
-    <Button variant="outline" size="xs" title={`Rewind to ${checkpointPhrase(checkpoint)} at ${clock(checkpoint.at)}`} onClick={() => openRewind({ kind: 'rewind', threadId: thread.id, n: checkpoint.n })}>
+  const reason = rewindBlockedReason(thread);
+  const button = (
+    <Button variant="outline" size="xs" disabled={!!reason} onClick={() => openRewind({ kind: 'rewind', threadId: thread.id, n: checkpoint.n })}>
       <History data-icon="inline-start" />
       Rewind to here
     </Button>
+  );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{reason ? <span className="inline-flex">{button}</span> : button}</TooltipTrigger>
+      <TooltipContent>{reason ?? `Rewind to ${checkpointPhrase(checkpoint)} at ${clock(checkpoint.at)}`}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -271,7 +278,7 @@ function StepActions({ thread, step, status }: { thread: Thread; step: Step; sta
     <span className="absolute top-1.5 right-0 z-10 flex items-center rounded-md bg-popover opacity-0 shadow-popover transition-opacity duration-150 group-hover/step:opacity-100 group-focus-within/step:opacity-100 pointer-coarse:opacity-100">
       {canRewind && (
         <>
-          <StepAction label={`Rewind to after "${step.title}"`} onClick={() => openRewind({ kind: 'rewind', threadId: thread.id, n: checkpoint.n })}>
+          <StepAction label={`Rewind to after "${step.title}"`} disabledReason={rewindBlockedReason(thread)} onClick={() => openRewind({ kind: 'rewind', threadId: thread.id, n: checkpoint.n })}>
             <History />
           </StepAction>
           <StepAction label={`Fork from after "${step.title}"`} onClick={() => openRewind({ kind: 'fork', threadId: thread.id, point: { kind: 'checkpoint', n: checkpoint.n } })}>
@@ -288,16 +295,11 @@ function StepActions({ thread, step, status }: { thread: Thread; step: Step; sta
   );
 }
 
-function StepAction({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function StepAction({ label, disabledReason, onClick, children }: { label: string; disabledReason?: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-xs" aria-label={label} className="relative z-10 text-muted-foreground" onClick={onClick}>
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    <TooltipIconButton label={label} hint={disabledReason} disabled={!!disabledReason} size="icon-xs" className="relative z-10 text-muted-foreground" onClick={onClick}>
+      {children}
+    </TooltipIconButton>
   );
 }
 

@@ -1,4 +1,5 @@
 import type { Action, State } from './store/index.tsx';
+import { goalDraftRequest, localGoalDraft } from './goals/draft.ts';
 import { initialQueue } from './store/queue.ts';
 import { initialThreads, mapThread, threadsReducer } from './store/threads.ts';
 
@@ -78,12 +79,19 @@ export function replay(c: DriftCase) {
   const run = (s: State, action: Action) => threadsReducer(s, action);
   let s = run(emptyState(), { type: 'create', title: first as string, provider: 'claude', project: null, isLive: true });
   const id = s.threads.at(-1)!.id;
+  // What `useGoalDrafts` does offline after each of your messages.
+  const draft = (state: State) => {
+    const request = goalDraftRequest(state.threads.find((t) => t.id === id)!);
+    const proposal = request && localGoalDraft(request.text);
+    return proposal?.kind === 'task' ? run(state, { type: 'goal-drafted', threadId: id, outcome: proposal.outcome, criteria: [] }) : state;
+  };
+  s = draft(s);
   if (c.steps) {
     const steps = c.steps.map((st, i) => ({ id: `${id}-p${i}`, title: st.title, size: 1 as const, status: 'ready' as const, progress: 0, footprint: st.files ?? [], addedAt: s.now, addedBy: 'claude' as const, revision: 1 }));
     s = { ...s, threads: mapThread(s.threads, id, (t) => ({ ...t, steps })) };
   }
   for (const turn of rest)
-    s = typeof turn === 'string' ? run(s, { type: 'send', threadId: id, text: turn, drift: 'on-goal', reason: 'replay' }) : run(s, { type: 'say', threadId: id, entry: { who: 'claude', kind: 'message', text: turn.agent } });
+    s = typeof turn === 'string' ? draft(run(s, { type: 'send', threadId: id, text: turn, drift: 'on-goal', reason: 'replay' })) : run(s, { type: 'say', threadId: id, entry: { who: 'claude', kind: 'message', text: turn.agent } });
   return s.threads.find((t) => t.id === id)!;
 }
 

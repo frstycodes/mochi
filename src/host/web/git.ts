@@ -189,6 +189,9 @@ export const git: GitHost = {
     return `${threadId}${n}`.padEnd(40, '0');
   },
   async restoreCheckpoint() {},
+  async rewindPreview() {
+    return { files: ['src/limits/schema.ts', 'src/gateway/config.ts'], outside: [] };
+  },
   /** Later checkpoints hold more of the fixture's changes, so scrubbing a replay shows the diff growing. */
   async checkpointDiff(cwd, _threadId, n) {
     const { files, ...diff } = await git.diff(cwd, 'branch');

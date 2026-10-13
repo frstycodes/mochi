@@ -30,7 +30,8 @@ import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
-import { GoalEditor } from './goals/GoalEditor';
+import { openGoalEditor } from './goals/GoalEditor';
+import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
 import { burnSeries, clock, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
@@ -649,31 +650,10 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   );
 }
 
-/** Self-contained so the goals rethink (feat/goals-*) can swap it whole. */
 function GoalSection({ thread }: { thread: Thread }) {
-  if (!hasGoal(thread)) return <NoGoalState thread={thread} />;
-  return <GoalProgress thread={thread} />;
-}
-
-function NoGoalState({ thread }: { thread: Thread }) {
-  const [isEditing, setEditing] = useState(false);
-  return (
-    <section aria-label="Goal" className="flex items-center gap-2 px-2 py-2">
-      <h2 className="type-title">Goal</h2>
-      <span className="min-w-0 flex-1 truncate type-meta text-subtle-foreground">None yet</span>
-      <TooltipIconButton label="Set a goal" hint="Otherwise your first real request sets it" className="size-6" onClick={() => setEditing(true)}>
-        <Edit className="size-3.5" />
-      </TooltipIconButton>
-      {isEditing && <GoalEditor thread={thread} onClose={() => setEditing(false)} />}
-    </section>
-  );
-}
-
-function GoalProgress({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const [isEditing, setEditing] = useState(false);
   const live = progressAt(thread, state.now, true);
   const eta = minutesLeft(thread, state.now);
   const latest = thread.revisions[thread.revisions.length - 1];
@@ -692,7 +672,7 @@ function GoalProgress({ thread }: { thread: Thread }) {
             </Badge>
             <span className="flex-1" />
             {/* z-10 lifts it above the stretched open-timeline button. */}
-            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => setEditing(true)}>
+            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => openGoalEditor(thread.id)}>
               <Edit />
             </Button>
             <PopoverTrigger asChild>
@@ -702,6 +682,7 @@ function GoalProgress({ thread }: { thread: Thread }) {
             </PopoverTrigger>
           </div>
           <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
+          {!!thread.criteria?.length && <CriteriaList criteria={thread.criteria} />}
           <div className="flex items-end justify-between gap-2">
             <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
             <span className="tabular pb-1 type-caption text-subtle-foreground">
@@ -745,7 +726,6 @@ function GoalProgress({ thread }: { thread: Thread }) {
         </div>
         <GoalTimeline thread={thread} />
       </PopoverContent>
-      {isEditing && <GoalEditor thread={thread} onClose={() => setEditing(false)} />}
     </Popover>
   );
 }
