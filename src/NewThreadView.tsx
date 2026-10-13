@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Folder, Link, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
@@ -18,6 +18,7 @@ import { useSplit } from './layout/SplitContext';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
 import { host } from './host';
+import { getDraft, newThreadDraftKey } from './chat/drafts';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
 import { contextMax } from './runtime/models';
@@ -39,10 +40,18 @@ interface Match {
   score: number;
 }
 
+/** The new-thread page's picks, kept with its draft. */
+interface NewThreadPicks {
+  provider: Provider;
+  picked: ThreadControls | null;
+  project: string | null;
+}
+
 export function NewThreadView() {
   return (
     <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:h-full">
-      <PromptInputProvider>
+      {/* One draft per profile: switching profiles swaps it. */}
+      <PromptInputProvider key={useSpace().id}>
         <NewThread />
       </PromptInputProvider>
     </ScrollArea>
@@ -53,26 +62,31 @@ function NewThread() {
   const { dispatch } = useHarness();
   const { leafId } = useSplit();
   const [layoutId] = useState(() => newComposerLayoutId(leafId));
-  const { textInput } = usePromptInputController();
-  const [provider, setProvider] = useState<Provider>(() => getPrefs().agent);
+  const { textInput, attachments } = usePromptInputController();
+  const spaceId = useSpace().id;
+  const draftKey = newThreadDraftKey(spaceId);
+  const [saved] = useState(() => getDraft<NewThreadPicks>(draftKey)?.extra);
+  const [provider, setProvider] = useState<Provider>(() => saved?.provider ?? getPrefs().agent);
   const defaults = useDefaultModels();
   // The Settings default model until you pick one here.
-  const [picked, setPicked] = useState<ThreadControls | null>(null);
+  const [picked, setPicked] = useState<ThreadControls | null>(saved?.picked ?? null);
   const controls = picked ?? initialControls(provider, defaults?.[provider] ?? '');
   const setControls = (next: ThreadControls, model?: { harness: Provider }) => {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
-  const spaceId = useSpace().id;
   // /side needs a thread to ask about.
   const slashItems = useSlashItems(provider, spaceId).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
-  const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
+  const [project, setProject] = useState<string | null>(saved ? saved.project : (recentProjects[0] ?? null));
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const [dependOn, setDependOn] = useState<Match | null>(null);
   const [run, setRun] = useState<RunChoice>(RUN_NOW);
   const draft = textInput.value;
+  // Picks only ride along with something typed or attached; on their own they aren't a draft.
+  const hasDraft = !!draft || attachments.files.length > 0;
+  const draftExtra = useMemo<NewThreadPicks | undefined>(() => (hasDraft ? { provider, picked, project } : undefined), [hasDraft, provider, picked, project]);
   const matches = useStepMatches(draft);
   const linked = dependOn && matches.some((m) => m.step.id === dependOn.step.id) ? dependOn : null;
   // The worktree checkbox remembers your last choice for the next new thread.
@@ -131,6 +145,8 @@ function NewThread() {
           <ComposerCard>
             <ComposerInput
               autoFocus
+              draftKey={draftKey}
+              draftExtra={draftExtra}
               controls={controls}
               provider={provider}
               onControlsChange={setControls}

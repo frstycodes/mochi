@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { ArrowUp, Hierarchy2, ClipboardList, Folder, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
@@ -17,6 +17,7 @@ import {
   PromptInputSubmit,
   PromptInputTools,
   usePromptInputAttachments,
+  usePromptInputController,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input';
 import { AutoHeight } from '@/components/ui/auto-height';
@@ -31,6 +32,7 @@ import type { ThreadControls } from './runtime/controls';
 import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import type { SlashItem } from './chat/slash';
 import { TokenTextarea } from './chat/SlashToken';
+import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
 // Each new thread page takes a fresh id, so nothing mounted later animates from a composer that already docked.
@@ -84,12 +86,22 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   submitLabel?: string;
   /** Beside send: the context ring. */
   meter?: ReactNode;
+  /** Where the unsent text and attachments are kept (`threadDraftKey`, `newThreadDraftKey`); sending clears it. */
+  draftKey: string;
+  /** Kept with the draft; memoize it, a new object saves again. */
+  draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
   const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
+  const draft = useComposerDraft(draftKey, draftExtra);
+  const send = (message: PromptInputMessage) => {
+    const result = onSend(message);
+    if (result !== false) draft.clear();
+    hold(result);
+  };
   return (
-    <PromptInput multiple globalDrop onSubmit={(message) => hold(onSend(message))}>
+    <PromptInput multiple globalDrop onSubmit={send}>
       <ComposerAttachments />
       <PromptInputBody>
         <TokenTextarea items={slashItems} className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
@@ -128,6 +140,50 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
 // PromptInput clears the input after onSubmit unless it throws; it swallows the throw.
 function hold(result: void | boolean) {
   if (result === false) throw new Error('Message held');
+}
+
+/** Puts the saved draft back into the composer once, then saves every change; needs the composer's `PromptInputProvider`. */
+function useComposerDraft(key: string, extra: unknown) {
+  const { textInput, attachments } = usePromptInputController();
+  const [isRestored, setIsRestored] = useState(false);
+  const didRestore = useRef(false);
+  const blobs = useRef(new Map<string, Promise<Blob>>());
+  // Blobs resolve async: only the newest save lands, and a send drops any still in flight.
+  const seq = useRef(0);
+  const text = textInput.value;
+  const { files } = attachments;
+
+  useEffect(() => {
+    // A ref, not the state: StrictMode runs this twice before the state updates, and the files would be added twice.
+    if (didRestore.current) return;
+    didRestore.current = true;
+    const saved = getDraft(key);
+    if (saved) {
+      textInput.setInput(saved.text);
+      attachments.add(saved.files.map((f) => new File([f.blob], f.filename ?? 'Attachment', { type: f.mediaType })));
+    }
+    setIsRestored(true);
+  }, [key, textInput, attachments]);
+
+  useEffect(() => {
+    if (!isRestored) return;
+    const n = ++seq.current;
+    const blobOf = (url: string) => blobs.current.get(url) ?? blobs.current.set(url, fetch(url).then((r) => r.blob())).get(url)!;
+    Promise.all(files.map((f) => blobOf(f.url)))
+      .then((list) => {
+        if (n !== seq.current) return;
+        const kept: DraftFile[] = files.map((f, i) => ({ filename: f.filename, mediaType: f.mediaType, blob: list[i] }));
+        saveDraft(key, { text, files: kept, extra });
+      })
+      .catch((error: unknown) => console.error('Reading an attachment for the draft failed', error));
+  }, [isRestored, key, text, files, extra]);
+
+  return {
+    clear: () => {
+      seq.current++;
+      clearDraft(key);
+    },
+  };
 }
 
 function ComposerAttachments() {
