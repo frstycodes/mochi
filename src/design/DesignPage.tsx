@@ -24,9 +24,10 @@ import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { BoardView } from '../BoardView';
-import { seedQueue } from '../model';
+import { seedQueue, type Thread } from '../model';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
+import { ReportCard } from '../goals/ReportCard';
 import { PipLayer } from '../Browser';
 import { SidePane } from '../SidePane';
 import { AppSidebar } from '../Sidebar';
@@ -610,6 +611,9 @@ function Recipes() {
             <SummaryPanel thread={rl} className="m-3 w-[300px] rounded-xl bg-popover shadow-popover" />
           </div>
         </Block>
+        <Block title="Report card" use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes." wide>
+          <ReportCard thread={reportFixture(rl)} />
+        </Block>
         <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
           <QueueDecision item={decision} showThread />
         </Block>
@@ -706,4 +710,18 @@ function Pair({ rule, children }: { rule: string; children: [ReactNode, ReactNod
       </div>
     </div>
   );
+}
+
+/** A goal thread as it looks after its agent claimed one criterion and reported. */
+function reportFixture(rl: Thread): Thread {
+  const at = rl.activity.at(-1)?.at ?? 0;
+  return {
+    ...rl,
+    live: undefined,
+    criteria: [
+      { id: 'c1', text: 'Every 429 carries Retry-After', claim: { evidence: 'curl -i /v1/search shows Retry-After: 30', at, by: 'claude' } },
+      { id: 'c2', text: 'pnpm test passes', command: 'pnpm test' },
+    ],
+    report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'], left: ['Per-key overrides in the admin UI'], question: 'Switch the 429 body to JSON now, or in a follow-up?' },
+  };
 }

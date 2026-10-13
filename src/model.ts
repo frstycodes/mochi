@@ -45,6 +45,18 @@ export interface Criterion {
   id: string;
   text: string;
   command?: string;
+  /** The agent says it's met (`claim_criterion`), with one line of evidence; checking it is yours or Mochi's. */
+  claim?: { evidence: string; at: number; by: Provider };
+}
+
+/** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
+export interface TurnReport {
+  at: number;
+  by: Provider;
+  decisions: string[];
+  left: string[];
+  /** The one thing that needs you, if anything. */
+  question?: string;
 }
 
 /** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
@@ -187,6 +199,8 @@ export interface Thread {
   similar?: Similar[];
   /** You removed the goal: drafts don't bring it back, an edit does. */
   isGoalOff?: boolean;
+  /** The latest `report`; a newer message from you starts a turn it no longer describes. */
+  report?: TurnReport;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;
