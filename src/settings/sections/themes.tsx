@@ -35,7 +35,7 @@ export function ThemesSection() {
 
 const MOCHI_VALUE = MOCHI_THEME_ID;
 
-function SlotSelect({ slot }: { slot: ThemeSlot }) {
+export function SlotSelect({ slot }: { slot: ThemeSlot }) {
   const prefs = usePrefs();
   const { installed } = useThemesState();
   const apply = useApplyTheme();

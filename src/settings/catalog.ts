@@ -4,7 +4,10 @@ import { SPACE_ICON_NAMES, type Provider, type Space } from '../model.ts';
 import { SHARED_ACCESS } from '../runtime/access.ts';
 import { EFFORTS } from '../runtime/controls.ts';
 import { effortName } from '../runtime/models.ts';
-import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ProfileConfig } from '../host/types/settings.ts';
+import type { RemoteSettings } from '../host/types/remote.ts';
+import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from '../themes/model.ts';
+import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../utility/prompts.ts';
+import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ModelChoice, type ProfileConfig } from '../host/types/settings.ts';
 import { linkedAccountId } from './accounts.ts';
 import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
@@ -46,6 +49,7 @@ export type Control =
   /** A model id; `provider` limits it to one harness, else the value is `provider:model`. */
   | { type: 'model'; provider?: Provider; emptyLabel?: string }
   | { type: 'starredModels' }
+  | { type: 'colorTheme'; slot: ThemeSlot }
   | { type: 'simulator' }
   | { type: 'icon' }
   | { type: 'github' }
@@ -63,6 +67,9 @@ export interface SettingSources {
   profile?: Space;
   accounts?: AccountsState;
   config?: ProfileConfig;
+  /** Installed color themes; while unread, any theme id is taken. */
+  colorThemes?: Pick<ColorTheme, 'id' | 'label' | 'kind'>[];
+  remote?: RemoteSettings;
 }
 
 export type SettingWrite =
@@ -70,6 +77,7 @@ export type SettingWrite =
   | { to: 'theme'; theme: string }
   | { to: 'quiet'; patch: Partial<QuietHours> }
   | { to: 'host'; patch: AgentSettingsPatch }
+  | { to: 'remote'; patch: Partial<RemoteSettings> }
   | { to: 'profile'; patch: Partial<Pick<Space, 'name' | 'icon' | 'github' | 'syncInstructions'>> }
   | { to: 'account'; provider: Provider; accountId: string }
   | { to: 'config'; title: string; changes: ConfigChange[] };
@@ -90,6 +98,8 @@ export function valueLabel(setting: Setting, value: string | undefined) {
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return value === 'true' ? 'On' : 'Off';
   if (control.type === 'choice' || control.type === 'select') return control.options.find((o) => o.value === value)?.label ?? value;
   if (control.type === 'instructions') return `${value.trimEnd().split('\n').length} lines`;
+  // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
+  if (control.type === 'colorTheme') return value === MOCHI_THEME_ID ? 'Mochi' : value.split(':').pop()!;
   return value || 'Not set';
 }
 
@@ -175,7 +185,48 @@ function parseValue(control: Control, value: string): string | number | boolean 
   return value;
 }
 
+/** A model choice as one value, `provider:model`; model ids can hold colons. */
+const modelValue = ({ provider, model }: ModelChoice) => `${provider}:${model}`;
+
+function parseModelChoice(value: string): ModelChoice | null {
+  const [provider, ...model] = value.split(':');
+  return HARNESS_IDS.includes(provider as Provider) && model.length ? { provider: provider as Provider, model: model.join(':') } : null;
+}
+
 const AGENT_REACH = "An agent can't widen its own reach.";
+
+function colorTheme(slot: ThemeSlot): Setting {
+  const key = slot === 'light' ? 'lightTheme' : 'darkTheme';
+  return {
+    key,
+    label: slot === 'light' ? 'Light theme' : 'Dark theme',
+    section: 'themes',
+    description: 'Mochi, or an installed VS Code color theme',
+    control: { type: 'colorTheme', slot },
+    read: ({ prefs }) => prefs[key],
+    write: (value, { colorThemes }) => {
+      const isKnown = value === MOCHI_THEME_ID || !colorThemes || colorThemes.some((t) => t.id === value && slotOf(t.kind) === slot);
+      return isKnown ? { to: 'prefs', patch: { [key]: value } } : null;
+    },
+  };
+}
+
+function remoteSetting(key: keyof RemoteSettings, label: string, control: Control, extra: Partial<Setting> = {}): Setting {
+  return {
+    key: key === 'machineName' ? key : key === 'isEnabled' ? 'remoteEnabled' : 'remoteNetwork',
+    label,
+    section: 'devices',
+    control,
+    read: ({ remote }) => remote && String(remote[key]),
+    write: (value) => {
+      const parsed = parseValue(control, value);
+      return parsed === null || (typeof parsed === 'string' && parsed.length > 64) ? null : { to: 'remote', patch: { [key]: parsed } };
+    },
+    ...extra,
+  };
+}
+
+const REMOTE_REACH = "It opens this computer to other devices; only you do that.";
 
 const APP_SETTINGS: Setting[] = [
   {
@@ -186,6 +237,8 @@ const APP_SETTINGS: Setting[] = [
     read: ({ theme }) => theme,
     write: (value) => (THEMES.some((t) => t.value === value) ? { to: 'theme', theme: value } : null),
   },
+  colorTheme('light'),
+  colorTheme('dark'),
   pref('reduceMotion', 'Reduce motion', 'general', choice(MOTION)),
   pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }),
   pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH),
@@ -231,6 +284,9 @@ const APP_SETTINGS: Setting[] = [
       write: (value) => (HOURS.some((h) => h.value === value) ? { to: 'quiet', patch: { [edge]: Number(value) } } : null),
     }),
   ),
+  remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, { locked: REMOTE_REACH }),
+  remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, { locked: REMOTE_REACH }),
+  remoteSetting('machineName', 'Computer name', { type: 'text', placeholder: 'This computer’s host name' }, { description: 'How your devices list this computer; empty uses the host name' }),
   pref('agent', 'Agent', 'defaults', choice(AGENTS)),
   pref('permissions', 'Permissions', 'defaults', choice(SHARED_ACCESS.map((a) => ({ value: a, label: a, ...(a === 'Full access' && { tone: 'warning' as const }) }))), { locked: AGENT_REACH }),
   {
@@ -238,10 +294,10 @@ const APP_SETTINGS: Setting[] = [
     label: 'Side chat model',
     section: 'defaults',
     control: { type: 'model' },
-    read: ({ host }) => host && `${host.sideChatModel.provider}:${host.sideChatModel.model}`,
+    read: ({ host }) => host && modelValue(host.sideChatModel),
     write: (value) => {
-      const [provider, ...model] = value.split(':');
-      return HARNESS_IDS.includes(provider as Provider) && model.length ? { to: 'host', patch: { sideChatModel: { provider: provider as Provider, model: model.join(':') } } } : null;
+      const sideChatModel = parseModelChoice(value);
+      return sideChatModel && { to: 'host', patch: { sideChatModel } };
     },
   },
   pref('whileWorking', 'While the agent is working, new messages', 'defaults', select(WHILE_WORKING)),
@@ -251,6 +307,20 @@ const APP_SETTINGS: Setting[] = [
   pref('simplifyAuto', 'Simplify long replies automatically', 'simplify', SWITCH),
   pref('simplifyAutoWords', 'Long means more than (words)', 'simplify', { type: 'number', min: 50, max: 2000, step: 50 }),
   hostSetting('concurrency', 'Agents running at once', 'defaults', { type: 'number', ...CONCURRENCY_RANGE, step: 1 }),
+  ...UTILITY_TASKS.map(
+    (task): Setting => ({
+      key: `utility.${task}`,
+      label: UTILITY_TASK_LABELS[task],
+      section: 'background',
+      context: 'Background task model',
+      control: { type: 'model' },
+      read: ({ host }) => host && modelValue(host.utilityModels[task]),
+      write: (value) => {
+        const choice = parseModelChoice(value);
+        return choice && { to: 'host', patch: { utilityModels: { [task]: choice } } };
+      },
+    }),
+  ),
   pref('driftGuard', 'Drift guard', 'goals', SWITCH),
   pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM)),
   hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.harness/worktrees', isPath: true }),
