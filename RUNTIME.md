@@ -69,6 +69,8 @@ The agent's plan list arrives whole each time (TodoWrite input, `turn/plan/updat
 
 Sizes for new steps default to 2 until the agent says otherwise. Progress, burn-up and ETA keep their math.
 
+Being replaced by Goals v2 below: steps mirror the plan with no sizes, and new plan items stop bumping the goal version.
+
 ## Approvals
 
 - Claude: keep the `canUseTool` promise's resolver in a map keyed by `toolUseID`, emit `approval`, resolve when the queue card is answered; abort through the callback's `signal` if the turn is interrupted. It only fires when nothing earlier approved the call; to gate every call, use a `PreToolUse` hook (docs). The composer's permissions menu sets `permissionMode` per harness (`PERMISSIONS` in `src/runtime/access.ts`):
@@ -173,9 +175,25 @@ All of the above verified with live runs on 2026-10-13 (tiny prompts, `electron/
 
 **Mochi background agents** (`start_background_agent`, `list_background_agents`, `stop_background_agent`): for work that should outlive the current turn. The tool adds a `mochi` subagent and starts it as a session of its own in `host.agent` (thread id `<thread>--<id>`), so it runs on the profile's account and, for Claude, counts toward the concurrency cap like any session (Codex has no cap yet). `worktree: same` runs it in the thread's worktree; `new` makes a worktree on `<branch>-<id>` branched off the thread's branch (`workspace.base`). Its events are folded into the parent as subagent events in the renderer (`fromBackground`): approvals and questions land on the parent's queue named after the agent, its spend counts toward the thread, its context doesn't. Its session stops after its first turn. On end it logs a line in the thread and leaves a note (`live.notes`) that goes to the thread's agent ahead of your next message; "Send to thread" sends it now. Start and stop are `change` tools (list is `read`), quiet: the chat row is their notice. A restart marks running agents stopped.
 
+## Goals v2
+
+Design in CHECKLIST §10–12 (decided 2026-10-13). Runtime pieces:
+
+- **Drafting.** On a thread's first message, and on later messages while the thread has no goal, one background-model call returns `{ kind: 'task' | 'chat', outcome, criteria[], similar[] }`. `similar` judges a shortlist (word overlap against active goals and settled records in the profile). The agent starts at once; the draft lands when it returns and never blocks the send.
+- **Plan prompting.** Goal threads get an instruction to keep their own plan current (Claude task tools, Codex `turn/plan/updated`); the plan still maps through `applyPlan`, without sizes and without a revision.
+- **Mochi tools.** `report` (decisions, what's left, one question for you; once per turn), `claim_criterion` (criterion id + one line of evidence), `get_report` (read, for coordinators). `edit_goal` edits outcome and criteria; `add_step` and friends edit the plan without a revision.
+- **Verification.** A checkable criterion's command runs in the thread's worktree (`threadCwd`) when the agent claims it or the turn ends, through main, with a timeout; output is kept on the criterion.
+- **Phase.** Derived in the renderer from what the thread already holds: no steps and no edits → Planning; edits → Building; a check run or claim → Verifying; all criteria met → Ready for review.
+- **Context.** Report cards and simplifications are Mochi's own data: never sent to the agent, never in fork seeding or handoff summaries.
+
 ## Not verified yet (check before building on it)
 
 - Env var the Agent SDK reads for the API key; the `user` tool_result message shape.
 - Per-process memory of a Claude Agent SDK session; safe concurrency count.
 - Whether app-server picks up an existing `codex login` without a login call; concurrent-turn limits.
 - Whether `TaskCreate` / `TaskUpdate` replace `TodoWrite` on the default model (docs say "on certain models"; `CLAUDE_CODE_ENABLE_TASKS=0` forces TodoWrite).
+- Whether runtime events say clearly enough when a test or check ran to drive the Verifying phase (check `src/runtime/apply.ts` event kinds before goals PR 5).
+- How reliably Claude and Codex call an end-of-turn Mochi tool when asked; the background-model fallback covers misses.
+- How to block `gh pr create` in Codex; the fallback replaces the body after the fact.
+- How to attach screenshots to a PR body without a GitHub upload API (side branch or release assets).
+- Whether a thread records the files it actually edited outside the plan's `footprint` (check before goals PR 4).
