@@ -5,10 +5,9 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Kbd } from '@/components/ui/kbd';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
 import { ARROW_SIDE, neighbourInDirection, type Side } from '../layout/tree';
 import { activeThreads, pinnedThreads } from '../reorder';
-import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
+import { TitleBar } from '../TitleBar';
 import { useHarness } from '../store';
 import { THREAD_MENU } from '../menus/menus';
 import { TargetContextMenu } from '../menus/TargetContextMenu';
@@ -17,7 +16,6 @@ import { useThreadSnapshots } from './snapshot';
 
 /** mod ↑: every running session in the space as a grid of snapshot cards, pinned first in pin order. Opens and closes without animation (keyboard). */
 export function Overview() {
-  const { reservesToggle } = useToggleSlot(true);
   const { state, dispatch } = useHarness();
   const pinned = pinnedThreads(state.threads, state.spaceId).map((t) => t.id);
   const others = activeThreads(state.threads, state.spaceId).map((t) => t.id);
@@ -38,7 +36,7 @@ export function Overview() {
 
   return (
     <div role="dialog" aria-modal aria-label="All sessions" onKeyDown={moveFocus} className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background">
-      <header className={cn('app-drag flex h-11 shrink-0 items-center gap-3 px-4', reservesToggle && TOGGLE_RESERVE)}>
+      <TitleBar className="gap-3 px-4">
         <h2 className="type-title">All sessions</h2>
         <span className="type-meta text-subtle-foreground tabular">{pinned.length + others.length}</span>
         <span className="flex-1" />
@@ -51,7 +49,7 @@ export function Overview() {
           Close
           <Kbd>Esc</Kbd>
         </Button>
-      </header>
+      </TitleBar>
       <div className="flex flex-col gap-6 px-4 pb-6">
         {groups.length === 0 && <NoSessions onStart={() => open(null)} />}
         {groups.map((g, gi) => (

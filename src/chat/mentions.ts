@@ -28,13 +28,13 @@ export function withoutQuery(text: string) {
   return text.replace(/(^|\s)@[^\s@]*$/, '$1');
 }
 
-/** Threads (not `selfId`), windows, skills, then MCP servers whose name contains the query, at most six of each. */
+/** Threads (not `selfId`, none settled), windows, skills, then MCP servers whose name contains the query, at most six of each. */
 export function mentionOptions(query: string, threads: Thread[], windows: AppWindow[], selfId: string, skills: AgentCommand[] = [], servers: McpServer[] = []): MentionOption[] {
   const q = query.toLowerCase();
   const hit = (title: string) => title.toLowerCase().includes(q);
   return [
     ...threads
-      .filter((t) => t.id !== selfId && hit(t.title))
+      .filter((t) => t.id !== selfId && t.status !== 'settled' && hit(t.title))
       .slice(0, MAX_OPTIONS)
       .map((thread) => ({ kind: 'thread' as const, thread })),
     ...windows
@@ -52,6 +52,19 @@ export function mentionOptions(query: string, threads: Thread[], windows: AppWin
   ];
 }
 
+const MENTION_GROUPS = [
+  { kind: 'thread', label: 'Threads' },
+  { kind: 'window', label: 'Windows' },
+  { kind: 'skill', label: 'Skills' },
+  { kind: 'mcp', label: 'MCP servers' },
+] as const;
+
+/** The menu's sections in order with their items, empty ones left out. The screen-recording prompt sits with the windows it would unlock. */
+export function mentionGroups<T extends { kind: MentionOption['kind'] | 'permission' }>(items: T[]) {
+  const groupOf = (item: T) => (item.kind === 'permission' ? 'window' : item.kind);
+  return MENTION_GROUPS.map((g) => ({ ...g, items: items.filter((item) => groupOf(item) === g.kind) })).filter((g) => g.items.length);
+}
+
 /** The mention a picked option adds; a window's needs its screenshot first, so it isn't made here. */
 export function mentionFor(option: Exclude<MentionOption, { kind: 'window' }>): Mention {
   if (option.kind === 'thread') return { kind: 'thread', id: option.thread.id, title: option.thread.title };
@@ -62,24 +75,25 @@ export function mentionFor(option: Exclude<MentionOption, { kind: 'window' }>): 
 export const optionId = (option: MentionOption) => (option.kind === 'thread' ? option.thread.id : option.kind === 'window' ? option.window.id : option.kind === 'skill' ? `skill:${option.skill.name}` : `mcp:${option.server.name}`);
 
 /**
- * What the transcript shows (`text`: the references as `@title`, then your message) and what the agent gets (`prompt`:
- * each thread's digest and a note per screenshot ahead of your message, then what to use for it; `images`: the screenshots
- * in mention order; `skills`: the skills to attach, for harnesses that load them from the message rather than by name).
- * A message that runs a `/command` keeps it first in both, since the harness only reads a command at the very start.
+ * What the transcript shows (`text`: the references as `@title`, then your message as written) and what the agent gets
+ * (`prompt`: each thread's digest and a note per screenshot ahead of your message, then what to use for it; `images`: the
+ * screenshots in mention order; `skills`: the skills to attach, for harnesses that load them from the message rather than by
+ * name). `typedSkills`: skills the message names as `/skill` after its start, which only the separate note makes the harness
+ * load. A message that runs a `/command` keeps it first in both, since the harness only reads a command at the very start.
  */
-export function withReferences(message: string, mentions: Mention[], threads: Thread[], isCommand = false, provider: Provider = 'claude') {
-  if (mentions.length === 0) return { text: message, prompt: message, images: [], skills: [] };
+export function withReferences(message: string, mentions: Mention[], threads: Thread[], { isCommand = false, provider = 'claude', typedSkills = [] }: { isCommand?: boolean; provider?: Provider; typedSkills?: string[] } = {}) {
+  const skills = [...new Set([...mentions.flatMap((m) => (m.kind === 'skill' ? [m.title] : [])), ...typedSkills])];
+  if (mentions.length === 0 && skills.length === 0) return { text: message, prompt: message, images: [], skills: [] };
   const tags = mentions.map((m) => `@${m.title}`).join(' ');
-  const text = isCommand ? `${message}\n\n${tags}` : `${tags}\n\n${message}`;
+  const text = !tags ? message : isCommand ? `${message}\n\n${tags}` : `${tags}\n\n${message}`;
   const context = mentions.flatMap((m) => {
     if (m.kind === 'window') return [`<window title="${attr(m.title)}">Screenshot of this window attached.</window>`];
     if (m.kind !== 'thread') return [];
     const thread = threads.find((t) => t.id === m.id);
     return [thread ? threadDigest(thread) : `<thread title="${attr(m.title)}">No longer available.</thread>`];
   });
-  const uses = mentions.flatMap((m) => (m.kind === 'skill' ? [skillLine(m.title, provider)] : m.kind === 'mcp' ? [serverLine(m.title, provider)] : []));
+  const uses = [...skills.map((name) => skillLine(name, provider)), ...mentions.flatMap((m) => (m.kind === 'mcp' ? [serverLine(m.title, provider)] : []))];
   const images = mentions.flatMap((m) => (m.kind === 'window' ? [m.image] : []));
-  const skills = mentions.flatMap((m) => (m.kind === 'skill' ? [m.title] : []));
   const preamble = [context.length ? `The user referenced these for context:\n\n${context.join('\n\n')}` : '', uses.join('\n')].filter(Boolean).join('\n\n');
   return { text, prompt: isCommand ? `${message}\n\n${preamble}` : `${preamble}\n\n${message}`, images, skills };
 }

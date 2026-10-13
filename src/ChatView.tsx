@@ -3,14 +3,14 @@ import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp } from 'reicon-react';
+import { ChevronDown, ChevronUp, Hourglass } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, isMochiCard, type Provider, type QueueItem, type Thread } from './model';
+import { authorName, isMochiCard, type Provider, type QueuedMessage, type QueueItem, type Thread } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
@@ -21,8 +21,8 @@ import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
-import { agentPhase, currentAction, pendingWork, type CurrentAction } from './agentPhase';
-import { chatRows, liveWorkIndex, type ChatRow } from './chat/rows';
+import { agentPhase, currentAction, isWorking, pendingWork, type CurrentAction } from './agentPhase';
+import { chatRows, finalReplies, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
@@ -31,20 +31,21 @@ import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
-import { MOD_KEY } from './keys';
+import { isMod, MOD_KEY } from './keys';
 import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitBanner } from './chat/LimitBanner';
-import { parseSlash, resolveToken, type SlashItem } from './chat/slash';
+import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
-import { withReferences } from './chat/mentions';
+import { queuedMessage, shouldQueue } from './chat/outbox';
+import { QueueTray } from './chat/QueueTray';
+import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
-import { QUEUED_PREFIX } from './runtime/live';
 import { SubagentRow } from './agents/SubagentRow';
 
 /** `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread. */
@@ -60,6 +61,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
+  const withActions = finalReplies(rows, isRunning);
 
   const composer = useComposerHeightVar();
   const resize = useOpeningResize();
@@ -79,7 +81,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
               {hasGoal(thread) && <GoalCard thread={thread} />}
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
+                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
@@ -120,7 +122,7 @@ function useComposerHeightVar() {
 }
 
 // isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; action?: CurrentAction }) {
+function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; hasActions: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'subagent') {
@@ -134,6 +136,12 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, action }: { 
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
   const message = (
     <div data-activity-index={row.index} data-file-scope className="group/row flex flex-col gap-1">
+      {entry.wasQueued && (
+        <span className="flex items-center gap-1 self-end type-caption text-subtle-foreground">
+          <Hourglass aria-hidden className="size-3" />
+          Queued
+        </span>
+      )}
       <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
         <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
           {isAgent && row.showAuthor && (
@@ -143,7 +151,7 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, action }: { 
               <span className="tabular">{clock(entry.at)}</span>
             </span>
           )}
-          {isYou && resolveToken(entry.text, slashItems) ? (
+          {isYou && slashTokens(entry.text, slashItems).length > 0 ? (
             <SlashTokenText text={entry.text} items={slashItems} />
           ) : (
             <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
@@ -152,7 +160,7 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, action }: { 
           )}
         </MessageContent>
       </Message>
-      {!isReadOnly && <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
+      {!isReadOnly && (isYou || hasActions) && <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
     </div>
   );
   if (isReadOnly) return message;
@@ -240,8 +248,13 @@ function Composer({
   onToggleTray: () => void;
   handoff: ReturnType<typeof useComposerHandoff>;
 }) {
-  const { state, dispatch } = useHarness();
-  const [isQueue, setIsQueue] = useState(false);
+  const { dispatch } = useHarness();
+  const { whileWorking } = usePrefs();
+  const [isHeld, setIsHeld] = useState(false);
+  const isQueueing = shouldQueue(thread, whileWorking, isHeld);
+  const queued = thread.queued ?? [];
+  const { textInput } = usePromptInputController();
+  const textarea = useRef<HTMLTextAreaElement>(null);
   const controls = controlsOf(thread);
   const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
@@ -253,6 +266,14 @@ function Composer({
   const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
   useSeedAttachment(thread.id === 'adm');
 
+  const edit = (message: QueuedMessage) => {
+    dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id });
+    // Whatever you were already typing stays; the queued text follows it.
+    textInput.setInput(textInput.value.trim() ? `${textInput.value}\n${message.draft}` : message.draft);
+    mention.restore(message.mentions);
+    textarea.current?.focus();
+  };
+
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
       <DriftCard guard={drift} thread={thread} />
@@ -263,54 +284,76 @@ function Composer({
           <MentionMenu menu={mention} />
           <ComposerCard className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
+            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, interrupts: true })} />
             <MentionChips menu={mention} />
             <ComposerInput
+              ref={textarea}
               controls={controls}
               provider={provider}
               isLocked={!!thread.live}
               onControlsChange={setControls}
               slashItems={slashItems}
               onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
-              submitLabel={isQueue ? 'Queue message' : 'Send'}
+              submitLabel={isQueueing ? 'Queue message' : 'Send'}
               meter={<ContextRing provider={provider} spaceId={thread.spaceId} context={thread.context} usage={threadUsage(thread)} />}
               onSend={({ text, files }) => {
                 const trimmed = text.trim();
                 if (!trimmed && files.length === 0 && mention.mentions.length === 0) return;
                 const command = parseSlash(trimmed);
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
-                const withFiles = files.length ? `${trimmed}${trimmed ? ' ' : ''}(${files.length} attached)` : trimmed;
-                const { text: shown, ...references } = withReferences(withFiles, mention.mentions, state.threads, !!resolveToken(trimmed, slashItems), provider);
-                return drift.submit(shown, isQueue ? QUEUED_PREFIX : '', references);
+                const message = queuedMessage(trimmed, { files: files.length, mentions: mention.mentions, isCommand: !!resolveToken(trimmed, slashItems), typedSkills: typedSkills(trimmed, slashItems) });
+                if (!isQueueing) return drift.submit(message);
+                dispatch({ type: 'queued-add', threadId: thread.id, message });
+                mention.clear();
               }}
-              placeholder={decisions.length ? 'Answer above, or steer with a message' : `Steer ${authorName(provider)} while it works`}
+              placeholder={placeholder(thread, decisions.length > 0, isQueueing)}
               autoFocus={handoff.isHandoff}
               {...menuProps}
               onKeyDown={(e) => {
                 mention.textareaProps.onKeyDown(e);
                 if (!e.isPropagationStopped()) slash.textareaProps.onKeyDown(e);
-                if (e.key === MOD_KEY) setIsQueue(true);
+                if (e.key === MOD_KEY) setIsHeld(true);
+                const newest = queued.at(-1);
+                if (e.key !== 'ArrowUp' || e.defaultPrevented || e.altKey || e.shiftKey || isMod(e) || e.currentTarget.value || mention.mentions.length || !newest) return;
+                e.preventDefault();
+                edit(newest);
               }}
-              onKeyUp={(e) => e.key === MOD_KEY && setIsQueue(false)}
-              onBlur={() => setIsQueue(false)}
+              onKeyUp={(e) => e.key === MOD_KEY && setIsHeld(false)}
+              onBlur={() => setIsHeld(false)}
             />
           </ComposerCard>
         </div>
         <ComposerMeta>
           <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
-          <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
-            {isQueue ? (
-              'Queues after this turn'
-            ) : (
-              <>
-                <Shortcut keys={['mod']} /> to queue
-              </>
-            )}
-          </span>
+          {isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
         </ComposerMeta>
         {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
     </div>
+  );
+}
+
+function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
+  const name = authorName(thread.providers[0]);
+  if (isAsking) return 'Answer above, or steer with a message';
+  if (isQueueing) return `Queue a message for when ${name} finishes`;
+  return isWorking(thread) ? `Steer ${name} while it works` : `Message ${name}`;
+}
+
+/** What holding mod does to this send: the setting's other choice. */
+function WhileWorkingHint({ whileWorking, isHeld }: { whileWorking: Prefs['whileWorking']; isHeld: boolean }) {
+  const other = whileWorking === 'queue' ? 'steer' : 'queue';
+  return (
+    <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
+      {isHeld ? (
+        { steer: 'Steers now', queue: 'Queues after this turn' }[other]
+      ) : (
+        <>
+          Hold <Shortcut keys={['mod']} /> to {other}
+        </>
+      )}
+    </span>
   );
 }
 

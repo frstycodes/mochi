@@ -9,14 +9,14 @@ import type { AppWindow, ScreenAccess } from '../host/types/windows';
 import type { AgentCommand, McpServer, Thread } from '../model';
 import { openPhotos } from '../photo/photos';
 import { useHarness } from '../store';
-import { mentionFor, mentionOptions, mentionQuery, optionId, withoutQuery, type Mention, type MentionOption } from './mentions';
+import { mentionFor, mentionGroups, mentionOptions, mentionQuery, optionId, withoutQuery, type Mention, type MentionOption } from './mentions';
 
 type MenuItem = MentionOption | { kind: 'permission' };
 
 /** Above the thread composer while the text ends in `@` and part of a name: threads, windows, skills and MCP servers, grouped. */
 export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> }) {
   if (!menu.isOpen) return null;
-  const groups = GROUPS.map((g) => ({ ...g, items: menu.items.filter((item) => groupOf(item) === g.kind) })).filter((g) => g.items.length);
+  const groups = mentionGroups(menu.items);
   return (
     <div id={menu.listId} role="listbox" aria-label="Reference a thread, window, skill or MCP server" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-popover">
       {groups.map((group) => (
@@ -48,16 +48,6 @@ export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> 
   );
 }
 
-const GROUPS = [
-  { kind: 'thread', label: 'Threads' },
-  { kind: 'window', label: 'Windows' },
-  { kind: 'skill', label: 'Skills' },
-  { kind: 'mcp', label: 'MCP servers' },
-] as const;
-
-// The screen-recording prompt belongs with the windows it would unlock.
-const groupOf = (item: MenuItem) => (item.kind === 'permission' ? 'window' : item.kind);
-
 function MentionItem({ item }: { item: MenuItem }) {
   if (item.kind === 'permission')
     return (
@@ -72,6 +62,7 @@ function MentionItem({ item }: { item: MenuItem }) {
       <>
         <WindowIcon icon={item.window.icon} />
         <span className="min-w-0 truncate">{item.window.title}</span>
+        {!!item.window.app && item.window.app !== item.window.title && <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.window.app}</span>}
       </>
     );
   if (item.kind === 'skill')
@@ -197,7 +188,9 @@ export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: 
     'aria-controls': isOpen ? listId : undefined,
     'aria-activedescendant': isOpen ? `${listId}-${items.indexOf(current)}` : undefined,
   };
-  return { listId, items, active, isOpen, choose, mentions, remove, clear: () => setMentions([]), textareaProps };
+  // Edit on a queued message brings its references back beside any you already picked.
+  const restore = (list: Mention[]) => setMentions((all) => [...all, ...list.filter((m) => !all.some((a) => a.id === m.id))]);
+  return { listId, items, active, isOpen, choose, mentions, remove, restore, clear: () => setMentions([]), textareaProps };
 }
 
 /** Other apps' windows, listed fresh each time the menu opens. */
