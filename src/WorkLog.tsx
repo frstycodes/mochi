@@ -5,7 +5,6 @@ import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getShare
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Check, ChevronRight, Eye, Flag, Global, GlobalSearch, TerminalSquare, X } from 'reicon-react';
-import { Spinner } from '@/components/ui/spinner';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
@@ -51,7 +50,6 @@ export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?
           onClick={() => setOpen((o) => !o)}
           className="group/log flex h-7 min-w-0 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground"
         >
-          <LeadIcon state={action?.isWaiting ? 'waiting' : isLive ? 'live' : 'done'} isOpen={isOpen} />
           <RollingTitle title={title} />
           <AnimatePresence initial={false}>
             {!isLive && (edits.length > 0 || failed > 0) && (
@@ -66,6 +64,7 @@ export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?
               </motion.span>
             )}
           </AnimatePresence>
+          <TrailIcon isWaiting={!!action?.isWaiting} isOpen={isOpen} />
         </button>
         {/* Folded, the images it looked at stay in view like Claude's; open, each Read row shows its own. */}
         <AnimatePresence initial={false}>
@@ -112,7 +111,7 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
 
   const row = (
     <>
-      <CallGlyph call={call} links={entry.links} isRunning={isRunning} />
+      <CallGlyph call={call} links={entry.links} />
       {isRunning ? (
         <Shimmer as="span" className="min-w-0 flex-1 truncate">
           {description}
@@ -183,8 +182,7 @@ function runOf(entry: ToolEntry): RunResult | undefined {
   return { exitCode: entry.exitCode ?? 0, lines: outputLines(entry.output ?? '') };
 }
 
-function CallGlyph({ call, links = [], isRunning }: { call: ToolCall; links?: WebLink[]; isRunning: boolean }) {
-  if (isRunning) return <Spinner className="size-4 shrink-0 text-muted-foreground" />;
+function CallGlyph({ call, links = [] }: { call: ToolCall; links?: WebLink[] }) {
   if (call.verb === 'Search') {
     const hosts = [...new Set(links.map((l) => hostname(l.url)))].slice(0, 3);
     if (!hosts.length) return <GlobalSearch className="size-4 shrink-0 text-muted-foreground" />;
@@ -288,19 +286,19 @@ function useImageUrl(files: ThreadFiles, path: string) {
 
 const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' } };
 
-/** The working spinner while live, the needs-you dot while paused on you (the chevron on hover for both, so it still reads as openable), the chevron once settled. */
-function LeadIcon({ state, isOpen }: { state: 'live' | 'waiting' | 'done'; isOpen: boolean }) {
-  const chevron = <ChevronRight className={cn('size-3.5 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />;
+/** After the title, so it sits flush with the prose like Claude's: the chevron, or the needs-you dot while paused on you (the chevron on hover, so it still reads as openable). Working needs no icon: Mochi under the chat and the shimmering title say it. */
+function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {
+  const chevron = <ChevronRight className={cn('size-3 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />;
   return (
-    <span className="grid size-3.5 shrink-0 place-items-center *:col-start-1 *:row-start-1">
+    <span className="grid size-3 shrink-0 place-items-center *:col-start-1 *:row-start-1">
       <AnimatePresence initial={false}>
-        {state !== 'done' ? (
-          <motion.span key={state} {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center *:col-start-1 *:row-start-1">
-            {state === 'live' ? <Spinner className="size-3.5 text-muted-foreground group-hover/log:opacity-0" /> : <span aria-hidden className="size-1.5 rounded-full bg-warning group-hover/log:opacity-0" />}
+        {isWaiting ? (
+          <motion.span key="waiting" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center *:col-start-1 *:row-start-1">
+            <span aria-hidden className="size-1.5 rounded-full bg-warning group-hover/log:opacity-0" />
             <span className="opacity-0 group-hover/log:opacity-100">{chevron}</span>
           </motion.span>
         ) : (
-          <motion.span key="done" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center">
+          <motion.span key="chevron" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center">
             {chevron}
           </motion.span>
         )}
