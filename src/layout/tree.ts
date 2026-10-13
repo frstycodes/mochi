@@ -217,13 +217,18 @@ export function neighbourInDirection(rects: Record<string, Rect>, fromId: string
   return candidates[0]?.[0];
 }
 
-/** Which drop zone a point falls in: the outer quarter on each side, the middle replaces. */
-export function zoneAt(rect: Rect, x: number, y: number): Zone {
+/** Which drop zone a point falls in: the outer quarter on each side, the middle replaces. Without a centre, the nearest side wins. */
+export function zoneAt(rect: Rect, x: number, y: number, hasCenter = true): Zone {
   const fx = (x - rect.left) / (rect.right - rect.left);
   const fy = (y - rect.top) / (rect.bottom - rect.top);
   const edges = { left: fx, right: 1 - fx, top: fy, bottom: 1 - fy } satisfies Record<Side, number>;
   const [side, distance] = Object.entries(edges).sort(([, a], [, b]) => a - b)[0] as [Side, number];
-  return distance < 0.25 ? side : 'center';
+  return distance < 0.25 || !hasCenter ? side : 'center';
+}
+
+/** Pane tabs of one thread that are open as splits in any space; the pane strip leaves them out. */
+export function splitTabIds(layouts: SpaceLayout[], threadId: string) {
+  return new Set(layouts.flatMap((l) => leaves(l.root)).flatMap(({ view }) => (view.kind === 'tab' && view.threadId === threadId ? [view.tabId] : [])));
 }
 
 export function sameView(a: View, b: View) {

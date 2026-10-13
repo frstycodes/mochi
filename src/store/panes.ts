@@ -59,6 +59,8 @@ export function panesReducer(state: State, action: Action): State {
       if (!tab) return panesReducer(state, { type: 'pane-open-tab', threadId: action.threadId, kind: action.kind });
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: tab.id })) };
     }
+    case 'layout-return-tab':
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: action.tabId })) };
     case 'pane-select-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, activeTab: action.tabId })) };
     case 'pane-pop':

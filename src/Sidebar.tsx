@@ -398,7 +398,7 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
       pointerY = ev.clientY;
       if (!current) {
         if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD) return;
-        startDrag({ kind: 'thread', id: thread.id }, thread.title, ev.clientX, ev.clientY, true);
+        startDrag({ kind: 'thread', id: thread.id }, thread.title, ev.clientX, ev.clientY, { hasOwnGhost: true });
         document.documentElement.style.userSelect = 'none';
         window.getSelection()?.removeAllRanges();
         frame = requestAnimationFrame(autoScroll);

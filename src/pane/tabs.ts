@@ -34,3 +34,8 @@ export const PANE_TABS = {
 export function tabTitle(tab: PaneTab) {
   return tab.title ?? PANE_TABS[tab.kind].title;
 }
+
+/** Why a tab kind can't open as its own split, shown on the drop zone while dragging it; undefined when it can. */
+export function splitRefusal(kind: PaneTabKind) {
+  return kind === 'new' ? "A new tab can't open in a split. Pick what it shows first." : undefined;
+}
