@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, LimitWindow } from '../../../src/host/types/agent.ts';
 import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
-import { codexWindows, hottest, mergeWindows, nearLimit } from '../../../src/usage/limits.ts';
+import { codexWindows, hottest, mergeWindows } from '../../../src/usage/limits.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -30,10 +30,9 @@ export function threadState(threadId: string, cwd: string, { isResumed = false, 
   return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits };
 }
 
-/** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. Returns the window now at `WARN_PCT` or more, if any. */
+/** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
 export function updateLimits(limits: AccountLimits, params: unknown) {
   limits.windows = mergeWindows(limits.windows ?? [], codexWindows(obj(obj(params)?.rateLimits) as Parameters<typeof codexWindows>[0]));
-  return nearLimit(limits.windows);
 }
 
 /** The Codex thread a notification or server request belongs to, if any. */
@@ -75,7 +74,7 @@ export function mapNotification(method: string, params: unknown, s: ThreadState)
       const error = obj(turn?.error);
       const end: AgentEvent = { threadId, type: 'turn-end', status, ...(typeof error?.message === 'string' && { error: apiMessage(error.message) }) };
       // The thread waits on the same account until the reset; moving it to another account is never automatic.
-      if (error?.codexErrorInfo !== 'usageLimitExceeded') return [end];
+      if (error?.codexErrorInfo !== 'usageLimitExceeded' && error?.codexErrorInfo !== 'rateLimitExceeded') return [end];
       const binding = hottest(s.limits.windows ?? []);
       return [{ threadId, type: 'limit', ...(binding?.resetsAt && { resetsAt: binding.resetsAt }), ...(binding && { label: binding.label }) }, end];
     }

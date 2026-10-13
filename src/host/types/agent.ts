@@ -55,10 +55,15 @@ export type AgentEvent =
   | { threadId: string; type: 'resolved'; requestId: string }
   /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
-  /** The account is close to a plan window's limit (Claude's `allowed_warning`, a Codex window at `WARN_PCT`); turns still run. */
-  | { threadId: string; type: 'limit-warning'; window: LimitWindow }
-  /** The account hit a plan window's limit: the turn ended and nothing runs on it until `resetsAt`. `label` names the window ("5-hour"). */
-  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string }
+  /** What the harness itself says about the account's usage as it goes (Claude's limit warning, its switch to extra usage); a line in the transcript, nothing more. */
+  | { threadId: string; type: 'limit-notice'; text: string }
+  /**
+   * The account hit a plan window's limit. `label` names the window ("5-hour"). `isTurnHeld`: the harness keeps the turn and
+   * continues it at the reset (Claude Code); otherwise the turn ended (Codex).
+   */
+  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string; isTurnHeld?: boolean }
+  /** The harness reports the window open again while it held the turn: the turn goes on. */
+  | { threadId: string; type: 'limit-cleared' }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** One plan rate-limit window of an account, as the provider reported it. */
