@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, LimitWindow } from '../../../src/host/types/agent.ts';
 import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
 import { codexWindows, hottest, mergeWindows } from '../../../src/usage/limits.ts';
+import { posixPath } from '../../platform.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -365,7 +366,9 @@ function num(value: unknown) {
 }
 
 function relative(cwd: string, file: string) {
-  return path.isAbsolute(file) && file.startsWith(cwd + path.sep) ? path.relative(cwd, file) : file;
+  if (!path.isAbsolute(file)) return file;
+  const inside = path.relative(cwd, file);
+  return inside && !inside.startsWith('..') && !path.isAbsolute(inside) ? posixPath(inside) : file;
 }
 
 function obj(value: unknown): Record<string, unknown> | undefined {

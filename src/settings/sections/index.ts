@@ -86,7 +86,7 @@ export const SETTINGS_SECTIONS = [
     settings: [
       ...Object.entries(ALERT_KINDS).map(([kind, label]) => ({ id: `alert-${kind}`, label: `${label} alerts`, keywords: 'system notification background' })),
       { id: 'watchedToasts', label: 'Toasts for watched threads', keywords: 'notification popup watch' },
-      { id: 'dockBadge', label: 'Dock badge counts', keywords: 'badge icon needs you' },
+      { id: 'dockBadge', label: 'App icon badge counts', keywords: 'badge icon needs you' },
       { id: 'quietHours', label: 'Quiet hours', keywords: 'do not disturb night silence' },
       { id: 'mutedThreads', label: 'Muted threads', keywords: 'mute unmute silence' },
     ],

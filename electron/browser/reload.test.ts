@@ -7,7 +7,7 @@ import { devTarget } from '../../src/terminal/lsof.ts';
 import { debounce, DEBOUNCE_MS, isHmrLog, isIgnored, ScrollMemory, watchTree } from './reload.ts';
 
 test('isIgnored skips build, cache and VCS dirs and editor temp files, nothing else', () => {
-  for (const rel of ['node_modules/react/index.js', '.git/index', 'dist/assets/app.js', 'web/.next/cache/x', 'src/.DS_Store', 'src/App.tsx~', 'src/.App.tsx.swp']) assert.ok(isIgnored(rel), rel);
+  for (const rel of ['node_modules/react/index.js', '.git/index', 'dist/assets/app.js', 'web/.next/cache/x', 'src/.DS_Store', 'src/App.tsx~', 'src/.App.tsx.swp', 'node_modules\\react\\index.js']) assert.ok(isIgnored(rel), rel);
   for (const rel of ['src/App.tsx', 'index.html', 'public/build-info.json', 'src/distance.ts']) assert.ok(!isIgnored(rel), rel);
 });
 

@@ -9,7 +9,8 @@ import { assertFreeBranch, branchNameError, listBranches, switchBranch } from '.
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
 
 function repo() {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'mochi-branches-')));
+  // `.native` also expands Windows 8.3 short names (RUNNER~1), which git never prints.
+  const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'mochi-branches-')));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, env: { ...process.env, ...IDENTITY }, stdio: 'pipe' }).toString();
   git('init', '-q', '-b', 'main');
   writeFileSync(join(dir, 'a.txt'), 'a\n');
@@ -32,7 +33,7 @@ test("an existing branch checked out elsewhere is refused, saying where; a dirty
   await assert.rejects(assertFreeBranch(dir, 'main'), { message: `main is already checked out in ${dir}` });
   await assertFreeBranch(dir, 'feat/old');
 
-  const other = join(realpathSync(mkdtempSync(join(tmpdir(), 'mochi-wt-'))), 'wt');
+  const other = join(realpathSync.native(mkdtempSync(join(tmpdir(), 'mochi-wt-'))), 'wt');
   git('worktree', 'add', '-q', other, 'feat/old');
   await assert.rejects(assertFreeBranch(dir, 'feat/old'), { message: `feat/old is already checked out in ${other}` });
   await assert.rejects(switchBranch(dir, 'feat/old'), /already checked out/);

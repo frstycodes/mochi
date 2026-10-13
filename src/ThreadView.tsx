@@ -312,17 +312,17 @@ function ThreadHeader({
   );
 }
 
-/** Where the agent runs. Only this Mac exists yet, so it states that rather than offering choices that do nothing. */
+/** Where the agent runs. Only this computer exists yet, so it states that rather than offering choices that do nothing. */
 function DeviceIndicator() {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span tabIndex={0} aria-label="Runs on this Mac" className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
+        <span tabIndex={0} aria-label="Runs on this computer" className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
           <Laptop className="size-4" />
         </span>
       </TooltipTrigger>
       <TooltipContent className="flex-col items-start gap-0.5">
-        <span className="block font-medium">Runs on this Mac</span>
+        <span className="block font-medium">Runs on this computer</span>
         <span className="block opacity-80">The agent works in this thread's folder on your machine</span>
       </TooltipContent>
     </Tooltip>

@@ -12,6 +12,8 @@ interface ModifierState {
   altKey: boolean;
 }
 
+export const IS_WINDOWS = typeof navigator !== 'undefined' && /win/i.test((navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform);
+
 export const IS_MAC = typeof navigator !== 'undefined' && isMacPlatform((navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform);
 
 /** Chromium's `userAgentData.platform` says `macOS`, the older `navigator.platform` says `MacIntel`: match both, any case. */
