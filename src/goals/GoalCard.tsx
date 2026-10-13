@@ -25,7 +25,7 @@ export function GoalCard({ thread }: { thread: Thread }) {
       </CardHeader>
       {(criteria.length > 0 || !!thread.similar?.length) && (
         <CardContent className="flex flex-col gap-3">
-          {criteria.length > 0 && <CriteriaList criteria={criteria} />}
+          {criteria.length > 0 && <CriteriaList thread={thread} />}
           <SimilarWork thread={thread} />
         </CardContent>
       )}

@@ -1,15 +1,18 @@
-import type { QueueItem, Thread } from '../model.ts';
+import type { LiveRun, Provider, QueueItem, Thread } from '../model.ts';
+import { resetLabel } from '../usage/limits.ts';
 
-export type NoticeKind = 'needs-you' | 'step-done' | 'review' | 'ci' | 'pr-review' | 'overlap' | 'race-lost' | 'run';
+export type NoticeKind = 'needs-you' | 'limit' | 'step-done' | 'review' | 'ci' | 'pr-review' | 'overlap' | 'race-lost' | 'run';
 
 /** Only main alerts these, as OS notifications for watched threads (`electron/notify/watch.ts`); they never land in the center. */
-type WatchKind = 'done' | 'failed' | 'limit';
+type WatchKind = 'done' | 'failed';
 
 export interface Notice {
   id: string;
   kind: NoticeKind;
   threadId: string;
   queueId?: string;
+  /** `pr-review`: the PR it's about, for its preview card. */
+  prNumber?: number;
   title: string;
   body: string;
   /** Simulation minutes, same clock as `State.now`. */
@@ -59,7 +62,10 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
   for (const t of next.threads) {
     const p = before.get(t.id);
     if (!p || p === t) continue;
-    if (p.status !== 'needs-you' && t.status === 'needs-you') {
+    const limit = t.live?.limit;
+    if (limit && !p.live?.limit) add({ id: `limit-${t.id}`, kind: 'limit', threadId: t.id, title: `${t.title} paused`, body: limitBody(t.providers[0], limit) });
+    else if (p.live?.limit?.autoResume && !limit && !t.live?.isOnApiKey) add({ id: `limit-resumed-${t.id}`, kind: 'limit', threadId: t.id, title: `${t.title} resumed`, body: 'Its usage limit reset' });
+    if (p.status !== 'needs-you' && t.status === 'needs-you' && !limit) {
       const blocked = t.steps.find((s) => s.status === 'blocked');
       add({ id: `needs-you-${t.id}`, kind: 'needs-you', threadId: t.id, title: `${t.title} needs you`, body: blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer' });
     }
@@ -76,7 +82,7 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
     // GAP: a real review request comes from GitHub (review_requested webhook via host.git); the simulation only ever opens PRs.
     const prs = new Set(p.prs.map((pr) => pr.number));
     for (const pr of t.prs) {
-      if (pr.state === 'open' && !prs.has(pr.number)) add({ id: `pr-review-${t.id}-${pr.number}`, kind: 'pr-review', threadId: t.id, title: `Review requested on #${pr.number}`, body: pr.title });
+      if (pr.state === 'open' && !prs.has(pr.number)) add({ id: `pr-review-${t.id}-${pr.number}`, kind: 'pr-review', threadId: t.id, prNumber: pr.number, title: `Review requested on #${pr.number}`, body: pr.title });
     }
   }
 
@@ -106,4 +112,10 @@ export function isQuiet(quiet: QuietHours, date: Date) {
   if (!quiet.isOn || quiet.start === quiet.end) return false;
   const h = date.getHours();
   return quiet.start < quiet.end ? h >= quiet.start && h < quiet.end : h >= quiet.start || h < quiet.end;
+}
+
+function limitBody(provider: Provider, limit: NonNullable<LiveRun['limit']>) {
+  const name = provider === 'claude' ? 'Claude' : 'Codex';
+  const window = limit.label ? `${limit.label.toLowerCase()} ` : '';
+  return `${name} hit the ${window}usage limit${limit.resetsAt ? `; resets ${resetLabel(limit.resetsAt)}` : ''}`;
 }

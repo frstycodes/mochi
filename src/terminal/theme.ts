@@ -33,10 +33,10 @@ export function terminalTheme(): ITheme {
   return { ...colors, selectionBackground: resolve('--foreground', 0.2), scrollbarSliderBackground: resolve('--foreground', 0.12) };
 }
 
-/** Re-runs `apply` when next-themes flips `data-theme` or the OS scheme changes under "system". */
+/** Re-runs `apply` when next-themes flips `data-theme`, a color theme rewrites the tokens on <html>, or the OS scheme changes under "system". */
 export function onThemeChange(apply: () => void) {
   const observer = new MutationObserver(apply);
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
 }
 

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
@@ -30,6 +31,7 @@ import { ImageDropTarget } from './viz/ImageVisual';
 import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
+import { ReportCard } from './goals/ReportCard';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
@@ -37,7 +39,9 @@ import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
-import { LimitBanner } from './chat/LimitBanner';
+import { HeldHint, LimitEntry } from './chat/LimitCard';
+import { heldBy, type AccountHold } from './runtime/limits';
+import { resetLabel } from './usage/limits';
 import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
@@ -45,6 +49,7 @@ import { queuedMessage, shouldQueue } from './chat/outbox';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
+import type { Mention } from './chat/mentions';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
@@ -58,7 +63,8 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   const liveWork = liveWorkIndex(rows);
   const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
-  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q));
+  // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
+  const decisions = state.queue.filter((q) => q.threadId === thread.id && !isMochiCard(q) && q.kind !== 'review');
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
@@ -86,6 +92,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
                   <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
+              <ReportCard thread={thread} />
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
           </ConversationContent>
@@ -131,6 +138,7 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, 
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
     return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
   }
+  if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
   const { entry } = row;
@@ -250,10 +258,11 @@ function Composer({
   onToggleTray: () => void;
   handoff: ReturnType<typeof useComposerHandoff>;
 }) {
-  const { dispatch } = useHarness();
+  const { state, dispatch } = useHarness();
   const { whileWorking } = usePrefs();
   const [isHeld, setIsHeld] = useState(false);
-  const isQueueing = shouldQueue(thread, whileWorking, isHeld);
+  const held = heldBy(state.threads, thread);
+  const isQueueing = !!held || shouldQueue(thread, whileWorking, isHeld);
   const queued = thread.queued ?? [];
   const { textInput } = usePromptInputController();
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -266,7 +275,12 @@ function Composer({
   const slash = useSlashMenu(slashItems);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
   const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
-  useSeedAttachment(thread.id === 'adm');
+  const draftKey = threadDraftKey(thread.id);
+  useSeedAttachment(thread.id === 'adm' && !getDraft(draftKey));
+  const draftExtra = useMemo(() => (mention.mentions.length > 0 ? { mentions: mention.mentions } : undefined), [mention.mentions]);
+  useEffect(() => {
+    mention.restore(getDraft<{ mentions: Mention[] }>(draftKey)?.extra?.mentions ?? []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const edit = (message: QueuedMessage) => {
     dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id });
@@ -279,7 +293,6 @@ function Composer({
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pb-3 md:px-6">
       <DriftCard guard={drift} thread={thread} />
-      <LimitBanner thread={thread} />
       <motion.div {...handoff.layout}>
         <div className="relative">
           <SlashMenu menu={slash} />
@@ -290,6 +303,8 @@ function Composer({
             <MentionChips menu={mention} />
             <ComposerInput
               ref={textarea}
+              draftKey={draftKey}
+              draftExtra={draftExtra}
               controls={controls}
               provider={provider}
               isLocked={!!thread.live}
@@ -308,7 +323,7 @@ function Composer({
                 dispatch({ type: 'queued-add', threadId: thread.id, message });
                 mention.clear();
               }}
-              placeholder={placeholder(thread, decisions.length > 0, isQueueing)}
+              placeholder={held ? heldPlaceholder(thread, held) : placeholder(thread, decisions.length > 0, isQueueing)}
               autoFocus={handoff.isHandoff}
               {...menuProps}
               onKeyDown={(e) => {
@@ -328,7 +343,7 @@ function Composer({
         <ComposerMeta>
           <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
-          {isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
+          {held ? <HeldHint held={held} /> : isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
         </ComposerMeta>
         {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
@@ -341,6 +356,11 @@ function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
   if (isAsking) return 'Answer above, or steer with a message';
   if (isQueueing) return `Queue a message for when ${name} finishes`;
   return isWorking(thread) ? `Steer ${name} while it works` : `Message ${name}`;
+}
+
+function heldPlaceholder(thread: Thread, held: AccountHold) {
+  const name = authorName(thread.providers[0]);
+  return `Queue a message for when ${name}'s limit resets${held.resetsAt ? ` at ${resetLabel(held.resetsAt)}` : ''}`;
 }
 
 /** What holding mod does to this send: the setting's other choice. */

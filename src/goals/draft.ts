@@ -1,12 +1,12 @@
 import { isConcrete } from '../drift.ts';
 import type { Similar, Thread } from '../model.ts';
 import { similarity } from '../progress.ts';
-import { outcomePrompt } from '../utility/prompts.ts';
+import { outcomePrompt, type DraftedCriterion } from '../utility/prompts.ts';
 
 export interface GoalProposal {
   kind: 'task' | 'chat';
   outcome: string;
-  criteria: string[];
+  criteria: DraftedCriterion[];
   similar: Similar[];
 }
 

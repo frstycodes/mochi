@@ -1,10 +1,12 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
+import { noteCollisions } from './collisions.ts';
 import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { completeStep, hasOpenWork, log, mapStep, mapThread } from '../store/threads.ts';
+import { hitLimit, isLimitEnd, warnLimit } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
 
 /** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
@@ -44,6 +46,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }) }));
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       if (!event.files?.length) return state;
+      if (event.patch) state = noteCollisions(state, thread.id);
       return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));
     case 'plan':
       return applyPlan(state, thread, event.items);
@@ -65,11 +68,14 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         context: { used: event.contextUsed ?? t.context.used, max: event.contextMax ?? t.context.max },
         session: t.session && event.inputTokens + event.outputTokens > 0 ? { ...t.session, usage: addUsage(t.session.usage, event) } : t.session,
       }));
+    case 'limit-warning':
+      return update((t) => warnLimit(t, event.window, now, who));
     case 'limit':
-      return update((t) => log({ ...pauseQueue(t, 'limit'), status: 'needs-you', live: t.live && { ...t.live, isWorking: false, limit: { resetsAt: event.resetsAt } } }, { at: now, who: 'harness', kind: 'event', text: `Usage limit reached${event.resetsAt ? `, resumes after ${new Date(event.resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` }));
+      return update((t) => hitLimit(t, event, now));
     case 'turn-end': {
       if (event.status === 'interrupted' && thread.live?.isReplacingTurn) return update((t) => log({ ...t, live: { ...t.live!, isReplacingTurn: undefined } }, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted for your queued message' }));
-      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false } })) : state;
+      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false, isWrappingUp: undefined } })) : state;
+      if (isLimitEnd(thread)) return ended;
       return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
     }
   }

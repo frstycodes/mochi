@@ -15,21 +15,34 @@ const queued = new Map<string, { scope: Scope; refs: Map<string, GithubRef> }>()
 const mounted = new Map<string, { ref: GithubRef; scope: Scope; count: number }>();
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | undefined;
+// Bumped on every cache write, so a list of refs can subscribe with one snapshot.
+let version = 0;
 
 /** Live state of a PR or issue, `undefined` until first read, `null` when gh couldn't read it. Batched with every other chip on screen. */
 export function useRefState(ref: GithubRef, scope: Scope) {
-  const key = refKey(ref);
+  return useRefStates([ref], scope)[0];
+}
+
+/** `useRefState` for a list, in the same order; one batch, one cache. */
+export function useRefStates(refs: GithubRef[], scope: Scope) {
+  const keys = refs.map(refKey);
+  const joined = keys.join('\n');
   const { cwd, githubUser } = scope;
   useEffect(() => {
-    const seen = mounted.get(key);
-    mounted.set(key, { ref, scope: { cwd, githubUser }, count: (seen?.count ?? 0) + 1 });
-    request(key, ref, { cwd, githubUser });
+    refs.forEach((ref, i) => {
+      const seen = mounted.get(keys[i]);
+      mounted.set(keys[i], { ref, scope: { cwd, githubUser }, count: (seen?.count ?? 0) + 1 });
+      request(keys[i], ref, { cwd, githubUser });
+    });
     return () => {
-      const m = mounted.get(key);
-      if (m && --m.count === 0) mounted.delete(key);
+      for (const key of keys) {
+        const m = mounted.get(key);
+        if (m && --m.count === 0) mounted.delete(key);
+      }
     };
-  }, [key, cwd, githubUser]);
-  return useSyncExternalStore(subscribe, () => cache.get(key)?.state);
+  }, [joined, cwd, githubUser]);
+  useSyncExternalStore(subscribe, () => version);
+  return keys.map((key) => cache.get(key)?.state);
 }
 
 function request(key: string, ref: GithubRef, scope: Scope) {
@@ -58,6 +71,7 @@ function flush() {
           inFlight.delete(k);
           cache.set(k, { state: states[k] ?? null, at });
         }
+        version++;
         listeners.forEach((l) => l());
       });
   }

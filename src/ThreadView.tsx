@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
-import { BranchUp, ChevronDown, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
+import { ChevronDown, Hierarchy2, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { ThreadPrHoverCard } from './chat/RefHoverCard';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -263,16 +265,19 @@ function ThreadHeader({
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <DeviceIndicator />
         <ThreadMenu thread={thread} />
+        <LimitChip thread={thread} />
         {!!thread.repo && (
           <span className="hidden min-w-0 items-center gap-1 truncate type-caption text-subtle-foreground @2xl:flex">
-            <BranchUp className="size-3.5 shrink-0" />
+            <Hierarchy2 className="size-3.5 shrink-0" />
             {thread.repo.branch}
           </span>
         )}
         {thread.prs.map((pr) => (
-          <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden @xl:inline-flex">
-            #{pr.number}
-          </Badge>
+          <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr}>
+            <Badge variant="secondary" tabIndex={0} aria-label={`#${pr.number}: ${pr.title}`} className="hidden @xl:inline-flex">
+              #{pr.number}
+            </Badge>
+          </ThreadPrHoverCard>
         ))}
         <span className="flex-1" />
         <Tooltip>

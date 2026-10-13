@@ -13,6 +13,7 @@ export interface DraftStep {
 export interface DraftCriterion {
   id?: string;
   text: string;
+  command?: string;
 }
 
 export interface GoalDraft {
@@ -25,7 +26,7 @@ export interface GoalDraft {
 export function draftFrom(thread: Thread): GoalDraft {
   return {
     goal: thread.goal,
-    criteria: (thread.criteria ?? []).map(({ id, text }) => ({ id, text })),
+    criteria: (thread.criteria ?? []).map(({ id, text, command }) => ({ id, text, command })),
     steps: thread.steps
       .filter((s) => s.status !== 'dropped')
       .map((s) => ({ id: s.id, title: s.title, size: s.size, gate: !!s.gate, acceptance: s.acceptance, isRemoved: false, isLocked: s.status === 'done' })),
@@ -94,17 +95,21 @@ export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Au
   };
 }
 
-/** Pushes one diff line per criterion added, reworded or removed; ids survive rewording so claims and evidence stay attached. */
+/** Pushes one diff line per criterion added, reworded or removed; ids survive rewording. */
 function criteriaFrom(thread: Thread, draft: GoalDraft, n: number, diff: string[]): Criterion[] {
   const old = thread.criteria ?? [];
   const next: Criterion[] = [];
   draft.criteria.forEach((c, i) => {
     const text = c.text.trim();
+    const command = c.command?.trim() || undefined;
     if (!text) return;
     const before = old.find((o) => o.id === c.id);
     if (!before) diff.push(`+ Done when: ${text}`);
     else if (before.text !== text) diff.push(`~ Done when: "${before.text}" → "${text}"`);
-    next.push(before ? { ...before, text } : { id: `${thread.id}-c${n}-${i}`, text });
+    if (before && before.command !== command) diff.push(`~ ${text}: check ${command ? `\`${command}\`` : 'removed'}`);
+    // A reworded criterion or a new check is a different promise: its old claim and check result no longer count.
+    const isSame = before?.text === text && before.command === command;
+    next.push(before && isSame ? before : { id: before?.id ?? `${thread.id}-c${n}-${i}`, text, ...(command && { command }) });
   });
   for (const o of old) if (!next.some((c) => c.id === o.id)) diff.push(`− Done when: ${o.text}`);
   return next;

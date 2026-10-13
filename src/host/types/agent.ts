@@ -21,6 +21,8 @@ export interface AgentStartOptions {
   permissionMode?: string;
   /** Provider session id from an earlier `session` event. */
   resume?: string;
+  /** With `resume`: continue a fork of that session holding only what came up to this point (`rewindPoint`), leaving the original as it was. */
+  forkAt?: string;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
 }
@@ -53,7 +55,10 @@ export type AgentEvent =
   | { threadId: string; type: 'resolved'; requestId: string }
   /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
-  | { threadId: string; type: 'limit'; resetsAt?: string }
+  /** The account is close to a plan window's limit (Claude's `allowed_warning`, a Codex window at `WARN_PCT`); turns still run. */
+  | { threadId: string; type: 'limit-warning'; window: LimitWindow }
+  /** The account hit a plan window's limit: the turn ended and nothing runs on it until `resetsAt`. `label` names the window ("5-hour"). */
+  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** One plan rate-limit window of an account, as the provider reported it. */
@@ -271,6 +276,8 @@ export interface AgentHost {
   classify(prompt: string, thread: Thread): Promise<DriftVerdict>;
   /** Before the renderer restores a git checkpoint: rewinds a live Claude session's own file checkpoints to just before `text` was sent. No-op otherwise. */
   rewindFiles(threadId: string, text: string): Promise<void>;
+  /** Where the thread's live session stood just before `text` was sent, for `forkAt`: Claude's last chain entry, Codex's previous turn. Null when this run doesn't know (restarted, or it was the session's first message). */
+  rewindPoint(threadId: string, text: string): Promise<string | null>;
   /** Stops one of a thread's native subagents (Claude task, Codex spawned agent); it ends with status `stopped`. */
   stopSubagent(threadId: string, subagentId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
@@ -299,6 +306,7 @@ export const agentMethods = {
   classify: 'invoke',
   utility: 'invoke',
   rewindFiles: 'invoke',
+  rewindPoint: 'invoke',
   stopSubagent: 'invoke',
   warm: 'invoke',
   models: 'invoke',
