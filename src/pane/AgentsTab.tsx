@@ -129,7 +129,7 @@ function SubagentSteps({ subagent }: { subagent: Subagent }) {
   const files = useThreadFiles();
   if (!subagent.steps.length) return <p className="px-2 py-1 type-meta text-subtle-foreground">{subagent.status === 'running' ? 'No tool calls yet' : 'No tool calls'}</p>;
   return (
-    <CallList data-file-scope>
+    <CallList>
       {subagent.steps.map((step) => (
         <CallRow key={step.id} entry={step} isRunning={!step.isDone && subagent.status === 'running'} files={files} />
       ))}

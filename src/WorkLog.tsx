@@ -4,7 +4,7 @@ import { useTheme } from 'next-themes';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Eye, Flag, Global, GlobalSearch, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Flag, Global, GlobalSearch, TerminalSquare, X } from 'reicon-react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
@@ -14,13 +14,14 @@ import { clock } from './progress';
 import { usePrefs } from './settings/prefs';
 import { eventLine, isApprovalChatter, parseTool, toolCall, turnSummary, type ToolCall } from './summary';
 import { hostname, type CurrentAction } from './agentPhase';
-import { loadViewerFile, openFromScope, useThreadFiles, type ThreadFiles } from './files/viewer';
+import { loadViewerFile, useThreadFiles, type ThreadFiles } from './files/viewer';
+import { usePaneOpeners } from './terminal/usePaneOpeners';
+import { useVizThreadId } from './viz/WidgetVisual';
 import { fileLink } from './terminal/links';
 import { describeCall } from './chat/describe';
 import { PREVIEW_KINDS } from './files/kinds';
 import { imageMime } from './files/previews';
 import { outputLines } from './chat/output';
-import { TooltipIconButton } from './ui';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
@@ -42,7 +43,7 @@ export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?
   const images = [...new Set(tools.map(toolCall).flatMap((c) => (c.verb === 'Read' && isImage(c.target) ? [c.target] : [])))].slice(0, THUMBS_SHOWN);
 
   return (
-    <div data-file-scope className="-mx-2 flex flex-col">
+    <div className="-mx-2 flex flex-col">
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -105,52 +106,26 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
   const [isOpen, setOpen] = useState(false);
   const call = toolCall(entry);
   const run = runOf(entry);
-  const isFile = call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write';
   const detail = callDetail(entry, call, files);
   const description = describeCall(entry);
 
-  const row = (
-    <>
-      <CallGlyph call={call} links={entry.links} />
-      {isRunning ? (
-        <Shimmer as="span" className="min-w-0 flex-1 truncate">
-          {description}
-        </Shimmer>
-      ) : (
-        <span className="min-w-0 flex-1 truncate text-foreground" title={call.verb === 'Run' ? call.target : undefined}>
-          {description}
-        </span>
-      )}
-      {call.added !== undefined && <DiffStat added={call.added} removed={call.removed ?? 0} withBar />}
-      {!isRunning && !!run && run.exitCode !== 0 && <span className="shrink-0 font-mono text-xs tabular text-destructive">exit {run.exitCode}</span>}
-    </>
-  );
-
   return (
-    <li className="group/call flex flex-col">
-      <div className={cn('flex min-w-0 items-center', !!detail && 'hover:bg-accent/60')}>
-        {detail ? (
-          <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => !o)} className="flex h-9 min-w-0 flex-1 cursor-default items-center gap-2.5 pr-1 pl-3 text-left type-meta">
-            {row}
-            <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />
-          </button>
+    <li className="flex flex-col">
+      {/* One toggle stretched under the row; the file name sits above it as its own link. */}
+      <div className={cn('relative isolate flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta', !!detail && 'hover:bg-accent/60')}>
+        {!!detail && <button type="button" aria-expanded={isOpen} aria-label={description} onClick={() => setOpen((o) => !o)} className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2" />}
+        <CallGlyph call={call} links={entry.links} />
+        {isRunning ? (
+          <Shimmer as="span" className="min-w-0 flex-1 truncate">
+            {description}
+          </Shimmer>
         ) : (
-          <div className="flex h-9 min-w-0 flex-1 items-center gap-2.5 pr-1 pl-3 type-meta">{row}</div>
+          <CallText call={call} description={description} hasOwnDescription={!!entry.description} files={files} />
         )}
-        {!!files && isFile && (
-          <TooltipIconButton
-            label="Open in viewer"
-            hint={call.target}
-            data-file-link={call.target}
-            onClick={(e) => openFromScope(e.currentTarget, files)}
-            className="mr-1.5 opacity-0 group-hover/call:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-          >
-            <Eye />
-          </TooltipIconButton>
-        )}
-        {/* The same trailing slot on every row, so chevrons and stats line up with the file rows' open button. */}
-        {!!files && !isFile && <span aria-hidden className="mr-1.5 size-6 shrink-0" />}
-        {!files && !detail && <span aria-hidden className="w-6 shrink-0" />}
+        {call.added !== undefined && <DiffStat added={call.added} removed={call.removed ?? 0} withBar />}
+        {!isRunning && !!run && run.exitCode !== 0 && <span className="shrink-0 font-mono text-xs tabular text-destructive">exit {run.exitCode}</span>}
+        {/* Rows with nothing to open keep the chevron's width, so stats line up. */}
+        {detail ? <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} /> : <span aria-hidden className="size-3.5 shrink-0" />}
       </div>
       {!!detail && (
         <Expand isOpen={isOpen}>
@@ -158,6 +133,22 @@ export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunni
         </Expand>
       )}
     </li>
+  );
+}
+
+/** The row's sentence; for a file call ("Edited redis.ts") the name is a link that opens the file in the side pane's Files tab. */
+function CallText({ call, description, hasOwnDescription, files }: { call: ToolCall; description: string; hasOwnDescription: boolean; files: ThreadFiles | null }) {
+  const { openFile } = usePaneOpeners(useVizThreadId());
+  const name = call.target.split('/').pop() ?? call.target;
+  const isFileLink = !!files && !hasOwnDescription && (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') && description.endsWith(name);
+  if (!isFileLink) return <span className="min-w-0 flex-1 truncate text-foreground" title={call.verb === 'Run' ? call.target : undefined}>{description}</span>;
+  return (
+    <span className="min-w-0 flex-1 truncate text-foreground">
+      {description.slice(0, -name.length)}
+      <button type="button" title={call.target} onClick={() => openFile(inRoot(files, call.target))} className="relative z-10 cursor-pointer underline-offset-2 hover:underline focus-visible:underline">
+        {name}
+      </button>
+    </span>
   );
 }
 
@@ -207,7 +198,7 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
   const isReady = useHighlighterReady();
   useEffect(() => {
     let isCurrent = true;
-    loadViewerFile({ source: 'workspace', ...files, ...fileLink(path) }).then(
+    loadViewerFile({ source: 'workspace', ...files, ...fileLink(inRoot(files, path)) }).then(
       (content) => isCurrent && setState(content.kind === 'text' ? { text: content.text } : { error: 'Binary file' }),
       (e: Error) => isCurrent && setState({ error: e.message }),
     );
@@ -231,20 +222,23 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
 }
 
 const PREVIEW_LINES = 40;
+
+// Calls logged before paths were made relative carry the absolute path; the file host only takes paths inside the root.
+const inRoot = (files: ThreadFiles, path: string) => (path.startsWith(`${files.root}/`) ? path.slice(files.root.length + 1) : path);
 const THUMBS_SHOWN = 3;
 
 const isImage = (path: string) => PREVIEW_KINDS.image.test(path) || PREVIEW_KINDS.svg.test(path);
 
-/** An image the agent read, small, opening in the viewer. */
+/** An image the agent read, small, opening in the side pane's Files tab. */
 function ImageThumb({ files, path }: { files: ThreadFiles; path: string }) {
   const url = useImageUrl(files, path);
+  const { openFile } = usePaneOpeners(files.threadId);
   const name = path.split('/').pop() ?? path;
   return (
     <button
       type="button"
       aria-label={`Open ${name}`}
-      data-file-link={path}
-      onClick={(e) => openFromScope(e.currentTarget, files)}
+      onClick={() => openFile(inRoot(files, path))}
       className="relative h-6 w-9 shrink-0 cursor-default overflow-hidden rounded-md bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
     >
       {!!url && <img src={url} alt="" className="size-full object-cover" />}
@@ -268,7 +262,7 @@ function useImageUrl(files: ThreadFiles, path: string) {
   useEffect(() => {
     let next: string | undefined;
     let isCurrent = true;
-    loadViewerFile({ source: 'workspace', ...files, ...fileLink(path) }).then(
+    loadViewerFile({ source: 'workspace', ...files, ...fileLink(inRoot(files, path)) }).then(
       (content) => {
         if (!isCurrent) return;
         next = URL.createObjectURL(new Blob([(content.kind === 'text' ? content.text : content.bytes) as BlobPart], { type: PREVIEW_KINDS.svg.test(path) ? 'image/svg+xml' : imageMime(path) }));
@@ -590,7 +584,7 @@ function ThoughtRow({ entry }: { entry: ActivityEntry }) {
   const [isOpen, setOpen] = useState(false);
   return (
     <li className="flex flex-col">
-      <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => !o)} className="flex h-9 cursor-default items-center gap-2.5 pr-1 pl-3 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground">
+      <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => !o)} className="flex h-9 cursor-default items-center gap-2.5 px-3 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground">
         <span className="size-4 shrink-0" />
         <span className="flex-1">Thought for {entry.seconds ?? 1}s</span>
         <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />
