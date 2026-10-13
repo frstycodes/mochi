@@ -6,6 +6,7 @@ import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
+import { killTree, spawnable } from '../../platform.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 interface Live {
@@ -408,7 +409,7 @@ class CodexServer {
   }
 
   dispose() {
-    this.child?.kill();
+    if (this.child) killTree(this.child);
   }
 
   private async boot(): Promise<RpcClient> {
@@ -418,7 +419,8 @@ class CodexServer {
 
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
-    const child = spawn(install.path, ['app-server'], { cwd: os.homedir(), env: hooksEnv(accountEnv(this.account, install.env)), stdio: ['pipe', 'pipe', 'pipe'] });
+    const target = spawnable(install.path, ['app-server']);
+    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: hooksEnv(accountEnv(this.account, install.env)), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
     const gen = ++this.gen;
     this.child = child;
     this.stderr = '';

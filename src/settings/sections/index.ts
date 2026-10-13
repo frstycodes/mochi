@@ -16,6 +16,7 @@ import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
 import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
 import { SchedulesSection } from './schedules';
+import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
 import { ThemesSection } from './themes';
 import { ToolsSection } from './tools';
@@ -49,6 +50,20 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
+    id: 'simplify',
+    group: 'App',
+    title: 'Simplify',
+    icon: Sparkles,
+    component: SimplifySection,
+    settings: [
+      { id: 'simplifyLength', label: 'Length', keywords: 'simplify bullets summary short detailed' },
+      { id: 'simplifyNeedsFirst', label: 'Put what needs you first', keywords: 'simplify question decision' },
+      { id: 'simplifyRules', label: 'Your rules', keywords: 'simplify custom instructions rules' },
+      { id: 'simplifyAuto', label: 'Simplify long replies automatically', keywords: 'simplify auto automatic' },
+      { id: 'simplifyAutoWords', label: 'Long means more than (words)', keywords: 'simplify threshold words length' },
+    ],
+  },
+  {
     id: 'themes',
     group: 'App',
     title: 'Themes',
@@ -71,7 +86,7 @@ export const SETTINGS_SECTIONS = [
     settings: [
       ...Object.entries(ALERT_KINDS).map(([kind, label]) => ({ id: `alert-${kind}`, label: `${label} alerts`, keywords: 'system notification background' })),
       { id: 'watchedToasts', label: 'Toasts for watched threads', keywords: 'notification popup watch' },
-      { id: 'dockBadge', label: 'Dock badge counts', keywords: 'badge icon needs you' },
+      { id: 'dockBadge', label: 'App icon badge counts', keywords: 'badge icon needs you' },
       { id: 'quietHours', label: 'Quiet hours', keywords: 'do not disturb night silence' },
       { id: 'mutedThreads', label: 'Muted threads', keywords: 'mute unmute silence' },
     ],

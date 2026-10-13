@@ -116,8 +116,7 @@ test('a usage limit pauses the thread with the account-wide reset time, then end
 
 test('one app-server per account: threads route to their profile account and never share a server', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
-  writeFileSync(fake, FAKE_CODEX, { mode: 0o755 });
+  const fake = fakeCodex(home, FAKE_CODEX);
   const events: AgentEvent[] = [];
   const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, side: { id: 'work', configDir: path.join(home, 'work') }, home: { id: 'default' } };
   const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
@@ -138,8 +137,7 @@ test('one app-server per account: threads route to their profile account and nev
 
 test('side chat asks on the profile account, streams once per delta, and says when that account is signed out', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
-  writeFileSync(fake, FAKE_CODEX, { mode: 0o755 });
+  const fake = fakeCodex(home, FAKE_CODEX);
   const events: AgentEvent[] = [];
   const accounts: Record<string, { id: string; configDir?: string }> = { work: { id: 'work', configDir: path.join(home, 'work') }, out: { id: 'out', configDir: path.join(home, 'out') } };
   const codex = new CodexAdapter((e) => events.push(e), async (spaceId) => accounts[spaceId], async () => ({ path: fake, env: process.env }));
@@ -155,9 +153,8 @@ test('side chat asks on the profile account, streams once per delta, and says wh
 
 test('a thread runs at the speed it started with, and a message changes it for its turn and the ones after', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
+  const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'tiers.log');
-  writeFileSync(fake, TIER_CODEX, { mode: 0o755 });
   const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
   // Lets each turn end before the next send.
   const settle = () => new Promise((r) => setTimeout(r, 150));
@@ -195,6 +192,19 @@ process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n'
 `;
 
 /** A stand-in `codex` speaking just enough app-server: thread ids carry its pid and CODEX_HOME, each turn echoes its thread. */
+/**
+ * A fake `codex` from a node script. Windows can't run a shebang script, so there it is a `.cmd` shim next to the script,
+ * the same shape as an npm-installed codex, which also exercises how the adapter spawns shims.
+ */
+function fakeCodex(home: string, source: string) {
+  const script = path.join(home, 'codex.cjs');
+  writeFileSync(script, source, { mode: 0o755 });
+  if (process.platform !== 'win32') return script;
+  const shim = path.join(home, 'codex.cmd');
+  writeFileSync(shim, `@node "%~dp0codex.cjs" %*\r\n`);
+  return shim;
+}
+
 const FAKE_CODEX = `#!/usr/bin/env node
 let n = 0, buf = '';
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
@@ -328,8 +338,7 @@ test('model/list maps to the picker: real ids, names, default flag, efforts and 
 
 test('a spawned agent becomes a subagent of its thread with its own steps, result and tokens (real 0.155.1 trace)', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
-  const fake = path.join(home, 'codex');
-  writeFileSync(fake, REPLAY_CODEX, { mode: 0o755 });
+  const fake = fakeCodex(home, REPLAY_CODEX);
   const events: AgentEvent[] = [];
   const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/subagent.jsonl', import.meta.url)) } }));
   try {

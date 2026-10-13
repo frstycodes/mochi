@@ -11,6 +11,7 @@ import { formatGithubAccount, GITHUB_COM } from '../../git/github';
 import { gitError } from '../../git/useGit';
 import type { GhAccount } from '../../host/types/git';
 import { host } from '../../host';
+import { keyName } from '../../keys';
 import { SPACE_ICON_NAMES, type Provider, type Space, type SpaceIconName } from '../../model';
 import { addProfile, getProfiles, MAX_PROFILES, removeProfile, updateProfile, useProfiles } from '../../profiles';
 import { useHarness } from '../../store';
@@ -218,7 +219,7 @@ function AddProfileGroup({ isFull }: { isFull: boolean }) {
     toast(`${profile.name} added`, { action: { label: 'Open', onClick: () => dispatch({ type: 'space', id: profile.id }) } });
   };
   return (
-    <SettingsGroup id="addProfile" footer={isFull ? `Mochi holds up to ${MAX_PROFILES} profiles, one per ⌥ digit.` : 'A new profile starts empty, on the default accounts, with a fresh browser session.'}>
+    <SettingsGroup id="addProfile" footer={isFull ? `Mochi holds up to ${MAX_PROFILES} profiles, one per ${keyName('nav')} + number shortcut.` : 'A new profile starts empty, on the default accounts, with a fresh browser session.'}>
       {name === null ? (
         <SettingsRow
           label={

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { prBody } from '../git/prBody.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
@@ -47,6 +48,8 @@ export interface ToolEnv {
    */
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   isDesktop: boolean;
+  /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
+  git: { push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
   now?: () => number;
 }
 
@@ -433,6 +436,16 @@ const GOAL_SPECS = {
       draft.steps = draft.steps.map((s) => (s.id === step.id ? { ...s, isRemoved: true } : s));
       editGoal(dispatch, thread, caller, draft);
       return { changed: `dropped "${step.title}"${args.reason ? `: ${args.reason}` : ''}`, result: goalOf(target(state(), caller, thread.id)) };
+    },
+  },
+  open_pr: {
+    run: async ({ env, caller, args }) => {
+      const cwd = caller.repo && env.cwdOf(caller);
+      if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
+      const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
+      await env.git.push(cwd, githubUser);
+      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
+      return { changed: `opened ${url}`, result: { url } };
     },
   },
   claim_criterion: {

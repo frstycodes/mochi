@@ -83,6 +83,9 @@ export type ThreadsAction =
   | { type: 'criterion-check'; threadId: string; criterionId: string; result: CheckRun | 'running' }
   | { type: 'similar-dismiss'; threadId: string; otherId: string }
   | { type: 'goal-remove'; threadId: string }
+  /** A reply's bullets from Simplify, shown in its place; display only. */
+  | { type: 'simplified'; threadId: string; index: number; text: string; rulesKey: string }
+  | { type: 'simplify-toggle'; threadId: string; index: number }
   | { type: 'criterion-claim'; threadId: string; criterionId: string; evidence: string; by: Provider }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
@@ -213,6 +216,10 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => claimCriterion(t, action, state.now)) };
     case 'report':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now } })) };
+    case 'simplified':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => mapEntry(t, action.index, (e) => ({ ...e, simplified: { text: action.text, rulesKey: action.rulesKey, isShown: true } }))) };
+    case 'simplify-toggle':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => mapEntry(t, action.index, (e) => (e.simplified ? { ...e, simplified: { ...e.simplified, isShown: !e.simplified.isShown } } : e))) };
     case 'goal-remove':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => removeGoal(t, state.now)) };
     case 'edit-goal':
@@ -259,6 +266,11 @@ function reduce(state: State, action: Action): State {
 /** An emptied queue drops its pause with it. */
 function withQueue(thread: Thread, queued: QueuedMessage[]): Thread {
   return { ...thread, queued, ...(queued.length === 0 && { queuePause: undefined }) };
+}
+
+function mapEntry(t: Thread, index: number, fn: (e: ActivityEntry) => ActivityEntry): Thread {
+  const entry = t.activity[index];
+  return entry ? { ...t, activity: t.activity.map((e, i) => (i === index ? fn(e) : e)) } : t;
 }
 
 export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {

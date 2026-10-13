@@ -1,5 +1,6 @@
 import type { Account, AccountId, AccountLinks } from '../host/types/settings.ts';
 import type { Provider } from '../model.ts';
+import { IS_WINDOWS } from '../keys.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
 
 export const defaultAccountId = (provider: Provider): AccountId => `${provider}-default`;
@@ -16,10 +17,15 @@ export function profilesUsing(links: Record<string, AccountLinks>, spaceIds: str
   return spaceIds.filter((spaceId) => linkedAccountId(links, spaceId, account.provider) === account.id);
 }
 
-/** What the user runs in a terminal to sign this account in: the tool's own login, pointed at the account's folder. */
-export function signInCommand(account: Account): string {
+/**
+ * What the user runs in a terminal to sign this account in: the tool's own login, pointed at the account's folder. POSIX
+ * shells take a one-command env prefix; PowerShell (Windows' default terminal) sets the variable first.
+ */
+export function signInCommand(account: Account, isWindows = IS_WINDOWS): string {
   const { loginCommand, configDirEnv } = HARNESSES[account.provider];
-  return account.configDir ? `${configDirEnv}=${shellQuote(account.configDir)} ${loginCommand}` : loginCommand;
+  if (!account.configDir) return loginCommand;
+  if (isWindows) return `$env:${configDirEnv}='${account.configDir.replace(/'/g, "''")}'; ${loginCommand}`;
+  return `${configDirEnv}=${shellQuote(account.configDir)} ${loginCommand}`;
 }
 
 /** A readable, unique id from the name the user typed: `claude-work`, then `claude-work-2`. */

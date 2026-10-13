@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { host } from '@/host';
 import type { Editor } from '@/host/types/fs';
-import { IS_MAC } from '../keys';
+import { IS_MAC, IS_WINDOWS } from '../keys';
 
 export const EDITOR_NAMES = { vscode: 'VS Code', cursor: 'Cursor', zed: 'Zed' } satisfies Record<Editor, string>;
 
@@ -19,7 +19,7 @@ export function openInEditor(editor: Editor, root: string, path: string, line?: 
   host.fs.openIn(editor, root, path, line).catch((e: Error) => toast.error(e.message));
 }
 
-export const REVEAL_IN = IS_MAC ? 'Finder' : 'file manager';
+export const REVEAL_IN = IS_MAC ? 'Finder' : IS_WINDOWS ? 'File Explorer' : 'file manager';
 
 /** Desktop only (`host.fs.reveal` rejects on the web build); an empty `path` reveals `root`. */
 export function revealPath(root: string, path: string) {

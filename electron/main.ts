@@ -5,10 +5,15 @@ import { stopAllCompares } from './browser/compare.ts';
 import { registerIpc } from './ipc/index.ts';
 import { startWatch } from './notify/watch.ts';
 import { startScheduler } from './schedule/scheduler.ts';
+import { startTray } from './tray.ts';
 import { createWindow, isTrustedUrl } from './window.ts';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
+
+const hasTray = process.platform !== 'darwin';
+// One Mochi per profile on Windows and Linux: a second launch opens a window in the running one (`startTray`).
+if (hasTray && !app.requestSingleInstanceLock()) app.exit();
 
 app.whenReady().then(() => {
   // Packaged builds get the icon from the bundle (`build/icon.icns`); dev runs inside Electron.app.
@@ -18,8 +23,10 @@ app.whenReady().then(() => {
   void startScheduler();
   installHooks().catch((error: unknown) => console.warn('Git hooks not installed; agents commit without the message check', error));
   createWindow();
+  if (hasTray) startTray();
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
 });
 
 app.on('will-quit', stopAllCompares);
-app.on('window-all-closed', () => process.platform !== 'darwin' && app.quit());
+// Every platform keeps running with no windows: macOS in the Dock, Windows and Linux in the tray. Quit is explicit.
+app.on('window-all-closed', () => {});

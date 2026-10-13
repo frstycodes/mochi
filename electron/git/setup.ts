@@ -1,7 +1,8 @@
-import { spawn } from 'node:child_process';
+import type { SpawnOptions } from 'node:child_process';
 import { access, constants, cp, readdir, readFile } from 'node:fs/promises';
 import { basename, join, matchesGlob } from 'node:path';
 import type { SetupChoice, SetupStep, WorktreeSetup } from '../../src/host/types/agent.ts';
+import { killTree, spawnFile, spawnShell } from '../platform.ts';
 import { userPath } from '../shellPath.ts';
 import { runGit } from './run.ts';
 
@@ -84,19 +85,19 @@ async function planSetup({ root, dir, include, command }: SetupRun): Promise<Pla
   const install = installCommand(new Set(await listRoot(dir)));
   if (install) steps.push(commandStep('install', `Install dependencies with ${install.manager}`, install.argv, root, dir));
   const script = command ?? ((await isFile(join(dir, MOCHI_SETUP_SCRIPT))) ? `bash ${MOCHI_SETUP_SCRIPT}` : undefined);
-  if (script) steps.push(commandStep('script', 'Run setup command', ['/bin/sh', '-c', script], root, dir, script));
+  if (script) steps.push(commandStep('script', 'Run setup command', script, root, dir));
   return steps;
 }
 
 /** A project's own setup script, run when Settings › Git has no command for the project. */
 export const MOCHI_SETUP_SCRIPT = '.mochi/setup.sh';
 
-function commandStep(id: string, label: string, argv: string[], root: string, dir: string, shown = argv.join(' ')): Planned {
+function commandStep(id: string, label: string, command: string[] | string, root: string, dir: string): Planned {
   return {
-    step: { id, label, command: shown, status: 'pending' },
+    step: { id, label, command: typeof command === 'string' ? command : command.join(' '), status: 'pending' },
     run: async (step, emit, signal) => {
       const env = { ...process.env, PATH: await userPath(), MOCHI_ROOT_PATH: root, MOCHI_WORKTREE_PATH: dir };
-      const exitCode = await runCommand(argv, dir, env, signal, (chunk) => {
+      const exitCode = await runCommand(command, dir, env, signal, (chunk) => {
         step.output = tail((step.output ?? '') + chunk);
         emit();
       });
@@ -171,17 +172,18 @@ function listNames(files: string[]) {
   return files.length > 3 ? `${shown} and ${files.length - 3} more` : shown;
 }
 
-/** Spawns in its own process group, so an abort stops what the command started too (pnpm's lifecycle scripts). */
-function runCommand(argv: string[], cwd: string, env: NodeJS.ProcessEnv, signal: AbortSignal, onOutput: (chunk: string) => void) {
+/** Spawns in its own process group, so an abort stops what the command started too (pnpm's lifecycle scripts). A string runs through the shell. */
+function runCommand(command: string[] | string, cwd: string, env: NodeJS.ProcessEnv, signal: AbortSignal, onOutput: (chunk: string) => void) {
   return new Promise<number>((resolve, reject) => {
-    const child = spawn(argv[0], argv.slice(1), { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    const stop = () => child.pid && process.kill(-child.pid, 'SIGTERM');
+    const options = { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] } satisfies SpawnOptions;
+    const child = typeof command === 'string' ? spawnShell(command, options) : spawnFile(command[0], command.slice(1), options);
+    const stop = () => killTree(child);
     signal.addEventListener('abort', stop, { once: true });
-    child.stdout.setEncoding('utf8').on('data', onOutput);
-    child.stderr.setEncoding('utf8').on('data', onOutput);
+    child.stdout?.setEncoding('utf8').on('data', onOutput);
+    child.stderr?.setEncoding('utf8').on('data', onOutput);
     child.on('error', (error: NodeJS.ErrnoException) => {
       signal.removeEventListener('abort', stop);
-      reject(error.code === 'ENOENT' ? new Error(`${argv[0]} isn't installed or isn't on your PATH`) : error);
+      reject(error.code === 'ENOENT' ? new Error(`${typeof command === 'string' ? command.split(' ')[0] : command[0]} isn't installed or isn't on your PATH`) : error);
     });
     child.on('close', (code) => {
       signal.removeEventListener('abort', stop);

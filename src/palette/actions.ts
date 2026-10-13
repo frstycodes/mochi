@@ -137,7 +137,7 @@ export const ACTIONS = [
   { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
   { id: 'layout-close', group: 'Layout', title: 'Close split', icon: X, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-close', leafId: scope.leafId }) },
 
-  // One per ⌥ digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
+  // One per `nav` + digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
   ...Array.from({ length: MAX_PROFILES }, (_, i) => ({
     id: `space-${i + 1}`,
     group: 'Space',

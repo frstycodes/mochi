@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Copy3, PinTack, RotateLeft, type IconProps } from 'reicon-react';
+import { Copy3, PinTack, RotateLeft, Sparkles, type IconProps } from 'reicon-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -13,9 +13,10 @@ import { useRewindActions } from '../rewind/useRewindActions';
 import { usePrefs } from '../settings/prefs';
 import { ForkIcon, TooltipIconButton } from '../ui';
 import { isMessagePinned, togglePin, useThreadPins } from './pins';
+import { useIsSimplifying, useSimplify } from '../simplify/useSimplify';
 
 export interface MessageAction {
-  id: 'copy' | 'pin' | 'fork' | `rewind-${RewindMode}`;
+  id: 'copy' | 'pin' | 'fork' | 'simplify' | `rewind-${RewindMode}`;
   label: string;
   hint?: string;
   icon: ComponentType<IconProps>;
@@ -29,6 +30,9 @@ export interface MessageAction {
 export function useMessageActions(thread: Thread, index: number): MessageAction[] {
   const pins = useThreadPins(thread.id);
   const { rewind } = useRewindActions();
+  const { dispatch } = useHarness();
+  const run = useSimplify(dispatch);
+  const isSimplifying = useIsSimplifying(thread.id, index);
   const entry = thread.activity[index];
   if (!entry) return [];
   const isPinned = isMessagePinned(pins, index);
@@ -50,8 +54,18 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
     isActive: isPinned,
     run: () => togglePin(thread.id, index),
   };
+  const isShown = !!entry.simplified?.isShown;
+  const simplify: MessageAction = {
+    id: 'simplify',
+    label: isShown ? 'Show original' : 'Simplify',
+    hint: isShown ? undefined : "Bullets for you to skim, made by your Simplify settings. The agent never sees them.",
+    icon: Sparkles,
+    isActive: isShown,
+    disabledReason: isSimplifying ? 'Simplifying…' : undefined,
+    run: () => void run(thread, index),
+  };
   // Rewind only goes back to your own messages, which return to the composer to edit.
-  const actions = entry.who === 'you' ? [copy, ...rewinds, fork, pin] : [copy, fork, pin];
+  const actions = entry.who === 'you' ? [copy, ...rewinds, fork, pin] : [copy, simplify, fork, pin];
   return actions;
 }
 
@@ -66,7 +80,7 @@ export function MessageActions({ thread, index, align }: { thread: Thread; index
       {actions.map((a) => {
         if (a.id.startsWith('rewind-')) return a === rewinds[0] && <RewindModeMenu key="rewind" actions={rewinds} />;
         return (
-          <TooltipIconButton key={a.id} label={a.label} hint={a.hint} aria-pressed={a.id === 'pin' ? !!a.isActive : undefined} onClick={a.run} className={cn(BAR_BUTTON, a.isActive && 'text-foreground')}>
+          <TooltipIconButton key={a.id} label={a.label} hint={a.disabledReason ?? a.hint} disabled={!!a.disabledReason && !a.id.startsWith('rewind-')} aria-pressed={a.id === 'pin' || a.id === 'simplify' ? !!a.isActive : undefined} onClick={a.run} className={cn(BAR_BUTTON, a.isActive && 'text-foreground')}>
             <a.icon weight={a.isActive ? 'Filled' : 'Outline'} />
           </TooltipIconButton>
         );

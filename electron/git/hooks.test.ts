@@ -13,7 +13,8 @@ test('agents commit with Conventional Commits only, and the repo hooks still run
   await installHooks(hooks);
   execFileSync('git', ['init', '-q', repo]);
   const own = join(repo, '.git', 'hooks', 'commit-msg');
-  writeFileSync(own, `#!/bin/sh\necho ran >> "${join(root, 'own.log')}"\n`);
+  // Forward slashes: Git for Windows runs hooks in its own sh, which reads C:/… paths.
+  writeFileSync(own, `#!/bin/sh\necho ran >> "${join(root, 'own.log').replaceAll('\\', '/')}"\n`);
   chmodSync(own, 0o755);
   const env = { ...hooksEnv(process.env, hooks), GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
   const commit = (message: string) => spawnSync('git', ['-C', repo, 'commit', '-q', '--allow-empty', '-m', message], { env, encoding: 'utf8' });
