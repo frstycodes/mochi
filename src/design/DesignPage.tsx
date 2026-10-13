@@ -618,6 +618,9 @@ function Recipes() {
         <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
           <QueueDecision item={decision} showThread />
         </Block>
+        <Block title="Same files" use="Two live threads of one project edited the same file; never pauses either agent." wide>
+          <QueueDecision item={{ id: 'q-collision-demo', kind: 'collision', threadId: rl.id, title: `"${adm.title}" is editing the same file`, detail: '', blocks: { steps: 0, threads: 2 }, createdAt: rl.startedAt, collision: { otherThreadId: adm.id, files: ['apps/api/middleware/ratelimit.ts'] } }} showThread />
+        </Block>
         <Block title="Side pane" use="Docked to the right of the chat, like Codex: Preview, Changes, Terminal and a new-tab page. The preview pops out into a floating window." wide>
           <div className="h-[460px] overflow-hidden rounded-xl border">{admPane && <SidePane thread={adm} pane={admPane} />}</div>
         </Block>

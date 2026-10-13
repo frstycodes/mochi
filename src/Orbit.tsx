@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClipboardTick, Clock, Hierarchy3, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
+import { ClipboardTick, Clock, Copy3, Hierarchy3, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { progressAt } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
@@ -28,6 +28,7 @@ const QUEUE_ICONS = {
   review: ClipboardTick,
   ci: GitPullRequestIcon,
   overlap: Hierarchy3,
+  collision: Copy3,
   run: Clock,
   setting: Setting2,
 } satisfies Record<QueueKind, LucideIcon>;
@@ -241,7 +242,7 @@ function Peek({ item, center, now }: { item: OrbitItem; center: { x: number; y: 
 }
 
 function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
-  const choices = item.kind === 'overlap' ? ['Link', 'Extract', 'Race', 'Keep both'] : item.kind === 'question' ? (singleChoice(item) ?? []) : [item.kind === 'review' ? 'Mark done' : 'Approve'];
+  const choices = item.kind === 'overlap' ? ['Link', 'Extract', 'Race', 'Keep both'] : item.kind === 'question' ? (singleChoice(item) ?? []) : [item.kind === 'review' ? 'Mark done' : item.kind === 'collision' ? 'Keep both' : 'Approve'];
   return (
     <>
       <PeekHeader thread={thread} />

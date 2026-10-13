@@ -306,7 +306,7 @@ export interface LiveRun {
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting' | 'run';
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'collision' | 'setting' | 'run';
 
 export interface QueueItem {
   id: string;
@@ -318,6 +318,8 @@ export interface QueueItem {
   blocks: { steps: number; threads: number };
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
+  /** Two live threads of one project edited the same files (repo-relative). */
+  collision?: { otherThreadId: string; files: string[] };
   requestId?: string;
   /** A Mochi tool call waiting on this widget (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
   tool?: ToolWidget;
