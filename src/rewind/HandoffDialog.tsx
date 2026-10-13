@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -11,6 +12,8 @@ import { host } from '../host';
 import type { Provider, Thread } from '../model';
 import { useHarness } from '../store';
 import { ProviderMark } from '../ui';
+import { handoffPrompt, parseHandoff } from '../utility/prompts';
+import { useDraft } from '../utility/useDraft';
 import { handoffSummary, PROVIDER_NAME, stepOwner, type DiffStat } from './handoff';
 
 const THREAD = 'thread';
@@ -25,7 +28,9 @@ export function HandoffDialog({ thread, stepId, onClose }: { thread: Thread; ste
   const step = openSteps.find((s) => s.id === scope);
   const from = step ? stepOwner(thread, step) : thread.providers[0];
   const to: Provider = from === 'claude' ? 'codex' : 'claude';
-  const summary = edited ?? handoffSummary(thread, to, step, diff);
+  const template = handoffSummary(thread, to, step, diff);
+  const drafted = useHandoffDraft(thread, scope, template);
+  const summary = edited ?? drafted.text ?? template;
 
   const submit = () => {
     dispatch({ type: 'handoff', threadId: thread.id, stepId: step?.id, to, summary });
@@ -67,6 +72,7 @@ export function HandoffDialog({ thread, stepId, onClose }: { thread: Thread; ste
         <Field>
           <FieldLabel htmlFor="handoff-summary">Context summary</FieldLabel>
           <Textarea id="handoff-summary" value={summary} onChange={(e) => setEdited(e.target.value)} rows={12} className="max-h-80 font-mono type-caption" />
+          {drafted.isDrafting && edited === null && <Shimmer className="type-caption">Summarizing the thread…</Shimmer>}
         </Field>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
@@ -100,4 +106,25 @@ function useDiffStat(thread: Thread) {
     };
   }, [cwd, base]);
   return stat;
+}
+
+const TRANSCRIPT_MESSAGES = 12;
+
+/** A model's summary for the receiving agent, from the template and the latest messages; drafted once per scope you pick. */
+function useHandoffDraft(thread: Thread, scope: string, template: string) {
+  const { draft, isDrafting } = useDraft('handoff', thread.spaceId);
+  const [drafted, setDrafted] = useState<{ scope: string; text: string } | null>(null);
+  useEffect(() => {
+    let isCurrent = true;
+    const transcript = thread.activity
+      .filter((a) => a.kind === 'message' && a.who !== 'harness')
+      .slice(-TRANSCRIPT_MESSAGES)
+      .map((a) => `${a.who === 'you' ? 'User' : 'Agent'}: ${a.text.slice(0, 1500)}`);
+    void draft(handoffPrompt(template, transcript)).then((text) => isCurrent && text && setDrafted({ scope, text: parseHandoff(text) }));
+    return () => {
+      isCurrent = false;
+    };
+    // Not on `template`: a running step's progress changes it every tick.
+  }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { text: drafted?.scope === scope ? drafted.text : null, isDrafting };
 }

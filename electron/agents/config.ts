@@ -29,8 +29,8 @@ const listeners = new Set<(settings: AgentSettings) => void>();
 let stored: Stored | undefined;
 
 export function agentSettings(): AgentSettings {
-  const { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel } = load();
-  return { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel };
+  const { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel, utilityModels } = load();
+  return { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel, utilityModels };
 }
 
 /** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.harness/worktrees`. */
