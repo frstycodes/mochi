@@ -5,7 +5,8 @@ import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls } from '../runtime/live.ts';
 import type { Thread } from '../model.ts';
-import { mentionFor, mentionOptions, mentionQuery, withoutQuery, withReferences, type Mention } from './mentions.ts';
+import { mentionFor, mentionGroups, mentionOptions, mentionQuery, withoutQuery, withReferences, type Mention } from './mentions.ts';
+import { slashItems, typedSkills } from './slash.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const calls = (s: State, action: Action) => agentCalls(s, action, () => threadsReducer(s, action));
@@ -43,6 +44,11 @@ test('options list other threads, then windows, by title', () => {
   assert.deepEqual(
     mentionOptions('LOG', [other], windows, 'x').map((o) => o.kind),
     ['thread'],
+  );
+  assert.deepEqual(
+    mentionOptions('LOG', [{ ...other, status: 'settled' }], windows, 'x').map((o) => o.kind),
+    [],
+    'settled threads are not offered',
   );
 });
 
@@ -98,12 +104,12 @@ test('a skill reference asks the agent to load it, an MCP reference to prefer it
     { kind: 'skill', id: 'skill:ui', title: 'ui', description: '' },
     { kind: 'mcp', id: 'mcp:claude.ai Linear', title: 'claude.ai Linear' },
   ];
-  const claude = withReferences('fix the header', mentions, [other], false, 'claude');
+  const claude = withReferences('fix the header', mentions, [other], { provider: 'claude' });
   assert.equal(claude.text, '@Fix "login" redirect @ui @claude.ai Linear\n\nfix the header');
   assert.match(claude.prompt, /<\/thread>\n\nFor this message, use the "ui" skill: load it with the Skill tool before you start\.\nFor this message, prefer the tools of the "claude\.ai Linear" MCP server \(mcp__claude_ai_Linear__\*\) over other ways to do the same thing\.\n\nfix the header$/);
   assert.deepEqual(claude.skills, ['ui']);
 
-  const codex = withReferences('/review', [mentions[1]], [], true, 'codex');
+  const codex = withReferences('/review', [mentions[1]], [], { isCommand: true, provider: 'codex' });
   assert.equal(codex.prompt, '/review\n\nFor this message, use the "ui" skill; its instructions are attached.', 'a command stays first');
   assert.doesNotMatch(codex.prompt, /referenced these for context/, 'no context block without context');
   assert.deepEqual(codex.skills, ['ui'], 'Codex attaches the skill item');
@@ -116,4 +122,47 @@ test('picked skills reach the agent call, so Codex can attach them', () => {
   s = threadsReducer(s, create);
   const send: Action = { type: 'send', threadId: id, text: '@ui\n\ngo', drift: 'on-goal', reason: '', prompt: 'p', images: [], skills: ['ui'] };
   assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: 'p', skills: ['ui'] }]);
+});
+
+test('the @ menu shows threads, windows, skills and MCP servers as four groups, in that order', () => {
+  const windows = [{ id: '4711', title: 'latitude-pact - Slack', app: 'Slack' }];
+  const groups = mentionGroups(mentionOptions('', [other], windows, 'x', skills, servers));
+  assert.deepEqual(
+    groups.map((g) => [g.label, g.items.length]),
+    [
+      ['Threads', 1],
+      ['Windows', 1],
+      ['Skills', 2],
+      ['MCP servers', 1],
+    ],
+  );
+  const blocked = mentionGroups([...mentionOptions('', [other], [], 'x'), { kind: 'permission' as const }]);
+  assert.deepEqual(
+    blocked.map((g) => g.label),
+    ['Threads', 'Windows'],
+    'without screen recording the Windows group holds the prompt to allow it',
+  );
+});
+
+test('a /skill typed mid-text is sent as written and its name goes to the agent separately', () => {
+  const items = slashItems(skills, 'claude', ['ui', 'run']);
+  const message = 'use /ui skill on this';
+  const claude = withReferences(message, [], [], { provider: 'claude', typedSkills: typedSkills(message, items) });
+  assert.equal(claude.text, message, 'the transcript shows it where you typed it');
+  assert.equal(claude.prompt, 'For this message, use the "ui" skill: load it with the Skill tool before you start.\n\nuse /ui skill on this');
+  assert.deepEqual(claude.skills, ['ui']);
+
+  const picked: Mention = { kind: 'skill', id: 'skill:ui', title: 'ui', description: '' };
+  assert.deepEqual(withReferences(message, [picked], [], { typedSkills: ['ui'] }).skills, ['ui'], 'picked and typed, asked once');
+
+  const create: Action = { type: 'create', title: message, prompt: claude.prompt, skills: claude.skills, provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Manual' } };
+  const [start] = calls(base(), create);
+  assert.equal(start.method, 'start');
+  assert.deepEqual(start.method === 'start' && { prompt: start.options.prompt, skills: start.options.skills }, { prompt: claude.prompt, skills: ['ui'] }, 'a new thread starts on it');
+  const s = threadsReducer(base(), create);
+  assert.equal(s.threads.at(-1)!.title, message);
+
+  const id = start.threadId;
+  const send: Action = { type: 'send', threadId: id, text: claude.text, drift: 'on-goal', reason: '', prompt: claude.prompt, images: [], skills: claude.skills };
+  assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: claude.prompt, skills: ['ui'] }], 'a running thread gets it with the message');
 });

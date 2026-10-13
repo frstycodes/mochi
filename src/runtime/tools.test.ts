@@ -3,6 +3,10 @@ import { test } from 'node:test';
 import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { singleLayout } from '../layout/tree.ts';
+import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
+import { DEFAULT_SPACES, type Provider, type Space } from '../model.ts';
+import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
+import type { ConfigChange, McpEntry, SkillEntry } from '../settings/agentConfig.ts';
 import { DEFAULT_PREFS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
@@ -31,6 +35,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     orientation: 'row',
     watched: [],
     sidechats: {},
+    notifications: { quiet: { isOn: false, start: 22, end: 8 }, muted: [] },
   } as unknown as State;
   const toasts: { text: string; undo?: () => void }[] = [];
   const notices: string[] = [];
@@ -40,6 +45,8 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const evals: string[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
+  let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
+  const settings = fakeSettings();
   const env: ToolEnv = {
     getState: () => state,
     dispatch: (a) => void (state = reduce(state, a)),
@@ -63,6 +70,13 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     },
     cwdOf: () => '/repo/rl',
     models: async () => CLAUDE_FALLBACK_MODELS,
+    profiles: {
+      list: () => profiles,
+      update: (id, patch) => void (profiles = profiles.map((p) => (p.id === id ? { ...p, ...patch } : p))),
+      remove: (id) => void (profiles = profiles.filter((p) => p.id !== id)),
+    },
+    theme: () => 'system',
+    settings: settings.host,
     isDesktop: true,
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
@@ -79,7 +93,83 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   };
   const thread = (id: string) => state.threads.find((t) => t.id === id)!;
   const card = () => state.queue.find((q) => q.tool)!;
-  return { env, call, ok, err, thread, card, state: () => state, prefs: () => prefs, toasts, notices, acts, commands, removed, evals, pages };
+  /** Starts an asking call and hands back its card once it's open (asks that preview first resolve a tick later). */
+  const asking = async (name: string, args?: Record<string, unknown>) => {
+    const queued = t.state().queue.length;
+    const result = call(name, args);
+    for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
+    return { result, card: t.state().queue.at(-1)! };
+  };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages };
+  return t;
+}
+
+/**
+ * `host.settings` for the settings tools, over in-memory config files: preview shows each change as one file edit, apply
+ * refuses when a file moved since its preview (main's stale check). Any method outside the tools' slice throws: no
+ * credential and no settings write is reachable.
+ */
+function fakeSettings() {
+  const calls: string[] = [];
+  const files = new Map<string, string>();
+  const accounts: AccountsState = { accounts: [...DEFAULT_ACCOUNTS, { id: 'claude-work', provider: 'claude', name: 'Work', configDir: '/acct/claude-work' }], links: { personal: { claude: 'claude-work' } } };
+  const config = {
+    claude: {
+      instructions: 'Be brief.\nAPI_TOKEN=sk-live-abcdefghijklmnop\n',
+      servers: [
+        { def: { name: 'github', type: 'stdio', command: 'npx', args: ['gh-mcp', '--token', 'ghp_abcdefghijklmnopqrstuvwxyz'], env: { GITHUB_TOKEN: 'ghp_ZYXWVUTSRQPONMLKJIHGFEDCBA' } }, enabled: true, scope: 'user', needs: [] },
+        { def: { name: 'linear', type: 'http', url: 'https://mcp.linear.app/mcp', headers: { Authorization: 'Bearer ${LINEAR_TOKEN}' } }, enabled: false, scope: 'user', needs: ['LINEAR_TOKEN'] },
+      ] as McpEntry[],
+      skills: [{ name: 'review', description: 'Review a diff', dir: '/acct/skills/review', enabled: true }],
+    },
+    codex: { instructions: '', servers: [] as McpEntry[], skills: [] as SkillEntry[] },
+  };
+  const providerConfig = (spaceId: string, provider: Provider): ProviderConfig => ({
+    provider,
+    account: accounts.accounts.find((a) => a.id === linkedAccountId(accounts.links, spaceId, provider))!,
+    instructions: { path: `/acct/${provider}/${provider === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}`, text: config[provider].instructions },
+    mcpServers: config[provider].servers,
+    skills: config[provider].skills,
+    plugins: [],
+    projectInstructions: null,
+  });
+  const pathOf = (c: ConfigChange) => `/acct/${c.provider}/${c.kind === 'instructions' ? 'instructions' : c.kind.startsWith('skill') ? 'settings.json' : '.claude.json'}`;
+  const apply = (c: ConfigChange) => {
+    const own = config[c.provider];
+    if (c.kind === 'instructions') own.instructions = c.text;
+    if (c.kind === 'mcp-set') own.servers = [...own.servers, { def: c.server, enabled: true, scope: 'user', needs: [] }];
+    if (c.kind === 'mcp-remove') own.servers = own.servers.filter((s) => s.def.name !== c.name);
+    if (c.kind === 'mcp-enabled') own.servers = own.servers.map((s) => (s.def.name === c.name ? { ...s, enabled: c.enabled } : s));
+    if (c.kind === 'skill-enabled') own.skills = own.skills.map((s) => (s.name === c.name ? { ...s, enabled: c.enabled } : s));
+  };
+  const host: ToolEnv['settings'] = {
+    accounts: async () => accounts,
+    detect: async (accountId) => ({ provider: 'claude', accountId, path: '/bin/claude', version: '2.1', login: accountId === 'claude-work' ? { state: 'logged-in', method: 'Claude account', plan: 'Max' } : { state: 'logged-out' } }),
+    get: async () => DEFAULT_SETTINGS,
+    agentConfig: async (spaceId) => ({ claude: providerConfig(spaceId, 'claude'), codex: providerConfig(spaceId, 'codex') }),
+    previewConfig: async (_spaceId, changes) => ({
+      edits: changes.map((c) => ({ path: pathOf(c), before: files.get(pathOf(c)) ?? '', after: c.kind === 'instructions' ? c.text : JSON.stringify(c) })),
+      copies: [],
+      notes: [],
+    }),
+    applyConfig: async (_spaceId, changes, befores) => {
+      if (changes.some((c) => (files.get(pathOf(c)) ?? '') !== befores[pathOf(c)])) throw new Error('A file changed since you reviewed it');
+      for (const c of changes) {
+        apply(c);
+        files.set(pathOf(c), JSON.stringify(c));
+      }
+      return { backupDir: '/backups/1' };
+    },
+    testMcp: async () => ({ tools: ['search', 'open'] }),
+  };
+  const recorded = new Proxy(host, {
+    get: (target, key: string) => {
+      if (!(key in target)) throw new Error(`settings tools must not call settings.${key}`);
+      calls.push(key);
+      return target[key as keyof typeof target];
+    },
+  });
+  return { host: recorded, calls, files, accounts, config };
 }
 
 let nextView = 0;
@@ -94,7 +184,7 @@ test('every tool in the table has a handler', async () => {
 });
 
 test('only deletes and settings ask; everything else runs without a widget', () => {
-  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_setting']);
+  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
 });
 
 test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
@@ -152,47 +242,19 @@ test('the widget sits in the caller’s thread where it asked, and collapses to 
   assert.equal(t.toasts.length, 0, 'you just answered it; no toast on top');
 });
 
-test('a setting change always waits, shows current and proposed, and Apply or Keep closes it with a record', async () => {
-  const t = setup();
-  const pending = t.call('update_setting', { key: 'diffStyle', value: 'split', reason: 'Split diffs read better for this refactor' });
-  assert.deepEqual(t.card().tool!.setting, { id: 'diffStyle', value: 'split' });
-  assert.equal(t.card().detail, 'Split diffs read better for this refactor');
-  assert.equal(t.prefs().diffStyle, 'unified', 'nothing changes while it waits');
-  decideTool(t.card().tool!.callId, { isApproved: true });
-  assert.equal(JSON.parse((await pending).text).changed, 'Set Diffs to Split');
-  assert.equal(t.prefs().diffStyle, 'split');
-  assert.equal(lastLog(t.thread('rl')), 'Set Diffs to Split');
-  const kept = t.call('update_setting', { key: 'driftGuard', value: 'false', reason: 'Too many prompts' });
-  decideTool(t.card().tool!.callId, { isApproved: false });
-  assert.match((await kept).text, /denied/);
-  assert.equal(t.prefs().driftGuard, true);
-  assert.equal(lastLog(t.thread('rl')), 'Kept Drift guard: On');
-});
-
-test('update_setting validates the key and value before asking, and never touches agent control or permissions', async () => {
-  const t = setup();
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'sideways', reason: 'x' }), /allowed: unified, split/);
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'unified', reason: 'x' }), /already Unified/);
-  assert.match(await t.err('update_setting', { key: 'agentControl', value: 'everything', reason: 'x' }), /isn't a setting agents can change/);
-  assert.match(await t.err('update_setting', { key: 'permissions', value: 'Full access', reason: 'x' }), /isn't a setting agents can change/);
-  assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
-  const settings = await t.ok('get_settings');
-  assert.ok(settings.some((x: { key: string; value: string }) => x.key === 'diffStyle' && x.value === 'unified'));
-  assert.equal(settings.some((x: { key: string }) => x.key === 'agentControl' || x.key === 'permissions'), false);
-});
-
 test('read only blocks every write, settings included, and shows agent control in the thread once', async () => {
   const t = setup({ control: 'read' });
   const before = t.state().threads;
   assert.match(await t.err('settle_thread', { threadIds: ['adm'] }), /Read only/);
   assert.match(await t.err('browser_click', { ref: 'e1' }), /Read only/);
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'split', reason: 'x' }), /Read only/);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' }), /Read only/);
   assert.match(await t.err('delete_thread', { threadIds: ['e2e'] }), /Read only/);
   assert.equal(t.state().threads.filter((x) => x.id !== 'rl').every((x, i) => x === before.filter((y) => y.id !== 'rl')[i]), true, 'no other thread changed');
   assert.equal(t.prefs().diffStyle, 'unified');
   const cards = t.state().queue.filter((q) => q.kind === 'setting');
   assert.equal(cards.length, 1, 'one widget, raised in place');
-  assert.deepEqual(cards[0].setting, { id: 'agentControl', suggested: 'everything' });
+  assert.deepEqual(cards[0].settings!.changes, [{ key: 'agentControl', value: 'everything' }]);
+  assert.equal(cards[0].settings!.by, 'harness');
   assert.equal(t.thread('rl').activity.filter((a) => a.card?.id === cards[0].id).length, 1);
   assert.ok((await t.ok('list_threads')).length > 0, 'reads still work');
 });
@@ -201,7 +263,7 @@ test('changes runs everything that doesn’t ask, and blocks deletes and setting
   const t = setup({ control: 'changes' });
   await t.ok('create_thread', { prompt: 'x' });
   assert.match(await t.err('delete_thread', { threadIds: ['e2e'] }), /Everything, asking before deletes and settings/);
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'split', reason: 'x' }), /Everything/);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' }), /Everything/);
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no tool widget was shown');
 });
 
@@ -628,4 +690,188 @@ test('widget ids carry a per-launch part, so a reload never reuses a saved entry
   assert.match(t.card().id, /^q-tool-rl-[a-z0-9]+-\d+$/);
   decideTool(t.card().tool!.callId, { isApproved: false });
   await pending;
+});
+
+// {SETTINGS}
+
+const SECRETS = ['sk-live-abcdefghijklmnop', 'ghp_abcdefghijklmnopqrstuvwxyz', 'ghp_ZYXWVUTSRQPONMLKJIHGFEDCBA'];
+
+type SettingView = { key: string; value: string | null; allowed?: string[]; locked?: string; server?: Record<string, unknown> };
+const byKey = (r: { settings: SettingView[] }, key: string) => r.settings.find((s) => s.key === key)!;
+const widget = (t: ReturnType<typeof setup>) => t.state().queue.find((q) => q.settings)!;
+
+test('get_settings reads every app setting and your profile’s, with values, allowed values and what’s locked', async () => {
+  const t = setup();
+  const r = await t.ok('get_settings');
+  assert.equal(r.profile.id, 'latitude');
+  assert.deepEqual([byKey(r, 'diffStyle').value, byKey(r, 'diffStyle').allowed], ['unified', ['unified', 'split']]);
+  assert.equal(byKey(r, 'theme').value, 'system');
+  assert.equal(byKey(r, 'concurrency').value, '6', 'host settings come from main');
+  assert.equal(byKey(r, 'alert.needs-you').value, 'true');
+  assert.equal(byKey(r, 'quietFrom').value, '22');
+  for (const key of ['agentControl', 'permissions', 'threadModels', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
+  assert.equal(byKey(r, 'profile.name').value, 'Latitude');
+  assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');
+  assert.equal(byKey(r, 'profile.claude.mcp.github').value, 'true');
+  assert.equal(byKey(r, 'profile.claude.skill.review').value, 'true');
+  assert.match(byKey(r, 'profile.claude.instructions').value!, /^Be brief\.\nAPI_TOKEN=\[redacted\]/);
+  assert.deepEqual(byKey(r, 'profile.claude.mcp.linear').server!.needs, ['needs LINEAR_TOKEN']);
+  assert.equal(byKey(r, 'profile.claude.mcp.github').server!.tools, undefined, 'servers start only for section: profile');
+  for (const secret of SECRETS) assert.doesNotMatch(JSON.stringify(r), new RegExp(secret), 'secret leaked');
+  const profile = await t.ok('get_settings', { section: 'profile' });
+  assert.ok(profile.settings.every((s: SettingView) => s.key.startsWith('profile.')));
+  assert.equal(byKey(profile, 'profile.claude.mcp.github').server!.tools, 2);
+  assert.equal(t.state().queue.length, 0, 'your own profile reads without a card');
+});
+
+test("another profile's settings are refused unless the user approves on a card", async () => {
+  const t = setup();
+  const denied = await t.asking('get_settings', { profileId: 'personal' });
+  assert.match(denied.card.title, /read Personal's settings\?/);
+  decideTool(denied.card.tool!.callId, { isApproved: false });
+  const refused = await denied.result;
+  assert.equal(refused.isError, true);
+  assert.doesNotMatch(refused.text, /Be brief/, 'nothing read');
+  const approved = await t.asking('get_settings', { profileId: 'personal' });
+  decideTool(approved.card.tool!.callId, { isApproved: true });
+  const r = JSON.parse((await approved.result).text);
+  assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-work');
+  assert.match(await setup({ control: 'changes' }).err('get_settings', { profileId: 'personal' }), /Everything/, 'below Everything another profile is out of reach');
+});
+
+test('update_settings puts one live widget in the thread with every suggestion grouped, returns at once, and changes nothing itself', async () => {
+  const t = setup();
+  const r = await t.ok('update_settings', {
+    changes: [
+      { key: 'diffStyle', value: 'split' },
+      { key: 'profile.name', value: 'Latitude HQ' },
+      { key: 'profile.claude.mcp.github', value: 'false' },
+      { key: 'profile.claude.instructions', value: 'Be brief.\nRun pnpm test before you push.\n' },
+    ],
+    reason: 'Set up this profile for the refactor',
+  });
+  assert.deepEqual(r.shown, ['Diffs', 'Name', 'MCP server github', 'CLAUDE.md']);
+  assert.match(r.note, /won't get their answer/);
+  assert.equal(r.changed, undefined, 'nothing changed, so no log line or toast');
+  const { settings, title, kind } = widget(t);
+  assert.equal(kind, 'setting');
+  assert.equal(title, 'Claude suggests 4 setting changes');
+  assert.equal(settings!.reason, 'Set up this profile for the refactor');
+  assert.deepEqual(settings!.changes.map((c) => [c.key, c.profileId]), [
+    ['diffStyle', undefined],
+    ['profile.name', 'latitude'],
+    ['profile.claude.mcp.github', 'latitude'],
+    ['profile.claude.instructions', 'latitude'],
+  ]);
+  assert.equal(settings!.before.diffStyle, 'unified');
+  assert.equal(settings!.before['latitude/profile.name'], 'Latitude');
+  assert.match(settings!.before['latitude/profile.claude.instructions'], /^\d+:-?\d+$/, 'instructions are kept as a hash, never their text');
+  assert.equal(t.thread('rl').activity.at(-1)!.card!.id, widget(t).id, 'it sits in the thread where the agent asked');
+  assert.equal(t.prefs().diffStyle, 'unified');
+  assert.equal(t.profiles()[0].name, 'Latitude');
+  assert.equal(t.settings.config.claude.servers[0].enabled, true);
+  assert.equal(t.settings.calls.some((c) => c === 'applyConfig' || c === 'previewConfig'), false, 'no file was even previewed');
+  assert.equal(t.toasts.length, 0);
+  for (const secret of SECRETS) assert.doesNotMatch(JSON.stringify(t.state().queue), new RegExp(secret), 'the saved widget holds no secret');
+});
+
+test('update_settings validates every change before showing anything', async () => {
+  const t = setup();
+  const one = (key: string, value: string, profileId?: string) => t.err('update_settings', { changes: [{ key, value, ...(profileId && { profileId }) }], reason: 'x' });
+  assert.match(await one('diffStyle', 'sideways'), /allowed: unified, split/);
+  assert.match(await one('diffStyle', 'unified'), /already Unified/);
+  assert.match(await one('terminalFontSize', '99'), /from 9 to 24/);
+  assert.match(await one('nope', 'x'), /No setting nope/);
+  assert.match(await one('agentControl', 'everything'), /the user's alone/);
+  assert.match(await one('permissions', 'Full access'), /the user's alone/);
+  assert.match(await one('claude.path', '/tmp/evil'), /the user's alone/);
+  assert.match(await one('diffStyle', 'split', 'latitude'), /isn't a profile setting/);
+  assert.match(await one('profile.icon', 'skull'), /isn't a value of profile.icon/);
+  assert.match(await one('profile.claude.instructions', 'API_TOKEN=[redacted]'), /still holds \[redacted\]/);
+  assert.match(await one('claude.model', 'claude-gpt-9'), /isn't offered/);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }, { key: 'diffStyle', value: 'split' }], reason: 'x' }), /appears twice/);
+  assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
+});
+
+test('account suggestions: only an existing account, only for a profile without its own, never under active threads', async () => {
+  const t = setup();
+  const account = (profileId: string, value: string) => t.call('update_settings', { changes: [{ key: 'profile.claudeAccount', value, profileId }], reason: 'x' });
+  assert.match((await account('scratch', 'claude-new')).text, /isn't a value/);
+  assert.match((await account('personal', 'claude-default')).text, /already has its own Claude Code account \(Work\)/);
+  assert.match((await account('latitude', 'claude-work')).text, /never switches a running thread's account/);
+  assert.ok(!(await account('scratch', 'claude-work')).isError);
+  assert.deepEqual(widget(t).settings!.changes, [{ key: 'profile.claudeAccount', value: 'claude-work', profileId: 'scratch' }]);
+  assert.equal(widget(t).title, 'Claude suggests changing Claude Code account (Scratch)', 'another profile is named on the widget');
+  assert.equal(t.settings.accounts.links.scratch, undefined, 'nothing linked');
+});
+
+test('add_mcp_server fills the server into a live widget, refusing anything that looks like a credential', async () => {
+  const t = setup();
+  assert.match(await t.err('add_mcp_server', { name: 'gh2', command: 'npx', env: { GITHUB_TOKEN: 'ghp_abcdefghijklmnopqrstuvwxyz' }, reason: 'x' }), /GITHUB_TOKEN looks like a secret/);
+  assert.match(await t.err('add_mcp_server', { name: 'api', url: 'https://api.example.com/mcp', headers: { Authorization: 'Bearer abcdef1234567890' }, reason: 'x' }), /looks like a secret/);
+  assert.match(await t.err('add_mcp_server', { name: 'github', command: 'npx', reason: 'x' }), /already has a server named github/);
+  assert.match(await t.err('add_mcp_server', { name: 'both', command: 'npx', url: 'https://x.dev/mcp', reason: 'x' }), /not both/);
+  assert.equal(t.state().queue.length, 0);
+  const r = await t.ok('add_mcp_server', { name: 'gh2', command: 'npx', args: ['gh-mcp'], env: { GITHUB_TOKEN: '${GITHUB_TOKEN}' }, reason: 'For PR reviews' });
+  assert.deepEqual(r.shown, ['MCP server gh2']);
+  assert.deepEqual(widget(t).settings!.addServer, { profileId: 'latitude', provider: 'claude', server: { name: 'gh2', type: 'stdio', command: 'npx', args: ['gh-mcp'], env: { GITHUB_TOKEN: '${GITHUB_TOKEN}' }, url: undefined, headers: undefined } });
+  assert.equal(t.settings.config.claude.servers.length, 2, 'nothing added');
+});
+
+test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {
+  const t = setup();
+  const denied = await t.asking('remove_mcp_server', { name: 'linear' });
+  assert.equal(denied.card.title, 'Remove MCP server linear from Latitude?');
+  assert.equal(denied.card.tool!.isDestructive, true);
+  assert.equal(denied.card.tool!.edits!.length, 1);
+  decideTool(denied.card.tool!.callId, { isApproved: false });
+  await denied.result;
+  assert.equal(t.settings.config.claude.servers.length, 2, 'cancelled: kept');
+  const stale = await t.asking('remove_mcp_server', { name: 'linear' });
+  t.settings.files.set('/acct/claude/.claude.json', 'edited in Claude Code meanwhile');
+  decideTool(stale.card.tool!.callId, { isApproved: true });
+  assert.match((await stale.result).text, /changed since you reviewed it/);
+  assert.equal(t.settings.config.claude.servers.length, 2, 'stale: kept');
+  const approved = await t.asking('remove_mcp_server', { name: 'linear' });
+  decideTool(approved.card.tool!.callId, { isApproved: true });
+  assert.ok(!(await approved.result).isError);
+  assert.deepEqual(t.settings.config.claude.servers.map((s) => s.def.name), ['github']);
+});
+
+test('remove_profile refuses the last profile and any with threads, and removes an empty one after Delete', async () => {
+  const t = setup();
+  assert.match(await t.err('remove_profile', { profileId: 'latitude' }), /still has \d+ threads \(\d+ live\)/);
+  const { result, card } = await t.asking('remove_profile', { profileId: 'scratch' });
+  assert.equal(card.title, 'Remove the profile Scratch?');
+  assert.equal(card.tool!.isDestructive, true);
+  decideTool(card.tool!.callId, { isApproved: true });
+  assert.ok(!(await result).isError);
+  assert.equal(t.profiles().some((p) => p.id === 'scratch'), false);
+  const alone = setup();
+  for (const p of alone.profiles()) if (p.id !== 'latitude') alone.env.profiles.remove(p.id);
+  assert.match(await alone.err('remove_profile', { profileId: 'latitude' }), /last profile/);
+});
+
+test('list_profiles shows every profile with its accounts, login state and GitHub account, and marks yours', async () => {
+  const t = setup();
+  const r = await t.ok('list_profiles');
+  assert.deepEqual(r.profiles.map((p: { id: string; isYours: boolean }) => [p.id, p.isYours]), [['latitude', true], ['personal', false], ['liane', false], ['scratch', false]]);
+  assert.deepEqual(r.profiles[1].accounts.claude, { id: 'claude-work', name: 'Work', login: { state: 'logged-in', method: 'Claude account', plan: 'Max' }, isOwn: true });
+  assert.equal(r.profiles[3].github, 'octo');
+  assert.deepEqual(r.accounts.map((a: { id: string }) => a.id), ['claude-default', 'codex-default', 'claude-work']);
+});
+
+test('Read only and Changes block every settings suggestion and delete with no widget, and nothing is touched', async () => {
+  const writes = {
+    update_settings: { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' },
+    add_mcp_server: { name: 'docs', command: 'npx', reason: 'x' },
+    remove_mcp_server: { name: 'github' },
+    remove_profile: { profileId: 'scratch' },
+  };
+  for (const control of ['read', 'changes'] as const) {
+    const t = setup({ control });
+    for (const [name, args] of Object.entries(writes)) assert.match(await t.err(name, args), control === 'read' ? /Read only/ : /Everything/, name);
+    assert.equal(t.state().queue.some((q) => q.tool || (q.settings && q.settings.by !== 'harness')), false);
+    assert.deepEqual(t.settings.calls, [], 'not even a read');
+  }
 });

@@ -1,5 +1,6 @@
 import type { AgentModel } from '../host/types/agent.ts';
 import type { Provider } from '../model.ts';
+import { HARNESSES } from '../settings/harnesses.ts';
 
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
@@ -68,4 +69,13 @@ export function optionFor(models: AgentModel[] | undefined, id: string, harness:
   if (listed) return { ...listed, harness };
   if (!models) return { id, harness, name: id || 'Default model', description: '', efforts: [], isDefault: false };
   return { id, harness, name: id, description: fallback ? `Unavailable, runs ${fallback.name}` : 'Unavailable', efforts: fallback?.efforts ?? [], defaultEffort: fallback?.defaultEffort, isDefault: false, isUnavailable: true };
+}
+
+/** Models whose harness, name or id contains every typed word as written; cmdk's fuzzy default found "luna" in "cLaUde soNnet". */
+export function searchModels(models: ModelOption[], query: string) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return models.filter((m) => {
+    const text = `${HARNESSES[m.harness].name} ${m.name} ${m.id}`.toLowerCase();
+    return words.every((word) => text.includes(word));
+  });
 }

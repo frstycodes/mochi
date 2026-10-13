@@ -2,6 +2,8 @@
 
 A dedicated page, not a dialog, styled like Apple's System Settings. Opening it (⌘, / Ctrl+,, the profile menu, the palette) swaps the app sidebar for a settings sidebar in the same spot and width; the content column shows one section. "Back to app" at the bottom of the settings sidebar (and Esc) returns to the exact layout you left. The sidebar toggle stays where it is.
 
+Every setting lives once in `src/settings/catalog.ts` (label, control, where its value lives, read and write); sections lay rows out in groups with their footers and render each row with `CatalogRow`, which the settings widget agents open in a thread renders too (RUNTIME.md › Mochi tools).
+
 Sidebar: a search field (filters sections and individual settings by label), the sections below in three groups, "Back to app" at the bottom. Content: inset grouped lists (`SettingsGroup` / `SettingsRow` in `src/settings/parts.tsx`): rows on one card surface split by inset hairlines, label (and a short secondary line) left, control right, the explanation as a footnote under the group. A section scrolls on its own; deep links (`openSettings('git', 'branchPrefix')`) scroll to and flash the row.
 
 Status: **now** = a value exists in code today (hardcoded or local state) and only needs wiring; **R1** = built by the runtime sessions; **later** = depends on unbuilt features, show nothing until then.

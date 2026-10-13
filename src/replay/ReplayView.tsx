@@ -6,7 +6,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -18,6 +18,7 @@ import { PreviewContext, SplitContext, type SplitInfo } from '../layout/SplitCon
 import type { Thread } from '../model';
 import { Shortcut } from '../Shortcut';
 import { HarnessContext, useHarness, type State } from '../store';
+import { TITLE_BAR, TitleBar } from '../TitleBar';
 import { TooltipIconButton } from '../ui';
 import { DiffStat, DiffView, Expand } from '../WorkLog';
 import type { ReplayExport } from './export';
@@ -83,10 +84,9 @@ function useCloseOnEscape() {
 }
 
 function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: () => void; onClose?: () => void }) {
-  const sidebar = useOptionalSidebar();
-  return (
-    <div className="app-drag flex h-11 shrink-0 items-center gap-2 px-3">
-      {!!sidebar && (sidebar.isMobile || sidebar.state === 'collapsed') && <SidebarTrigger className="-ml-1" />}
+  const hasSidebar = !!useOptionalSidebar();
+  const content = (
+    <>
       <VideoPlay aria-hidden className="size-4 shrink-0 text-muted-foreground" />
       <span className="type-meta font-medium">Replay</span>
       <span className="min-w-0 truncate type-meta text-muted-foreground">{title}</span>
@@ -102,8 +102,9 @@ function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: 
           <X />
         </TooltipIconButton>
       )}
-    </div>
+    </>
   );
+  return hasSidebar ? <TitleBar>{content}</TitleBar> : <header className={TITLE_BAR}>{content}</header>;
 }
 
 /** The exported page has no sidebar around it. */

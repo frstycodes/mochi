@@ -102,6 +102,7 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread' },
       { id: 'permissions', label: 'Permissions', keywords: 'manual ask auto edit full access bypass plan' },
+      { id: 'whileWorking', label: 'While the agent is working, new messages', keywords: 'queue steer send message interrupt busy' },
       { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },

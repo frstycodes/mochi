@@ -1,5 +1,6 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Source, type Step, type StepStatus, type Thread } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type QueuedMessage, type Source, type Step, type StepStatus, type Thread } from '../model.ts';
+import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
 import { hasGoal, isConcrete, KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
@@ -50,15 +51,23 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[] }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
   | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
   /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
   | { type: 'resume'; threadId: string; onApiKey?: boolean }
-  /** `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers. */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; skills?: string[] }
+  /**
+   * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
+   * `queuedId`: the queued message this sends, which leaves the queue. `interrupts`: ends the turn in flight first (the queue's Send now).
+   */
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; skills?: string[]; queuedId?: string; interrupts?: boolean }
+  | { type: 'queued-add'; threadId: string; message: QueuedMessage }
+  /** Edit and remove both take a message out; Edit puts its text back in the composer itself. */
+  | { type: 'queued-remove'; threadId: string; id: string }
+  | { type: 'queued-order'; threadId: string; ids: string[] }
+  | { type: 'queued-resume'; threadId: string }
   /** A link or file you added in the summary; a live agent is told in a message of yours. */
   | { type: 'source-add'; threadId: string; source: Source }
   | { type: 'drift-verdict'; threadId: string; text: string; drift: DriftKind; reason: string }
@@ -125,7 +134,7 @@ function reduce(state: State, action: Action): State {
       return {
         ...state,
         // Settling stops the agent process; the next message after reactivating starts it again with `resume`.
-        threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true } }) })),
+        threads: mapThread(state.threads, action.threadId, (t) => pauseQueue({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true } }) }, 'interrupted')),
         queue: state.queue.filter((q) => q.threadId !== action.threadId),
       };
     case 'unsettle':
@@ -149,6 +158,14 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, '', t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':
       return send(state, action);
+    case 'queued-add':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, queued: [...(t.queued ?? []), action.message] })) };
+    case 'queued-remove':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => withQueue(t, (t.queued ?? []).filter((m) => m.id !== action.id))) };
+    case 'queued-order':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, queued: orderQueue(t.queued ?? [], action.ids) })) };
+    case 'queued-resume':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, queuePause: undefined })) };
     case 'source-add':
       return addSource(state, action);
     case 'controls':
@@ -159,7 +176,8 @@ function reduce(state: State, action: Action): State {
         threads: mapThread(state.threads, action.threadId, (t) =>
           t.live
             ? log(
-                { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
+                // The queue waits for this turn to end, then goes on.
+                { ...t, status: 'running', queuePause: undefined, live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
                 { at: state.now, who: 'harness', kind: 'event', text: action.onApiKey ? 'Continuing on your API key, billed per use' : 'Resumed on the same account' },
               )
             : t,
@@ -212,6 +230,11 @@ function reduce(state: State, action: Action): State {
     default:
       return state;
   }
+}
+
+/** An emptied queue drops its pause with it. */
+function withQueue(thread: Thread, queued: QueuedMessage[]): Thread {
+  return { ...thread, queued, ...(queued.length === 0 && { queuePause: undefined }) };
 }
 
 export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {
@@ -458,7 +481,9 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
-      const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
+      const live = t.live && { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
+      const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
+      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }) });
       const goaled = setGoalFrom(said, action.text, now);
       return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
     }),

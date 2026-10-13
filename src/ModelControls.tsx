@@ -1,23 +1,33 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, Star } from 'reicon-react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ArrowLeft, ChevronDown, ChevronRight, Search, Star } from 'reicon-react';
 import { Button } from '@/components/ui/button';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
-import { effortFor, effortName, optionFor, type ModelOption } from './runtime/models';
+import { effortFor, effortName, optionFor, searchModels, type ModelOption } from './runtime/models';
 import { setPrefs, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
 import type { AgentInstall } from './host/types/settings';
 import { linkedAccountId } from './settings/accounts';
-import { HARNESS_IDS } from './settings/harnesses';
+import { HARNESS_IDS, HARNESSES } from './settings/harnesses';
 import { useSpace } from './store';
 import { ProviderMark } from './ui';
-
-const HARNESSES = { claude: 'Claude Code', codex: 'Codex' } satisfies Record<Provider, string>;
 
 /**
  * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. `unavailable` greys out
@@ -30,55 +40,51 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
   const defaults = useDefaultModels();
   const favorites = usePrefs().starredModels;
   const [isOpen, setOpen] = useState(false);
-  const harnesses = (Object.keys(HARNESSES) as Provider[]).filter((h) => !isLocked || h === provider);
+  const harnesses = HARNESS_IDS.filter((h) => !isLocked || h === provider);
   const listed = harnesses.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
   const model = optionFor(catalog[provider], value, provider);
   const models = listed.some((m) => m.harness === model.harness && m.id === model.id) ? listed : [...listed, model];
   const docked = models.filter((m) => m === model || (m.harness === model.harness && m.id === model.id) || (!unavailable[m.harness] && !m.isUnavailable && (favorites.includes(m.id) || defaults?.[m.harness] === m.id)));
-  const select = (id: string) => onChange(models.find((m) => m.id === id)!);
-  const toggleFavorite = (id: string) => setPrefs({ starredModels: toggleStar(favorites, id) });
 
   return (
-    <Popover open={isOpen} onOpenChange={setOpen}>
+    // Controlled: the dock keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click.
+    <DropdownMenu open={isOpen} onOpenChange={setOpen}>
       <ScrollDock
         label="Model"
         value={model.id}
-        onChange={select}
+        onChange={(id) => onChange(models.find((m) => m.id === id)!)}
+        onTap={() => setOpen(true)}
         items={docked.map((m) => ({ value: m.id, label: m.name, icon: <ProviderMark provider={m.harness} size={18} /> }))}
       >
-        <PopoverTrigger asChild>
+        <DropdownMenuTrigger asChild>
           <Button id={id} variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground">
             <ProviderMark provider={model.harness} size={14} />
             {model.name}
             {model.isUnavailable && <span className="type-caption text-warning">Unavailable</span>}
             <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
           </Button>
-        </PopoverTrigger>
+        </DropdownMenuTrigger>
       </ScrollDock>
-      <PopoverContent align="start" className="w-80 p-0">
-        <ModelMenu
-          models={models}
-          pending={harnesses.filter((h) => !catalog[h])}
-          harnesses={harnesses}
-          isChecked={(m) => m.harness === model.harness && m.id === model.id}
-          onPick={(m) => {
-            select(m.id);
-            setOpen(false);
-          }}
-          starred={favorites}
-          onToggleStar={(m) => toggleFavorite(m.id)}
-          unavailable={unavailable}
-        >
-          <p className="px-3 py-2 type-caption text-subtle-foreground">Starred models show up when you scroll over the model button.</p>
-        </ModelMenu>
-      </PopoverContent>
-    </Popover>
+      <ModelMenu
+        models={models}
+        pending={harnesses.filter((h) => !catalog[h])}
+        harnesses={harnesses}
+        isChecked={(m) => m.harness === model.harness && m.id === model.id}
+        onPick={onChange}
+        starred={favorites}
+        onToggleStar={(m) => setPrefs({ starredModels: toggleStar(favorites, m.id) })}
+        unavailable={unavailable}
+      >
+        <p className="px-1.5 pt-1 pb-0.5 type-caption text-subtle-foreground">Starred models show up when you scroll over the model button.</p>
+      </ModelMenu>
+    </DropdownMenu>
   );
 }
 
 /**
- * Harnesses first (plus Starred, where stars apply), then one list's models; typing searches every harness at once, and
- * Backspace in an empty search goes back. `pending`: harnesses whose list hasn't arrived yet.
+ * The menu body for a `DropdownMenu`: starred models first (where stars apply), then one row per harness whose submenu lists its
+ * models; typing filters every harness's models into one flat list. Below `md` the harness rows drill in instead of opening a
+ * submenu beside the menu. `pending`: harnesses whose list hasn't arrived yet. `keepsOpen`: picking doesn't close (star mode).
  */
 export function ModelMenu({
   models,
@@ -89,6 +95,8 @@ export function ModelMenu({
   starred,
   onToggleStar,
   unavailable = {},
+  keepsOpen,
+  align = 'start',
   children,
 }: {
   models: ModelOption[];
@@ -99,113 +107,224 @@ export function ModelMenu({
   starred?: string[];
   onToggleStar?: (model: ModelOption) => void;
   unavailable?: Unavailable;
+  keepsOpen?: boolean;
+  align?: 'start' | 'end';
   children?: ReactNode;
 }) {
   const space = useSpace();
   const notes = useHarnessNotes(space.id);
-  const [page, setPage] = useState<Provider | 'starred' | null>(harnesses.length === 1 ? harnesses[0] : null);
+  const isNarrow = useIsMobile();
   const [search, setSearch] = useState('');
-  const canGoBack = !!page && harnesses.length > 1 && !search;
-  const shown = search ? harnesses : page && page !== 'starred' ? [page] : [];
-  const starredModels = models.filter((m) => starred?.includes(m.id));
-  const hasStarredPage = !!onToggleStar && starredModels.length > 0;
+  const [page, setPage] = useState<Provider | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isSingle = harnesses.length === 1;
+  const drilled = isSingle ? harnesses[0] : isNarrow ? page : null;
+  const found = search ? searchModels(models, search) : [];
+  const starredModels = onToggleStar && !drilled ? models.filter((m) => starred?.includes(m.id)) : [];
   const isLoading = pending.length === harnesses.length;
-  const row = (m: ModelOption, hasMark?: boolean) => (
-    <ModelRow
-      key={`${m.harness}:${m.id}`}
-      model={m}
-      isChecked={isChecked(m)}
-      isDisabled={!!unavailable[m.harness] || !!m.isUnavailable}
-      onPick={onPick}
-      isStarred={!!starred?.includes(m.id)}
-      onToggleStar={onToggleStar}
-      hasMark={hasMark}
-    />
-  );
+  const ofHarness = (h: Provider) => models.filter((m) => m.harness === h);
+  const items = (list: ModelOption[], hasMark?: boolean) =>
+    list.map((m) => (
+      <ModelItem
+        key={`${m.harness}:${m.id}`}
+        model={m}
+        isChecked={isChecked(m)}
+        isDisabled={!!unavailable[m.harness] || !!m.isUnavailable}
+        onPick={onPick}
+        keepsOpen={keepsOpen}
+        isStarred={!!starred?.includes(m.id)}
+        onToggleStar={onToggleStar}
+        hasMark={hasMark}
+      />
+    ));
+  const firstItem = () => contentRef.current?.querySelector<HTMLElement>('[role^=menuitem]:not([data-disabled])');
+  const back = () => {
+    setPage(null);
+    inputRef.current?.focus();
+  };
+
+  // Keys reaching the menu itself: letters go to the search instead of Radix's typeahead; ArrowUp off the first item and
+  // ArrowLeft in a drilled-in list come back up. Keys from a submenu bubble here through React but aren't inside this content.
+  const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.defaultPrevented || e.target === inputRef.current || !e.currentTarget.contains(e.target as Node)) return;
+    const isTyping = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+    if (isTyping || (e.key === 'ArrowUp' && e.target === firstItem())) {
+      e.preventDefault();
+      inputRef.current?.focus();
+      if (isTyping) setSearch((s) => s + e.key);
+      return;
+    }
+    if (e.key === 'ArrowLeft' && page && !search) {
+      e.preventDefault();
+      back();
+    }
+  };
+  const onSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape' || e.key === 'Tab') return;
+    e.stopPropagation();
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      firstItem()?.focus();
+    }
+    if (e.key === 'Enter') firstItem()?.click();
+    if (e.key === 'Backspace' && !search && page) back();
+  };
 
   return (
-    <Command filter={matchesEvery}>
-      <CommandInput
-        value={search}
-        onValueChange={setSearch}
-        placeholder={page && !search ? `Search ${page === 'starred' ? 'starred' : HARNESSES[page]} models` : 'Search models'}
-        onKeyDown={(e) => {
-          if (e.key === 'Backspace' && canGoBack) setPage(null);
-        }}
-      />
-      {canGoBack && (
-        <button type="button" onClick={() => setPage(null)} className="mx-1 mt-1 flex items-center gap-1.5 rounded-md px-2 py-1 type-meta text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
-          <ArrowLeft aria-hidden className="size-3.5" />
-          All models
-        </button>
-      )}
-      <CommandList className="max-h-80">
-        <CommandEmpty>{isLoading ? 'Asking the harnesses for their models…' : page === 'starred' && !search ? 'Nothing starred anymore.' : 'No model matches.'}</CommandEmpty>
-        {page === 'starred' && !search && <CommandGroup>{starredModels.map((m) => row(m, true))}</CommandGroup>}
-        {!page && !search && (
-          <CommandGroup>
-            {hasStarredPage && (
-              <CommandItem value="Starred" onSelect={() => setPage('starred')} className="gap-2 [&>svg:last-child]:hidden">
-                {/* A span, not the svg itself: the item recolours its direct svg children when highlighted. */}
-                <span aria-hidden className="text-warning">
-                  <Star className="size-4 [&_*]:fill-current" />
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">Starred</span>
-                  <span className="truncate type-caption text-subtle-foreground">{starredModels.map((m) => m.name).join(', ')}</span>
-                </span>
-                <ChevronRight aria-hidden className="text-subtle-foreground" />
-              </CommandItem>
+    <DropdownMenuContent
+      ref={contentRef}
+      align={align}
+      collisionPadding={8}
+      className="w-80"
+      // Radix focuses the content on open and whenever the pointer leaves an item; the search takes it, so typing always filters.
+      onFocus={(e) => e.target === e.currentTarget && inputRef.current?.focus()}
+      onCloseAutoFocus={() => {
+        setSearch('');
+        setPage(null);
+      }}
+      onKeyDown={onMenuKeyDown}
+    >
+      <label className="mb-1 flex h-7 items-center gap-2 rounded-lg bg-input/30 px-2">
+        <Search aria-hidden className="size-4 shrink-0 opacity-50" />
+        <input
+          ref={inputRef}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={onSearchKeyDown}
+          placeholder={drilled && !search ? `Search ${HARNESSES[drilled].name} models` : 'Search models'}
+          aria-label="Search models"
+          className="w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground"
+        />
+      </label>
+      <div className="max-h-80 overflow-y-auto">
+        {!!search && <SearchResults found={found} isLoading={isLoading} items={items} />}
+        {!search && !!drilled && (
+          <>
+            {!isSingle && (
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  back();
+                }}
+                className="type-meta text-muted-foreground"
+              >
+                <ArrowLeft aria-hidden className="size-3.5" />
+                All models
+              </DropdownMenuItem>
             )}
-            {harnesses.map((h) => (
-              <CommandItem key={h} value={HARNESSES[h]} onSelect={() => setPage(h)} className="gap-2 [&>svg:last-child]:hidden">
-                <ProviderMark provider={h} size={16} />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate">{HARNESSES[h]}</span>
-                  <span className="truncate type-caption text-subtle-foreground">{[harnessSummary(models.filter((m) => m.harness === h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')}</span>
-                </span>
-                <span className="type-caption text-subtle-foreground">{unavailable[h] ?? space.plans[h]}</span>
-                <ChevronRight aria-hidden className="text-subtle-foreground" />
-              </CommandItem>
-            ))}
-          </CommandGroup>
+            {pending.includes(drilled) ? <MenuNote>Asking {HARNESSES[drilled].name} for its models…</MenuNote> : items(ofHarness(drilled))}
+          </>
         )}
-        {shown.map((h) => (
-          <CommandGroup key={h} heading={search ? <HarnessHeading harness={h} /> : undefined}>
-            {models.filter((m) => m.harness === h).map((m) => row(m))}
-          </CommandGroup>
-        ))}
-      </CommandList>
+        {!search && !drilled && (
+          <>
+            {starredModels.length > 0 && (
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Starred</DropdownMenuLabel>
+                {items(starredModels, true)}
+              </DropdownMenuGroup>
+            )}
+            <DropdownMenuGroup>
+              {starredModels.length > 0 && <DropdownMenuLabel>Harnesses</DropdownMenuLabel>}
+              {harnesses.map((h) => {
+                const row = <HarnessRow harness={h} summary={[harnessSummary(ofHarness(h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')} plan={unavailable[h] ?? space.plans[h]} />;
+                if (isNarrow)
+                  return (
+                    <DropdownMenuItem
+                      key={h}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setPage(h);
+                      }}
+                    >
+                      {row}
+                      <ChevronRight aria-hidden className="text-subtle-foreground" />
+                    </DropdownMenuItem>
+                  );
+                return (
+                  <DropdownMenuSub key={h}>
+                    <DropdownMenuSubTrigger>{row}</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent collisionPadding={8} className="max-h-(--radix-dropdown-menu-content-available-height) w-72 overflow-y-auto">
+                      {pending.includes(h) ? <MenuNote>Asking {HARNESSES[h].name} for its models…</MenuNote> : items(ofHarness(h))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+              })}
+            </DropdownMenuGroup>
+          </>
+        )}
+      </div>
       {children}
-    </Command>
+    </DropdownMenuContent>
   );
 }
 
-function ModelRow({ model, isChecked, isDisabled, onPick, isStarred, onToggleStar, hasMark }: { model: ModelOption; isChecked: boolean; isDisabled: boolean; onPick: (model: ModelOption) => void; isStarred: boolean; onToggleStar?: (model: ModelOption) => void; hasMark?: boolean }) {
+function SearchResults({ found, isLoading, items }: { found: ModelOption[]; isLoading: boolean; items: (list: ModelOption[], hasMark?: boolean) => ReactNode }) {
+  if (!found.length) return <MenuNote>{isLoading ? 'Asking the harnesses for their models…' : 'No model matches.'}</MenuNote>;
+  return HARNESS_IDS.filter((h) => found.some((m) => m.harness === h)).map((h) => (
+    <DropdownMenuGroup key={h}>
+      <DropdownMenuLabel className="flex items-center gap-1.5">
+        <ProviderMark provider={h} size={12} />
+        {HARNESSES[h].name}
+      </DropdownMenuLabel>
+      {items(found.filter((m) => m.harness === h))}
+    </DropdownMenuGroup>
+  ));
+}
+
+function MenuNote({ children }: { children: ReactNode }) {
+  return <p className="px-1.5 py-4 text-center type-meta text-muted-foreground">{children}</p>;
+}
+
+function HarnessRow({ harness, summary, plan }: { harness: Provider; summary: string; plan?: string }) {
   return (
-    <CommandItem value={`${HARNESSES[model.harness]} ${model.name} ${model.id}`} data-checked={isChecked} disabled={isDisabled} onSelect={() => onPick(model)} className="gap-2">
+    <>
+      <ProviderMark provider={harness} size={16} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{HARNESSES[harness].name}</span>
+        <span className="truncate type-caption text-subtle-foreground">{summary}</span>
+      </span>
+      {!!plan && <span className="type-caption text-subtle-foreground">{plan}</span>}
+    </>
+  );
+}
+
+function ModelItem({
+  model,
+  isChecked,
+  isDisabled,
+  onPick,
+  keepsOpen,
+  isStarred,
+  onToggleStar,
+  hasMark,
+}: {
+  model: ModelOption;
+  isChecked: boolean;
+  isDisabled: boolean;
+  onPick: (model: ModelOption) => void;
+  keepsOpen?: boolean;
+  isStarred: boolean;
+  onToggleStar?: (model: ModelOption) => void;
+  hasMark?: boolean;
+}) {
+  return (
+    <DropdownMenuCheckboxItem
+      checked={isChecked}
+      disabled={isDisabled}
+      onSelect={(e) => {
+        if (keepsOpen) e.preventDefault();
+        onPick(model);
+      }}
+      className="gap-2"
+    >
       {!!onToggleStar && <FavoriteToggle isOn={isStarred} name={model.name} onToggle={() => onToggleStar(model)} />}
       {hasMark && <ProviderMark provider={model.harness} size={14} />}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{model.name}</span>
-        <span className={cn('truncate type-caption', model.isUnavailable ? 'text-warning' : 'text-subtle-foreground')}>{model.description}</span>
+        {!!model.description && <span className={cn('truncate type-caption', model.isUnavailable ? 'text-warning' : 'text-subtle-foreground')}>{model.description}</span>}
       </span>
-    </CommandItem>
-  );
-}
-
-// cmdk's default fuzzy match finds "luna" in "cLaUde soNnet 5.5"; every typed word must appear as written instead.
-function matchesEvery(value: string, search: string) {
-  const text = value.toLowerCase();
-  return search.toLowerCase().split(/\s+/).every((word) => text.includes(word)) ? 1 : 0;
-}
-
-function HarnessHeading({ harness }: { harness: Provider }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <ProviderMark provider={harness} size={12} />
-      {HARNESSES[harness]}
-    </span>
+    </DropdownMenuCheckboxItem>
   );
 }
 
@@ -319,14 +438,17 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
       type="button"
       aria-label={isOn ? `Unstar ${name}` : `Star ${name}`}
       aria-pressed={isOn}
+      // Radix items select on pointerup when they never saw the pointerdown, so both stay here.
       onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
       }}
       className="flex size-5 shrink-0 cursor-default items-center justify-center rounded-sm text-subtle-foreground hover:text-foreground"
     >
-      <Star className={cn('size-3.5', isOn && 'text-warning [&_*]:fill-current')} />
+      {/* `!`: a focused menu item recolours every descendant. */}
+      <Star weight={isOn ? 'Filled' : undefined} className={cn('size-3.5', isOn && 'text-warning!')} />
     </button>
   );
 }

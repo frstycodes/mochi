@@ -1,4 +1,7 @@
 import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
+import type { Mention } from './chat/mentions.ts';
+import type { FileEdit } from './host/types/settings.ts';
+import type { McpServerDef } from './settings/agentConfig.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
@@ -72,6 +75,8 @@ export interface ActivityEntry {
   skill?: string;
   /** Tool entries: the MCP server tool this call ran. */
   mcp?: McpCall;
+  /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
+  wasQueued?: boolean;
 }
 
 export interface McpCall {
@@ -182,7 +187,26 @@ export interface Thread {
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
   subagents?: Subagent[];
+  /** Messages you wrote while the agent worked, sent one per turn end, first first (`src/chat/outbox.ts`). */
+  queued?: QueuedMessage[];
+  /** Why the queue stopped sending; cleared by your next send or Resume. */
+  queuePause?: QueuePause;
 }
+
+/** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
+export interface QueuedMessage {
+  id: string;
+  /** The text as typed: what the transcript shows, and what Edit puts back in the composer. */
+  draft: string;
+  files: number;
+  mentions: Mention[];
+  /** The text starts with a `/` command, so mention tags go after it. */
+  isCommand: boolean;
+  /** Skills typed as `/name` later in the text. */
+  typedSkills: string[];
+}
+
+export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
 
 /** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a Mochi background agent (`start_background_agent`). */
 export interface Subagent {
@@ -237,6 +261,8 @@ export interface LiveRun {
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
+  /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
+  isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
@@ -255,20 +281,40 @@ export interface QueueItem {
   requestId?: string;
   /** A Mochi tool call waiting on this widget (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
   tool?: ToolWidget;
-  /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
-  setting?: { id: string; suggested?: string };
+  /** A `setting` card: settings an agent (or a blocked Mochi call) suggests, as live rows you change in place. */
+  settings?: SettingsSuggestion;
   /** A `ci` card: the PR and the first failed check, whose log "Send failing log to agent" fetches. */
   ci?: { pr: number; url: string; check?: { name: string; link?: string } };
   createdAt: number;
 }
 
-/** What a Mochi widget asks: a setting change (current → `value`), a delete naming exactly what goes, or a browser escalation. */
+/** What a Mochi widget asks and waits on: a delete naming exactly what goes, or a browser escalation. */
 export interface ToolWidget {
   callId: string;
   options?: { id: string; label: string }[];
-  setting?: { id: string; value: string };
   isDestructive?: boolean;
+  /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
+  edits?: FileEdit[];
+  /** Mochi's own facts under the title, like which other profiles share the account. */
+  notes?: string[];
 }
+
+/**
+ * Settings shown as their real rows with a suggested value each. Nothing waits on it: the rows change settings live, and
+ * Done closes it into a record of what changed while it was open.
+ */
+export interface SettingsSuggestion {
+  by: Author;
+  reason?: string;
+  changes: { key: string; value: string; profileId?: string }[];
+  /** An MCP server to add, filled into Settings' add form. */
+  addServer?: { profileId: string; provider: Provider; server: McpServerDef };
+  /** Each row's value when the widget opened, by `settingRef`, so Done can say what changed. */
+  before: Record<string, string>;
+}
+
+/** One row of a settings suggestion: the key, in a profile for profile settings. */
+export const settingRef = (change: { key: string; profileId?: string }) => (change.profileId ? `${change.profileId}/${change.key}` : change.key);
 
 /** Mochi's own widgets render inline in the thread where the agent asked, not in the composer tray. */
 export const isMochiCard = (item: QueueItem) => !!item.tool || item.kind === 'setting';

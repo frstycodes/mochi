@@ -8,8 +8,6 @@ import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from 
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
-/** The composer marks a held-key message with this in the transcript; the agent gets the message without it. */
-export const QUEUED_PREFIX = 'Queued: ';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
@@ -25,17 +23,21 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       if (action.schedule) return [];
     // falls through
     case 'drift-new-thread':
-    case 'sidechat-promote':
+    case 'sidechat-promote': {
+      const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { workspace: startWorkspace(t.repo) }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? t.goal, { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }) }));
+    }
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
-      const text = withNotes(thread, action.prompt ?? action.text.replace(QUEUED_PREFIX, ''));
+      const text = withNotes(thread, action.prompt ?? action.text);
       const images = action.images?.length ? { images: action.images } : {};
       const skills = action.skills?.length ? { skills: action.skills } : {};
-      return thread.live.isDetached ? reattach(thread, text, undefined, images.images, skills.skills) : [{ method: 'send', threadId: thread.id, text, ...images, ...skills }];
+      if (thread.live.isDetached) return reattach(thread, text, undefined, images.images, skills.skills);
+      const interrupt = action.interrupts && thread.live.isWorking ? [{ method: 'interrupt' as const, threadId: thread.id }] : [];
+      return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills }];
     }
     case 'source-add': {
       const thread = state.threads.find((t) => t.id === action.threadId);
