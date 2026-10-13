@@ -1,3 +1,4 @@
+import { normalize } from 'node:path';
 import { parseWorktrees } from '../../src/git/parse.ts';
 import type { Branch, BranchList } from '../../src/host/types/git.ts';
 import { runGit } from './run.ts';
@@ -46,7 +47,8 @@ export async function branchNameError(top: string, name: string) {
 export async function assertFreeBranch(top: string, branch: string) {
   const worktrees = parseWorktrees(await runGit(top, ['worktree', 'list', '--porcelain']));
   const at = worktrees.find((w) => w.branch === branch);
-  if (at) throw new Error(`${branch} is already checked out in ${at.path}`);
+  // git prints `C:/…` on Windows; the message shows the folder the way the OS does.
+  if (at) throw new Error(`${branch} is already checked out in ${normalize(at.path)}`);
 }
 
 /** Switches the checkout at `top` to `branch` (a remote one gets a tracking branch); refuses with uncommitted changes, so nothing of yours is carried over or lost. */

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
+import path from 'node:path';
 
 const isWindows = process.platform === 'win32';
 
@@ -41,6 +42,9 @@ export function killTree(child: ChildProcess) {
     child.kill();
   }
 }
+
+/** A relative path with `/` separators, the form the renderer, git and overlap detection compare on every platform. */
+export const posixPath = (relative: string) => relative.split(path.sep).join('/');
 
 // Quotes for cmd.exe's own parsing only: `%VAR%` still expands inside quotes, so callers pass paths and fixed flags, never user text.
 function quoteForCmd(arg: string) {

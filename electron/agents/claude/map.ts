@@ -5,6 +5,7 @@ import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@
 import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
+import { posixPath } from '../../platform.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
@@ -74,7 +75,7 @@ export function createMapper(threadId: string, cwd: string) {
   function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock, result: unknown) {
     const outcome: { text: string; files?: string[]; exitCode?: number; output?: string; patch?: string } = { text: describeTool(tool.name, tool.input, servers, cwd) };
     const file = tool.input.file_path ?? tool.input.notebook_path;
-    if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [path.relative(cwd, path.resolve(cwd, file))];
+    if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [posixPath(path.relative(cwd, path.resolve(cwd, file)))];
     if (tool.name === 'Bash') Object.assign(outcome, { exitCode: exitCode(block), output: tail(resultText(block)) });
     const patch = !block.is_error && EDIT_TOOLS.has(tool.name) ? patchOf(tool.input, result) : undefined;
     if (patch) outcome.patch = patch;
@@ -293,7 +294,7 @@ export function describeTool(name: string, input: Record<string, unknown>, serve
   if (kind.skill) return `Skill ${kind.skill}`;
   if (kind.mcp) return `Mcp ${kind.mcp.server}: ${kind.mcp.tool}`;
   const file = input.file_path ?? input.notebook_path;
-  const inside = typeof file === 'string' && cwd ? path.relative(cwd, path.resolve(cwd, file)) : undefined;
+  const inside = typeof file === 'string' && cwd ? posixPath(path.relative(cwd, path.resolve(cwd, file))) : undefined;
   const target = input.command ?? (inside && !inside.startsWith('..') ? inside : file) ?? input.pattern ?? input.url ?? input.query ?? input.subject ?? input.description;
   if (typeof target !== 'string') return name;
   const verb = VERBS[name as keyof typeof VERBS];

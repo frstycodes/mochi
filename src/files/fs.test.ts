@@ -9,7 +9,8 @@ import { listFiles } from '../../electron/fs/list.ts';
 import { fuzzyFiles } from './fuzzy.ts';
 
 function fixture() {
-  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'harness-fs-')));
+  // `.native` also expands Windows 8.3 short names, as resolveInside's own realpath does.
+  const base = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), 'harness-fs-')));
   const root = path.join(base, 'root');
   mkdirSync(path.join(root, 'src'), { recursive: true });
   mkdirSync(path.join(root, 'dist'));

@@ -13,6 +13,8 @@ function scratchRepo() {
   git(dir, 'init', '-q', '-b', 'main');
   git(dir, 'config', 'user.email', 'test@example.com');
   git(dir, 'config', 'user.name', 'test');
+  // Windows runners set core.autocrlf, which would check `two\n` back out as `two\r\n`.
+  git(dir, 'config', 'core.autocrlf', 'false');
   writeFileSync(join(dir, '.gitignore'), 'ignored.txt\n');
   writeFileSync(join(dir, 'a.txt'), 'one\n');
   git(dir, 'add', '-A');

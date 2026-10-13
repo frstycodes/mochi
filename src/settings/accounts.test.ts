@@ -15,10 +15,10 @@ test('profiles fall back to the default account per provider', () => {
 });
 
 test('sign-in commands point the tool at the account folder', () => {
-  assert.equal(signInCommand(DEFAULT_ACCOUNTS[0]), 'claude auth login');
-  assert.equal(signInCommand(DEFAULT_ACCOUNTS[1]), 'codex login');
-  assert.equal(signInCommand(work), 'CLAUDE_CONFIG_DIR=/Users/me/.harness/accounts/claude-work claude auth login');
-  assert.equal(signInCommand({ ...work, provider: 'codex', configDir: "/Users/o'brien/my accounts" }), `CODEX_HOME='/Users/o'\\''brien/my accounts' codex login`);
+  assert.equal(signInCommand(DEFAULT_ACCOUNTS[0], false), 'claude auth login');
+  assert.equal(signInCommand(DEFAULT_ACCOUNTS[1], false), 'codex login');
+  assert.equal(signInCommand(work, false), 'CLAUDE_CONFIG_DIR=/Users/me/.harness/accounts/claude-work claude auth login');
+  assert.equal(signInCommand({ ...work, provider: 'codex', configDir: "/Users/o'brien/my accounts" }, false), `CODEX_HOME='/Users/o'\\''brien/my accounts' codex login`);
   assert.equal(signInCommand({ ...work, configDir: "C:\\Users\\o'brien\\acct" }, true), "$env:CLAUDE_CONFIG_DIR='C:\\Users\\o''brien\\acct'; claude auth login");
 });
 

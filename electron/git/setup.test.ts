@@ -9,6 +9,9 @@ import { includePatterns, installCommand, matchesInclude, prepareWorktree } from
 
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
 
+
+// Setup commands are the user's own, so they're written for the platform's shell: cmd.exe on Windows.
+const isWindows = process.platform === 'win32';
 test('the install follows the lockfile at the top of the worktree', () => {
   const manager = (...files: string[]) => installCommand(new Set(files))?.argv.join(' ');
   assert.equal(manager('package.json', 'pnpm-lock.yaml'), 'pnpm install --frozen-lockfile --prefer-offline');
@@ -67,7 +70,7 @@ function recorder() {
 test('setup copies ignored local files, then runs the setup command with the worktree paths', async () => {
   const { project, dir } = scratch();
   const { emit, last } = recorder();
-  const status = await prepareWorktree({ root: project, dir, include: '.env*, !.env.example', command: 'echo "$MOCHI_ROOT_PATH" > from-root.txt', emit, choose: () => Promise.resolve('skip'), signal: new AbortController().signal });
+  const status = await prepareWorktree({ root: project, dir, include: '.env*, !.env.example', command: isWindows ? 'echo %MOCHI_ROOT_PATH%> from-root.txt' : 'echo "$MOCHI_ROOT_PATH" > from-root.txt', emit, choose: () => Promise.resolve('skip'), signal: new AbortController().signal });
   assert.equal(status, 'ready');
   assert.equal(readFileSync(join(dir, '.env'), 'utf8'), 'SECRET=1\n');
   assert.equal(readFileSync(join(dir, 'local.json'), 'utf8'), '{}\n', ".worktreeinclude's patterns add to the setting");
@@ -88,7 +91,7 @@ test('a failed step waits: Retry runs it again, Skip setup ends the setup skippe
     root: project,
     dir,
     include: '',
-    command: 'echo boom >&2; exit 3',
+    command: isWindows ? 'echo boom 1>&2& exit /b 3' : 'echo boom >&2; exit 3',
     emit,
     choose: () => {
       asked++;
