@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { ARROW_SIDE, neighbourInDirection, type Side } from '../layout/tree';
 import { activeThreads, pinnedThreads } from '../reorder';
-import { LIGHTS_RESERVE, useToggleSlot } from '../SidebarToggle';
+import { TOGGLE_RESERVE, useToggleSlot } from '../SidebarToggle';
 import { useHarness } from '../store';
 import { THREAD_MENU } from '../menus/menus';
 import { TargetContextMenu } from '../menus/TargetContextMenu';
@@ -17,7 +17,7 @@ import { useThreadSnapshots } from './snapshot';
 
 /** mod ↑: every running session in the space as a grid of snapshot cards, pinned first in pin order. Opens and closes without animation (keyboard). */
 export function Overview() {
-  const { reservesLights } = useToggleSlot(true);
+  const { reservesToggle } = useToggleSlot(true);
   const { state, dispatch } = useHarness();
   const pinned = pinnedThreads(state.threads, state.spaceId).map((t) => t.id);
   const others = activeThreads(state.threads, state.spaceId).map((t) => t.id);
@@ -38,7 +38,7 @@ export function Overview() {
 
   return (
     <div role="dialog" aria-modal aria-label="All sessions" onKeyDown={moveFocus} className="absolute inset-0 z-30 flex flex-col overflow-y-auto bg-background">
-      <header className={cn('app-drag flex h-11 shrink-0 items-center gap-3 px-4', reservesLights && LIGHTS_RESERVE)}>
+      <header className={cn('app-drag flex h-11 shrink-0 items-center gap-3 px-4', reservesToggle && TOGGLE_RESERVE)}>
         <h2 className="type-title">All sessions</h2>
         <span className="type-meta text-subtle-foreground tabular">{pinned.length + others.length}</span>
         <span className="flex-1" />

@@ -11,6 +11,7 @@ import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
+import { SidebarToggle } from './SidebarToggle';
 import { Stage } from './stage/Stage';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
@@ -113,6 +114,8 @@ function Shell() {
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
+      {/* Last on purpose: Electron applies app-region in document order, so the headers' drag regions after it would swallow its clicks. */}
+      <SidebarToggle />
     </SidebarProvider>
   );
 }
