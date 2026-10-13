@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, Clock, BellOff, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, Hourglass, Clock, BellOff, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -19,6 +19,7 @@ import { useJump } from './useNotifications';
 
 const KIND_ICONS = {
   'needs-you': { icon: AlertCircle, className: 'text-warning' },
+  limit: { icon: Hourglass, className: 'text-warning' },
   'step-done': { icon: CheckCircle, className: 'text-success' },
   review: { icon: Eye, className: 'text-muted-foreground' },
   ci: { icon: CloseCircle, className: 'text-destructive' },

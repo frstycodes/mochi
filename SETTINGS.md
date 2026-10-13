@@ -64,7 +64,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 | Permissions | Manual / Auto / Full access (Plan too in Claude threads; per-harness meaning in `src/runtime/access.ts`) | Auto | now | src/Composer.tsx |
 | Runs on | This Mac / … | This Mac | now | src/Composer.tsx:137 |
 | Agents running at once | stepper 1–16 | 6 | R1 | RUNTIME.md:91 |
-| When a usage limit hits | Pause until reset (fixed copy; API key / handoff are per-thread choices) | — | R1 | RUNTIME.md Auth |
+| When a usage limit hits | Pause until reset (fixed copy; Resume at reset, API key and handoff are per-thread choices on the limit card) | — | done | RUNTIME.md › Usage limits |
 
 ### Background tasks
 One model per task, each a picker over both harnesses' models (`src/settings/sections/background.tsx`): Thread titles, Commit messages, Pull requests, Goal steps, Handoff summaries. Default Haiku 5.5; a task falls back to Haiku 5.5, then GPT-6-Luna, then Mochi's own text (RUNTIME.md › Background tasks). Stored in agent settings (`utilityModels`), since main runs the calls. Done.

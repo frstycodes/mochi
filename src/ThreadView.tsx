@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
 import { ChevronDown, Hierarchy2, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
@@ -264,6 +265,7 @@ function ThreadHeader({
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <DeviceIndicator />
         <ThreadMenu thread={thread} />
+        <LimitChip thread={thread} />
         {!!thread.repo && (
           <span className="hidden min-w-0 items-center gap-1 truncate type-caption text-subtle-foreground @2xl:flex">
             <Hierarchy2 className="size-3.5 shrink-0" />

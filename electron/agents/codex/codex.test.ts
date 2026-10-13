@@ -99,12 +99,14 @@ test('after a resume only the reported request counts, not the whole history', (
 
 test('a usage limit pauses the thread with the account-wide reset time, then ends the turn', () => {
   const limits = {};
-  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } });
+  assert.equal(updateLimits(limits, { rateLimits: { primary: { usedPercent: 89, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } }), undefined, 'under WARN_PCT: no warning');
+  assert.equal(updateLimits(limits, { rateLimits: { primary: { usedPercent: 93, windowDurationMins: 300, resetsAt: 1791808455 } } })?.label, '5-hour', 'a sparse update warns from the merged windows');
+  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 } } });
   updateLimits(limits, { rateLimits: { primary: null, secondary: null } });
   const s = threadState('h1', '/x', { limits });
   const turn = { id: 'u', status: 'failed', error: { message: 'You hit your usage limit.', codexErrorInfo: 'usageLimitExceeded' } };
   assert.deepEqual(mapNotification('turn/completed', { threadId: 't', turn }, s), [
-    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z' },
+    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z', label: '5-hour' },
     { threadId: 'h1', type: 'turn-end', status: 'failed', error: 'You hit your usage limit.' },
   ]);
   const other = mapNotification('turn/completed', { threadId: 't', turn: { ...turn, error: { message: 'x', codexErrorInfo: 'serverOverloaded' } } }, s);

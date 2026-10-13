@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ const KIND = {
   review: { icon: ClipboardTick, label: 'Ready for review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
   overlap: { icon: Hierarchy3, label: 'Overlap' },
+  collision: { icon: Copy3, label: 'Same files' },
   run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Setting2, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
@@ -139,10 +140,16 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
         {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} canOpenThread={!!showThread} />}
         {item.kind === 'question' && <QuestionChoices item={item} />}
         {item.kind === 'overlap' && <OverlapChoices item={item} />}
+        {!!item.collision && <SharedFiles files={item.collision.files} />}
       </CardContent>
       {item.kind === 'review' && (
         <CardFooter className="gap-2">
           <ReviewActions item={item} canOpenThread={!!showThread} />
+        </CardFooter>
+      )}
+      {!!item.collision && (
+        <CardFooter className="gap-2">
+          <CollisionActions item={item} otherId={item.collision.otherThreadId} />
         </CardFooter>
       )}
       {item.kind === 'run' && (
@@ -232,6 +239,29 @@ function ReviewActions({ item, canOpenThread }: { item: QueueItem; canOpenThread
           Open thread
         </Button>
       )}
+    </>
+  );
+}
+
+function SharedFiles({ files }: { files: string[] }) {
+  return (
+    <p className="type-caption text-subtle-foreground">
+      Both edited <code className="rounded-sm bg-muted px-1 font-mono text-muted-foreground">{files.join(', ')}</code>
+    </p>
+  );
+}
+
+/** Never pauses an agent: open the other thread to coordinate, or keep both going. */
+function CollisionActions({ item, otherId }: { item: QueueItem; otherId: string }) {
+  const { state, dispatch } = useHarness();
+  const withUndo = useUndoable();
+  const other = state.threads.find((t) => t.id === otherId);
+  return (
+    <>
+      {!!other && <Button onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: other.id } })}>Open "{other.title}"</Button>}
+      <Button variant="outline" onClick={() => withUndo('Kept both', () => dispatch({ type: 'answer', queueId: item.id }))}>
+        Keep both
+      </Button>
     </>
   );
 }
