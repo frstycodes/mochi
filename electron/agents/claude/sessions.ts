@@ -14,6 +14,7 @@ import { emitAgentEvent } from '../events.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { FORK_MISSING_NOTICE, FORK_REFUSED_NOTICE, forkPoint, MISSING_FORK_POINT, takeForkAt, transcriptUuids } from './fork.ts';
 
 /**
  * One `query()` per thread, fed by a streaming-input inbox. A live session holds a Claude Code child process; at most
@@ -25,7 +26,7 @@ interface Session {
   options: AgentRunOptions;
   inbox: { text: string; images?: AgentImage[] }[];
   /** Every message handed to Claude Code, with the uuid `rewindFiles` takes and the chain entry before it (`rewindPoint`). */
-  sent: { uuid: string; text: string; after: string | null }[];
+  sent: { uuid: string; text: string; images?: AgentImage[]; after: string | null }[];
   /** The newest entry of the main conversation chain; undefined while a resumed session hasn't shown one yet. */
   lastUuid?: string | null;
   wake: EventEmitter;
@@ -111,9 +112,12 @@ export async function rewindClaude(threadId: string, text: string) {
   if (!result.canRewind) console.warn(`Claude rewind skipped for ${threadId}: ${result.error ?? 'no checkpoint'}`);
 }
 
-/** The chain entry just before the latest sent message with this text, for `forkAt`; null when unknown or it was the first. */
-export function claudeRewindPoint(threadId: string, text: string) {
-  return sessions.get(threadId)?.sent.findLast((m) => m.text.includes(text))?.after ?? null;
+/** The transcript entry just before the latest sent message with this text, for `forkAt`; null when unknown or it was the first. */
+export async function claudeRewindPoint(threadId: string, text: string) {
+  const session = sessions.get(threadId);
+  const index = session?.sent.findLastIndex((m) => m.text.includes(text)) ?? -1;
+  if (!session?.sessionId || index < 0) return null;
+  return forkPoint(session.sent, index, await transcriptUuids(session.account.configDir, session.sessionId));
 }
 
 /** Stops one subagent (Agent tool task) of a live session; Claude Code then reports it `stopped`. */
@@ -151,6 +155,8 @@ async function schedule(session: Session) {
 async function launch(session: Session) {
   const { threadId, options } = session;
   const abort = new AbortController();
+  const sentBefore = session.sent.length;
+  let isForkRefused = false;
   try {
     const { accountEnv, apiKeyFor, defaultModel, userPath } = await config();
     const { configDir = null } = session.account;
@@ -165,6 +171,8 @@ async function launch(session: Session) {
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
+    const { forkAt, isMissing } = await takeForkAt(session);
+    if (isMissing) emit({ threadId, type: 'notice', text: FORK_MISSING_NOTICE });
     const mode = (options.permissionMode as PermissionMode | undefined) ?? 'default';
     const permissions = permissionOptions(mode);
     session.query = query({
@@ -179,8 +187,8 @@ async function launch(session: Session) {
         ...permissions,
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
-        // Only on the launch that forks: init then hands back the fork's own id, and later launches resume that whole.
-        ...(options.forkAt && session.sessionId === options.resume && { resumeSessionAt: options.forkAt, forkSession: true }),
+        // `takeForkAt` gives it to one launch only: init then hands back the fork's own id, and later launches resume that whole.
+        ...(forkAt && { resumeSessionAt: forkAt, forkSession: true }),
         env,
         includePartialMessages: true,
         enableFileCheckpointing: true,
@@ -192,6 +200,10 @@ async function launch(session: Session) {
       },
     });
     for await (const message of session.query) {
+      if (forkAt && message.type === 'result' && message.subtype !== 'success' && message.errors.some((e) => e.includes(MISSING_FORK_POINT))) {
+        isForkRefused = true;
+        break;
+      }
       if ((message.type === 'assistant' || message.type === 'user') && !message.parent_tool_use_id && message.uuid) session.lastUuid = message.uuid;
       if (message.type === 'system' && message.subtype === 'init') {
         session.sessionId = message.session_id;
@@ -211,6 +223,17 @@ async function launch(session: Session) {
   } finally {
     if (session.abort === abort) release(session);
   }
+  if (isForkRefused && sessions.get(threadId) === session) await resumeWhole(session, sentBefore);
+}
+
+/** Claude Code refused the fork before running anything: the same messages go again on the whole session (its `forkAt` is spent). */
+async function resumeWhole(session: Session, sentBefore: number) {
+  const unread = session.sent.splice(sentBefore);
+  session.lastUuid = unread[0]?.after ?? session.lastUuid;
+  session.inbox.unshift(...unread.map(({ text, images }) => ({ text, images })));
+  session.isBusy = true;
+  emit({ threadId: session.threadId, type: 'notice', text: FORK_REFUSED_NOTICE });
+  await schedule(session);
 }
 
 /** Ends a session's process and hands its slot to the next waiting thread. The record stays for `send` unless stopped. */
@@ -238,7 +261,7 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
     const next = session.inbox.shift();
     if (next) {
       const uuid = randomUUID();
-      session.sent.push({ uuid, text: next.text, after: session.lastUuid ?? null });
+      session.sent.push({ uuid, text: next.text, images: next.images, after: session.lastUuid ?? null });
       session.lastUuid = uuid;
       session.mapper.sent(next.text).forEach(emit);
       yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid };
