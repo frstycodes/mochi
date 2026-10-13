@@ -136,6 +136,7 @@ export const git: GitHost = {
     return {
       number: 490,
       url: 'https://github.com/latitude-dev/latitude/pull/490',
+      title: 'Rate limits for the public API',
       state: 'OPEN',
       checks: [
         { name: 'typecheck', state: 'pass' },

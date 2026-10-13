@@ -80,14 +80,14 @@ export const git = {
   async pr(_sender, cwd, user) {
     const top = await topLevel(string(cwd, 'cwd'));
     const account = githubAccount(user);
-    const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state'], account).catch((error: Error) => {
+    const view = await runGh(top, ['pr', 'view', '--json', 'number,url,state,title'], account).catch((error: Error) => {
       if (/no (open )?pull requests? found|no git remotes/i.test(error.message)) return null;
       throw error;
     });
     if (!view) return null;
     // gh exits 8 while checks are pending and 1 when one failed or none are reported; stdout still holds the JSON.
     const checks = await runGh(top, ['pr', 'checks', '--json', 'name,bucket,link'], account, { okCodes: [0, 1, 8] }).catch(() => '');
-    return { ...(JSON.parse(view) as { number: number; url: string; state: string }), checks: parseChecks(checks) };
+    return { ...(JSON.parse(view) as { number: number; url: string; state: string; title: string }), checks: parseChecks(checks) };
   },
 
   async ghAccounts() {
