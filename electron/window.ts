@@ -27,7 +27,17 @@ export function openRoute(route: string) {
   win.on('closed', () => routed.delete(route));
 }
 
-export function createWindow(route = '', bounds?: Rectangle) {
+/** Brings the main window back, hidden or minimized, or opens one. */
+export function showMainWindow() {
+  const win = mainWindow();
+  if (!win) return void createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+/** `isHidden`: the main window that keeps the store running for remote devices while no window is open. */
+export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
   const win = new BrowserWindow({
     width: 1280,
@@ -47,7 +57,7 @@ export function createWindow(route = '', bounds?: Rectangle) {
       nodeIntegration: false,
     },
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => win.webContents.send('windows:onFullScreenChange', true));
   win.on('leave-full-screen', () => win.webContents.send('windows:onFullScreenChange', false));
   if (isMain) win.on('close', () => writeFileSync(stateFile(), JSON.stringify(win.getNormalBounds())));

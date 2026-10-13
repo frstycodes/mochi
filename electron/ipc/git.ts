@@ -2,11 +2,11 @@ import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
-import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, WorktreeOptions } from '../../src/host/types/git.ts';
+import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, PrInfo, SwitchOptions, WorktreeOptions } from '../../src/host/types/git.ts';
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
-import { assertFreeBranch, baseRef, branchNameError, listBranches, localName } from '../git/branches.ts';
+import { assertFreeBranch, baseRef, branchNameError, listBranches, localName, switchBranch } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
@@ -17,6 +17,7 @@ import { prsOnBranches, type GhPr } from '../../src/git/prs.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
+const SWITCH_CHANGES = ['refuse', 'stash', 'commit', 'bring', 'discard'] satisfies SwitchOptions['changes'][];
 // ponytail: untracked files diff one process each; capped so a missing .gitignore can't fork thousands.
 const MAX_UNTRACKED = 200;
 const MAX_PATCH = 8 * 1024 * 1024;
@@ -173,6 +174,11 @@ export const git = {
 
   async branchNameError(_sender, root, name) {
     return branchNameError(await topLevel(string(root, 'root')), string(name, 'name', 255));
+  },
+
+  async switchBranch(_sender, root, branch, options) {
+    const changes = oneOf(record(options, 'options').changes, SWITCH_CHANGES, 'options.changes');
+    await switchBranch(await topLevel(string(root, 'root')), string(branch, 'branch', 255), { changes });
   },
 
   async worktrees(_sender, root) {

@@ -1,13 +1,15 @@
 import type { ComponentType } from 'react';
-import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Global, Keyboard, Notification, Palette, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
+import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Devices, Global, Keyboard, Notification, Palette, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent, ProfileCircle } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { UTILITY_TASKS } from '../../utility/prompts';
+import { AccountSection } from './account';
 import { BackgroundSection, UTILITY_TASK_LABELS } from './background';
 import { BrowserSection } from './browser';
 import { DataSection } from './data';
 import { DefaultsSection } from './defaults';
+import { DevicesSection } from './devices';
 import { GeneralSection } from './general';
 import { GitSection } from './git';
 import { GoalsSection } from './goals';
@@ -35,6 +37,14 @@ export interface SettingsSection {
 
 /** The settings page in sidebar order (SETTINGS.md). */
 export const SETTINGS_SECTIONS = [
+  {
+    id: 'account',
+    group: 'App',
+    title: 'Account',
+    icon: ProfileCircle,
+    component: AccountSection,
+    settings: [{ id: 'mochiAccount', label: 'Mochi account', keywords: 'sign in sign out login logout clerk devices computers sync' }],
+  },
   {
     id: 'general',
     group: 'App',
@@ -89,6 +99,19 @@ export const SETTINGS_SECTIONS = [
       { id: 'dockBadge', label: 'App icon badge counts', keywords: 'badge icon needs you' },
       { id: 'quietHours', label: 'Quiet hours', keywords: 'do not disturb night silence' },
       { id: 'mutedThreads', label: 'Muted threads', keywords: 'mute unmute silence' },
+    ],
+  },
+  {
+    id: 'devices',
+    group: 'App',
+    title: 'Devices',
+    icon: Devices,
+    component: DevicesSection,
+    settings: [
+      { id: 'remoteEnabled', label: 'Let devices control this computer', keywords: 'remote control phone laptop server connect' },
+      { id: 'remoteNetwork', label: 'Allow devices on this network', keywords: 'lan tailscale wifi firewall remote' },
+      { id: 'machineName', label: 'Computer name', keywords: 'machine host name remote' },
+      { id: 'connectedDevices', label: 'Connected devices', keywords: 'remote paired' },
     ],
   },
   {
