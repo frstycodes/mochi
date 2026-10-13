@@ -178,6 +178,11 @@ export const git: GitHost = {
     return `${threadId}${n}`.padEnd(40, '0');
   },
   async restoreCheckpoint() {},
+  /** Later checkpoints hold more of the fixture's changes, so scrubbing a replay shows the diff growing. */
+  async checkpointDiff(cwd, _threadId, n) {
+    const { files, ...diff } = await git.diff(cwd, 'branch');
+    return { ...diff, files: files.slice(0, (n % files.length) + 1) };
+  },
   async forkWorktree(_cwd, threadId) {
     return `~/.harness/worktrees/demo/${threadId}`;
   },

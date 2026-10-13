@@ -200,6 +200,8 @@ export const SETTINGS_SECTIONS = [
     component: DataSection,
     settings: [
       { id: 'demoData', label: 'Show demo data', keywords: 'sample example fixture threads prototype' },
+      { id: 'recordReplays', label: 'Record threads for replay', keywords: 'replay recording session playback demo debug events' },
+      { id: 'clearReplays', label: 'Clear replay recordings', keywords: 'replay recording delete disk space' },
       { id: 'storage', label: 'Storage used', keywords: 'disk space size' },
       { id: 'clearPins', label: 'Clear pins', keywords: 'reset delete' },
       { id: 'clearSideChats', label: 'Clear side chats', keywords: 'reset delete' },

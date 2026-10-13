@@ -26,6 +26,12 @@ import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useWorktreeManager } from './git/useWorktreeManager';
+import { readEmbeddedReplay } from './replay/export';
+import { useReplayRoute } from './replay/open';
+import { ReplayPage, ReplayView } from './replay/ReplayView';
+
+// An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
+const embeddedReplay = readEmbeddedReplay();
 
 export function App() {
   const route = useHashRoute();
@@ -34,7 +40,9 @@ export function App() {
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ReducedMotion>
         <TooltipProvider delayDuration={400}>
-          {route === 'design' ? (
+          {embeddedReplay ? (
+            <ReplayPage payload={embeddedReplay} />
+          ) : route === 'design' ? (
             <DesignPage />
           ) : route.startsWith('/window/') ? (
             <TornWindow threadId={route.slice('/window/'.length)} />
@@ -86,6 +94,7 @@ function Shell() {
   useWorktreeManager();
   const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
+  const isReplayOpen = !!useReplayRoute();
   useSettingsShortcut();
 
   return (
@@ -100,7 +109,7 @@ function Shell() {
       )}
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : review.isOpen ? <ReviewView /> : <Stage />}
+          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : review.isOpen ? <ReviewView /> : <Stage />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />

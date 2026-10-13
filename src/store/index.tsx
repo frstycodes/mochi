@@ -23,6 +23,7 @@ import { initialNotifications, notificationsReducer, type NotificationsAction, t
 import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
 import { scheduleReducer, type ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
+import { recordAction } from '../replay/recorder.ts';
 
 export type { View } from './layout.ts';
 export type { OverlapMode } from './threads.ts';
@@ -57,13 +58,19 @@ const TICK_MS = showsDemoData() ? 1000 : 60_000;
 export const HarnessContext = createContext<{ state: State; dispatch: Dispatch<Action> } | null>(null);
 
 export function HarnessProvider({ children }: { children: ReactNode }) {
-  const [state, apply] = useReducer(reducer, undefined, initialState);
+  const [state, applyNow] = useReducer(reducer, undefined, initialState);
   const latest = useRef(state);
+  // Actions from outside a dispatch (agent events, scheduled runs) are recorded against the newest store this provider has seen.
+  const apply = useCallback((action: Action) => {
+    recordAction(latest.current, action);
+    applyNow(action);
+  }, []);
   useEffect(() => {
     latest.current = state;
   }, [state]);
   const dispatch = useCallback<Dispatch<Action>>((action) => {
     const before = latest.current;
+    recordAction(before, action);
     const answer = resolution(before, action);
     if (answer) void host.agent.resolve(answer.requestId, answer.decision);
     let after: State | undefined;
@@ -76,16 +83,16 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
       // A call that throws (bad options, no adapter) ends the turn as failed, so the thread says why instead of spinning.
       callAgent(call).catch((error: unknown) => apply({ type: 'agent', event: failed(call.threadId, error) }));
     }
-    apply(action);
+    applyNow(action);
     // After the action: a new thread only exists once it has applied.
-    for (const call of calls) if (call.method === 'start') apply({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
+    for (const call of calls) if (call.method === 'start') applyNow({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
     if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
-  }, []);
+  }, [apply]);
   // The tick is the app's clock, one per minute of `now`: the demo runs it 60× fast, real threads at wall-clock speed.
   // Real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {
     if (state.paused) return;
-    const id = setInterval(() => apply({ type: 'tick' }), TICK_MS);
+    const id = setInterval(() => applyNow({ type: 'tick' }), TICK_MS);
     return () => clearInterval(id);
   }, [state.paused]);
   useEffect(
@@ -94,7 +101,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
         if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
         apply({ type: 'agent', event, ms: Date.now() });
       }),
-    [],
+    [apply],
   );
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => apply(event.type === 'agent' ? { type: 'agent', event: event.event } : { type: 'schedule-run', event });
@@ -102,7 +109,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     // What happened while no window was open: runs and their agent's events, in order.
     void host.schedule.drain().then((events) => events.forEach(onSchedule), (error: unknown) => console.error('Reading scheduled runs failed', error));
     return off;
-  }, []);
+  }, [apply]);
   useEffect(
     () =>
       host.agent.onToolCall((call) => {

@@ -141,6 +141,8 @@ export interface GitHost {
   checkpoint(cwd: string, threadId: string, n: number): Promise<string>;
   /** Resets the worktree's branch and files to checkpoint `n`, after saving the current files as the `undo` checkpoint. */
   restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo'): Promise<void>;
+  /** What checkpoint `n` held against the branch's base: the thread's changes as they stood then. Throws when its files weren't saved. */
+  checkpointDiff(cwd: string, threadId: string, n: number): Promise<GitDiff>;
   /** New worktree for `threadId` on `branch`, starting from `from`'s checkpoint, or from `cwd`'s HEAD without one. */
   forkWorktree(cwd: string, threadId: string, branch: string, from?: { threadId: string; n: number }): Promise<string>;
 }
@@ -165,5 +167,6 @@ export const gitMethods = {
   diskUsage: 'invoke',
   checkpoint: 'invoke',
   restoreCheckpoint: 'invoke',
+  checkpointDiff: 'invoke',
   forkWorktree: 'invoke',
 } satisfies Manifest<GitHost>;
