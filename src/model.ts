@@ -285,6 +285,8 @@ export interface LiveRun {
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
+  /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
+  restart?: { forkAt: string } | { seed: string };
   /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
   isReplacingTurn?: boolean;
 }

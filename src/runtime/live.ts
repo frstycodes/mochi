@@ -54,6 +54,13 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     }
     case 'interrupt':
       return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+    case 'rewind':
+    case 'rewind-message':
+    case 'rewind-undo': {
+      // The next message starts the agent again on the rewound session (`reattach`).
+      const threadId = action.type === 'rewind-undo' ? state.rewindUndo?.threadId : action.threadId;
+      return threadId && hasAgent(state, threadId) ? [{ method: 'stop', threadId }] : [];
+    }
     case 'settle':
       return [...(hasAgent(state, action.threadId) ? [{ method: 'stop' as const, threadId: action.threadId }] : []), ...stopBackground(state, [action.threadId])];
     case 'delete':
@@ -95,7 +102,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
@@ -124,7 +131,11 @@ export function resumeAfterLostProcess(thread: Thread, call: Extract<AgentCall, 
 
 function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[], skills?: string[]) {
   const provider = thread.session?.provider ?? thread.providers[0];
-  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }) });
+  const restart = thread.live?.restart;
+  const seed = restart && 'seed' in restart ? restart.seed : undefined;
+  const resume = seed === undefined ? thread.session?.id : undefined;
+  const forkAt = restart && 'forkAt' in restart ? restart.forkAt : undefined;
+  return start(thread, provider, controlsOf(thread), seed ? `${seed}\n\n${prompt}` : prompt, { resume, ...(forkAt && { forkAt }), useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }) });
 }
 
 /** Mochi background agents of these threads that are still running. */

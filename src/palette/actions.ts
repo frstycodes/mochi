@@ -10,6 +10,7 @@ import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import type { Provider, Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
+import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
 import { openSchedule } from '../schedule/ScheduleDialog';
 import { openGoalEditor } from '../goals/GoalEditor';
@@ -77,7 +78,7 @@ export const ACTIONS = [
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
   { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, keywords: 'title name', when: when.thread, run: inThread((t) => startRename(t.id)) },
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
-  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
+  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, disabledReason: (s) => s.thread && rewindBlockedReason(s.thread), run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-replay', group: 'Thread', title: 'Replay thread', icon: VideoPlay, keywords: 'recording session playback demo debug', when: when.thread, run: onThread((t) => openReplay(t.id)) },
   { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Export, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },

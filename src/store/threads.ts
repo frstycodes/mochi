@@ -9,7 +9,7 @@ import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
-import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindUndo } from '../rewind/checkpoints.ts';
+import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, undoRewind, type Checkpoint, type RewindMode, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import { contextMax } from '../runtime/models.ts';
@@ -83,8 +83,8 @@ export type ThreadsAction =
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
-  | { type: 'rewind'; threadId: string; n: number }
-  | { type: 'rewind-message'; threadId: string; index: number }
+  | { type: 'rewind'; threadId: string; n: number; mode?: RewindMode; forkAt?: string | null }
+  | { type: 'rewind-message'; threadId: string; index: number; mode?: RewindMode; forkAt?: string | null }
   | { type: 'rewind-undo' }
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
@@ -212,9 +212,9 @@ function reduce(state: State, action: Action): State {
     case 'restore':
       return { ...state, ...action.snapshot };
     case 'rewind':
-      return rewind(state, action.threadId, action.n);
+      return rewind(state, action.threadId, action.n, action.mode, action.forkAt);
     case 'rewind-message':
-      return rewindToMessage(state, action.threadId, action.index);
+      return rewindToMessage(state, action.threadId, action.index, action.mode, action.forkAt);
     case 'rewind-undo':
       return undoRewind(state);
     case 'checkpoint-ref':
@@ -491,7 +491,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
-      const live = t.live && { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
+      const live = t.live && { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
       const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }) });
       return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
