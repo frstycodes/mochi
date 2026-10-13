@@ -27,7 +27,7 @@ import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
 import { ChatView } from './ChatView';
-import { progressAt } from './progress';
+import { goalProgress, progressLabel } from './progress';
 import { SidePane, useSplitTabIds } from './SidePane';
 import { SplitControls } from './layout/SplitControls';
 import { THREAD_ACTIONS_MENU, THREAD_HEADER_MENU } from './menus/menus';
@@ -255,7 +255,7 @@ function ThreadHeader({
 }) {
   const { state } = useHarness();
   const { isFirst, leafId } = useSplit();
-  const { pct } = progressAt(thread, state.now, true);
+  const progress = goalProgress(thread, state.now);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
@@ -285,8 +285,8 @@ function ThreadHeader({
             <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
               {hasGoal(thread) ? (
                 <>
-                  <ProgressRing pct={pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
-                  <span className="tabular">{Math.round(pct * 100)}%</span>
+                  <ProgressRing pct={progress.pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+                  <span className="tabular">{progressLabel(progress)}</span>
                 </>
               ) : (
                 <TextalignLeft className="size-4" aria-hidden />

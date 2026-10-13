@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { prBody } from '../git/prBody.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
@@ -47,6 +48,8 @@ export interface ToolEnv {
    */
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   isDesktop: boolean;
+  /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
+  git: { push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
   now?: () => number;
 }
 
@@ -391,7 +394,7 @@ const GOAL_SPECS = {
       const title = args.title.trim();
       if (!title) throw new Error('title is required');
       const draft = draftFrom(thread);
-      draft.steps.push({ title, size: (args.size ?? 1) as Size, gate: false, isRemoved: false, isLocked: false });
+      draft.steps.push({ title, size: 1, gate: false, isRemoved: false, isLocked: false });
       editGoal(dispatch, thread, caller, draft);
       return { changed: `added the step "${title}"`, result: goalOf(target(state(), caller, thread.id)) };
     },
@@ -433,6 +436,16 @@ const GOAL_SPECS = {
       draft.steps = draft.steps.map((s) => (s.id === step.id ? { ...s, isRemoved: true } : s));
       editGoal(dispatch, thread, caller, draft);
       return { changed: `dropped "${step.title}"${args.reason ? `: ${args.reason}` : ''}`, result: goalOf(target(state(), caller, thread.id)) };
+    },
+  },
+  open_pr: {
+    run: async ({ env, caller, args }) => {
+      const cwd = caller.repo && env.cwdOf(caller);
+      if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
+      const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
+      await env.git.push(cwd, githubUser);
+      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
+      return { changed: `opened ${url}`, result: { url } };
     },
   },
   claim_criterion: {

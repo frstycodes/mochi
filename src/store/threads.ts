@@ -6,7 +6,7 @@ import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
-import { progressAt } from '../progress.ts';
+import { goalProgress } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
@@ -83,6 +83,9 @@ export type ThreadsAction =
   | { type: 'criterion-check'; threadId: string; criterionId: string; result: CheckRun | 'running' }
   | { type: 'similar-dismiss'; threadId: string; otherId: string }
   | { type: 'goal-remove'; threadId: string }
+  /** A reply's bullets from Simplify, shown in its place; display only. */
+  | { type: 'simplified'; threadId: string; index: number; text: string; rulesKey: string }
+  | { type: 'simplify-toggle'; threadId: string; index: number }
   | { type: 'criterion-claim'; threadId: string; criterionId: string; evidence: string; by: Provider }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
@@ -144,7 +147,7 @@ function reduce(state: State, action: Action): State {
       return {
         ...state,
         // Settling stops the agent process; the next message after reactivating starts it again with `resume`.
-        threads: mapThread(state.threads, action.threadId, (t) => pauseQueue({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true } }) }, 'interrupted')),
+        threads: mapThread(state.threads, action.threadId, (t) => pauseQueue({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true, limit: undefined } }) }, 'interrupted')),
         queue: state.queue.filter((q) => q.threadId !== action.threadId),
       };
     case 'unsettle':
@@ -187,7 +190,7 @@ function reduce(state: State, action: Action): State {
           t.live
             ? log(
                 // The queue waits for this turn to end, then goes on.
-                { ...t, status: 'running', queuePause: undefined, live: { ...t.live, isWorking: true, limit: undefined, limitWarning: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
+                { ...t, status: 'running', queuePause: undefined, live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
                 { at: state.now, who: 'harness', kind: 'event', text: resumeText(t, action) },
               )
             : t,
@@ -213,6 +216,10 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => claimCriterion(t, action, state.now)) };
     case 'report':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now } })) };
+    case 'simplified':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => mapEntry(t, action.index, (e) => ({ ...e, simplified: { text: action.text, rulesKey: action.rulesKey, isShown: true } }))) };
+    case 'simplify-toggle':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => mapEntry(t, action.index, (e) => (e.simplified ? { ...e, simplified: { ...e.simplified, isShown: !e.simplified.isShown } } : e))) };
     case 'goal-remove':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => removeGoal(t, state.now)) };
     case 'edit-goal':
@@ -259,6 +266,11 @@ function reduce(state: State, action: Action): State {
 /** An emptied queue drops its pause with it. */
 function withQueue(thread: Thread, queued: QueuedMessage[]): Thread {
   return { ...thread, queued, ...(queued.length === 0 && { queuePause: undefined }) };
+}
+
+function mapEntry(t: Thread, index: number, fn: (e: ActivityEntry) => ActivityEntry): Thread {
+  const entry = t.activity[index];
+  return entry ? { ...t, activity: t.activity.map((e, i) => (i === index ? fn(e) : e)) } : t;
 }
 
 export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {
@@ -505,7 +517,8 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
-      const live = t.live && { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
+      // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
+      const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
       const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }) });
       return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
@@ -580,7 +593,7 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   const source = state.threads.find((t) => t.id === action.threadId);
   if (!source) return state;
   const now = state.now;
-  const isGoalDone = source.status === 'review' || progressAt(source, now, true).pct >= 1;
+  const isGoalDone = goalProgress(source, now).phase === 'ready';
   const hasOpenPr = source.prs.some((p) => p.state === 'open');
   const short = action.prompt.length > 40 ? `${action.prompt.slice(0, 39)}…` : action.prompt;
   let next: State = state;

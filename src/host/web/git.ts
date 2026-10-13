@@ -209,7 +209,7 @@ export const git: GitHost = {
 // One of every chip state, by number on any repo; other numbers stay unknown, as without gh.
 const demoRef = (kind: RefState['kind'], status: RefState['status'], number: number, title: string, extra: Partial<RefState> = {}): RefState => ({
   ...bareState(kind, status, title, `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`),
-  author: 'frstycodes',
+  author: { login: 'frstycodes', avatarUrl: 'https://avatars.githubusercontent.com/frstycodes?s=40' },
   updatedAt: new Date(Date.now() - (number % 9) * 47 * 60_000).toISOString(),
   ...(kind === 'pr' && { branch: { head: `feat/demo-${number}`, base: 'main' }, diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 }, checks: 'pass', review: 'approved' }),
   ...extra,

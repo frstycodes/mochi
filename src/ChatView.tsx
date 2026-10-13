@@ -1,10 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useSimplifyReveal } from './simplify/useSimplify';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Hourglass } from 'reicon-react';
+import { ChevronDown, ChevronUp, Hourglass, Sparkles } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -22,6 +23,7 @@ import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
+import { SetupRow } from './chat/SetupRow';
 import { agentPhase, currentAction, isWorking, pendingWork, type CurrentAction } from './agentPhase';
 import { chatRows, finalReplies, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
@@ -38,9 +40,7 @@ import { MessageActions } from './chat/MessageActions';
 import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
-import { HeldHint, LimitEntry } from './chat/LimitCard';
-import { heldBy, type AccountHold } from './runtime/limits';
-import { resetLabel } from './usage/limits';
+import { LimitEntry, LimitHint } from './chat/LimitCard';
 import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
@@ -88,6 +88,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
           <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
               {hasGoal(thread) && <GoalCard thread={thread} />}
+              {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
               <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
                 {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
               </Transcript>
@@ -162,8 +163,10 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
           )}
           {isYou && slashTokens(entry.text, slashItems).length > 0 ? (
             <SlashTokenText text={entry.text} items={slashItems} />
+          ) : isAgent ? (
+            <AgentReply thread={thread} index={row.index} isLive={isLive} />
           ) : (
-            <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
+            <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={false}>
               {entry.text}
             </MessageResponse>
           )}
@@ -179,6 +182,33 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     </MessageContextMenu>
   );
 });
+
+/** An agent's reply, or its Simplify bullets: they come in with the word reveal, and the reply pulses while they're made. */
+function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {
+  const entry = thread.activity[index];
+  const { isSimplifying, isRevealing } = useSimplifyReveal(thread.id, index);
+  const simplified = entry.simplified?.isShown ? entry.simplified.text : null;
+  return (
+    <>
+      {simplified !== null && (
+        <span className="flex items-center gap-1 type-caption text-subtle-foreground">
+          <Sparkles aria-hidden className="size-3" />
+          Simplified for you
+        </span>
+      )}
+      <MessageResponse
+        key={simplified === null ? 'original' : 'simplified'}
+        plugins={VIZ_PLUGINS}
+        components={VIZ_COMPONENTS}
+        rehypePlugins={VIZ_REHYPE_PLUGINS}
+        isAnimating={isLive || (simplified !== null && isRevealing)}
+        className={cn('transition-[opacity,filter] duration-300 motion-reduce:transition-none', isSimplifying && 'opacity-50 blur-[1.5px]')}
+      >
+        {simplified ?? entry.text}
+      </MessageResponse>
+    </>
+  );
+}
 
 /** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */
 function outline(rows: ChatRow[], pins: Pin[]): OutlineItem[] {
@@ -257,11 +287,10 @@ function Composer({
   onToggleTray: () => void;
   handoff: ReturnType<typeof useComposerHandoff>;
 }) {
-  const { state, dispatch } = useHarness();
+  const { dispatch } = useHarness();
   const { whileWorking } = usePrefs();
   const [isHeld, setIsHeld] = useState(false);
-  const held = heldBy(state.threads, thread);
-  const isQueueing = !!held || shouldQueue(thread, whileWorking, isHeld);
+  const isQueueing = shouldQueue(thread, whileWorking, isHeld);
   const queued = thread.queued ?? [];
   const { textInput } = usePromptInputController();
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -322,7 +351,7 @@ function Composer({
                 dispatch({ type: 'queued-add', threadId: thread.id, message });
                 mention.clear();
               }}
-              placeholder={held ? heldPlaceholder(thread, held) : placeholder(thread, decisions.length > 0, isQueueing)}
+              placeholder={placeholder(thread, decisions.length > 0, isQueueing)}
               autoFocus={handoff.isHandoff}
               {...menuProps}
               onKeyDown={(e) => {
@@ -342,7 +371,7 @@ function Composer({
         <ComposerMeta>
           <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
-          {held ? <HeldHint held={held} /> : isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
+          {thread.live?.limit ? <LimitHint limit={thread.live.limit} /> : isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
         </ComposerMeta>
         {!!workspace && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
@@ -355,11 +384,6 @@ function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
   if (isAsking) return 'Answer above, or steer with a message';
   if (isQueueing) return `Queue a message for when ${name} finishes`;
   return isWorking(thread) ? `Steer ${name} while it works` : `Message ${name}`;
-}
-
-function heldPlaceholder(thread: Thread, held: AccountHold) {
-  const name = authorName(thread.providers[0]);
-  return `Queue a message for when ${name}'s limit resets${held.resetsAt ? ` at ${resetLabel(held.resetsAt)}` : ''}`;
 }
 
 /** What holding mod does to this send: the setting's other choice. */

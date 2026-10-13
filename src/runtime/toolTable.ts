@@ -93,7 +93,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description: "Add a step to a thread's plan. Plan changes don't change the goal's version.",
-    shape: { title: z.string(), size: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe('1 small, 2 medium, 3 large'), threadId },
+    shape: { title: z.string(), threadId },
   },
   edit_goal: {
     tier: 'change',
@@ -108,6 +108,15 @@ export const TOOL_TABLE = {
   },
   reorder_steps: { tier: 'change', description: 'Reorder goal steps. List step ids top first; steps left out keep their place after them.', shape: { threadId, order: z.array(z.string()).min(1) } },
   drop_step: { tier: 'change', description: "Drop a step that's no longer needed. Done steps can't be dropped.", shape: { threadId, stepId, reason: z.string().optional() } },
+  open_pr: {
+    tier: 'change',
+    description:
+      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first. Use this instead of `gh pr create`.',
+    shape: {
+      title: z.string().min(1).max(72).describe('Conventional Commits style, like "fix(auth): keep the session cookie"'),
+      why: z.string().min(1).max(300).describe('One sentence: why this change'),
+    },
+  },
   claim_criterion: {
     tier: 'change',
     quiet: true,

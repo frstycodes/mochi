@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
-import { progressAt } from '../progress';
+import { goalProgress } from '../progress';
 import { isWorking } from '../agentPhase';
 import { threadDetail } from '../Sidebar';
 import { useHarness, type State } from '../store';
@@ -45,7 +45,7 @@ function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
     title: thread.title,
     line: thread.line,
     status: thread.status,
-    pct: Math.round(progressAt(thread, state.now, true).pct * 100) / 100,
+    pct: Math.round(goalProgress(thread, state.now).pct * 100) / 100,
     nowStep: threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title),
     isWorking: isWorking(thread),
     lastMessage: last ? { who: last.who, text: last.text } : null,

@@ -1,6 +1,6 @@
 import { isValidElement, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
-import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Hourglass, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,11 +30,11 @@ import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
-import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
+import { GoalTimeline, StepLinkLine } from './GoalTimeline';
 import { openGoalEditor } from './goals/GoalEditor';
 import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
-import { burnSeries, clock, duration, minutesLeft, progressAt } from './progress';
+import { burnSeries, clock, duration, GOAL_PHASE_LABELS, goalProgress, progressAt, progressLabel } from './progress';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
@@ -152,13 +152,14 @@ function SummarySections({ sections, ...props }: SectionProps & { sections: Summ
 
 /** Pending approval or question; blocked steps say so in the goal block. */
 function NeedsYou({ thread }: { thread: Thread }) {
-  if (thread.status !== 'needs-you') return null;
+  // A limit's own line is `RateLimitWarning`'s.
+  if (thread.status !== 'needs-you' || thread.live?.limit) return null;
   return (
     <p role="status" className="flex items-center gap-2.5 px-2 py-1 type-meta text-warning">
       <span className="flex w-4 shrink-0 justify-center" aria-hidden>
         <span className="size-1.5 rounded-full bg-warning" />
       </span>
-      {limitStatus(thread) ?? currentAction(thread)?.label ?? PHASE_LABELS.wait}
+      {currentAction(thread)?.label ?? PHASE_LABELS.wait}
     </p>
   );
 }
@@ -639,6 +640,14 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   const provider = thread.providers[0];
   const { limits } = useAccountLimits(provider, thread.spaceId);
   const tight = limits?.windows.find((w) => toneFor(w.usedPct / 100) === 'destructive');
+  const limit = limitStatus(thread);
+  if (limit)
+    return (
+      <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
+        <Hourglass className="size-4 shrink-0" aria-hidden />
+        {limit}
+      </p>
+    );
   if (thread.status !== 'running' || !tight) return null;
 
   const name = `${PROVIDER_NAMES[provider]} ${tight.label.toLowerCase()} limit`;
@@ -655,8 +664,7 @@ function GoalSection({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const live = progressAt(thread, state.now, true);
-  const eta = minutesLeft(thread, state.now);
+  const progress = goalProgress(thread, state.now);
   const latest = thread.revisions[thread.revisions.length - 1];
   const now = thread.steps.filter((s) => s.status === 'running' || s.status === 'blocked');
   const waiting = thread.steps.filter((s) => s.status === 'waiting');
@@ -685,10 +693,8 @@ function GoalSection({ thread }: { thread: Thread }) {
           <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
           {!!thread.criteria?.length && <CriteriaList thread={thread} />}
           <div className="flex items-end justify-between gap-2">
-            <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
-            <span className="tabular pb-1 type-caption text-subtle-foreground">
-              {Math.round(live.done + live.partial)} of {live.scope} pts · {etaLabel(eta).toLowerCase()}
-            </span>
+            <span className="tabular type-display">{Math.round(progress.pct * 100)}%</span>
+            <span className="tabular pb-1 type-caption text-subtle-foreground">{progress.total ? progressLabel(progress) : GOAL_PHASE_LABELS[progress.phase]}</span>
           </div>
           <Sparkline thread={thread} now={state.now} />
           {now.map((s) => (

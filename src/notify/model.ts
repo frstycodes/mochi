@@ -63,8 +63,10 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
     const p = before.get(t.id);
     if (!p || p === t) continue;
     const limit = t.live?.limit;
-    if (limit && !p.live?.limit) add({ id: `limit-${t.id}`, kind: 'limit', threadId: t.id, title: `${t.title} paused`, body: limitBody(t.providers[0], limit) });
-    else if (p.live?.limit?.autoResume && !limit && !t.live?.isOnApiKey) add({ id: `limit-resumed-${t.id}`, kind: 'limit', threadId: t.id, title: `${t.title} resumed`, body: 'Its usage limit reset' });
+    const was = p.live?.limit;
+    if (limit && !was) add({ id: `limit-${t.id}`, kind: 'limit', threadId: t.id, title: limit.isTurnHeld ? `${t.title} is waiting` : `${t.title} stopped`, body: limitBody(t.providers[0], limit) });
+    // Going on by itself: Claude Code past the reset, or Codex on the Resume at reset you chose. Not a stop you made, not the API key.
+    else if (was && !limit && (was.isTurnHeld || was.autoResume) && t.live?.isWorking && !t.live.isOnApiKey) add({ id: `limit-resumed-${t.id}`, kind: 'limit', threadId: t.id, title: `${t.title} continued`, body: 'Its usage limit reset' });
     if (p.status !== 'needs-you' && t.status === 'needs-you' && !limit) {
       const blocked = t.steps.find((s) => s.status === 'blocked');
       add({ id: `needs-you-${t.id}`, kind: 'needs-you', threadId: t.id, title: `${t.title} needs you`, body: blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer' });
@@ -117,5 +119,6 @@ export function isQuiet(quiet: QuietHours, date: Date) {
 function limitBody(provider: Provider, limit: NonNullable<LiveRun['limit']>) {
   const name = provider === 'claude' ? 'Claude' : 'Codex';
   const window = limit.label ? `${limit.label.toLowerCase()} ` : '';
-  return `${name} hit the ${window}usage limit${limit.resetsAt ? `; resets ${resetLabel(limit.resetsAt)}` : ''}`;
+  const reset = limit.resetsAt ? ` at ${resetLabel(limit.resetsAt)}` : '';
+  return limit.isTurnHeld ? `${name} hit the ${window}usage limit and continues after the reset${reset}` : `${name} hit the ${window}usage limit; resets${reset || ' later'}`;
 }

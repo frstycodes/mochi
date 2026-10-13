@@ -35,6 +35,12 @@ export interface AgentSettings {
   worktreeRoot: string;
   shell: string;
   prDrafts: boolean;
+  /** A new worktree gets its ignored files, dependencies and the project's setup command before the agent's first turn (`electron/git/setup.ts`). */
+  prepareWorktrees: boolean;
+  /** Ignored files copied from the project into a new worktree, gitignore patterns split by commas or lines; the project's own `.worktreeinclude` adds to them. */
+  worktreeInclude: string;
+  /** Per project folder (absolute path), a shell command run in a new worktree after the install. */
+  setupCommands: Record<string, string>;
   /** The model new side chats start on, as the model chip names it; each side chat can switch, provider included. */
   sideChatModel: ModelChoice;
   /** Per background task (titles, commit and PR drafts…), the model tried first; `utilityCandidates` adds the fallbacks. */
@@ -157,6 +163,9 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   worktreeRoot: '',
   shell: '',
   prDrafts: false,
+  prepareWorktrees: true,
+  worktreeInclude: '.env*',
+  setupCommands: {},
   sideChatModel: { provider: 'claude', model: 'claude-sonnet-5-5' },
   utilityModels: Object.fromEntries(UTILITY_TASKS.map((task) => [task, { provider: 'claude', model: CHEAP_MODELS.claude }])) as AgentSettings['utilityModels'],
 };

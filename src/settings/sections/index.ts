@@ -16,6 +16,7 @@ import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
 import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
 import { SchedulesSection } from './schedules';
+import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
 import { ThemesSection } from './themes';
 import { ToolsSection } from './tools';
@@ -46,6 +47,20 @@ export const SETTINGS_SECTIONS = [
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
       { id: 'projectsFolder', label: 'Projects folder', keywords: 'path open folder directory' },
       { id: 'restoreLayout', label: 'Restore layout on launch', keywords: 'splits views startup' },
+    ],
+  },
+  {
+    id: 'simplify',
+    group: 'App',
+    title: 'Simplify',
+    icon: Sparkles,
+    component: SimplifySection,
+    settings: [
+      { id: 'simplifyLength', label: 'Length', keywords: 'simplify bullets summary short detailed' },
+      { id: 'simplifyNeedsFirst', label: 'Put what needs you first', keywords: 'simplify question decision' },
+      { id: 'simplifyRules', label: 'Your rules', keywords: 'simplify custom instructions rules' },
+      { id: 'simplifyAuto', label: 'Simplify long replies automatically', keywords: 'simplify auto automatic' },
+      { id: 'simplifyAutoWords', label: 'Long means more than (words)', keywords: 'simplify threshold words length' },
     ],
   },
   {
@@ -107,6 +122,7 @@ export const SETTINGS_SECTIONS = [
       }),
       { id: 'starredModels', label: 'Starred models', keywords: 'favorite star dock model claude codex opus sonnet haiku gpt' },
       { id: 'effort', label: 'Default effort', keywords: 'reasoning thinking' },
+      { id: 'speed', label: 'Default speed', keywords: 'fast mode service tier priority' },
     ],
   },
   {
@@ -149,7 +165,6 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
-      { id: 'stepSize', label: 'New step size', keywords: 'points progress eta small medium large' },
     ],
   },
   {

@@ -47,6 +47,8 @@ import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
 import { StateMatrix, previewState } from './state-matrix';
 import { Shortcut } from '../Shortcut';
+import { SetupRow } from '../chat/SetupRow';
+import type { WorktreeSetup } from '../host/types/agent';
 
 const SECTIONS = [
   ['foundations', 'Foundations'],
@@ -580,6 +582,13 @@ function Conversation() {
             </QuestionnaireActions>
           </Questionnaire>
         </Block>
+        <Block wide title="Worktree setup" use="Tops a new worktree thread while its ignored files, dependencies and setup command get ready; the agent starts after. Open while it runs or waits on you, folded once done.">
+          <div className="flex flex-col gap-4">
+            {SETUP_SAMPLES.map((setup) => (
+              <SetupRow key={setup.status} thread={adm} setup={setup} />
+            ))}
+          </div>
+        </Block>
         <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, overlaps.">
           <Marker variant="separator">
             <MarkerContent className="type-caption">Goal v2: +1 step "Per-key overrides"</MarkerContent>
@@ -729,3 +738,14 @@ function reportFixture(rl: Thread): Thread {
     report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'], left: ['Per-key overrides in the admin UI'], question: 'Switch the 429 body to JSON now, or in a follow-up?' },
   };
 }
+
+const AGO = Date.now();
+const COPY = { id: 'copy', label: 'Copy .env, .env.local', status: 'done', startedAt: AGO - 14_000, endedAt: AGO - 13_800, output: '.env\n.env.local' } as const;
+const INSTALL = { id: 'install', label: 'Install dependencies with pnpm', command: 'pnpm install --frozen-lockfile --prefer-offline', startedAt: AGO - 13_800 } as const;
+const SCRIPT = { id: 'script', label: 'Run setup command', command: 'pnpm build:native' } as const;
+
+const SETUP_SAMPLES: WorktreeSetup[] = [
+  { status: 'running', startedAt: AGO - 14_000, steps: [COPY, { ...INSTALL, status: 'running', output: 'Lockfile is up to date, resolution step is skipped\nProgress: resolved 812, reused 812, downloaded 0, added 640\n' }, { ...SCRIPT, status: 'pending' }] },
+  { status: 'failed', startedAt: AGO - 14_000, steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 9_000 }, { ...SCRIPT, status: 'failed', startedAt: AGO - 9_000, endedAt: AGO - 6_000, exitCode: 1, output: 'node-gyp rebuild\ngyp ERR! find Python Python is not set from command line or npm configuration\n' }] },
+  { status: 'ready', startedAt: AGO - 14_000, endedAt: AGO, steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 2_000 }, { ...SCRIPT, status: 'done', startedAt: AGO - 2_000, endedAt: AGO }] },
+];

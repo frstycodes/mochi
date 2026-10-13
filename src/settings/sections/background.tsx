@@ -10,6 +10,7 @@ import { SettingsGroup, SettingsRow, settingControlId } from '../parts';
 export const UTILITY_TASK_LABELS = {
   title: 'Thread titles',
   outcome: 'Goals',
+  simplify: 'Simplify',
   commit: 'Commit messages',
   pr: 'Pull requests',
   goal: 'Goal steps',

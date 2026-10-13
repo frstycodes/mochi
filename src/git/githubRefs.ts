@@ -23,10 +23,10 @@ export function refsQuery(refs: GithubRef[]) {
 fragment S on IssueOrPullRequest {
   __typename
   ... on PullRequest {
-    title url state isDraft mergeable reviewDecision updatedAt author { login } headRefName baseRefName additions deletions changedFiles
+    title url state isDraft mergeable reviewDecision updatedAt author { login avatarUrl(size: 40) } headRefName baseRefName additions deletions changedFiles
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
   }
-  ... on Issue { title url state stateReason updatedAt author { login } }
+  ... on Issue { title url state stateReason updatedAt author { login avatarUrl(size: 40) } }
 }`;
   const args = refs.flatMap((r, i) => ['-f', `o${i}=${r.owner}`, '-f', `n${i}=${r.repo}`]);
   return ['api', 'graphql', '-f', `query=${query}`, ...args];
@@ -42,7 +42,7 @@ type Node = {
   stateReason?: string | null;
   reviewDecision?: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
   updatedAt?: string;
-  author?: { login: string } | null;
+  author?: { login: string; avatarUrl: string } | null;
   headRefName?: string;
   baseRefName?: string;
   additions?: number;
@@ -75,7 +75,7 @@ function toState(node: Node): RefState {
     checks: (rollup ? CHECKS[rollup] : null) ?? null,
     review: (node.reviewDecision && REVIEWS[node.reviewDecision]) ?? null,
     isNotPlanned: node.stateReason === 'NOT_PLANNED',
-    author: node.author?.login ?? null,
+    author: node.author ?? null,
     updatedAt: node.updatedAt ?? null,
     branch: isPr && node.headRefName && node.baseRefName ? { head: node.headRefName, base: node.baseRefName } : null,
     diff: isPr && node.additions !== undefined ? { added: node.additions, removed: node.deletions ?? 0, files: node.changedFiles ?? 0 } : null,

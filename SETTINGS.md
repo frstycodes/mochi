@@ -55,7 +55,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 | Accounts | each login in its own config folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`): name, folder, profiles using it, login state + plan, the sign-in command; add, rename, remove (not the default, not while a profile uses it). Harness never signs in | R1 (done) |
 | Profiles | each profile's account for this harness; one account can serve several profiles | R1 (done) |
 | API key | only for harnesses with one (`ANTHROPIC_API_KEY`), keychain, last 4 shown | R1 (done) |
-| — | Starred models (the scroll dock), Default effort | now (src/ModelControls.tsx:32-33) |
+| — | Starred models (the scroll dock), Default effort, Default speed (Standard / Fast: new threads run Fast on models that report a faster tier, standard elsewhere; agents can read it, never propose it) | now (src/ModelControls.tsx:32-33) |
 
 ### Defaults for new threads
 | Setting | Control | Default | Status | Today |
@@ -64,7 +64,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 | Permissions | Manual / Auto / Full access (Plan too in Claude threads; per-harness meaning in `src/runtime/access.ts`) | Auto | now | src/Composer.tsx |
 | Runs on | This Mac / … | This Mac | now | src/Composer.tsx:137 |
 | Agents running at once | stepper 1–16 | 6 | R1 | RUNTIME.md:91 |
-| When a usage limit hits | Pause until reset (fixed copy; Resume at reset, API key and handoff are per-thread choices on the limit card) | — | done | RUNTIME.md › Usage limits |
+| When a usage limit hits | Fixed: each harness's own behaviour (Claude Code waits and continues; Codex stops). Resume at reset, API key and handoff are per-thread choices on the limit card | — | done | RUNTIME.md › Usage limits |
 
 ### Background tasks
 One model per task, each a picker over both harnesses' models (`src/settings/sections/background.tsx`): Thread titles, Commit messages, Pull requests, Goal steps, Handoff summaries. Default Haiku 5.5; a task falls back to Haiku 5.5, then GPT-6-Luna, then Mochi's own text (RUNTIME.md › Background tasks). Stored in agent settings (`utilityModels`), since main runs the calls. Done.
@@ -93,6 +93,10 @@ Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name
 | Branch prefix | text | `harness/` | now | — |
 | Open pull requests as drafts | switch | off | now | electron/ipc/git.ts:74 |
 | Diffs | Unified / Split (Changes tab and work log) | Unified | now | src/pane/ChangesTab.tsx:36 |
+| Prepare worktrees before starting | switch | on | done | electron/git/setup.ts (RUNTIME.md › Worktree setup) |
+| Ignored files to copy | text, gitignore patterns, comma separated; the project's `.worktreeinclude` adds to them | `.env*` | done | electron/git/setup.ts |
+| Setup command, per project folder | one text row per project your threads use; empty runs the project's `.mochi/setup.sh` | — | done | `setupCommands` in agent settings |
+| Remove settled worktrees | Never / After 1, 7, 30 days | After 7 days | done | src/git/useWorktreeManager.ts |
 
 ### Terminal
 | Setting | Control | Default | Status | Today |
