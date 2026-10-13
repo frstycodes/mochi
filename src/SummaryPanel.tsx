@@ -11,7 +11,6 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
@@ -40,7 +39,7 @@ import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { isPrChip, openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
+import { openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
 
 const LIST_LIMIT = 3;
 
@@ -71,45 +70,40 @@ function LiveSummary({ thread, cwd, onPaneOpened }: { thread: Thread; cwd: strin
   return <SummaryBody thread={thread} prs={withLivePr(thread.prs, prQuery.data)} onPaneOpened={onPaneOpened} />;
 }
 
-/** The base panel says where the thread stands and what needs you; everything else waits in collapsed sections. */
+/** The base panel says where the thread stands, what needs you and what shipped; everything else waits in collapsed sections. */
 function SummaryBody({ thread, prs, onPaneOpened }: { thread: Thread; prs: PullRequest[]; onPaneOpened?: () => void }) {
   const summary = summarize(thread.activity);
-  const sections = useSummarySections(thread, summary, prs);
+  const sections = useSummarySections(thread, summary);
   const open = useSummaryOpeners(thread, onPaneOpened);
-  const props = { thread, summary, prs, open };
+  const props = { thread, summary, open };
 
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-3">
       <PanelHeader thread={thread} />
       <GoalSection thread={thread} />
+      <Separator className="mx-2 my-2 w-auto!" />
       <NeedsYou thread={thread} />
       <RateLimitWarning thread={thread} />
       <ChangesRow {...props} />
-      {sections.length > 0 && (
-        <>
-          <Separator className="mx-2 my-2 w-auto!" />
-          <SummarySections sections={sections} {...props} />
-        </>
-      )}
+      <PullRequests prs={prs} onOpen={open.url} />
+      {sections.length > 0 && <SummarySections sections={sections} {...props} />}
     </div>
   );
 }
 
-function useSummarySections(thread: Thread, summary: ThreadSummary, prs: PullRequest[]) {
+function useSummarySections(thread: Thread, summary: ThreadSummary) {
   const { state } = useHarness();
-  return summarySections({ thread, summary, prs, threads: state.threads, space: profileById(thread.spaceId) });
+  return summarySections({ thread, summary, threads: state.threads, space: profileById(thread.spaceId) });
 }
 
 interface SectionProps {
   thread: Thread;
   summary: ThreadSummary;
-  prs: PullRequest[];
   open: ReturnType<typeof useSummaryOpeners>;
 }
 
 const SECTION_BODIES = {
   outcome: OutcomeDetails,
-  prs: PullRequestRows,
   sources: SourceRows,
   skills: SkillRows,
   tools: ToolRows,
@@ -125,7 +119,7 @@ function SummarySections({ sections, ...props }: SectionProps & { sections: Summ
       type="multiple"
       value={openSectionIds(sections, remembered, props.thread.status === 'settled')}
       onValueChange={(ids) => rememberOpen(sections, ids)}
-      className="gap-0.5"
+      className="gap-0.5 pt-2"
     >
       {sections.map((section) => {
         const Body = SECTION_BODIES[section.id];
@@ -160,66 +154,31 @@ function NeedsYou({ thread }: { thread: Thread }) {
   );
 }
 
-function ChangesRow({ thread, summary, prs, open }: SectionProps) {
-  const chips = prs.filter(isPrChip);
-  if (!thread.repo && summary.files.length === 0 && chips.length === 0) return null;
+function ChangesRow({ thread, summary, open }: SectionProps) {
+  if (!thread.repo && summary.files.length === 0) return null;
   return (
-    <>
-      <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
-        <span className="tabular type-caption text-subtle-foreground">
-          {summary.files.length === 0 ? (
-            (thread.status === 'settled' ? 'None' : 'None yet')
-          ) : (
-            <>
-              <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
-              {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
-            </>
-          )}
-        </span>
-      </SummaryRow>
-      {chips.length > 0 && (
-        <ul aria-label="Open pull requests" className="flex flex-wrap gap-1 pt-0.5 pr-2 pb-1 pl-[34px]">
-          {chips.map((pr) => (
-            <li key={pr.number}>
-              <PrChip pr={pr} onOpen={open.url} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-}
-
-/** A demo PR has no URL: the chip still names it on hover and focus, but opens nothing. */
-function PrChip({ pr, onOpen }: { pr: PullRequest; onOpen: (url: string) => void }) {
-  const { url } = pr;
-  const chip = 'inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 type-caption font-medium text-foreground';
-  const content = (
-    <>
-      <PrStateIcon state={pr.state} className="size-3.5" />
-      <span className="tabular">#{pr.number}</span>
-    </>
-  );
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {url ? (
-          <button type="button" onClick={() => onOpen(url)} aria-label={`#${pr.number}: ${pr.title}, ${pr.state}`} className={cn(chip, 'transition-colors hover:bg-accent')}>
-            {content}
-          </button>
+    <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
+      <span className="tabular type-caption text-subtle-foreground">
+        {summary.files.length === 0 ? (
+          (thread.status === 'settled' ? 'None' : 'None yet')
         ) : (
-          <span tabIndex={0} aria-label={`#${pr.number}: ${pr.title}, ${pr.state}`} className={chip}>
-            {content}
-          </span>
+          <>
+            <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
+            {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
+          </>
         )}
-      </TooltipTrigger>
-      <TooltipContent className="max-w-72">{pr.title}</TooltipContent>
-    </Tooltip>
+      </span>
+    </SummaryRow>
   );
 }
 
-function PullRequestRows({ prs, open }: SectionProps) {
-  return prs.map((pr) => <PullRequestRow key={pr.number} pr={pr} onOpen={open.url} />);
+function PullRequests({ prs, onOpen }: { prs: PullRequest[]; onOpen: (url: string) => void }) {
+  if (prs.length === 0) return null;
+  return (
+    <Section label="Pull requests">
+      <LimitedList items={prs}>{(pr) => <PullRequestRow key={pr.number} pr={pr} onOpen={onOpen} />}</LimitedList>
+    </Section>
+  );
 }
 
 function SourceRows({ thread, open }: SectionProps) {
@@ -476,7 +435,7 @@ function LimitedList<T>({ items, children }: { items: T[]; children: (item: T) =
       {shown.map(children)}
       {items.length > LIST_LIMIT && (
         <Button variant="ghost" size="xs" className="self-start text-subtle-foreground" onClick={() => setOpen((o) => !o)}>
-          {isOpen ? 'Show less' : `View all ${items.length}`}
+          {isOpen ? 'Show less' : `Show ${items.length - LIST_LIMIT} more`}
         </Button>
       )}
     </>

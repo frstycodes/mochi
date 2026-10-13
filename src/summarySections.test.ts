@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { ActivityEntry, PullRequest, Space, Thread } from './model.ts';
+import type { ActivityEntry, Space, Thread } from './model.ts';
 import { summarize } from './summary.ts';
 import { openSectionIds, summarySections } from './summarySections.ts';
 
@@ -8,10 +8,9 @@ const space = { id: 's', name: 'Personal' } as Space;
 const thread = (patch: Partial<Thread>) =>
   ({ id: 't', spaceId: 's', status: 'running', activity: [], sources: [], prs: [], steps: [], revisions: [], startedAt: 0, ...patch }) as Thread;
 const tool = (text: string, extra: Partial<ActivityEntry> = {}): ActivityEntry => ({ at: 1, who: 'claude', kind: 'tool', text, ...extra });
-const pr = (number: number, state: PullRequest['state']): PullRequest => ({ number, state, title: `PR ${number}` });
 
-const headers = (t: Thread, prs = t.prs) =>
-  summarySections({ thread: t, summary: summarize(t.activity), prs, threads: [t], space }).map((s) => [s.title, s.detail].filter(Boolean).join(' · '));
+const headers = (t: Thread) =>
+  summarySections({ thread: t, summary: summarize(t.activity), threads: [t], space }).map((s) => [s.title, s.detail].filter(Boolean).join(' · '));
 
 test('a new thread with nothing done shows no sections', () => {
   assert.deepEqual(headers(thread({})), []);
@@ -40,9 +39,8 @@ test('a busy thread says something in every closed header, in reading order', ()
   ]);
 });
 
-test('pull requests get a section only for those the chips leave out', () => {
-  assert.deepEqual(headers(thread({}), [pr(1, 'open'), pr(2, 'draft')]), []);
-  assert.deepEqual(headers(thread({}), [pr(1, 'open'), pr(2, 'merged')]), ['Pull requests · 2']);
+test('pull requests stay in the base panel, never a section', () => {
+  assert.deepEqual(headers(thread({ prs: [{ number: 1, state: 'merged', title: 'a' }] })), []);
 });
 
 test('a settled thread leads with its outcome, open until you close it', () => {
@@ -52,7 +50,7 @@ test('a settled thread leads with its outcome, open until you close it', () => {
     steps: [{ status: 'done' }, { status: 'dropped' }] as Thread['steps'],
     revisions: [{ n: 1 }] as Thread['revisions'],
   });
-  const sections = summarySections({ thread: settled, summary: summarize([]), prs: [], threads: [settled], space });
+  const sections = summarySections({ thread: settled, summary: summarize([]), threads: [settled], space });
   assert.deepEqual(headers(settled), ['Outcome · 38m · 1 step done']);
   assert.deepEqual(openSectionIds(sections, {}, true), ['outcome']);
   assert.deepEqual(openSectionIds(sections, { outcome: false }, true), []);
