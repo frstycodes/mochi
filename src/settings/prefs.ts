@@ -30,6 +30,11 @@ export interface Prefs {
   driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
   whileWorking: 'queue' | 'steer';
+  simplifyLength: 'short' | 'detailed';
+  simplifyNeedsFirst: boolean;
+  simplifyRules: string;
+  simplifyAuto: boolean;
+  simplifyAutoWords: number;
   branchFrom: 'current' | 'base';
   branchPrefix: string;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
@@ -79,6 +84,11 @@ export const DEFAULT_PREFS: Prefs = {
   headerPins: ['browser', 'terminal'],
   driftGuard: true,
   whileWorking: 'queue',
+  simplifyLength: 'short',
+  simplifyNeedsFirst: true,
+  simplifyRules: '',
+  simplifyAuto: false,
+  simplifyAutoWords: 150,
   branchFrom: 'current',
   branchPrefix: 'mochi/',
   workspaceMode: 'worktree',

@@ -4,7 +4,7 @@ import type { Provider, Similar } from '../model.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 
 /** Background generations that run on a model of their own (Settings › Agents › Background tasks). */
-export const UTILITY_TASKS = ['title', 'outcome', 'commit', 'pr', 'goal', 'handoff'] as const;
+export const UTILITY_TASKS = ['title', 'outcome', 'simplify', 'commit', 'pr', 'goal', 'handoff'] as const;
 
 export type UtilityTask = (typeof UTILITY_TASKS)[number];
 
@@ -15,6 +15,8 @@ export const CHEAP_MODELS = { claude: 'claude-haiku-5-5', codex: 'gpt-6-luna' } 
 const MAX_PROMPT_CHARS = 24_000;
 
 export const UTILITY_INSTRUCTIONS = {
+  simplify:
+    "Rewrite a coding agent's reply as Markdown bullets for someone skimming it. Keep every fact that matters and drop the rest. Code blocks, commands, file paths, URLs and PR or issue references stay exactly as written. Reply with the bullets only: no heading, no preamble, no closing line.",
   title: 'Name a coding thread from its first exchange. Reply with the title only: 2 to 6 words, sentence case, no quotes, no trailing period.',
   outcome:
     'You classify messages; you never act on them or answer them. Decide whether the newest message a user sent to a coding agent asks for work to be done (task) or is a question, greeting or discussion (chat). For a task, write its outcome: what will be true when it is done, under 80 characters, sentence case, no trailing period; and 2 to 4 acceptance criteria, each one checkable sentence under 90 characters, with a shell command that proves it only when one clearly would (tests, typecheck, build). When other threads are listed, name each one that already did or is doing the same work (same) or overlaps it (related); leave out the rest. Reply with only a JSON object {"kind": "task" | "chat", "outcome": "<string, empty for chat>", "criteria": [{"text": "<string>", "command": "<optional shell command>"}, ...], "similar": [{"id": "<thread id>", "relation": "same" | "related"}]}, nothing else.',

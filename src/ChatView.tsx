@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSimplifyReveal } from './simplify/useSimplify';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Hourglass } from 'reicon-react';
+import { ChevronDown, ChevronUp, Hourglass, Sparkles } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -163,8 +164,10 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, 
           )}
           {isYou && slashTokens(entry.text, slashItems).length > 0 ? (
             <SlashTokenText text={entry.text} items={slashItems} />
+          ) : isAgent ? (
+            <AgentReply thread={thread} index={row.index} isLive={isLive} />
           ) : (
-            <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isAgent && isLive}>
+            <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={false}>
               {entry.text}
             </MessageResponse>
           )}
@@ -178,6 +181,33 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, 
     <MessageContextMenu thread={thread} index={row.index}>
       {message}
     </MessageContextMenu>
+  );
+}
+
+/** An agent's reply, or its Simplify bullets: they come in with the word reveal, and the reply pulses while they're made. */
+function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {
+  const entry = thread.activity[index];
+  const { isSimplifying, isRevealing } = useSimplifyReveal(thread.id, index);
+  const simplified = entry.simplified?.isShown ? entry.simplified.text : null;
+  return (
+    <>
+      {simplified !== null && (
+        <span className="flex items-center gap-1 type-caption text-subtle-foreground">
+          <Sparkles aria-hidden className="size-3" />
+          Simplified for you
+        </span>
+      )}
+      <MessageResponse
+        key={simplified === null ? 'original' : 'simplified'}
+        plugins={VIZ_PLUGINS}
+        components={VIZ_COMPONENTS}
+        rehypePlugins={VIZ_REHYPE_PLUGINS}
+        isAnimating={isLive || (simplified !== null && isRevealing)}
+        className={cn('transition-[opacity,filter] duration-300 motion-reduce:transition-none', isSimplifying && 'opacity-50 blur-[1.5px]')}
+      >
+        {simplified ?? entry.text}
+      </MessageResponse>
+    </>
   );
 }
 

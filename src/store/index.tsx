@@ -29,6 +29,7 @@ import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
 import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
+import { useAutoSimplify } from '../simplify/useSimplify.ts';
 
 export type { View } from './layout.ts';
 export type { OverlapMode } from './threads.ts';
@@ -149,6 +150,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   useAutoTitles(state.threads, dispatch);
   useGoalDrafts(state.threads, dispatch);
+  useAutoSimplify(state.threads, dispatch);
   useEffect(() => saveThreads(state), [state.threads, state.queue, state.checkpoints, state.forks]);
   useEffect(() => pruneDrafts(new Set(state.threads.map((t) => t.id))), [state.threads]);
   return <HarnessContext.Provider value={{ state, dispatch }}>{children}</HarnessContext.Provider>;
