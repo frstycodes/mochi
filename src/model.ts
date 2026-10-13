@@ -1,6 +1,7 @@
 import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
+import type { VizLanguage } from './viz/fence.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
@@ -122,6 +123,8 @@ export interface PullRequest {
   number: number;
   state: 'open' | 'merged' | 'draft';
   title: string;
+  /** Live PRs from `gh`; the demo fixtures have none, so their rows don't open anything. */
+  url?: string;
 }
 
 /**
@@ -268,7 +271,7 @@ export function answerText(answers: string[][]) {
   return answers.filter((a) => a.length).map((a) => a.join(', ')).join(' · ');
 }
 
-export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'new'] as const;
+export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual', 'new'] as const;
 export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
 export interface PaneTab {
@@ -280,6 +283,13 @@ export interface PaneTab {
   isPopped?: boolean;
   /** Agents tabs: the agent shown expanded, picked from the chat's "Open". */
   agentId?: string;
+  /** Visual tabs: the chat visual's fence, rendered again here. */
+  visual?: PaneVisual;
+}
+
+export interface PaneVisual {
+  language: VizLanguage;
+  code: string;
 }
 
 export interface Pane {

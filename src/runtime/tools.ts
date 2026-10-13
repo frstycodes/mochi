@@ -1,15 +1,17 @@
 import { z } from 'zod';
 import type { Page } from '../browser/pages.ts';
-import type { AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
+import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
 import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Size, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
-import { AGENT_SETTING_KEYS, AGENT_SETTINGS, type AgentSettingKey, optionLabel, settingPatch, settingValue } from '../settings/settingOptions.ts';
+import { AGENT_SETTING_KEYS, AGENT_SETTINGS, type AgentSettingKey, optionLabel, settingPatch, settingValue, THREAD_MODELS } from '../settings/settingOptions.ts';
 import { AGENT_CONTROLS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { BROWSER_TOOLS } from './browserTools.ts';
+import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
+import { defaultModelOf, effortRank, modelTier } from './models.ts';
 import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type Tier, type ToolName } from './toolTable.ts';
 import { applyUndo, captureUndo } from './undo.ts';
 
@@ -30,6 +32,8 @@ export interface ToolEnv {
   browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor'>;
   /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
   cwdOf: (thread: Thread) => string | null | undefined;
+  /** The models `provider` offers the profile's account; empty when they couldn't be read. */
+  models: (provider: Provider, spaceId: string) => Promise<AgentModel[]>;
   isDesktop: boolean;
   now?: () => number;
 }
@@ -301,17 +305,18 @@ const THREAD_SPECS = {
     },
   },
   create_thread: {
-    run: ({ state, caller, args, dispatch }) => {
+    run: async ({ state, caller, args, dispatch, env }) => {
       const prompt = args.prompt.trim();
       if (!prompt) throw new Error('prompt is required');
       const provider = providerOf(args.provider, caller);
+      const controls = await newThreadControls(env, caller, provider, args);
       const before = state();
       dispatch({
         type: 'create',
         title: prompt,
         provider,
         project: projectRef(caller.repo),
-        controls: provider === caller.providers[0] ? caller.controls : undefined,
+        controls,
         isLive: !!caller.live,
         isBackground: true,
       });
@@ -597,6 +602,34 @@ function agentSetting(key: string) {
 const isPinned = (t: Thread) => t.orbitSlot !== undefined && t.status !== 'settled';
 
 const providerOf = (provider: Provider | undefined, caller: Thread) => provider ?? caller.providers[0];
+
+/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Tools allows them. */
+async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
+  const inherited = provider === caller.providers[0] ? caller.controls : undefined;
+  if (!picked.model && !picked.effort) return inherited;
+  const rule = env.prefs.get().threadModels;
+  const setting = `"${THREAD_MODELS.label}" is "${THREAD_MODELS.options.find((o) => o.value === rule)!.label}" in Settings › Tools`;
+  if (rule === 'default') throw new Error(`${setting}: call again without model and effort, or ask the user to change that setting`);
+  const models = await env.models(provider, caller.spaceId);
+  if (picked.model && models.length && !models.some((m) => m.id === picked.model)) throw new Error(`${picked.model} isn't offered; use one of ${models.map((m) => m.id).join(', ')}`);
+  const current = inherited ? controlsOf(caller) : DEFAULT_CONTROLS[provider];
+  const next = { ...current, ...(picked.model && { model: picked.model }), ...(picked.effort && { effort: picked.effort }) };
+  const dearer = dearerPart(current, next, models);
+  if (rule === 'cheaper' && dearer) throw new Error(`${dearer} costs more than this thread's default. ${setting}; ask the user to change it if they want this`);
+  return next;
+}
+
+/** What in `next` costs more than `current`, or null; a model or effort Mochi can't rank counts as more. */
+function dearerPart(current: ThreadControls, next: ThreadControls, models: AgentModel[]) {
+  const defaultModel = current.model || defaultModelOf(models)?.id || '';
+  if (next.model && next.model !== defaultModel) {
+    const [from, to] = [modelTier(defaultModel), modelTier(next.model)];
+    if (from === undefined || to === undefined || to > from) return next.model;
+  }
+  const [from, to] = [effortRank(current.effort), effortRank(next.effort)];
+  if (to < 0 || to > from) return `${next.effort} effort`;
+  return null;
+}
 
 const count = (threads: Thread[]) => (threads.length === 1 ? `"${threads[0].title}"` : `${threads.length} threads`);
 

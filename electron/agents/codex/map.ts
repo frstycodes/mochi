@@ -1,7 +1,6 @@
 import path from 'node:path';
 import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
-import { MODEL_PRICES } from '../../../src/usage/model.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -19,7 +18,7 @@ export interface ThreadState {
   limits: AccountLimits;
 }
 
-type Totals = { input: number; cached: number; output: number };
+type Totals = { input: number; output: number };
 
 /** When the account's most-used rate-limit window resets, in unix seconds. */
 export interface AccountLimits {
@@ -27,7 +26,7 @@ export interface AccountLimits {
 }
 
 export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits } = {}): ThreadState {
-  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, cached: 0, output: 0 }, account, limits };
+  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0 }, account, limits };
 }
 
 /** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
@@ -211,8 +210,6 @@ const CONNECTION_STATUS = { notStarted: 'pending', starting: 'pending', connecte
 const STARTUP_STATUS = { starting: 'pending', ready: 'connected', failed: 'failed', cancelled: 'failed' } as const satisfies Record<string, McpServer['status']>;
 const TURN_STATUS = { completed: 'done', interrupted: 'interrupted', failed: 'failed' } as const;
 const AGENT_END = { completed: 'done', errored: 'failed', interrupted: 'stopped', shutdown: 'stopped' } as const;
-// TODO(codex): threads don't report their model yet, so every Codex token is priced as the default model; cached input is left out of the cost.
-const PRICE = MODEL_PRICES['gpt-5.5-codex'];
 
 function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'end', s: ThreadState): AgentEvent[] {
   if (!item || typeof item.id !== 'string') return [];
@@ -290,7 +287,7 @@ export function childEvents(method: string, params: unknown, s: ThreadState, sub
   if (method === 'thread/tokenUsage/updated') {
     const total = obj(obj(p.tokenUsage)?.total)?.totalTokens;
     // The parent's own usage leaves its children out, so their spend is added to the thread here, without touching its context meter.
-    const spend = mapUsage(obj(p.tokenUsage), s).flatMap((e): AgentEvent[] => (e.type === 'usage' ? [{ threadId: e.threadId, type: 'usage', inputTokens: e.inputTokens, outputTokens: e.outputTokens, ...(e.costUsd !== undefined && { costUsd: e.costUsd }) }] : []));
+    const spend = mapUsage(obj(p.tokenUsage), s).flatMap((e): AgentEvent[] => (e.type === 'usage' ? [{ threadId: e.threadId, type: 'usage', inputTokens: e.inputTokens, outputTokens: e.outputTokens }] : []));
     return [...spend, ...(typeof total === 'number' ? [progress({ tokens: total })] : [])];
   }
   if (method === 'turn/completed') {
@@ -336,17 +333,16 @@ function mapUsage(usage: Record<string, unknown> | undefined, s: ThreadState): A
   const total = obj(usage?.total);
   const last = obj(usage?.last);
   if (typeof total?.inputTokens !== 'number' || typeof total.outputTokens !== 'number') return [];
-  const now = { input: total.inputTokens, cached: num(total.cachedInputTokens), output: total.outputTokens };
+  const now = { input: total.inputTokens, output: total.outputTokens };
   // After a resume, count only the request this update reports.
-  const before = s.total ?? { input: now.input - num(last?.inputTokens), cached: now.cached - num(last?.cachedInputTokens), output: now.output - num(last?.outputTokens) };
+  const before = s.total ?? { input: now.input - num(last?.inputTokens), output: now.output - num(last?.outputTokens) };
   s.total = now;
   const inputTokens = Math.max(0, now.input - before.input);
   const outputTokens = Math.max(0, now.output - before.output);
-  const uncached = Math.max(0, inputTokens - (now.cached - before.cached));
   const contextMax = typeof usage?.modelContextWindow === 'number' ? usage.modelContextWindow : undefined;
   const contextUsed = typeof last?.totalTokens === 'number' ? last.totalTokens : undefined;
-  const costUsd = (uncached * PRICE.input + outputTokens * PRICE.output) / 1_000_000;
-  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, costUsd, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
+  // Codex reports tokens, never spend; the summary shows tokens for it rather than a price Mochi would have to guess.
+  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
 }
 
 /** Upstream API errors arrive as their raw JSON body; show the message inside. */

@@ -27,7 +27,8 @@ export const fs = {
   openIn: async (_sender, editor, root, path, line) => {
     if (!EDITORS.includes(editor as Editor)) throw new TypeError(`editor must be one of ${EDITORS.join(', ')}`);
     if (line !== undefined && !(Number.isInteger(line) && (line as number) > 0)) throw new TypeError('line must be a positive integer');
-    const file = await resolveInside(string(root, 'root'), string(path, 'path'));
+    const rel = string(path, 'path');
+    const file = rel ? await resolveInside(string(root, 'root'), rel) : '';
     await openInEditor(editor as Editor, await resolveRoot(string(root, 'root')), file, line as number | undefined);
   },
   reveal: async (_sender, root, path) => {

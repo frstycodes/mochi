@@ -1,17 +1,28 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
-import { toast } from 'sonner';
 import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextInputUsage, ContextOutputUsage, ContextTrigger } from '@/components/ai-elements/context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { host } from '@/host';
+import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
-import type { AgentInfo, McpServer, Provider, Source, Step, Thread } from './model';
+import { copyText } from './clipboard';
+import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
+import { openFiles } from './files/viewer';
+import { withLivePr } from './git/prs';
+import { usePr } from './git/useGit';
+import type { AgentInfo, McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
+import { useProfiles } from './profiles';
+import { isFolderSource, sourceFrom, sourceUrl } from './sources';
+import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
@@ -31,9 +42,10 @@ const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser
 const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser', Search: 'Searched the web', Fetch: 'Read web pages' } satisfies Record<CountedVerb, string>;
 const SOURCE_ICONS = { link: Link, mcp: Setting, file: Document } satisfies Record<Source['kind'], IconComponent>;
 
-export function SummaryPanel({ thread, className }: { thread: Thread; className?: string }) {
+/** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. */
+export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thread; className?: string; onPaneOpened?: () => void }) {
   const summary = summarize(thread.activity);
-  const notYet = () => toast('Not in the prototype yet', { description: 'This opens a tab in the side pane in the real app.' });
+  const open = useSummaryOpeners(thread, onPaneOpened);
 
   return (
     <aside aria-label="Thread summary" className={cn('flex min-h-0 flex-col', className)}>
@@ -44,32 +56,18 @@ export function SummaryPanel({ thread, className }: { thread: Thread; className?
           <GoalSection thread={thread} />
           <Separator className="mx-2 my-2 w-auto!" />
           <RateLimitWarning thread={thread} />
-          <SummaryRow icon={Edit} label="Changes" onClick={notYet}>
+          <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
             <span className="tabular type-caption">
               <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span>
             </span>
           </SummaryRow>
           <ContextRow thread={thread} />
 
-          <Section label="Pull requests" empty={thread.prs.length === 0 ? 'No PRs linked yet' : undefined}>
-            {thread.prs.map((pr) => (
-              <SummaryRow key={pr.number} icon={pr.state === 'merged' ? BranchDown : BranchUp} label={pr.title} onClick={notYet}>
-                <span className="tabular type-caption text-subtle-foreground">#{pr.number}</span>
-              </SummaryRow>
-            ))}
-          </Section>
+          <PullRequestsSection thread={thread} onOpen={open.url} />
 
-          <Section
-            label="Sources"
-            action={
-              <Button variant="ghost" size="icon-xs" aria-label="Add a source" onClick={notYet}>
-                <Add />
-              </Button>
-            }
-            empty={thread.sources.length === 0 ? 'No sources yet' : undefined}
-          >
+          <Section label="Sources" action={<AddSource thread={thread} />} empty={thread.sources.length === 0 ? 'No sources yet' : undefined}>
             <LimitedList items={thread.sources}>
-              {(source) => <SummaryRow key={source.label} icon={SOURCE_ICONS[source.kind]} label={source.label} onClick={notYet} />}
+              {(source) => <SummaryRow key={source.label} icon={SOURCE_ICONS[source.kind]} label={source.label} onClick={open.source(source) ?? undefined} />}
             </LimitedList>
           </Section>
 
@@ -142,11 +140,123 @@ function PanelHeader({ thread }: { thread: Thread }) {
         <DropdownMenuContent align="end">
           <DropdownMenuGroup>
             {repo && <DropdownMenuItem onSelect={() => navigator.clipboard?.writeText(repo.branch).catch(() => undefined)}>Copy branch name</DropdownMenuItem>}
-            {!!thread.repo && <DropdownMenuItem onSelect={() => toast('Not in the prototype yet')}>Open in editor</DropdownMenuItem>}
+            <OpenInEditorItems thread={thread} />
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+/** Where each summary row leads: the side pane for changes, links and folders, the file viewer for files, Settings for MCP. */
+function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
+  const { dispatch } = useHarness();
+  const toPane = (action: Action) => {
+    dispatch(action);
+    onPaneOpened?.();
+  };
+  const url = (address: string) => toPane({ type: 'pane-open-tab', threadId: thread.id, kind: 'browser', url: address });
+  const root = threadCwd(thread);
+
+  const source = (s: Source): (() => void) | null => {
+    if (s.kind === 'link') return () => url(sourceUrl(s.label));
+    if (s.kind === 'mcp') return () => openProfileConfig(thread.spaceId, 'mcp', thread.providers[0]);
+    if (!root) return null;
+    if (isFolderSource(s)) return () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'files' });
+    return () => openFiles({ files: [{ source: 'workspace', threadId: thread.id, root, path: s.label }], index: 0 });
+  };
+
+  return { changes: () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }), url, source };
+}
+
+function OpenInEditorItems({ thread }: { thread: Thread }) {
+  const editors = useInstalledEditors();
+  const root = threadCwd(thread);
+  if (!root) return null;
+  return editors.map((editor) => (
+    <DropdownMenuItem key={editor} onSelect={() => openInEditor(editor, root, '')}>
+      Open in {EDITOR_NAMES[editor]}
+    </DropdownMenuItem>
+  ));
+}
+
+/** A live thread on the desktop also lists its branch's PR from `gh`; the web build's mock would give every thread the same one. */
+function PullRequestsSection({ thread, onOpen }: { thread: Thread; onOpen: (url: string) => void }) {
+  const cwd = host.isDesktop && thread.live ? threadCwd(thread) : null;
+  if (cwd) return <LivePullRequests thread={thread} cwd={cwd} onOpen={onOpen} />;
+  return <PullRequestList prs={thread.prs} onOpen={onOpen} />;
+}
+
+function LivePullRequests({ thread, cwd, onOpen }: { thread: Thread; cwd: string; onOpen: (url: string) => void }) {
+  const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
+  const prQuery = usePr(cwd, githubUser);
+  return <PullRequestList prs={withLivePr(thread.prs, prQuery.data)} onOpen={onOpen} />;
+}
+
+function PullRequestList({ prs, onOpen }: { prs: PullRequest[]; onOpen: (url: string) => void }) {
+  return (
+    <Section label="Pull requests" empty={prs.length === 0 ? 'No PRs linked yet' : undefined}>
+      {prs.map((pr) => (
+        <PullRequestRow key={pr.number} pr={pr} onOpen={onOpen} />
+      ))}
+    </Section>
+  );
+}
+
+function PullRequestRow({ pr, onOpen }: { pr: PullRequest; onOpen: (url: string) => void }) {
+  const { url } = pr;
+  const row = (
+    <SummaryRow icon={pr.state === 'merged' ? BranchDown : BranchUp} label={pr.title} onClick={url ? () => onOpen(url) : undefined}>
+      <span className="tabular type-caption text-subtle-foreground">#{pr.number}</span>
+    </SummaryRow>
+  );
+  if (!url) return row;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onOpen(url)}>Open in the side pane</ContextMenuItem>
+        {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
+        <ContextMenuItem onSelect={() => window.open(url, '_blank', 'noreferrer')}>Open in your browser</ContextMenuItem>
+        <ContextMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/** A URL or a path in the thread's folder; a live agent is told in a message of yours. */
+function AddSource({ thread }: { thread: Thread }) {
+  const { dispatch } = useHarness();
+  const [isOpen, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const source = sourceFrom(text);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!source) return;
+    dispatch({ type: 'source-add', threadId: thread.id, source });
+    setText('');
+    setOpen(false);
+  };
+  return (
+    <Popover open={isOpen} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <TooltipIconButton label="Add a source" hint={thread.live ? 'A link or file the agent should use; it gets a message' : 'A link or file this thread draws on'} className="size-6">
+          <Add className="size-3.5" />
+        </TooltipIconButton>
+      </PopoverTrigger>
+      <PopoverContent align="end" side="left" className="w-72">
+        <form onSubmit={submit} className="flex flex-col gap-2">
+          <label htmlFor={`add-source-${thread.id}`} className="type-meta font-medium">
+            Add a source
+          </label>
+          <Input id={`add-source-${thread.id}`} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder={thread.repo ? 'https://… or docs/api.md' : 'https://…'} />
+          <p className="type-caption text-subtle-foreground">{source ? (source.kind === 'link' ? 'Adds a link' : "Adds a file from this thread's folder") : 'Paste a URL or type a file path'}</p>
+          <Button type="submit" size="sm" className="self-end">
+            Add source
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -355,9 +465,11 @@ function ThreadUsageSection({ thread }: { thread: Thread }) {
           {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)} out
         </span>
       </SummaryRow>
-      <SummaryRow icon={DollarCircle} label="Est. cost">
-        <span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)}</span>
-      </SummaryRow>
+      {usage.costUsd !== null && (
+        <SummaryRow icon={DollarCircle} label="Cost">
+          <span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)}</span>
+        </SummaryRow>
+      )}
     </Section>
   );
 }
@@ -383,7 +495,7 @@ function SpaceUsageSection({ thread }: { thread: Thread }) {
   const space = profileById(thread.spaceId);
   const usage = spaceUsage(state.threads, space, state.now);
   return (
-    <Section label={`${space.name} usage`} action={<span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)} est.</span>}>
+    <Section label={`${space.name} usage`} action={<span className="tabular type-caption text-subtle-foreground">{usage.costUsd === null ? `${TOKENS.format(usage.input + usage.output)} tokens` : USD.format(usage.costUsd)}</span>}>
       {usage.plans.map((p) => (
         <PlanRow key={p.provider} plan={p} />
       ))}
@@ -537,6 +649,8 @@ function OutcomeSection({ thread }: { thread: Thread }) {
         </dd>
         <dt className="text-subtle-foreground">Goal</dt>
         <dd className="tabular">{outcome.revisions === 0 ? 'Unchanged since it was set' : `Revised to v${outcome.revisions + 1}`}</dd>
+        <dt className="text-subtle-foreground">Cost</dt>
+        <dd className="tabular">{outcome.usage.costUsd === null ? `${TOKENS.format(outcome.usage.input + outcome.usage.output)} tokens, no cost reported` : USD.format(outcome.usage.costUsd)}</dd>
         <dt className="text-subtle-foreground">PRs</dt>
         <dd className="tabular">
           {outcome.merged.length + outcome.unmerged.length === 0

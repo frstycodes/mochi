@@ -5,7 +5,8 @@ import { PANE_TAB_KINDS } from '../model';
 import { useHarness } from '../store';
 import { PANE_TABS, type PaneTabProps } from './tabs';
 
-const OPENABLE = PANE_TAB_KINDS.filter((k) => k !== 'new');
+// A visual tab opens from its chat visual, never empty from here.
+const OPENABLE = PANE_TAB_KINDS.filter((k) => k !== 'new' && k !== 'visual');
 
 export function NewTab({ thread }: PaneTabProps) {
   const { dispatch } = useHarness();

@@ -145,7 +145,7 @@ Settings › Agents › **Agents can change Mochi**: Read only / Changes, never 
 
 | Area | read | change | destructive / setting (asks) |
 |---|---|---|---|
-| Threads | `list_threads` (status, pinned, project), `get_thread` | `rename_thread`, `settle_thread`, `reactivate_thread`, `pin_thread`, `unpin_thread`, `reorder_threads` (before/after one, or the whole pinned order), `watch_thread`, `create_thread` (starts an agent), `send_to_thread` | `delete_thread` |
+| Threads | `list_threads` (status, pinned, project), `get_thread` | `rename_thread`, `settle_thread`, `reactivate_thread`, `pin_thread`, `unpin_thread`, `reorder_threads` (before/after one, or the whole pinned order), `watch_thread`, `create_thread` (starts an agent; optional `model`/`effort`, capped by Settings › Tools › Models for threads agents start: Default or cheaper (default), Any model, Always the default), `send_to_thread` | `delete_thread` |
 | Goals | `get_goal` | `set_step_status`, `add_step`, `edit_goal` (text, step criteria), `reorder_steps`, `drop_step`, `settle_goal` | |
 | Browser | `browser_tabs`, `browser_snapshot`, `browser_screenshot`, `browser_console`, `browser_wait_for` | `browser_open`, `browser_click`, `browser_hover`, `browser_type`, `browser_select`, `browser_drag`, `browser_upload` (worktree files), `browser_press`, `browser_scroll`, `browser_eval` (local pages), `browser_back`, `browser_forward`, `browser_reload`, `browser_set_device` | per call: typing, Enter, or clicking a submit control on a non-local origin; `browser_eval` on a non-local origin (the widget shows the origin and the whole script); `browser_upload` of a file outside the worktree |
 | Layout | | `open_pane_tab`, `focus_thread`, `split_with`, `close_pane`, `show_file`, `open_changes` | |
