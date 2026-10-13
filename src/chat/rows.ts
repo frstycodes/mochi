@@ -55,3 +55,24 @@ export function liveWorkIndex(rows: ChatRow[]) {
   const i = rows.findLastIndex((r) => r.kind === 'work');
   return rows.slice(i + 1).some((r) => r.kind === 'message') ? -1 : i;
 }
+
+/**
+ * Agent replies that get message actions: the last agent message of each turn (nothing but events or reviews after it until
+ * you speak), and in the newest turn only once the agent is idle. Your own messages always keep theirs.
+ */
+export function finalReplies(rows: ChatRow[], isWorking: boolean): Set<number> {
+  const finals = new Set<number>();
+  let candidate = -1;
+  rows.forEach((row, i) => {
+    if (row.kind === 'work' || row.kind === 'subagent') return void (candidate = -1);
+    if (row.kind !== 'message') return;
+    if (row.entry.who === 'you') {
+      if (candidate >= 0) finals.add(candidate);
+      candidate = -1;
+      return;
+    }
+    if (row.entry.who === 'claude' || row.entry.who === 'codex') candidate = i;
+  });
+  if (candidate >= 0 && !isWorking) finals.add(candidate);
+  return finals;
+}
