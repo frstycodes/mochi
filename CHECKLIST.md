@@ -85,7 +85,7 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 - [x] Drag a thread row into the Pinned section to pin, out to unpin, within to reorder
 - [x] Drop indicator line and a placeholder gap; auto-scroll near edges
 - [x] Keyboard: Cmd Shift P pin/unpin, Alt ↑/↓ reorder
-- [x] Pinned order drives Orbit slots, Stage Manager order (§3) and Cmd 1–9 jump (`pinnedThreads` in `src/reorder.ts` is the one order)
+- [x] Pinned order drives Orbit slots, the pinned pager's page order (§3) and Cmd 1–9 jump (`pinnedThreads` in `src/reorder.ts` is the one order)
 - [x] Drag a thread onto a split drop zone to open it there (§3)
 
 ## 3. Multitasking
@@ -106,32 +106,30 @@ Principles: no assumed orientation (portrait monitors are first class), every la
 - [x] Narrow split degrades gracefully: summary column folds into a sheet, side pane becomes a tab
 
 ### Pinned tabs, made useful
-- [x] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the Stage Manager cards)
+- [x] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the overview cards)
 - [x] Cmd 1–9 jumps to pinned N; Cmd Opt 1–9 opens pinned N in a new split
 - [x] Hover a pinned thread → live peek (transcript tail + preview thumbnail) without switching
 - [x] Pinned thread can be "watched": notify on needs-you / done / CI fail even when not visible (main owns the OS notifications, CI polling and dock badge, so they keep working with every window closed: `electron/notify/watch.ts`; a CI failure lands in the Queue with "Send failing log to agent")
 
-### Stage Manager mode
-The main session (or split) sits centered; pinned sessions hover at both screen edges as 3D cards, sticking out slightly.
+### Pinned pager (replaced Stage Manager, decided 2026-10-13)
+Always on, no mode and no extra chrome: pinned threads sit side by side and the main chat slides between them.
 
-- [x] Center stage: one session or a split group, scaled to ~85–90% width so the edge cards stay visible (88%; Shift Cmd S or the header toggle)
-- [x] Edge cards in pinned order: pins before the current one on the left, after it on the right (a carousel, so position = order)
-- [x] Cards are rotated toward the center (`rotateY` ~35–50°), recede in depth, ~24–40px visible; the nearer one is larger
-- [x] Live thumbnails: a cheap snapshot (title, progress ring, now-step, last message, preview frame), not a live React tree per card (preview frame is a native capture on desktop; the web build shows the address only)
-- [x] Horizontal two-finger scroll / swipe moves 1:1 with the fingers; crossing a detent swaps the center; release snaps (the model dock's physics: a native scroller read through Motion, so the snap is CSS scroll-snap, not a JS spring; the dock has no spring to share)
-- [x] Ctrl ← / → steps one card; no animation on keyboard nav (decided: none). Inside a split group the arrows move split focus first and step the stage at the group's edge
-- [x] Hover an edge card → it slides out further with a peek; click brings it center
-- [x] Drag an edge card into the center → opens it as a split beside the current session
-- [x] Needs-you cards pulse their amber dot and sort nearer the center (optional, setting in the Cmd ↑ overview)
-- [x] Group stacking: more than ~3 per side collapses into a stack with a count
-- [x] Portrait monitor: cards on top / bottom edges, vertical scroll switches
-- [x] Reduced motion: flat cards, crossfade only
-- [x] Exit back to normal layout keeps the current center as the active thread
-- [x] Performance budget: 60fps on scroll with 9 pinned; thumbnails throttled to ~1 fps (59 fps over a 4 s sweep with 9 pinned in headless Chrome; the 2–3 long frames are the center swapping at a detent)
+- [x] Pinned threads are full-width pages of one native horizontal scroller in pin order; CSS `scroll-snap` (`snap-mandatory`, `snap-always`) stops each gesture at the next page, no JS spring (`src/pager/PinnedPager.tsx`)
+- [x] Non-pinned views open as before; one sits on the page before pin 1 (or, when it's a pinned thread, at its own position). Other threads open in the focused split group leave the pager
+- [x] Two-finger horizontal swipe moves 1:1 (native); haptic per detent like the model dock
+- [x] Mouse press-and-drag on empty space pages 1:1 after a 6px axis lock, releasing to the next page by distance (half a page) or flick; never starts on text (selection keeps working) or controls, a vertical lock lets go, the click after a drag is swallowed (`useDragToSwipe`)
+- [x] Ctrl ← / → (Alt on Windows/Linux) steps one pinned thread, instantly; inside a split group the arrows move split focus first. Cmd 1–9 jumps to pinned N. Listed in Settings › Keyboard
+- [x] Reduced motion: a drag release lands instantly
+- [x] The current page and its pinned neighbours stay mounted and hot, keyed by thread, so landing on a neighbour flips it from read-only preview to live without a remount; the rest unmount and remember their scroll (offset + row measurements)
+- [x] Off-screen neighbours: `content-visibility: auto` (no style, layout or paint, shimmers paused); Mochi's frame loop stops while off screen
+- [x] Long threads: the transcript is virtualized (`@tanstack/react-virtual`, `src/chat/Transcript.tsx`). 2,000 entries in a production build: mount 1.1 s → 0.18 s, remount 1.0 s → 0.09 s, DOM 38k → 0.3k nodes, heap +219 MB → +37 MB, scroll 45–49 → 60 fps
+- [ ] Find in thread over virtualized rows (none exists yet; search the store's rows, then `scrollToIndex`)
 
 ### Decided
-- Stage Manager order is pinned order, not recency: positions never move (same rule as Orbit). The edge-card item above follows this.
-- Unpinned running threads stay off stage; the Queue covers them.
+- Pager order is pinned order, not recency: positions never move (same rule as Orbit).
+- Unpinned running threads stay off the pager; the Queue covers them.
+- No ⌥1–9: on macOS it types characters into the composer (⌥5 is `[` on a German layout). Cmd 1–9 already jumps to pinned N.
+- Portrait windows page horizontally too: vertical is the chat's own scroll axis (Stage Manager switched vertically there).
 - [x] Multi-window: tear a split into its own OS window, one per monitor (split menu → Move to a new window; the main window's store is the only one, torn windows mirror it over `host.windows` broadcasts; web opens a tab at `#/window/<id>`)
 - [x] Mission-control overview (Cmd ↑): all sessions as a grid of live cards
 

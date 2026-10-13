@@ -1,39 +1,21 @@
 import { memo, useEffect, useState } from 'react';
-import { Globe, Layers } from 'reicon-react';
+import { Globe } from 'reicon-react';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { pageKey, usePage } from '../browser/pages';
 import { LiveDot, ProgressRing, ProviderMark } from '../ui';
 import type { ThreadSnapshot } from './snapshot';
 
-export type StripSide = 'left' | 'right' | 'top' | 'bottom';
-
-/**
- * A thread as a card: title, progress, the step in flight, the last message and a preview frame, all from a snapshot.
- * Stage edge cards add a strip on the side facing the center, so the sliver that sticks out still shows the ring, the needs-you dot and the stack count.
- */
-export const SnapshotCard = memo(function SnapshotCard({ snap, strip, stacked, className }: { snap: ThreadSnapshot; strip?: StripSide; stacked?: number | null; className?: string }) {
+/** A thread as a card: title, progress, the step in flight, the last message and a preview frame, all from a snapshot. */
+export const SnapshotCard = memo(function SnapshotCard({ snap, className }: { snap: ThreadSnapshot; className?: string }) {
   const needsYou = snap.status === 'needs-you';
-  const isVertical = strip === 'top' || strip === 'bottom';
   return (
-    <div className={cn('flex overflow-hidden rounded-xl bg-card text-left shadow-popover', STRIP_FLEX[strip ?? 'none'], className)}>
-      {!!strip && (
-        <div className={cn('flex shrink-0 items-center justify-center gap-2 bg-accent/40', isVertical ? 'h-9 flex-row px-3' : 'w-9 flex-col py-3')}>
-          <ProgressRing pct={snap.pct} slot={snap.line} size={14} isWorking={snap.isWorking} />
-          {needsYou && <LiveDot className="text-warning" />}
-          {!!stacked && (
-            <span aria-label={`${stacked} more stacked`} className={cn('flex items-center gap-0.5 type-caption text-muted-foreground tabular', isVertical ? 'flex-row' : 'flex-col')}>
-              <Layers className="size-3.5" />
-              {stacked}
-            </span>
-          )}
-        </div>
-      )}
+    <div className={cn('flex flex-col overflow-hidden rounded-xl bg-card text-left shadow-popover', className)}>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center gap-2">
-          {!strip && <ProgressRing pct={snap.pct} slot={snap.line} size={14} isWorking={snap.isWorking} />}
+          <ProgressRing pct={snap.pct} slot={snap.line} size={14} isWorking={snap.isWorking} />
           <span className="min-w-0 flex-1 truncate type-title">{snap.title}</span>
-          {!strip && needsYou && <LiveDot className="text-warning" />}
+          {needsYou && <LiveDot className="text-warning" />}
         </div>
         <p className="flex min-w-0 gap-1.5 type-meta text-muted-foreground">
           <span className="shrink-0 tabular">{Math.round(snap.pct * 100)}%</span>
@@ -50,9 +32,6 @@ export const SnapshotCard = memo(function SnapshotCard({ snap, strip, stacked, c
     </div>
   );
 });
-
-// The strip is the first child: it sits on the named side.
-const STRIP_FLEX = { left: 'flex-row', right: 'flex-row-reverse', top: 'flex-col', bottom: 'flex-col-reverse', none: 'flex-col' } satisfies Record<StripSide | 'none', string>;
 
 const CAPTURE_MS = 1000;
 

@@ -13,7 +13,7 @@ A desktop workspace for running many coding agents at once. Give each thread a g
 - **Drift guard.** A prompt that wanders from the thread's goal gets flagged before it runs.
 - **Metro board.** One line per thread, one station per step; threads touching the same files meet at an interchange so overlaps show up before they conflict.
 - **Side pane.** Browser preview, diffs, terminal, files, iOS simulator and a side chat, in browser-style tabs that pop out into a floating window.
-- **Multitasking.** Splits, pinned threads, Orbit (a radial switcher) and a Stage Manager mode you swipe through.
+- **Multitasking.** Splits, pinned threads, Orbit (a radial switcher), and pinned threads you swipe between.
 - **Your own logins.** Mochi drives your installed Claude Code and `codex`. It never logs in for you and never sees your credentials.
 
 ## Run it

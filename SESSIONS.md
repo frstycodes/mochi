@@ -43,7 +43,7 @@ Decided: Electron desktop shell; the web build (Vite single file / artifact) kee
 
 | Id | Session | Needs | Checklist |
 |---|---|---|---|
-| `stage` | Stage Manager + Cmd ↑ overview + multi-window | `layout`, `shell` | §3 Stage Manager, Decided |
+| `stage` | Pinned pager + Cmd ↑ overview + multi-window | `layout`, `shell` | §3 Pinned pager, Decided |
 | `sidechat` | Side chat tab | `slices`, `viz` | §1 Side chat |
 | `rewind` | Checkpoints / rewind, thread forking, agent handoff | `git`, `goals` | §6 3, 5, 7 |
 | `review` | Review inbox + Cmd K actions | `git`, `layout` | §6 6, 8 |

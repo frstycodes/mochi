@@ -5,7 +5,7 @@ import { isWorking } from '../agentPhase';
 import { threadDetail } from '../Sidebar';
 import { useHarness, type State } from '../store';
 
-/** What a Stage Manager or overview card shows: plain data, so cards never mount a thread's live React tree. */
+/** What an overview card shows: plain data, so cards never mount a thread's live React tree. */
 export interface ThreadSnapshot {
   id: string;
   title: string;

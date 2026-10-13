@@ -74,7 +74,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" style={isReadOnly ? ({ '--composer-h': '0px' } as React.CSSProperties) : undefined}>
-      {/* Instant while opening: a thread opens at its latest message, and a Stage swipe lands on the live view already where the preview was. */}
+      {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
       <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
           <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>

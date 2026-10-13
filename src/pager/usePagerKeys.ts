@@ -1,24 +1,21 @@
 import { useEffect, useRef } from 'react';
 import { useHarness } from '../store';
 import { isMod, isNav } from '../keys';
+import { pinnedNeighbour, slotsOf } from './slots';
 
 /**
- * mod Shift S toggles Stage Manager, mod ↑ toggles the overview, Esc closes it. In Stage Manager nav ←/→ (↑/↓ in portrait) steps one card,
- * instantly; the split keys run first, so inside a split group nav arrows still move between splits and only step the stage at the group's edge.
+ * nav ←/→ steps to the previous or next pinned thread, instantly; the split keys run first, so inside a split group the arrows move between
+ * splits and only step at the group's edge. mod ↑ toggles the overview, Esc closes it.
  */
-export function useStageKeys(onStep: (step: 1 | -1) => void) {
+export function usePagerKeys() {
   const { state, dispatch } = useHarness();
-  const latest = useRef({ state, onStep });
-  latest.current = { state, onStep };
+  const latest = useRef(state);
+  latest.current = state;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      const { state: s, onStep: step } = latest.current;
-      if (isMod(e) && e.shiftKey && !e.altKey && e.code === 'KeyS') {
-        e.preventDefault();
-        return dispatch({ type: 'stage-toggle' });
-      }
+      const s = latest.current;
       if (isMod(e) && !e.shiftKey && !e.altKey && e.key === 'ArrowUp' && !isEditingText(e.target)) {
         e.preventDefault();
         return dispatch({ type: 'overview-toggle' });
@@ -27,12 +24,11 @@ export function useStageKeys(onStep: (step: 1 | -1) => void) {
         e.preventDefault();
         return dispatch({ type: 'overview-toggle', isOpen: false });
       }
-      if (!s.isStage || !isNav(e) || e.shiftKey) return;
-      const keys = s.orientation === 'column' ? (['ArrowUp', 'ArrowDown'] as const) : (['ArrowLeft', 'ArrowRight'] as const);
-      const dir = keys.indexOf(e.key as never);
-      if (dir < 0) return;
+      if (!isNav(e) || e.shiftKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+      const id = pinnedNeighbour(slotsOf(s), e.key === 'ArrowLeft' ? -1 : 1);
+      if (!id) return;
       e.preventDefault();
-      step(dir === 0 ? -1 : 1);
+      dispatch({ type: 'go', view: { kind: 'thread', id } });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
