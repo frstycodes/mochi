@@ -1,4 +1,4 @@
-import type { AgentQuestion, LimitWindow, SubagentStatus } from './host/types/agent.ts';
+import type { AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -6,7 +6,7 @@ import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
-import { limitPausedThread } from './usage/limitDemo.ts';
+import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
 export type Size = 1 | 2 | 3;
@@ -229,6 +229,8 @@ export interface Thread {
   agent?: AgentInfo;
   /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
   live?: LiveRun;
+  /** Its new worktree's preparation before the agent's first turn; unset when there was nothing to prepare. */
+  setup?: WorktreeSetup;
   /** Second opinions from the other provider, oldest first. */
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
@@ -299,12 +301,11 @@ export interface LiveRun {
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
   cwd?: string;
-  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. `label` names the window ("5-hour"); `autoResume`: you chose Resume at reset. */
-  limit?: { resetsAt?: string; label?: string; autoResume?: boolean };
-  /** The account is close to a plan window's limit; turns still run. Cleared by the limit itself or a resume. */
-  limitWarning?: LimitWindow;
-  /** Mochi asked the agent to wrap up before the limit; cleared when that turn ends. */
-  isWrappingUp?: boolean;
+  /**
+   * The account hit its usage limit. `isTurnHeld`: Claude Code holds the turn and continues it at the reset. Otherwise (Codex)
+   * the turn ended and the thread waits for you to resume (`autoResume`: you chose Resume at reset), use an API key, or hand off.
+   */
+  limit?: { resetsAt?: string; label?: string; isTurnHeld?: boolean; autoResume?: boolean };
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
@@ -713,13 +714,14 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
 export function seedThreads(): Thread[] {
   return [
     rateLimiting(),
-    limitPausedThread(),
+    claudeLimitThread(),
     adminDashboard(),
     flakyCheckout(),
     authMigration(),
     onboardingEmails(),
     vizGalleryThread(),
     simpleThread('lobby', 'personal', 'map-veto', 'Realtime veto lobby', 'claude', 1, 700, ['Presence channel', 'Lobby state machine', 'Veto turn timer', 'Reconnect handling'], 2, 1),
+    codexLimitThread(),
     simpleThread('timer', 'personal', 'focus-mode', 'Sync timer across devices', 'codex', 2, 760, ['CRDT timer state', 'Sync over relay', 'Conflict UI'], 1),
     simpleThread('queues', 'personal', null, 'Compare Postgres job queues', 'claude', 3, 790, ['Collect the options', 'Compare tradeoffs'], 1),
     simpleThread('cfg', 'liane', 'liane', 'Per-space config dirs', 'claude', 1, 720, ['Materialize CODEX_HOME per space', 'Materialize CLAUDE_CONFIG_DIR per space', 'Stop global writes', 'Migration for existing users'], 1, 1),

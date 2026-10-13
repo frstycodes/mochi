@@ -75,14 +75,6 @@ export function hottest(windows: LimitWindow[]) {
   return windows.reduce<LimitWindow | undefined>((top, w) => (!top || w.usedPct > top.usedPct ? w : top), undefined);
 }
 
-/** Codex sends no warning of its own, so Mochi warns at this share of a window, like Claude Code's own warning. */
-export const WARN_PCT = 90;
-
-export function nearLimit(windows: LimitWindow[]) {
-  const top = hottest(windows);
-  return top && top.usedPct >= WARN_PCT ? top : undefined;
-}
-
 export type Tone = 'normal' | 'warning' | 'destructive';
 
 /** Shared by the context ring and the limit bars: under 70% normal, 70–90% warning, above 90% destructive. `share` is 0–1. */

@@ -1,19 +1,20 @@
 import type { Thread } from '../model.ts';
-import { DEMO_FIVE_HOUR_RESET } from './demoLimits.ts';
+import { DEMO_FIVE_HOUR_RESET, DEMO_CODEX_RESET } from './demoLimits.ts';
 
-export const LIMIT_DEMO_ID = 'limit';
+/** The usage limit demos are the only demo threads with a `live` run (their limit lives there); they start fresh like the rest. */
+export const LIMIT_DEMO_IDS = ['limit', 'limit-codex'];
 
-/** Demo: a Claude thread that warned, wrapped up and paused on its 5-hour limit, with a message waiting for the reset. */
-export function limitPausedThread(): Thread {
+/** Demo: Claude Code hit its 5-hour limit mid-turn and holds the turn until the reset, with a message queued behind it. */
+export function claudeLimitThread(): Thread {
   const s = 14 * 60 - 40;
   return {
-    id: LIMIT_DEMO_ID,
+    id: 'limit',
     spaceId: 'latitude',
     repo: { project: 'latitude', branch: 'feat/usage-export' },
     title: 'Usage export to CSV',
     goal: 'Admins can export a month of API usage per key as CSV.',
     providers: ['claude'],
-    status: 'needs-you',
+    status: 'running',
     line: 2,
     startedAt: s,
     revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
@@ -23,23 +24,44 @@ export function limitPausedThread(): Thread {
       { at: s + 1, who: 'claude', kind: 'message', text: 'I will add a streaming CSV route next to the usage API, then a button on the admin page.' },
       { at: s + 2, who: 'claude', kind: 'tool', text: 'Read apps/api/routes/admin/usage.ts' },
       { at: s + 4, who: 'claude', kind: 'tool', text: 'Write apps/api/routes/admin/usage.csv.ts' },
-      { at: s + 31, who: 'harness', kind: 'event', text: "Claude's 5-hour limit is 91% used", detail: 'Turns still run; Mochi pauses the thread when the limit hits.' },
+      { at: s + 31, who: 'harness', kind: 'event', text: "Claude's 5-hour limit is 92% used" },
       { at: s + 33, who: 'claude', kind: 'tool', text: 'Edit apps/web/routes/admin/usage.tsx  +18 −2' },
-      { at: s + 36, who: 'harness', kind: 'event', text: 'Wrapping up before the 5-hour limit', detail: 'Claude Code checkpoints the current step on its own.' },
       { at: s + 38, who: 'claude', kind: 'tool', text: 'Run pnpm --filter api test usage' },
-      {
-        at: s + 40,
-        who: 'claude',
-        kind: 'message',
-        text: 'Checkpoint before the usage limit: the CSV route streams rows and its tests pass. Left:\n\n- Wire the Export button to the route\n- Add a month picker\n- Document the CSV columns',
-      },
+      { at: s + 40, who: 'claude', kind: 'message', text: 'The CSV route streams rows and its tests pass. Left:\n\n- Wire the Export button to the route\n- Add a month picker\n- Document the CSV columns' },
       { at: s + 41, who: 'harness', kind: 'event', isLimit: true, text: 'Claude hit the 5-hour usage limit' },
     ],
     queued: [{ id: 'm-limit-demo', draft: 'Then add the month picker.', files: 0, mentions: [], isCommand: false, typedSkills: [] }],
-    queuePause: 'limit',
-    live: { isWorking: false, isDetached: true, limit: { resetsAt: DEMO_FIVE_HOUR_RESET, label: '5-hour' } },
+    live: { isWorking: true, limit: { resetsAt: DEMO_FIVE_HOUR_RESET, label: '5-hour', isTurnHeld: true } },
     prs: [],
     sources: [],
     context: { used: 118_000, max: 200_000 },
+  };
+}
+
+/** Demo: Codex ended its turn on a usage limit; the thread waits for you until the weekly reset. */
+export function codexLimitThread(): Thread {
+  const s = 14 * 60 - 25;
+  return {
+    id: 'limit-codex',
+    spaceId: 'personal',
+    repo: { project: 'focus-mode', branch: 'feat/streaks' },
+    title: 'Focus streaks',
+    goal: 'Count consecutive focus days and show the streak on the home screen.',
+    providers: ['codex'],
+    status: 'needs-you',
+    line: 4,
+    startedAt: s,
+    revisions: [{ n: 1, at: s, label: 'Goal set', by: 'you' }],
+    steps: [],
+    activity: [
+      { at: s, who: 'you', kind: 'message', text: 'Track focus streaks: consecutive days with at least one session.' },
+      { at: s + 2, who: 'codex', kind: 'tool', text: 'Read src/sessions/store.ts' },
+      { at: s + 5, who: 'codex', kind: 'tool', text: 'Edit src/sessions/streak.ts  +41 −0' },
+      { at: s + 6, who: 'harness', kind: 'event', isLimit: true, text: 'Codex hit the weekly usage limit' },
+    ],
+    live: { isWorking: false, isDetached: true, limit: { resetsAt: DEMO_CODEX_RESET, label: 'Weekly' } },
+    prs: [],
+    sources: [],
+    context: { used: 64_000, max: 272_000 },
   };
 }
