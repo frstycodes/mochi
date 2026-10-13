@@ -59,3 +59,17 @@ test('closing several tabs keeps a survivor active, and restoring brings the pan
   assert.equal(right.activeTab, 'a');
   assert.deepEqual(run(others, { type: 'pane-restore', pane: pane() }), pane());
 });
+
+test('showing a kind selects its docked tab and opens the pane, or opens a new tab when there is none', () => {
+  const shown = run(pane({ isOpen: false, tabs: [{ id: 'a', kind: 'browser' }, { id: 'b', kind: 'changes' }], activeTab: 'a' }), { type: 'pane-show-tab', threadId: 't', kind: 'changes' });
+  assert.deepEqual([shown.isOpen, shown.activeTab, shown.tabs.length], [true, 'b', 2]);
+  const added = run(pane({ tabs: [{ id: 'a', kind: 'changes', isPopped: true }], activeTab: '' }), { type: 'pane-show-tab', threadId: 't', kind: 'changes' });
+  assert.equal(added.tabs.length, 2);
+  assert.equal(added.activeTab, added.tabs[1].id);
+});
+
+test('a popped-out open adds a floating tab without opening the pane or changing its selection', () => {
+  const p = run(pane({ isOpen: false }), { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true });
+  assert.deepEqual([p.isOpen, p.activeTab], [false, 'a']);
+  assert.deepEqual(p.tabs.at(-1), { id: p.tabs.at(-1)!.id, kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true, url: undefined, file: undefined });
+});
