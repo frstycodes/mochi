@@ -22,7 +22,7 @@ import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
 import { agentPhase, currentAction, pendingWork, type CurrentAction } from './agentPhase';
-import { chatRows, liveWorkIndex, type ChatRow } from './chat/rows';
+import { chatRows, finalReplies, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from './viz/FenceVisual';
 import { ImageDropTarget } from './viz/ImageVisual';
@@ -58,6 +58,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
   const tray = useTrayState(decisions.length);
+  const withActions = finalReplies(rows, isRunning);
 
   const composer = useComposerHeightVar();
   const resize = useOpeningResize();
@@ -76,7 +77,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
             <div ref={messages} className="contents">
               {rows.map((row, i) => (
                 <div key={row.key} data-chat-row={i} className="scroll-mt-6">
-                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
+                  <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />
                 </div>
               ))}
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
@@ -117,7 +118,7 @@ function useComposerHeightVar() {
 }
 
 // isLive: the newest row of a running thread, the one still being written.
-function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; action?: CurrentAction }) {
+function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; hasActions: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'subagent') {
@@ -149,7 +150,7 @@ function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, action }: { 
           )}
         </MessageContent>
       </Message>
-      {!isReadOnly && <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
+      {!isReadOnly && (isYou || hasActions) && <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
     </div>
   );
   if (isReadOnly) return message;
