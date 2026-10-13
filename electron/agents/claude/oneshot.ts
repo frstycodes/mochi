@@ -39,18 +39,37 @@ export async function classifyClaude(prompt: string, thread: Thread, signal: Abo
   return null;
 }
 
-/** `supportedModels()` from the profile's account: a query whose prompt never arrives, closed once it answers. */
+/** `supportedModels()` from the profile's account. */
 export async function claudeSupportedModels(spaceId: string) {
-  const { options } = await runner(spaceId);
-  const idle = (async function* (): AsyncGenerator<SDKUserMessage> {
-    await new Promise(() => {});
-  })();
-  const q = query({ prompt: idle, options: { ...options, cwd: os.tmpdir() } });
+  const q = idleQuery((await runner(spaceId)).options);
   try {
     return await q.supportedModels();
   } finally {
     q.close();
   }
+}
+
+/**
+ * The account's plan windows from Claude Code's `/usage` read. Null when plan limits don't apply (API key login). The SDK
+ * marks the call experimental, so a missing method reads as null too.
+ */
+export async function claudeLimits(spaceId: string) {
+  const { accountId, options } = await runner(spaceId);
+  const q = idleQuery(options);
+  try {
+    const usage = await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET?.({ skipBehaviors: true });
+    return usage?.rate_limits_available ? { accountId, rateLimits: usage.rate_limits } : null;
+  } finally {
+    q.close();
+  }
+}
+
+/** A query whose prompt never arrives, for control requests only; close it once it answers. */
+function idleQuery(options: Options) {
+  const idle = (async function* (): AsyncGenerator<SDKUserMessage> {
+    await new Promise(() => {});
+  })();
+  return query({ prompt: idle, options: { ...options, cwd: os.tmpdir() } });
 }
 
 /** Parks a Claude Code process for the profile's account, so its next side question or classify skips the startup. */

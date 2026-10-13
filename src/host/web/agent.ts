@@ -2,6 +2,7 @@ import { localClassifier } from '../../drift.ts';
 import { demoReviewer } from '../../secondOpinion/demo.ts';
 import { chunks, mockAnswer } from '../../sidechat/mockAnswer.ts';
 import { CLAUDE_FALLBACK_MODELS } from '../../runtime/models.ts';
+import { demoLimits } from '../../usage/demoLimits.ts';
 import type { AgentAskEvent, AgentEvent, AgentHost, AgentModel } from '../types/agent.ts';
 
 const listeners = new Set<(event: AgentEvent) => void>();
@@ -46,6 +47,10 @@ export const agent: AgentHost = {
   onToolCall: () => () => {},
   async toolResult() {},
   async warm() {},
+  async limits(provider) {
+    return demoLimits(provider);
+  },
+  onLimits: () => () => {},
   async models(provider) {
     return provider === 'claude' ? CLAUDE_FALLBACK_MODELS : DEMO_CODEX_MODELS;
   },

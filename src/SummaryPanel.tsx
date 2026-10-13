@@ -35,7 +35,10 @@ import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
 import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon, TooltipIconButton } from './ui';
-import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
+import { spaceUsage, threadUsage } from './usage/model';
+import { LimitBars, UpdatedAt } from './usage/LimitBars';
+import { toneFor, untilLabel } from './usage/limits';
+import { useAccountLimits } from './usage/useAccountLimits';
 
 const LIST_LIMIT = 3;
 
@@ -456,7 +459,7 @@ function ChipSection({ label, items, empty, action }: { label: string; items: st
 
 const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
-const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<PlanUsage['provider'], string>;
+const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<Provider, string>;
 
 function ThreadUsageSection({ thread }: { thread: Thread }) {
   const usage = threadUsage(thread);
@@ -477,17 +480,17 @@ function ThreadUsageSection({ thread }: { thread: Thread }) {
 }
 
 function RateLimitWarning({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
-  const space = profileById(thread.spaceId);
   const provider = thread.providers[0];
-  const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.plans[provider], state.now);
-  if (thread.status !== 'running' || !isKnownPlan(space.plans[provider]) || !plan.isWarning) return null;
+  const { limits } = useAccountLimits(provider, thread.spaceId);
+  const tight = limits?.windows.find((w) => toneFor(w.usedPct / 100) === 'destructive');
+  if (thread.status !== 'running' || !tight) return null;
 
-  const name = `${PROVIDER_NAMES[plan.provider]} ${plan.plan}`;
+  const name = `${PROVIDER_NAMES[provider]} ${tight.label.toLowerCase()} limit`;
+  const resets = tight.resetsAt ? `, resets in ${untilLabel(Date.parse(tight.resetsAt) - Date.now())}` : '';
   return (
     <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
       <TriangleWarning className="size-4 shrink-0" aria-hidden />
-      {plan.remaining === 0 ? `${name} limit reached; this agent stalls until the window resets.` : `${name} limit in about ${duration(Math.max(1, Math.round(plan.minutesLeft ?? 0)))} at this pace.`}
+      {tight.usedPct >= 100 ? `${name} reached; this agent stalls until it resets${resets}.` : `${name} at ${Math.round(tight.usedPct)}%${resets}.`}
     </p>
   );
 }
@@ -495,28 +498,27 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
 function SpaceUsageSection({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const space = profileById(thread.spaceId);
-  const usage = spaceUsage(state.threads, space, state.now);
+  const usage = spaceUsage(state.threads, space);
+  const providers = [...new Set(state.threads.filter((t) => t.spaceId === space.id).flatMap((t) => t.providers))];
   return (
     <Section label={`${space.name} usage`} action={<span className="tabular type-caption text-subtle-foreground">{usage.costUsd === null ? `${TOKENS.format(usage.input + usage.output)} tokens` : USD.format(usage.costUsd)}</span>}>
-      {usage.plans.map((p) => (
-        <PlanRow key={p.provider} plan={p} />
+      {providers.map((p) => (
+        <PlanLimits key={p} provider={p} spaceId={space.id} />
       ))}
     </Section>
   );
 }
 
-function PlanRow({ plan }: { plan: PlanUsage }) {
-  const share = Math.min(1, plan.used / plan.limit);
+function PlanLimits({ provider, spaceId }: { provider: Provider; spaceId: string }) {
+  const { limits } = useAccountLimits(provider, spaceId);
   return (
-    <div className="flex flex-col gap-1.5 px-2 py-1">
+    <div className="flex flex-col gap-2 px-2 py-1">
       <div className="flex items-center gap-2.5 type-body">
-        <ProviderMark provider={plan.provider} size={16} />
-        <span className="min-w-0 flex-1 truncate">
-          {PROVIDER_NAMES[plan.provider]} <span className="text-subtle-foreground">· {plan.plan}</span>
-        </span>
-        <span className={cn('tabular type-caption', plan.isWarning ? 'text-warning' : 'text-subtle-foreground')}>{TOKENS.format(plan.remaining)} left</span>
+        <ProviderMark provider={provider} size={16} />
+        <span className="min-w-0 flex-1 truncate">{PROVIDER_NAMES[provider]}</span>
+        <UpdatedAt limits={limits} />
       </div>
-      <Progress value={share * 100} style={{ '--progress-color': plan.isWarning ? 'var(--warning)' : 'var(--muted-foreground)' } as CSSProperties} aria-label={`${PROVIDER_NAMES[plan.provider]} ${plan.plan} plan used`} />
+      <LimitBars limits={limits} />
     </div>
   );
 }

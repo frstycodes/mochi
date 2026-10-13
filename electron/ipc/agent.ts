@@ -5,11 +5,13 @@ import { app } from 'electron';
 import type { AgentAskContext, AgentAskModel, AgentImage, AgentAskEvent, AgentAskMessage, AgentDecision, AgentEvent, AgentHost, AgentReviewEvent, AgentReviewRequest, AgentRunOptions, StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
-import { askClaude, classifyClaude, warmClaude } from '../agents/claude/oneshot.ts';
+import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
 import { hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
-import { secondOpinionModel } from '../agents/config.ts';
+import { accountFor, secondOpinionModel } from '../agents/config.ts';
+import { limitsOf, recordLimits } from '../agents/limits.ts';
+import { claudeUsageWindows } from '../../src/usage/limits.ts';
 import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
@@ -65,6 +67,7 @@ const codex = new CodexAdapter(
   undefined,
   codexUrl,
 );
+codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 
@@ -111,6 +114,12 @@ export const agent = {
   async models(_sender, provider, spaceId) {
     if (!PROVIDERS.includes(provider as string)) throw new TypeError('provider must be claude or codex');
     return models(codex, provider as Provider, string(spaceId, 'spaceId', 256));
+  },
+  async limits(_sender, provider, spaceId, refresh) {
+    if (!PROVIDERS.includes(provider as string)) throw new TypeError('provider must be claude or codex');
+    string(spaceId, 'spaceId', 256);
+    if (refresh) await refreshLimits(provider as Provider, spaceId as string).catch((error) => console.warn(`Could not read ${provider as Provider} limits`, error));
+    return limitsOf((await accountFor(spaceId as string, provider as Provider)).account.id, provider as Provider);
   },
   async rewindFiles(_sender, threadId, text) {
     string(threadId, 'threadId', 256);
@@ -227,6 +236,22 @@ export async function startAgent(threadId: unknown, options: unknown) {
     markIdle(threadId as string);
     throw error;
   }
+}
+
+// Claude's read starts a Claude Code process, so a hover reads at most once a minute per profile.
+const REFRESH_MS = 60_000;
+const refreshedAt = new Map<string, number>();
+
+async function refreshLimits(provider: Provider, spaceId: string) {
+  const key = `${provider}:${spaceId}`;
+  if (Date.now() - (refreshedAt.get(key) ?? 0) < REFRESH_MS) return;
+  refreshedAt.set(key, Date.now());
+  if (provider === 'codex') {
+    const { accountId, windows } = await codex.readLimits(spaceId);
+    return recordLimits(accountId, 'codex', windows, true);
+  }
+  const read = await claudeLimits(spaceId);
+  if (read) await recordLimits(read.accountId, 'claude', claudeUsageWindows(read.rateLimits), true);
 }
 
 /** The model and effort a run sends: always an explicit model the account offers. A list that can't be read passes the choice through; the run then reports the provider's own error. */

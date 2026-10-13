@@ -9,6 +9,8 @@ import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
+import { recordLimits } from '../limits.ts';
+import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 /**
@@ -174,6 +176,7 @@ async function launch(session: Session) {
       }
       // Auto mode depends on the plan, the model and fast mode; where Claude Code can't run it, edits fall back to acceptEdits rather than asking every time.
       if (message.type === 'system' && message.subtype === 'init' && mode === 'auto' && message.permissionMode !== 'auto') void session.query.setPermissionMode('acceptEdits').catch(() => {});
+      if (message.type === 'rate_limit_event') void recordLimits(session.account.id, 'claude', [claudeEventWindow(message.rate_limit_info)].filter((w) => !!w));
       session.mapper.map(message).forEach(emit);
       if (message.type !== 'result') continue;
       void session.query.mcpServerStatus().then((list) => emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } }), () => {});

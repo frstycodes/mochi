@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { ContextRing } from './ContextRing';
+import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { ChevronDown, ChevronUp } from 'reicon-react';
@@ -260,6 +262,7 @@ function Composer({
               slashItems={slashItems}
               onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
               submitLabel={isQueue ? 'Queue message' : 'Send'}
+              meter={<ContextRing provider={provider} spaceId={thread.spaceId} context={thread.context} usage={threadUsage(thread)} />}
               onSend={({ text, files }) => {
                 const trimmed = text.trim();
                 if (!trimmed && files.length === 0 && mention.mentions.length === 0) return;
