@@ -1,15 +1,15 @@
 # Accounts and devices
 
-How Mochi gets an optional account (Clerk) and lets other devices (a phone, a second Mac, a browser) follow and steer threads that run on your Mac. This covers CHECKLIST §6 "Mobile companion / Remote control". Read it with [RUNTIME.md](RUNTIME.md) (agents run in main, and the Auth section) and [SETTINGS.md](SETTINGS.md).
+How Mochi gets an optional account (Clerk) and lets your other Macs follow and steer threads that run on any one of them. A phone (PWA) comes later as one more client of the same logic. This covers CHECKLIST §6 "Mobile companion / Remote control". Read it with [RUNTIME.md](RUNTIME.md) (agents run in main, and the Auth section) and [SETTINGS.md](SETTINGS.md).
 
 Status labels: **verified** = read in this repo; **source** = read in T3 Code's source at `pingdotgg/t3code@6524a8d` (2026-10-13), paths relative to that repo; **docs** = read in Clerk's docs on 2026-10-13 (links inline), not yet run here; **proposed** = ours to decide, waiting for approval; **not verified** = belief, check before building on it.
 
 ## Summary (proposed)
 
-- **The Mac that owns the worktree runs the agents, always.** Other devices are full remote controls: everything you do in a thread on the Mac, you can do from a phone, a browser or another Mac, executed on the owning Mac. Devices never run agents, never hold provider credentials, and never touch the worktree directly.
+- **The Mac that owns the worktree runs the agents, always.** Other devices are full remote controls: everything you do in a thread on the Mac, you can do from another Mac, executed on the owning Mac. Devices never run agents, never hold provider credentials, and never touch the worktree directly.
 - **The Mac is the server, and the single writer.** Devices connect to it over a WebSocket: directly on the LAN or Tailscale with no account, or through Mochi's relay from anywhere once you sign in. No cloud database holds your threads.
 - **A Mochi account is identity for the relay and your device list.** It is not a Claude or Codex login. Mochi still never logs in to Claude or Codex, and never handles their credentials (RUNTIME.md › Auth, unchanged).
-- **No account stays the default.** Mochi works fully offline and local-only. Signing in adds reach from anywhere, push notifications, your Macs listed on every device, and settings and pins synced between Macs.
+- **No account stays the default.** Mochi works fully offline and local-only. Signing in adds reach from anywhere, your Macs listed on every device, and settings and pins synced between Macs.
 - **End-to-end encrypted.** Device keys are exchanged at pairing, so the relay forwards ciphertext it can't read.
 
 ## What T3 Code does (source)
@@ -80,19 +80,18 @@ Everything runs on the Mac that owns the thread; a device sends the command and 
 
 - **Server in main.** A WebSocket server in main (`electron/remote/`), off until you turn on Settings › Devices.
   - Binds `127.0.0.1`. "Allow devices on this network" binds the LAN or Tailscale interface.
-  - The phone UI loads from the same server (below), so LAN and Tailscale need no hosting at all.
 - **The renderer stays the writer.** Today the store lives in the renderer: it consumes `AgentEvent`s and saves itself through `host.data.save` (verified, `src/host/types/data.ts`, `src/store/persist.ts`). Every store action already passes through one hook, `recordAction` (verified, `src/replay/recorder.ts`).
   - The remote stream taps that hook: main sends devices a snapshot (`toSaved`-shaped, filtered by scope), then each action with a sequence number.
   - Device commands (`send`, `resolve`, `interrupt`) go from main to the renderer, which runs them through the same paths the UI uses.
   - The cost: remote control needs Mochi's renderer alive. That's a hidden window when every window is closed. Moving the store into main is the long-term fix, and is out of scope here.
 - **Reconnect** works like T3's: the device sends its last sequence number and gets the actions after it, or a fresh snapshot if the gap is too old.
 - **Auth.** No secret goes in the URL: the socket opens, then the first frame authenticates.
-  - Pairing: the Mac shows a QR code holding its public key, its address and a one-time code. The device generates its own keypair, as a non-extractable WebCrypto key in IndexedDB on the web or in the keychain on a Mac. The two run an ECDH handshake, and the Mac shows "Allow <device>?".
+  - Pairing without an account: the Mac shows a pairing code (its address, its public key and a one-time secret, valid 10 minutes) to copy into the other Mac's Settings › Devices; the phone later gets the same code as a QR. With an account, your Macs list each other and no code is needed. Either way the new device generates its own keypair (`safeStorage` on a Mac), the two run the handshake, and the owning Mac shows "Allow <device>?".
   - After pairing, each connection proves the device key against a fresh challenge.
 - **Relay, only when signed in and "Reach this Mac from anywhere" is on.**
   - The Mac opens one outbound WebSocket to the relay, authenticated with its Clerk access token in a header. Main is Node, so it can set headers.
   - Devices connect to the relay with their device key. The relay pairs the sockets and forwards encrypted frames.
-  - The relay stores per account: the Mac ids, the device public keys the Mac registered, push subscriptions, and the encrypted settings and pins copy. No thread content.
+  - The relay stores per account: the Mac ids, the device public keys the Mac registered, and the encrypted settings and pins copy. No thread content.
 
 ## What syncs (proposed)
 
@@ -111,12 +110,11 @@ Everything runs on the Mac that owns the thread; a device sends the command and 
 
 ## End-to-end encryption (proposed)
 
-- **libsodium** (`libsodium-wrappers` in Electron and the web, `react-native-libsodium` in the native app; the Expo binding is not verified): `crypto_kx` key exchange from each side's static key plus fresh ephemeral keys, then `secretstream` per connection. One vetted library on every client beats hand-assembled WebCrypto now that a native app is in scope.
-- **Device keys** are generated on the device and never leave it: keychain on Macs, secure storage in the native app, a non-extractable key in IndexedDB on the web (the web keeps a libsodium key wrapped by a non-extractable WebCrypto key).
+- **libsodium** (`libsodium-wrappers`, which runs in Electron and later in the phone PWA): `crypto_kx` key exchange from each side's static key plus fresh ephemeral keys, then `secretstream` per connection. One vetted construction beats hand-assembling ECDH, HKDF, AES-GCM and nonce handling from WebCrypto on a trust boundary.
+- **Device keys** are generated on the device and never leave it: `safeStorage` on Macs; the PWA later wraps its key with a non-extractable WebCrypto key in IndexedDB.
 - **Approval on the Mac's screen.** A new device is accepted only after "Allow <device>?" on the Mac, also when it arrives through the relay. A compromised relay can forward and drop frames, not read or add.
 - **Account key** (for synced settings and pins): generated by the first Mac you sign in on, sent to each new device over the E2E channel when the Mac approves it. Lose every device and the synced copy is unreadable; Macs still hold their own settings, so nothing local is lost.
 - The same layer runs on LAN, Tailscale and the relay: one code path.
-- Push payloads carry no content ("A thread needs you"); tapping fetches over the encrypted channel.
 - TLS-only to the relay (relay can read threads): rejected.
 
 ## Conflicts (proposed)
@@ -139,34 +137,30 @@ Everything runs on the Mac that owns the thread; a device sends the command and 
 
 - **Relay:** a Cloudflare Worker plus one Durable Object per Mac, holding hibernatable WebSockets. T3 runs the same shape (source, `infra/relay`). Not verified: current Workers and Durable Objects pricing. Believed to be about $5/month on the paid plan, with idle hibernated sockets costing little. Check before PR 5.
 - **Self-host:** the same Worker deploys to your own Cloudflare account, with the relay URL set in Settings. Or skip the relay and use Tailscale, which needs nothing hosted.
-- **Phone UI:** served by the Mac on LAN and Tailscale. For relay use, the same static build on Cloudflare Pages (free tier, not verified). It's a client only, like `app.t3.codes`.
+- No client hosting: the only client for now is Mochi on another Mac.
 
 ## Clients
 
-- **Web app (PWA):** the existing web build with a third host implementation, `src/host/remote`, next to `desktop` and `web` (verified layout, `src/host/`). It speaks the device protocol instead of IPC. Served by the Mac on LAN and Tailscale, and hosted (Cloudflare Pages) for relay use. Full parity with the scopes above, phone and desktop layouts, Add to Home Screen, Web Push.
-- **Another Mac:** Mochi itself shows paired Macs' threads next to its own, through the same `remote` host per Mac.
-- **Native app (Expo, iOS and Android):** same protocol, same screens, plus APNs/FCM push, a Live Activity for running threads, and secure storage. Sign-in with `@clerk/expo` and `expo-secure-store` (docs, [Expo quickstart](https://clerk.com/docs/expo/getting-started/quickstart)) to list your Macs; each Mac still approves the device.
-- **Sign-in on a device** lists every Mac on your account and starts pairing with each, so a QR scan is only needed without an account.
+- **Another Mac, first and only for now.** Mochi gets a third host implementation, `src/host/remote`, next to `desktop` and `web` (verified layout, `src/host/`), speaking the device protocol instead of IPC. A Mac shows paired Macs' threads and Queue merged with its own, each tagged with its Mac, using the existing UI.
+- **Phone, later and separately designed:** a PWA (the web build on `src/host/remote`, Add to Home Screen, Web Push). Because the protocol, scopes, encryption and relay are client-agnostic, it adds screens and push, not logic. No native app planned.
 
 ## PRs, in order
 
-Each PR is its own worktree session, per SESSIONS.md, verified at phone width and in both themes where it has UI.
+Each PR is its own worktree session, per SESSIONS.md, verified in both themes where it has UI.
 
-1. **`remote-server`**: `electron/remote/`: WebSocket server, protocol, scopes, QR pairing, device registry, snapshot plus sequenced action stream from `recordAction`, command bridge to the renderer, hidden window keeping the renderer alive with windows closed. Settings › Devices. Tests: sequencing and replay, first answer wins, scope refusal, duplicate command id.
+1. **`remote-server`**: `electron/remote/`: WebSocket server, protocol, scopes, pairing code, device registry, snapshot plus sequenced action stream from `recordAction`, command bridge to the renderer, hidden window keeping the renderer alive with windows closed. Settings › Devices. Tests: sequencing and replay, first answer wins, scope refusal, duplicate command id.
 2. **`e2e`**: libsodium handshake and framing, device approval on the Mac, tampered and replayed frames rejected (test).
 3. **`remote-commands`**: the full command set for `operate`, `manage`, `code` and `terminal`, each routed through the same code the Mac's UI uses (ship flow still asks before push and PR).
-4. **`remote-client`**: `src/host/remote`, phone and desktop layouts for every screen, encrypted offline cache, offline banner, served by the Mac.
-5. **`multi-mac`**: a Mac shows paired Macs' threads and Queue merged with its own; "Runs on" lists them.
-6. **`account`**: Clerk sign-in in main (PKCE, system browser, `safeStorage`), `host.account`, Settings › Account; first verify redirect URIs and the revoke endpoint.
-7. **`relay`**: Worker and Durable Objects, Clerk JWT check, device-key auth, frame forwarding, account Mac and device list, self-host relay URL; the Mac's outbound connection behind "Reach this Mac from anywhere"; web sign-in to list Macs.
-8. **`sync`**: account key distribution, encrypted settings and pins blob, `sync: true` catalog rows, merged pins.
-9. **`push`**: Web Push and APNs/FCM from the relay for needs-you, review ready, CI failed, finished runs; per-device notification settings.
-10. **`native`**: Expo app at parity with the web client, secure storage, push, Live Activity, store builds.
+4. **`multi-mac`**: `src/host/remote`, encrypted snapshot cache, offline state; a Mac lists paired Macs' threads and Queue with its own and acts on them; "Runs on" lists them.
+5. **`account`**: Clerk sign-in in main (PKCE, system browser, `safeStorage`), `host.account`, Settings › Account; first verify redirect URIs and the revoke endpoint.
+6. **`relay`**: Worker and Durable Objects, Clerk JWT check, device-key auth, frame forwarding, account Mac and device list (sign in on a second Mac → it lists your Macs, each approves), self-host relay URL; the Mac's outbound connection behind "Reach this Mac from anywhere".
+7. **`sync`**: account key distribution, encrypted settings and pins blob, `sync: true` catalog rows, merged pins.
+
+Later, its own design pass: the phone PWA and push.
 
 ## Decisions for the user
 
-Made, as "complete feature": account, hosted relay, every scope remotely, settings and pins sync, web and native clients. Still yours:
+Made: account, hosted relay, every scope remotely, settings and pins sync; Mac-to-Mac first, phone later. Still yours:
 
-1. **Who owns the infrastructure:** a Cloudflare account for the relay (Workers paid plan, believed about $5/month, not verified) and the domain it runs on.
-2. **Apple Developer and Google Play accounts** for the native app and APNs/FCM (Apple's is believed to be $99/year, not verified).
-3. **Terminal scope off by default** for new devices, as proposed?
+1. **Who owns the infrastructure:** a Cloudflare account for the relay (Workers paid plan, believed about $5/month, not verified) and its domain.
+2. **Terminal scope off by default** for new devices, as proposed?
