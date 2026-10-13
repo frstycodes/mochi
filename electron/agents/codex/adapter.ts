@@ -15,6 +15,8 @@ interface Live {
   /** Server generation the thread was opened on; after a crash it is resumed on the new server before the next turn. */
   gen: number;
   turnId?: string;
+  /** Turns this thread started on this Codex thread, oldest first, for `rewindPoint`. */
+  turns: { id: string; text: string }[];
   options: AgentRunOptions;
 }
 
@@ -131,6 +133,13 @@ export class CodexAdapter {
     return this.threads.get(threadId)?.options;
   }
 
+  /** The turn before the latest one started with this text, for `forkAt`; null when unknown or it was the first. */
+  rewindPoint(threadId: string, text: string) {
+    const turns = this.threads.get(threadId)?.turns ?? [];
+    const index = turns.findLastIndex((t) => t.text.includes(text));
+    return index > 0 ? turns[index - 1].id : null;
+  }
+
   async interrupt(threadId: string) {
     const live = this.threads.get(threadId);
     const rpc = live?.server.rpc;
@@ -233,16 +242,21 @@ export class CodexAdapter {
   }
 
   private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions) {
+    // A reopen after a server crash keeps the turns it knew; a fork starts a new Codex thread whose turns it doesn't.
+    const prior = this.threads.get(threadId);
+    const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
     const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
-    const result = options.resume
-      ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
-      : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
+    const result = options.resume && options.forkAt
+      ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
+      : options.resume
+        ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
+        : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
     const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
     if (typeof codexId !== 'string') throw new Error(`codex ${options.resume ? 'thread/resume' : 'thread/start'} returned no thread id`);
     const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits });
-    const live: Live = { codexId, server, state, gen: server.gen, options: { ...options, resume: codexId } };
+    const live: Live = { codexId, server, state, gen: server.gen, turns, options: { ...options, resume: codexId, forkAt: undefined } };
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
@@ -270,9 +284,13 @@ export class CodexAdapter {
     const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
     const attached = skillInputs(text, skills, listed);
     const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
+    // Mid-turn, the message steers the running turn (schema `TurnSteerParams`, 0.155.1) instead of waiting for a new one. Steer takes no
+    // `serviceTier`, so a speed change made while steering applies from the next turn/start.
+    if (live.turnId) return void (await rpc.request('turn/steer', { threadId: live.codexId, expectedTurnId: live.turnId, input }));
     const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
+    if (typeof turnId === 'string') live.turns.push({ id: turnId, text });
     // Codex reports no skill load of its own: an attached skill is loaded with the turn.
     for (const event of skillEvents(threadId, typeof turnId === 'string' ? turnId : String(Date.now()), attached)) this.emit(event);
   }
@@ -303,7 +321,10 @@ export class CodexAdapter {
   private notification(server: CodexServer, method: string, params: unknown) {
     if (method === 'account/rateLimits/updated') {
       this.onLimits?.(server.account.id, codexWindows((params as { rateLimits?: Parameters<typeof codexWindows>[0] }).rateLimits));
-      return updateLimits(server.limits, params);
+      const window = updateLimits(server.limits, params);
+      // Account-wide, so every thread mid-turn on this account hears it; the store logs each window once.
+      if (window) for (const live of server.byCodex.values()) if (live.turnId) this.emit({ threadId: live.state.threadId, type: 'limit-warning', window });
+      return;
     }
     const ask = server.asks.get(codexThreadId(params) ?? '');
     if (ask) return ask.notify(method, params);

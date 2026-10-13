@@ -435,6 +435,23 @@ const GOAL_SPECS = {
       return { changed: `dropped "${step.title}"${args.reason ? `: ${args.reason}` : ''}`, result: goalOf(target(state(), caller, thread.id)) };
     },
   },
+  claim_criterion: {
+    run: ({ state, caller, args, dispatch }) => {
+      const criterion = caller.criteria?.find((c) => c.id === args.criterionId);
+      if (!caller.goal) throw new Error('This thread has no goal; nothing to claim');
+      if (!criterion) throw new Error(`No criterion ${args.criterionId}; get_goal lists them`);
+      dispatch({ type: 'criterion-claim', threadId: caller.id, criterionId: criterion.id, evidence: args.evidence.trim(), by: caller.providers[0] });
+      return { changed: `claimed "${criterion.text}"`, result: goalOf(target(state(), caller, caller.id)) };
+    },
+  },
+  report_turn: {
+    run: ({ state, caller, args, dispatch }) => {
+      if (!caller.goal) throw new Error('This thread has no goal; there is nothing to report against');
+      dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }) } });
+      return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
+    },
+  },
+  get_report: { run: ({ state, caller, args }) => ({ result: reportOf(target(state(), caller, args.threadId)) }) },
   settle_goal: {
     run: ({ state, caller, args, dispatch }) => {
       const [thread] = others(state(), caller, [args.threadId], 'settle');
@@ -573,6 +590,11 @@ function others(state: State, caller: Thread, ids: string[], verb: string) {
   return threads;
 }
 
+function reportOf(thread: Thread) {
+  const { goal, criteria = [], report, prs, status } = thread;
+  return { threadId: thread.id, title: thread.title, status, goal, criteria: criteria.map(({ id, text, claim }) => ({ id, text, claimed: claim?.evidence ?? null })), report: report ?? null, prs: prs.map(({ number, state, title }) => ({ number, state, title })) };
+}
+
 function stepIn(thread: Thread, stepId: string) {
   const step = thread.steps.find((s) => s.id === stepId);
   if (!step) throw new Error(`No step ${stepId} in "${thread.title}"; get_goal lists the step ids`);
@@ -634,7 +656,7 @@ function agentOf(s: Subagent, now = Date.now()) {
 }
 
 function goalOf(thread: Thread) {
-  return { threadId: thread.id, title: thread.title, goal: thread.goal, status: thread.status, steps: thread.steps.map(stepOf) };
+  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, steps: thread.steps.map(stepOf) };
 }
 
 function stepOf(s: Thread['steps'][number]) {

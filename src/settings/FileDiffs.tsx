@@ -1,12 +1,12 @@
 import { MultiFileDiff } from '@pierre/diffs/react';
-import { useTheme } from 'next-themes';
+import { useDiffTheme } from '../themes/highlight';
 import { Badge } from '@/components/ui/badge';
 import type { FileEdit } from '../host/types/settings';
 import { usePrefs } from './prefs';
 
 /** Config file edits as diffs, one per file with its path: Settings' review dialog and Mochi's settings cards. */
 export function FileDiffs({ edits }: { edits: FileEdit[] }) {
-  const { resolvedTheme } = useTheme();
+  const diffTheme = useDiffTheme();
   const { diffStyle } = usePrefs();
   return edits.map((e) => (
     <section key={e.path} className="flex flex-col gap-1.5">
@@ -19,7 +19,7 @@ export function FileDiffs({ edits }: { edits: FileEdit[] }) {
           oldFile={{ name: e.path, contents: e.before }}
           newFile={{ name: e.path, contents: e.after }}
           disableWorkerPool
-          options={{ diffStyle, disableFileHeader: true, overflow: 'wrap', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
+          options={{ diffStyle, disableFileHeader: true, overflow: 'wrap', ...diffTheme }}
           style={{ '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties}
           className="max-h-80 overflow-auto"
         />

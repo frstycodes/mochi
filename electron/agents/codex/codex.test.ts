@@ -99,12 +99,14 @@ test('after a resume only the reported request counts, not the whole history', (
 
 test('a usage limit pauses the thread with the account-wide reset time, then ends the turn', () => {
   const limits = {};
-  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } });
+  assert.equal(updateLimits(limits, { rateLimits: { primary: { usedPercent: 89, windowDurationMins: 300, resetsAt: 1791808455 }, secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1792000000 } } }), undefined, 'under WARN_PCT: no warning');
+  assert.equal(updateLimits(limits, { rateLimits: { primary: { usedPercent: 93, windowDurationMins: 300, resetsAt: 1791808455 } } })?.label, '5-hour', 'a sparse update warns from the merged windows');
+  updateLimits(limits, { rateLimits: { primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: 1791808455 } } });
   updateLimits(limits, { rateLimits: { primary: null, secondary: null } });
   const s = threadState('h1', '/x', { limits });
   const turn = { id: 'u', status: 'failed', error: { message: 'You hit your usage limit.', codexErrorInfo: 'usageLimitExceeded' } };
   assert.deepEqual(mapNotification('turn/completed', { threadId: 't', turn }, s), [
-    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z' },
+    { threadId: 'h1', type: 'limit', resetsAt: '2026-10-12T12:34:15.000Z', label: '5-hour' },
     { threadId: 'h1', type: 'turn-end', status: 'failed', error: 'You hit your usage limit.' },
   ]);
   const other = mapNotification('turn/completed', { threadId: 't', turn: { ...turn, error: { message: 'x', codexErrorInfo: 'serverOverloaded' } } }, s);
@@ -150,34 +152,47 @@ test('side chat asks on the profile account, streams once per delta, and says wh
   }
 });
 
-test('a thread runs at the speed it started with, and a message changes it for its turn and the ones after', async () => {
+test('a thread runs at the speed it started with; a message changes it for its turn and the ones after, a steer from the next turn', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = path.join(home, 'codex');
   const log = path.join(home, 'tiers.log');
   writeFileSync(fake, TIER_CODEX, { mode: 0o755 });
   const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  // Lets turn/completed land, so the next send starts a turn instead of steering.
+  const settle = () => new Promise((r) => setTimeout(r, 50));
   try {
     await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority' });
+    await settle();
     await codex.send('t', 'again');
+    await settle();
     await codex.send('t', 'slower', undefined, undefined, '');
-    await codex.send('t', 'still slower');
+    await settle();
+    await codex.send('t', 'hold');
+    await settle();
+    await codex.send('t', 'faster', undefined, undefined, 'priority');
+    await settle();
+    await codex.send('t', 'next');
+    await settle();
     await codex.start('u', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
-    assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['thread/start priority', 'turn/start priority', 'turn/start priority', 'turn/start null', 'turn/start null', 'thread/start null', 'turn/start null']);
+    const expected = ['thread/start priority', 'turn/start priority', 'turn/start priority', 'turn/start null', 'turn/start null', 'turn/steer undefined', 'turn/start priority', 'thread/start null', 'turn/start null'];
+    assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), expected);
   } finally {
     codex.dispose();
   }
 });
 
-/** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG. */
+/** Logs the `serviceTier` of every thread/start, turn/start and turn/steer to $TIER_LOG. Turns complete at once, except one whose text is "hold", which a steer completes. */
 const TIER_CODEX = `#!/usr/bin/env node
 const fs = require('node:fs');
-let buf = '';
+let buf = '', n = 0;
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+const done = (threadId, id) => send({ method: 'turn/completed', params: { threadId, turn: { id, status: 'completed' } } });
 process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
-  if (m.method === 'thread/start' || m.method === 'turn/start') fs.appendFileSync(process.env.TIER_LOG, m.method + ' ' + m.params.serviceTier + '\\n');
+  if (['thread/start', 'turn/start', 'turn/steer'].includes(m.method)) fs.appendFileSync(process.env.TIER_LOG, m.method + ' ' + m.params.serviceTier + '\\n');
   if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
-  else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c' + Math.random() } } });
-  else if (m.method === 'turn/start') send({ id: m.id, result: { turn: { id: 'u' } } });
+  else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c' + ++n } } });
+  else if (m.method === 'turn/start') { const id = 'u' + ++n; send({ id: m.id, result: { turn: { id } } }); if (m.params.input.at(-1).text !== 'hold') done(m.params.threadId, id); }
+  else if (m.method === 'turn/steer') { send({ id: m.id, result: {} }); done(m.params.threadId, m.params.expectedTurnId); }
   else if (m.id !== undefined) send({ id: m.id, result: {} });
 } });
 `;

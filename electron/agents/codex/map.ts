@@ -1,6 +1,7 @@
 import path from 'node:path';
-import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, LimitWindow } from '../../../src/host/types/agent.ts';
 import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import { codexWindows, hottest, mergeWindows, nearLimit } from '../../../src/usage/limits.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -20,21 +21,19 @@ export interface ThreadState {
 
 type Totals = { input: number; output: number; cached: number };
 
-/** When the account's most-used rate-limit window resets, in unix seconds. */
+/** The account's plan windows as Codex last reported them, merged across sparse updates. */
 export interface AccountLimits {
-  resetsAt?: number;
+  windows?: LimitWindow[];
 }
 
 export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits } = {}): ThreadState {
   return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits };
 }
 
-/** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
+/** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. Returns the window now at `WARN_PCT` or more, if any. */
 export function updateLimits(limits: AccountLimits, params: unknown) {
-  const snapshot = obj(obj(params)?.rateLimits);
-  const windows = [obj(snapshot?.primary), obj(snapshot?.secondary)].filter((w) => typeof w?.usedPercent === 'number' && typeof w.resetsAt === 'number');
-  const binding = windows.sort((a, b) => (b!.usedPercent as number) - (a!.usedPercent as number))[0];
-  if (binding) limits.resetsAt = binding.resetsAt as number;
+  limits.windows = mergeWindows(limits.windows ?? [], codexWindows(obj(obj(params)?.rateLimits) as Parameters<typeof codexWindows>[0]));
+  return nearLimit(limits.windows);
 }
 
 /** The Codex thread a notification or server request belongs to, if any. */
@@ -77,8 +76,8 @@ export function mapNotification(method: string, params: unknown, s: ThreadState)
       const end: AgentEvent = { threadId, type: 'turn-end', status, ...(typeof error?.message === 'string' && { error: apiMessage(error.message) }) };
       // The thread waits on the same account until the reset; moving it to another account is never automatic.
       if (error?.codexErrorInfo !== 'usageLimitExceeded') return [end];
-      const resetsAt = s.limits.resetsAt;
-      return [{ threadId, type: 'limit', ...(resetsAt !== undefined && { resetsAt: new Date(resetsAt * 1000).toISOString() }) }, end];
+      const binding = hottest(s.limits.windows ?? []);
+      return [{ threadId, type: 'limit', ...(binding?.resetsAt && { resetsAt: binding.resetsAt }), ...(binding && { label: binding.label }) }, end];
     }
     case 'mcpServer/startupStatus/updated': {
       const status = STARTUP_STATUS[p.status as keyof typeof STARTUP_STATUS];

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Sparkles, Trash3, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,15 +15,38 @@ import { getPrefs } from '../settings/prefs';
 import type { Size, Thread } from '../model';
 import { useHarness } from '../store';
 import { StepStatusIcon, TooltipIconButton } from '../ui';
-import { applyDraft, draftFrom, type DraftStep, type GoalDraft } from './edit';
+import { applyDraft, draftFrom, type DraftCriterion, type DraftStep, type GoalDraft } from './edit';
 import { templatesFor } from './templates';
 import { goalPrompt, parseSteps } from '../utility/prompts';
 import { useDraft } from '../utility/useDraft';
 
+let openThreadId: string | null = null;
+const listeners = new Set<() => void>();
+
+/** Opens the goal editor for a thread (goal card, summary, thread menu); null closes it. */
+export function openGoalEditor(threadId: string | null) {
+  openThreadId = threadId;
+  listeners.forEach((l) => l());
+}
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+};
+
+/** Mounted once at the app root. */
+export function GoalEditorLayer() {
+  const threadId = useSyncExternalStore(subscribe, () => openThreadId);
+  const { state } = useHarness();
+  const thread = state.threads.find((t) => t.id === threadId);
+  if (!thread) return null;
+  return <GoalEditor key={thread.id} thread={thread} onClose={() => openGoalEditor(null)} />;
+}
+
 /** A save that changes the goal text or criteria is one goal revision; plan-only saves aren't. Mount it only while open so the draft starts fresh from the thread. */
 export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () => void }) {
   const { state, dispatch } = useHarness();
-  const { draft, setGoal, updateStep, moveStep, addSteps } = useGoalDraft(thread);
+  const { draft, setGoal, setCriterion, removeCriterion, addCriterion, updateStep, moveStep, addSteps } = useGoalDraft(thread);
   const [newTitle, setNewTitle] = useState('');
   const [isDriftMuted, setDriftMuted] = useState(!!thread.drift?.isMuted);
   const edited = applyDraft(thread, draft, state.now);
@@ -54,14 +77,33 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="gap-5 sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="type-title">Edit goal</DialogTitle>
-          <DialogDescription>Changing the goal or its criteria saves v{nextVersion}; plan edits keep the version.</DialogDescription>
+          <DialogTitle className="type-title">{thread.goal ? 'Edit goal' : 'Make this a goal'}</DialogTitle>
+          <DialogDescription>Changing the goal or what done means saves v{nextVersion}; plan edits keep the version.</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="goal-text">Goal</Label>
-          <Textarea id="goal-text" rows={2} value={draft.goal} onChange={(e) => setGoal(e.target.value)} className="min-h-0 type-body" />
+          <Textarea id="goal-text" rows={2} value={draft.goal} onChange={(e) => setGoal(e.target.value)} placeholder="What will be true when this is done" className="min-h-0 type-body" />
         </div>
+
+        <section aria-label="Done when" className="flex flex-col gap-1.5">
+          <h3 className="type-body font-medium">Done when</h3>
+          <ul className="flex flex-col gap-1">
+            {draft.criteria.map((c, i) => (
+              <li key={c.id ?? `new-${i}`} className="flex items-center gap-1.5">
+                <Input value={c.text} onChange={(e) => setCriterion(i, { text: e.target.value })} aria-label={`Criterion ${i + 1}`} className="h-7 min-w-0 flex-1" />
+                <Input value={c.command ?? ''} onChange={(e) => setCriterion(i, { command: e.target.value })} placeholder="Check command" aria-label={`Criterion ${i + 1} check command`} className="h-7 w-40 font-mono type-caption" />
+                <TooltipIconButton label="Remove criterion" hint="Done no longer needs this" onClick={() => removeCriterion(i)}>
+                  <Trash3 />
+                </TooltipIconButton>
+              </li>
+            ))}
+          </ul>
+          <Button variant="ghost" size="sm" className="self-start" onClick={addCriterion}>
+            <Add data-icon="inline-start" />
+            Add criterion
+          </Button>
+        </section>
 
         <section aria-label="Steps" className="flex min-h-0 flex-col gap-1.5">
           <div className="flex items-center gap-2">
@@ -152,6 +194,10 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
 function useGoalDraft(thread: Thread) {
   const [draft, setDraft] = useState<GoalDraft>(() => draftFrom(thread));
   const setGoal = (goal: string) => setDraft((d) => ({ ...d, goal }));
+  // Blank rows can stay while you type: `applyDraft` skips them.
+  const setCriterion = (i: number, patch: Partial<DraftCriterion>) => setDraft((d) => ({ ...d, criteria: d.criteria.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
+  const removeCriterion = (i: number) => setDraft((d) => ({ ...d, criteria: d.criteria.filter((_, j) => j !== i) }));
+  const addCriterion = () => setDraft((d) => ({ ...d, criteria: [...d.criteria, { text: '' }] }));
   const updateStep = (i: number, patch: Partial<DraftStep>) => setDraft((d) => ({ ...d, steps: d.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
   const moveStep = (i: number, by: -1 | 1) =>
     setDraft((d) => {
@@ -160,7 +206,7 @@ function useGoalDraft(thread: Thread) {
       return { ...d, steps };
     });
   const addSteps = (steps: Omit<DraftStep, 'id' | 'isRemoved' | 'isLocked'>[]) => setDraft((d) => ({ ...d, steps: [...d.steps, ...steps.map((s) => ({ ...s, isRemoved: false, isLocked: false }))] }));
-  return { draft, setGoal, updateStep, moveStep, addSteps };
+  return { draft, setGoal, setCriterion, removeCriterion, addCriterion, updateStep, moveStep, addSteps };
 }
 
 const SIZES = ['1', '2', '3'] as const;

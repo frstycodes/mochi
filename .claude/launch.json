@@ -539,15 +539,15 @@
       }
     },
     {
-      "name": "mochi-speed",
+      "name": "mochi-themes",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
         "dev",
         "--port",
-        "5619",
+        "5687",
         "--strictPort"
       ],
-      "port": 5619
+      "port": 5687
     }
   ]
 }

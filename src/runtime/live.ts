@@ -1,10 +1,11 @@
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
-import type { Provider, Thread } from '../model.ts';
+import { firstPrompt, type Provider, type Thread } from '../model.ts';
 import { startWorkspace } from '../git/workspace.ts';
 import { sourcePrompt } from '../sources.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
+import { WRAP_PROMPT } from './limits.ts';
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
@@ -27,7 +28,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? t.goal, { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }) }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }) }));
     }
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
@@ -56,6 +57,13 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     }
     case 'interrupt':
       return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+    case 'rewind':
+    case 'rewind-message':
+    case 'rewind-undo': {
+      // The next message starts the agent again on the rewound session (`reattach`).
+      const threadId = action.type === 'rewind-undo' ? state.rewindUndo?.threadId : action.threadId;
+      return threadId && hasAgent(state, threadId) ? [{ method: 'stop', threadId }] : [];
+    }
     case 'settle':
       return [...(hasAgent(state, action.threadId) ? [{ method: 'stop' as const, threadId: action.threadId }] : []), ...stopBackground(state, [action.threadId])];
     case 'delete':
@@ -79,8 +87,9 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       return hasAgent(state, action.threadId) ? [{ method: 'stopSubagent', threadId: action.threadId, subagentId: subagent.id }] : [];
     }
     case 'agent': {
-      // A background agent's session ends with its first turn: the report is in, nobody will send it more.
       const { event } = action;
+      if (event.type === 'limit-warning') return wrapUp(state, next(), event.threadId);
+      // A background agent's session ends with its first turn: the report is in, nobody will send it more.
       if (event.type !== 'turn-end' && event.type !== 'limit') return [];
       const isBackground = state.threads.some((t) => t.subagents?.some((s) => s.sessionId === event.threadId && isRunning(s)));
       return isBackground ? [{ method: 'stop', threadId: event.threadId }] : [];
@@ -97,7 +106,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
@@ -119,6 +128,14 @@ function runFolder(thread: Thread) {
 }
 
 /** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */
+/** Codex has no wrap-up of its own: the turn that just crossed `WRAP_PCT` gets Mochi's, steered into the running turn. */
+function wrapUp(state: State, next: State, threadId: string): AgentCall[] {
+  const was = state.threads.find((t) => t.id === threadId);
+  const now = next.threads.find((t) => t.id === threadId);
+  if (!now?.live?.isWrappingUp || was?.live?.isWrappingUp || now.providers[0] !== 'codex') return [];
+  return [{ method: 'send', threadId, text: WRAP_PROMPT }];
+}
+
 /** A send that found no agent process (it ended without Mochi noticing): start it again with `resume`, carrying the same message. */
 export function resumeAfterLostProcess(thread: Thread, call: Extract<AgentCall, { method: 'send' }>): AgentCall[] {
   return thread.live ? reattach(thread, call.text, undefined, call.images, call.skills) : [];
@@ -126,7 +143,11 @@ export function resumeAfterLostProcess(thread: Thread, call: Extract<AgentCall, 
 
 function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[], skills?: string[]) {
   const provider = thread.session?.provider ?? thread.providers[0];
-  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }) });
+  const restart = thread.live?.restart;
+  const seed = restart && 'seed' in restart ? restart.seed : undefined;
+  const resume = seed === undefined ? thread.session?.id : undefined;
+  const forkAt = restart && 'forkAt' in restart ? restart.forkAt : undefined;
+  return start(thread, provider, controlsOf(thread), seed ? `${seed}\n\n${prompt}` : prompt, { resume, ...(forkAt && { forkAt }), useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }) });
 }
 
 /** Mochi background agents of these threads that are still running. */

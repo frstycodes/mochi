@@ -2,7 +2,7 @@ import { answerText, seedQueue, type QueueItem } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { getRestored } from './persist.ts';
 import { showsDemoData } from '../demoData.ts';
-import { hasOpenWork, log, mapStep, mapThread } from './threads.ts';
+import { log, mapStep, mapThread } from './threads.ts';
 
 export interface QueueState {
   queue: QueueItem[];
@@ -52,14 +52,12 @@ function answer(state: State, queueId: string, answers: string[][] = []): State 
   if (!item) return state;
   const now = state.now;
   const queue = state.queue.filter((q) => q.id !== queueId);
+  if (item.kind === 'collision') return { ...state, queue, threads: mapThread(state.threads, item.threadId, (t) => log(t, { at: now, who: 'you', kind: 'event', text: 'Kept both threads editing the same files' })) };
   if (item.kind === 'run' || item.kind === 'ci') return { ...state, queue, threads: mapThread(state.threads, item.threadId, (t) => log(t, { at: now, who: 'you', kind: 'event', text: `Settled: ${item.title}` })) };
 
   const threads = mapThread(state.threads, item.threadId, (t) => {
-    if (item.kind === 'review') {
-      const prs = t.prs.map((p) => (p.state === 'open' ? { ...p, state: 'merged' as const } : p));
-      const done = !hasOpenWork(t);
-      return log({ ...t, prs, status: done ? 'settled' : t.status }, { at: now, who: 'you', kind: 'event', text: done ? 'Approved and merged. Every PR is merged, thread settled.' : 'Approved and merged' });
-    }
+    // PR state is GitHub's: marking done never touches it.
+    if (item.kind === 'review') return log({ ...t, status: 'settled', settledAt: now }, { at: now, who: 'you', kind: 'event', text: 'Marked done' });
     const blocked = t.steps.find((s) => s.status === 'blocked');
     const unblocked = blocked ? mapStep(t, blocked.id, (s) => ({ ...s, status: 'running', note: undefined })) : t;
     const text = item.kind === 'approval' ? `Approved: ${item.code ?? item.title}` : (answerText(answers) || 'Answered');

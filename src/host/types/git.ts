@@ -146,13 +146,32 @@ export interface GitHost {
   removeWorktree(path: string): Promise<void>;
   diskUsage(path: string): Promise<number>;
   /** Snapshots the worktree's files (untracked included) under `refs/harness/checkpoints/<threadId>/<n>` without touching HEAD, index or files; resolves to the commit. */
-  checkpoint(cwd: string, threadId: string, n: number): Promise<string>;
+  checkpoint(cwd: string, threadId: string, n: number | 'turn' | 'undo'): Promise<string>;
   /** Resets the worktree's branch and files to checkpoint `n`, after saving the current files as the `undo` checkpoint. */
-  restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo'): Promise<void>;
+  restoreCheckpoint(cwd: string, threadId: string, n: number | 'undo', hasUndo?: boolean): Promise<void>;
+  /** Before a rewind with files: the files checkpoint `n` changes back, and those changed since the agent's last turn ended (made outside the agent). */
+  rewindPreview(cwd: string, threadId: string, n: number): Promise<RewindPreview>;
   /** What checkpoint `n` held against the branch's base: the thread's changes as they stood then. Throws when its files weren't saved. */
   checkpointDiff(cwd: string, threadId: string, n: number): Promise<GitDiff>;
   /** New worktree for `threadId` on `branch`, starting from `from`'s checkpoint, or from `cwd`'s HEAD without one. */
   forkWorktree(cwd: string, threadId: string, branch: string, from?: { threadId: string; n: number }): Promise<string>;
+  /** Runs a goal criterion's check command in the worktree with your shell's PATH; never throws for a failing command. */
+  runCheck(cwd: string, command: string): Promise<CheckRun>;
+}
+
+export interface CheckRun {
+  /** null when it was killed (timed out). */
+  exitCode: number | null;
+  /** The output's tail, stdout and stderr interleaved. */
+  output: string;
+  ms: number;
+}
+
+export interface RewindPreview {
+  /** Paths whose content differs between the checkpoint and the worktree now. */
+  files: string[];
+  /** Of those and others, paths changed since the agent's last turn ended: made by you or another program, lost on a rewind. */
+  outside: string[];
 }
 
 export const gitMethods = {
@@ -178,6 +197,8 @@ export const gitMethods = {
   diskUsage: 'invoke',
   checkpoint: 'invoke',
   restoreCheckpoint: 'invoke',
+  rewindPreview: 'invoke',
   checkpointDiff: 'invoke',
   forkWorktree: 'invoke',
+  runCheck: 'invoke',
 } satisfies Manifest<GitHost>;

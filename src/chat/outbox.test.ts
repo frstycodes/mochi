@@ -73,7 +73,8 @@ test('a failed or interrupted turn and a usage limit pause the queue; Resume or 
     let s = event(start, { threadId: id, ...e } as AgentEvent);
     assert.equal(thread(s, id).queuePause, pause);
     assert.deepEqual(dueQueued(s), [], `${pause}: nothing sent`);
-    s = run(s, { type: 'queued-resume', threadId: id });
+    // A limit's Resume is the agent's own (it holds every send until then); the others resume the queue.
+    s = pause === 'limit' ? event(run(s, { type: 'resume', threadId: id }), { threadId: id, type: 'turn-end', status: 'done' }) : run(s, { type: 'queued-resume', threadId: id });
     assert.equal(drafts(runQueue(s), id).length, 2, `${pause}: Resume sends the next one`);
     const sent = run(event(start, { threadId: id, ...e } as AgentEvent), { type: 'send', threadId: id, text: 'go on', reason: '' });
     assert.equal(thread(sent, id).queuePause, undefined, `${pause}: a send of yours clears the pause`);

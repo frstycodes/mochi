@@ -5,6 +5,7 @@ import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@
 import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
+import { claudeEventWindow } from '../../../src/usage/limits.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
@@ -181,9 +182,11 @@ export function createMapper(threadId: string, cwd: string) {
         return content.flatMap((block) => (block.type === 'tool_result' ? toolEnd(block as ToolResultBlock, message.tool_use_result) : []));
       }
       case 'rate_limit_event': {
-        const { status, resetsAt } = message.rate_limit_info;
-        if (status !== 'rejected') return [];
-        return [{ threadId, type: 'limit', ...(resetsAt !== undefined && { resetsAt: resetTime(resetsAt) }) }];
+        const info = message.rate_limit_info;
+        const window = claudeEventWindow(info);
+        if (info.status === 'allowed_warning') return window ? [{ threadId, type: 'limit-warning', window }] : [];
+        if (info.status !== 'rejected') return [];
+        return [{ threadId, type: 'limit', ...(info.resetsAt !== undefined && { resetsAt: resetTime(info.resetsAt) }), ...(window && { label: window.label }) }];
       }
       case 'result': {
         const status = isInterrupting ? 'interrupted' : message.subtype === 'success' ? 'done' : 'failed';

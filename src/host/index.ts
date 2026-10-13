@@ -9,6 +9,7 @@ import { pty as desktopPty } from './desktop/pty.ts';
 import { schedule as desktopSchedule } from './desktop/schedule.ts';
 import { settings as desktopSettings } from './desktop/settings.ts';
 import { sim as desktopSim } from './desktop/sim.ts';
+import { themes as desktopThemes } from './desktop/themes.ts';
 import { windows as desktopWindows } from './desktop/windows.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
 import { agent as webAgent } from './web/agent.ts';
@@ -22,6 +23,7 @@ import { pty as webPty } from './web/pty.ts';
 import { schedule as webSchedule } from './web/schedule.ts';
 import { settings as webSettings } from './web/settings.ts';
 import { sim as webSim } from './web/sim.ts';
+import { themes as webThemes } from './web/themes.ts';
 import { windows as webWindows } from './web/windows.ts';
 
 export type { HostBridge, Namespace } from './types/index.ts';
@@ -43,6 +45,7 @@ export const registry: Registry = {
   settings: { web: webSettings, desktop: desktopSettings },
   data: { web: webData, desktop: desktopData },
   schedule: { web: webSchedule, desktop: desktopSchedule },
+  themes: { web: webThemes, desktop: desktopThemes },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -63,4 +66,5 @@ export const host = {
   settings: pick('settings'),
   data: pick('data'),
   schedule: pick('schedule'),
+  themes: pick('themes'),
 } satisfies HostBridge & { isDesktop: boolean };
