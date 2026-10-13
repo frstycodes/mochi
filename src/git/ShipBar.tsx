@@ -3,6 +3,8 @@ import { ArrowUpRight, BranchUp, ChevronDown, ClockCircle, CloseCircle, MinusCir
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { PrStateIcon } from '@/icons/github';
+import type { RefStatus } from '../chat/refs';
 import { cn } from '@/lib/utils';
 import { host } from '../host';
 import type { CheckState, GitDiff, PrCheck, PrInfo } from '../host/types/git';
@@ -102,11 +104,14 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   );
 }
 
+const PR_STATUS: Record<string, RefStatus | undefined> = { OPEN: 'open', MERGED: 'merged', CLOSED: 'closed' };
+
 function PrLink({ pr }: { pr: PrInfo }) {
   return (
     <Button variant="ghost" size="sm" asChild className="min-w-0">
       <a href={pr.url} target="_blank" rel="noreferrer">
-        <span className="tabular text-success">#{pr.number}</span>
+        <PrStateIcon state={PR_STATUS[pr.state] ?? 'unknown'} />
+        <span className="tabular">#{pr.number}</span>
         <span className="truncate text-muted-foreground lowercase">{pr.state}</span>
         <ArrowUpRight data-icon="inline-end" className="text-subtle-foreground" />
       </a>

@@ -213,6 +213,7 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
     if (next) {
       const uuid = randomUUID();
       session.sent.push({ uuid, text: next.text });
+      session.mapper.sent(next.text).forEach(emit);
       yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid };
       continue;
     }

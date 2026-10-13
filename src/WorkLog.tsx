@@ -3,13 +3,13 @@ import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Eye, Flag, Global, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Eye, Flag, Global, Note, Server, TerminalSquare, X } from 'reicon-react';
 import { Spinner } from '@/components/ui/spinner';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
 import { PATCHES, RUNS, type RunResult } from './fixtures';
-import type { ActivityEntry } from './model';
+import type { ActivityEntry, AgentCommand } from './model';
 import { clock } from './progress';
 import { usePrefs } from './settings/prefs';
 import { eventLine, isApprovalChatter, parseTool, turnSummary, type ToolCall } from './summary';
@@ -20,8 +20,11 @@ import { Favicon, WebFetchRow, WebSearchRow } from './WebLinks';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
-/** One agent turn's work, folded to a line like Claude's: while live the line names the current action and rolls to each new one; when the turn ends it settles into a summary. */
-export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?: CurrentAction }) {
+/**
+ * One agent turn's work, folded to a line like Claude's: while live the line names the current action and rolls to each new one;
+ * when the turn ends it settles into a summary. `skills` describe the skills the turn used.
+ */
+export function WorkLog({ entries, skills = [], action }: { entries: ActivityEntry[]; skills?: AgentCommand[]; action?: CurrentAction }) {
   const [isOpen, setOpen] = useState(false);
   const isLive = !!action;
   const calls = entries.filter((e) => e.kind === 'tool').map((e) => parseTool(e.text));
@@ -66,6 +69,7 @@ export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?
             const isRunning = isLive && i === lastTool;
             if (call.verb === 'Search') return <WebSearchRow key={i} call={call} links={e.links} isRunning={isRunning} />;
             if (call.verb === 'Fetch') return <WebFetchRow key={i} call={call} links={e.links} isRunning={isRunning} />;
+            if (call.verb === 'Skill') return <SkillRow key={i} name={call.target} description={skills.find((s) => s.name === call.target)?.description} />;
             return <ToolRow key={i} call={call} isRunning={isRunning} files={files} />;
           })}
         </ol>
@@ -164,7 +168,7 @@ function TitleContent({ value }: { value: CurrentAction | string }) {
 
 const FAVICONS_SHOWN = 4;
 
-/** Favicons of the pages a search returned (stacked, each fading in as it arrives), the read page's, or the file's type icon. */
+/** Favicons of the pages a search returned (stacked, each fading in as it arrives), the read page's, the file's type icon, or a skill's or MCP server's glyph. */
 function ActionIcon({ action }: { action: CurrentAction }) {
   const { call, links = [] } = action;
   if (!call) return null;
@@ -184,6 +188,8 @@ function ActionIcon({ action }: { action: CurrentAction }) {
     );
   }
   if (call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write') return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-3.5 shrink-0" />;
+  if (call.verb === 'Skill') return <Note aria-hidden className="size-3.5 shrink-0 text-info" />;
+  if (call.verb === 'Mcp') return <Server aria-hidden className="size-3.5 shrink-0" />;
   return null;
 }
 
@@ -317,7 +323,19 @@ export function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning:
   );
 }
 
-const VERB_LABEL = { Read: 'Read', Edit: 'Edited', Write: 'Created', Run: 'Ran', Browser: 'Opened', Search: 'Searched', Fetch: 'Read' } satisfies Record<ToolCall['verb'], string>;
+const VERB_LABEL = { Read: 'Read', Edit: 'Edited', Write: 'Created', Run: 'Ran', Browser: 'Opened', Search: 'Searched', Fetch: 'Read', Skill: 'Using skill', Mcp: 'Called' } satisfies Record<ToolCall['verb'], string>;
+
+/** A skill the agent loaded: its name in the resolved-token colour and what it is for. */
+function SkillRow({ name, description }: { name: string; description?: string }) {
+  return (
+    <li className="flex h-7 min-w-0 items-center gap-2 px-2 type-meta">
+      <Note className="size-4 shrink-0 text-info" aria-hidden />
+      <span className="shrink-0 text-subtle-foreground">{VERB_LABEL.Skill}</span>
+      <span className="shrink-0 font-medium text-info">{name}</span>
+      {!!description && <span className="min-w-0 truncate text-muted-foreground" title={description}>{description}</span>}
+    </li>
+  );
+}
 
 // Past this many characters a command row expands to show the whole command.
 const LONG_COMMAND = 80;
@@ -325,11 +343,21 @@ const LONG_COMMAND = 80;
 function ToolGlyph({ call }: { call: ToolCall }) {
   if (call.verb === 'Run') return <TerminalSquare className="size-4 shrink-0 text-muted-foreground" />;
   if (call.verb === 'Browser') return <Global className="size-4 shrink-0 text-muted-foreground" />;
+  if (call.verb === 'Mcp') return <Server className="size-4 shrink-0 text-muted-foreground" />;
   return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-4 shrink-0" />;
 }
 
 function ToolTarget({ call }: { call: ToolCall }) {
   if (call.verb === 'Run') return <code className="min-w-0 truncate font-mono text-xs text-foreground" title={call.target}>{call.target}</code>;
+  if (call.verb === 'Mcp') {
+    const [server, tool = ''] = call.target.split(': ');
+    return (
+      <span className="flex min-w-0 gap-1" title={call.target}>
+        <span className="truncate text-subtle-foreground">{server}</span>
+        <span className="shrink-0 text-foreground">{tool}</span>
+      </span>
+    );
+  }
   const slash = call.target.lastIndexOf('/');
   return (
     <span className="flex min-w-0 font-mono text-xs" title={call.target}>

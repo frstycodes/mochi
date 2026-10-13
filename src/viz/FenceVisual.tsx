@@ -12,11 +12,13 @@ import { SortableTable } from './SortableTable';
 import { VisualFrame, type VisualSource } from './VisualFrame';
 import { WidgetVisual } from './WidgetVisual';
 import { FileCode } from '../files/FileCode';
+import { ChatLink } from '../chat/ChatLink';
+import { rehypeRefs, rehypeRelativeLinks } from '../chat/rehypeRefs';
 
-/** Streamdown hooks for agent messages: fenced visuals plus table, image and file-path overrides. Widgets need a VizThreadProvider above. */
+/** Streamdown hooks for chat messages: fenced visuals plus table, image, file-path and PR/issue link overrides. Widgets need a VizThreadProvider above. */
 export const VIZ_PLUGINS = { renderers: [{ language: [...VIZ_LANGUAGES], component: FenceVisual }] } satisfies PluginConfig;
 
-export const VIZ_COMPONENTS = { table: SortableTable, img: ImageVisual, inlineCode: FileCode } satisfies Components;
+export const VIZ_COMPONENTS = { table: SortableTable, img: ImageVisual, inlineCode: FileCode, a: ChatLink } satisfies Components;
 
 type SanitizeSchema = { protocols?: Record<string, string[] | undefined> };
 const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, SanitizeSchema];
@@ -26,7 +28,10 @@ const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, SanitizeSc
 export const VIZ_REHYPE_PLUGINS = [
   defaultRehypePlugins.raw,
   [sanitize, { ...schema, protocols: { ...schema.protocols, src: [...(schema.protocols?.src ?? []), 'data'] } }],
+  rehypeRelativeLinks,
   defaultRehypePlugins.harden,
+  // After harden: the links it adds point at refs and paths the chip and path renderers check themselves.
+  rehypeRefs,
 ] as NonNullable<StreamdownProps['rehypePlugins']>;
 
 function FenceVisual({ code, isIncomplete, language, meta }: CustomRendererProps) {

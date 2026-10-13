@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import os from 'node:os';
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillInput, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
@@ -105,7 +105,7 @@ export class CodexAdapter {
       const rpc = await server.client();
       await server.requireLogin(rpc);
       await this.open(server, rpc, threadId, options);
-      await this.turn(threadId, options.prompt, options.images);
+      await this.turn(threadId, options.prompt, options.images, options.skills);
     });
   }
 
@@ -115,9 +115,9 @@ export class CodexAdapter {
     await this.start(threadId, { ...options, permissionMode: 'review' });
   }
 
-  async send(threadId: string, text: string, images?: AgentImage[]) {
+  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[]) {
     if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
-    await this.report(threadId, () => this.turn(threadId, text, images));
+    await this.report(threadId, () => this.turn(threadId, text, images, skills));
   }
 
   async interrupt(threadId: string) {
@@ -240,18 +240,21 @@ export class CodexAdapter {
     if (this.threads.get(threadId)?.codexId === codexId) this.emit({ threadId, type: 'info', info: infoFromLists(mcp, skills, plugins) });
   }
 
-  private async turn(threadId: string, text: string, images: AgentImage[] = []) {
+  private async turn(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = []) {
     let live = this.threads.get(threadId)!;
     const rpc = await live.server.client();
     if (live.gen !== live.server.gen) {
       await this.open(live.server, rpc, threadId, live.options);
       live = this.threads.get(threadId)!;
     }
-    const skill = text.startsWith('/') ? skillInput(text, commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null))) : null;
-    const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...(skill ? [skill] : [])];
+    const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
+    const attached = skillInputs(text, skills, listed);
+    const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
     const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
+    // Codex reports no skill load of its own: an attached skill is loaded with the turn.
+    for (const event of skillEvents(threadId, typeof turnId === 'string' ? turnId : String(Date.now()), attached)) this.emit(event);
   }
 
   private async report(threadId: string, run: () => Promise<void>) {

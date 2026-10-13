@@ -36,7 +36,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'reasoning':
       return update((t) => log(t, { at: now, who, kind: 'reasoning', text: event.text }));
     case 'tool':
-      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.links && { links: event.links }) }));
+      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }) }));
       if (event.links) state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, text: event.text, links: event.links } : e)) }));
       if (!event.files?.length) return state;
       return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));

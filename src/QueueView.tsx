@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, BranchDown, BranchUp, CheckCircle, Clock, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, BranchDown, CheckCircle, Clock, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
   QuestionnaireTitle,
 } from '@/components/ui/questionnaire';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import { answerText, isMochiCard, type QueueItem, type QueueKind, type Thread } from './model';
 import { duration } from './progress';
@@ -36,8 +37,8 @@ import { useSendCiLog } from './notify/useSendCiLog';
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
   question: { icon: MessageQuestion, label: 'Question' },
-  review: { icon: BranchUp, label: 'Review' },
-  ci: { icon: BranchUp, label: 'CI failed' },
+  review: { icon: GitPullRequestIcon, label: 'Review' },
+  ci: { icon: GitPullRequestIcon, label: 'CI failed' },
   overlap: { icon: BranchDown, label: 'Overlap' },
   run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Setting2, label: 'Setting' },
