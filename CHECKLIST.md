@@ -258,6 +258,10 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 - [ ] Mochi runs checkable criteria itself in the thread's worktree when the agent claims one or goes idle; judged criteria read "claimed" until you accept them. All criteria green → Ready for review
 - [ ] The sidebar card's detail line is the report's headline (Ready for review, Needs you: …, Docs not done)
 - [ ] `get_report` for coordinator threads: criteria, files, open question as data
+- [ ] Ready for review is a state, not a question: shown on the report card, the sidebar card's detail and the ring phase; no `review` item in the composer's questionnaire tray (`endTurn` in `src/runtime/apply.ts` stops queueing one), so the composer stays a normal prompt and your next message just continues the thread
+- [ ] One honest primary action, "Mark done" (settles). A merge, when offered, is a separate "Merge #N" that runs `gh pr merge` as the profile's GitHub account, always confirmed (PR and merge method), destructive tier. PR state is never flipped locally (today `answer()` in `src/store/queue.ts` marks open PRs merged with no git call, and the button reads "Approve and merge")
+- [ ] No "Open thread" inside the thread itself; only in the Queue (`ReviewActions` in `src/QueueView.tsx`, `src/Orbit.tsx`, `src/review/ReviewView.tsx`)
+- [ ] Review uses a check/review icon, never the PR Octicon (that stays on PR chips)
 
 ### Progress
 - [ ] The ring shows phase plus criteria met, not a percentage: Planning → Building → Verifying → Ready for review → Settled, Needs you / Blocked over any phase; derived from events Mochi sees, not the agent's self-report. Card text "Building · 1/3"
@@ -267,7 +271,7 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 ### PRs
 1. Goals: drafting, chats without a goal, summary without a goal, the version rule, the settled record
 2. Duplicate check at drafting
-3. Report card and verification
+3. Report card and verification, including the review rework (ready for review as a state, Mark done, a real confirmed Merge #N)
 4. Collision from real edits
 5. Phases on the ring; remove sizes, weighted progress, ETA
 
