@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Search, Star } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +15,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
@@ -83,8 +82,8 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
 
 /**
  * The menu body for a `DropdownMenu`: starred models first (where stars apply), then one row per harness whose submenu lists its
- * models; typing filters every harness's models into one flat list. Below `md` the harness rows drill in instead of opening a
- * submenu beside the menu. `pending`: harnesses whose list hasn't arrived yet. `keepsOpen`: picking doesn't close (star mode).
+ * models; typing filters every harness's models into one flat list. Where a submenu can't sit beside the menu, or nothing can
+ * hover, the harness rows drill in instead. `pending`: harnesses whose list hasn't arrived yet. `keepsOpen`: picking doesn't close (star mode).
  */
 export function ModelMenu({
   models,
@@ -113,7 +112,7 @@ export function ModelMenu({
 }) {
   const space = useSpace();
   const notes = useHarnessNotes(space.id);
-  const isNarrow = useIsMobile();
+  const isNarrow = useSyncExternalStore(onDrillInChange, () => window.matchMedia(DRILL_IN).matches);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState<Provider | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -257,6 +256,15 @@ export function ModelMenu({
       {children}
     </DropdownMenuContent>
   );
+}
+
+// The menu (320px) and a submenu (288px) side by side, plus collision padding. `md` (768px) drilled in on a 758px pane with room to spare.
+const DRILL_IN = '(max-width: 639px), (hover: none)';
+
+function onDrillInChange(onChange: () => void) {
+  const query = window.matchMedia(DRILL_IN);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
 }
 
 function SearchResults({ found, isLoading, items }: { found: ModelOption[]; isLoading: boolean; items: (list: ModelOption[], hasMark?: boolean) => ReactNode }) {
