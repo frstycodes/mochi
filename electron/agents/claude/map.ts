@@ -44,10 +44,7 @@ export function createMapper(threadId: string, cwd: string) {
     if (!tool) return [];
     tools.delete(block.tool_use_id);
     if (AGENT_TOOLS.has(tool.name)) return agentEnd(block, result);
-    const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block) };
-    if (tool.name === 'Bash') end.output = tail(resultText(block));
-    const patch = !block.is_error && EDIT_TOOLS.has(tool.name) ? patchOf(tool.input, result) : undefined;
-    if (patch) end.patch = patch;
+    const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block, result) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
     if (links) end.links = links;
     const task = (result as { task?: { id?: unknown } } | undefined)?.task;
@@ -56,11 +53,14 @@ export function createMapper(threadId: string, cwd: string) {
     return [end, planFromTasks()];
   }
 
-  function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock) {
-    const outcome: { text: string; files?: string[]; exitCode?: number } = { text: describeTool(tool.name, tool.input, cwd) };
+  /** What a finished call reports, the thread's own or a subagent's: its line, edited files, a command's exit code and output tail, an edit's patch. */
+  function toolOutcome(tool: { name: string; input: Record<string, unknown> }, block: ToolResultBlock, result: unknown) {
+    const outcome: { text: string; files?: string[]; exitCode?: number; output?: string; patch?: string } = { text: describeTool(tool.name, tool.input, cwd) };
     const file = tool.input.file_path ?? tool.input.notebook_path;
     if (typeof file === 'string' && EDIT_TOOLS.has(tool.name) && !block.is_error) outcome.files = [path.relative(cwd, path.resolve(cwd, file))];
-    if (tool.name === 'Bash') outcome.exitCode = exitCode(block);
+    if (tool.name === 'Bash') Object.assign(outcome, { exitCode: exitCode(block), output: tail(resultText(block)) });
+    const patch = !block.is_error && EDIT_TOOLS.has(tool.name) ? patchOf(tool.input, result) : undefined;
+    if (patch) outcome.patch = patch;
     return outcome;
   }
 
@@ -83,7 +83,8 @@ export function createMapper(threadId: string, cwd: string) {
         if (block.type !== 'tool_use') return [];
         const input = block.input as Record<string, unknown>;
         tools.set(block.id, { name: block.name, input });
-        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input, cwd) } })];
+        const description = callDescription(block.name, input);
+        return [subagent(id, 'progress', { step: { id: block.id, phase: 'start', text: describeTool(block.name, input, cwd), ...(description && { description }) } })];
       });
     if (message.type !== 'user' || typeof message.message.content === 'string') return [];
     return message.message.content.flatMap((block): AgentEvent[] => {
@@ -92,7 +93,7 @@ export function createMapper(threadId: string, cwd: string) {
       const tool = tools.get(result.tool_use_id);
       if (!tool) return [];
       tools.delete(result.tool_use_id);
-      return [subagent(id, 'progress', { step: { id: result.tool_use_id, phase: 'end', ...toolOutcome(tool, result) } })];
+      return [subagent(id, 'progress', { step: { id: result.tool_use_id, phase: 'end', ...toolOutcome(tool, result, message.tool_use_result) } })];
     });
   }
 

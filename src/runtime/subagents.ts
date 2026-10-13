@@ -243,8 +243,11 @@ function withStep(steps: SubagentStep[], step: NonNullable<AgentSubagentEvent['s
   const done = {
     ...(step.files && { files: step.files }),
     ...(step.exitCode !== undefined && { exitCode: step.exitCode }),
+    ...(step.output !== undefined && { output: step.output }),
+    ...(step.patch && { patch: step.patch }),
   };
-  if (step.phase === 'start') return steps.some((s) => s.id === step.id) ? steps : [...steps, { id: step.id, text: step.text, isDone: false }];
+  const started = { id: step.id, text: step.text, isDone: false, ...(step.description && { description: step.description }) };
+  if (step.phase === 'start') return steps.some((s) => s.id === step.id) ? steps : [...steps, started];
   if (!steps.some((s) => s.id === step.id)) return [...steps, { id: step.id, text: step.text, isDone: true, ...done }];
   return steps.map((s) => (s.id === step.id ? { ...s, text: step.text, isDone: true, ...done } : s));
 }

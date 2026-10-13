@@ -69,7 +69,8 @@ export interface AgentSubagentEvent {
   /** One line on what it is doing now. */
   activity?: string;
   /** One of its own tool calls. */
-  step?: { id: string; phase: 'start' | 'end'; text: string; files?: string[]; exitCode?: number };
+  /** One of its tool calls, with the same extras as the thread's own (`description` on start; `output`, `patch` on end). */
+  step?: { id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string };
   /** Its latest message; `isDelta` appends to the one before. */
   message?: string;
   isDelta?: boolean;

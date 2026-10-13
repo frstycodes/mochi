@@ -298,7 +298,7 @@ export function childEvents(method: string, params: unknown, s: ThreadState, sub
   if (method !== 'item/started' && method !== 'item/completed') return [];
   const item = obj(p.item);
   if (item?.type === 'agentMessage') return method === 'item/completed' && typeof item.text === 'string' && item.text ? [progress({ message: item.text })] : [];
-  return mapItem(item, method === 'item/started' ? 'start' : 'end', s).flatMap((e) => (e.type === 'tool' ? [progress({ step: { id: e.id, phase: e.phase, text: e.text, ...(e.files && { files: e.files }), ...(e.exitCode !== undefined && { exitCode: e.exitCode }) } })] : []));
+  return mapItem(item, method === 'item/started' ? 'start' : 'end', s).flatMap((e) => (e.type === 'tool' ? [progress({ step: { id: e.id, phase: e.phase, text: e.text, ...(e.files && { files: e.files }), ...(e.exitCode !== undefined && { exitCode: e.exitCode }), ...(e.output !== undefined && { output: e.output }) } })] : []));
 }
 
 /** `/root/echo_hi` → "echo hi". */

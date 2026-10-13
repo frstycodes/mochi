@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotionConfig } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
@@ -18,6 +18,8 @@ import { hostname, type CurrentAction } from './agentPhase';
 import { loadViewerFile, openFromScope, useThreadFiles, type ThreadFiles } from './files/viewer';
 import { fileLink } from './terminal/links';
 import { describeCall } from './chat/describe';
+import { PREVIEW_KINDS } from './files/kinds';
+import { imageMime } from './files/previews';
 import { outputLines } from './chat/output';
 import { TooltipIconButton } from './ui';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
@@ -38,34 +40,46 @@ export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?
   const lastTool = entries.findLastIndex((e) => e.kind === 'tool');
   const title = action ? { key: `live:${action.label}`, value: action } : { key: 'done', value: turnSummary(entries) };
   const files = useThreadFiles();
+  const images = [...new Set(tools.map(toolCall).flatMap((c) => (c.verb === 'Read' && isImage(c.target) ? [c.target] : [])))].slice(0, THUMBS_SHOWN);
 
   return (
     <div data-file-scope className="-mx-2 flex flex-col">
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        onClick={() => setOpen((o) => !o)}
-        className="group/log flex h-7 cursor-default items-center gap-2 self-start rounded-lg px-2 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-      >
-        <LeadIcon state={action?.isWaiting ? 'waiting' : isLive ? 'live' : 'done'} isOpen={isOpen} />
-        <RollingTitle title={title} />
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          onClick={() => setOpen((o) => !o)}
+          className="group/log flex h-7 min-w-0 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+        >
+          <LeadIcon state={action?.isWaiting ? 'waiting' : isLive ? 'live' : 'done'} isOpen={isOpen} />
+          <RollingTitle title={title} />
+          <AnimatePresence initial={false}>
+            {!isLive && (edits.length > 0 || failed > 0) && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: 0.12 }} className="flex shrink-0 items-center gap-3 text-subtle-foreground">
+                {edits.length > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <FileStack paths={edits.map((c) => c.target)} />
+                    <DiffStat added={sum(edits, 'added')} removed={sum(edits, 'removed')} />
+                  </span>
+                )}
+                {failed > 0 && <span className="tabular text-destructive">{failed} failed</span>}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+        {/* Folded, the images it looked at stay in view like Claude's; open, each Read row shows its own. */}
         <AnimatePresence initial={false}>
-          {!isLive && (edits.length > 0 || failed > 0) && (
-            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: 0.12 }} className="flex shrink-0 items-center gap-3 text-subtle-foreground">
-              {edits.length > 0 && (
-                <span className="flex items-center gap-1.5">
-                  <FileStack paths={edits.map((c) => c.target)} />
-                  <DiffStat added={sum(edits, 'added')} removed={sum(edits, 'removed')} />
-                </span>
-              )}
-              {failed > 0 && <span className="tabular text-destructive">{failed} failed</span>}
+          {!isOpen && !!files && images.length > 0 && (
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="ml-auto flex shrink-0 items-center gap-1 pr-2">
+              {images.map((path) => (
+                <ImageThumb key={path} files={files} path={path} />
+              ))}
             </motion.span>
           )}
         </AnimatePresence>
-      </button>
+      </div>
       <Expand isOpen={isOpen}>
-        {/* Inside border: an outside ring would be cut off by the expander's clip. */}
-        <ol className="mx-2 mt-1 flex flex-col divide-y overflow-hidden rounded-xl border">
+        <CallList className="mx-2 mt-1">
           {entries.map((e, i) => {
             if (e.kind === 'reasoning') return <ThoughtRow key={i} entry={e} />;
             // The live title says what it waits on; once answered, the call's own row is the record.
@@ -73,14 +87,22 @@ export function WorkLog({ entries, action }: { entries: ActivityEntry[]; action?
             if (e.kind !== 'tool') return <EventRow key={i} entry={e} />;
             return <CallRow key={i} entry={e} isRunning={isLive && i === lastTool} files={files} />;
           })}
-        </ol>
+        </CallList>
       </Expand>
     </div>
   );
 }
 
-/** One call in an open work group: what it did in words, opening in place to the detail behind it. */
-function CallRow({ entry, isRunning, files }: { entry: ActivityEntry; isRunning: boolean; files: ThreadFiles | null }) {
+/** The bordered list of calls: an open work group, a subagent's log. Inside border: an outside ring would be cut off by an expander's clip. */
+export function CallList({ className, ...props }: ComponentProps<'ol'>) {
+  return <ol className={cn('flex flex-col divide-y overflow-hidden rounded-xl border', className)} {...props} />;
+}
+
+/** What a row needs from a call, whether the thread's own (`ActivityEntry`) or a subagent's (`SubagentStep`). */
+type ToolEntry = Pick<ActivityEntry, 'text' | 'description' | 'output' | 'exitCode' | 'patch' | 'links'>;
+
+/** One call: what it did in words, opening in place to the detail behind it. */
+export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunning: boolean; files: ThreadFiles | null }) {
   const [isOpen, setOpen] = useState(false);
   const call = toolCall(entry);
   const run = runOf(entry);
@@ -141,20 +163,20 @@ function CallRow({ entry, isRunning, files }: { entry: ActivityEntry; isRunning:
 }
 
 /** What a call opens to: the command and its output, the edit's diff, the file it read, the pages a search returned. */
-function callDetail(entry: ActivityEntry, call: ToolCall, files: ThreadFiles | null): ReactNode {
+function callDetail(entry: ToolEntry, call: ToolCall, files: ThreadFiles | null): ReactNode {
   if (call.verb === 'Run') return <RunOutput command={call.target} run={runOf(entry)} />;
   if (call.verb === 'Edit' || call.verb === 'Write') {
     const patch = entry.patch ?? PATCHES[call.target];
     return patch ? <DiffView patch={patch} /> : null;
   }
-  if (call.verb === 'Read') return files ? <FilePreview files={files} path={call.target} /> : null;
+  if (call.verb === 'Read' && files) return isImage(call.target) ? <ImageDetail files={files} path={call.target} /> : <FilePreview files={files} path={call.target} />;
   if (call.verb === 'Search') return entry.links?.length ? <LinkList links={entry.links} /> : null;
   if (call.verb === 'Fetch') return <LinkRow link={entry.links?.[0] ?? { url: call.target }} />;
   return null;
 }
 
 /** A live call's output and exit code, or the demo's scripted run for the same command. */
-function runOf(entry: ActivityEntry): RunResult | undefined {
+function runOf(entry: ToolEntry): RunResult | undefined {
   const call = parseTool(entry.text);
   if (call.verb !== 'Run') return undefined;
   if (entry.output === undefined && entry.exitCode === undefined) return RUNS[call.target];
@@ -211,6 +233,58 @@ function FilePreview({ files, path }: { files: ThreadFiles; path: string }) {
 }
 
 const PREVIEW_LINES = 40;
+const THUMBS_SHOWN = 3;
+
+const isImage = (path: string) => PREVIEW_KINDS.image.test(path) || PREVIEW_KINDS.svg.test(path);
+
+/** An image the agent read, small, opening in the viewer. */
+function ImageThumb({ files, path }: { files: ThreadFiles; path: string }) {
+  const url = useImageUrl(files, path);
+  const name = path.split('/').pop() ?? path;
+  return (
+    <button
+      type="button"
+      aria-label={`Open ${name}`}
+      data-file-link={path}
+      onClick={(e) => openFromScope(e.currentTarget, files)}
+      className="relative h-6 w-9 shrink-0 cursor-default overflow-hidden rounded-md bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] focus-visible:outline-2 focus-visible:outline-offset-2 dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
+    >
+      {!!url && <img src={url} alt="" className="size-full object-cover" />}
+    </button>
+  );
+}
+
+function ImageDetail({ files, path }: { files: ThreadFiles; path: string }) {
+  const url = useImageUrl(files, path);
+  if (!url) return <p className="type-caption text-subtle-foreground">Loading…</p>;
+  return (
+    <div className="flex justify-center overflow-hidden rounded-lg border bg-card p-3">
+      <img src={url} alt={path.split('/').pop()} className="max-h-64 max-w-full object-contain" />
+    </div>
+  );
+}
+
+/** A workspace image as an object URL, revoked when the row goes; `null` while it loads or when it can't be read. */
+function useImageUrl(files: ThreadFiles, path: string) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let next: string | undefined;
+    let isCurrent = true;
+    loadViewerFile({ source: 'workspace', ...files, ...fileLink(path) }).then(
+      (content) => {
+        if (!isCurrent) return;
+        next = URL.createObjectURL(new Blob([(content.kind === 'text' ? content.text : content.bytes) as BlobPart], { type: PREVIEW_KINDS.svg.test(path) ? 'image/svg+xml' : imageMime(path) }));
+        setUrl(next);
+      },
+      () => isCurrent && setUrl(null),
+    );
+    return () => {
+      isCurrent = false;
+      if (next) URL.revokeObjectURL(next);
+    };
+  }, [files, path]);
+  return url;
+}
 
 const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' } };
 
@@ -396,85 +470,10 @@ export function Expand({ isOpen, children }: { isOpen: boolean; children: ReactN
   );
 }
 
-export function ToolRow({ call, isRunning, files }: { call: ToolCall; isRunning: boolean; files: ThreadFiles | null }) {
-  const [isOpen, setOpen] = useState(false);
-  const patch = PATCHES[call.target];
-  const run = RUNS[call.target];
-  const isLongCommand = call.verb === 'Run' && (call.target.includes('\n') || call.target.length > LONG_COMMAND);
-  const detail = (call.verb === 'Edit' || call.verb === 'Write') && patch ? <DiffView patch={patch} /> : call.verb === 'Run' && (run || isLongCommand) ? <RunOutput command={call.target} run={run} /> : null;
-
-  const row = (
-    <>
-      <ToolGlyph call={call} />
-      <span className="shrink-0 text-subtle-foreground">{VERB_LABEL[call.verb]}</span>
-      <ToolTarget call={call} />
-      <span className="ml-auto flex shrink-0 items-center gap-2 pl-2">
-        {call.added !== undefined && <DiffStat added={call.added} removed={call.removed ?? 0} withBar />}
-        {call.verb === 'Run' && !isRunning && !!run && <ExitBadge run={run} />}
-      </span>
-    </>
-  );
-
-  const isFile = call.verb === 'Read' || call.verb === 'Edit' || call.verb === 'Write';
-
-  return (
-    <li className="group/tool flex flex-col">
-      <div className="flex min-w-0 items-center gap-0.5">
-        {detail ? (
-          <button
-            type="button"
-            aria-expanded={isOpen}
-            onClick={() => setOpen((o) => !o)}
-            className="flex h-7 min-w-0 flex-1 cursor-default items-center gap-2 rounded-lg px-2 text-left type-meta hover:bg-accent/60"
-          >
-            {row}
-          </button>
-        ) : (
-          <div className="flex h-7 min-w-0 flex-1 items-center gap-2 px-2 type-meta">{row}</div>
-        )}
-        {/* Keeps the stats column aligned with the file rows' open button. */}
-        {!!files && !isFile && <span aria-hidden className="size-6 shrink-0" />}
-        {!!files && isFile && (
-          <TooltipIconButton
-            label="Open in viewer"
-            hint={call.target}
-            data-file-link={call.target}
-            onClick={(e) => openFromScope(e.currentTarget, files)}
-            className="opacity-0 group-hover/tool:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-          >
-            <Eye />
-          </TooltipIconButton>
-        )}
-      </div>
-      {!!detail && (
-        <Expand isOpen={isOpen}>
-          <div className="pt-1 pb-2">{detail}</div>
-        </Expand>
-      )}
-    </li>
-  );
-}
-
-const VERB_LABEL = { Read: 'Read', Edit: 'Edited', Write: 'Created', Run: 'Ran', Browser: 'Opened', Search: 'Searched', Fetch: 'Read' } satisfies Record<ToolCall['verb'], string>;
-
-// Past this many characters a command row expands to show the whole command.
-const LONG_COMMAND = 80;
-
 function ToolGlyph({ call }: { call: ToolCall }) {
   if (call.verb === 'Run') return <TerminalSquare className="size-4 shrink-0 text-muted-foreground" />;
   if (call.verb === 'Browser') return <Global className="size-4 shrink-0 text-muted-foreground" />;
   return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-4 shrink-0" />;
-}
-
-function ToolTarget({ call }: { call: ToolCall }) {
-  if (call.verb === 'Run') return <code className="min-w-0 truncate font-mono text-xs text-foreground" title={call.target}>{call.target}</code>;
-  const slash = call.target.lastIndexOf('/');
-  return (
-    <span className="flex min-w-0 font-mono text-xs" title={call.target}>
-      <span className="truncate text-subtle-foreground">{call.target.slice(0, slash + 1)}</span>
-      <span className="shrink-0 text-foreground">{call.target.slice(slash + 1)}</span>
-    </span>
-  );
 }
 
 export function DiffStat({ added, removed, withBar }: { added: number; removed: number; withBar?: boolean }) {

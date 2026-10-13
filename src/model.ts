@@ -206,8 +206,11 @@ export interface SubagentStep {
   id: string;
   text: string;
   isDone: boolean;
+  description?: string;
   files?: string[];
   exitCode?: number;
+  output?: string;
+  patch?: string;
 }
 
 export interface LiveRun {
@@ -382,6 +385,7 @@ function rateLimiting(): Thread {
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts' },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run node -e "\\\n  const lua = require(\'fs\').readFileSync(\'packages/cache/bucket.lua\', \'utf8\');\\\n  console.log(lua.length)"' },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Read packages/cache/index.ts' },
+      { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Read src/logo.svg' },
       { at: at(s, 101), who: 'claude', kind: 'tool', text: 'Edit packages/cache/redis.ts  +38 −0' },
       { at: at(s, 104), who: 'claude', kind: 'tool', text: 'Run pnpm --filter cache test' },
     ],
@@ -637,7 +641,7 @@ export function seedQueue(): QueueItem[] {
 }
 
 export const FAKE_TOOLS: Record<string, string[]> = {
-  rl5: ['Search ioredis cluster evalsha NOSCRIPT retry', 'Run pnpm --filter cache add ioredis', 'Search upstash ratelimit sliding window vs token bucket', 'Read packages/cache/index.ts', 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts', 'Search redis token bucket rate limiter lua script atomic', 'Edit packages/cache/redis.ts  +12 −2', 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
+  rl5: ['Search ioredis cluster evalsha NOSCRIPT retry', 'Run pnpm --filter cache add ioredis', 'Search upstash ratelimit sliding window vs token bucket', 'Read packages/cache/index.ts', 'Read src/logo.svg', 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts', 'Search redis token bucket rate limiter lua script atomic', 'Edit packages/cache/redis.ts  +12 −2', 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
   rl6: ['Write apps/api/middleware/ratelimit.ts', 'Edit apps/api/gateway.ts  +6 −1', 'Run pnpm --filter api test ratelimit'],
   rl7: ['Edit packages/db/schema/limits.ts  +14 −0', 'Edit apps/api/middleware/ratelimit.ts  +22 −3'],
   rl8: ['Write scripts/load/ratelimit.k6.js', 'Run k6 run scripts/load/ratelimit.k6.js'],
