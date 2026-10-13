@@ -86,7 +86,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
       />
       {body}
       {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} />}
-      <div className="pointer-events-none absolute inset-x-0 top-12 bottom-36 z-30 overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-12 bottom-36 z-30">
         <PipLayer thread={thread} />
       </div>
     </div>

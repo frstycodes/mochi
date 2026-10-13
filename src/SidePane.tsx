@@ -75,7 +75,7 @@ function TabStrip({ thread, tabs, active, inSplits }: { thread: Thread; tabs: Pa
     [next[from], next[to]] = [next[to], next[from]];
     reorder(next);
   };
-  const canPop = !!active && active.kind !== 'new';
+  const canPop = !!active && active.kind !== 'new' && active.kind !== 'browser';
 
   return (
     <div ref={stripRef} data-pane-strip={thread.id} className="app-drag flex h-11 shrink-0 items-center gap-1 px-2">

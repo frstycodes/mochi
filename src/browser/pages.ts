@@ -154,8 +154,19 @@ if (host.isDesktop)
       const { level, message, source, line } = event;
       updatePage(key, { console: [...(pages.get(key)?.console ?? []), { level, message, source, line }].slice(-CONSOLE_LIMIT) });
     } else if (event.type === 'devtools') updatePage(key, { devtools: event.mode });
-    else openListener?.(key, event.url);
+    else if (event.type === 'open') openListener?.(key, event.url);
   });
+
+const viewports = new Map<string, { width: number; height: number }>();
+
+/** The CSS size the page last had on screen; the floating window shows it at that size, scaled down. */
+export function rememberViewport(key: string, viewport: { width: number; height: number }) {
+  viewports.set(key, viewport);
+}
+
+export function viewportOf(key: string) {
+  return viewports.get(key);
+}
 
 function subscribe(listener: () => void) {
   listeners.add(listener);

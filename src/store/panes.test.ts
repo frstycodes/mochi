@@ -73,3 +73,13 @@ test('a popped-out open adds a floating tab without opening the pane or changing
   assert.deepEqual([p.isOpen, p.activeTab], [false, 'a']);
   assert.deepEqual(p.tabs.at(-1), { id: p.tabs.at(-1)!.id, kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true, url: undefined, file: undefined });
 });
+
+test("a background tab leaves the pane closed and your tab in front, and a thread with no pane gets a closed one", () => {
+  const fresh = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:3000', isBackground: true });
+  assert.equal(fresh.isOpen, false);
+  assert.equal(fresh.activeTab, fresh.tabs[0].id);
+  const beside = run(pane({ activeTab: 'b', isOpen: true }), { type: 'pane-open-tab', threadId: 't', kind: 'browser', isBackground: true });
+  assert.equal(beside.isOpen, true);
+  assert.equal(beside.activeTab, 'b');
+  assert.equal(beside.tabs.length, 4);
+});

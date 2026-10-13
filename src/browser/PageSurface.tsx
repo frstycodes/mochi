@@ -9,7 +9,7 @@ import { PreviewContext } from '../layout/SplitContext';
 import { pickDemoElement } from './actions';
 import { DemoPage } from './DemoPage';
 import { DEVICES, fitDevice } from './devices';
-import { emulationOf, ensureView, type Page } from './pages';
+import { emulationOf, ensureView, rememberViewport, type Page } from './pages';
 
 // Open overlays the native view would paint over. Tooltips are left out: they'd blink the page on every hover.
 const OVERLAYS = '[role=dialog], [role=menu], [role=listbox], [data-slot=popover-content], [data-slot=hover-card-content]';
@@ -23,6 +23,9 @@ export function PageSurface({ thread, pageId, page, isDriving, className }: { th
   useNativeView(frameRef, page, device);
   useEmulation(page, fit);
   useEffect(() => void ensureView(pageId, thread.spaceId), [pageId, thread.spaceId]);
+  useEffect(() => {
+    if (size.w > 0 && size.h > 0) rememberViewport(pageId, { width: size.w, height: size.h });
+  }, [pageId, size.w, size.h]);
 
   return (
     <div ref={frameRef} className={cn('relative h-full overflow-hidden bg-background', isDriving && 'ring-2 ring-foreground/25 ring-inset', !!device && 'bg-muted/40', className)}>

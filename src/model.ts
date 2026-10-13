@@ -297,7 +297,8 @@ export interface Pane {
   isOpen: boolean;
   tabs: PaneTab[];
   activeTab: string;
-  driver?: Provider;
+  /** The browser tab the thread's agent last drove; it floats while the agent works and the tab is off screen. */
+  drivenTab?: string;
 }
 
 export function seedPanes(): Pane[] {
@@ -306,7 +307,7 @@ export function seedPanes(): Pane[] {
       threadId: 'adm',
       isOpen: true,
       activeTab: 'adm-browser',
-      driver: 'codex',
+      drivenTab: 'adm-browser',
       tabs: [
         { id: 'adm-browser', kind: 'browser', title: 'API usage', url: 'localhost:3000/admin/usage' },
         { id: 'adm-changes', kind: 'changes' },

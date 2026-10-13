@@ -472,12 +472,40 @@
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* The soft blurred patch behind the PiP's hover controls, like Codex: blur that fades out from the corner. */
-.pip-blur {
-  backdrop-filter: blur(14px);
-  background: oklch(0.18 0.01 285 / 0.55);
-  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, black 50%, transparent 90%);
-  mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, black 50%, transparent 90%);
+/*
+ * The PiP's hover scrim: a progressive blur, strongest under the buttons and spilling past the window's corner; the icons carry their own shadow.
+ * Centred on the buttons, every layer reaches transparent before its box edge, or the edge shows as a hard line.
+ * The strongest layer stays fully opaque out past the window's corner: a partly masked blur is a crossfade, so a sharp edge
+ * under it ghosts through.
+ * Each layer (2/4/8px) blurs more over a smaller radius, so the blur ramps instead of ending at one edge.
+ * It fades in by animating the blur itself, never opacity: a backdrop-filter under opacity < 1 blurs only its own layer.
+ */
+.pip-scrim > span {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transition: backdrop-filter 150ms;
+}
+.pip-scrim > :nth-child(1) {
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, black 50%, transparent);
+}
+.pip-scrim > :nth-child(2) {
+  mask-image: radial-gradient(ellipse 48% 48% at 50% 50%, black 60%, transparent);
+}
+.pip-scrim > :nth-child(3) {
+  mask-image: radial-gradient(ellipse 42% 43% at 50% 50%, black 75%, transparent);
+}
+:hover > .pip-scrim > :nth-child(1),
+:focus-within > .pip-scrim > :nth-child(1) {
+  backdrop-filter: blur(2px);
+}
+:hover > .pip-scrim > :nth-child(2),
+:focus-within > .pip-scrim > :nth-child(2) {
+  backdrop-filter: blur(4px);
+}
+:hover > .pip-scrim > :nth-child(3),
+:focus-within > .pip-scrim > :nth-child(3) {
+  backdrop-filter: blur(8px);
 }
 
 /* Toggling the side pane animates the panels' flex-grow; dragging the handle never does. */

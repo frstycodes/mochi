@@ -9,7 +9,7 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  /** `isPopped` adds it as a floating window, `isBackground` as a docked tab; both leave the pane and its selection as they are. */
+  /** `isPopped` adds it as a floating window, `isBackground` as a docked tab; both leave the pane and its selection as they are (a thread with no pane gets a closed one). */
   | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean; isBackground?: boolean }
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   /** The thread's docked tab of this kind, selected with the pane open; a new one when there is none. */
@@ -18,6 +18,7 @@ export type PanesAction =
   | { type: 'pane-close-tabs'; threadId: string; tabIds: string[] }
   | { type: 'pane-restore'; pane: Pane }
   | { type: 'pane-pop'; threadId: string; tabId: string; isPopped: boolean }
+  | { type: 'pane-drive'; threadId: string; tabId: string | undefined }
   | { type: 'pane-reorder'; threadId: string; order: string[] }
   | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> }
   /** The thread's Agents tab, selected, with this agent expanded. */
@@ -40,7 +41,8 @@ export function panesReducer(state: State, action: Action): State {
     }
     case 'pane-open-tab': {
       const thread = state.threads.find((t) => t.id === action.threadId);
-      const existing = state.panes.find((p) => p.threadId === action.threadId) ?? newPane(action.threadId);
+      const current = state.panes.find((p) => p.threadId === action.threadId);
+      const existing = current ?? newPane(action.threadId);
       const tab: PaneTab = {
         id: nextTabId(existing.tabs),
         kind: action.kind,
@@ -50,7 +52,10 @@ export function panesReducer(state: State, action: Action): State {
         ...(action.visual && { visual: action.visual }),
       };
       if (action.isPopped) return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), { ...existing, tabs: [...existing.tabs, { ...tab, isPopped: true }] }] };
-      if (action.isBackground) return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), { ...existing, tabs: [...existing.tabs, tab] }] };
+      if (action.isBackground) {
+        const pane = current ? { ...current, tabs: [...current.tabs, tab] } : { threadId: action.threadId, isOpen: false, tabs: [tab], activeTab: tab.id };
+        return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
+      }
       const tabs = existing.tabs.flatMap((t) => (t.kind !== 'new' ? [t] : t.id === existing.activeTab ? [tab] : []));
       const pane = { ...existing, isOpen: true, tabs: tabs.includes(tab) ? tabs : [...tabs, tab], activeTab: tab.id };
       return { ...state, panes: [...state.panes.filter((p) => p.threadId !== action.threadId), pane] };
@@ -64,6 +69,8 @@ export function panesReducer(state: State, action: Action): State {
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, isOpen: true, activeTab: action.tabId })) };
     case 'pane-select-tab':
       return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, activeTab: action.tabId })) };
+    case 'pane-drive':
+      return { ...state, panes: mapPane(state.panes, action.threadId, (p) => ({ ...p, drivenTab: action.tabId })) };
     case 'pane-pop':
       return {
         ...state,
@@ -127,7 +134,8 @@ function loadPanes(): Pane[] {
   try {
     const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
     const panes: Pane[] = raw ? JSON.parse(raw) : [];
-    return panes.map((p) => ({ ...p, tabs: p.tabs.filter((t) => PANE_TAB_KINDS.includes(t.kind)) }));
+    // Browser tabs float only while an agent drives them, so an old manual pop-out goes back in the pane.
+    return panes.map((p) => ({ ...p, tabs: p.tabs.filter((t) => PANE_TAB_KINDS.includes(t.kind)).map((t) => (t.kind === 'browser' ? { ...t, isPopped: false } : t)) }));
   } catch {
     return [];
   }
