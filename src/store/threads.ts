@@ -1,4 +1,6 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
+import type { CheckRun } from '../host/types/git.ts';
+import type { DraftedCriterion } from '../utility/prompts.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type QueuedMessage, type Similar, type Source, type Step, type StepStatus, type Thread, type TurnReport } from '../model.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { sourcePrompt } from '../sources.ts';
@@ -76,7 +78,8 @@ export type ThreadsAction =
   | { type: 'drift-keep'; threadId: string }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
   /** The background model's goal for a thread that had none; dropped when one was set meanwhile or you removed it. */
-  | { type: 'goal-drafted'; threadId: string; outcome: string; criteria: string[]; similar?: Similar[] }
+  | { type: 'goal-drafted'; threadId: string; outcome: string; criteria: DraftedCriterion[]; similar?: Similar[] }
+  | { type: 'criterion-check'; threadId: string; criterionId: string; result: CheckRun | 'running' }
   | { type: 'similar-dismiss'; threadId: string; otherId: string }
   | { type: 'goal-remove'; threadId: string }
   | { type: 'criterion-claim'; threadId: string; criterionId: string; evidence: string; by: Provider }
@@ -201,6 +204,8 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => setDraftedGoal(t, action.outcome, action.criteria, action.similar ?? [], state.now)) };
     case 'similar-dismiss':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, similar: t.similar?.filter((s) => s.threadId !== action.otherId) })) };
+    case 'criterion-check':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => checkCriterion(t, action, state.now)) };
     case 'criterion-claim':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => claimCriterion(t, action, state.now)) };
     case 'report':
@@ -515,11 +520,21 @@ function addSource(state: State, action: Extract<Action, { type: 'source-add' }>
 
 const titleFrom = (text: string) => (text.length > 48 ? `${text.slice(0, 47)}…` : text);
 
-function setDraftedGoal(t: Thread, outcome: string, criteria: string[], similar: Similar[], now: number): Thread {
+function setDraftedGoal(t: Thread, outcome: string, criteria: DraftedCriterion[], similar: Similar[], now: number): Thread {
   if (t.goal || t.isGoalOff) return t;
   const n = (t.revisions.at(-1)?.n ?? 0) + 1;
-  const set = { ...t, goal: outcome, ...(similar.length && { similar }), criteria: criteria.map((text, i) => ({ id: `${t.id}-c${n}-${i}`, text })), revisions: [...t.revisions, { n, at: now, label: 'Goal drafted', by: 'harness' as const, diff: [`+ Goal: ${outcome}`, ...criteria.map((c) => `+ Done when: ${c}`)] }] };
+  const set = { ...t, goal: outcome, ...(similar.length && { similar }), criteria: criteria.map((c, i) => ({ id: `${t.id}-c${n}-${i}`, ...c })), revisions: [...t.revisions, { n, at: now, label: 'Goal drafted', by: 'harness' as const, diff: [`+ Goal: ${outcome}`, ...criteria.map((c) => `+ Done when: ${c.text}`)] }] };
   return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal: ${outcome}` });
+}
+
+function checkCriterion(t: Thread, action: Extract<Action, { type: 'criterion-check' }>, now: number): Thread {
+  const criterion = t.criteria?.find((c) => c.id === action.criterionId);
+  if (!criterion) return t;
+  const { result } = action;
+  const check = result === 'running' ? { status: 'running' as const, at: now } : { status: result.exitCode === 0 ? ('passed' as const) : ('failed' as const), at: now, ms: result.ms, output: result.output };
+  const checked = { ...t, criteria: t.criteria!.map((c) => (c.id === criterion.id ? { ...c, check } : c)) };
+  if (check.status === 'running') return checked;
+  return log(checked, { at: now, who: 'harness', kind: 'event', text: `Check ${check.status}: ${criterion.text}`, detail: `\`${criterion.command}\`` });
 }
 
 function claimCriterion(t: Thread, action: Extract<Action, { type: 'criterion-claim' }>, now: number): Thread {

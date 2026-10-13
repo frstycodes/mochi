@@ -682,7 +682,7 @@ function GoalSection({ thread }: { thread: Thread }) {
             </PopoverTrigger>
           </div>
           <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
-          {!!thread.criteria?.length && <CriteriaList criteria={thread.criteria} />}
+          {!!thread.criteria?.length && <CriteriaList thread={thread} />}
           <div className="flex items-end justify-between gap-2">
             <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
             <span className="tabular pb-1 type-caption text-subtle-foreground">

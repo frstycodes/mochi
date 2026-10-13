@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
+import { isMet } from '../model.ts';
 import { parseOutcome } from '../utility/prompts.ts';
 import { goalDraftRequest, localGoalDraft } from './draft.ts';
 import { draftFrom } from './edit.ts';
@@ -11,7 +12,7 @@ test('parseOutcome reads a task with criteria, a chat, and rejects anything else
   assert.deepEqual(parseOutcome('```json\n{"kind":"task","outcome":"Dark mode toggle in settings.","criteria":["Toggle switches theme"," ","pnpm test passes","a","b"]}\n```'), {
     kind: 'task',
     outcome: 'Dark mode toggle in settings',
-    criteria: ['Toggle switches theme', 'pnpm test passes', 'a', 'b'],
+    criteria: [{ text: 'Toggle switches theme' }, { text: 'pnpm test passes' }, { text: 'a' }, { text: 'b' }],
     similar: [],
   });
   assert.deepEqual(parseOutcome('{"kind":"chat","outcome":"","criteria":[]}'), { kind: 'chat', outcome: '', criteria: [], similar: [] });
@@ -63,7 +64,7 @@ test('a report counts until you write again; rewording a criterion drops its cla
   const state = { ...initialThreads(), queue: [], spaceId: 'latitude', views: {} } as unknown as State;
   let s = threadsReducer(state, { type: 'create', title: 'add retry-after', provider: 'claude', project: null, isLive: true });
   const id = s.threads.at(-1)!.id;
-  s = threadsReducer(s, { type: 'goal-drafted', threadId: id, outcome: '429s carry Retry-After', criteria: ['Header present', 'Tests pass'] });
+  s = threadsReducer(s, { type: 'goal-drafted', threadId: id, outcome: '429s carry Retry-After', criteria: [{ text: 'Header present' }, { text: 'Tests pass' }] });
   const [first] = s.threads.at(-1)!.criteria!;
   s = threadsReducer(s, { type: 'criterion-claim', threadId: id, criterionId: first.id, evidence: 'curl shows it', by: 'claude' });
   s = threadsReducer(s, { type: 'report', threadId: id, report: { by: 'claude', decisions: [], left: ['Tests'] } });
@@ -75,4 +76,23 @@ test('a report counts until you write again; rewording a criterion drops its cla
   draft.criteria[0].text = 'Header present on every 429';
   s = threadsReducer(s, { type: 'edit-goal', threadId: id, draft });
   assert.equal(s.threads.at(-1)!.criteria![0].claim, undefined);
+});
+
+test('a failed check outweighs a claim; a passed one meets the criterion; changing the command resets it', () => {
+  assert.deepEqual(parseOutcome('{"kind":"task","outcome":"x","criteria":[{"text":"Tests pass","command":" pnpm test "},{"text":"Docs"},"Plain",{"command":"orphan"}]}')!.criteria, [{ text: 'Tests pass', command: 'pnpm test' }, { text: 'Docs' }, { text: 'Plain' }]);
+  const state = { ...initialThreads(), queue: [], spaceId: 'latitude', views: {} } as unknown as State;
+  let s = threadsReducer(state, { type: 'create', title: 'fix the tests', provider: 'claude', project: null, isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = threadsReducer(s, { type: 'goal-drafted', threadId: id, outcome: 'Tests green', criteria: [{ text: 'Tests pass', command: 'pnpm test' }] });
+  const [c] = s.threads.at(-1)!.criteria!;
+  s = threadsReducer(s, { type: 'criterion-claim', threadId: id, criterionId: c.id, evidence: 'ran it', by: 'claude' });
+  s = threadsReducer(s, { type: 'criterion-check', threadId: id, criterionId: c.id, result: { exitCode: 1, output: '1 failing', ms: 900 } });
+  assert.equal(isMet(s.threads.at(-1)!.criteria![0]), false);
+  assert.equal(s.threads.at(-1)!.activity.at(-1)!.text, 'Check failed: Tests pass');
+  s = threadsReducer(s, { type: 'criterion-check', threadId: id, criterionId: c.id, result: { exitCode: 0, output: 'ok', ms: 900 } });
+  assert.equal(isMet(s.threads.at(-1)!.criteria![0]), true);
+  const draft = draftFrom(s.threads.at(-1)!);
+  draft.criteria[0].command = 'pnpm vitest run';
+  s = threadsReducer(s, { type: 'edit-goal', threadId: id, draft });
+  assert.deepEqual(s.threads.at(-1)!.criteria![0], { id: c.id, text: 'Tests pass', command: 'pnpm vitest run' });
 });

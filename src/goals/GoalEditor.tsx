@@ -15,7 +15,7 @@ import { getPrefs } from '../settings/prefs';
 import type { Size, Thread } from '../model';
 import { useHarness } from '../store';
 import { StepStatusIcon, TooltipIconButton } from '../ui';
-import { applyDraft, draftFrom, type DraftStep, type GoalDraft } from './edit';
+import { applyDraft, draftFrom, type DraftCriterion, type DraftStep, type GoalDraft } from './edit';
 import { templatesFor } from './templates';
 import { goalPrompt, parseSteps } from '../utility/prompts';
 import { useDraft } from '../utility/useDraft';
@@ -91,7 +91,8 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
           <ul className="flex flex-col gap-1">
             {draft.criteria.map((c, i) => (
               <li key={c.id ?? `new-${i}`} className="flex items-center gap-1.5">
-                <Input value={c.text} onChange={(e) => setCriterion(i, e.target.value)} aria-label={`Criterion ${i + 1}`} className="h-7 min-w-0 flex-1" />
+                <Input value={c.text} onChange={(e) => setCriterion(i, { text: e.target.value })} aria-label={`Criterion ${i + 1}`} className="h-7 min-w-0 flex-1" />
+                <Input value={c.command ?? ''} onChange={(e) => setCriterion(i, { command: e.target.value })} placeholder="Check command" aria-label={`Criterion ${i + 1} check command`} className="h-7 w-40 font-mono type-caption" />
                 <TooltipIconButton label="Remove criterion" hint="Done no longer needs this" onClick={() => removeCriterion(i)}>
                   <Trash3 />
                 </TooltipIconButton>
@@ -194,7 +195,7 @@ function useGoalDraft(thread: Thread) {
   const [draft, setDraft] = useState<GoalDraft>(() => draftFrom(thread));
   const setGoal = (goal: string) => setDraft((d) => ({ ...d, goal }));
   // Blank rows can stay while you type: `applyDraft` skips them.
-  const setCriterion = (i: number, text: string) => setDraft((d) => ({ ...d, criteria: d.criteria.map((c, j) => (j === i ? { ...c, text } : c)) }));
+  const setCriterion = (i: number, patch: Partial<DraftCriterion>) => setDraft((d) => ({ ...d, criteria: d.criteria.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
   const removeCriterion = (i: number) => setDraft((d) => ({ ...d, criteria: d.criteria.filter((_, j) => j !== i) }));
   const addCriterion = () => setDraft((d) => ({ ...d, criteria: [...d.criteria, { text: '' }] }));
   const updateStep = (i: number, patch: Partial<DraftStep>) => setDraft((d) => ({ ...d, steps: d.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));

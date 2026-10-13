@@ -41,7 +41,7 @@ test('a new thread has no goal until one is drafted; a draft never replaces a go
   assert.deepEqual(thread(s, id).revisions, []);
   s = run(s, { type: 'send', threadId: id, text: 'fix the login bug on the signup page', drift: 'on-goal', reason: 'No goal yet' });
   assert.equal(thread(s, id).goal, '', 'sending never sets the goal');
-  s = run(s, { type: 'goal-drafted', threadId: id, outcome: 'Signup login bug fixed', criteria: ['Signing up then logging in works', 'pnpm test passes'] });
+  s = run(s, { type: 'goal-drafted', threadId: id, outcome: 'Signup login bug fixed', criteria: [{ text: 'Signing up then logging in works' }, { text: 'pnpm test passes', command: 'pnpm test' }] });
   const t = thread(s, id);
   assert.deepEqual([t.goal, t.criteria!.map((c) => c.text), t.revisions.map((r) => [r.n, r.label, r.by])], ['Signup login bug fixed', ['Signing up then logging in works', 'pnpm test passes'], [[1, 'Goal drafted', 'harness']]]);
   assert.equal(t.title, 'hi', 'the title is not the goal');

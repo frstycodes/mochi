@@ -197,6 +197,10 @@ export const git: GitHost = {
     const { files, ...diff } = await git.diff(cwd, 'branch');
     return { ...diff, files: files.slice(0, (n % files.length) + 1) };
   },
+  async runCheck(_cwd, command) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return { exitCode: 0, output: `$ ${command}\n(demo) passed`, ms: 1200 };
+  },
   async forkWorktree(_cwd, threadId) {
     return `~/.harness/worktrees/demo/${threadId}`;
   },

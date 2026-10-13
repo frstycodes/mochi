@@ -47,7 +47,12 @@ export interface Criterion {
   command?: string;
   /** The agent says it's met (`claim_criterion`), with one line of evidence; checking it is yours or Mochi's. */
   claim?: { evidence: string; at: number; by: Provider };
+  /** Mochi ran `command` in the worktree when you asked; a failed check outweighs a claim. */
+  check?: { status: 'running' | 'passed' | 'failed'; at: number; ms?: number; output?: string };
 }
+
+/** Met when its check passed, or the agent claimed it and no check failed since. */
+export const isMet = (c: Criterion) => c.check?.status === 'passed' || (!!c.claim && c.check?.status !== 'failed');
 
 /** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
 export interface TurnReport {

@@ -155,6 +155,16 @@ export interface GitHost {
   checkpointDiff(cwd: string, threadId: string, n: number): Promise<GitDiff>;
   /** New worktree for `threadId` on `branch`, starting from `from`'s checkpoint, or from `cwd`'s HEAD without one. */
   forkWorktree(cwd: string, threadId: string, branch: string, from?: { threadId: string; n: number }): Promise<string>;
+  /** Runs a goal criterion's check command in the worktree with your shell's PATH; never throws for a failing command. */
+  runCheck(cwd: string, command: string): Promise<CheckRun>;
+}
+
+export interface CheckRun {
+  /** null when it was killed (timed out). */
+  exitCode: number | null;
+  /** The output's tail, stdout and stderr interleaved. */
+  output: string;
+  ms: number;
 }
 
 export interface RewindPreview {
@@ -190,4 +200,5 @@ export const gitMethods = {
   rewindPreview: 'invoke',
   checkpointDiff: 'invoke',
   forkWorktree: 'invoke',
+  runCheck: 'invoke',
 } satisfies Manifest<GitHost>;
