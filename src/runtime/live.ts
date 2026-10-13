@@ -1,6 +1,6 @@
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
-import type { Provider, Thread } from '../model.ts';
+import { firstPrompt, type Provider, type Thread } from '../model.ts';
 import { startWorkspace } from '../git/workspace.ts';
 import { sourcePrompt } from '../sources.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -28,7 +28,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'sidechat-promote':
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { workspace: startWorkspace(t.repo) }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), firstPrompt(t), { workspace: startWorkspace(t.repo) }));
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];

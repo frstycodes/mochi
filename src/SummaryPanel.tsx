@@ -28,7 +28,8 @@ import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
 import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
-import { GoalEditor } from './goals/GoalEditor';
+import { openGoalEditor } from './goals/GoalEditor';
+import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
 import { burnSeries, clock, duration, minutesLeft, progressAt } from './progress';
 import { useHarness } from './store';
@@ -531,7 +532,6 @@ function GoalSection({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const [isEditing, setEditing] = useState(false);
   const live = progressAt(thread, state.now, true);
   const eta = minutesLeft(thread, state.now);
   const latest = thread.revisions[thread.revisions.length - 1];
@@ -550,7 +550,7 @@ function GoalSection({ thread }: { thread: Thread }) {
             </Badge>
             <span className="flex-1" />
             {/* z-10 lifts it above the stretched open-timeline button. */}
-            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => setEditing(true)}>
+            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => openGoalEditor(thread.id)}>
               <Edit />
             </Button>
             <PopoverTrigger asChild>
@@ -560,6 +560,7 @@ function GoalSection({ thread }: { thread: Thread }) {
             </PopoverTrigger>
           </div>
           <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
+          {!!thread.criteria?.length && <CriteriaList criteria={thread.criteria} />}
           <div className="flex items-end justify-between gap-2">
             <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
             <span className="tabular pb-1 type-caption text-subtle-foreground">
@@ -603,7 +604,6 @@ function GoalSection({ thread }: { thread: Thread }) {
         </div>
         <GoalTimeline thread={thread} />
       </PopoverContent>
-      {isEditing && <GoalEditor thread={thread} onClose={() => setEditing(false)} />}
     </Popover>
   );
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { firstPrompt } from '../model.ts';
 import { initialQueue } from '../store/queue.ts';
 import type { State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
@@ -14,7 +15,8 @@ test('New thread from a finished goal settles it, keeps its open-PR review queue
   assert.equal(auth.status, 'settled');
   assert.equal(auth.settledAt, s.now);
   assert.deepEqual(s.queue.filter((q) => q.threadId === 'auth').map((q) => q.kind), ['review']);
-  assert.equal(created.goal, 'Add dark mode to settings');
+  assert.equal(firstPrompt(created), 'Add dark mode to settings');
+  assert.equal(created.goal, '', 'the goal is drafted after, never copied');
   assert.equal(created.repo?.project, 'latitude');
   assert.equal(created.activity[0].text, 'Branched off feat/better-auth');
   assert.deepEqual(s.views.latitude, { kind: 'thread', id: created.id });
@@ -49,7 +51,7 @@ test('a goal edit is one revision with a diff per change, and no change makes no
   rest[0].isRemoved = true;
   const steps = draft.steps.filter((s) => s !== first);
   steps.push(first, { title: 'Alert on 429 spikes', size: 1, gate: true, isRemoved: false, isLocked: false });
-  const next = applyDraft(rl, { goal: 'Rate limit every key', steps }, 900);
+  const next = applyDraft(rl, { goal: 'Rate limit every key', criteria: [], steps }, 900);
   assert.equal(next.revisions.length, 3);
   assert.deepEqual(revisionDiff(next, 3), [
     '~ Goal: "Every public API key is rate limited by plan tier, with per-key overrides and clear 429s." → "Rate limit every key"',

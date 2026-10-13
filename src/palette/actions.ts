@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
+import { Archive, Flag, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
@@ -12,6 +12,8 @@ import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { openRewind } from '../rewind/requests';
 import { openSchedule } from '../schedule/ScheduleDialog';
+import { openGoalEditor } from '../goals/GoalEditor';
+import { hasGoal } from '../drift';
 import { startRename } from '../rename';
 import { openSettings } from '../settings/open';
 import { openReplay } from '../replay/open';
@@ -79,6 +81,8 @@ export const ACTIONS = [
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-replay', group: 'Thread', title: 'Replay thread', icon: VideoPlay, keywords: 'recording session playback demo debug', when: when.thread, run: onThread((t) => openReplay(t.id)) },
   { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Export, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
+  { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
+  { id: 'thread-goal-remove', group: 'Thread', title: 'Remove goal', icon: CloseSquare, keywords: 'goal chat question untrack progress', when: (s) => when.thread(s) && hasGoal(s.thread!), run: onThread((t, { dispatch }) => dispatch({ type: 'goal-remove', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   {
     id: 'thread-second-opinion',

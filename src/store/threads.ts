@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type Source, type Step, type StepStatus, type Thread } from '../model.ts';
 import { sourcePrompt } from '../sources.ts';
-import { hasGoal, isConcrete, KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
+import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
 import { progressAt } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
@@ -66,6 +66,9 @@ export type ThreadsAction =
   | { type: 'drift-settings'; threadId: string; isMuted: boolean }
   | { type: 'drift-keep'; threadId: string }
   | { type: 'edit-goal'; threadId: string; draft: GoalDraft; by?: Author }
+  /** The background model's goal for a thread that had none; dropped when one was set meanwhile or you removed it. */
+  | { type: 'goal-drafted'; threadId: string; outcome: string; criteria: string[] }
+  | { type: 'goal-remove'; threadId: string }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
@@ -173,6 +176,10 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, drift: { ...t.drift, isMuted: action.isMuted } })) };
     case 'drift-keep':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => keepHere(t, state.now)) };
+    case 'goal-drafted':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => setDraftedGoal(t, action.outcome, action.criteria, state.now)) };
+    case 'goal-remove':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => removeGoal(t, state.now)) };
     case 'edit-goal':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now, action.by)) };
     case 'step-status':
@@ -394,12 +401,12 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     spaceId: state.spaceId,
     repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, branchName(getPrefs().branchPrefix, '', id)) : null,
     title: titleFrom(action.title),
-    goal: action.title,
+    goal: '',
     providers: [action.provider],
     status: 'running',
     line: freeLine(state.threads.filter((t) => t.spaceId === state.spaceId)),
     startedAt: now,
-    revisions: [{ n: 1, at: now, label: 'Goal set', by: 'you' }],
+    revisions: [],
     steps,
     activity: [
       ...(action.branchFrom ? [{ at: now, who: 'harness' as const, kind: 'event' as const, text: `Branched off ${action.branchFrom}` }] : []),
@@ -459,8 +466,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     threads: mapThread(state.threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
       const said = log(t.live ? { ...t, status: 'running', live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, notes: undefined } } : t, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift });
-      const goaled = setGoalFrom(said, action.text, now);
-      return action.drift ? applyDrift(goaled, action.text, action.drift, action.reason, now) : goaled;
+      return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
     }),
   };
 }
@@ -475,13 +481,16 @@ function addSource(state: State, action: Extract<Action, { type: 'source-add' }>
 
 const titleFrom = (text: string) => (text.length > 48 ? `${text.slice(0, 47)}…` : text);
 
-/** A thread started with "hi" has no goal yet: the first concrete message becomes it, and the title too unless you renamed the thread. */
-function setGoalFrom(t: Thread, text: string, now: number): Thread {
-  if (hasGoal(t) || !isConcrete(text)) return t;
-  const n = t.revisions.length + 1;
-  const title = t.title === titleFrom(t.goal) ? titleFrom(text) : t.title;
-  const set = { ...t, goal: text, title, revisions: [...t.revisions, { n, at: now, label: 'Goal set from your message', by: 'you' as const, diff: [`~ Goal: "${t.goal}" → "${text}"`] }] };
-  return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: set from your message` });
+function setDraftedGoal(t: Thread, outcome: string, criteria: string[], now: number): Thread {
+  if (t.goal || t.isGoalOff) return t;
+  const n = (t.revisions.at(-1)?.n ?? 0) + 1;
+  const set = { ...t, goal: outcome, criteria: criteria.map((text, i) => ({ id: `${t.id}-c${n}-${i}`, text })), revisions: [...t.revisions, { n, at: now, label: 'Goal drafted', by: 'harness' as const, diff: [`+ Goal: ${outcome}`, ...criteria.map((c) => `+ Done when: ${c}`)] }] };
+  return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal: ${outcome}` });
+}
+
+function removeGoal(t: Thread, now: number): Thread {
+  if (!t.goal) return { ...t, isGoalOff: true };
+  return log({ ...t, goal: '', criteria: [], isGoalOff: true }, { at: now, who: 'harness', kind: 'event', text: 'Goal removed' });
 }
 
 function keepHere(t: Thread, now: number): Thread {

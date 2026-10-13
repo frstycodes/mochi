@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { singleLayout } from '../layout/tree.ts';
+import { firstPrompt } from '../model.ts';
 import { DEFAULT_PREFS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
@@ -306,7 +307,7 @@ test('create_thread creates in the same project without moving your view, and Un
   const t = setup();
   const r = await t.ok('create_thread', { prompt: 'Add a rate limit dashboard', provider: 'codex' });
   const created = t.thread(r.id);
-  assert.deepEqual([created.goal, created.providers[0], created.repo?.project], ['Add a rate limit dashboard', 'codex', 'latitude']);
+  assert.deepEqual([firstPrompt(created), created.providers[0], created.repo?.project], ['Add a rate limit dashboard', 'codex', 'latitude']);
   assert.deepEqual(t.state().views, { latitude: { kind: 'thread', id: 'rl' } });
   assert.equal(t.toasts.at(-1)!.text, 'Claude started "Add a rate limit dashboard"');
   t.toasts.at(-1)!.undo!();
