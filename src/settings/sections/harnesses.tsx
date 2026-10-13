@@ -30,12 +30,13 @@ export function HarnessesSection() {
   );
 }
 
-/** Across harnesses: the model chip's scroll dock shows starred models, and new threads start at this effort. */
+/** Across harnesses: the model chip's scroll dock shows starred models, and new threads start at this effort and speed. */
 function ModelsGroup() {
   return (
-    <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer. The lists are this profile's accounts' own.">
+    <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer. The lists are this profile's accounts' own. Fast speed runs only on models that offer it and costs more; the composer's speed menu shows each model's price.">
       <CatalogRow settingKey="starredModels" />
       <CatalogRow settingKey="effort" />
+      <CatalogRow settingKey="speed" />
     </SettingsGroup>
   );
 }

@@ -5,6 +5,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, patchOf, permissionResult, planFromTodos, withPlanTools } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
+import { claudeFast } from '../../../src/runtime/models.ts';
 
 const CWD = '/repo';
 
@@ -183,17 +184,17 @@ test('WebSearch ends with its hits as links, WebFetch with the page it read', ()
   assert.deepEqual(result('f1', fetched).at(0), { threadId: 't1', type: 'tool', id: 'f1', phase: 'end', text: 'Fetch http://redis.io/docs', links: [{ url: 'https://redis.io/docs/' }] });
 });
 
-test('supportedModels() lists each model once by its wire id, the default row marking the default', () => {
+test('supportedModels() lists each model once by its wire id, the default row marking the default, fast mode where reported', () => {
   const effort = { supportsEffort: true, supportedEffortLevels: ['low', 'high'] as ('low' | 'high')[] };
   const models = claudeModels([
     { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', description: 'Opus 5.5', ...effort },
-    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Best for everyday, complex tasks', ...effort },
+    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Best for everyday, complex tasks', ...effort, supportsFastMode: true },
     { value: 'claude-opus-5-5', displayName: 'Opus 5.5 (explicit)', description: '' },
     { value: 'claude-haiku-4-5-20251001', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5', description: 'Fastest' },
   ]);
   assert.deepEqual(models, [
-    { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], isDefault: true },
-    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], isDefault: false },
+    { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], speeds: [claudeFast('claude-opus-5-5')], isDefault: true },
+    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], speeds: [], isDefault: false },
   ]);
 });
 

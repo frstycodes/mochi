@@ -4,6 +4,7 @@ import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagen
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
+import { claudeFast } from '../../../src/runtime/models.ts';
 
 /** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
 export function createMapper(threadId: string, cwd: string) {
@@ -374,7 +375,7 @@ export function claudeModels(infos: ModelInfo[]): AgentModel[] {
   const rows = infos.filter((m) => m !== defaultRow);
   const defaultId = defaultRow ? idOf(defaultRow) : rows[0] && idOf(rows[0]);
   const models = new Map<string, AgentModel>();
-  for (const m of rows) if (!models.has(idOf(m))) models.set(idOf(m), { id: idOf(m), name: m.displayName, description: m.description, efforts: m.supportedEffortLevels ?? [], isDefault: idOf(m) === defaultId });
+  for (const m of rows) if (!models.has(idOf(m))) models.set(idOf(m), { id: idOf(m), name: m.displayName, description: m.description, efforts: m.supportedEffortLevels ?? [], speeds: m.supportsFastMode ? [claudeFast(idOf(m))] : [], isDefault: idOf(m) === defaultId });
   return [...models.values()];
 }
 

@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { Provider, Repo } from './model';
-import { EffortPicker, ModelPicker, useModels } from './ModelControls';
+import { EffortPicker, ModelPicker, SpeedPicker, useModels } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
@@ -107,6 +107,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
           </PromptInputActionMenu>
           <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
           <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
+          <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} />
         </PromptInputTools>
         <PromptInputTools>
           {meter}

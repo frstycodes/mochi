@@ -44,9 +44,13 @@ const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
 
+/** What a live session runs on, with the speed its latest message set. */
+export const claudeRunOptions = (threadId: string) => sessions.get(threadId)?.options;
+
 export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.permissionMode && !(options.permissionMode in PERMISSION_MODES)) throw new TypeError(`permissionMode must be one of ${Object.keys(PERMISSION_MODES).join(', ')}`);
   if (options.effort && !EFFORTS.includes(options.effort as EffortLevel)) throw new TypeError(`effort must be one of ${EFFORTS.join(', ')}`);
+  if (options.speed && options.speed !== 'fast') throw new TypeError('speed must be fast');
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
   const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, isBusy: true };
@@ -55,9 +59,14 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   await schedule(session);
 }
 
-export async function sendClaude(threadId: string, text: string, images?: AgentImage[]) {
+/** `speed`: '' standard, 'fast' fast mode, unset keeps it; a live process switches before reading the message. */
+export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string) {
   const session = sessions.get(threadId);
   if (!session) throw new Error('No Claude session for this thread in this run of Harness; start it again with resume');
+  if (speed !== undefined && speed !== (session.options.speed ?? '')) {
+    session.options = { ...session.options, speed: speed || undefined };
+    await session.query?.applyFlagSettings({ fastMode: !!speed });
+  }
   session.inbox.push({ text, images });
   session.isBusy = true;
   if (session.query) session.wake.emit('push');
@@ -157,6 +166,8 @@ async function launch(session: Session) {
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
+        // The flag layer is also the Agent SDK's opt-in: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
+        ...(options.speed && { settings: { fastMode: true } }),
         ...permissions,
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),

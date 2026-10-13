@@ -198,9 +198,9 @@ test('auto tools never wait: creating and messaging threads run straight through
 
 test('create_thread takes a model and effort at or below the default, and refuses dearer ones unless the setting allows', async () => {
   const t = setup();
-  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', access: 'Auto' } });
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', speed: '', access: 'Auto' } });
   const cheaper = await t.ok('create_thread', { prompt: 'Rename a variable', model: 'claude-haiku-5-5', effort: 'low' });
-  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', access: 'Auto' });
+  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' });
   assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-opus-5-5' }), /claude-opus-5-5 costs more/);
   assert.match(await t.err('create_thread', { prompt: 'x', effort: 'max' }), /max effort costs more/);
   assert.match(await t.err('create_thread', { prompt: 'x', model: 'gpt-9' }), /isn't offered/);

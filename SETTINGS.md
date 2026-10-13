@@ -43,7 +43,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 | Accounts | each login in its own config folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`): name, folder, profiles using it, login state + plan, the sign-in command; add, rename, remove (not the default, not while a profile uses it). Harness never signs in | R1 (done) |
 | Profiles | each profile's account for this harness; one account can serve several profiles | R1 (done) |
 | API key | only for harnesses with one (`ANTHROPIC_API_KEY`), keychain, last 4 shown | R1 (done) |
-| — | Starred models (the scroll dock), Default effort | now (src/ModelControls.tsx:32-33) |
+| — | Starred models (the scroll dock), Default effort, Default speed (Standard / Fast: new threads run Fast on models that report a faster tier, standard elsewhere; agents can read it, never propose it) | now (src/ModelControls.tsx:32-33) |
 
 ### Defaults for new threads
 | Setting | Control | Default | Status | Today |

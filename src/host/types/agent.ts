@@ -18,6 +18,8 @@ export interface AgentStartOptions {
   skills?: string[];
   model?: string;
   effort?: string;
+  /** A speed id from the model's `speeds`; unset runs at standard speed. Main drops one the model doesn't list. */
+  speed?: string;
   permissionMode?: string;
   /** Provider session id from an earlier `session` event. */
   resume?: string;
@@ -180,7 +182,17 @@ export interface AgentModel {
   efforts: string[];
   /** The provider's default effort for this model; unset leaves it to the harness. */
   defaultEffort?: string;
+  /** Faster tiers than standard the model reports (Claude fast mode, Codex `serviceTiers`); empty when it reports none. */
+  speeds: AgentSpeed[];
   isDefault: boolean;
+}
+
+/** One speed tier above standard. `description` carries the provider's own note on what it costs. */
+export interface AgentSpeed {
+  /** Sent as-is: Claude's `fast`, a Codex service tier id (`priority`). */
+  id: string;
+  name: string;
+  description: string;
 }
 
 export interface AgentAskMessage {
@@ -220,8 +232,8 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  /** `skills`: as `AgentStartOptions.skills`, for this message. */
-  send(threadId: string, text: string, images?: AgentImage[], skills?: string[]): Promise<void>;
+  /** `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it. */
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string): Promise<void>;
   interrupt(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;

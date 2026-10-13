@@ -19,6 +19,8 @@ export interface Prefs {
   starredModels: string[];
   /** A provider effort id; a model that doesn't take it runs its own default. */
   effort: string;
+  /** New threads' speed: '' standard or `fast`, which runs only on models that report a faster tier. */
+  speed: '' | 'fast';
   agent: 'claude' | 'codex';
   permissions: SharedAccess;
   /** Side pane tabs pinned as icons in the thread header, in order. */
@@ -66,6 +68,7 @@ export const DEFAULT_PREFS: Prefs = {
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
   effort: 'high',
+  speed: '',
   agent: 'claude',
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
@@ -140,6 +143,7 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
   if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
+  if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];

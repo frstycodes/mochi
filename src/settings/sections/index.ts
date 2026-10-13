@@ -91,6 +91,7 @@ export const SETTINGS_SECTIONS = [
       }),
       { id: 'starredModels', label: 'Starred models', keywords: 'favorite star dock model claude codex opus sonnet haiku gpt' },
       { id: 'effort', label: 'Default effort', keywords: 'reasoning thinking' },
+      { id: 'speed', label: 'Default speed', keywords: 'fast mode service tier priority' },
     ],
   },
   {

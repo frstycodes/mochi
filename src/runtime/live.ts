@@ -11,7 +11,7 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
-  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[] }
+  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string }
   | { method: 'interrupt' | 'stop'; threadId: string }
   | { method: 'stopSubagent'; threadId: string; subagentId: string };
 
@@ -35,9 +35,11 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const text = withNotes(thread, action.prompt ?? action.text);
       const images = action.images?.length ? { images: action.images } : {};
       const skills = action.skills?.length ? { skills: action.skills } : {};
+      // Every message carries the thread's speed, so a change in the composer applies from the next one.
+      const speed = thread.controls ? { speed: controlsOf(thread).speed } : {};
       if (thread.live.isDetached) return reattach(thread, text, undefined, images.images, skills.skills);
       const interrupt = action.interrupts && thread.live.isWorking ? [{ method: 'interrupt' as const, threadId: thread.id }] : [];
-      return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills }];
+      return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed }];
     }
     case 'source-add': {
       const thread = state.threads.find((t) => t.id === action.threadId);
