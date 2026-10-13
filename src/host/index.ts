@@ -7,6 +7,7 @@ import { git as desktopGit } from './desktop/git.ts';
 import { notify as desktopNotify } from './desktop/notify.ts';
 import { ports as desktopPorts } from './desktop/ports.ts';
 import { pty as desktopPty } from './desktop/pty.ts';
+import { remote as desktopRemote } from './desktop/remote.ts';
 import { schedule as desktopSchedule } from './desktop/schedule.ts';
 import { settings as desktopSettings } from './desktop/settings.ts';
 import { sim as desktopSim } from './desktop/sim.ts';
@@ -22,6 +23,7 @@ import { git as webGit } from './web/git.ts';
 import { notify as webNotify } from './web/notify.ts';
 import { ports as webPorts } from './web/ports.ts';
 import { pty as webPty } from './web/pty.ts';
+import { remote as webRemote } from './web/remote.ts';
 import { schedule as webSchedule } from './web/schedule.ts';
 import { settings as webSettings } from './web/settings.ts';
 import { sim as webSim } from './web/sim.ts';
@@ -48,6 +50,7 @@ export const registry: Registry = {
   data: { web: webData, desktop: desktopData },
   schedule: { web: webSchedule, desktop: desktopSchedule },
   themes: { web: webThemes, desktop: desktopThemes },
+  remote: { web: webRemote, desktop: desktopRemote },
   account: { web: webAccount, desktop: desktopAccount },
 };
 
@@ -70,5 +73,6 @@ export const host = {
   data: pick('data'),
   schedule: pick('schedule'),
   themes: pick('themes'),
+  remote: pick('remote'),
   account: pick('account'),
 } satisfies HostBridge & { isDesktop: boolean };

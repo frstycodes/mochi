@@ -8,6 +8,7 @@ import type { Manifest } from './manifest.ts';
 import { notifyMethods, type NotifyHost } from './notify.ts';
 import { portsMethods, type PortsHost } from './ports.ts';
 import { ptyMethods, type PtyHost } from './pty.ts';
+import { remoteMethods, type RemoteHost } from './remote.ts';
 import { scheduleMethods, type ScheduleHost } from './schedule.ts';
 import { settingsMethods, type SettingsHost } from './settings.ts';
 import { simMethods, type SimHost } from './sim.ts';
@@ -28,6 +29,7 @@ export interface HostBridge {
   data: DataHost;
   schedule: ScheduleHost;
   themes: ThemesHost;
+  remote: RemoteHost;
   account: AccountHost;
 }
 
@@ -48,5 +50,6 @@ export const manifest = {
   data: dataMethods,
   schedule: scheduleMethods,
   themes: themesMethods,
+  remote: remoteMethods,
   account: accountMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

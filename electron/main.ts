@@ -3,10 +3,11 @@ import { installHooks } from './git/hooks.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
 import { registerIpc } from './ipc/index.ts';
+import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
 import { startScheduler } from './schedule/scheduler.ts';
 import { startTray } from './tray.ts';
-import { createWindow, isTrustedUrl } from './window.ts';
+import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
@@ -22,9 +23,12 @@ app.whenReady().then(() => {
   startWatch();
   void startScheduler();
   installHooks().catch((error: unknown) => console.warn('Git hooks not installed; agents commit without the message check', error));
+  // Before the first window: it watches every window's close.
+  startRemote();
   createWindow();
   if (hasTray) startTray();
-  app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
+  // The main window may be hidden rather than closed (remote devices keep its store running).
+  app.on('activate', () => BrowserWindow.getAllWindows().some((w) => w.isVisible()) || showMainWindow());
 });
 
 app.on('will-quit', stopAllCompares);
