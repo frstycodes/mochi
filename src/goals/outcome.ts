@@ -1,6 +1,7 @@
 import type { Thread } from '../model.ts';
+import { threadUsage } from '../usage/model.ts';
 
-/** What a settled goal came to. GAP: no cost yet, the tick simulation tracks tokens but not spend. */
+/** What a settled goal came to. `usage.costUsd` is null when the harness reported no spend (Codex, demo threads). */
 export function outcomeOf(thread: Thread) {
   const end = thread.settledAt ?? Math.max(thread.startedAt, ...thread.activity.map((a) => a.at), ...thread.steps.map((s) => s.doneAt ?? s.droppedAt ?? 0));
   const done = thread.steps.filter((s) => s.status === 'done');
@@ -14,5 +15,6 @@ export function outcomeOf(thread: Thread) {
     revisions: thread.revisions.length - 1,
     merged: thread.prs.filter((p) => p.state === 'merged'),
     unmerged: thread.prs.filter((p) => p.state !== 'merged'),
+    usage: threadUsage(thread),
   };
 }
