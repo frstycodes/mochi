@@ -45,9 +45,9 @@ test("new threads' branches have no prefix by default, follow the Branch prefix 
   const create = { type: 'create', title: 'x', provider: 'claude', project: '/Users/me/dev/app' } as const;
   const branchOf = () => threadsReducer({ ...initialThreads(), spaceId: 'latitude', views: {} } as never, create).threads.at(-1)!.repo!.branch;
   setPrefs({ branchPrefix: DEFAULT_PREFS.branchPrefix });
-  assert.doesNotMatch(branchOf(), /\//);
+  assert.equal(branchOf(), 'feat/x');
   setPrefs({ branchPrefix: 'me/' });
-  assert.match(branchOf(), /^me\//);
+  assert.equal(branchOf(), 'me/feat/x');
 });
 
 test('agent control: the old Reversible default becomes Everything (deletes and settings still ask); unknown values fall back', async () => {

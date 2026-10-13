@@ -598,6 +598,31 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-affectionate-chebyshev-aed0cb/c31c499f-0033-4847-bf6c-c5ed47fe718b/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-thread-messages",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5521",
+        "--strictPort"
+      ],
+      "port": 5521
+    },
+    {
+      "name": "mochi-thread-messages-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5627",
+        "--strictPort"
+      ],
+      "port": 5627,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-happy-clarke-94f128/ae987ffd-afe2-45ce-ad25-b1c951e4285a/scratchpad/mochi-userdata"
+      }
     }
   ]
 }

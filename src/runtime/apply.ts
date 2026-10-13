@@ -43,7 +43,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'reasoning':
       return update((t) => log(t, { at: now, who, kind: 'reasoning', text: event.text }));
     case 'tool':
-      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }) }));
+      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }), ...(event.sent && { sent: event.sent }) }));
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       state = recordCreatedPr(state, thread, event);
       if (!event.files?.length) return state;
@@ -274,9 +274,8 @@ function endTurn(state: State, thread: Thread, event: Extract<AgentEvent, { type
   if (event.status === 'failed') return update((t) => log({ ...t, status: 'needs-you' }, { at: now, who: 'harness', kind: 'event', text: `Turn failed${event.error ? `: ${event.error}` : ''}` }));
   // A turn with no plan (a plain question) has nothing to review.
   if (hasOpenWork(thread) || thread.status === 'review' || thread.status === 'settled' || !thread.steps.length) return state;
-  if (state.queue.some((q) => q.kind === 'review' && q.threadId === thread.id)) return update((t) => ({ ...t, status: 'review' }));
-  const review: QueueItem = { id: `q-review-${thread.id}`, kind: 'review', threadId: thread.id, title: `Review "${thread.title}"`, detail: 'Every step is done. Look over the diff and open a PR.', blocks: { steps: 0, threads: 1 }, createdAt: now };
-  return { ...update((t) => ({ ...t, status: 'review' })), queue: [...state.queue, review] };
+  // The report card says what's next (open a PR, its review, settle); no queue card repeats it.
+  return update((t) => ({ ...t, status: 'review' }));
 }
 
 /** Who speaks for a thread right now: its live session, else the owner of the step in flight, else its first provider. */

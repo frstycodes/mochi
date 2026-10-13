@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../ho
 import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../settings/agentConfig.ts';
-import { DEFAULT_PREFS, type AgentControl, type Prefs } from '../settings/prefs.ts';
+import { DEFAULT_PREFS, setPrefs, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
 import { panesReducer } from '../store/panes.ts';
@@ -24,7 +24,7 @@ const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidec
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
-function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/' } = {}) {
+function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/', gitBranches = null as string[] | null, gitCurrent = 'main' as string | null } = {}) {
   const view = { kind: 'thread', id: 'rl' } as const;
   let state = {
     ...initialThreads(undefined, true),
@@ -81,7 +81,9 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     theme: () => 'system',
     settings: settings.host,
     isDesktop: true,
-    git: { push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9') },
+    git: {
+      branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
+      push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9') },
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
   const ok = async (name: string, args?: Record<string, unknown>, threadId?: string) => {
@@ -198,6 +200,28 @@ test('auto tools never wait: creating and messaging threads run straight through
   await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
   assert.ok(t.thread(created.id));
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no widget was shown');
+});
+
+test('create_thread names the branch from its prompt, unique among the repo branches, and falls back to the prompt alone without git', async () => {
+  const named = setup({ gitBranches: ['main', 'feat/rate-limit-dashboard'] });
+  const created = await named.ok('create_thread', { prompt: 'Add a rate limit dashboard' });
+  assert.equal(named.thread(created.id)?.repo?.branch, 'feat/rate-limit-dashboard-2');
+  const offline = setup();
+  const fallback = await offline.ok('create_thread', { prompt: 'Fix the login bug' });
+  assert.equal(offline.thread(fallback.id)?.repo?.branch, 'fix/login-bug');
+});
+
+test('create_thread gives the new thread its own worktree even when your Worktree box is unticked', async () => {
+  const t = setup({ gitBranches: ['main'] });
+  t.env.prefs.set({ workspaceMode: 'folder' });
+  setPrefs({ workspaceMode: 'folder' });
+  try {
+    const created = await t.ok('create_thread', { prompt: 'Fix the login bug' });
+    assert.notEqual(t.thread(created.id)?.repo?.mode, 'folder');
+    assert.equal(t.thread(created.id)?.repo?.branch, 'fix/login-bug');
+  } finally {
+    setPrefs({ workspaceMode: DEFAULT_PREFS.workspaceMode });
+  }
 });
 
 test('create_thread takes a model and effort at or below the default, and refuses dearer ones unless the setting allows', async () => {
@@ -381,8 +405,12 @@ test('create_thread creates in the same project without moving your view, and Un
 
 test('send_to_thread sends into the other thread as a message from this one, with no Undo', async () => {
   const t = setup();
-  await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new limits table' });
-  assert.ok(t.thread('adm').activity.some((a) => a.kind === 'message' && a.text.includes('Use the new limits table')));
+  const sender = t.thread('rl');
+  t.env.dispatch({ type: 'say', threadId: 'rl', entry: { who: 'claude', kind: 'tool', text: 'Mcp mochi: send_to_thread', mcp: { server: 'mochi', tool: 'send_to_thread' } } });
+  await t.ok('send_to_thread', { threadId: 'adm', text: '  Use the new limits table ' });
+  const received = t.thread('adm').activity.at(-1)!;
+  assert.deepEqual({ who: received.who, kind: received.kind, text: received.text, from: received.from }, { who: 'you', kind: 'message', text: 'Use the new limits table', from: { threadId: 'rl', title: sender.title } });
+  assert.deepEqual(t.thread('rl').activity.findLast((a) => a.kind === 'tool')!.sent, { threadId: 'adm', title: t.thread('adm').title, text: 'Use the new limits table' }, "the sender's call row knows what it sent");
   assert.equal(t.toasts.at(-1)!.undo, undefined);
 });
 
@@ -895,7 +923,7 @@ test('claim_criterion records evidence; report and get_report give the turn as d
 });
 
 test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and its checks', async () => {
-  const t = setup();
+  const t = setup({ gitBranches: ['main', 'feat/rate-limit'], gitCurrent: 'feat/rate-limit' });
   t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }, { text: 'Tests pass', command: 'pnpm test' }] } });
   const [first] = t.thread('rl').criteria!;
   t.env.dispatch({ type: 'criterion-claim', threadId: 'rl', criterionId: first.id, evidence: 'curl -i shows it', by: 'claude' });
@@ -904,4 +932,12 @@ test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and 
   assert.deepEqual(t.pushes, ['/repo/rl']);
   assert.equal(t.prs[0].title, 'feat(api): rate limit keys by plan');
   assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [ ] Tests pass'].join('\n'));
+});
+
+test('open_pr refuses a detached HEAD and the default branch, and pushes nothing', async () => {
+  const detached = setup({ gitBranches: ['main'], gitCurrent: null });
+  assert.match(await detached.err('open_pr', { title: 'fix: x', why: 'y' }), /detached HEAD/);
+  const onMain = setup({ gitBranches: ['main'] });
+  assert.match(await onMain.err('open_pr', { title: 'fix: x', why: 'y' }), /push straight to it/);
+  assert.deepEqual([...detached.pushes, ...onMain.pushes], []);
 });

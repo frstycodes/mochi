@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
+import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
+import type { BranchList } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
+import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
@@ -50,7 +53,7 @@ export interface ToolEnv {
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
+  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
   now?: () => number;
 }
 
@@ -332,12 +335,15 @@ const THREAD_SPECS = {
       if (!prompt) throw new Error('prompt is required');
       const provider = providerOf(args.provider, caller);
       const controls = await newThreadControls(env, caller, provider, args);
+      const project = projectRef(caller.repo);
+      const workspace = project ? await newWorktree(env, project, prompt) : undefined;
       const before = state();
       dispatch({
         type: 'create',
         title: prompt,
         provider,
-        project: projectRef(caller.repo),
+        project,
+        ...(workspace && { workspace }),
         controls,
         isLive: !!caller.live,
         isBackground: true,
@@ -349,8 +355,9 @@ const THREAD_SPECS = {
   send_to_thread: {
     run: ({ state, caller, args, dispatch }) => {
       const [thread] = others(state(), caller, [args.threadId], 'message');
-      const text = `From "${caller.title}": ${args.text.trim()}`;
-      dispatch({ type: 'send', threadId: thread.id, text, drift: 'on-goal', reason: `Sent by ${authorName(caller.providers[0])} from another thread` });
+      const text = args.text.trim();
+      const from = { threadId: caller.id, title: caller.title };
+      dispatch({ type: 'send', threadId: thread.id, text, prompt: receivedPrompt(from, text), from, drift: 'on-goal', reason: `Sent by ${authorName(caller.providers[0])} from another thread` });
       return { changed: `messaged "${thread.title}"`, result: { threadId: thread.id, sent: text }, isFinal: true };
     },
   },
@@ -443,6 +450,9 @@ const GOAL_SPECS = {
     run: async ({ env, caller, args, dispatch }) => {
       const cwd = caller.repo && env.cwdOf(caller);
       if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
+      const { current, defaultBranch } = await env.git.branches(cwd);
+      if (!current) throw new Error(`${cwd} is on a detached HEAD, so there is no branch to push. Commit on this thread's own branch, not in another worktree`);
+      if (current === defaultBranch) throw new Error(`${cwd} is on ${defaultBranch}; open_pr would push straight to it. Commit on a branch of its own first`);
       const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
       await env.git.push(cwd, githubUser);
       const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
@@ -630,6 +640,16 @@ function sidebar(state: State, caller: Thread) {
 const isPinned = (t: Thread) => t.orbitSlot !== undefined && t.status !== 'settled';
 
 const providerOf = (provider: Provider | undefined, caller: Thread) => provider ?? caller.providers[0];
+
+/**
+ * An agent-started thread always gets its own worktree, whatever the composer's Worktree box says: parallel agents sharing
+ * one folder trip over each other's changes and make worktrees Mochi can't see. Its branch is named from the prompt.
+ */
+async function newWorktree(env: ToolEnv, project: string, prompt: string) {
+  const list = await env.git.branches(project).catch(() => null);
+  const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
+  return { mode: 'worktree' as const, branch: uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken) };
+}
 
 /** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Tools allows them. */
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
