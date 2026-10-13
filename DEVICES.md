@@ -1,0 +1,181 @@
+# Accounts and devices
+
+How Mochi gets an account (Clerk) and lets your other machines follow and steer threads that run on any one of them. A phone (PWA) comes later as one more client of the same logic. This covers CHECKLIST §6 "Mobile companion / Remote control". Read it with [RUNTIME.md](RUNTIME.md) (agents run in main, and the Auth section) and [SETTINGS.md](SETTINGS.md).
+
+Status labels: **verified** = read in this repo; **source** = read in T3 Code's source at `pingdotgg/t3code@6524a8d` (2026-10-13), paths relative to that repo; **docs** = read in Clerk's docs on 2026-10-13 (links inline), not yet run here; **proposed** = designed here, approved 2026-10-13 (see Decisions); **not verified** = belief, check before building on it.
+
+## Summary (proposed)
+
+- **The machine that owns the worktree runs the agents, always.** Other devices are full remote controls: everything you do in a thread on the machine, you can do from another computer (macOS, Windows or Linux), executed on the owning machine. Devices never run agents, never hold provider credentials, and never touch the worktree directly.
+- **The machine is the server, and the single writer.** Devices connect to it over a WebSocket: directly on the LAN or Tailscale when they can reach it, through Mochi's relay otherwise. No cloud database holds your threads.
+- **A Mochi account is identity for the relay and your device list.** It is not a Claude or Codex login. Mochi still never logs in to Claude or Codex, and never handles their credentials (RUNTIME.md › Auth, unchanged).
+- **One machine needs no account.** Mochi on a single machine works fully offline and local-only, as today. Using more than one device needs an account: pairing, the device list, reach from anywhere and settings and pins sync all go through it.
+- **End-to-end encrypted.** Device keys are exchanged at pairing, so the relay forwards ciphertext it can't read.
+
+## What T3 Code does (source)
+
+T3 Code is the closest reference. Its model holds up and Mochi should copy most of it, with two exceptions noted at the end of this section.
+
+- **One server per machine runs the agents.** A Node server (`apps/server`, bundled into the desktop app) owns providers, terminals, git and files. Desktop, web and mobile are all clients of it (`docs/internals/overview.md`). Agents keep running with no client connected (`docs/user/remote-access.md:190`). When the host is off, remote use stops: "That machine must stay running and reachable" (`remote-access.md:4`).
+- **Transport.** WebSocket RPC on `/ws` (Effect RPC, JSON, permessage-deflate; `apps/server/src/ws.ts`), port 3773.
+  - Binds `127.0.0.1` by default. Desktop "Network access" switches it to `0.0.0.0` (`apps/desktop/src/backend/DesktopServerExposure.ts:31-32`).
+  - Routes to a server: LAN, Tailscale (`t3 serve --tailscale-serve`), SSH port-forward, or T3 Connect (below). A saved environment tries an ordered list of routes (`docs/internals/remote.md`).
+- **Auth without accounts.** Each server issues its own scoped sessions. You pair by one-time token (link or QR from `t3 pair`), or by a silent handoff when the desktop shell talks to its own server (`packages/contracts/src/auth.ts`).
+  - Scopes: `orchestration:read` / `operate`, `terminal:*`, `filesystem:*`, and others. Every RPC declares the scope it needs (`apps/server/src/auth/RpcAuthorization.ts`).
+  - Tokens are DPoP-bound. Long-lived tokens never go in socket URLs: a client first gets a short-lived WS ticket over HTTP (`docs/internals/environment-auth.md`).
+  - Hosted pairing links keep the secret in the URL fragment.
+- **State.** The server is event-sourced: SQLite event log plus projections (`apps/server/src/persistence/`).
+  - Clients subscribe to a shell stream: a snapshot, then sequenced updates. Each open thread has its own subscription, which takes `afterSequence` to replay what the client missed (`packages/contracts/src/orchestrationV2.ts:2036-2072, 3352`).
+  - The server is the only writer. Commands are idempotent through receipts, and a reconnecting client doesn't replay its mutations automatically (`docs/internals/connection-runtime.md`).
+- **Offline.** Clients retry with jittered backoff capped at 5 minutes. They keep cached projections readable, marked as not live (`connection-runtime.md`).
+- **Clerk only for the optional hosted part, T3 Connect.** Packages: `@clerk/electron` (desktop), `@clerk/expo` (mobile), `@clerk/backend` (relay); see each `package.json`.
+  - The relay is a Cloudflare Worker with Durable Objects (`infra/relay`). It links environments to accounts, brokers a one-time bootstrap credential bound to the client's key, allocates Cloudflare tunnels, forwards webhooks, and sends APNs/FCM pushes.
+  - It doesn't proxy app traffic: clients reach the environment through its tunnel hostname, and the relay never sees the session token (`docs/internals/t3-connect.md:6, 35-41`). Their own stated caveat: a compromised relay signing key can mint credentials (`t3-connect.md`).
+- **Where secrets are kept.**
+  - Desktop: saved environments go through Electron `safeStorage` (`apps/desktop/src/app/DesktopConnectionCatalogStore.ts`).
+  - Server: secrets as 0600 files (`apps/server/src/auth/ServerSecretStore.ts`).
+  - Web: IndexedDB.
+  - Mobile: secure storage.
+
+**Where Mochi differs:**
+
+1. **Clerk stays out of the renderer.** T3 renders Clerk's `ClerkProvider` from `@clerk/electron/react` in the renderer (`apps/web/src/components/clerk/ElectronManagedAuthShell.tsx:2`, source), and sign-in UI loads from Clerk into the app window (docs, [Electron overview](https://clerk.com/docs/reference/electron/overview)). That breaks two Mochi rules: no secrets in the renderer, and no credential entry inside the app. Mochi signs in through the system browser with tokens only in main (below).
+2. **The relay carries ciphertext instead of handing out tunnels.** A Cloudflare tunnel terminates TLS at Cloudflare's edge, so Cloudflare can read the traffic (not verified; general knowledge of how Cloudflare tunnels work). Mochi's relay forwards frames that are end-to-end encrypted between paired device keys instead, and a new device needs approval on the machine's own screen, so a compromised relay can't add one.
+3. **Pairing goes through the account.** T3 pairs without accounts by one-time token; Mochi has one pairing flow, through the account's device list, so the device list and revocation live in one place.
+
+## Clerk sign-in (docs, proposed)
+
+- **Flow: OAuth 2.0 authorization code with PKCE, in the system browser.** Mochi is registered as a public Clerk OAuth application. Main does the whole flow:
+  1. generate `code_verifier`, `state` and `nonce`;
+  2. `shell.openExternal(<clerk>/oauth/authorize?...&code_challenge_method=S256)`;
+  3. receive the redirect;
+  4. exchange the code at `/oauth/token` with no client secret;
+  5. ask for scopes `openid profile email offline_access`.
+- **What Clerk documents:** "Public" clients need no secret, but don't enforce PKCE on their own. Instance-wide "Require PKCE" is on by default and accepts only S256. `offline_access` returns a refresh token that never expires. Access tokens last 1 day and are JWTs by default, verifiable against `/.well-known/jwks.json` ([how Clerk implements OAuth](https://clerk.com/docs/guides/configure/auth-strategies/oauth/how-clerk-implements-oauth)).
+- **Redirect: loopback first.** `http://127.0.0.1:<random port>/callback`, served by a one-shot listener in main (RFC 8252). It works in dev, whereas custom-scheme deep links only reach a packaged app on macOS (docs, [OAuth deep links](https://clerk.com/docs/guides/configure/auth-strategies/oauth-deep-links)). Fallback if Clerk won't accept loopback: `mochi://auth/callback` through `app.setAsDefaultProtocolClient` plus `open-url`. Neither line exists in `electron/` today (verified). Whether Clerk OAuth apps accept loopback or custom-scheme redirect URIs is not verified; that is PR 1's first task.
+- **Storage.**
+  - The refresh token is encrypted with `safeStorage` in main's userData, the same pattern as the API keys in `electron/agents/config.ts:93` (verified). The access token stays in memory in main.
+  - The renderer gets `{ status, name, email, imageUrl }` and nothing else, through a new `host.account` (`signIn()`, `signOut()`, `onChange`).
+  - No token in a URL, in a log, or in IPC to the renderer.
+- **Sign-out** drops both tokens and asks the relay to forget this machine's link. Revoking the refresh token at Clerk: the endpoint is not verified, check it in PR 1.
+- **Why not `@clerk/electron`:** it is beta and its renderer runs `ClerkProvider` (docs). Plain OAuth needs no SDK in the app. The relay verifies tokens with `@clerk/backend` or plain JWKS.
+- **Cost:** free up to 50,000 monthly retained users per app on Hobby (docs, [pricing](https://clerk.com/pricing)).
+
+## Devices and what they can do (proposed)
+
+Everything runs on the machine that owns the thread; a device sends the command and shows the result. Each device holds scopes, granted on the machine at pairing and changeable later in Settings › Devices.
+
+| Scope | What it allows | Default for a new device |
+|---|---|---|
+| `read` | threads, activity, goals, report cards, Queue, usage, PR status, schedules | on |
+| `operate` | answer approvals and questions, send messages and attachments, interrupt, stop, resume, rewind, fork, hand off, side chat | on |
+| `manage` | start threads (pick machine, project, agent, model, permissions), edit goals, rename, pin, archive, delete, schedules, commit, push, open a PR (as the machine's gh login, asked first as on the machine), the machine's settings | on |
+| `code` | file tree, file contents, diffs, Changes tab actions (stage, revert, line comments), checkpoint diffs | on |
+| `terminal` | open and type in the thread's terminals | off: a terminal is a shell on your machine |
+
+- Never on a device, whatever the scope: provider logins, API keys, gh tokens, the machine's OS keychain, the Mochi tools' browser sessions. Browser and simulator panes are pixels on the machine; devices get a live screenshot (`code` scope), not control.
+- "Runs on" (SETTINGS.md › Defaults) lists every machine you are paired with, on every device; a thread stays on the machine it started on.
+- Several machines: each runs its own threads; devices show one merged list and Queue, each row tagged with its machine.
+
+## Transport (proposed)
+
+- **Server in main.** A WebSocket server in main (`electron/remote/`), off until you turn on Settings › Devices.
+  - Binds `127.0.0.1`. "Allow devices on this network" binds the LAN or Tailscale interface.
+- **The renderer stays the writer.** Today the store lives in the renderer: it consumes `AgentEvent`s and saves itself through `host.data.save` (verified, `src/host/types/data.ts`, `src/store/persist.ts`). Every store action already passes through one hook, `recordAction` (verified, `src/replay/recorder.ts`).
+  - The remote stream taps that hook: main sends devices a snapshot (`toSaved`-shaped, filtered by scope), then each action with a sequence number.
+  - Device commands (`send`, `resolve`, `interrupt`) go from main to the renderer, which runs them through the same paths the UI uses.
+  - The cost: remote control needs Mochi's renderer alive. That's a hidden window when every window is closed. Moving the store into main is the long-term fix, and is out of scope here.
+- **Reconnect** works like T3's: the device sends its last sequence number and gets the actions after it, or a fresh snapshot if the gap is too old.
+- **Auth.** No secret goes in the URL: the socket opens, then the first frame authenticates.
+  - Pairing needs an account, signed in on both sides. Your machines list each other (the relay holds the account's machines and their public keys); pick one and the owning machine shows "Allow <device>?". One pairing flow, and signing out or removing a device in the account revokes it everywhere. The phone later pairs the same way, after signing in.
+  - Each device generates its own keypair (`safeStorage`) and registers the public key under the account; the two run the handshake on first connect.
+  - After pairing, each connection proves the device key against a fresh challenge.
+- **Relay, only when signed in and "Reach this computer from anywhere" is on.**
+  - The machine opens one outbound WebSocket to the relay, authenticated with its Clerk access token in a header. Main is Node, so it can set headers.
+  - Devices connect to the relay with their device key. The relay pairs the sockets and forwards encrypted frames.
+  - The relay stores per account: the machine ids, the device public keys the machine registered, and the encrypted settings and pins copy. No thread content.
+
+## Platforms (proposed)
+
+Mochi on macOS, Windows and Linux are equal peers: any of them can own threads and control the others. Today Mochi ships for macOS only: `package.json` › `build` has just a `mac` target and packs only `node-pty` `darwin-*` prebuilds, and the native helpers (haptics, `electron/native.ts`, screen-capture permission) are guarded by `process.platform` (verified).
+
+- **Keep running with windows closed.** On Windows and Linux main quits when the last window closes (`electron/main.ts:23`, verified). Mochi now stays in the tray instead (Electron `Tray`, PR 0), so agents, schedules and remote devices keep working; Quit in the tray menu stops it. macOS already keeps running.
+- **Secret storage.** `safeStorage` uses Keychain on macOS, DPAPI on Windows, libsecret or KWallet on Linux. On Linux with no secret service it falls back to a weak backend (believed; `safeStorage.getSelectedStorageBackend()`, not verified). Then Mochi keeps the refresh token and device key in memory only and says sign-in won't survive a restart, rather than writing them weakly protected.
+- **Sign-in redirect.** Loopback works the same on all three; a custom scheme needs per-OS registration (Windows registry through `setAsDefaultProtocolClient`, a Linux `.desktop` file), one more reason for loopback.
+- **LAN.** Windows Defender Firewall asks the first time Mochi listens beyond loopback (believed, not verified); Settings › Devices says so before turning it on.
+- **Paths.** Commands carry thread ids and worktree-relative paths; the owning machine resolves them. A client never builds an absolute path for another OS.
+- **Names.** "Runs on this Mac" (`src/ThreadView.tsx:315`, verified) and SETTINGS.md's "This Mac" become the machine's name, editable in Settings › Devices, defaulting to the OS host name.
+
+## What syncs (proposed)
+
+| Data | Where it lives | Reaches devices |
+|---|---|---|
+| Threads, activity, goals, Queue, usage, PR status | the owning machine's store | streamed live; changed only through commands |
+| File contents, diffs, terminal output | the worktree | streamed on demand with `code` / `terminal` scope |
+| Settings that aren't tied to one machine (theme, notifications, defaults for new threads, background models, drift, git conventions, starred models) | each machine, plus one encrypted account copy on the relay | synced between your machines and shown on devices; a catalog row opts in with `sync: true` in `src/settings/catalog.ts` |
+| Pins | each machine, plus the account copy | one pinned order across machines (a pin names machine + thread) |
+| Machine-specific settings (paths, shell, worktrees folder, harness paths, accounts and profiles' config files) | that machine | editable remotely with `manage`, never synced to another machine |
+| Provider credentials, API keys, gh tokens, Clerk tokens, device private keys | keychain / `safeStorage` | never |
+| Replay recordings, checkpoints | the machine | replay plays on a device through the stream; files never leave |
+
+- The account copy (settings and pins) is the only Mochi data stored in the cloud. It is encrypted with an account key no server holds (below); per key last writer wins.
+- Devices keep an encrypted cache of the last snapshot so the app opens instantly and reads offline.
+
+## End-to-end encryption (proposed)
+
+- **libsodium** (`libsodium-wrappers`, which runs in Electron and later in the phone PWA): `crypto_kx` key exchange from each side's static key plus fresh ephemeral keys, then `secretstream` per connection. One vetted construction beats hand-assembling ECDH, HKDF, AES-GCM and nonce handling from WebCrypto on a trust boundary.
+- **Device keys** are generated on the device and never leave it: `safeStorage` on computers; the PWA later wraps its key with a non-extractable WebCrypto key in IndexedDB.
+- **Approval on the machine's screen.** A new device is accepted only after "Allow <device>?" on the machine, also when it arrives through the relay. A compromised relay can forward and drop frames, not read or add.
+- **Account key** (for synced settings and pins): generated by the first machine you sign in on, sent to each new device over the E2E channel when the machine approves it. Lose every device and the synced copy is unreadable; machines still hold their own settings, so nothing local is lost.
+- The same layer runs on LAN, Tailscale and the relay: one code path.
+- TLS-only to the relay (relay can read threads): rejected.
+
+## Conflicts (proposed)
+
+- **One writer per thread.** The machine applies commands in arrival order, the same order the UI's own actions use.
+- **Answering a Queue item:** the first answer wins. A later answer for the same `requestId` gets "Already answered on <device>", and the card disappears everywhere through the stream.
+- **Messages from two devices** both land, in arrival order, through the existing outbox (`src/chat/outbox.ts`, verified to exist).
+- **Every command carries an id.** The machine keeps recent ids, so a resend after a dropped connection runs once (T3's receipts, smaller).
+- **Two devices editing the same thing** (goal text, title, a setting on the machine): applied in arrival order, last write wins; the loser sees the new value arrive through the stream. Goal edits keep their existing revision history, so nothing is lost.
+- **Synced settings between machines:** last writer wins per key, by the relay's timestamp. A machine offline during an edit gets it on reconnect.
+
+## Offline (proposed)
+
+- **No account, no network:** Mochi on one machine works exactly as today. Nothing here runs until you sign in and turn on Settings › Devices.
+- **Device can't reach the machine:** the device shows the cached snapshot with "<machine> offline since <time>" and disables actions. Drafts stay in the composer. Nothing queues to send later, because sending later could spend usage unasked (the same rule as `pauseQueue` on restart, verified in `src/store/persist.ts`).
+- **Relay down:** already-paired devices on the LAN or Tailscale keep working from the keys they hold; new pairing waits for the relay, and remote devices see "offline".
+- **Machine asleep:** agents pause with the machine, as today. Keep-awake while threads run is a separate checklist item if wanted.
+
+## Hosting and cost (proposed)
+
+- **Relay:** a Cloudflare Worker plus one Durable Object per machine, holding hibernatable WebSockets. T3 runs the same shape (source, `infra/relay`). Not verified: current Workers and Durable Objects pricing. Believed to be about $5/month on the paid plan, with idle hibernated sockets costing little. Check before PR 2.
+- **Self-host:** the same Worker deploys to your own Cloudflare account, with the relay URL set in Settings. Pairing always needs a relay (hosted or self-hosted), since the account's device list lives there; traffic itself can stay on the LAN or Tailscale.
+- No client hosting: the only client for now is Mochi on another computer.
+
+## Clients
+
+- **Another computer, first and only for now.** Mochi gets a third host implementation, `src/host/remote`, next to `desktop` and `web` (verified layout, `src/host/`), speaking the device protocol instead of IPC. A machine shows paired machines' threads and Queue merged with its own, each tagged with its machine, using the existing UI.
+- **Phone, later and separately designed:** a PWA (the web build on `src/host/remote`, Add to Home Screen, Web Push). Because the protocol, scopes, encryption and relay are client-agnostic, it adds screens and push, not logic. No native app planned.
+
+## PRs, in order
+
+Each PR is its own worktree session, per SESSIONS.md, verified in both themes where it has UI. PRs 1–4 ship together: nothing reaches users before encryption.
+
+0. **`platforms`** ([#92](https://github.com/frstycodes/mochi/pull/92)): Windows (NSIS) and Linux (AppImage) builds, `node-pty` per platform, CI packaging on all three, shells / `.cmd` shims / process-tree kills through `electron/platform.ts`, tray keep-alive (agents and schedules keep running with no window), platform-neutral copy. Split out: the custom title bar off macOS, the Ports tab on Windows (no `lsof`), the Windows icon badge. Machine names move to `remote-server`, where they're first needed.
+1. **`account`**: Clerk sign-in in main (PKCE, system browser, `safeStorage`), `host.account`, Settings › Account; first verify redirect URIs and the revoke endpoint.
+2. **`relay`**: Worker and Durable Objects, Clerk JWT check, the account's machines and device public keys, device-key auth, frame forwarding, self-host relay URL; the machine's outbound connection behind "Reach this computer from anywhere".
+3. **`remote-server`**: `electron/remote/`: WebSocket server, protocol, scopes, pairing through the account's device list, snapshot plus sequenced action stream from `recordAction`, command bridge to the renderer, hidden window keeping the renderer alive with windows closed, direct LAN/Tailscale route tried before the relay. Settings › Devices. Tests: sequencing and replay, first answer wins, scope refusal, duplicate command id.
+4. **`e2e`**: libsodium handshake and framing, device approval on the owning machine, tampered and replayed frames rejected (test).
+5. **`remote-commands`**: the full command set for `operate`, `manage`, `code` and `terminal`, each routed through the same code the machine's UI uses (ship flow still asks before push and PR).
+6. **`multi-machine`**: `src/host/remote`, encrypted snapshot cache, offline state; a machine lists paired machines' threads and Queue with its own and acts on them; "Runs on" lists them.
+7. **`sync`**: account key distribution, encrypted settings and pins blob, `sync: true` catalog rows, merged pins.
+
+Later, its own design pass: the phone PWA and push.
+
+## Decisions (approved 2026-10-13)
+
+- Account required for any pairing; one machine alone needs none.
+- Hosted relay on the user's own Cloudflare account and domain; self-host stays possible.
+- Every scope available remotely; `terminal` off by default for new devices.
+- Settings and pins sync between machines.
+- macOS, Windows and Linux as equal peers; computer-to-computer first, phone PWA later, no native app.
