@@ -1,7 +1,8 @@
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react';
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import type { ChatRow } from './rows';
+import { hasGaps, transcriptGaps } from './transcriptGaps';
 
 export interface TranscriptHandle {
   scrollToIndex: (index: number, options?: { align?: 'start' | 'center' | 'end' }) => void;
@@ -29,9 +30,9 @@ const JUMP_PADDING_PX = 24;
  * virtualizer's total, and growing rows grow it.
  */
 export function Transcript({ ref, threadId, rows, remembered, children }: { ref: Ref<TranscriptHandle>; threadId: string; rows: ChatRow[]; remembered: RememberedScroll | undefined; children: (row: ChatRow, index: number) => ReactNode }) {
-  const { scrollRef, isAtBottom } = useStickToBottomContext();
+  const { scrollRef, contentRef, isAtBottom } = useStickToBottomContext();
   const list = useRef<HTMLDivElement>(null);
-  const scrollMargin = useOffsetIn(list, scrollRef);
+  const scrollMargin = useOffsetIn(list, scrollRef, contentRef);
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -48,6 +49,7 @@ export function Transcript({ ref, threadId, rows, remembered, children }: { ref:
   useImperativeHandle(ref, () => ({ scrollToIndex: (index, options) => virtualizer.scrollToIndex(index, options) }), [virtualizer]);
   useRememberScroll(threadId, virtualizer, isAtBottom);
   useRevealCard(rows, virtualizer);
+  useGapCheck(list, scrollRef, contentRef, virtualizer);
 
   const items = virtualizer.getVirtualItems();
   const top = (items[0]?.start ?? scrollMargin) - scrollMargin;
@@ -66,21 +68,69 @@ export function Transcript({ ref, threadId, rows, remembered, children }: { ref:
 
 type Virtualizer = ReturnType<typeof useVirtualizer<HTMLElement, Element>>;
 
-/** The list's distance from the top of the scroller's content (the chat's top padding and the goal card above it): the virtualizer's `scrollMargin`. */
-function useOffsetIn(list: RefObject<HTMLElement | null>, scrollRef: RefObject<HTMLElement | null>) {
+/** The list's distance from the top of the scroller's content (the chat's top padding, the goal card and setup row above it): the virtualizer's `scrollMargin`. */
+function useOffsetIn(list: RefObject<HTMLElement | null>, scrollRef: RefObject<HTMLElement | null>, contentRef: RefObject<HTMLElement | null>) {
   const [offset, setOffset] = useState(0);
-  useLayoutEffect(() => {
+  // Not a layout effect: the scroller and content are ancestors, and React attaches their refs after this child's layout effects run.
+  useEffect(() => {
     const el = list.current;
     const scroller = scrollRef.current;
-    if (!el || !scroller) return;
+    const content = contentRef.current;
+    if (!el || !scroller || !content) return;
     const measure = () => setOffset(el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop);
     measure();
-    // The goal card above the list grows and folds; the content box resizing is when the list may have moved.
+    // Anything above the list growing or folding resizes the content box. Not the list's parent: ChatView wraps the rows in a
+    // `display: contents` div, which has no box, so a ResizeObserver on it never fires and a stale margin opens a gap above the rows.
     const ro = new ResizeObserver(measure);
-    if (el.parentElement) ro.observe(el.parentElement);
+    ro.observe(content);
     return () => ro.disconnect();
-  }, [list, scrollRef]);
+  }, [list, scrollRef, contentRef]);
   return offset;
+}
+
+const GAP_CHECK_SETTLE_MS = 250;
+
+/** Dev only: once scrolling and resizing settle, reports any part of the visible list the mounted rows don't cover, with how far rows sit from where the virtualizer placed them. */
+function useGapCheck(list: RefObject<HTMLElement | null>, scrollRef: RefObject<HTMLElement | null>, contentRef: RefObject<HTMLElement | null>, virtualizer: Virtualizer) {
+  const latest = useRef(virtualizer);
+  latest.current = virtualizer;
+  useEffect(() => {
+    const el = list.current;
+    const scroller = scrollRef.current;
+    const content = contentRef.current;
+    if (!import.meta.env.DEV || !el || !scroller || !content) return;
+    let timer = 0;
+    const check = () => {
+      // An off-screen pinned page skips layout; measuring it would force it.
+      if (!el.checkVisibility({ contentVisibilityAuto: true })) return;
+      const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+      const span = (box: DOMRect) => ({ top: box.top - origin, bottom: box.bottom - origin });
+      const rendered = [...el.querySelectorAll<HTMLElement>('[data-chat-row]')];
+      const starts = new Map(latest.current.getVirtualItems().map((item) => [item.index, item.start]));
+      const listBox = span(el.getBoundingClientRect());
+      const view = { top: Math.max(listBox.top, scroller.scrollTop), bottom: Math.min(listBox.bottom, scroller.scrollTop + scroller.clientHeight) };
+      const gaps = transcriptGaps(
+        rendered.map((row) => span(row.getBoundingClientRect())),
+        rendered.map((row) => starts.get(Number(row.dataset.index)) ?? NaN),
+        view,
+        ROW_GAP_PX,
+      );
+      if (hasGaps(gaps)) console.error('Transcript window has gaps', gaps);
+    };
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(check, GAP_CHECK_SETTLE_MS);
+    };
+    const ro = new ResizeObserver(schedule);
+    ro.observe(content);
+    ro.observe(scroller);
+    scroller.addEventListener('scroll', schedule, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      ro.disconnect();
+      scroller.removeEventListener('scroll', schedule);
+    };
+  }, [list, scrollRef, contentRef]);
 }
 
 function useRememberScroll(threadId: string, virtualizer: Virtualizer, isAtBottom: boolean) {
