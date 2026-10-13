@@ -4,11 +4,9 @@ import { Button } from '@/components/ui/button';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
 import { useSimulators } from '../../sim/useSimulators';
 import { SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
-import { setPrefs, usePrefs } from '../prefs';
-import { ENGINES } from '../settingOptions';
+import { CatalogRow } from '../CatalogRow';
 
 export function BrowserSection() {
-  const { searchEngine } = usePrefs();
   const history = useAddressHistory();
   const clearHistory = () => {
     const previous = replaceAddressHistory([]);
@@ -17,11 +15,7 @@ export function BrowserSection() {
   return (
     <div className="flex flex-col gap-8">
       <SettingsGroup footer="What the address bar searches when you type something that isn't a URL.">
-        <SettingsRow
-          id="searchEngine"
-          label="Search engine"
-          control={<SettingsSelect id="searchEngine" value={searchEngine} options={ENGINES} onChange={(v) => setPrefs({ searchEngine: v })} />}
-        />
+        <CatalogRow settingKey="searchEngine" />
         <SettingsRow
           id="addressHistory"
           label="Address history"
@@ -46,26 +40,25 @@ const PAGES = new Intl.PluralRules('en');
 const FIRST_BOOTED = 'first-booted';
 
 function SimulatorGroup() {
-  const { simulator } = usePrefs();
-  const { simulators } = useSimulators();
-  const isMissing = !!simulator && !!simulators && !simulators.some((s) => s.udid === simulator);
   return (
-    <SettingsGroup footer="The Simulator tab opens on this device; you can still switch per thread.">
-      <SettingsRow
-        id="simulator"
-        label="Default simulator"
-        description={isMissing ? 'That simulator is gone, so the first booted one is used.' : undefined}
-        control={
-          <SettingsSelect
-            id="simulator"
-            value={isMissing || !simulator ? FIRST_BOOTED : simulator}
-            options={[{ value: FIRST_BOOTED, label: 'First booted' }, ...(simulators ?? []).map((s) => ({ value: s.udid, label: `${s.name} (${s.runtime})` }))]}
-            onChange={(v) => setPrefs({ simulator: v === FIRST_BOOTED ? '' : v })}
-            disabled={!simulators}
-            className="w-56"
-          />
-        }
-      />
+    <SettingsGroup footer="The Simulator tab opens on this device; you can still switch per thread. A simulator that's gone falls back to the first booted one.">
+      <CatalogRow settingKey="simulator" />
     </SettingsGroup>
+  );
+}
+
+/** Booted and available simulators by udid, '' for "first booted"; a saved one that's gone shows as first booted. */
+export function SimulatorSelect({ id, value, onChange }: { id: string; value: string; onChange: (udid: string) => void }) {
+  const { simulators } = useSimulators();
+  const isMissing = !!value && !!simulators && !simulators.some((s) => s.udid === value);
+  return (
+    <SettingsSelect
+      id={id}
+      value={isMissing || !value ? FIRST_BOOTED : value}
+      options={[{ value: FIRST_BOOTED, label: 'First booted' }, ...(simulators ?? []).map((s) => ({ value: s.udid, label: `${s.name} (${s.runtime})` }))]}
+      onChange={(v) => onChange(v === FIRST_BOOTED ? '' : v)}
+      disabled={!simulators}
+      className="w-56"
+    />
   );
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { STEP_STATUSES } from '../host/types/agent.ts';
+import { SETTING_SECTIONS } from '../settings/settingSections.ts';
 
 /**
  * Every Mochi tool an agent can call, in one table (RUNTIME.md › Mochi tools): main builds the MCP servers from it and
@@ -9,7 +10,7 @@ export type Tier = 'read' | 'change' | 'destructive' | 'setting';
 
 export const TIERS = ['read', 'change', 'destructive', 'setting'] as const satisfies Tier[];
 
-/** Tiers that wait on the user's widget in the thread every time; everything else runs without asking. */
+/** Tiers that put a widget in the thread every time: a delete waits for its answer, a setting widget is the user's to change. */
 export const ASKING_TIERS = ['destructive', 'setting'] as const satisfies Tier[];
 
 const threadId = z.string().optional().describe('A thread in this profile (ids come from list_threads); defaults to your own thread');
@@ -18,9 +19,9 @@ const threadIds = z.array(z.string()).min(1).describe('Threads in this profile; 
 const stepId = z.string().describe('A step id from get_goal');
 const tabId = z.string().optional().describe("One of your thread's browser tabs from browser_tabs; defaults to the active one");
 const ref = z.string().describe('An element ref like "e12" from the latest browser_snapshot');
-const profileId = z.string().optional().describe("A profile id from list_profiles; defaults to your own. Another profile's always asks the user");
+const profileId = z.string().optional().describe('A profile id from list_profiles; defaults to your own');
 const configProvider = z.enum(['claude', 'codex']).optional().describe("Which harness's config; defaults to your own");
-const reason = z.string().min(1).max(240).describe('Why, in a sentence the user reads on the card');
+const reason = z.string().min(1).max(240).describe('Why, in a sentence the user reads on the widget');
 
 export const TOOL_TABLE = {
   // {THREADS}
@@ -233,52 +234,37 @@ export const TOOL_TABLE = {
     shape: { title: z.string().min(1).max(80), reason: z.string().min(1).max(240) },
   },
   // {SETTINGS}
-  get_settings: { tier: 'read', description: 'Read the Mochi settings you can propose changes to: each key with its label, current value and allowed values.', shape: {} },
-  update_setting: {
+  get_settings: {
+    tier: 'read',
+    description:
+      "Read Mochi's settings: each key with its label, section, current value, the values it takes, and whether you may propose it. Profile settings (name, icon, GitHub and agent accounts, instructions files, MCP servers, skills) are your profile's unless you pass profileId. section: profile adds each MCP server's tool count (it starts the servers). Secret values are never returned.",
+    shape: {
+      section: z.enum(SETTING_SECTIONS).optional(),
+      profileId,
+    },
+  },
+  update_settings: {
     tier: 'setting',
     description:
-      'Propose changing one Mochi setting (keys and allowed values from get_settings). The user sees the current and proposed value in your thread and applies or keeps it; you get the outcome. Say why in `reason`.',
-    shape: { key: z.string().describe('A key from get_settings'), value: z.string().describe('One of the allowed values from get_settings'), reason: z.string().min(1).max(240) },
+      "Suggest setting changes to the user: one settings widget in your thread shows each setting's real control with your value as a suggestion, and the user changes what they want there, now or later. Group related changes in one call. Returns once the widget is shown; you don't get the user's answer (get_settings reads the values later). Keys and values from get_settings; locked keys are refused.",
+    shape: {
+      changes: z
+        .array(z.object({ key: z.string().describe('A key from get_settings'), value: z.string().describe('As get_settings shows values: "true"/"false", an allowed value, a number or text'), profileId }))
+        .min(1)
+        .max(20),
+      reason,
+    },
   },
-  // {PROFILES}
   list_profiles: {
     tier: 'read',
     description:
-      "List Mochi's profiles: id, name, icon, the Claude and Codex accounts each runs on (with login state), its GitHub account, and which one is yours. Also every existing agent account (for link_account) and the icon names (for update_profile).",
+      "List Mochi's profiles: id, name, icon, the Claude and Codex accounts each runs on (with login state), its GitHub account, and which one is yours. Also every existing agent account, for proposing profile.claudeAccount / profile.codexAccount.",
     shape: {},
-  },
-  get_profile_config: {
-    tier: 'read',
-    description:
-      "Read a profile's agent setup per harness: the instructions file's text, MCP servers (enabled, tool count, which environment variables they still need) and skills (enabled). Secret values are never returned. Your own profile reads straight away; another profile asks the user first.",
-    shape: { profileId, provider: configProvider.describe('Only this harness; both when left out') },
-  },
-  update_profile: {
-    tier: 'setting',
-    description: 'Propose renaming a profile and/or changing its icon. The user applies or keeps it in your thread.',
-    shape: { profileId, name: z.string().trim().min(1).max(40).optional(), icon: z.string().optional().describe('An icon name from list_profiles'), reason },
-  },
-  link_account: {
-    tier: 'setting',
-    description:
-      "Propose linking an existing agent account (ids from list_profiles) to a profile that has none of its own for that harness yet. Never creates or signs in an account; a profile keeps one account per harness, so one that already has its own is refused (the user changes it in Settings), and so is one with active threads on that harness.",
-    shape: { profileId, provider: z.enum(['claude', 'codex']), accountId: z.string().min(1), reason },
-  },
-  set_profile_instructions: {
-    tier: 'setting',
-    description:
-      "Propose new text for a profile's instructions file (CLAUDE.md / AGENTS.md of its account): `append` adds lines at the end, `text` replaces the whole file. The user sees the diff and applies or keeps it.",
-    shape: { profileId, provider: configProvider, text: z.string().max(100_000).optional(), append: z.string().min(1).max(10_000).optional(), reason },
-  },
-  set_mcp_server_enabled: {
-    tier: 'setting',
-    description: "Propose turning one of a profile's MCP servers on or off (names from get_profile_config). The user sees the file diff and applies or keeps it.",
-    shape: { profileId, provider: configProvider, name: z.string().min(1), enabled: z.boolean(), reason },
   },
   add_mcp_server: {
     tier: 'setting',
     description:
-      "Propose adding an MCP server to a profile's account: a `command` (stdio) or a `url` (http). Never pass secrets: put `${VAR}` where a token goes and the user sets it in Settings › Profiles; a value that looks like a credential is refused.",
+      "Suggest adding an MCP server to a profile's account: a `command` (stdio) or a `url` (http). The user sees it filled in on a settings widget in your thread and adds it there if they want; you don't get their answer. Never pass secrets: put `${VAR}` where a token goes; a value that looks like a credential is refused.",
     shape: {
       profileId,
       provider: configProvider,
@@ -290,11 +276,6 @@ export const TOOL_TABLE = {
       headers: z.record(z.string(), z.string()).optional(),
       reason,
     },
-  },
-  set_skill_enabled: {
-    tier: 'setting',
-    description: "Propose turning one of a profile's skills on or off (names from get_profile_config). The user sees the file diff and applies or keeps it.",
-    shape: { profileId, provider: configProvider, name: z.string().min(1), enabled: z.boolean(), reason },
   },
   remove_mcp_server: {
     tier: 'destructive',

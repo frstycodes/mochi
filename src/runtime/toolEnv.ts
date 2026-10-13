@@ -30,7 +30,17 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     cwdOf: (thread) => thread.live?.cwd ?? threadCwd(thread),
     models: (provider, spaceId) => host.agent.models(provider, spaceId).catch(() => []),
     profiles: { list: getProfiles, update: updateProfile, remove: (id) => void removeProfile(id) },
+    theme: storedTheme,
     settings: host.settings,
     isDesktop: host.isDesktop,
   };
+}
+
+/** next-themes keeps the choice under `theme`; nothing stored (or storage blocked) means its default, System. */
+function storedTheme() {
+  try {
+    return localStorage.getItem('theme') ?? 'system';
+  } catch {
+    return 'system';
+  }
 }

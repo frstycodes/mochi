@@ -11,9 +11,12 @@ type AgentSettingsValue = ReturnType<typeof useAgentSettingsState>;
 
 const Context = createContext<AgentSettingsValue | null>(null);
 
-/** Loads agent settings and detects every account once per settings visit; sections read it through `useAgentSettings`. */
-export function AgentSettingsProvider({ children }: { children: ReactNode }) {
-  return <Context.Provider value={useAgentSettingsState()}>{children}</Context.Provider>;
+/**
+ * Loads agent settings and, unless `isDetecting` is off, detects every account once per settings visit (a settings widget
+ * in a thread shows no login state, so it skips starting each tool). Sections read it through `useAgentSettings`.
+ */
+export function AgentSettingsProvider({ isDetecting = true, children }: { isDetecting?: boolean; children: ReactNode }) {
+  return <Context.Provider value={useAgentSettingsState(isDetecting)}>{children}</Context.Provider>;
 }
 
 export function useAgentSettings() {
@@ -22,7 +25,7 @@ export function useAgentSettings() {
   return value;
 }
 
-function useAgentSettingsState() {
+function useAgentSettingsState(isDetecting: boolean) {
   const [installs, setInstalls] = useState<Record<AccountId, InstallState>>({});
   const [settings, setSettings] = useState<AgentSettings>();
   const [accounts, setAccounts] = useState<AccountsState>();
@@ -37,14 +40,15 @@ function useAgentSettingsState() {
   }, []);
 
   useEffect(() => {
-    if (!host.isDesktop) return;
+    // The web build keeps these in memory (the side chat default works there); accounts and keys need the desktop app.
     void host.settings.get().then(setSettings);
+    if (!host.isDesktop) return;
     for (const id of HARNESS_IDS) if (HARNESSES[id].apiKey) void host.settings.apiKey(id).then((state) => setApiKeys((prev) => ({ ...prev, [id]: state })));
     void host.settings.accounts().then((state) => {
       setAccounts(state);
-      state.accounts.forEach((a) => check(a.id));
+      if (isDetecting) state.accounts.forEach((a) => check(a.id));
     });
-  }, [check]);
+  }, [check, isDetecting]);
 
   const checkProvider = (provider: Provider) => accounts?.accounts.filter((a) => a.provider === provider).forEach((a) => check(a.id));
 

@@ -1,28 +1,28 @@
-import { useState, type KeyboardEvent } from 'react';
-import { ArrowRight, Flag, Setting2, ShieldCheck, Trash3, type IconComponent } from 'reicon-react';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Flag, Setting2, ShieldCheck, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
-import type { ActivityEntry, ProfileChange, QueueItem } from '../model';
+import { authorName, settingRef, type ActivityEntry, type QueueItem, type SettingsSuggestion, type Space } from '../model';
+import { host } from '../host';
+import { useProfiles } from '../profiles';
 import { clock } from '../progress';
 import { decideTool } from '../runtime/tools';
+import { AgentSettingsProvider } from '../settings/AgentSettings';
+import { findSetting, recordValue, settingsCatalog, valueLabel } from '../settings/catalog';
+import { CatalogRow, isConfigKey, useSettingSources } from '../settings/CatalogRow';
 import { FileDiffs } from '../settings/FileDiffs';
-import { HARNESSES } from '../settings/harnesses';
-import { SettingsSelect } from '../settings/parts';
-import { setPrefs, usePrefs } from '../settings/prefs';
-import { isSwitch, isWidgetSetting, optionLabel, settingPatch, settingValue, WIDGET_SETTINGS, type WidgetSettingKey } from '../settings/settingOptions';
+import { SettingsRow } from '../settings/parts';
+import { SuggestedServerRow } from '../settings/ProfileAgentConfig';
 import { useHarness } from '../store';
-import { SPACE_ICONS } from '../ui';
 
 /** A Mochi widget where the agent asked: the live card while it waits, then its one-line record. */
 export function CardEntry({ entry, card }: { entry: ActivityEntry; card: NonNullable<ActivityEntry['card']> }) {
   const { state } = useHarness();
   const item = card.isOpen ? state.queue.find((q) => q.id === card.id) : undefined;
+  if (item?.settings) return <SettingsWidget item={item} settings={item.settings} />;
   if (item) return <MochiWidget item={item} />;
   // Open with no card behind it: Mochi reloaded while it waited, and main told the agent nothing was done.
   return <EventLine text={card.isOpen ? `Not answered before Mochi reloaded: ${entry.text}` : entry.text} at={entry.at} />;
@@ -43,27 +43,19 @@ export function EventLine({ text, detail, at }: { text: string; detail?: string;
 }
 
 const KIND = {
-  setting: { icon: Setting2, label: 'Setting', approve: 'Apply', deny: 'Keep current' },
   delete: { icon: Trash3, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
   confirm: { icon: ShieldCheck, label: 'Approval', approve: 'Allow', deny: 'Deny' },
 } satisfies Record<string, { icon: IconComponent; label: string; approve: string; deny: string }>;
 
-/** Enter works on whichever button has focus; Esc anywhere inside says no. */
+/** A call waiting on you: a delete or a browser escalation. Enter works on whichever button has focus; Esc anywhere inside says no. */
 function MochiWidget({ item }: { item: QueueItem }) {
-  const decide = useDecision(item);
   const [options, setOptions] = useState<string[]>([]);
-  const setting = item.tool?.setting ?? (item.setting && { id: item.setting.id, value: item.setting.suggested ?? '' });
-  const kind = item.tool?.isDestructive ? 'delete' : setting || item.tool?.changes || item.tool?.edits ? 'setting' : 'confirm';
+  const kind = item.tool?.isDestructive ? 'delete' : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
+  const decide = (isApproved: boolean, chosen?: string[]) => (item.tool ? decideTool(item.tool.callId, { isApproved, options: chosen }) : undefined);
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape') return;
-    e.stopPropagation();
-    decide(false);
-  };
-
   return (
-    <Card size="sm" data-card={item.id} tabIndex={-1} role="group" aria-label={item.title} onKeyDown={onKeyDown} className="outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <WidgetCard item={item} onEscape={() => decide(false)}>
       <CardHeader>
         <CardDescription className={cn('flex items-center gap-1 type-caption font-medium', kind === 'delete' ? 'text-destructive' : 'text-foreground')}>
           <Icon aria-hidden className="size-3.5" />
@@ -72,8 +64,6 @@ function MochiWidget({ item }: { item: QueueItem }) {
         <CardTitle className="text-pretty">{item.title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {!!setting && isWidgetSetting(setting.id) && <SettingChange id={setting.id} value={setting.value} />}
-        {item.tool?.changes?.map((c) => <ProfileChangeRow key={c.kind === 'switch' ? c.label : c.kind} change={c} />)}
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
         {!!item.tool?.notes?.length && (
           <ul className="flex flex-col gap-1 type-caption text-muted-foreground">
@@ -101,79 +91,104 @@ function MochiWidget({ item }: { item: QueueItem }) {
           {approve}
         </Button>
       </CardFooter>
+    </WidgetCard>
+  );
+}
+
+function WidgetCard({ item, onEscape, children }: { item: QueueItem; onEscape: () => void; children: ReactNode }) {
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    onEscape();
+  };
+  return (
+    <Card size="sm" data-card={item.id} tabIndex={-1} role="group" aria-label={item.title} onKeyDown={onKeyDown} className="outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {children}
     </Card>
   );
 }
 
-/** The setting's real control twice, read-only: as it is now, and as it would be. */
-function SettingChange({ id, value }: { id: WidgetSettingKey; value: string }) {
-  const current = settingValue(usePrefs(), id);
+/**
+ * Suggested settings as their real Settings rows, live: every control changes the setting right away, and each row
+ * carries the suggestion with Use. Nothing waits on it; Done (or Esc) closes it into a record of what changed meanwhile.
+ */
+function SettingsWidget({ item, settings }: { item: QueueItem; settings: SettingsSuggestion }) {
+  const { dispatch } = useHarness();
+  const profiles = useProfiles();
+  const readers = useRef(new Map<string, Reader>());
+  const groups = [...new Set(settings.changes.map((c) => c.profileId ?? ''))].map((profileId) => [profileId, settings.changes.filter((c) => (c.profileId ?? '') === profileId)] as const);
+  const close = async () => {
+    const done = (await Promise.all([...readers.current.values()].map((read) => read()))).flat();
+    dispatch({ type: 'card-record', queueId: item.id, text: done.length ? capitalize(LIST.format(done)) : 'Closed the suggestion; nothing changed' });
+  };
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="min-w-32 flex-1 type-body">{WIDGET_SETTINGS[id].label}</span>
-      <span className="flex items-center gap-2">
-        <ReadOnlyControl id={id} value={current} label={`Now: ${optionLabel(id, current)}`} className="text-muted-foreground" />
-        <ArrowRight aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />
-        <ReadOnlyControl id={id} value={value} label={`Proposed: ${optionLabel(id, value)}`} />
-      </span>
-    </div>
+    <AgentSettingsProvider isDetecting={false}>
+      <WidgetCard item={item} onEscape={() => void close()}>
+        <CardHeader>
+          <CardDescription className="flex items-center gap-1 type-caption font-medium text-foreground">
+            <Setting2 aria-hidden className="size-3.5" />
+            Settings
+          </CardDescription>
+          <CardTitle className="text-pretty">{item.title}</CardTitle>
+          {!!settings.reason && <p className="type-body text-muted-foreground text-pretty">{settings.reason}</p>}
+          {settings.by === 'harness' && !!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
+        </CardHeader>
+        <CardContent className="px-0">
+          {groups.map(([profileId, changes]) => (
+            <SuggestionGroup key={profileId} item={item} profile={profiles.find((p) => p.id === profileId)} profileId={profileId} changes={changes} settings={settings} readers={readers.current} />
+          ))}
+          {!!settings.addServer && <SuggestedServer server={settings.addServer} by={settings.by} readers={readers.current} />}
+        </CardContent>
+        <CardFooter className="justify-between gap-2 border-t-0 bg-transparent pt-0">
+          <p className="type-caption text-muted-foreground">Changes apply as you make them.</p>
+          <Button variant="outline" size="sm" onClick={() => void close()}>
+            Done
+          </Button>
+        </CardFooter>
+      </WidgetCard>
+    </AgentSettingsProvider>
   );
-}
-
-/** A profile change with the control Settings › Profiles uses for it, read-only: as it is now, and as it would be. */
-function ProfileChangeRow({ change }: { change: ProfileChange }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="min-w-32 flex-1 type-body">{changeLabel(change)}</span>
-      <span className="flex items-center gap-2">
-        <ProfileControl change={change} side="from" className="text-muted-foreground" />
-        <ArrowRight aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />
-        <ProfileControl change={change} side="to" />
-      </span>
-    </div>
-  );
-}
-
-const changeLabel = (c: ProfileChange) => (c.kind === 'name' ? 'Name' : c.kind === 'icon' ? 'Icon' : c.kind === 'account' ? `${HARNESSES[c.provider].name} account` : c.label);
-
-function ProfileControl({ change, side, className }: { change: ProfileChange; side: 'from' | 'to'; className?: string }) {
-  const label = `${side === 'from' ? 'Now' : 'Proposed'}: ${String(change[side])}`;
-  if (change.kind === 'switch') return <Switch checked={change[side]} disabled aria-label={`${side === 'from' ? 'Now' : 'Proposed'}: ${change[side] ? 'on' : 'off'}`} className={READ_ONLY} />;
-  if (change.kind === 'name') return <Input value={change[side]} readOnly aria-label={label} className={cn('h-7 w-36', className)} />;
-  if (change.kind === 'account') return <SettingsSelect value={change[side]} options={[{ value: change[side], label: change[side] }]} onChange={() => {}} disabled aria-label={label} className={cn('w-auto max-w-44', READ_ONLY, className)} />;
-  const Icon = SPACE_ICONS[change[side]];
-  return (
-    <ToggleGroup type="single" size="sm" variant="outline" value={change[side]} disabled aria-label={label}>
-      <ToggleGroupItem value={change[side]} className={cn('size-7 px-0', READ_ONLY)}>
-        <Icon aria-hidden />
-      </ToggleGroupItem>
-    </ToggleGroup>
-  );
-}
-
-const READ_ONLY = 'disabled:cursor-default disabled:opacity-100';
-
-function ReadOnlyControl({ id, value, label, className }: { id: WidgetSettingKey; value: string; label: string; className?: string }) {
-  if (isSwitch(id)) return <Switch checked={value === 'true'} disabled aria-label={label} className={READ_ONLY} />;
-  return <SettingsSelect value={value} options={WIDGET_SETTINGS[id].options} onChange={() => {}} disabled aria-label={label} className={cn('w-auto max-w-44', READ_ONLY, className)} />;
 }
 
 /**
- * A tool widget answers the waiting call; a setting a blocked call pointed at (no call waits on it) is applied here and
- * closes with its record.
+ * What changed through one part of the widget since it opened, for its record. Config files are read again here: a row
+ * that wrote one through the review reloads only its own copy.
  */
-function useDecision(item: QueueItem) {
-  const { dispatch } = useHarness();
-  const prefs = usePrefs();
-  return (isApproved: boolean, options?: string[]) => {
-    if (item.tool) return decideTool(item.tool.callId, { isApproved, options });
-    if (!item.setting || !isWidgetSetting(item.setting.id)) return dispatch({ type: 'card-record', queueId: item.id, text: 'Dismissed' });
-    const { id, suggested = '' } = item.setting;
-    const { label } = WIDGET_SETTINGS[id];
-    const patch = isApproved && settingPatch(id, suggested);
-    if (patch) setPrefs(patch);
-    dispatch({ type: 'card-record', queueId: item.id, text: patch ? `Set ${label} to ${optionLabel(id, suggested)}` : `Kept ${label}: ${optionLabel(id, settingValue(prefs, id))}` });
-  };
+type Reader = () => Promise<string[]>;
+
+const capitalize = (s: string) => s[0].toUpperCase() + s.slice(1);
+const LIST = new Intl.ListFormat('en', { type: 'conjunction' });
+
+/** One profile's rows (or the app's, `profileId` ''); registers how to tell what changed since the widget opened. */
+function SuggestionGroup({ item, profile, profileId, changes, settings, readers }: { item: QueueItem; profile?: Space; profileId: string; changes: SettingsSuggestion['changes']; settings: SettingsSuggestion; readers: Map<string, Reader> }) {
+  const { sources } = useSettingSources(profile, false);
+  readers.set(profileId, async () => {
+    const config = profile && changes.some((c) => isConfigKey(c.key)) ? await host.settings.agentConfig(profile.id).catch(() => undefined) : undefined;
+    const now = { ...sources, config };
+    const catalog = settingsCatalog({ profile, config });
+    return changes.flatMap((c) => {
+      const setting = findSetting(catalog, c.key);
+      const value = setting?.read(now);
+      if (!setting || value === undefined || recordValue(setting, value) === settings.before[settingRef(c)]) return [];
+      return [setting.control.type === 'instructions' ? `saved ${setting.label}` : `set ${setting.label} to ${valueLabel(setting, value)}`];
+    });
+  });
+  if (profileId && !profile) return <SettingsRow label="That profile was removed" />;
+  return changes.map((c) => <CatalogRow key={c.key} settingKey={c.key} profile={profile} suggestion={{ value: c.value, by: settings.by }} idPrefix={`${item.id}-`} />);
+}
+
+function SuggestedServer({ server, by, readers }: { server: NonNullable<SettingsSuggestion['addServer']>; by: SettingsSuggestion['by']; readers: Map<string, Reader> }) {
+  const profile = useProfiles().find((p) => p.id === server.profileId);
+  readers.set('addServer', async () => {
+    const config = await host.settings.agentConfig(server.profileId).catch(() => undefined);
+    return config?.[server.provider].mcpServers.some((s) => s.def.name === server.server.name) ? [`added MCP server ${server.server.name}`] : [];
+  });
+  if (!profile) return <SettingsRow label="That profile was removed" />;
+  return (
+    <SuggestedServerRow profile={profile} provider={server.provider} server={server.server}>
+      <p className="type-meta text-muted-foreground">Filled in by {authorName(by)}. Review it to add it; secrets stay as {'${VAR}'}.</p>
+    </SuggestedServerRow>
+  );
 }
 
 /** Opens the widget's thread, then scrolls the widget into view and focuses it, so Esc and Tab act on it straight away. */
