@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ModelMenu, toggleStar, useModels } from '../../ModelControls';
 import { EFFORTS } from '../../runtime/controls';
 import { effortName, optionFor, type ModelOption } from '../../runtime/models';
@@ -46,7 +46,7 @@ function ModelsGroup() {
   );
 }
 
-/** The two-level model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
+/** The model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
 function StarredModelsRow() {
   const { starredModels } = usePrefs();
   const catalog = useModels(useSpace().id);
@@ -58,23 +58,23 @@ function StarredModelsRow() {
       label="Starred models"
       description={starred.map((m) => m.name).join(', ') || 'None starred yet'}
       control={
-        <Popover>
-          <PopoverTrigger asChild>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button id={settingControlId('starredModelsPicker')} variant="outline" size="sm">
               Choose models
               <ChevronDown data-icon="inline-end" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 p-0">
-            <ModelMenu
-              models={models}
-              pending={HARNESS_IDS.filter((h) => !catalog[h])}
-              harnesses={HARNESS_IDS}
-              isChecked={(m) => starredModels.includes(m.id)}
-              onPick={(m) => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
-            />
-          </PopoverContent>
-        </Popover>
+          </DropdownMenuTrigger>
+          <ModelMenu
+            models={models}
+            pending={HARNESS_IDS.filter((h) => !catalog[h])}
+            harnesses={HARNESS_IDS}
+            isChecked={(m) => starredModels.includes(m.id)}
+            onPick={(m) => setPrefs({ starredModels: toggleStar(starredModels, m.id) })}
+            keepsOpen
+            align="end"
+          />
+        </DropdownMenu>
       }
     />
   );
