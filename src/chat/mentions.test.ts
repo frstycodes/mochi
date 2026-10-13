@@ -53,7 +53,7 @@ test('options list other threads, then windows, by title', () => {
 });
 
 test('a thread reference becomes a digest and a window reference its screenshot, in the prompt the agent gets', () => {
-  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Manual' } };
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', speed: '', access: 'Manual' } };
   let s = base();
   const id = calls(s, create)[0].threadId;
   s = threadsReducer(s, create);
@@ -69,7 +69,7 @@ test('a thread reference becomes a digest and a window reference its screenshot,
   assert.match(ref.prompt, /<window title="Safari — Docs">Screenshot of this window attached\.<\/window>\n\nwhy does it loop\?$/);
 
   const send: Action = { type: 'send', threadId: id, text: ref.text, drift: 'on-goal', reason: '', prompt: ref.prompt, images: ref.images };
-  assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: ref.prompt, images: [shot] }]);
+  assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: ref.prompt, images: [shot], speed: '' }]);
   const said = threadsReducer(s, send).threads.find((t) => t.id === id)!.activity.at(-1)!;
   assert.equal(said.text, ref.text, 'the transcript keeps your message, not the injected context');
 });
@@ -116,12 +116,12 @@ test('a skill reference asks the agent to load it, an MCP reference to prefer it
 });
 
 test('picked skills reach the agent call, so Codex can attach them', () => {
-  const create: Action = { type: 'create', title: 'go', provider: 'codex', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'gpt-5.5', effort: 'Low', access: 'Manual' } };
+  const create: Action = { type: 'create', title: 'go', provider: 'codex', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'gpt-5.5', effort: 'Low', speed: '', access: 'Manual' } };
   let s = base();
   const id = calls(s, create)[0].threadId;
   s = threadsReducer(s, create);
   const send: Action = { type: 'send', threadId: id, text: '@ui\n\ngo', drift: 'on-goal', reason: '', prompt: 'p', images: [], skills: ['ui'] };
-  assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: 'p', skills: ['ui'] }]);
+  assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: 'p', skills: ['ui'], speed: '' }]);
 });
 
 test('the @ menu shows threads, windows, skills and MCP servers as four groups, in that order', () => {
@@ -155,7 +155,7 @@ test('a /skill typed mid-text is sent as written and its name goes to the agent 
   const picked: Mention = { kind: 'skill', id: 'skill:ui', title: 'ui', description: '' };
   assert.deepEqual(withReferences(message, [picked], [], { typedSkills: ['ui'] }).skills, ['ui'], 'picked and typed, asked once');
 
-  const create: Action = { type: 'create', title: message, prompt: claude.prompt, skills: claude.skills, provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', access: 'Manual' } };
+  const create: Action = { type: 'create', title: message, prompt: claude.prompt, skills: claude.skills, provider: 'claude', project: '/Users/me/dev/harness', isLive: true, controls: { model: 'sonnet-5.5', effort: 'Low', speed: '', access: 'Manual' } };
   const [start] = calls(base(), create);
   assert.equal(start.method, 'start');
   assert.deepEqual(start.method === 'start' && { prompt: start.options.prompt, skills: start.options.skills }, { prompt: claude.prompt, skills: ['ui'] }, 'a new thread starts on it');
@@ -164,5 +164,5 @@ test('a /skill typed mid-text is sent as written and its name goes to the agent 
 
   const id = start.threadId;
   const send: Action = { type: 'send', threadId: id, text: claude.text, drift: 'on-goal', reason: '', prompt: claude.prompt, images: [], skills: claude.skills };
-  assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: claude.prompt, skills: ['ui'] }], 'a running thread gets it with the message');
+  assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: claude.prompt, skills: ['ui'], speed: '' }], 'a running thread gets it with the message');
 });

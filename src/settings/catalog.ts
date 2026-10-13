@@ -10,7 +10,7 @@ import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, MOTION, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, MOTION, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -262,6 +262,16 @@ const APP_SETTINGS: Setting[] = [
   pref('demoData', 'Show demo data', 'data', SWITCH, { description: 'Mochi reloads to apply' }),
   pref('recordReplays', 'Record threads for replay', 'data', SWITCH),
   pref('effort', 'Default effort', 'harnesses', select(EFFORTS.map((level) => ({ value: level, label: effortName(level) })))),
+  {
+    key: 'speed',
+    label: 'Default speed',
+    section: 'harnesses',
+    context: 'New threads',
+    control: choice(SPEEDS),
+    read: ({ prefs }) => prefs.speed || 'standard',
+    write: (value) => (value === 'standard' || value === 'fast' ? { to: 'prefs', patch: { speed: value === 'fast' ? 'fast' : '' } } : null),
+    locked: "An agent can't raise what you pay.",
+  },
   {
     key: 'starredModels',
     label: 'Starred models',

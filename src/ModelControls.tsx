@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, Search, Star } from 'reicon-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Flash, Search, Star } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
-import { effortFor, effortName, optionFor, searchModels, type ModelOption } from './runtime/models';
+import { effortFor, effortName, FAST, optionFor, searchModels, speedFor, type ModelOption } from './runtime/models';
 import { setPrefs, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
@@ -486,6 +486,53 @@ export function EffortPicker({ model, value, onChange: setEffort }: { model: Age
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The speed tiers `model` reports, under the harness's own names, each with the provider's note on what it costs; hidden
+ * for a model that reports none. Picking the first tier stores `fast`, so Fast carries over to another model that has one.
+ */
+export function SpeedPicker({ model, value, onChange }: { model: AgentModel; value: string; onChange: (speed: string) => void }) {
+  const { speeds } = model;
+  if (!speeds.length) return null;
+  const speed = speeds.find((s) => s.id === speedFor(model, value));
+  const choose = (id: string) => onChange(id === STANDARD ? '' : id === speeds[0].id ? FAST : id);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className={cn('gap-1.5 px-2', speed ? 'text-foreground' : 'text-muted-foreground')} aria-label={`Speed: ${speed?.name ?? 'Standard'}`}>
+          <Flash weight={speed ? 'Filled' : undefined} className="size-3.5" />
+          {speed?.name ?? 'Standard'}
+          <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Speed</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={speed?.id ?? STANDARD} onValueChange={choose}>
+            <SpeedItem value={STANDARD} name="Standard" description="The model's usual speed and price" />
+            {speeds.map((s) => (
+              <SpeedItem key={s.id} value={s.id} name={s.name} description={s.description} />
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Radix menus treat '' as no value.
+const STANDARD = 'standard';
+
+function SpeedItem({ value, name, description }: { value: string; name: string; description: string }) {
+  return (
+    <DropdownMenuRadioItem value={value} className="items-start">
+      <span className="flex min-w-0 flex-col">
+        {name}
+        {!!description && <span className="type-caption text-muted-foreground">{description}</span>}
+      </span>
+    </DropdownMenuRadioItem>
   );
 }
 

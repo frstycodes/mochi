@@ -44,6 +44,8 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const commands: string[] = [];
   const removed: string[] = [];
   const evals: string[] = [];
+  const pushes: string[] = [];
+  const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
@@ -79,6 +81,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     theme: () => 'system',
     settings: settings.host,
     isDesktop: true,
+    git: { push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9') },
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
   const ok = async (name: string, args?: Record<string, unknown>, threadId?: string) => {
@@ -101,7 +104,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages, pushes, prs };
   return t;
 }
 
@@ -199,9 +202,9 @@ test('auto tools never wait: creating and messaging threads run straight through
 
 test('create_thread takes a model and effort at or below the default, and refuses dearer ones unless the setting allows', async () => {
   const t = setup();
-  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', access: 'Auto' } });
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', speed: '', access: 'Auto' } });
   const cheaper = await t.ok('create_thread', { prompt: 'Rename a variable', model: 'claude-haiku-5-5', effort: 'low' });
-  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', access: 'Auto' });
+  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' });
   assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-opus-5-5' }), /claude-opus-5-5 costs more/);
   assert.match(await t.err('create_thread', { prompt: 'x', effort: 'max' }), /max effort costs more/);
   assert.match(await t.err('create_thread', { prompt: 'x', model: 'gpt-9' }), /isn't offered/);
@@ -889,4 +892,16 @@ test('claim_criterion records evidence; report and get_report give the turn as d
   assert.equal(r.threadId, 'adm');
   const mine = await t.ok('get_report');
   assert.deepEqual([mine.criteria[0].claimed, mine.report.question, mine.report.decisions], ['curl -i shows Retry-After: 30', 'Switch the 429 body to JSON?', ['Kept the old 429 body']]);
+});
+
+test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and its checks', async () => {
+  const t = setup();
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }, { text: 'Tests pass', command: 'pnpm test' }] } });
+  const [first] = t.thread('rl').criteria!;
+  t.env.dispatch({ type: 'criterion-claim', threadId: 'rl', criterionId: first.id, evidence: 'curl -i shows it', by: 'claude' });
+  const r = await t.ok('open_pr', { title: 'feat(api): rate limit keys by plan', why: 'Enterprise keys need higher limits.' });
+  assert.equal(r.url, 'https://github.com/o/r/pull/9');
+  assert.deepEqual(t.pushes, ['/repo/rl']);
+  assert.equal(t.prs[0].title, 'feat(api): rate limit keys by plan');
+  assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [ ] Tests pass'].join('\n'));
 });

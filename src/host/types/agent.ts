@@ -18,6 +18,8 @@ export interface AgentStartOptions {
   skills?: string[];
   model?: string;
   effort?: string;
+  /** A speed id from the model's `speeds`; unset runs at standard speed. Main drops one the model doesn't list. */
+  speed?: string;
   permissionMode?: string;
   /** Provider session id from an earlier `session` event. */
   resume?: string;
@@ -55,10 +57,15 @@ export type AgentEvent =
   | { threadId: string; type: 'resolved'; requestId: string }
   /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
-  /** The account is close to a plan window's limit (Claude's `allowed_warning`, a Codex window at `WARN_PCT`); turns still run. */
-  | { threadId: string; type: 'limit-warning'; window: LimitWindow }
-  /** The account hit a plan window's limit: the turn ended and nothing runs on it until `resetsAt`. `label` names the window ("5-hour"). */
-  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string }
+  /** What the harness itself says about the account's usage as it goes (Claude's limit warning, its switch to extra usage); a line in the transcript, nothing more. */
+  | { threadId: string; type: 'limit-notice'; text: string }
+  /**
+   * The account hit a plan window's limit. `label` names the window ("5-hour"). `isTurnHeld`: the harness keeps the turn and
+   * continues it at the reset (Claude Code); otherwise the turn ended (Codex).
+   */
+  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string; isTurnHeld?: boolean }
+  /** The harness reports the window open again while it held the turn: the turn goes on. */
+  | { threadId: string; type: 'limit-cleared' }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** One plan rate-limit window of an account, as the provider reported it. */
@@ -215,7 +222,17 @@ export interface AgentModel {
   efforts: string[];
   /** The provider's default effort for this model; unset leaves it to the harness. */
   defaultEffort?: string;
+  /** Faster tiers than standard the model reports (Claude fast mode, Codex `serviceTiers`); empty when it reports none. */
+  speeds: AgentSpeed[];
   isDefault: boolean;
+}
+
+/** One speed tier above standard. `description` carries the provider's own note on what it costs. */
+export interface AgentSpeed {
+  /** Sent as-is: Claude's `fast`, a Codex service tier id (`priority`). */
+  id: string;
+  name: string;
+  description: string;
 }
 
 export interface AgentAskMessage {
@@ -255,8 +272,8 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  /** `skills`: as `AgentStartOptions.skills`, for this message. */
-  send(threadId: string, text: string, images?: AgentImage[], skills?: string[]): Promise<void>;
+  /** `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it. */
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string): Promise<void>;
   /** Stops a turn; during worktree setup, stops the setup and the agent doesn't start. */
   interrupt(threadId: string): Promise<void>;
   /** After a failed setup step: run the failed step again, or start the agent without the rest of the setup. */

@@ -1,15 +1,40 @@
-import type { AgentModel } from '../host/types/agent.ts';
+import type { AgentModel, AgentSpeed } from '../host/types/agent.ts';
 import type { Provider } from '../model.ts';
 import { HARNESSES } from '../settings/harnesses.ts';
 
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-/** Claude's list when `supportedModels()` fails (Claude Code missing, a slow start): the current family, Opus as default. */
+/** Claude's list when `supportedModels()` fails (Claude Code missing, a slow start): the current family, Opus as default. No speeds: nothing reported fast mode. */
 export const CLAUDE_FALLBACK_MODELS: AgentModel[] = [
-  { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: CLAUDE_EFFORTS, isDefault: true },
-  { id: 'claude-sonnet-5-5', name: 'Sonnet 5.5', description: 'Efficient for routine tasks', efforts: CLAUDE_EFFORTS, isDefault: false },
-  { id: 'claude-haiku-5-5', name: 'Haiku 5.5', description: 'Fastest for quick answers', efforts: CLAUDE_EFFORTS, isDefault: false },
+  { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: CLAUDE_EFFORTS, speeds: [], isDefault: true },
+  { id: 'claude-sonnet-5-5', name: 'Sonnet 5.5', description: 'Efficient for routine tasks', efforts: CLAUDE_EFFORTS, speeds: [], isDefault: false },
+  { id: 'claude-haiku-5-5', name: 'Haiku 5.5', description: 'Fastest for quick answers', efforts: CLAUDE_EFFORTS, speeds: [], isDefault: false },
 ];
+
+/**
+ * Claude fast mode's API price per model, from Anthropic's pricing docs and Claude Code 2.1.296's own cost table; both put
+ * it at 2x standard. GAP: a model missing here gets a note without a price.
+ */
+const CLAUDE_FAST_PRICES: Record<string, string> = {
+  'claude-opus-5-5': '$8 / $40 per Mtok',
+  'claude-opus-5': '$10 / $50 per Mtok',
+  'claude-opus-4-8': '$10 / $50 per Mtok',
+};
+
+/** Claude Code's fast mode for a model whose `supportedModels()` row says `supportsFastMode`. */
+export function claudeFast(id: string): AgentSpeed {
+  const price = CLAUDE_FAST_PRICES[id];
+  return { id: 'fast', name: 'Fast', description: price ? `Up to 2.5x faster output, 2x the price (${price})` : 'Up to 2.5x faster output, at a higher price' };
+}
+
+/** What Settings' default speed and a thread's control store: '' standard, 'fast' the model's first faster tier, or a tier id. */
+export const FAST = 'fast';
+
+/** The tier a run on `model` gets: the chosen id when the model lists it, its first tier for `fast`, else none (standard). */
+export function speedFor(model: AgentModel, speed: string | undefined) {
+  if (!speed) return;
+  return (model.speeds.find((s) => s.id === speed) ?? (speed === FAST ? model.speeds[0] : undefined))?.id;
+}
 
 const EFFORT_NAMES: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
 
@@ -45,12 +70,14 @@ export const effortFor = (model: AgentModel, effort: string | undefined) => (eff
 
 /**
  * What a run sends: the chosen model when the account offers it, else the account's default, so a model the account
- * no longer offers never reaches the provider. An empty list (it couldn't be read) passes the choice through.
+ * no longer offers never reaches the provider. An empty list (it couldn't be read) passes model and effort through, but
+ * never a speed: only a model that reports a tier gets one.
  */
-export function resolveRun(models: AgentModel[], model: string | undefined, effort: string | undefined) {
+export function resolveRun(models: AgentModel[], model: string | undefined, effort: string | undefined, speed?: string): { model: string | undefined; effort: string | undefined; speed?: string } {
   const picked = models.find((m) => m.id === model) ?? defaultModelOf(models);
   if (!picked) return { model, effort };
-  return { model: picked.id, effort: effortFor(picked, effort) };
+  const tier = speedFor(picked, speed);
+  return { model: picked.id, effort: effortFor(picked, effort), ...(tier && { speed: tier }) };
 }
 
 /** A model as the picker lists it. `isUnavailable`: a stored choice the account no longer offers; runs use the default instead. */
@@ -67,8 +94,8 @@ export function optionFor(models: AgentModel[] | undefined, id: string, harness:
   const fallback = models && defaultModelOf(models);
   const listed = models?.find((m) => m.id === id) ?? (id ? undefined : fallback);
   if (listed) return { ...listed, harness };
-  if (!models) return { id, harness, name: id || 'Default model', description: '', efforts: [], isDefault: false };
-  return { id, harness, name: id, description: fallback ? `Unavailable, runs ${fallback.name}` : 'Unavailable', efforts: fallback?.efforts ?? [], defaultEffort: fallback?.defaultEffort, isDefault: false, isUnavailable: true };
+  if (!models) return { id, harness, name: id || 'Default model', description: '', efforts: [], speeds: [], isDefault: false };
+  return { id, harness, name: id, description: fallback ? `Unavailable, runs ${fallback.name}` : 'Unavailable', efforts: fallback?.efforts ?? [], defaultEffort: fallback?.defaultEffort, speeds: fallback?.speeds ?? [], isDefault: false, isUnavailable: true };
 }
 
 /** Models whose harness, name or id contains every typed word as written; cmdk's fuzzy default found "luna" in "cLaUde soNnet". */

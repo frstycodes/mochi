@@ -5,6 +5,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, patchOf, permissionResult, planFromTodos, withPlanTools } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
+import { claudeFast } from '../../../src/runtime/models.ts';
 
 const CWD = '/repo';
 
@@ -157,17 +158,19 @@ test('approvals: Bash is a command, file tools are edits, deny carries a message
   assert.deepEqual(permissionResult('Bash', { command: 'ls' }, { kind: 'allow' }), { behavior: 'allow', updatedInput: { command: 'ls' } });
 });
 
-test('a rejected rate limit pauses the thread with its reset time and window; a warning names the window it is close to', () => {
+test("Claude's limit states pass through as Claude Code reports them: held turn, extra usage, warning, reopened", () => {
   const { map } = createMapper('t1', CWD);
-  const event = (status: string, resetsAt?: number, extra?: object) => ({ type: 'rate_limit_event', rate_limit_info: { status, resetsAt, ...extra } }) as unknown as SDKMessage;
-  assert.deepEqual(map(event('allowed', 1_760_000_000, { rateLimitType: 'five_hour', utilization: 0.4 })), []);
-  assert.deepEqual(map(event('allowed_warning', 1_760_000_000)), [], 'a warning without a known window says nothing to show');
-  assert.deepEqual(map(event('allowed_warning', 1_760_000_000, { rateLimitType: 'five_hour', utilization: 0.92 })), [
-    { threadId: 't1', type: 'limit-warning', window: { id: 'five_hour', label: '5-hour', usedPct: 92, resetsAt: '2025-10-09T08:53:20.000Z' } },
-  ]);
-  assert.deepEqual(map(event('rejected', 1_760_000_000)), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z' }]);
-  assert.deepEqual(map(event('rejected', 1_760_000_000, { rateLimitType: 'seven_day' })), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z', label: 'Weekly' }]);
-  assert.deepEqual(map(event('rejected')), [{ threadId: 't1', type: 'limit' }]);
+  const event = (status: string, extra?: object) => map({ type: 'rate_limit_event', rate_limit_info: { status, resetsAt: 1_760_000_000, rateLimitType: 'five_hour', ...extra } } as unknown as SDKMessage);
+  assert.deepEqual(event('allowed', { utilization: 0.4 }), []);
+  assert.deepEqual(event('allowed_warning', { utilization: 0.92 }), [{ threadId: 't1', type: 'limit-notice', text: "Claude's 5-hour limit is 92% used" }]);
+  assert.deepEqual(event('allowed_warning', { utilization: 0.94 }), [], 'one warning per window and reset');
+  assert.deepEqual(event('rejected'), [{ threadId: 't1', type: 'limit', isTurnHeld: true, resetsAt: '2025-10-09T08:53:20.000Z', label: '5-hour' }]);
+  assert.deepEqual(event('rejected'), [], 'repeats of a held window say nothing');
+  assert.deepEqual(event('allowed', { utilization: 0 }), [{ threadId: 't1', type: 'limit-cleared' }]);
+
+  const { map: overage } = createMapper('t2', CWD);
+  const rejected = overage({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', rateLimitType: 'seven_day', overageStatus: 'allowed', resetsAt: 1_760_000_000 } } as unknown as SDKMessage);
+  assert.deepEqual(rejected, [{ threadId: 't2', type: 'limit-notice', text: 'Claude is past its weekly limit and using extra usage, billed per use' }], 'extra usage keeps running: no pause');
 });
 
 test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
@@ -188,17 +191,17 @@ test('WebSearch ends with its hits as links, WebFetch with the page it read', ()
   assert.deepEqual(result('f1', fetched).at(0), { threadId: 't1', type: 'tool', id: 'f1', phase: 'end', text: 'Fetch http://redis.io/docs', links: [{ url: 'https://redis.io/docs/' }] });
 });
 
-test('supportedModels() lists each model once by its wire id, the default row marking the default', () => {
+test('supportedModels() lists each model once by its wire id, the default row marking the default, fast mode where reported', () => {
   const effort = { supportsEffort: true, supportedEffortLevels: ['low', 'high'] as ('low' | 'high')[] };
   const models = claudeModels([
     { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', description: 'Opus 5.5', ...effort },
-    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Best for everyday, complex tasks', ...effort },
+    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Best for everyday, complex tasks', ...effort, supportsFastMode: true },
     { value: 'claude-opus-5-5', displayName: 'Opus 5.5 (explicit)', description: '' },
     { value: 'claude-haiku-4-5-20251001', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5', description: 'Fastest' },
   ]);
   assert.deepEqual(models, [
-    { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], isDefault: true },
-    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], isDefault: false },
+    { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], speeds: [claudeFast('claude-opus-5-5')], isDefault: true },
+    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], speeds: [], isDefault: false },
   ]);
 });
 

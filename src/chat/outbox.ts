@@ -5,7 +5,6 @@ import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { withReferences } from './mentions.ts';
-import { heldBy } from '../runtime/limits.ts';
 
 type WhileWorking = Prefs['whileWorking'];
 
@@ -26,7 +25,6 @@ export function dueQueued(state: Pick<State, 'threads' | 'queue'>): { thread: Th
   return state.threads.flatMap((thread) => {
     const message = thread.queued?.[0];
     if (!message || !thread.live || thread.queuePause || thread.live.isWorking || thread.live.starting || thread.status === 'settled') return [];
-    if (heldBy(state.threads, thread)) return [];
     if (state.queue.some((q) => q.threadId === thread.id && (q.kind === 'approval' || q.kind === 'question'))) return [];
     return [{ thread, message }];
   });

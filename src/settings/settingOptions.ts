@@ -8,6 +8,12 @@ export const MOTION = [
   { value: 'off', label: 'Off' },
 ] as const;
 
+// Values, not '': toggle groups and Radix selects read '' as nothing chosen.
+export const SPEEDS = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'fast', label: 'Fast' },
+] as const;
+
 export const DIFF_STYLES = [
   { value: 'unified', label: 'Unified' },
   { value: 'split', label: 'Split' },
