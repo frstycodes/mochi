@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
+import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
+import type { BranchList } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
@@ -50,7 +52,7 @@ export interface ToolEnv {
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
+  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
   now?: () => number;
 }
 
@@ -332,12 +334,15 @@ const THREAD_SPECS = {
       if (!prompt) throw new Error('prompt is required');
       const provider = providerOf(args.provider, caller);
       const controls = await newThreadControls(env, caller, provider, args);
+      const project = projectRef(caller.repo);
+      const workspace = project ? await newWorktree(env, project, prompt) : undefined;
       const before = state();
       dispatch({
         type: 'create',
         title: prompt,
         provider,
-        project: projectRef(caller.repo),
+        project,
+        ...(workspace && { workspace }),
         controls,
         isLive: !!caller.live,
         isBackground: true,
@@ -632,6 +637,16 @@ const isPinned = (t: Thread) => t.orbitSlot !== undefined && t.status !== 'settl
 const providerOf = (provider: Provider | undefined, caller: Thread) => provider ?? caller.providers[0];
 
 /** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Tools allows them. */
+/** A worktree thread's branch named from its prompt and unique among the repo's branches, as the new-thread composer picks it. */
+async function newWorktree(env: ToolEnv, project: string, prompt: string) {
+  const { workspaceMode, branchPrefix } = env.prefs.get();
+  if (workspaceMode !== 'worktree') return undefined;
+  const list = await env.git.branches(project).catch(() => null);
+  if (!list) return undefined;
+  const taken = new Set(list.branches.filter((b) => !b.isRemote).map((b) => b.name));
+  return { mode: workspaceMode, branch: uniqueBranch(branchName(branchPrefix, prompt, 'thread'), taken) };
+}
+
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
   const inherited = provider === caller.providers[0] ? caller.controls : undefined;
   if (!picked.model && !picked.effort) return inherited;
