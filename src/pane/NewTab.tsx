@@ -1,6 +1,6 @@
-import { BranchUp } from 'reicon-react';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { PrStateIcon } from '@/icons/github';
 import { PANE_TAB_KINDS } from '../model';
 import { useHarness } from '../store';
 import { PANE_TABS, type PaneTabProps } from './tabs';
@@ -39,7 +39,7 @@ export function NewTab({ thread }: PaneTabProps) {
             {thread.prs.map((pr) => (
               <Item key={pr.number} size="sm" className="px-2">
                 <ItemMedia>
-                  <BranchUp className="size-4 text-muted-foreground" />
+                  <PrStateIcon state={pr.state} className="size-4" />
                 </ItemMedia>
                 <ItemContent>
                   <ItemTitle className="font-normal">{pr.title}</ItemTitle>

@@ -22,8 +22,13 @@ import {
 import { AutoHeight } from '@/components/ui/auto-height';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { PrStateIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
-import type { Provider, Repo } from './model';
+import { RefChip } from './chat/ChatLink';
+import { refFromUrl } from './chat/refs';
+import { useThreadPrs } from './git/useGit';
+import type { Provider, Repo, Thread } from './model';
+import { VizThreadProvider } from './viz/WidgetVisual';
 import { EffortPicker, ModelPicker, useModels } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
@@ -239,6 +244,24 @@ const ACCESS_ICONS = { Manual: Hand, Auto: ShieldCheck, 'Full access': ShieldAle
 function AccessIcon({ access, className }: { access: Access; className?: string }) {
   const Icon = ACCESS_ICONS[access];
   return <Icon aria-hidden className={className} />;
+}
+
+/** The branch's latest PR beside it: a live chip when it has a URL, else its state icon and number (demo fixtures). */
+export function BranchPr({ thread }: { thread: Thread }) {
+  const pr = useThreadPrs(thread).at(-1);
+  if (!pr) return null;
+  const githubRef = pr.url ? refFromUrl(pr.url) : null;
+  if (!githubRef)
+    return (
+      <span className="flex shrink-0 items-center gap-1 tabular" title={`${pr.title} (${pr.state})`}>
+        <PrStateIcon state={pr.state} className="size-3.5" />#{pr.number}
+      </span>
+    );
+  return (
+    <VizThreadProvider value={thread.id}>
+      <RefChip githubRef={githubRef} />
+    </VizThreadProvider>
+  );
 }
 
 /** Where a started thread works: its project folder or its own worktree, and the branch. */

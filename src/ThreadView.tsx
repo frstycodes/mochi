@@ -19,6 +19,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PrStateIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTabKind, Thread } from './model';
 import { PANE_TABS } from './pane/tabs';
@@ -270,8 +271,8 @@ function ThreadHeader({
           </span>
         )}
         {thread.prs.map((pr) => (
-          <Badge key={pr.number} variant="secondary" title={pr.title} className="hidden @xl:inline-flex">
-            #{pr.number}
+          <Badge key={pr.number} variant="secondary" title={`${pr.title} (${pr.state})`} className="hidden gap-1 tabular @xl:inline-flex">
+            <PrStateIcon state={pr.state} className="size-3" />#{pr.number}
           </Badge>
         ))}
         <span className="flex-1" />

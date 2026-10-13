@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { PrStateIcon } from '@/icons/github';
 import { useConfirm } from '../git/useConfirm';
 import type { Pane, PaneTab, Thread } from '../model';
 import { BrowserTab } from '../pane/BrowserTab';
@@ -106,7 +107,8 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
               <ul className="flex flex-col gap-1">
                 {thread.prs.map((pr) => (
                   <li key={pr.number} className="flex min-w-0 items-center gap-2">
-                    <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
+                    <PrStateIcon state={pr.state} className="size-3.5" />
+                    <span className="tabular">#{pr.number}</span>
                     <span className="min-w-0 truncate">{pr.title}</span>
                     <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
                   </li>

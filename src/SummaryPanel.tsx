@@ -11,17 +11,14 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
 import { openFiles } from './files/viewer';
-import { withLivePr } from './git/prs';
 import { PrStateIcon } from './icons/github';
-import { usePr } from './git/useGit';
+import { useThreadPrs } from './git/useGit';
 import type { AgentInfo, McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
-import { useProfiles } from './profiles';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
@@ -164,20 +161,8 @@ function OpenInEditorItems({ thread }: { thread: Thread }) {
   ));
 }
 
-/** A live thread on the desktop also lists its branch's PR from `gh`; the web build's mock would give every thread the same one. */
 function PullRequestsSection({ thread, onOpen }: { thread: Thread; onOpen: (url: string) => void }) {
-  const cwd = host.isDesktop && thread.live ? threadCwd(thread) : null;
-  if (cwd) return <LivePullRequests thread={thread} cwd={cwd} onOpen={onOpen} />;
-  return <PullRequestList prs={thread.prs} onOpen={onOpen} />;
-}
-
-function LivePullRequests({ thread, cwd, onOpen }: { thread: Thread; cwd: string; onOpen: (url: string) => void }) {
-  const githubUser = useProfiles().find((p) => p.id === thread.spaceId)?.github || undefined;
-  const prQuery = usePr(cwd, githubUser);
-  return <PullRequestList prs={withLivePr(thread.prs, prQuery.data)} onOpen={onOpen} />;
-}
-
-function PullRequestList({ prs, onOpen }: { prs: PullRequest[]; onOpen: (url: string) => void }) {
+  const prs = useThreadPrs(thread);
   return (
     <Section label="Pull requests" empty={prs.length === 0 ? 'No PRs linked yet' : undefined}>
       {prs.map((pr) => (

@@ -15,7 +15,7 @@ import { QueueDecision } from './QueueView';
 import { useHarness } from './store';
 import { ProviderMark } from './ui';
 import { WorkspaceControls, WorkspaceNotes, useThreadWorkspace } from './git/WorkspacePicker';
-import { BranchLabel, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, useComposerHandoff } from './Composer';
+import { BranchLabel, BranchPr, ComposerCard, ComposerInput, ComposerMeta, PermissionsMenu, useComposerHandoff } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
@@ -284,6 +284,7 @@ function Composer({
         <ComposerMeta>
           <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
           {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
+          {!workspace && <BranchPr thread={thread} />}
           <span className="ml-auto hidden shrink-0 items-center gap-1 md:flex">
             {isQueue ? (
               'Queues after this turn'
