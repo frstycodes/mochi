@@ -4,14 +4,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runGit } from './run.ts';
 
-export function checkpointRef(threadId: string, n: number | 'undo') {
+/** `undo`: the files a rewind replaced. `turn`: the files as the agent's last turn left them, to tell its changes from anyone else's. */
+export function checkpointRef(threadId: string, n: number | 'undo' | 'turn') {
   if (!/^[\w-]{1,64}$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
-  if (n !== 'undo' && (!Number.isInteger(n) || n < 0 || n > 1_000_000)) throw new TypeError('checkpoint must be a non-negative integer or "undo"');
+  if (n !== 'undo' && n !== 'turn' && (!Number.isInteger(n) || n < 0 || n > 1_000_000)) throw new TypeError('checkpoint must be a non-negative integer, "undo" or "turn"');
   return `refs/harness/checkpoints/${threadId}/${n}`;
 }
 
 /** A commit of the work tree's files (untracked included, ignored not) whose parent is HEAD, stored at `ref`. HEAD, index and files stay as they are. */
 export async function snapshot(top: string, ref: string, message: string) {
+  const commit = await snapshotCommit(top, message);
+  await runGit(top, ['update-ref', ref, commit]);
+  return commit;
+}
+
+/** `snapshot` without a ref: the work tree's files as an unreferenced commit, for comparing. */
+export async function snapshotCommit(top: string, message: string) {
   // A throwaway index, so the user's staged state is never touched.
   const index = join(tmpdir(), `harness-index-${randomUUID()}`);
   const env = { GIT_INDEX_FILE: index };
@@ -20,9 +28,7 @@ export async function snapshot(top: string, ref: string, message: string) {
     await runGit(top, ['read-tree', head], { env });
     await runGit(top, ['add', '-A', '--', '.'], { env });
     const tree = (await runGit(top, ['write-tree'], { env })).trim();
-    const commit = (await runGit(top, ['commit-tree', tree, '-p', head, '-m', message])).trim();
-    await runGit(top, ['update-ref', ref, commit]);
-    return commit;
+    return (await runGit(top, ['commit-tree', tree, '-p', head, '-m', message])).trim();
   } finally {
     await rm(index, { force: true });
   }
@@ -43,5 +49,11 @@ export async function applyFiles(top: string, commit: string) {
 }
 
 export async function resolveCommit(top: string, ref: string) {
-  return (await runGit(top, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).trim();
+  // --quiet exits 1 for a missing ref: that's an answer (''), not a failure.
+  return (await runGit(top, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { okCodes: [1] })).trim();
+}
+
+/** Paths whose content differs between two commits' trees. */
+export async function changedPaths(top: string, from: string, to: string) {
+  return (await runGit(top, ['diff', '--name-only', '-z', from, to])).split('\0').filter(Boolean);
 }

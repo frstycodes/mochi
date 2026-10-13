@@ -25,6 +25,7 @@ import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
+import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useWorktreeManager } from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
@@ -58,6 +59,7 @@ export function App() {
               <PhotoViewer />
               <FileViewer />
               <ScheduleLayer />
+              <GoalEditorLayer />
               <Toaster position="bottom-right" />
             </HarnessProvider>
           )}

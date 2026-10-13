@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { firstPrompt } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { chatFor, questionText, sidechatReducer, type Quote } from './sidechat.ts';
 import { initialThreads } from './threads.ts';
@@ -65,7 +66,7 @@ test('promoting to a new thread creates it from the question and seeds the answe
   const promoted = run(state, { type: 'sidechat-promote', ...at, id: 'a1', to: 'thread' });
   assert.equal(promoted.threads.length, state.threads.length + 1);
   const created = promoted.threads.at(-1)!;
-  assert.equal(created.goal, 'Why Redis?');
+  assert.equal(firstPrompt(created), 'Why Redis?');
   assert.equal(created.activity.at(-1)?.text, 'From the side chat:\n\nShared state.');
   assert.deepEqual(thread(promoted).activity, thread(state).activity);
 });

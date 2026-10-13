@@ -2,6 +2,8 @@ import { ArrowSwapHorizontal, Undo } from 'reicon-react';
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
+import { SkippedItem } from '../menus/ActionItems';
+import { rewindBlockedReason } from './checkpoints';
 import { forkRelatives } from './fork';
 import { openRewind } from './requests';
 import { useRewindActions } from './useRewindActions';
@@ -12,18 +14,21 @@ export function RewindMenuItems({ thread }: { thread: Thread }) {
   const { undo } = useRewindActions();
   const relatives = forkRelatives(state, thread.id);
   const canUndo = state.rewindUndo?.threadId === thread.id;
+  const blockedReason = rewindBlockedReason(thread);
   if (!canUndo && !relatives.length) return null;
 
   return (
     <>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
-        {canUndo && (
+        {canUndo && (blockedReason ? (
+          <SkippedItem menu="dropdown" icon={<Undo />} title="Undo rewind" reason={blockedReason} />
+        ) : (
           <DropdownMenuItem onSelect={() => void undo()}>
             <Undo />
             Undo rewind
           </DropdownMenuItem>
-        )}
+        ))}
         {relatives.map((r) => (
           <DropdownMenuItem key={r.id} onSelect={() => openRewind({ kind: 'compare', threadId: thread.id, otherId: r.id })}>
             <ArrowSwapHorizontal />
