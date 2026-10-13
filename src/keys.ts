@@ -1,6 +1,6 @@
 /**
  * Keyboard shortcuts across platforms. `mod` is the primary modifier (⌘ on macOS, Ctrl on Windows and Linux);
- * `nav` is the secondary one for moving between spaces, splits and stage cards (⌃ on macOS, Alt elsewhere, because Ctrl is `mod` there).
+ * `nav` is the secondary one for moving between spaces and splits (⌃ on macOS, Alt elsewhere, because Ctrl is `mod` there).
  */
 export type Modifier = 'mod' | 'nav' | 'shift' | 'alt';
 export type Arrow = 'up' | 'down' | 'left' | 'right';

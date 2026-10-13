@@ -17,6 +17,7 @@ import { FileDiffs } from '../settings/FileDiffs';
 import { SettingsRow } from '../settings/parts';
 import { SuggestedServerRow } from '../settings/ProfileAgentConfig';
 import { useHarness } from '../store';
+import { revealCard } from './Transcript';
 
 /** A Mochi widget where the agent asked: the live card while it waits, then its one-line record. */
 export function CardEntry({ entry, card }: { entry: ActivityEntry; card: NonNullable<ActivityEntry['card']> }) {
@@ -200,7 +201,8 @@ export function useShowCard() {
     // Timers, not rAF: frames pause while the window is hidden, and the thread mounts a beat after `go`.
     const find = () => {
       const el = document.querySelector<HTMLElement>(`[data-card="${CSS.escape(item.id)}"]`);
-      if (!el) return void (++tries < 60 && setTimeout(find, 16));
+      // The transcript is virtualized: a card far up the thread has no element until its row is scrolled to.
+      if (!el) return void (revealCard(item.id), ++tries < 60 && setTimeout(find, 16));
       el.scrollIntoView({ block: 'center' });
       el.focus({ preventScroll: true });
     };

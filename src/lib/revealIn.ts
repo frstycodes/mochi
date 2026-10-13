@@ -1,6 +1,6 @@
 /**
- * `scrollIntoView` confined to one scroller. The native call scrolls every scrolling ancestor too, the Stage and spaces pagers included:
- * a tab strip revealing its active tab as a swiped-in session mounted dragged the Stage back to the old page and undid the swipe.
+ * `scrollIntoView` confined to one scroller. The native call scrolls every scrolling ancestor too, the pinned and spaces pagers included:
+ * a tab strip revealing its active tab as a swiped-in session mounted dragged the pager back to the old page and undid the swipe.
  */
 export function revealIn(scroller: HTMLElement, el: Element, { align = 'nearest', behavior = 'instant' }: { align?: 'nearest' | 'start'; behavior?: ScrollBehavior } = {}) {
   const box = scroller.getBoundingClientRect();

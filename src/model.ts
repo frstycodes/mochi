@@ -6,6 +6,7 @@ import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
+import { longThreadFromUrl } from './longThread.ts';
 import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
@@ -728,6 +729,7 @@ export function seedThreads(): Thread[] {
     simpleThread('queues', 'personal', null, 'Compare Postgres job queues', 'claude', 3, 790, ['Collect the options', 'Compare tradeoffs'], 1),
     simpleThread('cfg', 'liane', 'liane', 'Per-space config dirs', 'claude', 1, 720, ['Materialize CODEX_HOME per space', 'Materialize CLAUDE_CONFIG_DIR per space', 'Stop global writes', 'Migration for existing users'], 1, 1),
     simpleThread('tele', 'liane', 'liane', 'Skill telemetry', 'codex', 2, 800, ['Log skill loads per thread', 'Dead skill report'], 0),
+    ...[longThreadFromUrl()].filter((t) => !!t),
   ];
 }
 

@@ -12,7 +12,7 @@ import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
 import { SidebarToggle } from './SidebarToggle';
-import { Stage } from './stage/Stage';
+import { PinnedPager } from './pager/PinnedPager';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
 import { useGlobalKeys } from './palette/useGlobalKeys';
@@ -115,7 +115,7 @@ function Shell() {
       )}
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : review.isOpen ? <ReviewView /> : <Stage />}
+          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />

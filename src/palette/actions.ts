@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, Flag, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
+import { Archive, Flag, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
@@ -24,6 +24,7 @@ import { askSecondOpinion } from '../secondOpinion/run';
 import { reviewerFor } from '../secondOpinion/reviewer';
 import { providerName } from '../secondOpinion/verdict';
 import { pinMany } from '../reorder';
+import { pinnedNeighbour, slotsOf } from '../pager/slots';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
@@ -127,7 +128,8 @@ export const ACTIONS = [
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),
-  { id: 'layout-stage', group: 'Layout', title: 'Toggle Stage Manager', icon: Layers, shortcut: ['mod', 'shift', 'S'], run: ({ dispatch }) => dispatch({ type: 'stage-toggle' }) },
+  { id: 'pinned-previous', group: 'Layout', title: 'Previous pinned thread', icon: ArrowLeft, shortcut: ['mod', 'shift', '['], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, -1) },
+  { id: 'pinned-next', group: 'Layout', title: 'Next pinned thread', icon: ArrowRight, shortcut: ['mod', 'shift', ']'], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, 1) },
   { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, shortcut: ['mod', 'up'], keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
   { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, shortcut: ['mod', '\\'], run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
   { id: 'layout-split-down', group: 'Layout', title: 'Split down', icon: RowHorizontal, run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId, side: 'bottom' }) },
@@ -156,6 +158,12 @@ export const ACTIONS = [
   { id: 'theme-system', group: 'Appearance', title: 'System theme', icon: Monitor, run: ({ setTheme }) => setTheme('system') },
   { id: 'sim-pause', group: 'Appearance', title: 'Pause or resume agents', icon: Pause, keywords: 'simulation tick', run: ({ dispatch }) => dispatch({ type: 'pause' }) },
 ] satisfies PaletteAction[];
+
+/** The pinned pager's keys: the next or previous pinned thread, instantly (keyboard navigation never animates). */
+function goPinned(state: State, dispatch: Dispatch<Action>, step: 1 | -1) {
+  const id = pinnedNeighbour(slotsOf(state), step);
+  if (id) dispatch({ type: 'go', view: { kind: 'thread', id } });
+}
 
 function onThread(fn: (thread: Thread, ctx: ActionContext) => void) {
   return (ctx: ActionContext) => ctx.scope.thread && fn(ctx.scope.thread, ctx);
