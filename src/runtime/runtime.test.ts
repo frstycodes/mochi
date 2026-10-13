@@ -110,7 +110,8 @@ test('usage events move the context meter and accumulate on a live session', () 
 });
 
 test('info merges into the thread, MCP servers by name, and a new session starts it over', () => {
-  let s = base();
+  // The demo thread carries agent info of its own; a session starts it over.
+  let s = applyAgentEvent(base(), { threadId: 'rl', type: 'session', provider: 'claude', sessionId: 'sess-1' });
   s = applyAgentEvent(s, { threadId: 'rl', type: 'info', info: { model: 'm', mcpServers: [{ name: 'a', status: 'pending', toolCount: 2 }, { name: 'b', status: 'connected' }] } });
   s = applyAgentEvent(s, { threadId: 'rl', type: 'info', info: { skills: ['ui'], mcpServers: [{ name: 'a', status: 'connected' }] } });
   assert.deepEqual(thread(s, 'rl').agent, { model: 'm', skills: ['ui'], mcpServers: [{ name: 'a', status: 'connected', toolCount: 2 }, { name: 'b', status: 'connected' }] });

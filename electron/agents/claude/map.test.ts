@@ -254,3 +254,19 @@ test('a Skill call is a skill load and an mcp__ call names its server and tool, 
   assert.deepEqual(unknown.type === 'tool' && unknown.mcp, { server: 'later', tool: 'do_it' }, 'a server init did not list splits at its first __');
   assert.deepEqual(call('b1', 'Skill', {})[0], { threadId: 't1', type: 'tool', id: 'b1', phase: 'start', text: 'Skill' }, 'no skill name, no skill load');
 });
+
+test('a message opening with a /skill reports the load itself, once init has listed the skills (2.1.296 emits nothing for it)', () => {
+  const mapper = createMapper('t1', CWD);
+  assert.deepEqual(mapper.sent('/shout what is 2+2?'), [], 'init not in yet: held');
+  const init = mapper.map({ type: 'system', subtype: 'init', session_id: 's', parent_tool_use_id: null, cwd: CWD, tools: [], mcp_servers: [], skills: ['shout'] } as unknown as SDKMessage);
+  assert.deepEqual(
+    init.filter((e) => e.type === 'tool').map((e) => e.type === 'tool' && [e.phase, e.text, e.skill]),
+    [
+      ['start', 'Skill shout', 'shout'],
+      ['end', 'Skill shout', 'shout'],
+    ],
+  );
+  assert.equal(mapper.sent('/shout again').length, 2, 'known now: reported at once');
+  assert.deepEqual(mapper.sent('/compact'), [], 'a command that is not a skill');
+  assert.deepEqual(mapper.sent('no command'), []);
+});

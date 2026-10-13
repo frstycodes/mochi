@@ -17,6 +17,20 @@ export function createMapper(threadId: string, cwd: string) {
   let isInterrupting = false;
   /** MCP server names from init, to read a server back out of `mcp__<server>__<tool>`. */
   let servers: string[] = [];
+  /** Skill names from init; until it arrives, skills sent messages open with wait in `typed`. */
+  let skills: string[] | undefined;
+  const typed: string[] = [];
+
+  // A message opening with `/skill` loads it with no event of its own in the stream (2.1.296), so the load is reported here.
+  function typedSkills(): AgentEvent[] {
+    if (!skills) return [];
+    const known = new Set(skills);
+    return typed.splice(0).flatMap((name, i) => {
+      if (!known.has(name)) return [];
+      const call = { threadId, type: 'tool' as const, id: `skill:${Date.now()}:${i}:${name}`, text: `Skill ${name}`, skill: name };
+      return [{ ...call, phase: 'start' as const }, { ...call, phase: 'end' as const }];
+    });
+  }
 
   const planFromTasks = (): AgentEvent => ({ threadId, type: 'plan', items: tasks.map(({ title, status }) => ({ title, status })) });
 
@@ -131,7 +145,8 @@ export function createMapper(threadId: string, cwd: string) {
         if (message.subtype.startsWith('task_')) return mapTask(message);
         if (message.subtype === 'init') {
           servers = (message.mcp_servers ?? []).map((s) => s.name);
-          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }];
+          skills = message.skills ?? [];
+          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }, ...typedSkills()];
         }
         if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name), commands: commandsFrom(message.commands) } }];
         return [];
@@ -176,6 +191,12 @@ export function createMapper(threadId: string, cwd: string) {
 
   return {
     map,
+    /** A message handed to Claude Code: a leading `/skill` is a skill load, reported once init has listed the skills. */
+    sent(text: string): AgentEvent[] {
+      const name = /^\/(\S+)/.exec(text)?.[1];
+      if (name) typed.push(name);
+      return typedSkills();
+    },
     /** The task id `query.stopTask` takes for a subagent, once Claude Code has registered it. */
     taskOf: (subagentId: string) => agents.get(subagentId)?.taskId,
     markInterrupting() {
