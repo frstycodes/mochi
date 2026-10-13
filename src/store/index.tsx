@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState, type Dispatch, type ReactNode } from 'react';
 import { dueQueued, sendMessage } from '../chat/outbox.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
@@ -9,6 +9,7 @@ import { useProfiles } from '../profiles.ts';
 import { resolution } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
+import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
 import { runTool } from '../runtime/tools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
 import { applyUndo, type ToolUndo } from '../runtime/undo.ts';
@@ -139,6 +140,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     [dispatch],
   );
   useQueueRunner(state, dispatch);
+  useLimitResumes(state.threads, dispatch);
   useEffect(() => {
     savePanes(state.panes);
   }, [state.panes]);
@@ -159,6 +161,26 @@ function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
       sendMessage(dispatch, state, thread, message, { queuedId: message.id });
     }
   }, [state, dispatch]);
+}
+
+/** Resumes threads you set to Resume at reset once their reset passes; one timer for the earliest. */
+function useLimitResumes(threads: Thread[], dispatch: Dispatch<Action>) {
+  const [tick, setTick] = useState(0);
+  // The resume applies on the next render; until then the same thread is still due.
+  const resumed = useRef(new Set<string>());
+  useEffect(() => {
+    for (const t of dueResumes(threads)) {
+      const key = `${t.id}:${t.live!.limit!.resetsAt}`;
+      if (resumed.current.has(key)) continue;
+      resumed.current.add(key);
+      dispatch({ type: 'resume', threadId: t.id, atReset: true });
+    }
+    const at = nextResumeAt(threads);
+    if (at === undefined) return;
+    // setTimeout overflows past ~24.8 days; a weekly reset is well inside that.
+    const id = window.setTimeout(() => setTick((n) => n + 1), at - Date.now() + 1000);
+    return () => window.clearTimeout(id);
+  }, [threads, dispatch, tick]);
 }
 
 // Sequential: a handoff's stop must reach the old agent before the new one starts in the same thread.

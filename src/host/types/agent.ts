@@ -51,7 +51,10 @@ export type AgentEvent =
   | { threadId: string; type: 'resolved'; requestId: string }
   /** `cachedTokens`: the part of `inputTokens` read from the prompt cache. */
   | { threadId: string; type: 'usage'; inputTokens: number; outputTokens: number; cachedTokens?: number; costUsd?: number; contextUsed?: number; contextMax?: number }
-  | { threadId: string; type: 'limit'; resetsAt?: string }
+  /** The account is close to a plan window's limit (Claude's `allowed_warning`, a Codex window at `WARN_PCT`); turns still run. */
+  | { threadId: string; type: 'limit-warning'; window: LimitWindow }
+  /** The account hit a plan window's limit: the turn ended and nothing runs on it until `resetsAt`. `label` names the window ("5-hour"). */
+  | { threadId: string; type: 'limit'; resetsAt?: string; label?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** One plan rate-limit window of an account, as the provider reported it. */

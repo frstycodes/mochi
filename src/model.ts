@@ -1,4 +1,4 @@
-import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
+import type { AgentQuestion, LimitWindow, SubagentStatus } from './host/types/agent.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -6,6 +6,7 @@ import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
+import { limitPausedThread } from './usage/limitDemo.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
 export type Size = 1 | 2 | 3;
@@ -64,6 +65,8 @@ export interface ActivityEntry {
   output?: string;
   exitCode?: number;
   patch?: string;
+  /** Events only: the thread paused here on a usage limit; the latest such entry renders the live limit card while the pause lasts. */
+  isLimit?: boolean;
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
@@ -253,8 +256,12 @@ export interface LiveRun {
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
   cwd?: string;
-  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
-  limit?: { resetsAt?: string };
+  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. `label` names the window ("5-hour"); `autoResume`: you chose Resume at reset. */
+  limit?: { resetsAt?: string; label?: string; autoResume?: boolean };
+  /** The account is close to a plan window's limit; turns still run. Cleared by the limit itself or a resume. */
+  limitWarning?: LimitWindow;
+  /** Mochi asked the agent to wrap up before the limit; cleared when that turn ends. */
+  isWrappingUp?: boolean;
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
@@ -656,6 +663,7 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
 export function seedThreads(): Thread[] {
   return [
     rateLimiting(),
+    limitPausedThread(),
     adminDashboard(),
     flakyCheckout(),
     authMigration(),

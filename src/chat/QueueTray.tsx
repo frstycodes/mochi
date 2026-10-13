@@ -7,11 +7,14 @@ import { cn } from '@/lib/utils';
 import type { QueuedMessage, Thread } from '../model';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
+import { heldBy } from '../runtime/limits';
 import { moveQueued, PAUSE_REASONS } from './outbox';
 
 /** Messages waiting for the agent's turn to end, docked in the composer above the text like the question tray. */
 export function QueueTray({ thread, onSendNow, onEdit }: { thread: Thread; onSendNow: (message: QueuedMessage) => void; onEdit: (message: QueuedMessage) => void }) {
-  const { dispatch } = useHarness();
+  const { state, dispatch } = useHarness();
+  // Held by a usage limit: nothing may start a turn on that account, Send now included.
+  const isHeld = !!heldBy(state.threads, thread);
   const reduce = useReducedMotionConfig();
   const [isOpen, setOpen] = useState(true);
   const queued = thread.queued ?? [];
@@ -38,7 +41,7 @@ export function QueueTray({ thread, onSendNow, onEdit }: { thread: Thread; onSen
           <ScrollArea className="[&>[data-slot=scroll-area-viewport]]:max-h-[min(30vh,14rem)]">
             <Reorder.Group as="ol" axis="y" values={ids} onReorder={order} className="flex flex-col gap-0.5 px-1 pb-1 select-none">
               {queued.map((message) => (
-                <QueueRow key={message.id} message={message} onSendNow={onSendNow} onEdit={onEdit} onRemove={() => dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id })} onMove={(step) => order(moveQueued(ids, message.id, step))} />
+                <QueueRow key={message.id} message={message} onSendNow={isHeld ? undefined : onSendNow} onEdit={onEdit} onRemove={() => dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id })} onMove={(step) => order(moveQueued(ids, message.id, step))} />
               ))}
             </Reorder.Group>
           </ScrollArea>
@@ -49,11 +52,11 @@ export function QueueTray({ thread, onSendNow, onEdit }: { thread: Thread; onSen
 }
 
 function QueueStatus({ thread, preview }: { thread: Thread; preview?: string }) {
-  if (thread.queuePause) return <span className="min-w-0 truncate text-warning">Paused: {PAUSE_REASONS[thread.queuePause]}{thread.queuePause === 'limit' && ', sends after you resume'}</span>;
+  if (thread.queuePause) return <span className="min-w-0 truncate text-warning">Paused: {PAUSE_REASONS[thread.queuePause]}{thread.queuePause === 'limit' && ', sends when the thread resumes'}</span>;
   return <span className="min-w-0 truncate text-muted-foreground">{preview ?? 'Sends when this turn ends'}</span>;
 }
 
-function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: QueuedMessage; onSendNow: (m: QueuedMessage) => void; onEdit: (m: QueuedMessage) => void; onRemove: () => void; onMove: (step: -1 | 1) => void }) {
+function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: QueuedMessage; onSendNow?: (m: QueuedMessage) => void; onEdit: (m: QueuedMessage) => void; onRemove: () => void; onMove: (step: -1 | 1) => void }) {
   return (
     <Reorder.Item
       as="li"
@@ -72,9 +75,11 @@ function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: Q
       <ExtraCount icon={Paperclip} count={message.files} label="attached" />
       <ExtraCount icon={MentionCircle} count={message.mentions.length} label="referenced" />
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 pointer-coarse:opacity-100">
-        <Button variant="ghost" size="xs" className="rounded-full" onClick={() => onSendNow(message)}>
-          Send now
-        </Button>
+        {!!onSendNow && (
+          <Button variant="ghost" size="xs" className="rounded-full" onClick={() => onSendNow(message)}>
+            Send now
+          </Button>
+        )}
         <TooltipIconButton label="Edit" hint="Moves it back into the message box" onClick={() => onEdit(message)}>
           <Edit className="size-3.5" />
         </TooltipIconButton>

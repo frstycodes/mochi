@@ -236,6 +236,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [x] Each profile (space) links at most one Claude and one Codex account; one account can be linked to several profiles
 - [x] Threads always run on their profile's account; never rotate to another account of the same provider
 - [x] Limit reached: thread pauses with the reset time and resumes on the same account; one-click, explicit options to continue on your API key or hand off to the other provider
+- [x] Graceful stop: warns as a window fills, wraps up the turn in flight (Claude Code's own checkpoint, Mochi's steer for Codex), holds sends and new threads on that account until the reset, Resume at reset per thread; limit card in the transcript, header chip, sidebar line, composer hint, ring arc, notification (RUNTIME.md › Usage limits)
 
 ## 10. Goals v2 (decided 2026-10-13)
 

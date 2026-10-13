@@ -1,4 +1,5 @@
 import { isValidElement, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { limitStatus } from './chat/LimitCard';
 import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
@@ -155,7 +156,7 @@ function NeedsYou({ thread }: { thread: Thread }) {
       <span className="flex w-4 shrink-0 justify-center" aria-hidden>
         <span className="size-1.5 rounded-full bg-warning" />
       </span>
-      {currentAction(thread)?.label ?? PHASE_LABELS.wait}
+      {limitStatus(thread) ?? currentAction(thread)?.label ?? PHASE_LABELS.wait}
     </p>
   );
 }

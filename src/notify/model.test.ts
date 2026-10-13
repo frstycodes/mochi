@@ -50,3 +50,15 @@ test('quiet hours wrap past midnight', () => {
   assert.equal(isQuiet({ isOn: true, start: 9, end: 17 }, at(12)), true);
   assert.equal(isQuiet({ ...night, isOn: false }, at(23)), false);
 });
+
+test('a usage limit notifies as a pause, not a question; a resume at reset notifies too', () => {
+  const live = { isWorking: false };
+  const running = thread({ status: 'running', live });
+  const paused = thread({ status: 'needs-you', live: { ...live, limit: { resetsAt: '2026-10-13T15:40:00.000Z', label: '5-hour', autoResume: true } } });
+  const [notice] = diffNotices({ threads: [running], queue: [] }, { threads: [paused], queue: [] }, 10);
+  assert.equal(notice.kind, 'limit');
+  assert.match(notice.body, /hit the 5-hour usage limit; resets /);
+  assert.deepEqual(diff(running, paused), ['limit'], 'no second "needs you" for the same pause');
+  assert.deepEqual(diff(paused, thread({ status: 'running', live })), ['limit']);
+  assert.deepEqual(diff(paused, thread({ status: 'running', live: { ...live, isOnApiKey: true } })), [], 'moving to the API key is your own click');
+});

@@ -56,8 +56,9 @@ export type ThreadsAction =
   | { type: 'workspace'; threadId: string; workspace: WorkspaceDraft }
   | { type: 'controls'; threadId: string; controls: ThreadControls }
   | { type: 'interrupt'; threadId: string }
-  /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. */
-  | { type: 'resume'; threadId: string; onApiKey?: boolean }
+  /** After a usage limit: on the same account, or (`onApiKey`) on the stored API key from now on. `atReset`: the reset came and you had chosen Resume at reset. */
+  | { type: 'resume'; threadId: string; onApiKey?: boolean; atReset?: boolean }
+  | { type: 'limit-auto-resume'; threadId: string; isOn: boolean }
   /**
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
    * `queuedId`: the queued message this sends, which leaves the queue. `interrupts`: ends the turn in flight first (the queue's Send now).
@@ -177,12 +178,14 @@ function reduce(state: State, action: Action): State {
           t.live
             ? log(
                 // The queue waits for this turn to end, then goes on.
-                { ...t, status: 'running', queuePause: undefined, live: { ...t.live, isWorking: true, limit: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
-                { at: state.now, who: 'harness', kind: 'event', text: action.onApiKey ? 'Continuing on your API key, billed per use' : 'Resumed on the same account' },
+                { ...t, status: 'running', queuePause: undefined, live: { ...t.live, isWorking: true, limit: undefined, limitWarning: undefined, isDetached: undefined, isOnApiKey: t.live.isOnApiKey || action.onApiKey } },
+                { at: state.now, who: 'harness', kind: 'event', text: resumeText(t, action) },
               )
             : t,
         ),
       };
+    case 'limit-auto-resume':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live?.limit ? { ...t, live: { ...t.live, limit: { ...t.live.limit, autoResume: action.isOn || undefined } } } : t)) };
     case 'drift-new-thread':
       return driftNewThread(state, action);
     case 'drift-verdict':
@@ -564,4 +567,11 @@ function handoffLive(state: State, action: Extract<Action, { type: 'handoff' }>)
       t.live && !action.stepId ? { ...t, status: 'running', session: undefined, controls: undefined, live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: undefined, isDetached: undefined } } : t,
     ),
   };
+}
+
+function resumeText(thread: Thread, action: Extract<ThreadsAction, { type: 'resume' }>) {
+  if (action.onApiKey) return 'Continuing on your API key, billed per use';
+  const window = thread.live?.limit?.label;
+  if (action.atReset) return `Resumed after the ${window ? `${window.toLowerCase()} ` : ''}limit reset`;
+  return 'Resumed on the same account';
 }

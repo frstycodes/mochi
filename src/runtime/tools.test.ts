@@ -299,7 +299,7 @@ test('another profile is out of reach and bad args are errors, not throws', asyn
 
 test('list_threads filters by status, pinned and project inside the profile', async () => {
   const t = setup();
-  assert.deepEqual((await t.ok('list_threads')).map((x: { id: string }) => x.id), ['rl', 'adm', 'e2e', 'auth', 'onb', 'viz']);
+  assert.deepEqual((await t.ok('list_threads')).map((x: { id: string }) => x.id), ['rl', 'limit', 'adm', 'e2e', 'auth', 'onb', 'viz']);
   assert.deepEqual((await t.ok('list_threads', { status: 'settled' })).map((x: { id: string }) => x.id), ['onb', 'viz']);
   assert.deepEqual((await t.ok('list_threads', { pinned: true })).map((x: { id: string }) => x.id), ['rl', 'adm', 'auth']);
   assert.equal((await t.ok('list_threads', { project: 'nope' })).length, 0);

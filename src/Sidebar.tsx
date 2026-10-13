@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
@@ -575,6 +576,8 @@ function useThreadRow(thread: Thread) {
 }
 
 export function threadDetail(thread: Thread, question?: string) {
+  const limit = limitStatus(thread);
+  if (limit) return limit;
   if (thread.status === 'needs-you') return question ?? 'Waiting on you';
   if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];
