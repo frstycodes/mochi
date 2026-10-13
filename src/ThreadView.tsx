@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { BranchUp, ChevronDown, Laptop, SidebarRight } from 'reicon-react';
+import { BranchUp, ChevronDown, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import { useSplit } from './layout/SplitContext';
 import { SummaryPanel } from './SummaryPanel';
 import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
 import { useHarness } from './store';
+import { hasGoal } from './drift';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 
 const PANE_ANIMATION_MS = 260;
@@ -277,8 +278,14 @@ function ThreadHeader({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="sm" aria-label="Thread summary" aria-pressed={isSummaryOpen} onClick={onToggleSummary} className={cn('gap-1.5 px-2 text-muted-foreground', isSummaryOpen && 'bg-accent text-foreground')}>
-              <ProgressRing pct={pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
-              <span className="tabular">{Math.round(pct * 100)}%</span>
+              {hasGoal(thread) ? (
+                <>
+                  <ProgressRing pct={pct} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+                  <span className="tabular">{Math.round(pct * 100)}%</span>
+                </>
+              ) : (
+                <TextalignLeft className="size-4" aria-hidden />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>{isSummaryOpen ? 'Hide the summary' : 'Show the summary'}</TooltipContent>

@@ -140,11 +140,11 @@ function bestMatch(steps: Step[], title: string) {
   return best;
 }
 
-/** The scope-add revision flow for steps the agent planned that the goal doesn't have yet. */
+/** Steps the agent planned that the goal doesn't have yet: plan changes, logged, never a goal revision. */
 function addScope(state: State, threadId: string, provider: Provider, added: { item: AgentPlanItem; after?: Step }[]): State {
   const now = state.now;
   const thread = state.threads.find((t) => t.id === threadId)!;
-  const revision = thread.revisions.length + 1;
+  const revision = thread.revisions.at(-1)?.n ?? 1;
   let steps = thread.steps;
   const created: Step[] = [];
   added.forEach(({ item, after }, k) => {
@@ -170,7 +170,7 @@ function addScope(state: State, threadId: string, provider: Provider, added: { i
   let next: State = {
     ...state,
     threads: mapThread(state.threads, threadId, (t) =>
-      log({ ...t, steps, revisions: [...t.revisions, { n: revision, at: now, label, by: provider }] }, { at: now, who: 'harness', kind: 'event', text: `Goal v${revision}: +${created.length} step${created.length === 1 ? '' : 's'}` }),
+      log({ ...t, steps }, { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` }),
     ),
   };
   for (const step of created) next = holdOverlap(next, threadId, step);

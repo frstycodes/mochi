@@ -57,8 +57,12 @@ export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thre
         <div className="flex flex-col gap-0.5 px-2 pt-2 pb-3">
           <PanelHeader thread={thread} />
           {thread.status === 'settled' && <OutcomeSection thread={thread} />}
-          <GoalSection thread={thread} />
-          <Separator className="mx-2 my-2 w-auto!" />
+          {hasGoal(thread) && (
+            <>
+              <GoalSection thread={thread} />
+              <Separator className="mx-2 my-2 w-auto!" />
+            </>
+          )}
           <RateLimitWarning thread={thread} />
           <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
             <span className="tabular type-caption">
@@ -555,7 +559,7 @@ function GoalSection({ thread }: { thread: Thread }) {
               </Button>
             </PopoverTrigger>
           </div>
-          {hasGoal(thread) ? <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p> : <p className="type-meta text-subtle-foreground">No goal yet. Your first real request sets it.</p>}
+          <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
           <div className="flex items-end justify-between gap-2">
             <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
             <span className="tabular pb-1 type-caption text-subtle-foreground">
