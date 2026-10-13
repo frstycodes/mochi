@@ -202,6 +202,7 @@ const TURN_STATUS = { completed: 'done', interrupted: 'interrupted', failed: 'fa
 const AGENT_END = { completed: 'done', errored: 'failed', interrupted: 'stopped', shutdown: 'stopped' } as const;
 // TODO(codex): threads don't report their model yet, so every Codex token is priced as the default model; cached input is left out of the cost.
 const PRICE = MODEL_PRICES['gpt-5.5-codex'];
+const OUTPUT_MAX = 4000;
 
 function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'end', s: ThreadState): AgentEvent[] {
   if (!item || typeof item.id !== 'string') return [];
@@ -218,7 +219,12 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
     case 'commandExecution': {
       if (typeof item.command !== 'string') return [];
       const exitCode = typeof item.exitCode === 'number' ? item.exitCode : undefined;
-      return [{ threadId, type: 'tool', id, phase, text: item.command, ...(phase === 'end' && exitCode !== undefined && { exitCode }) }];
+      const output = typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput.slice(-OUTPUT_MAX) : undefined;
+      // `command` is the shell wrapper (`/bin/zsh -lc '…'`); a single `commandActions` entry is what the agent actually typed.
+      const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
+      const typed = actions.length === 1 ? obj(actions[0])?.command : undefined;
+      const text = typeof typed === 'string' ? typed : item.command;
+      return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && exitCode !== undefined && { exitCode }), ...(phase === 'end' && output !== undefined && { output }) }];
     }
     case 'fileChange': {
       const files = Array.isArray(item.changes) ? item.changes.flatMap((c) => (typeof obj(c)?.path === 'string' ? [relative(s.cwd, obj(c)!.path as string)] : [])) : [];

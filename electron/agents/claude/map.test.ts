@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, claudeModels, commandsFrom, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
+import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, patchOf, permissionResult, planFromTodos, withPlanTools } from './map.ts';
+import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
 
 const CWD = '/repo';
@@ -237,4 +238,16 @@ test('commands keep skills and custom commands with their argument hints, not Cl
       { name: 'review', description: 'Review' },
     ],
   );
+});
+
+test('work-group rows: Bash keeps its own description, file paths read relative to the worktree, edits carry a renderable patch', () => {
+  assert.equal(callDescription('Bash', { command: 'gh run watch 1', description: "Waited for PR 42's CI run to finish" }), "Waited for PR 42's CI run to finish");
+  assert.equal(callDescription('Grep', { pattern: 'describeTool', path: '/repo/src' }), 'Searched for “describeTool” in src');
+  assert.equal(callDescription('Read', { file_path: '/repo/a.ts' }), undefined);
+  assert.equal(describeTool('Read', { file_path: '/repo/src/math.js' }, '/repo'), 'Read src/math.js');
+  assert.equal(describeTool('Read', { file_path: '/elsewhere/x.js' }, '/repo'), 'Read /elsewhere/x.js');
+  const patch = patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: [' a', '+b'] }] });
+  assert.equal(patch, 'diff --git a/math.js b/math.js\n--- a/math.js\n+++ b/math.js\n@@ -1,1 +1,2 @@\n a\n+b');
+  assert.equal(parsePatchFiles(patch!)[0].files[0].type, 'change');
+  assert.equal(patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [] }), undefined);
 });

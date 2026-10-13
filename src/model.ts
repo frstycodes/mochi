@@ -55,6 +55,11 @@ export interface ActivityEntry {
   drift?: 'on-goal' | 'scope-add' | 'off-goal';
   /** The agent's id for a tool call, so its end can find the entry its start logged. */
   toolId?: string;
+  /** Tool calls: the agent's own plain-language line for it, the command's output and exit code, an edit's unified diff. */
+  description?: string;
+  output?: string;
+  exitCode?: number;
+  patch?: string;
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];

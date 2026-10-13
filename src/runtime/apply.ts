@@ -1,5 +1,5 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
-import type { AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
+import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
 import { similarity } from '../progress.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -36,8 +36,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'reasoning':
       return update((t) => log(t, { at: now, who, kind: 'reasoning', text: event.text }));
     case 'tool':
-      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.links && { links: event.links }) }));
-      if (event.links) state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, text: event.text, links: event.links } : e)) }));
+      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }) }));
+      state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       if (!event.files?.length) return state;
       return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));
     case 'plan':
@@ -66,6 +66,12 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'turn-end':
       return endTurn(thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false } })) : state, thread, event);
   }
+}
+
+/** What a tool call's end adds to the entry its start logged. */
+function toolEnd(event: Extract<AgentEvent, { type: 'tool' }>): Partial<ActivityEntry> {
+  const { text, links, output, exitCode, patch } = event;
+  return { ...(links && { text, links }), ...(output !== undefined && { output }), ...(exitCode !== undefined && { exitCode }), ...(patch && { patch }) };
 }
 
 export function applyAgentEvents(state: State, events: AgentEvent[]): State {
