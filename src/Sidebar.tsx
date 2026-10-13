@@ -33,7 +33,7 @@ import { ThreadRowMenu } from './menus/ThreadRowMenu';
 import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
 import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
-import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
+import { activeThreads, dropPin, lastActivityAt, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
 import { NextRunBadge } from './schedule/NextRunBadge';
@@ -255,7 +255,7 @@ function useThreadSelection(order: string[], openId: string | undefined) {
   return { ids: current.ids, onClick, onKeyDown };
 }
 
-/** Pinned and active threads, split by the Threads label. Drag a row across the label to pin or unpin, within a section to reorder, or out onto a split to open it there. Alt ↑/↓ does the same from the keyboard. */
+/** Pinned threads in your order, then the rest by recent activity, split by the Threads label. Drag a row across the label to pin or unpin, within Pinned to reorder, or out onto a split to open it there. Alt ↑/↓ does the same from the keyboard. */
 function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; active: Thread[]; row: (t: Thread) => ReactNode; selectedIds: string[] }) {
   const { dispatch } = useHarness();
   const listRef = useRef<HTMLUListElement>(null);
@@ -299,7 +299,9 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
       );
     });
     const slot = drag.state?.slot;
-    if (slot && slot.toPinned === isPinned) rows.splice(slot.index, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} />);
+    // Threads sort by recency, so a row dropped there lands where its last activity puts it, not where the pointer is.
+    const at = slot && !isPinned && dragged ? threads.filter((t) => t.id !== dragged.id && lastActivityAt(t) > lastActivityAt(dragged)).length : slot?.index;
+    if (slot && slot.toPinned === isPinned) rows.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} />);
     return rows;
   };
   const showPinned = pinned.length > 0 || !!drag.state;
@@ -566,7 +568,7 @@ const AGENTS_LABEL = new Intl.PluralRules('en');
 function useThreadRow(thread: Thread) {
   const { state } = useHarness();
   const { pct } = progressAt(thread, state.now, true);
-  const lastAt = thread.activity[thread.activity.length - 1]?.at ?? thread.startedAt;
+  const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
   return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Thread } from './model.ts';
-import { dropPin, pinMany, pinnedThreads, reorderThreads, stepPin, togglePin } from './reorder.ts';
+import { activeThreads, dropPin, pinMany, pinnedThreads, reorderThreads, stepPin, togglePin } from './reorder.ts';
 
-const t = (id: string, orbitSlot?: number) => ({ id, orbitSlot, spaceId: 's', status: 'running' }) as Thread;
+const t = (id: string, orbitSlot?: number, lastAt = 0) => ({ id, orbitSlot, spaceId: 's', status: 'running', startedAt: 0, activity: lastAt ? [{ at: lastAt }] : [] }) as unknown as Thread;
 
 test('reorders listed threads in place and assigns pin slots in order', () => {
   const threads = [t('a', 1), t('other'), t('b'), t('c', 2)];
@@ -31,11 +31,13 @@ test('toggle pin appends to Pinned, unpin goes to the top of Threads, full Pinne
   assert.equal(togglePin([...full, t('x')], 's', 'x'), null);
 });
 
-test('Alt arrows swap within a list and cross the Pinned boundary at its edge', () => {
+test('Alt arrows swap within Pinned and cross the boundary at its edge; an unpinned thread pins on up from anywhere', () => {
   assert.deepEqual(stepPin(['a', 'b'], ['c'], 'b', -1), { pinned: ['b', 'a'], unpinned: ['c'] });
   assert.deepEqual(stepPin(['a', 'b'], ['c'], 'b', 1), { pinned: ['a'], unpinned: ['b', 'c'] });
   assert.deepEqual(stepPin(['a'], ['c', 'd'], 'c', -1), { pinned: ['a', 'c'], unpinned: ['d'] });
   assert.equal(stepPin(['a'], ['c'], 'a', -1), null);
+  assert.deepEqual(stepPin(['a'], ['c', 'd'], 'd', -1), { pinned: ['a', 'd'], unpinned: ['c'] });
+  assert.equal(stepPin(['a'], ['c', 'd'], 'c', 1), null, 'unpinned threads have no manual order to step through');
 });
 
 test('drop inserts at the index of the target list', () => {
@@ -51,4 +53,9 @@ test('bulk pin appends in selection order; bulk unpin puts them back at the top 
   assert.deepEqual(pinMany(pinned, 's', ['a', 'c']), { pinned: ['b'], unpinned: ['c', 'a', 'd'] });
   const full = [t('a', 1), t('b', 2), t('c', 3), t('d', 4), t('e'), t('f'), t('g')];
   assert.equal(pinMany(full, 's', ['e', 'f']), null);
+});
+
+test('unpinned threads list most recent activity first; pinned keep their slot order', () => {
+  const threads = [t('old', undefined, 10), t('p2', 2, 5), t('new', undefined, 30), t('mid', undefined, 20), t('p1', 1, 1)];
+  assert.deepEqual(activeThreads(threads, 's').map((x) => x.id), ['new', 'mid', 'old']);
 });
