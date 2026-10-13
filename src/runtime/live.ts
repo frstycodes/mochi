@@ -115,6 +115,11 @@ function runFolder(thread: Thread) {
 }
 
 /** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */
+/** A send that found no agent process (it ended without Mochi noticing): start it again with `resume`, carrying the same message. */
+export function resumeAfterLostProcess(thread: Thread, call: Extract<AgentCall, { method: 'send' }>): AgentCall[] {
+  return thread.live ? reattach(thread, call.text, undefined, call.images, call.skills) : [];
+}
+
 function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[], skills?: string[]) {
   const provider = thread.session?.provider ?? thread.providers[0];
   return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }) });
