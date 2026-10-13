@@ -10,7 +10,7 @@ import { projectName } from '../projects';
 import { DiffStat } from '../WorkLog';
 import type { Workspace } from './WorkspacePicker';
 
-/** Picking another branch while the project folder has uncommitted changes: stash them (the default), bring them along, or discard them. */
+/** Picking another branch while the project folder has uncommitted changes: stash them (the default), commit them as work in progress, bring them along, or discard them. */
 export function SwitchBranchDialog({ workspace, target, onClose }: { workspace: Workspace; target: Branch | null; onClose: () => void }) {
   return (
     <Dialog open={!!target} onOpenChange={(open) => !open && onClose()}>
@@ -105,6 +105,9 @@ function SwitchBranchContent({ workspace, target, onClose }: { workspace: Worksp
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-auto">
+              <DropdownMenuItem onSelect={() => run('commit')}>
+                Commit to <BranchName name={current} /> as work in progress
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => run('bring')}>
                 Bring changes to <BranchName name={localBranch(target)} />
               </DropdownMenuItem>

@@ -54,8 +54,9 @@ export async function assertFreeBranch(top: string, branch: string) {
 
 /**
  * Switches the checkout at `top` to `branch` (a remote one gets a tracking branch). Uncommitted changes go by `changes`: `refuse`
- * throws, `stash` saves them in a named stash first (popped back if the switch fails), `bring` is a plain `git switch` that carries
- * them over and refuses on conflict, `discard` resets tracked files and deletes untracked ones.
+ * throws, `stash` saves them in a named stash first (popped back if the switch fails), `commit` saves them as a work-in-progress
+ * commit on the current branch (undone if the switch fails), `bring` is a plain `git switch` that carries them over and refuses on
+ * conflict, `discard` resets tracked files and deletes untracked ones.
  */
 export async function switchBranch(top: string, branch: string, { changes }: SwitchOptions) {
   const current = await currentBranch(top);
@@ -70,11 +71,22 @@ export async function switchBranch(top: string, branch: string, { changes }: Swi
     await runGit(top, ['clean', '-fd']);
     return void (await runGit(top, ['switch', local]));
   }
+  if (changes === 'commit') {
+    await runGit(top, ['add', '--all']);
+    await runGit(top, ['commit', '-m', `chore: save work in progress before switching to ${local}`]);
+    // A mixed reset puts the files back as uncommitted changes, though what was staged before comes back unstaged.
+    return switchOrUndo(top, local, ['reset', '--mixed', 'HEAD~1']);
+  }
   await runGit(top, ['stash', 'push', '--include-untracked', '-m', `mochi: ${current || 'HEAD'} before switching to ${local}`]);
+  return switchOrUndo(top, local, ['stash', 'pop']);
+}
+
+/** `git switch`, running `undo` before rethrowing when it fails, so the changes saved for the switch come back. */
+async function switchOrUndo(top: string, branch: string, undo: string[]) {
   try {
-    await runGit(top, ['switch', local]);
+    await runGit(top, ['switch', branch]);
   } catch (error) {
-    await runGit(top, ['stash', 'pop']);
+    await runGit(top, undo);
     throw error;
   }
 }

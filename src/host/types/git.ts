@@ -100,9 +100,9 @@ export interface ChangeStat {
   removed: number;
 }
 
-/** What a branch switch does with uncommitted changes: throw, stash them (named), carry them over, or throw them away. */
+/** What a branch switch does with uncommitted changes: throw, stash them (named), commit them as work in progress, carry them over, or throw them away. */
 export interface SwitchOptions {
-  changes: 'refuse' | 'stash' | 'bring' | 'discard';
+  changes: 'refuse' | 'stash' | 'commit' | 'bring' | 'discard';
 }
 
 /** How a thread's worktree is made: a new `branch` from `base` (default branch when unset), or an existing `branch` checked out. */

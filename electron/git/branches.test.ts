@@ -8,6 +8,8 @@ import { assertFreeBranch, branchNameError, listBranches, switchBranch } from '.
 
 // A Mochi session injects its commit-msg hook through GIT_CONFIG_*; the scratch repo's commits mustn't run it.
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_COUNT: '0' };
+// switchBranch's own git calls read process.env; a CI runner has no git identity for its work-in-progress commit.
+Object.assign(process.env, IDENTITY);
 
 function repo() {
   // `.native` also expands Windows 8.3 short names (RUNNER~1), which git never prints.
@@ -84,6 +86,25 @@ test('stash: a switch that fails puts the changes back', async () => {
   await assert.rejects(switchBranch(dir, 'gone', { changes: 'stash' }), /invalid reference: gone/);
   assert.equal(git('branch', '--show-current').trim(), 'main');
   assert.equal(git('stash', 'list'), '', 'the stash was popped back');
+  assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), 'b\nc\n');
+  assert.ok(existsSync(join(dir, 'new.txt')));
+});
+
+test('commit: a work-in-progress commit on the current branch holds the changes and the target is clean', async () => {
+  const { dir, git } = dirtyRepo();
+  await switchBranch(dir, 'side', { changes: 'commit' });
+  assert.equal(git('branch', '--show-current').trim(), 'side');
+  assert.equal(git('status', '--porcelain'), '');
+  assert.equal(git('log', '-1', '--format=%s', 'main').trim(), 'chore: save work in progress before switching to side');
+  assert.equal(git('show', '--name-only', '--format=', 'main'), 'a.txt\nnew.txt\n');
+  assert.equal(git('stash', 'list'), '');
+});
+
+test('commit: a switch that fails undoes the commit and leaves the changes uncommitted', async () => {
+  const { dir, git } = dirtyRepo();
+  const before = git('rev-parse', 'main');
+  await assert.rejects(switchBranch(dir, 'gone', { changes: 'commit' }), /invalid reference: gone/);
+  assert.equal(git('rev-parse', 'main'), before);
   assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), 'b\nc\n');
   assert.ok(existsSync(join(dir, 'new.txt')));
 });

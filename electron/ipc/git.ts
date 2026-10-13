@@ -17,7 +17,7 @@ import { prsOnBranches, type GhPr } from '../../src/git/prs.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
-const SWITCH_CHANGES = ['refuse', 'stash', 'bring', 'discard'] satisfies SwitchOptions['changes'][];
+const SWITCH_CHANGES = ['refuse', 'stash', 'commit', 'bring', 'discard'] satisfies SwitchOptions['changes'][];
 // ponytail: untracked files diff one process each; capped so a missing .gitignore can't fork thousands.
 const MAX_UNTRACKED = 200;
 const MAX_PATCH = 8 * 1024 * 1024;
