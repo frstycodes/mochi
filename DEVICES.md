@@ -2,7 +2,7 @@
 
 How Mochi gets an account (Clerk) and lets your other machines follow and steer threads that run on any one of them. A phone (PWA) comes later as one more client of the same logic. This covers CHECKLIST §6 "Mobile companion / Remote control". Read it with [RUNTIME.md](RUNTIME.md) (agents run in main, and the Auth section) and [SETTINGS.md](SETTINGS.md).
 
-Status labels: **verified** = read in this repo; **source** = read in T3 Code's source at `pingdotgg/t3code@6524a8d` (2026-10-13), paths relative to that repo; **docs** = read in Clerk's docs on 2026-10-13 (links inline), not yet run here; **proposed** = ours to decide, waiting for approval; **not verified** = belief, check before building on it.
+Status labels: **verified** = read in this repo; **source** = read in T3 Code's source at `pingdotgg/t3code@6524a8d` (2026-10-13), paths relative to that repo; **docs** = read in Clerk's docs on 2026-10-13 (links inline), not yet run here; **proposed** = designed here, approved 2026-10-13 (see Decisions); **not verified** = belief, check before building on it.
 
 ## Summary (proposed)
 
@@ -172,9 +172,10 @@ Each PR is its own worktree session, per SESSIONS.md, verified in both themes wh
 
 Later, its own design pass: the phone PWA and push.
 
-## Decisions for the user
+## Decisions (approved 2026-10-13)
 
-Made: account required for any pairing (one machine alone needs none), hosted relay, every scope remotely, settings and pins sync; computer-to-computer first, phone later. Still yours:
-
-1. **Who owns the infrastructure:** a Cloudflare account for the relay (Workers paid plan, believed about $5/month, not verified) and its domain.
-2. **Terminal scope off by default** for new devices, as proposed?
+- Account required for any pairing; one machine alone needs none.
+- Hosted relay on the user's own Cloudflare account and domain; self-host stays possible.
+- Every scope available remotely; `terminal` off by default for new devices.
+- Settings and pins sync between machines.
+- macOS, Windows and Linux as equal peers; computer-to-computer first, phone PWA later, no native app.
