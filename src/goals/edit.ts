@@ -25,12 +25,17 @@ export function draftFrom(thread: Thread): GoalDraft {
   };
 }
 
-/** Applies a draft as one new revision whose `diff` lists each change. Returns the thread unchanged when nothing changed. */
+/**
+ * Applies a draft. A change to what done means (the goal text or a step's acceptance criteria) is a new revision whose
+ * `diff` lists every change; plan-only edits (steps added, dropped, renamed, resized, reordered) are logged, not versioned.
+ * Returns the thread unchanged when nothing changed.
+ */
 export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Author = 'you'): Thread {
-  const n = thread.revisions.length + 1;
-  const diff: string[] = [];
+  const latest = thread.revisions.at(-1)?.n ?? 1;
+  const goalDiff: string[] = [];
+  const planDiff: string[] = [];
   const goal = draft.goal.trim() || thread.goal;
-  if (goal !== thread.goal) diff.push(`~ Goal: "${thread.goal}" → "${goal}"`);
+  if (goal !== thread.goal) goalDiff.push(`~ Goal: "${thread.goal}" → "${goal}"`);
 
   const byId = new Map(thread.steps.map((s) => [s.id, s]));
   const steps: Step[] = [];
@@ -39,20 +44,22 @@ export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Au
     const old = d.id ? byId.get(d.id) : undefined;
     if (!old) {
       if (d.isRemoved || !title) return;
-      diff.push(`+ ${title}`);
-      steps.push({ id: `${thread.id}-r${n}-${i}`, title, size: d.size, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: by, revision: n, gate: d.gate || undefined, acceptance: criteria(d) });
+      planDiff.push(`+ ${title}`);
+      steps.push({ id: `${thread.id}-e${thread.steps.length}-${i}`, title, size: d.size, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: by, revision: latest, gate: d.gate || undefined, acceptance: criteria(d) });
+      if (criteria(d)) goalDiff.push(`~ ${title}: acceptance criteria set`);
       return;
     }
     if (d.isRemoved && !d.isLocked) {
-      diff.push(`− ${old.title}`);
-      steps.push({ ...old, status: 'dropped', droppedAt: now, note: `Dropped: removed by ${by === 'you' ? 'you' : by} in v${n}` });
+      planDiff.push(`− ${old.title}`);
+      steps.push({ ...old, status: 'dropped', droppedAt: now, note: `Dropped: removed by ${by === 'you' ? 'you' : by}` });
+      if (old.acceptance) goalDiff.push(`~ ${old.title}: acceptance criteria removed`);
       return;
     }
     const next = { ...old, title: title || old.title, size: d.size, gate: d.gate || undefined, acceptance: criteria(d) };
-    if (next.title !== old.title) diff.push(`~ "${old.title}" renamed to "${next.title}"`);
-    if (next.size !== old.size) diff.push(`~ ${next.title}: size ${old.size} → ${next.size}`);
-    if (!!next.gate !== !!old.gate) diff.push(`~ ${next.title}: ${next.gate ? 'pause before it' : 'no pause'}`);
-    if (JSON.stringify(next.acceptance) !== JSON.stringify(old.acceptance)) diff.push(`~ ${next.title}: acceptance criteria ${next.acceptance ? 'set' : 'removed'}`);
+    if (next.title !== old.title) planDiff.push(`~ "${old.title}" renamed to "${next.title}"`);
+    if (next.size !== old.size) planDiff.push(`~ ${next.title}: size ${old.size} → ${next.size}`);
+    if (!!next.gate !== !!old.gate) planDiff.push(`~ ${next.title}: ${next.gate ? 'pause before it' : 'no pause'}`);
+    if (JSON.stringify(next.acceptance) !== JSON.stringify(old.acceptance)) goalDiff.push(`~ ${next.title}: acceptance criteria ${next.acceptance ? 'set' : 'removed'}`);
     steps.push(next);
   });
 
@@ -60,15 +67,18 @@ export function applyDraft(thread: Thread, draft: GoalDraft, now: number, by: Au
   const before = kept(thread.steps.map((s) => s.id));
   const after = kept(draft.steps.filter((d) => !d.isRemoved).map((d) => d.id));
   const surviving = before.filter((id) => after.includes(id));
-  if (surviving.join() !== after.filter((id) => surviving.includes(id)).join()) diff.push('~ Reordered steps');
+  if (surviving.join() !== after.filter((id) => surviving.includes(id)).join()) planDiff.push('~ Reordered steps');
 
+  const diff = [...goalDiff, ...planDiff];
   if (diff.length === 0) return thread;
   thread.steps.forEach((s, i) => s.status === 'dropped' && steps.splice(Math.min(i, steps.length), 0, s));
   const label = diff.length === 1 ? diff[0].slice(2) : `${diff.length} edits`;
+  if (!goalDiff.length) return { ...thread, steps, activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` }] };
+  const n = latest + 1;
   return {
     ...thread,
     goal,
-    steps,
+    steps: steps.map((s) => (s.addedAt === now && !byId.has(s.id) ? { ...s, revision: n } : s)),
     revisions: [...thread.revisions, { n, at: now, label, by, diff }],
     activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: ${label}` }],
   };

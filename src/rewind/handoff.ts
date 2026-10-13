@@ -33,7 +33,7 @@ export function handoffSummary(thread: Thread, to: Provider, step: Step | undefi
 
 // For a live thread, `agentCalls` (src/runtime/live.ts) also stops the old agent and starts the new one in the same worktree
 // with `summary` as its first prompt. A demo thread, or a one-step handoff, only changes who the model says owns the work.
-/** Moves the thread (or one step) to `to`, logged as a revision, a harness event and the summary the new agent starts from. */
+/** Moves the thread (or one step) to `to`, logged as a harness event and the summary the new agent starts from. Not a goal revision: what done means is unchanged. */
 export function handoff(state: State, threadId: string, stepId: string | undefined, to: Provider, summary: string): State {
   const now = state.now;
   return {
@@ -44,7 +44,6 @@ export function handoff(state: State, threadId: string, stepId: string | undefin
       const from = step ? stepOwner(t, step) : t.providers[0];
       if (from === to) return t;
       const what = step ? `"${step.title}"` : 'the thread';
-      const n = t.revisions.length + 1;
       const moved: Thread = step
         ? { ...t, providers: t.providers.includes(to) ? t.providers : [...t.providers, to], steps: t.steps.map((s) => (s.id === step.id ? { ...s, owner: to } : s)) }
         : {
@@ -53,8 +52,7 @@ export function handoff(state: State, threadId: string, stepId: string | undefin
             // Finished steps keep who did them; open ones follow the thread to its new agent.
             steps: t.steps.map((s) => (s.status === 'done' || s.status === 'dropped' ? { ...s, owner: stepOwner(t, s) } : { ...s, owner: undefined })),
           };
-      const revised = { ...moved, revisions: [...moved.revisions, { n, at: now, label: `Handed ${what} to ${PROVIDER_NAME[to]}`, by: 'you' as const, diff: [`~ ${step ? step.title : 'Thread'}: ${PROVIDER_NAME[from]} → ${PROVIDER_NAME[to]}`] }] };
-      const logged = log(revised, { at: now, who: 'harness', kind: 'event', text: `Handed ${what} from ${PROVIDER_NAME[from]} to ${PROVIDER_NAME[to]} with a context summary` });
+      const logged = log(moved, { at: now, who: 'harness', kind: 'event', text: `Handed ${what} from ${PROVIDER_NAME[from]} to ${PROVIDER_NAME[to]} with a context summary` });
       return log(logged, { at: now, who: 'harness', kind: 'message', text: summary });
     }),
   };

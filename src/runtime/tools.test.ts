@@ -415,12 +415,12 @@ test('set_step_status sets the status as the agent and rejects unknown steps', a
   assert.match(await t.err('set_step_status', { stepId: 'nope', status: 'done' }), /No step nope/);
 });
 
-test('add_step lands as a goal revision by the agent', async () => {
+test('add_step lands as a plan step by the agent, not a goal revision', async () => {
   const t = setup();
   const before = t.thread('rl').revisions.length;
   await t.ok('add_step', { title: 'Document the limits', size: 2 });
   const added = t.thread('rl').steps.find((s) => s.title === 'Document the limits')!;
-  assert.deepEqual([added.size, added.addedBy, t.thread('rl').revisions.length], [2, 'claude', before + 1]);
+  assert.deepEqual([added.size, added.addedBy, t.thread('rl').revisions.length], [2, 'claude', before]);
 });
 
 test('edit_goal changes the goal text and criteria as one revision', async () => {

@@ -20,15 +20,17 @@ import { templatesFor } from './templates';
 import { goalPrompt, parseSteps } from '../utility/prompts';
 import { useDraft } from '../utility/useDraft';
 
-/** Every save is one goal revision. Mount it only while open so the draft starts fresh from the thread. */
+/** A save that changes the goal text or criteria is one goal revision; plan-only saves aren't. Mount it only while open so the draft starts fresh from the thread. */
 export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () => void }) {
   const { state, dispatch } = useHarness();
   const { draft, setGoal, updateStep, moveStep, addSteps } = useGoalDraft(thread);
   const [newTitle, setNewTitle] = useState('');
   const [isDriftMuted, setDriftMuted] = useState(!!thread.drift?.isMuted);
-  const hasEdits = applyDraft(thread, draft, state.now) !== thread;
+  const edited = applyDraft(thread, draft, state.now);
+  const hasEdits = edited !== thread;
+  const isRevision = edited.revisions.length > thread.revisions.length;
   const hasDriftEdits = isDriftMuted !== !!thread.drift?.isMuted;
-  const nextVersion = thread.revisions.length + 1;
+  const nextVersion = (thread.revisions.at(-1)?.n ?? 1) + 1;
   const templates = templatesFor(thread.spaceId);
   const stepsDraft = useDraft('goal', thread.spaceId);
   const draftSteps = async () => {
@@ -53,7 +55,7 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
       <DialogContent className="gap-5 sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="type-title">Edit goal</DialogTitle>
-          <DialogDescription>Saving records the changes as v{nextVersion} in the timeline.</DialogDescription>
+          <DialogDescription>Changing the goal or its criteria saves v{nextVersion}; plan edits keep the version.</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-1.5">
@@ -139,7 +141,7 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
             Cancel
           </Button>
           <Button onClick={save} disabled={!hasEdits && !hasDriftEdits}>
-            {hasEdits ? `Save as v${nextVersion}` : 'Save'}
+            {isRevision ? `Save as v${nextVersion}` : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

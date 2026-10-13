@@ -81,7 +81,7 @@ function SummaryBody({ thread, prs, onPaneOpened }: { thread: Thread; prs: PullR
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-3">
       <PanelHeader thread={thread} />
-      <GoalSection thread={thread} />
+      {hasGoal(thread) && <GoalSection thread={thread} />}
       <NeedsYou thread={thread} />
       <RateLimitWarning thread={thread} />
       <ChangesRow {...props} />

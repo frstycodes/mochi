@@ -527,11 +527,9 @@ function tagSent(t: Thread, action: Extract<Action, { type: 'drift-verdict' }>, 
 function applyDrift(t: Thread, text: string, drift: DriftKind, reason: string, now: number): Thread {
   if (drift === 'off-goal') return log(t, { at: now, who: 'harness', kind: 'event', text: 'Sent off-goal · not counted', detail: reason });
   if (drift === 'on-goal') return t;
-  const n = t.revisions.length + 1;
   const title = stepTitleFrom(text);
-  const added: Step = { id: `${t.id}-d${n}`, title, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: 'you', revision: n };
-  const withStep = { ...t, steps: [...t.steps, added], revisions: [...t.revisions, { n, at: now, label: 'Scope from your message', by: 'you' as const, diff: [`+ ${title}`] }] };
-  return log(withStep, { at: now, who: 'harness', kind: 'event', text: `Goal v${n}: +1 step "${title}"`, detail: reason });
+  const added: Step = { id: `${t.id}-d${t.steps.length}`, title, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: 'you', revision: t.revisions.at(-1)?.n ?? 1 };
+  return log({ ...t, steps: [...t.steps, added] }, { at: now, who: 'harness', kind: 'event', text: `Plan: +1 step "${title}"`, detail: reason });
 }
 
 /** Off-goal prompt to a new thread. A finished goal is settled first: its review stays queued while a PR is open, otherwise it resolves. */

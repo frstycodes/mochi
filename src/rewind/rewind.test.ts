@@ -91,7 +91,7 @@ test('fork from a checkpoint names it for the worktree only once its files were 
   assert.equal(Object.values(s.forks)[0].checkpoint, cp.n);
 });
 
-test('handoff moves one step or the whole thread and logs a revision, an event and the summary', () => {
+test('handoff moves one step or the whole thread and logs an event and the summary, not a revision', () => {
   let s = base();
   const rl = thread(s, 'rl');
   const summary = handoffSummary(rl, 'codex', undefined, { files: 3, added: 40, removed: 6 });
@@ -103,7 +103,8 @@ test('handoff moves one step or the whole thread and logs a revision, an event a
   let t = thread(s, 'rl');
   assert.equal(t.steps.find((x) => x.id === 'rl6')!.owner, 'codex');
   assert.deepEqual(t.providers, ['claude', 'codex']);
-  assert.equal(t.revisions.at(-1)!.label, 'Handed "Token bucket middleware" to Codex');
+  assert.equal(t.revisions.length, rl.revisions.length, 'what done means is unchanged');
+  assert.equal(t.activity.at(-2)!.text, 'Handed "Token bucket middleware" from Claude to Codex with a context summary');
   assert.equal(t.activity.at(-1)!.text, summary);
 
   s = threadsReducer(s, { type: 'handoff', threadId: 'rl', to: 'codex', summary });

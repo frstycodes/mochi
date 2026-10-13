@@ -579,10 +579,10 @@ function stepIn(thread: Thread, stepId: string) {
   return step;
 }
 
-/** True when the draft changed the goal (a new revision landed). */
+/** True when the draft changed the goal or its plan. */
 function editGoal(dispatch: (a: Action) => void, thread: Thread, caller: Thread, draft: GoalDraft, state?: () => State) {
   dispatch({ type: 'edit-goal', threadId: thread.id, draft, by: caller.providers[0] });
-  return !state || state().threads.find((t) => t.id === thread.id)!.revisions.length > thread.revisions.length;
+  return !state || state().threads.find((t) => t.id === thread.id) !== thread;
 }
 
 function sidebar(state: State, caller: Thread) {
