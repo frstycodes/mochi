@@ -434,6 +434,7 @@ function adminDashboard(): Thread {
       { at: at(s, 10), who: 'codex', kind: 'tool', text: 'Write apps/api/routes/admin/usage.ts  +18 −0' },
       { at: at(s, 24), who: 'codex', kind: 'tool', text: 'Run pnpm --filter api test usage' },
       { at: at(s, 38), who: 'codex', kind: 'message', text: 'Endpoint is done and paginated by cursor. p95 is 140ms on the 10k-key seed database. Setup notes are in `README.md`, the page mounts from `src/App.tsx` and the scripts live in `package.json`. Moving on to the charts page.' },
+      { at: at(s, 39), who: 'codex', kind: 'message', text: 'Related work: #45 is open, #49 is still a draft, #47 merged and #30 was closed. #46 has conflicts with main and #48 is failing CI. Issues: #12 is open, #9 was fixed, #8 closed as not planned, and #999 is one gh cannot read. Upstream there is vercel/streamdown#120 and https://github.com/frstycodes/mochi/pull/45. The header lives in src/App.tsx:3 and styles in [the stylesheet](src/index.css); src/missing.ts stays plain, and this is our #1 priority. On GitHub: frstycodes/mochi#45, frstycodes/mochi#47, frstycodes/mochi#7 and frstycodes/mochi#50.' },
       { at: at(s, 40), who: 'harness', kind: 'event', text: 'Finished "Usage query endpoint"' },
       { at: at(s, 44), who: 'codex', kind: 'tool', text: 'Edit apps/web/routes/admin/usage.tsx  +120 −4' },
     ],
