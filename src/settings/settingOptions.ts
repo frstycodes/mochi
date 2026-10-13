@@ -18,6 +18,13 @@ export const WORKSPACE_MODES = [
   { value: 'folder', label: 'Project folder' },
 ] as const;
 
+export const WORKTREE_CLEANUP = [
+  { value: 'never', label: 'Never' },
+  { value: '1', label: 'After 1 day' },
+  { value: '7', label: 'After 7 days' },
+  { value: '30', label: 'After 30 days' },
+] as const;
+
 export const WHILE_WORKING = [
   { value: 'queue', label: 'Queue until it finishes' },
   { value: 'steer', label: 'Send right away (steer)' },

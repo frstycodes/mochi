@@ -131,6 +131,21 @@ Being replaced by Goals v2 below: steps mirror the plan with no sizes, and new p
 - Startup: a cold Claude Code start costs ~3–5s, more than the 4s budget, so both share one SDK `prewarm()` spare per account (parked when a side chat opens, a Claude thread starts, and after every claim; closed after 10 min unused and on quit). `prewarm` is `@alpha`; without it both fall back to cold starts.
 - Usage: Claude reports cost; Codex reports tokens only, so Codex cost comes from a pricing constant marked TODO until checked against OpenAI's published prices.
 
+## Worktree setup
+
+A new worktree gets ready before the agent's first turn (`prepareWorktree`, `electron/git/setup.ts`), between `createWorktree` and the agent start in `startAgent` (`electron/ipc/agent.ts`). Only when main just made the worktree and Settings › Git › Prepare worktrees before starting is on; project-folder threads, restarts and a reused worktree skip it.
+
+1. **Copy** ignored files matching Settings › Git › Ignored files to copy (default `.env*`) plus the project's `.worktreeinclude`, gitignore patterns. Only files git ignores are copied (`git ls-files --others --ignored --exclude-standard --directory`, so `node_modules/` is never walked), so a copy never lands in a commit. `.worktreeinclude` is Claude Code's convention for the same thing (docs, code.claude.com/docs/en/worktrees); its `WorktreeCreate` hook replaces worktree creation entirely, so it's not matched. Codex's setup scripts live in `.codex` but their file format isn't documented: not read.
+2. **Install** from the lockfile at the worktree's top, in the manager's frozen mode: pnpm (`--frozen-lockfile --prefer-offline`, links from the global store: 6s for this repo, measured 2026-10-13), bun, yarn (Berry `--immutable`), npm `ci`, uv, Poetry, Bundler, `go mod download`, `cargo fetch --locked` (`installCommand`).
+3. **Setup command**: Settings › Git's command for the project folder, else the project's `.mochi/setup.sh`; `/bin/sh -c` in the worktree with `MOCHI_ROOT_PATH` and `MOCHI_WORKTREE_PATH`.
+
+Each step streams as a `setup` agent event carrying the whole setup (status, steps, elapsed, tail-capped output; 250ms throttle) into `Thread.setup`, shown as the "Setting up worktree" row at the top of the thread (`src/chat/SetupRow.tsx`) and "Setting up worktree…" on the sidebar row and header. Commands run in their own process group.
+
+- **Gating.** `start` returns once the worktree exists; setup and the agent launch go on in main and report through events (a failure is `turn-end failed`). It can't wait the setup out: the renderer runs agent calls one after another (`callAgent`), so a Stop, and every other thread's calls, would queue behind it. A `send` meanwhile waits on the start (`Starts`, `electron/agents/starts.ts`), so a steer isn't lost or turned into a second start.
+- **Failure.** A failed step waits for `setupChoice`: Retry runs it again, Skip setup starts the agent without the rest; Open terminal opens the worktree's terminal. The thread is needs-you meanwhile. A background agent's setup skips a failed step on its own.
+- **Cancel.** Stop (`interrupt`) or settling during setup kills the running command, the setup ends `cancelled`, the turn ends interrupted and the thread stays. The next message starts the agent in the worktree as it is. A setup Mochi quit during restores as cancelled. GAP: a worktree whose setup never finished (quit mid-setup) isn't set up again.
+- **Cleanup.** Settings › Git › Remove settled worktrees (default after 7 days; `useWorktreeCleanup`): on launch and hourly, worktrees of threads settled that long (counted from when cleanup first saw them settled, wall clock) are removed with `git worktree remove`, which keeps any with uncommitted changes; branches stay. A message to such a thread makes the worktree again on its branch at the same path, so Claude's `resume` finds the session, and runs the setup again.
+
 ## Concurrency and lifecycle
 
 - Claude: the SDK runs the Claude Code binary, so each thread is a child process (docs say it "runs Claude Code"; per-process limits not documented). Cap concurrent Claude agents (start at 6, setting), queue the rest, measure memory before raising it.

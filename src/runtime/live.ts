@@ -1,7 +1,8 @@
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
-import { startWorkspace } from '../git/workspace.ts';
+import { startWorkspace, workspaceMode } from '../git/workspace.ts';
+import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
@@ -104,7 +105,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
@@ -145,7 +146,16 @@ function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: A
   const seed = restart && 'seed' in restart ? restart.seed : undefined;
   const resume = seed === undefined ? thread.session?.id : undefined;
   const forkAt = restart && 'forkAt' in restart ? restart.forkAt : undefined;
-  return start(thread, provider, controlsOf(thread), seed ? `${seed}\n\n${prompt}` : prompt, { resume, ...(forkAt && { forkAt }), useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }) });
+  // Cleanup removed its worktree: main makes it again on the same branch, at the same path, so `resume` still finds the session.
+  const remake = isCleanedUp(thread) ? { cwd: projectRoot(thread.repo!), workspace: startWorkspace(thread.repo) } : {};
+  return start(thread, provider, controlsOf(thread), seed ? `${seed}\n\n${prompt}` : prompt, { resume, ...(forkAt && { forkAt }), useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }), ...remake });
+}
+
+/** A worktree thread whose agent ran in a worktree that's gone from the list (Settings › Git cleanup, Clean up settled worktrees). */
+function isCleanedUp(thread: Thread) {
+  if (!thread.repo || workspaceMode(thread.repo) !== 'worktree' || !thread.live?.cwd) return false;
+  const root = projectRoot(thread.repo);
+  return !!root && thread.live.cwd !== root && !worktreePath(thread.id);
 }
 
 /** Mochi background agents of these threads that are still running. */
