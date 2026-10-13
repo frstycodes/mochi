@@ -25,6 +25,7 @@ import { contextMax } from './runtime/models';
 import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
 import { toast } from 'sonner';
+import { imageProblem, sentImages } from './chat/images';
 import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
 import { toWhen } from './schedule/form';
 import { describeTrigger } from './schedule/describe';
@@ -102,16 +103,19 @@ function NewThread() {
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
 
-  const start = ({ text, files }: PromptInputMessage) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const title = files.length ? `${trimmed} (${files.length} attached)` : trimmed;
-    if (project && workspace.error) {
-      toast.error(workspace.error);
+  const start = async ({ text, files }: PromptInputMessage) => {
+    const title = text.trim();
+    if (!title) return;
+    // GAP: a schedule's start leaves out images (`src/host/types/schedule.ts`).
+    const isScheduled = run.mode !== 'now' && run.mode !== 'background';
+    const problem = (project && workspace.error) || (isScheduled && files.length > 0 ? 'Scheduled threads can’t start with images yet' : imageProblem(files));
+    if (problem) {
+      toast.error(problem);
       return false;
     }
-    const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(trimmed, slashItems), provider, typedSkills: typedSkills(trimmed, slashItems) });
-    const create = { type: 'create', title, ...(skills.length > 0 && { prompt, skills }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
+    const images = await sentImages(files);
+    const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
+    const create = { type: 'create', title, ...(skills.length > 0 && { prompt, skills }), ...(images.length > 0 && { images }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
     if (run.mode === 'now') {
       handOffComposer(leafId, layoutId);
       return dispatch(create);

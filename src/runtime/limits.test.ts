@@ -14,7 +14,7 @@ const calls = (s: State, action: Action) => agentCalls(s, action, () => threadsR
 const RESET = '2026-10-13T15:40:00.000Z';
 const BEFORE = Date.parse(RESET) - 60_000;
 const AFTER = Date.parse(RESET) + 1;
-const NEXT = queuedMessage('next', { files: 0, mentions: [], isCommand: false, typedSkills: [] });
+const NEXT = queuedMessage('next', { mentions: [], isCommand: false, typedSkills: [] });
 
 function liveThread(provider: 'claude' | 'codex') {
   const s = run(base(), { type: 'create', title: 'reply with ok', provider, project: 'harness', isLive: true });

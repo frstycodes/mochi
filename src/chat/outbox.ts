@@ -4,6 +4,7 @@ import { judgeDrift, type DriftVerdict } from '../drift.ts';
 import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
+import { agentImage } from './images.ts';
 import { withReferences } from './mentions.ts';
 
 type WhileWorking = Prefs['whileWorking'];
@@ -61,14 +62,13 @@ export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 
  * queued message is checked when it goes out, not when you wrote it. A confident off-goal verdict waits in `useDriftPending`.
  */
 export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'threads'>, thread: Thread, message: QueuedMessage, extra?: { queuedId?: string; interrupts?: boolean }) {
-  const { draft, files } = message;
-  const withFiles = files ? `${draft}${draft ? ' ' : ''}(${files} attached)` : draft;
-  const { text, ...references } = withReferences(withFiles, message.mentions, state.threads, { isCommand: message.isCommand, provider: thread.providers[0], typedSkills: message.typedSkills });
+  const { draft, images = [] } = message;
+  const { text, ...references } = withReferences(draft, message.mentions, state.threads, { isCommand: message.isCommand, provider: thread.providers[0], typedSkills: message.typedSkills });
   // A new message answers an open suggestion by ignoring it.
   setDriftPending(thread.id, null);
   const verdict = judgeDrift(text, thread);
   const isSettled = !(verdict instanceof Promise);
-  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, ...extra });
+  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, images: [...references.images, ...images.map(agentImage)], thumbs: images.map((i) => i.thumb), ...extra });
   void Promise.resolve(verdict).then((v) => {
     if (v.kind === 'off-goal') return setDriftPending(thread.id, { text, verdict: v });
     if (!isSettled) dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift: v.kind, reason: v.reason });

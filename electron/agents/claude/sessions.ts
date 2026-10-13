@@ -8,7 +8,7 @@ import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/ho
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
-import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, withPlanTools } from './map.ts';
+import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
 import { recordLimits } from '../limits.ts';
@@ -273,8 +273,3 @@ function dropApprovals(threadId: string, message: string) {
 const config = () => import('../config.ts');
 
 const emit = emitAgentEvent;
-
-function userContent(text: string, images?: AgentImage[]): SDKUserMessage['message']['content'] {
-  if (!images?.length) return text;
-  return [...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType, data: i.data } })), { type: 'text' as const, text }];
-}

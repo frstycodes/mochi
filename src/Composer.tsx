@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
+import { toast } from 'sonner';
 import { ArrowUp, Hierarchy2, ClipboardList, Folder, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
@@ -33,6 +34,7 @@ import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import type { SlashItem } from './chat/slash';
 import { TokenTextarea } from './chat/SlashToken';
 import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
+import { IMAGE_ERRORS, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES } from './chat/images';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
 // Each new thread page takes a fresh id, so nothing mounted later animates from a composer that already docked.
@@ -80,7 +82,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   /** `/` commands and skills a token in the text can resolve to. */
   slashItems: SlashItem[];
   /** Return `false` to hold the message: the text stays in the input. */
-  onSend: (message: PromptInputMessage) => void | boolean;
+  onSend: (message: PromptInputMessage) => void | boolean | Promise<void | boolean>;
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
@@ -95,13 +97,13 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
 export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
   const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
   const draft = useComposerDraft(draftKey, draftExtra);
-  const send = (message: PromptInputMessage) => {
-    const result = onSend(message);
+  const send = async (message: PromptInputMessage) => {
+    const result = await onSend(message);
     if (result !== false) draft.clear();
     hold(result);
   };
   return (
-    <PromptInput multiple globalDrop onSubmit={send}>
+    <PromptInput multiple globalDrop accept={IMAGE_TYPES.join(',')} maxFileSize={MAX_IMAGE_BYTES} maxFiles={MAX_IMAGES} onError={(e) => toast.error(IMAGE_ERRORS[e.code])} onSubmit={send}>
       <ComposerAttachments />
       <PromptInputBody>
         <TokenTextarea items={slashItems} className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
@@ -138,7 +140,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
   );
 }
 
-// PromptInput clears the input after onSubmit unless it throws; it swallows the throw.
+// PromptInput clears the input after onSubmit unless it throws (or rejects); it swallows the throw.
 function hold(result: void | boolean) {
   if (result === false) throw new Error('Message held');
 }

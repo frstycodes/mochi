@@ -69,7 +69,7 @@ function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: Q
       className="group/queued relative flex h-9 cursor-grab items-center gap-2 rounded-lg pr-1 pl-3 outline-none hover:bg-accent/60 focus-visible:bg-accent/60 active:cursor-grabbing data-[dragging]:z-10"
     >
       <span className={cn('min-w-0 flex-1 truncate type-meta', !message.draft && 'text-muted-foreground')}>{message.draft || 'No text'}</span>
-      <ExtraCount icon={Paperclip} count={message.files} label="attached" />
+      <ExtraCount icon={Paperclip} count={message.images?.length ?? 0} label="attached" />
       <ExtraCount icon={MentionCircle} count={message.mentions.length} label="referenced" />
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 pointer-coarse:opacity-100">
         <Button variant="ghost" size="xs" className="rounded-full" onClick={() => onSendNow(message)}>

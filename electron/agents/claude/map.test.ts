@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, patchOf, permissionResult, planFromTodos, withPlanTools } from './map.ts';
+import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, patchOf, permissionResult, planFromTodos, userContent, withPlanTools } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
@@ -290,4 +290,12 @@ test('a message opening with a /skill reports the load itself, once init has lis
   assert.equal(mapper.sent('/shout again').length, 2, 'known now: reported at once');
   assert.deepEqual(mapper.sent('/compact'), [], 'a command that is not a skill');
   assert.deepEqual(mapper.sent('no command'), []);
+});
+
+test('images become base64 image blocks ahead of the text in the user message', () => {
+  assert.equal(userContent('hi'), 'hi');
+  assert.deepEqual(userContent('what is this?', [{ mediaType: 'image/gif', data: 'R0lGOD==' }]), [
+    { type: 'image', source: { type: 'base64', media_type: 'image/gif', data: 'R0lGOD==' } },
+    { type: 'text', text: 'what is this?' },
+  ]);
 });

@@ -48,6 +48,9 @@ import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } fr
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
 import { queuedMessage, shouldQueue } from './chat/outbox';
+import { imageFiles, imageProblem, sentImages } from './chat/images';
+import { toast } from 'sonner';
+import { openPhotos } from './photo/photos';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
@@ -156,6 +159,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
           Queued
         </span>
       )}
+      {isYou && !!entry.images?.length && <SentImages thumbs={entry.images} />}
       <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
         <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
           {isAgent && row.showAuthor && (
@@ -186,6 +190,26 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     </MessageContextMenu>
   );
 });
+
+/** The images you sent with a message, as the small copies the transcript keeps; click opens them larger. */
+function SentImages({ thumbs }: { thumbs: string[] }) {
+  const photos = thumbs.map((src, i) => ({ src, name: `Image ${i + 1}` }));
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      {photos.map((photo, i) => (
+        <button
+          key={i}
+          type="button"
+          aria-label={`View ${photo.name}`}
+          onClick={() => openPhotos({ photos, index: i })}
+          className="relative size-16 cursor-zoom-in overflow-hidden rounded-lg bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
+        >
+          <img src={photo.src} alt="" className="size-full object-cover" />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** An agent's reply, or its Simplify bullets: they come in with the word reveal, and the reply pulses while they're made. */
 function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {
@@ -302,7 +326,7 @@ function Composer({
   const [isHeld, setIsHeld] = useState(false);
   const isQueueing = shouldQueue(thread, whileWorking, isHeld);
   const queued = thread.queued ?? [];
-  const { textInput } = usePromptInputController();
+  const { textInput, attachments } = usePromptInputController();
   const textarea = useRef<HTMLTextAreaElement>(null);
   const controls = controlsOf(thread);
   const workspace = useThreadWorkspace(thread);
@@ -325,6 +349,7 @@ function Composer({
     // Whatever you were already typing stays; the queued text follows it.
     textInput.setInput(textInput.value.trim() ? `${textInput.value}\n${message.draft}` : message.draft);
     mention.restore(message.mentions);
+    if (message.images?.length) attachments.add(imageFiles(message.images));
     textarea.current?.focus();
   };
 
@@ -351,12 +376,18 @@ function Composer({
               onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
               submitLabel={isQueueing ? 'Queue message' : 'Send'}
               meter={<ContextRing provider={provider} spaceId={thread.spaceId} context={thread.context} usage={threadUsage(thread)} />}
-              onSend={({ text, files }) => {
+              onSend={async ({ text, files }) => {
                 const trimmed = text.trim();
                 if (!trimmed && files.length === 0 && mention.mentions.length === 0) return;
                 const command = parseSlash(trimmed);
+                const problem = command?.command.name === 'side' && files.length > 0 ? 'Side chat questions can’t carry images' : imageProblem(files);
+                if (problem) {
+                  toast.error(problem);
+                  return false;
+                }
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
-                const message = queuedMessage(trimmed, { files: files.length, mentions: mention.mentions, isCommand: !!resolveToken(trimmed, slashItems), typedSkills: typedSkills(trimmed, slashItems) });
+                const images = await sentImages(files);
+                const message = queuedMessage(trimmed, { ...(images.length > 0 && { images }), mentions: mention.mentions, isCommand: !!resolveToken(trimmed, slashItems), typedSkills: typedSkills(trimmed, slashItems) });
                 if (!isQueueing) return drift.submit(message);
                 dispatch({ type: 'queued-add', threadId: thread.id, message });
                 mention.clear();

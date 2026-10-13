@@ -1,3 +1,4 @@
+import { agentImage } from '../chat/images.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
@@ -26,9 +27,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'drift-new-thread':
     case 'sidechat-promote': {
       const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
+      const images = action.type === 'create' && action.images?.length ? { images: action.images.map(agentImage) } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }) }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }), ...images }));
     }
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);

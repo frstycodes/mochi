@@ -183,7 +183,27 @@ test('a thread runs at the speed it started with, and a message changes it for i
   }
 });
 
-/** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG; each turn completes shortly after its reply. */
+test('images go to turn/start as data-URL image inputs ahead of the text, on the first prompt and on a send', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = fakeCodex(home, TIER_CODEX);
+  const log = path.join(home, 'inputs.log');
+  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: path.join(home, 'tiers.log'), INPUT_LOG: log } }));
+  const png = { mediaType: 'image/png' as const, data: 'iVBORw0KGgo=' };
+  try {
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'what is this?', images: [png] });
+    await new Promise((r) => setTimeout(r, 150));
+    await codex.send('t', 'and this?', [{ mediaType: 'image/webp', data: 'UklGRg==' }]);
+    const inputs = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepEqual(inputs, [
+      [{ type: 'image', url: 'data:image/png;base64,iVBORw0KGgo=' }, { type: 'text', text: 'what is this?', text_elements: [] }],
+      [{ type: 'image', url: 'data:image/webp;base64,UklGRg==' }, { type: 'text', text: 'and this?', text_elements: [] }],
+    ]);
+  } finally {
+    codex.dispose();
+  }
+});
+
+/** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG (and turn/start's input to $INPUT_LOG); each turn completes shortly after its reply. */
 const TIER_CODEX = `#!/usr/bin/env node
 const fs = require('node:fs');
 let buf = '', n = 0;
@@ -192,6 +212,7 @@ const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
 const done = (threadId, id) => setTimeout(() => send({ method: 'turn/completed', params: { threadId, turn: { id, status: 'completed' } } }), 20);
 process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
   if (['thread/start', 'turn/start'].includes(m.method)) fs.appendFileSync(process.env.TIER_LOG, m.method + ' ' + m.params.serviceTier + '\\n');
+  if (m.method === 'turn/start' && process.env.INPUT_LOG) fs.appendFileSync(process.env.INPUT_LOG, JSON.stringify(m.params.input) + '\\n');
   if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
   else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c' + ++n } } });
   else if (m.method === 'turn/start') { const id = 'u' + ++n; send({ id: m.id, result: { turn: { id } } }); done(m.params.threadId, id); }

@@ -1,6 +1,6 @@
 import path from 'node:path';
-import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKRateLimitInfo, SDKSystemMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
@@ -420,4 +420,10 @@ export const PERMISSION_MODES = {
 export function permissionOptions(mode: PermissionMode) {
   // The SDK refuses bypassPermissions without this opt-in; Full access is the user's explicit, confirmed choice in the composer.
   return { permissionMode: mode, allowDangerouslySkipPermissions: mode === 'bypassPermissions', allowedTools: PERMISSION_MODES[mode] };
+}
+
+/** A message for Claude Code: image blocks ahead of the text, or the text alone. */
+export function userContent(text: string, images?: AgentImage[]): SDKUserMessage['message']['content'] {
+  if (!images?.length) return text;
+  return [...images.map((i) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType, data: i.data } })), { type: 'text' as const, text }];
 }

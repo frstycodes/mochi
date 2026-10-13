@@ -30,7 +30,7 @@ export function claudeLimitThread(): Thread {
       { at: s + 40, who: 'claude', kind: 'message', text: 'The CSV route streams rows and its tests pass. Left:\n\n- Wire the Export button to the route\n- Add a month picker\n- Document the CSV columns' },
       { at: s + 41, who: 'harness', kind: 'event', isLimit: true, text: 'Claude hit the 5-hour usage limit' },
     ],
-    queued: [{ id: 'm-limit-demo', draft: 'Then add the month picker.', files: 0, mentions: [], isCommand: false, typedSkills: [] }],
+    queued: [{ id: 'm-limit-demo', draft: 'Then add the month picker.', mentions: [], isCommand: false, typedSkills: [] }],
     live: { isWorking: true, limit: { resetsAt: DEMO_FIVE_HOUR_RESET, label: '5-hour', isTurnHeld: true } },
     prs: [],
     sources: [],
