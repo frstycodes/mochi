@@ -27,6 +27,8 @@ import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
 import { scheduleReducer, type ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
+import { isTapped } from '../remote/tap.ts';
+import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
 import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
 import { useAutoSimplify } from '../simplify/useSimplify.ts';
@@ -41,17 +43,22 @@ export interface Snapshot {
   queue: QueueItem[];
 }
 
-export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState;
+/** `streamed`: how many of the remote stream's numbered actions this store holds (`src/remote/tap.ts`). */
+export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState & { streamed: number };
 export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | ReviewAction | NotificationsAction | ScheduleAction | { type: 'reset' } | { type: 'tool-undo'; undo: ToolUndo };
 
 // notificationsReducer diffs what the others changed, so it runs last.
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, reviewsReducer, scheduleReducer, notificationsReducer];
 
 function initialState(saved = getRestored()): State {
-  return { ...initialThreads(saved), ...initialQueue(saved), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat(), ...initialNotifications() };
+  return { ...initialThreads(saved), ...initialQueue(saved), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat(), ...initialNotifications(), streamed: 0 };
 }
 
 function reducer(state: State, action: Action): State {
+  return { ...reduce(state, action), streamed: state.streamed + (isTapped(action) ? 1 : 0) };
+}
+
+function reduce(state: State, action: Action): State {
   // Resetting the demo keeps your own threads as they are.
   if (action.type === 'tool-undo') return applyUndo(state, action.undo).state;
   if (action.type === 'reset') return { ...initialState(toSaved(state)), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }), ...initialSideChat({}) };
@@ -144,6 +151,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     [dispatch],
   );
   useQueueRunner(state, dispatch);
+  useRemoteBridge(state, dispatch);
   useLimitResumes(state.threads, dispatch);
   useEffect(() => {
     savePanes(state.panes);
