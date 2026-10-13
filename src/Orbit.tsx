@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClipboardTick, Clock, BranchDown as GitMerge, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
+import { ClipboardTick, Clock, Hierarchy3, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { progressAt } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
@@ -27,7 +27,7 @@ const QUEUE_ICONS = {
   question: MessageCircleQuestion,
   review: ClipboardTick,
   ci: GitPullRequestIcon,
-  overlap: GitMerge,
+  overlap: Hierarchy3,
   run: Clock,
   setting: Setting2,
 } satisfies Record<QueueKind, LucideIcon>;

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { host } from './host';
 import { restoreFailed, restoreSaved } from './store/persist';
+import { loadDrafts } from './chat/drafts';
 import './index.css';
 
 if (host.isDesktop) showTrafficLights();
@@ -11,6 +12,7 @@ if (host.isDesktop) showTrafficLights();
 host.data
   .load()
   .then(restoreSaved, (error: unknown) => restoreFailed(error))
+  .then(() => loadDrafts())
   .then(() => {
     createRoot(document.getElementById('root')!).render(
       <StrictMode>

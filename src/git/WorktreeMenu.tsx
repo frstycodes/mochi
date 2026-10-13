@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BranchDown, Broom, Copy } from 'reicon-react';
+import { ArrowDown, Broom, Copy } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -77,7 +77,7 @@ export function WorktreeMenu({ cwd, base: chosenBase, diff, run, confirm }: Work
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem onSelect={sync}>
-            <BranchDown />
+            <ArrowDown />
             Sync with {base}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => navigator.clipboard?.writeText(cwd).catch(() => undefined)}>
