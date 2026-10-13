@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Folder, BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon-react';
+import { Folder, Link, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { getPrefs, setPrefs } from './settings/prefs';
@@ -249,7 +249,7 @@ function MatchRow({ match, isLinked, onToggle }: { match: Match; isLinked: boole
         </span>
       </div>
       <Button variant={isLinked ? 'default' : 'outline'} className="h-7 px-2.5 text-xs" onClick={onToggle} aria-pressed={isLinked}>
-        <GitMerge className="size-3.5" />
+        <Link className="size-3.5" />
         {isLinked ? 'Linked' : 'Depend on it'}
       </Button>
     </div>

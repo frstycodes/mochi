@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { ArrowUp, BranchDown, CheckCircle, InfoCircle, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { ArrowUp, CheckCircle, InfoCircle, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -340,7 +341,7 @@ function Actions() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline">
-              <BranchDown data-icon="inline-start" />
+              <Link data-icon="inline-start" />
               Link step
             </Button>
             <Button>
@@ -361,7 +362,7 @@ function Actions() {
             <Badge variant="secondary">M</Badge>
             <Badge variant="outline">v3</Badge>
             <Badge variant="secondary">
-              <BranchDown />
+              <GitPullRequestIcon />
               #482
             </Badge>
             <Badge variant="destructive">Failed</Badge>
@@ -420,7 +421,7 @@ function Display() {
           <div className="flex flex-col gap-2">
             <Item variant="outline">
               <ItemMedia variant="icon">
-                <BranchDown />
+                <Link />
               </ItemMedia>
               <ItemContent>
                 <ItemTitle>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, BranchDown, CheckCircle, Clock, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, CheckCircle, Clock, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ const KIND = {
   question: { icon: MessageQuestion, label: 'Question' },
   review: { icon: GitPullRequestIcon, label: 'Review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
-  overlap: { icon: BranchDown, label: 'Overlap' },
+  overlap: { icon: Hierarchy3, label: 'Overlap' },
   run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Setting2, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;

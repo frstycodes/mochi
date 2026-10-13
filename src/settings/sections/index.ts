@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { BranchUp, Clock, Sparkles, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
+import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
@@ -167,7 +167,7 @@ export const SETTINGS_SECTIONS = [
     id: 'git',
     group: 'Workspace',
     title: 'Git',
-    icon: BranchUp,
+    icon: Hierarchy2,
     component: GitSection,
     settings: [
       { id: 'worktreeRoot', label: 'Worktrees folder', keywords: 'worktree path directory' },

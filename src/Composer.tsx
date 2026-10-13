@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
-import { ArrowUp, BranchUp, ClipboardList, Folder, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
+import { ArrowUp, Hierarchy2, ClipboardList, Folder, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
 import { openPhotos } from './photo/photos';
@@ -249,7 +249,7 @@ export function BranchLabel({ repo }: { repo: Repo }) {
   const isFolder = repo.mode === 'folder';
   return (
     <span className="flex min-w-0 items-center gap-1 px-1.5">
-      {isFolder ? <Folder className="size-3.5 shrink-0" aria-label="Project folder" /> : <BranchUp className="size-3.5 shrink-0" aria-label="Own worktree" />}
+      {isFolder ? <Folder className="size-3.5 shrink-0" aria-label="Project folder" /> : <Hierarchy2 className="size-3.5 shrink-0" aria-label="Own worktree" />}
       <span className="truncate">{repo.branch}</span>
     </span>
   );

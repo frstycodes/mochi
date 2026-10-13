@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, Flag, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
+import { Archive, Flag, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
 import { pageKey, reloadPage } from '../browser/pages';
@@ -98,7 +98,7 @@ export const ACTIONS = [
   },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
-  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
+  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: Hierarchy2, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
   { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },
 
