@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, BranchDown, CheckCircle, Clock, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, BranchDown, CheckCircle, ClipboardTick, Clock, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,7 @@ import { useSendCiLog } from './notify/useSendCiLog';
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
   question: { icon: MessageQuestion, label: 'Question' },
-  review: { icon: GitPullRequestIcon, label: 'Review' },
+  review: { icon: ClipboardTick, label: 'Ready for review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
   overlap: { icon: BranchDown, label: 'Overlap' },
   run: { icon: Clock, label: 'Scheduled run' },
@@ -136,13 +136,13 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
       <CardContent className="flex flex-col gap-3">
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
         {isMochiCard(item) && <ShowCard item={item} />}
-        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} />}
+        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} canOpenThread={!!showThread} />}
         {item.kind === 'question' && <QuestionChoices item={item} />}
         {item.kind === 'overlap' && <OverlapChoices item={item} />}
       </CardContent>
       {item.kind === 'review' && (
         <CardFooter className="gap-2">
-          <ReviewActions item={item} />
+          <ReviewActions item={item} canOpenThread={!!showThread} />
         </CardFooter>
       )}
       {item.kind === 'run' && (
@@ -178,7 +178,8 @@ export function useUndoable() {
   };
 }
 
-function ApprovalRequest({ item }: { item: QueueItem }) {
+/** `canOpenThread`: false inside the thread itself (the composer's tray), where Open thread would go nowhere. */
+function ApprovalRequest({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
   return (
@@ -192,9 +193,11 @@ function ApprovalRequest({ item }: { item: QueueItem }) {
       )}
       <ConfirmationRequest>
         <ConfirmationActions>
-          <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
-            Open thread
-          </ConfirmationAction>
+          {canOpenThread && (
+            <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+              Open thread
+            </ConfirmationAction>
+          )}
           <ConfirmationAction onClick={() => withUndo('Approved', () => dispatch({ type: 'answer', queueId: item.id }))}>Approve and run</ConfirmationAction>
         </ConfirmationActions>
       </ConfirmationRequest>
@@ -215,18 +218,20 @@ function ShowCard({ item }: { item: QueueItem }) {
   );
 }
 
-function ReviewActions({ item }: { item: QueueItem }) {
+function ReviewActions({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
   return (
     <>
-      <Button onClick={() => withUndo('Merged', () => dispatch({ type: 'answer', queueId: item.id }))}>
+      <Button onClick={() => withUndo('Marked done', () => dispatch({ type: 'answer', queueId: item.id }))}>
         <CheckCircle data-icon="inline-start" />
-        Approve and merge
+        Mark done
       </Button>
-      <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
-        Open thread
-      </Button>
+      {canOpenThread && (
+        <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+          Open thread
+        </Button>
+      )}
     </>
   );
 }
