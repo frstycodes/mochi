@@ -173,7 +173,7 @@ function reduce(state: State, action: Action): State {
     case 'create':
       return create(state, action);
     case 'workspace':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, '', t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, t.title, t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':
       return send(state, action);
     case 'queued-add':
@@ -468,7 +468,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
   const thread: Thread = {
     id,
     spaceId: state.spaceId,
-    repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, branchName(getPrefs().branchPrefix, '', id)) : null,
+    repo: action.project ? withWorkspace(repoFor(action.project, ''), action.workspace ?? { mode: getPrefs().workspaceMode }, branchName(getPrefs().branchPrefix, action.title, id)) : null,
     title: titleFrom(action.title),
     goal: '',
     providers: [action.provider],
