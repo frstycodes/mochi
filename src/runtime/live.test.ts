@@ -221,6 +221,6 @@ test('a thread whose worktree was cleaned up makes it again on its next message'
   setWorktreePath(id, null);
   const [remade] = calls(s, { type: 'send', threadId: id, text: 'go on', drift: 'on-goal', reason: '' });
   assert.equal(remade.method === 'start' && remade.options.cwd, '/Users/me/dev/harness');
-  assert.deepEqual(remade.method === 'start' && remade.options.workspace, { mode: 'worktree', branch: `mochi/${id}` });
+  assert.deepEqual(remade.method === 'start' && remade.options.workspace, { mode: 'worktree', branch: id });
   assert.equal(remade.method === 'start' && remade.options.resume, 'sess-1');
 });
