@@ -8,14 +8,14 @@ import { assertFreeBranch, branchNameError, listBranches, switchBranch } from '.
 
 // A Mochi session injects its commit-msg hook through GIT_CONFIG_*; the scratch repo's commits mustn't run it.
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_COUNT: '0' };
-// switchBranch's own git calls read process.env; a CI runner has no git identity for its work-in-progress commit.
-Object.assign(process.env, IDENTITY);
 
 function repo() {
   // `.native` also expands Windows 8.3 short names (RUNNER~1), which git never prints.
   const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'mochi-branches-')));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: dir, env: { ...process.env, ...IDENTITY }, stdio: 'pipe' }).toString();
   git('init', '-q', '-b', 'main');
+  // switchBranch's own git calls read run.ts's env snapshot, not IDENTITY: the work-in-progress commit needs a repo identity, and Windows runners set core.autocrlf.
+  for (const [key, value] of [['user.name', 't'], ['user.email', 't@t'], ['core.autocrlf', 'false']]) git('config', key, value);
   writeFileSync(join(dir, 'a.txt'), 'a\n');
   git('add', '.');
   git('commit', '-qm', 'first');
