@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import type { QueuedMessage, Thread } from '../model';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
+import { compactFocus } from './compact';
 import { moveQueued, PAUSE_REASONS } from './outbox';
 
 /** Messages waiting for the agent's turn to end, docked in the composer above the text like the question tray. */
@@ -72,9 +73,12 @@ function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: Q
       <ExtraCount icon={Paperclip} count={message.images?.length ?? 0} label="attached" />
       <ExtraCount icon={MentionCircle} count={message.mentions.length} label="referenced" />
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 pointer-coarse:opacity-100">
-        <Button variant="ghost" size="xs" className="rounded-full" onClick={() => onSendNow(message)}>
-          Send now
-        </Button>
+        {/* A compaction can't cut into the turn: it waits for the end. */}
+        {compactFocus(message.draft) === null && (
+          <Button variant="ghost" size="xs" className="rounded-full" onClick={() => onSendNow(message)}>
+            Send now
+          </Button>
+        )}
         <TooltipIconButton label="Edit" hint="Moves it back into the message box" onClick={() => onEdit(message)}>
           <Edit className="size-3.5" />
         </TooltipIconButton>

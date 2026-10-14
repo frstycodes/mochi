@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { SearchEngine } from '../host/types/browser.ts';
 import type { PaneTabKind } from '../model.ts';
 import { accessOf, type SharedAccess } from '../runtime/access.ts';
 import { effortId, modelId } from '../runtime/models.ts';
@@ -47,7 +48,7 @@ export interface Prefs {
   terminalFontSize: number;
   terminalScrollback: number;
   restoreTerminals: boolean;
-  searchEngine: 'duckduckgo' | 'google' | 'bing' | 'kagi';
+  searchEngine: SearchEngine;
   /** A simulator udid; empty picks the first booted one. */
   simulator: string;
   /** Desktop only: show the fixture threads and profiles alongside your own (`showsDemoData`). */

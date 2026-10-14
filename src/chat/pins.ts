@@ -16,6 +16,9 @@ let pins: Pins = load();
 const listeners = new Set<() => void>();
 const EMPTY: Pin[] = [];
 
+/** Outside React: the store reads them when a compaction starts or ends. */
+export const getThreadPins = (threadId: string) => pins[threadId] ?? EMPTY;
+
 export function useThreadPins(threadId: string) {
   return useSyncExternalStore(subscribe, () => pins[threadId] ?? EMPTY);
 }

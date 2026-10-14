@@ -11,6 +11,7 @@ export const THREAD_MENU = [
 
 export const TAB_MENU = [
   ['tab-reload', 'tab-duplicate'],
+  ['tab-copy-url', 'tab-open-external'],
   ['tab-pop', 'tab-split'],
   ['tab-close', 'tab-close-others', 'tab-close-right'],
 ] as const;
@@ -20,6 +21,9 @@ export const PANE_MENU = [
   ['tab-reload', 'tab-duplicate'],
   ['tab-pop', 'tab-split'],
 ] as const;
+
+/** The Preview pane's own actions, at the top of its header's ⋯. */
+export const BROWSER_PANE_MENU = [['tab-find'], ['tab-copy-url', 'tab-open-external']] as const;
 
 export const SPLIT_MENU = [
   ['layout-split', 'layout-split-down'],

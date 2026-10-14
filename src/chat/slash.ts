@@ -1,13 +1,16 @@
 import type { AgentCommand, Provider } from '../model.ts';
 
 /** Commands Mochi runs itself from the thread composer. Anything else starting with `/` goes to the agent as typed. */
-export const SLASH_COMMANDS = [{ name: 'side', argumentHint: '<question>', description: 'Ask in side chat, with this thread as context' }] as const;
+export const SLASH_COMMANDS = [
+  { name: 'side', argumentHint: '<question>', description: 'Ask in side chat, with this thread as context' },
+  { name: 'compact', argumentHint: '[focus]', description: 'Summarize the conversation to free context, keeping your pins' },
+] as const;
 
 /**
  * One row of the `/` menu: Mochi's own command or the harness's skill or command. A skill works anywhere in the message
  * (its name goes to the agent separately); a command runs only when it opens the message.
  */
-export type SlashItem = AgentCommand & { source: 'mochi' | Provider; isSkill: boolean };
+export type SlashItem = AgentCommand & { source: 'mochi' | Provider; isSkill: boolean; /** Listed but can't run now, and why. */ disabledReason?: string };
 
 /** Mochi's commands first, then the harness's, a name the harness shares with Mochi left to Mochi. `skills` unset: all are skills. */
 export function slashItems(commands: AgentCommand[], provider: Provider, skills?: string[]): SlashItem[] {

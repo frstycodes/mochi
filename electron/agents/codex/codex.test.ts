@@ -74,6 +74,13 @@ test('a message that never streamed arrives whole from item/completed, once', ()
   assert.deepEqual(mapNotification('item/completed', { threadId: 't', item: { ...item, id: 'm2' } }, s), []);
 });
 
+test('a context compaction item is the compaction starting and ending', () => {
+  const s = threadState('h1', '/repo');
+  const item = { type: 'contextCompaction', id: 'c1' };
+  assert.deepEqual(mapNotification('item/started', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'compaction', phase: 'start' }]);
+  assert.deepEqual(mapNotification('item/completed', { threadId: 't', item }, s), [{ threadId: 'h1', type: 'compaction', phase: 'end' }]);
+});
+
 test('a failed turn carries the API message, not its raw JSON body', () => {
   const end = replay('failed').events.at(-1)!;
   assert.equal(end.type, 'turn-end');

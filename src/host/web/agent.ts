@@ -19,6 +19,8 @@ const endTurn = async (threadId: string) => {
 export const agent: AgentHost = {
   start: endTurn,
   send: endTurn,
+  compact: endTurn,
+  async compactInstructions() {},
   interrupt: endTurn,
   stop: endTurn,
   async resolve() {},

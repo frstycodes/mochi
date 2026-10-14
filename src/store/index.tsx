@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState, type Dispatch, type ReactNode } from 'react';
 import { dueQueued, sendMessage } from '../chat/outbox.ts';
+import { compactFocus, useCompactInstructions } from '../chat/compact.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -151,6 +152,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     [dispatch],
   );
   useQueueRunner(state, dispatch);
+  useCompactInstructions(state.threads);
   useRemoteBridge(state, dispatch);
   useLimitResumes(state.threads, dispatch);
   useEffect(() => {
@@ -174,7 +176,9 @@ function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
     for (const { thread, message } of dueQueued(state)) {
       if (sent.current.has(message.id)) continue;
       sent.current.add(message.id);
-      sendMessage(dispatch, state, thread, message, { queuedId: message.id });
+      const focus = compactFocus(message.draft);
+      if (focus !== null) dispatch({ type: 'compact', threadId: thread.id, focus, queuedId: message.id });
+      else sendMessage(dispatch, state, thread, message, { queuedId: message.id });
     }
   }, [state, dispatch]);
 }
@@ -206,6 +210,7 @@ function callAgent(call: AgentCall) {
   const run = () => {
     if (call.method === 'start') return host.agent.start(call.threadId, call.options);
     if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images, call.skills, call.speed);
+    if (call.method === 'compact') return host.agent.compact(call.threadId, call.focus);
     if (call.method === 'stopSubagent') return host.agent.stopSubagent(call.threadId, call.subagentId);
     return host.agent[call.method](call.threadId);
   };

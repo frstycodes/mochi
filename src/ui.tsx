@@ -87,7 +87,7 @@ export function StepStatusIcon({ status }: { status: StepStatus }) {
   return <Icon aria-label={STEP_LABELS[status]} className="size-4 shrink-0" style={{ color: stepColor(status) }} />;
 }
 
-export function stepColor(status: StepStatus) {
+function stepColor(status: StepStatus) {
   return STEP_COLORS[status];
 }
 

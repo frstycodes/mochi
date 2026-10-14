@@ -35,7 +35,7 @@ export type AgentEvent =
   /** Main is preparing the new worktree before the agent's first turn; each event carries the whole setup so far. */
   | { threadId: string; type: 'setup'; setup: WorktreeSetup }
   /** A project folder thread's agent runs on this branch of the project's checkout. */
-  | { threadId: string; type: 'branch'; branch: string }
+  | { threadId: string; type: 'branch'; branch: string; isDetached?: boolean }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }
@@ -68,6 +68,12 @@ export type AgentEvent =
   | { threadId: string; type: 'limit'; resetsAt?: string; label?: string; isTurnHeld?: boolean }
   /** The harness reports the window open again while it held the turn: the turn goes on. */
   | { threadId: string; type: 'limit-cleared' }
+  /**
+   * The harness compacted the conversation: Claude Code's `/compact` or auto-compact, Codex's `thread/compact/start` or its own.
+   * `start` while it summarizes, `end` once done (token counts where the harness reports them), `summary` when it hands the
+   * summary over (Claude's PostCompact hook; Codex shows none).
+   */
+  | { threadId: string; type: 'compaction'; phase: 'start' | 'end' | 'summary'; trigger?: 'manual' | 'auto'; preTokens?: number; postTokens?: number; summary?: string; error?: string }
   | { threadId: string; type: 'turn-end'; status: 'done' | 'interrupted' | 'failed'; error?: string };
 
 /** One plan rate-limit window of an account, as the provider reported it. */
@@ -277,6 +283,10 @@ export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
   /** `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it. */
   send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string): Promise<void>;
+  /** Compacts the live session now with the harness's own compaction; `focus` is what you typed after `/compact` (Claude only). */
+  compact(threadId: string, focus: string): Promise<void>;
+  /** What Mochi asks the harness to keep on every compaction of the thread, manual or auto: '' clears it. Claude only (PreCompact hook); Codex takes none. */
+  compactInstructions(threadId: string, instructions: string): Promise<void>;
   /** Stops a turn; during worktree setup, stops the setup and the agent doesn't start. */
   interrupt(threadId: string): Promise<void>;
   /** After a failed setup step: run the failed step again, or start the agent without the rest of the setup. */
@@ -314,6 +324,8 @@ export interface AgentHost {
 export const agentMethods = {
   start: 'invoke',
   send: 'invoke',
+  compact: 'invoke',
+  compactInstructions: 'invoke',
   interrupt: 'invoke',
   setupChoice: 'invoke',
   resolve: 'invoke',

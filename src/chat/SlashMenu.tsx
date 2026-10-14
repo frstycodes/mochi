@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react';
-import { MessageQuestion } from 'reicon-react';
+import { Compress, MessageQuestion } from 'reicon-react';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { revealIn } from '@/lib/revealIn';
 import { host } from '../host';
@@ -35,20 +35,33 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
               role="option"
               aria-selected={item === current}
               onPointerDown={(e) => e.preventDefault()}
+              aria-disabled={!!item.disabledReason || undefined}
               onClick={() => menu.choose(item)}
-              className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent"
+              className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:aria-selected:bg-accent/60"
             >
-              {item.source === 'mochi' ? <MessageQuestion className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <ProviderMark provider={item.source} size={14} className="mx-px" />}
+              <SlashIcon item={item} />
               <span className="shrink-0 font-medium">/{item.name}</span>
               {!!item.argumentHint && <span className="shrink-0 text-subtle-foreground max-sm:hidden">{item.argumentHint}</span>}
               <span className="min-w-0 truncate text-muted-foreground">{item.description}</span>
-              {menu.isMidText && !item.isSkill && <span className="ml-auto shrink-0 type-caption text-warning">Runs only at the start of a message</span>}
+              {item.disabledReason ? (
+                <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.disabledReason}</span>
+              ) : (
+                menu.isMidText && !item.isSkill && <span className="ml-auto shrink-0 type-caption text-warning">Runs only at the start of a message</span>
+              )}
             </div>
           ))}
         </div>
       ))}
     </div>
   );
+}
+
+const MOCHI_ICONS = { side: MessageQuestion, compact: Compress } satisfies Record<string, typeof MessageQuestion>;
+
+function SlashIcon({ item }: { item: SlashItem }) {
+  if (item.source !== 'mochi') return <ProviderMark provider={item.source} size={14} className="mx-px" />;
+  const Icon = MOCHI_ICONS[item.name as keyof typeof MOCHI_ICONS] ?? MessageQuestion;
+  return <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
 const groupName = (source: SlashItem['source']) => (source === 'mochi' ? 'Mochi' : HARNESSES[source].name);
@@ -74,7 +87,7 @@ export function useSlashMenu(items: SlashItem[]) {
   const index = Math.min(active, matches.length - 1);
 
   const choose = (item: SlashItem) => {
-    if (!range) return;
+    if (!range || item.disabledReason) return;
     const next = insertToken(text, range, item);
     textInput.setInput(next.text);
     setActive(0);

@@ -6,7 +6,7 @@ import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentA
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, claudeRunOptions, hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, claudeRunOptions, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
@@ -22,8 +22,8 @@ import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
-import { switchBranch } from '../git/branches.ts';
-import { runGit, topLevel } from '../git/run.ts';
+import { headOf, switchBranch } from '../git/branches.ts';
+import { topLevel } from '../git/run.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -93,6 +93,18 @@ export const agent = {
     markBusy(threadId as string);
     if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier);
     return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier);
+  },
+  async compact(_sender, threadId, focus) {
+    string(threadId, 'threadId', 256);
+    string(focus, 'focus', 10_000);
+    await starts.wait(threadId as string);
+    if (!hasClaudeSession(threadId as string) && !codex.owns(threadId as string)) throw new Error(NO_AGENT_PROCESS);
+    markBusy(threadId as string);
+    if (hasClaudeSession(threadId as string)) return compactClaude(threadId as string, focus as string);
+    return codex.compact(threadId as string);
+  },
+  async compactInstructions(_sender, threadId, instructions) {
+    setClaudeCompactInstructions(string(threadId, 'threadId', 256), string(instructions, 'instructions', 20_000));
   },
   async interrupt(_sender, threadId) {
     string(threadId, 'threadId', 256);
@@ -378,9 +390,9 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
     const top = await topLevel(root).catch(() => null);
     if (!top) return { cwd: root };
     if (workspace.isExisting) await switchBranch(top, workspace.branch, { changes: 'refuse' });
-    // On a detached HEAD the thread shows the commit, as git does, never the name it was created with: that branch doesn't exist.
-    const branch = (await runGit(top, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] })).trim() || (await runGit(top, ['rev-parse', '--short', 'HEAD'], { okCodes: [128] })).trim();
-    if (branch) broadcast({ threadId, type: 'branch', branch });
+    // The thread shows what the checkout really has, never the name it was created with: on a detached HEAD that branch doesn't exist.
+    const head = await headOf(top).catch(() => null);
+    if (head) broadcast({ threadId, type: 'branch', ...head });
     return { cwd: root };
   }
   const isRepo = await topLevel(root).then(

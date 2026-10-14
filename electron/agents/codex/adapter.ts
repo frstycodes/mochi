@@ -130,6 +130,17 @@ export class CodexAdapter {
     await this.report(threadId, () => this.turn(threadId, text, images, skills));
   }
 
+  /** `thread/compact/start` runs as a turn of its own; it takes no instructions (0.155.1 schema), so the renderer re-sends what to keep after. */
+  async compact(threadId: string) {
+    const live = this.threads.get(threadId);
+    if (!live) throw new Error('No live Codex session for this thread; resume it first');
+    await this.report(threadId, async () => {
+      const rpc = await live.server.client();
+      if (live.gen !== live.server.gen) await this.open(live.server, rpc, threadId, live.options);
+      await rpc.request('thread/compact/start', { threadId: this.threads.get(threadId)!.codexId });
+    });
+  }
+
   /** What a live thread runs on, with the speed its latest message set. */
   runOptions(threadId: string) {
     return this.threads.get(threadId)?.options;

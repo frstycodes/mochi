@@ -8,7 +8,8 @@ import { Annotator } from './browser/Annotate';
 import { ComparePane } from './browser/Compare';
 import { RESPONSIVE } from './browser/devices';
 import { deviceSize, PageSurface, useSize } from './browser/PageSurface';
-import { destroyPage, ensureView, getPage, onOpenTab, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
+import { FindBar } from './browser/FindBar';
+import { destroyPage, ensureView, getPage, onOpenTab, openFind, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
 import { BrowserToolbar, DeviceBar, DriveBar } from './browser/Toolbar';
 import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
@@ -17,6 +18,7 @@ import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { useHarness } from './store';
 import { isWorking } from './agentPhase';
+import { isMod } from './keys';
 import { PreviewContext } from './layout/SplitContext';
 
 type Corner = 'tl' | 'tr' | 'bl' | 'br';
@@ -38,9 +40,17 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
   useTabSync(thread.id, tab, page);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      onKeyDown={(e) => {
+        if (!isMod(e) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') return;
+        e.preventDefault();
+        openFind(pageId);
+      }}
+    >
       <BrowserToolbar thread={thread} pageId={pageId} page={page} />
       {page.device !== RESPONSIVE && <DeviceBar pageId={pageId} page={page} />}
+      {!!page.find && <FindBar pageId={pageId} page={page} find={page.find} />}
       {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} />}
       <div className="min-h-0 flex-1">
         {page.annotating ? (

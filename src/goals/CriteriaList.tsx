@@ -4,7 +4,8 @@ import { cn } from '@/lib/utils';
 import { isMet, type Criterion, type Thread } from '../model';
 import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
-import { useRunCheck } from './checks';
+import { useWorktreePath } from '../git/worktrees';
+import { checkBlockedReason, runCriterionCheck } from './checks';
 
 /** What done means for a goal, one line per criterion: the agent's claim, and a check you can run when it has a command. */
 export function CriteriaList({ thread, className }: { thread: Thread; className?: string }) {
@@ -44,10 +45,11 @@ function CriterionEvidence({ criterion: c }: { criterion: Criterion }) {
 
 function RunCheck({ thread, criterion }: { thread: Thread; criterion: Criterion }) {
   const { dispatch } = useHarness();
-  const run = useRunCheck(dispatch);
-  const isRunning = criterion.check?.status === 'running';
+  useWorktreePath(thread.id); // re-renders once the worktree is made
+  const reason = checkBlockedReason(thread, criterion);
   return (
-    <TooltipIconButton label="Run check" hint={`Runs \`${criterion.command}\` in this thread's worktree`} disabled={isRunning} className="-my-1 size-6" onClick={() => run(thread, criterion)}>
+    // z-10 lifts it above the summary goal block's stretched open button.
+    <TooltipIconButton label="Run check" hint={reason ?? `Runs \`${criterion.command}\` in this thread's worktree`} disabled={!!reason} className="relative z-10 -my-1 size-6" onClick={() => runCriterionCheck(dispatch, thread, criterion)}>
       <Play className="size-3.5" />
     </TooltipIconButton>
   );

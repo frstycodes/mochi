@@ -122,6 +122,24 @@ export interface ActivityEntry {
   from?: ThreadRef;
   /** Tool entries: the message this `send_to_thread` call delivered. */
   sent?: ThreadRef & { text: string };
+  /** Events only: the harness compacted the conversation here. */
+  compaction?: Compaction;
+}
+
+/**
+ * One compaction of a thread's conversation. `pins` and `hasGoal`: what Mochi asked it to keep. `focus`: what you typed after
+ * `/compact`. Token counts as the harness reported them; Codex reports none after a compaction (0.155.1), so its rows carry no sizes.
+ */
+export interface Compaction {
+  trigger: 'manual' | 'auto';
+  status: 'running' | 'done' | 'failed';
+  pins: number;
+  hasGoal: boolean;
+  focus?: string;
+  preTokens?: number;
+  postTokens?: number;
+  summary?: string;
+  error?: string;
 }
 
 /** Another thread, with its title when the entry was written; a renamed or deleted thread still reads. `threadId` is missing only on messages migrated from the old `From "…":` prefix whose sender is gone. */
@@ -208,6 +226,8 @@ export interface Repo {
   mode?: 'folder';
   base?: string;
   isExisting?: boolean;
+  /** The checkout is on a detached HEAD: `branch` holds its short commit, shown as such, never as a branch name. */
+  isDetached?: boolean;
 }
 
 export interface Thread {

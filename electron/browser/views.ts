@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { BrowserWindow, screen, session, WebContentsView, type WebContents } from 'electron';
-import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserSnapshot, PickedElement } from '../../src/host/types/browser.ts';
+import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserMenuCommand, BrowserSnapshot, FindOptions, PickedElement } from '../../src/host/types/browser.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
 import { clickScript, focusScript, hoverScript, locateScript, markScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
 import { evalResult, EVAL_TIMEOUT_MS, withTimeout, type CdpEvaluate } from './evaluate.ts';
@@ -25,6 +25,8 @@ interface Entry {
   hmrAt: number;
   /** Scroll polling pauses while a restore settles, or it would record the top of the freshly loaded page. */
   holdScrollUntil: number;
+  /** Escape in the page closes the find bar only while a search is open. */
+  isFinding: boolean;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -67,7 +69,7 @@ export function createView(owner: WebContents, url: string, spaceId: string) {
     webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
   });
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0 };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
@@ -241,6 +243,51 @@ export async function captureView(owner: WebContents, id: string, fullPage: bool
   const clip = { x: 0, y: 0, width: cssContentSize.width, height: Math.min(cssContentSize.height, MAX_CAPTURE_HEIGHT), scale: 1 };
   const { data } = (await dbg.sendCommand('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip })) as { data: string };
   return `data:image/png;base64,${data}`;
+}
+
+const PEEK_QUALITY = 85;
+
+export async function peekView(owner: WebContents, id: string) {
+  const wc = get(owner, id).view.webContents;
+  // capturePage is the cheap path while the view is on screen; once hidden it comes back empty and CDP renders it instead.
+  const image = await wc.capturePage().catch(() => null);
+  if (image && !image.isEmpty()) return `data:image/jpeg;base64,${image.toJPEG(PEEK_QUALITY).toString('base64')}`;
+  const dbg = await debuggerFor(wc);
+  const { data } = (await dbg.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: PEEK_QUALITY })) as { data: string };
+  return `data:image/jpeg;base64,${data}`;
+}
+
+export function findInView(owner: WebContents, id: string, text: string, o: FindOptions) {
+  const entry = get(owner, id);
+  entry.isFinding = true;
+  // Electron's `findNext` means "start a new session", the opposite of Chromium's name for it.
+  entry.view.webContents.findInPage(text, { forward: o.forward, findNext: o.isNewSearch, matchCase: o.matchCase });
+}
+
+export function stopFindInView(owner: WebContents, id: string) {
+  const entry = get(owner, id);
+  entry.isFinding = false;
+  entry.view.webContents.stopFindInPage('keepSelection');
+}
+
+export function menuCommandInView(owner: WebContents, id: string, command: BrowserMenuCommand, at: { x: number; y: number }, url?: string) {
+  const entry = get(owner, id);
+  const wc = entry.view.webContents;
+  // The app's menu took focus from the page; edits act on the page's focused element and selection.
+  wc.focus();
+  if (command === 'cut') wc.cut();
+  else if (command === 'copy') wc.copy();
+  else if (command === 'paste') wc.paste();
+  else if (command === 'select-all') wc.selectAll();
+  else if (command === 'copy-image') wc.copyImageAt(at.x, at.y);
+  else if (command === 'save-image' && url) wc.downloadURL(url);
+  else if (command === 'inspect') {
+    if (!wc.isDevToolsOpened()) {
+      setDevtools(owner, id, 'docked');
+      if (!owner.isDestroyed()) owner.send('browser:onEvent', { id, type: 'devtools', mode: 'docked' } satisfies BrowserEvent);
+    }
+    wc.inspectElement(at.x, at.y);
+  }
 }
 
 export async function pickElement(owner: WebContents, id: string): Promise<PickedElement | null> {
@@ -451,6 +498,35 @@ function wire(id: string, entry: Entry) {
     entry.logs = [...entry.logs, { level: LOG_LEVELS.includes(level as BrowserLog['level']) ? (level as BrowserLog['level']) : 'info', message, source: sourceId, line: lineNumber }].slice(-LOG_LIMIT);
     if (level === 'error' || level === 'warning') emit({ id, type: 'console', level, message, source: sourceId, line: lineNumber });
   });
+  wc.on('found-in-page', (_event, r) => emit({ id, type: 'found', active: r.activeMatchOrdinal, matches: r.matches }));
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const isMod = process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta;
+    if (isMod && !input.alt && !input.shift && input.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      emit({ id, type: 'key', key: 'find' });
+    } else if (input.key === 'Escape' && entry.isFinding) {
+      event.preventDefault();
+      emit({ id, type: 'key', key: 'escape' });
+    }
+  });
+  wc.on('context-menu', (_event, p) =>
+    emit({
+      id,
+      type: 'context-menu',
+      x: p.x,
+      y: p.y,
+      linkUrl: isAllowedUrl(p.linkURL) ? p.linkURL : '',
+      linkText: p.linkText,
+      srcUrl: p.srcURL,
+      mediaType: p.mediaType,
+      selectionText: p.selectionText,
+      isEditable: p.isEditable,
+      canCut: p.editFlags.canCut,
+      canCopy: p.editFlags.canCopy,
+      canPaste: p.editFlags.canPaste,
+    }),
+  );
   wc.on('devtools-closed', () => {
     closeDevtools(entry);
     layout(entry);

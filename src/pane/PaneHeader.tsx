@@ -2,10 +2,10 @@ import { createContext, useContext, useLayoutEffect, useState, type PointerEvent
 import { createPortal } from 'react-dom';
 import { ExitFullscreen, Fullscreen, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ActionItems } from '../menus/ActionItems';
-import { PANE_MENU } from '../menus/menus';
+import { BROWSER_PANE_MENU, PANE_MENU } from '../menus/menus';
 import { OverflowIcon, TooltipIconButton } from '../ui';
 import type { PaneTabKind } from '../model';
 import { PANE_TABS } from './tabs';
@@ -73,6 +73,12 @@ export function PaneHeader({
             <TooltipContent>More actions</TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end" className="w-60">
+            {kind === 'browser' && (
+              <>
+                <ActionItems target={{ threadId, tabId }} groups={BROWSER_PANE_MENU} menu="dropdown" />
+                <DropdownMenuSeparator />
+              </>
+            )}
             <ActionItems target={{ threadId, tabId }} groups={PANE_MENU} menu="dropdown" />
           </DropdownMenuContent>
         </DropdownMenu>

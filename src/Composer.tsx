@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { toast } from 'sonner';
-import { ArrowUp, Hierarchy2, ClipboardList, Folder, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
+import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
+import { BranchIcon, BranchName } from './git/BranchLabel';
 import { openPhotos } from './photo/photos';
 import {
   PromptInput,
@@ -305,11 +306,10 @@ function AccessIcon({ access, className }: { access: Access; className?: string 
 
 /** Where a started thread works: its project folder or its own worktree, and the branch. */
 export function BranchLabel({ repo }: { repo: Repo }) {
-  const isFolder = repo.mode === 'folder';
   return (
     <span className="flex min-w-0 items-center gap-1 px-1.5">
-      {isFolder ? <Folder className="size-3.5 shrink-0" aria-label="Project folder" /> : <Hierarchy2 className="size-3.5 shrink-0" aria-label="Own worktree" />}
-      <span className="truncate">{repo.branch}</span>
+      <BranchIcon repo={repo} />
+      <BranchName repo={repo} />
     </span>
   );
 }
