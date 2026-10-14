@@ -11,7 +11,7 @@ between a device and its machine. It can't read what it forwards.
 
 Deployed (development instance): `https://mochi-relay.sandeshpandey.workers.dev`.
 
-Self-hosting is the same Worker on your own Cloudflare account; Mochi takes the relay URL in Settings › Devices.
+Self-hosting is the same Worker on your own Cloudflare account; point Mochi at it with the `MOCHI_RELAY_URL` environment variable (there is no setting for it yet).
 
 ## Run locally
 
