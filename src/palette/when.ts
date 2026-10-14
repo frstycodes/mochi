@@ -58,6 +58,8 @@ export const when = {
   /** Browser tabs float only while an agent drives them. */
   poppableTab: (s: ActionScope) => !!s.tab && s.tab.kind !== 'new' && s.tab.kind !== 'browser',
   browserTab: (s: ActionScope) => s.tab?.kind === 'browser',
+  /** A browser tab showing a web page, not about:blank. */
+  webTab: (s: ActionScope) => s.tab?.kind === 'browser' && /^https?:/i.test(s.tab.url ?? ''),
   otherTabs: (s: ActionScope) => tabIndex(s) >= 0 && s.tabs.length > 1,
   tabsToRight: (s: ActionScope) => tabIndex(s) >= 0 && tabIndex(s) < s.tabs.length - 1,
 };
