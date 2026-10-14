@@ -542,7 +542,7 @@ function slotAt(list: HTMLUListElement | null, draggedId: string, pinnedIds: str
 function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: ReactNode; label: string; isActive?: boolean; onClick: () => void; trailing?: ReactNode; badge?: number }) {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton isActive={isActive} onClick={onClick}>
+      <SidebarMenuButton isActive={isActive} onClick={onClick} className="text-xs [&_svg]:size-3.5">
         {icon}
         <span>{label}</span>
         {!!trailing && <span className="ml-auto flex items-center opacity-0 transition-opacity group-hover/menu-item:opacity-100">{trailing}</span>}
