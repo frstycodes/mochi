@@ -1,4 +1,5 @@
 import { Fragment, useLayoutEffect, useRef, type ComponentProps } from 'react';
+import { useComposedRefs } from 'radix-ui/internal';
 import { PromptInputTextarea, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { cn } from '@/lib/utils';
 import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
@@ -9,9 +10,10 @@ import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
  * can't colour runs, so while a token resolves its own text goes transparent and a mirror on top (no pointer events) draws
  * it: the textarea keeps caret, selection, IME and undo; the mirror copies its box metrics and scroll offset.
  */
-export function TokenTextarea({ items, className, onScroll, ...props }: ComponentProps<typeof PromptInputTextarea> & { items: SlashItem[] }) {
+export function TokenTextarea({ items, className, onScroll, ref, ...props }: ComponentProps<typeof PromptInputTextarea> & { items: SlashItem[] }) {
   const { textInput } = usePromptInputController();
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useComposedRefs(textarea, ref);
   const mirror = useRef<HTMLDivElement>(null);
   const text = textInput.value;
   const tokens = slashTokens(text, items);
@@ -24,7 +26,7 @@ export function TokenTextarea({ items, className, onScroll, ...props }: Componen
   return (
     <div className="relative w-full">
       <PromptInputTextarea
-        ref={textarea}
+        ref={textareaRef}
         // No colour transition: the text must vanish the frame the mirror shows it.
         className={cn(className, 'transition-none', !!last && 'text-transparent caret-foreground')}
         // The mirror can't show a scrollbar, so the textarea hides its own and both wrap at the same width.
