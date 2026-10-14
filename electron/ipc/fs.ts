@@ -7,7 +7,9 @@ import { installedEditors, openInEditor } from '../fs/editors.ts';
 import { readInside, unwatchRoot, watchRoot, writeInside } from '../fs/files.ts';
 import { resolveInside, resolveRoot } from '../fs/contain.ts';
 import { listFiles } from '../fs/list.ts';
+import { cancelSearch, searchFor } from '../fs/search.ts';
 import { record, string, type Handlers } from './handlers.ts';
+import type { SearchOptions } from '../../src/host/types/fs.ts';
 
 const MAX_WRITE_CHARS = 5 * 1024 * 1024;
 const MAX_FOLDERS = 500;
@@ -21,6 +23,12 @@ export const fs = {
     if (force !== undefined && typeof force !== 'boolean') throw new TypeError('options.force must be a boolean');
     return writeInside(string(root, 'root'), string(path, 'path'), string(text, 'text', MAX_WRITE_CHARS), { baseMtimeMs, force });
   },
+  search: (sender, root, id, pattern, options) => {
+    const o = record(options, 'options');
+    for (const key of ['isCaseSensitive', 'isRegex', 'isWholeWord']) if (typeof o[key] !== 'boolean') throw new TypeError(`options.${key} must be a boolean`);
+    return searchFor(sender, string(root, 'root'), string(id, 'id', 64), string(pattern, 'pattern', 1024), o as unknown as SearchOptions);
+  },
+  cancelSearch: async (_sender, id) => cancelSearch(string(id, 'id', 64)),
   watch: (sender, root) => watchRoot(sender, string(root, 'root')),
   unwatch: async (sender, root) => unwatchRoot(sender, string(root, 'root')),
   editors: () => installedEditors(),
