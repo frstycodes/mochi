@@ -5,6 +5,6 @@
   "compatibility_date": "2026-10-01",
   "durable_objects": { "bindings": [{ "name": "ACCOUNTS", "class_name": "AccountRelay" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountRelay"] }],
-  // TODO(owner: Sandesh): the Clerk instance's Frontend API URL once it exists, and a `routes` entry for the relay's domain.
-  "vars": { "CLERK_ISSUER": "" }
+  // Clerk development instance. TODO(owner: Sandesh): a `routes` entry for the relay's domain, and the production issuer at launch.
+  "vars": { "CLERK_ISSUER": "https://amazed-hyena-4980.clerk.accounts.dev" }
 }
