@@ -5,6 +5,7 @@ import type { McpServerDef } from './settings/agentConfig.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
 import type { VizLanguage } from './viz/fence.ts';
+import type { PaneLayout } from './pane/layout.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
 import { longThreadFromUrl } from './longThread.ts';
 import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
@@ -409,7 +410,7 @@ export function answerText(answers: string[][]) {
   return answers.filter((a) => a.length).map((a) => a.join(', ')).join(' · ');
 }
 
-export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual', 'new'] as const;
+export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual'] as const;
 export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
 export interface PaneTab {
@@ -430,11 +431,21 @@ export interface PaneVisual {
   code: string;
 }
 
+/** Kinds that keep several tabs in one pane, shown as tabs in its header; every other kind is one tab per thread. */
+const MULTI_TAB_KINDS = new Set<PaneTabKind>(['browser', 'sidechat', 'visual']);
+
+export const isMultiTab = (kind: PaneTabKind) => MULTI_TAB_KINDS.has(kind);
+
+/** One pane per kind, laid out in `layout`; `isOpen` shows or hides them all without forgetting the layout. */
 export interface Pane {
   threadId: string;
   isOpen: boolean;
   tabs: PaneTab[];
+  /** The tab picked last, in whichever pane. */
   activeTab: string;
+  layout?: PaneLayout;
+  /** The tab each multi-tab pane shows. */
+  shown?: Partial<Record<PaneTabKind, string>>;
   /** The browser tab the thread's agent last drove; it floats while the agent works and the tab is off screen. */
   drivenTab?: string;
 }
@@ -446,6 +457,7 @@ export function seedPanes(): Pane[] {
       isOpen: true,
       activeTab: 'adm-browser',
       drivenTab: 'adm-browser',
+      layout: { columns: [['browser']], focused: 'browser' },
       tabs: [
         { id: 'adm-browser', kind: 'browser', title: 'API usage', url: 'localhost:3000/admin/usage' },
         { id: 'adm-changes', kind: 'changes' },

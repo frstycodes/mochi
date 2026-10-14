@@ -6,8 +6,8 @@ import { cancelDrag, endDrag, moveDrag, startDrag } from './drag';
 
 const DRAG_THRESHOLD = 4;
 
-/** Pointer-down handler for a split tab's title: drag it onto another split's edge to move it, onto its thread's tab strip to put it back, onto a thread header to pin its kind. Esc cancels. */
-export function useSplitTabDrag(threadId: string, tabId: string, kind: PaneTabKind, label: string) {
+/** Pointer-down handler for a split tab's title: drag it onto another split's edge to move it, onto one of its thread's panes to put it back, onto a thread header to pin its kind. Esc cancels. */
+export function useSplitTabDrag(threadId: string, tabId: string, kind: PaneTabKind | undefined, label: string) {
   const { dispatch } = useHarness();
   return (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
@@ -31,8 +31,8 @@ export function useSplitTabDrag(threadId: string, tabId: string, kind: PaneTabKi
       document.documentElement.style.userSelect = '';
       if (!ev) return cancelDrag();
       const landed = endDrag();
-      if (isOverPaneStrip(ev.clientX, ev.clientY, threadId)) return dispatch({ type: 'layout-return-tab', threadId, tabId });
-      if (isOverPinDrop(ev.clientX, ev.clientY)) return setPinned(kind, true);
+      if (isOverPanes(ev.clientX, ev.clientY, threadId)) return dispatch({ type: 'layout-return-tab', threadId, tabId });
+      if (kind && isOverPinDrop(ev.clientX, ev.clientY)) return setPinned(kind, true);
       if (landed) dispatch({ type: 'layout-drop', ...landed });
     };
     const onUp = (ev: PointerEvent) => finish(ev);
@@ -48,6 +48,6 @@ export function useSplitTabDrag(threadId: string, tabId: string, kind: PaneTabKi
   };
 }
 
-function isOverPaneStrip(x: number, y: number, threadId: string) {
-  return document.elementsFromPoint(x, y).some((el) => el.closest(`[data-pane-strip="${CSS.escape(threadId)}"]`));
+function isOverPanes(x: number, y: number, threadId: string) {
+  return document.elementsFromPoint(x, y).some((el) => el.closest(`[data-panes-of="${CSS.escape(threadId)}"]`));
 }

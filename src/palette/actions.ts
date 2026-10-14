@@ -122,9 +122,9 @@ export const ACTIONS = [
   { id: 'tab-close-others', group: 'Side pane', title: 'Close other tabs', icon: CloseSquare, when: when.otherTabs, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.filter((x) => x !== tab), ctx)) },
   { id: 'tab-close-right', group: 'Side pane', title: 'Close tabs to the right', icon: CloseSquare, when: when.tabsToRight, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.slice(ctx.scope.tabs.indexOf(tab) + 1), ctx)) },
   { id: 'tab-reload', group: 'Side pane', title: 'Reload page', icon: Refresh, when: when.browserTab, run: onTab((tab, t) => reloadPage(pageKey(t.id, tab.id))) },
-  { id: 'tab-duplicate', group: 'Side pane', title: 'Duplicate tab', icon: Copy, when: when.contentTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: tab.kind, url: tab.url, file: tab.file })) },
+  { id: 'tab-duplicate', group: 'Side pane', title: 'Duplicate tab', icon: Copy, when: when.multiTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: tab.kind, url: tab.url, file: tab.file })) },
   { id: 'tab-pop', group: 'Side pane', title: 'Pop out into a floating window', icon: Pip, when: when.poppableTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-pop', threadId: t.id, tabId: tab.id, isPopped: true })) },
-  { id: 'tab-split', group: 'Side pane', title: 'Move tab to a new split', icon: RowVertical, when: when.contentTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'tab', threadId: t.id, tabId: tab.id } })) },
+  { id: 'tab-split', group: 'Side pane', title: 'Move tab to a new split', icon: RowVertical, when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'tab', threadId: t.id, tabId: tab.id } })) },
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),

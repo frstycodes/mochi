@@ -15,6 +15,12 @@ export const TAB_MENU = [
   ['tab-close', 'tab-close-others', 'tab-close-right'],
 ] as const;
 
+/** A pane header's ⋯: the header has its own close. */
+export const PANE_MENU = [
+  ['tab-reload', 'tab-duplicate'],
+  ['tab-pop', 'tab-split'],
+] as const;
+
 export const SPLIT_MENU = [
   ['layout-split', 'layout-split-down'],
   ['layout-zoom', 'layout-unzoom', 'layout-swap', 'layout-rotate'],
