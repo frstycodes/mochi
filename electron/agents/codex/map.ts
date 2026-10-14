@@ -246,6 +246,8 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       const { text, links } = webSearch(item);
       return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && links.length > 0 && { links }) }];
     }
+    case 'contextCompaction':
+      return [{ threadId, type: 'compaction', phase }];
     case 'subAgentActivity':
       return phase === 'end' ? subAgentActivity(item, threadId) : [];
     case 'collabAgentToolCall':

@@ -4,6 +4,7 @@ import type { DraftedCriterion } from '../utility/prompts.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
+import { compactionEntry } from '../chat/compact.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, type GoalDraft } from '../goals/edit.ts';
@@ -68,6 +69,8 @@ export type ThreadsAction =
    * `queuedId`: the queued message this sends, which leaves the queue. `interrupts`: ends the turn in flight first (the queue's Send now).
    */
   | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; interrupts?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef }
+  /** `/compact`: the harness compacts the live session now. `queuedId`: it waited in the queue as typed. */
+  | { type: 'compact'; threadId: string; focus: string; queuedId?: string }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
   /** Edit and remove both take a message out; Edit puts its text back in the composer itself. */
   | { type: 'queued-remove'; threadId: string; id: string }
@@ -176,6 +179,15 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.repo ? { ...t, repo: withWorkspace(t.repo, action.workspace, branchName(getPrefs().branchPrefix, t.title, t.id)), live: t.live && { ...t.live, cwd: undefined } } : t)) };
     case 'send':
       return send(state, action);
+    case 'compact':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => {
+          if (!t.live) return t;
+          const left = withQueue(t, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
+          return log({ ...left, status: 'running', live: { ...t.live, isWorking: true } }, compactionEntry(t, state.now, 'manual', action.focus));
+        }),
+      };
     case 'queued-add':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, queued: [...(t.queued ?? []), action.message] })) };
     case 'queued-remove':

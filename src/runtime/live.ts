@@ -14,6 +14,7 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
   | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string }
+  | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop'; threadId: string }
   | { method: 'stopSubagent'; threadId: string; subagentId: string };
 
@@ -44,6 +45,8 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const interrupt = action.interrupts && thread.live.isWorking ? [{ method: 'interrupt' as const, threadId: thread.id }] : [];
       return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed }];
     }
+    case 'compact':
+      return hasAgent(state, action.threadId) ? [{ method: 'compact', threadId: action.threadId, focus: action.focus }] : [];
     case 'source-add': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (thread?.sources.some((s) => s.label === action.source.label)) return [];

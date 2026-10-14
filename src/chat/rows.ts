@@ -43,9 +43,9 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       return rows.push({ kind: 'subagent', key, entry });
     }
     if (entry.kind === 'event') {
-      const isWidget = !!entry.card || !!entry.isLimit;
+      const isWidget = !!entry.card || !!entry.isLimit || !!entry.compaction;
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
-      // Mochi's widgets (a delete or settings approval, a usage limit) stay in view: the turn continues in a new accordion after one.
+      // Mochi's widgets (a delete or settings approval, a usage limit, a compaction) stay in view: the turn continues in a new accordion after one.
       if (isWidget) turn = undefined;
       return rows.push({ kind: 'event', key, entry });
     }

@@ -311,3 +311,14 @@ test('MCP status keeps an http or SSE server’s URL, never a claude.ai proxy’
     ['https://mcp.linear.app/mcp', undefined, undefined],
   );
 });
+
+test('a compaction reports its start, then the sizes from the boundary, and the next usage counts from the smaller context', () => {
+  const { map } = createMapper('t1', CWD);
+  const status = (fields: object) => ({ type: 'system', subtype: 'status', uuid: 'a-b-c-d-e', session_id: 's', ...fields }) as unknown as SDKMessage;
+  assert.deepEqual(map(status({ status: 'compacting' })), [{ threadId: 't1', type: 'compaction', phase: 'start' }]);
+  assert.deepEqual(map({ type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'auto', pre_tokens: 182_000, post_tokens: 24_000 }, uuid: 'a-b-c-d-e', session_id: 's' } as SDKMessage), [
+    { threadId: 't1', type: 'compaction', phase: 'end', trigger: 'auto', preTokens: 182_000, postTokens: 24_000 },
+  ]);
+  assert.deepEqual(map(status({ status: null, compact_result: 'success' })), []);
+  assert.deepEqual(map(status({ status: null, compact_result: 'failed', compact_error: 'Not enough messages' })), [{ threadId: 't1', type: 'compaction', phase: 'end', error: 'Not enough messages' }]);
+});
