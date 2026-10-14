@@ -21,8 +21,7 @@ const SIDE_BY_SIDE_MIN_WIDTH = 640;
 export function FilesTab({ thread, tab }: PaneTabProps) {
   const root = threadCwd(thread);
   if (!root) return <NoFolderState />;
-  // Keyed on the file asked for: the one Files pane switches to a file opened from the chat or a terminal.
-  return <FilesBrowser key={`${tab.id}:${root}:${tab.file?.path ?? ''}:${tab.file?.line ?? ''}`} threadId={thread.id} root={root} initial={tab.file} />;
+  return <FilesBrowser key={`${tab.id}:${root}`} threadId={thread.id} root={root} initial={tab.file} />;
 }
 
 function FilesBrowser({ threadId, root, initial }: { threadId: string; root: string; initial?: FileTarget }) {
@@ -40,6 +39,10 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
     setSelected(target);
     if (container.current!.clientWidth < SIDE_BY_SIDE_MIN_WIDTH) setIsTreeOpen(false);
   };
+  // The one Files pane switches to a file opened from the chat or a terminal without remounting, so a search in progress survives.
+  useEffect(() => {
+    if (initial) open(initial);
+  }, [initial?.path, initial?.line]);
   const searchInFiles = () => {
     setIsTreeOpen(true);
     if (!query.startsWith('?')) setQuery('?');
