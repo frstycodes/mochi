@@ -6,6 +6,11 @@ export const SCOPES = ['read', 'operate', 'manage', 'code', 'terminal'] as const
 
 export type Scope = (typeof SCOPES)[number];
 
+/** What a device or computer is, for its icon: from its OS, or `phone` for the phone app (later). */
+export const DEVICE_KINDS = ['mac', 'windows', 'linux', 'phone'] as const;
+
+export type DeviceKind = (typeof DEVICE_KINDS)[number];
+
 /** A new device gets every scope but `terminal`: a terminal is a shell on this machine. */
 export const DEFAULT_SCOPES: Scope[] = ['read', 'operate', 'manage', 'code'];
 
@@ -26,6 +31,8 @@ export type RelayState = { status: 'off' } | { status: 'connecting' } | { status
 export interface PairedDeviceInfo {
   id: string;
   name: string;
+  /** Missing for a device paired before devices named their kind. */
+  kind?: DeviceKind;
   scopes: Scope[];
   pairedAt: number;
 }
@@ -34,11 +41,34 @@ export interface PairedDeviceInfo {
 export interface OtherMachine {
   id: string;
   name: string;
+  /** Known once paired: the relay doesn't list it. */
+  kind?: DeviceKind;
   isOnline: boolean;
   isPaired: boolean;
   /** The six digits both screens show while pairing with it. */
   pairingCode: string;
 }
+
+/**
+ * Another computer of yours that this one follows as a device. `refused`: it said no (removed this computer, or its key
+ * changed), so nothing retries until you pair again.
+ */
+export interface FollowedMachine {
+  id: string;
+  name: string;
+  kind?: DeviceKind;
+  status: 'connecting' | 'online' | 'offline' | 'refused';
+  route?: 'lan' | 'relay';
+  /** What it lets this computer do; empty until it welcomed this one. */
+  scopes: Scope[];
+  /** Why the last attempt failed, or the machine's refusal. */
+  error?: string;
+  /** Epoch ms it was last online, for "offline since". */
+  lastSeenAt?: number;
+}
+
+/** A machine's stream as a device applies it: a fresh base, then each store action numbered within the base's epoch. */
+export type StreamFrame = { type: 'snapshot'; epoch: string; seq: number; saved: unknown } | { type: 'action'; epoch: string; seq: number; action: unknown };
 
 /** "Allow <name>?" on this computer's screen. */
 export interface ApprovalRequest {
@@ -52,6 +82,7 @@ export interface ApprovalRequest {
 export interface ConnectedDevice {
   id: string;
   name: string;
+  kind?: DeviceKind;
   scopes: Scope[];
   connectedAt: number;
 }
@@ -128,6 +159,17 @@ export interface RemoteHost {
   /** Pairs with another computer of yours; resolves once it allowed this one, rejects with its reason otherwise. */
   pair(machineId: string): Promise<void>;
   forgetMachine(machineId: string): Promise<void>;
+  /** The computers this one follows, and how each connection stands. */
+  machines(): Promise<FollowedMachine[]>;
+  onMachines(listener: (machines: FollowedMachine[]) => void): () => void;
+  /** The main window's mirrors start empty: every followed machine sends a fresh snapshot, then its actions. */
+  follow(): Promise<void>;
+  onMachineFrame(listener: (message: { machineId: string; frame: StreamFrame }) => void): () => void;
+  /** Keeps a followed machine's store (`toSaved` JSON) encrypted on this computer, for launch and offline reading. */
+  cacheMachine(machineId: string, saved: string): Promise<void>;
+  cachedMachines(): Promise<{ machineId: string; saved: string }[]>;
+  /** Runs on that machine; rejects only for a bad argument, every other failure is the result's `error`. */
+  command(machineId: string, command: RemoteCommand): Promise<CommandResult>;
 }
 
 export const remoteMethods = {
@@ -146,4 +188,11 @@ export const remoteMethods = {
   otherMachines: 'invoke',
   pair: 'invoke',
   forgetMachine: 'invoke',
+  machines: 'invoke',
+  onMachines: 'event',
+  follow: 'invoke',
+  onMachineFrame: 'event',
+  cacheMachine: 'invoke',
+  cachedMachines: 'invoke',
+  command: 'invoke',
 } satisfies Manifest<RemoteHost>;

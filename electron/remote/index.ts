@@ -4,15 +4,18 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import sodium from 'libsodium-wrappers';
-import type { ApprovalRequest, CommandResult, OtherMachine, RelayState, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
+import type { ApprovalRequest, CommandResult, FollowedMachine, OtherMachine, RelayState, RemoteCommand, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
 import { accessToken, current as currentAccount, onAccountChange } from '../account/session.ts';
 import { createWindow, mainWindow } from '../window.ts';
+import { MachineCache } from './cache.ts';
+import { followMachine, openLan, type MachineFollower, type Route } from './client.ts';
 import { loadDeviceKeys, type DeviceKeys } from './crypto/keys.ts';
 import { networkHosts } from './interfaces.ts';
 import type { RawLink } from './link.ts';
+import type { PairedMachine } from './registry.ts';
 import { ActionLog } from './log.ts';
 import { APPROVAL_TIMEOUT_MS, deviceId, pairingCode, secureAsDevice, secureAsMachine, type Origin } from './pairing.ts';
-import { PROTOCOL_VERSION, type ServerFrame } from './protocol.ts';
+import { asKind, PROTOCOL_VERSION, type ServerFrame } from './protocol.ts';
 import { Registry } from './registry.ts';
 import { connectMachine, listMachines, openDeviceChannel, type MachineConnection } from './relayClient.ts';
 import { startRemoteServer, type RemoteServer, type RendererBridge } from './server.ts';
@@ -35,12 +38,16 @@ const approvals = new Map<string, (isAllowed: boolean) => void>();
 let registry: Registry | undefined;
 let keys: Promise<DeviceKeys> | undefined;
 const theRegistry = () => (registry ??= new Registry(app.getPath('userData')));
+let cache: MachineCache | undefined;
+const theCache = () => (cache ??= new MachineCache(app.getPath('userData'), safeStorage));
 const theKeys = () => (keys ??= loadDeviceKeys(safeStorage, app.getPath('userData')).then((loaded) => loaded.keys));
 let error: string | undefined;
 let restarting: Promise<void> = Promise.resolve();
 let isQuitting = false;
 const snapshots = new Map<string, (snapshot: Awaited<ReturnType<RendererBridge['snapshot']>>) => void>();
 const results = new Map<string, (result: CommandResult) => void>();
+/** The computers this one follows as a device, by machine id. */
+const followers = new Map<string, MachineFollower>();
 
 /** Reads Settings › Devices and, when it is on, starts listening and keeps the renderer alive. */
 export function startRemote() {
@@ -58,12 +65,21 @@ export function startRemote() {
     win.on('closed', () => !isQuitting && keepRendererAlive());
   });
   // Signing in or out starts or stops the relay connection.
-  onAccountChange(() => settings.isEnabled && settings.reachesAnywhere && void restart());
+  onAccountChange((account) => {
+    if (settings.isEnabled && settings.reachesAnywhere) void restart();
+    // Signing in opens the relay route to computers that weren't reachable; signing out ends it.
+    for (const follower of followers.values()) {
+      const { status, route } = follower.state();
+      if (account.status === 'signed-in' ? status !== 'online' : route === 'relay') follower.resync();
+    }
+  });
   if (settings.isEnabled) void restart();
+  app.on('will-quit', () => followers.forEach((f) => f.close()));
+  syncFollowers();
 }
 
 export function remoteStatus(): RemoteStatus {
-  const pairedDevices = theRegistry().devices().map(({ id, name, scopes, pairedAt }) => ({ id, name, scopes, pairedAt }));
+  const pairedDevices = theRegistry().devices().map(({ id, name, kind, scopes, pairedAt }) => ({ id, name, kind, scopes, pairedAt }));
   return { settings, hostName: hostname(), addresses: server?.addresses ?? [], devices: server?.devices() ?? [], pairedDevices, relay: relayState, ...(error && { error }) };
 }
 
@@ -134,7 +150,7 @@ function approve(request: { name: string; code: string }): Promise<boolean> {
 
 async function secure(raw: RawLink, origin: Origin) {
   const registry = theRegistry();
-  return secureAsMachine(raw, origin, {
+  const secured = await secureAsMachine(raw, origin, {
     keys: await theKeys(),
     find: (id) => registry.findDevice(id),
     approve,
@@ -144,6 +160,8 @@ async function secure(raw: RawLink, origin: Origin) {
       return added;
     },
   });
+  if ('device' in secured) registry.setDeviceKind(secured.device.deviceId, secured.device.kind);
+  return secured;
 }
 
 /** Your account's other computers, from the relay, each with the code both screens show if you pair with it. */
@@ -158,6 +176,7 @@ export async function otherMachines(): Promise<OtherMachine[]> {
       name: m.name,
       isOnline: m.isOnline,
       isPaired: registry.machines().some((p) => p.id === m.id && p.publicKey === m.publicKey),
+      kind: registry.machines().find((p) => p.id === m.id)?.kind,
       pairingCode: pairingCode(sodium.from_base64(m.publicKey, sodium.base64_variants.ORIGINAL), own.publicKey),
     }));
 }
@@ -188,14 +207,90 @@ export async function pair(machineId: string) {
     });
     if (welcome.type === 'refused') throw new Error(welcome.reason);
     if (welcome.type !== 'welcome') throw new Error('That computer answered something unexpected');
-    theRegistry().addMachine({ id: machine.id, name: machine.name, publicKey: machine.publicKey });
+    theRegistry().addMachine({ id: machine.id, name: machine.name, kind: asKind(welcome.machineKind), publicKey: machine.publicKey });
   } finally {
     raw.close(1000, 'Paired');
   }
+  // A new key (paired again after a change) needs a new connection, not the old one's.
+  followers.get(machineId)?.close();
+  followers.delete(machineId);
+  syncFollowers();
 }
 
 export function forgetMachine(machineId: string) {
   theRegistry().removeMachine(machineId);
+  theCache().remove(machineId);
+  syncFollowers();
+}
+
+/** The main window's latest copy of a followed machine's store, kept for the next launch and for reading it offline. */
+export function cacheMachine(sender: WebContents, machineId: string, saved: string) {
+  if (sender !== mainWindow()?.webContents || !followers.has(machineId)) return;
+  theCache().write(machineId, saved);
+}
+
+export const cachedMachines = () => [...followers.keys()].flatMap((machineId) => {
+  const saved = theCache().read(machineId);
+  return saved ? [{ machineId, saved }] : [];
+});
+
+export const followedMachines = (): FollowedMachine[] => [...followers.values()].map((f) => f.state());
+
+/** The main window's store starts its mirrors empty; every followed machine starts over with a snapshot. */
+export function follow(sender: WebContents) {
+  if (sender !== mainWindow()?.webContents) return;
+  for (const follower of followers.values()) follower.resync();
+}
+
+export function commandMachine(machineId: string, command: RemoteCommand): Promise<CommandResult> {
+  const follower = followers.get(machineId);
+  return follower ? follower.command(command) : Promise.resolve({ isOk: false, error: 'This computer isn’t paired with that one' });
+}
+
+/** One follower per paired machine: new ones start, forgotten ones stop. */
+function syncFollowers() {
+  const machines = theRegistry().machines();
+  for (const [id, follower] of followers) {
+    if (machines.some((m) => m.id === id)) continue;
+    follower.close();
+    followers.delete(id);
+  }
+  for (const machine of machines) if (!followers.has(machine.id)) followers.set(machine.id, startFollowing(machine));
+  broadcastMachines();
+
+  function startFollowing(machine: PairedMachine) {
+    return followMachine({
+      machine: { ...machine, lastSeenAt: theCache().savedAt(machine.id) },
+      routes: () => routesTo(machine.id),
+      secure: async (raw) => {
+        await sodium.ready;
+        return secureAsDevice(raw, await theKeys(), sodium.from_base64(machine.publicKey, sodium.base64_variants.ORIGINAL), settings.machineName || hostname(), true);
+      },
+      onChange: broadcastMachines,
+      onFrame: (frame) => mainWindow()?.webContents.send('remote:onMachineFrame', { machineId: machine.id, frame }),
+      onWelcome: (welcome) => theRegistry().noteWelcome(machine.id, welcome),
+    });
+  }
+}
+
+/** Its LAN and Tailscale addresses as it last told this computer, then the relay. */
+function routesTo(machineId: string): Route[] {
+  const addresses = theRegistry().machines().find((m) => m.id === machineId)?.addresses ?? [];
+  return [
+    ...addresses.map((address) => ({ kind: 'lan' as const, open: () => openLan(address) })),
+    {
+      kind: 'relay' as const,
+      open: async () => {
+        const [token, own] = await Promise.all([accessToken(), theKeys()]);
+        return openDeviceChannel(machineId, deviceId(own.publicKey), token);
+      },
+    },
+  ];
+}
+
+function broadcastMachines() {
+  const machines = followedMachines();
+  for (const win of BrowserWindow.getAllWindows()) win.webContents.send('remote:onMachines', machines);
 }
 
 const bridge: RendererBridge = {

@@ -13,22 +13,23 @@ import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/l
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
 import { runTool } from '../runtime/tools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
-import { applyUndo, type ToolUndo } from '../runtime/undo.ts';
-import { initialLayout, layoutReducer, type LayoutAction, type LayoutState } from './layout.ts';
-import { initialPanes, panesReducer, savePanes, type PanesAction, type PanesState } from './panes.ts';
-import { initialQueue, queueReducer, rankQueue, type QueueAction, type QueueState } from './queue.ts';
-import { initialSideChat, saveSideChats, sidechatReducer, type SideChatAction, type SideChatState } from './sidechat.ts';
-import { getRestored, saveThreads, toSaved } from './persist.ts';
+import type { ToolUndo } from '../runtime/undo.ts';
+import type { LayoutAction, LayoutState } from './layout.ts';
+import { savePanes, type PanesAction, type PanesState } from './panes.ts';
+import { rankQueue, type QueueAction, type QueueState } from './queue.ts';
+import { saveSideChats, type SideChatAction, type SideChatState } from './sidechat.ts';
+import { saveThreads } from './persist.ts';
+import { initialState, reducer } from './root.ts';
 import { pruneDrafts } from '../chat/drafts.ts';
-import { initialThreads, threadsReducer, type ThreadsAction, type ThreadsState } from './threads.ts';
-import { initialUi, uiReducer, type UiAction, type UiState } from './ui.ts';
-import { reviewsReducer, type ReviewAction } from '../secondOpinion/slice.ts';
-import { initialNotifications, notificationsReducer, type NotificationsAction, type NotificationsState } from '../notify/slice.ts';
+import type { ThreadsAction, ThreadsState } from './threads.ts';
+import type { UiAction, UiState } from './ui.ts';
+import type { ReviewAction } from '../secondOpinion/slice.ts';
+import type { NotificationsAction, NotificationsState } from '../notify/slice.ts';
 import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
-import { scheduleReducer, type ScheduleAction } from '../schedule/slice.ts';
+import type { ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
 import { recordAction } from '../replay/recorder.ts';
-import { isTapped } from '../remote/tap.ts';
+import { tapAction } from '../remote/tap.ts';
 import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
 import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
@@ -38,6 +39,7 @@ import { usePrSync } from '../git/usePrSync.ts';
 export type { View } from './layout.ts';
 export type { OverlapMode } from './threads.ts';
 export { rankQueue };
+export { mirrorState, reducer } from './root.ts';
 
 export interface Snapshot {
   threads: Thread[];
@@ -47,24 +49,6 @@ export interface Snapshot {
 /** `streamed`: how many of the remote stream's numbered actions this store holds (`src/remote/tap.ts`). */
 export type State = ThreadsState & QueueState & PanesState & LayoutState & UiState & SideChatState & NotificationsState & { streamed: number };
 export type Action = ThreadsAction | QueueAction | PanesAction | LayoutAction | UiAction | SideChatAction | ReviewAction | NotificationsAction | ScheduleAction | { type: 'reset' } | { type: 'tool-undo'; undo: ToolUndo };
-
-// notificationsReducer diffs what the others changed, so it runs last.
-const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, uiReducer, sidechatReducer, reviewsReducer, scheduleReducer, notificationsReducer];
-
-function initialState(saved = getRestored()): State {
-  return { ...initialThreads(saved), ...initialQueue(saved), ...initialPanes(), ...initialLayout(), ...initialUi(), ...initialSideChat(), ...initialNotifications(), streamed: 0 };
-}
-
-function reducer(state: State, action: Action): State {
-  return { ...reduce(state, action), streamed: state.streamed + (isTapped(action) ? 1 : 0) };
-}
-
-function reduce(state: State, action: Action): State {
-  // Resetting the demo keeps your own threads as they are.
-  if (action.type === 'tool-undo') return applyUndo(state, action.undo).state;
-  if (action.type === 'reset') return { ...initialState(toSaved(state)), ...initialPanes([]), ...initialLayout({ layouts: {}, watched: [] }), ...initialSideChat({}) };
-  return SLICES.reduce((s, slice) => slice(s, action), state);
-}
 
 setDriftClassifier((prompt, thread) => host.agent.classify(prompt, thread));
 
@@ -115,7 +99,12 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   // Real agents report through host.agent whether or not the demo is paused.
   useEffect(() => {
     if (state.paused) return;
-    const id = setInterval(() => applyNow({ type: 'tick' }), TICK_MS);
+    // Streamed but not recorded for replay: a device's copy keeps the same clock, so entries it applies get the same times.
+    const id = setInterval(() => {
+      const tick: Action = { type: 'tick' };
+      tapAction(tick);
+      applyNow(tick);
+    }, TICK_MS);
     return () => clearInterval(id);
   }, [state.paused]);
   useEffect(
