@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion, useReducedMotionConfig, type MotionProps } from 'motion/react';
 import { useTheme } from 'next-themes';
 import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Kbd } from '@/components/ui/kbd';
 import {
@@ -121,7 +121,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
 function SpaceHeader() {
   const space = useSpace();
   return (
-    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-10 md:in-data-traffic-lights:pl-28">
+    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-10 md:in-data-traffic-lights:pl-[calc(var(--lights-end)+37px)]">
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex min-w-0 items-center gap-2 px-1">
@@ -199,31 +199,53 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
         <ThreadList pinned={pinned} active={active} row={row} selectedIds={selection.ids} />
 
         {settled.length > 0 && (
-          <Collapsible className="group/settled">
-            <SidebarGroup>
-              <SidebarGroupLabel asChild>
-                <CollapsibleTrigger className="hover:text-sidebar-foreground">
-                  Settled
-                  <span className="ml-1 tabular">{settled.length}</span>
-                  <ChevronRight className="ml-auto size-3 transition-transform duration-150 group-data-[state=open]/settled:rotate-90" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {settled.map((t) => (
-                      <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
-                        <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
-                      </ThreadRowMenu>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
+          <SettledSection count={settled.length}>
+            {settled.map((t) => (
+              <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
+                <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
+              </ThreadRowMenu>
+            ))}
+          </SettledSection>
         )}
       </div>
     </>
+  );
+}
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+const ACCORDION = { duration: 0.2, ease: EASE_OUT };
+const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
+
+function SettledSection({ count, children }: { count: number; children: ReactNode }) {
+  const [isOpen, setOpen] = useState(false);
+  const reduce = useReducedMotionConfig();
+  const contentId = useId();
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel asChild>
+        <button type="button" aria-expanded={isOpen} aria-controls={contentId} onClick={() => setOpen(!isOpen)} className="hover:text-sidebar-foreground">
+          Settled
+          <span className="ml-1 tabular">{count}</span>
+          <ChevronRight className={cn('ml-auto size-3 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none', isOpen && 'rotate-90')} />
+        </button>
+      </SidebarGroupLabel>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            id={contentId}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={reduce ? { duration: 0 } : ACCORDION}
+            className="overflow-hidden"
+          >
+            <SidebarGroupContent>
+              <SidebarMenu>{children}</SidebarMenu>
+            </SidebarGroupContent>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </SidebarGroup>
   );
 }
 
@@ -279,6 +301,7 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
       const item = (
         <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selectedIds}>
           <SidebarMenuItem
+            asChild
             data-row-id={t.id}
             data-thread-row={t.id}
             data-pinned={isPinned || undefined}
@@ -290,7 +313,7 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
             }}
             aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
           >
-            {row(t)}
+            <motion.li {...glide}>{row(t)}</motion.li>
           </SidebarMenuItem>
         </ThreadRowMenu>
       );
@@ -303,29 +326,31 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
     const slot = drag.state?.slot;
     // Threads sort by recency, so a row dropped there lands where its last activity puts it, not where the pointer is.
     const at = slot && !isPinned && dragged ? threads.filter((t) => t.id !== dragged.id && lastActivityAt(t) > lastActivityAt(dragged)).length : slot?.index;
-    if (slot && slot.toPinned === isPinned) rows.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} />);
+    if (slot && slot.toPinned === isPinned) rows.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} glide={glide} />);
     return rows;
   };
   const showPinned = pinned.length > 0 || !!drag.state;
+  // Rows only re-measure when the order or the drop slot changes, so ticks, scrolling and space swipes never animate them.
+  const glide = { layout: 'position', layoutDependency: rowOrderKey(pinnedIds, activeIds, drag.state), transition: ROW_LAYOUT } as const;
   const isPinnedEmpty = pinned.filter((t) => t.id !== drag.state?.id).length === 0 && drag.state?.slot?.toPinned !== true;
 
   return (
     <SidebarGroup>
-      <SidebarMenu ref={listRef} className="select-none">
+      <SidebarMenu ref={listRef} className="relative select-none">
         {showPinned && (
-          <li>
+          <motion.li {...glide}>
             <SidebarGroupLabel>Pinned</SidebarGroupLabel>
-          </li>
+          </motion.li>
         )}
         {section(pinned, true)}
         {!!drag.state && isPinnedEmpty && (
-          <li aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
+          <motion.li {...glide} aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
             Drop here to pin
-          </li>
+          </motion.li>
         )}
-        <li data-threads-label className="mt-3">
+        <motion.li {...glide} data-threads-label className="mt-3">
           <SidebarGroupLabel>Threads</SidebarGroupLabel>
-        </li>
+        </motion.li>
         {section(active, false)}
       </SidebarMenu>
       {!!drag.state && !!dragged && <RowGhost thread={dragged} drag={drag.state} />}
@@ -333,11 +358,16 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
   );
 }
 
-function DropPlaceholder({ height }: { height: number }) {
+function rowOrderKey(pinnedIds: string[], activeIds: string[], drag: RowDragState | null) {
+  const slot = drag?.slot ? `${drag.slot.toPinned ? 'p' : 'u'}${drag.slot.index}` : '';
+  return `${pinnedIds.join(',')}|${activeIds.join(',')}|${drag?.id ?? ''}|${slot}`;
+}
+
+function DropPlaceholder({ height, glide }: { height: number; glide: MotionProps }) {
   return (
-    <li aria-hidden className="relative" style={{ height }}>
+    <motion.li {...glide} aria-hidden className="relative" style={{ height }}>
       <span className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-foreground/40" />
-    </li>
+    </motion.li>
   );
 }
 
@@ -450,20 +480,18 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
 
 /**
  * Where a dragged row would land, read from the rows as rendered (the placeholder included), so moving the placeholder never flips the answer back.
+ * Positions come from `offsetTop` within the (relative) list, not `getBoundingClientRect`: rows gliding to their new place carry a transform that would flip the slot mid-animation.
  * Above the Threads label is Pinned; a full Pinned sends the row to the top of Threads.
  */
 function slotAt(list: HTMLUListElement | null, draggedId: string, pinnedIds: string[], x: number, y: number): RowDragState['slot'] {
   if (!list) return null;
   const box = list.getBoundingClientRect();
   if (x < box.left - LIST_SLACK_PX || x > box.right + LIST_SLACK_PX) return null;
-  const label = list.querySelector('[data-threads-label]')!.getBoundingClientRect();
+  const mid = (el: HTMLElement) => box.top + el.offsetTop + el.offsetHeight / 2;
   const isFull = pinnedIds.filter((id) => id !== draggedId).length >= PIN_SLOTS.length;
-  const toPinned = y < label.top + label.height / 2 && !isFull;
+  const toPinned = y < mid(list.querySelector<HTMLElement>('[data-threads-label]')!) && !isFull;
   const rows = [...list.querySelectorAll<HTMLElement>(toPinned ? '[data-row-id][data-pinned]' : '[data-row-id]:not([data-pinned])')];
-  const index = rows.filter((r) => {
-    const rr = r.getBoundingClientRect();
-    return rr.top + rr.height / 2 < y;
-  }).length;
+  const index = rows.filter((r) => mid(r) < y).length;
   return { toPinned, index };
 }
 

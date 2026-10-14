@@ -23,6 +23,8 @@ import {
 } from '../layout/tree.ts';
 import { getProfiles } from '../profiles.ts';
 import { getPrefs } from '../settings/prefs.ts';
+import type { Thread } from '../model.ts';
+import { pinnedThreads } from '../reorder.ts';
 import type { Action, State } from './index.tsx';
 import { showsDemoData } from '../demoData.ts';
 
@@ -173,6 +175,12 @@ function reduce(state: State, action: Action): State {
       return action.orientation === state.orientation ? state : { ...state, orientation: action.orientation };
     case 'delete':
       return { ...state, watched: state.watched.filter((id) => !action.threadIds.includes(id)), layouts: Object.fromEntries(Object.entries(state.layouts).map(([id, l]) => [id, withoutThreads(l, action.threadIds)])) };
+    case 'settle': {
+      const spaceId = state.threads.find((t) => t.id === action.threadId)?.spaceId;
+      if (!spaceId || !state.layouts[spaceId]) return state;
+      const next = leaveSettled(state.layouts[spaceId], state.threads, spaceId, action.threadId);
+      return next === state.layouts[spaceId] ? state : set(next, spaceId);
+    }
     case 'watch-toggle': {
       const isWatched = state.watched.includes(action.threadId);
       return { ...state, watched: isWatched ? state.watched.filter((id) => id !== action.threadId) : [...state.watched, action.threadId] };
@@ -196,6 +204,17 @@ function withoutThreads(layout: SpaceLayout, ids: string[]): SpaceLayout {
   const shows = (v: View) => (v.kind === 'thread' && ids.includes(v.id)) || (v.kind === 'tab' && ids.includes(v.threadId));
   const stale = leaves(layout.root).filter((l) => shows(l.view));
   return stale.length ? { ...layout, root: stale.reduce((root, l) => setLeafView(root, l.id, NEW_THREAD), layout.root) } : layout;
+}
+
+/** Splits showing a thread just settled show the first pinned thread not already on screen instead, or a new thread. */
+export function leaveSettled(layout: SpaceLayout, threads: Thread[], spaceId: string, threadId: string): SpaceLayout {
+  const shown = leaves(layout.root);
+  const stale = shown.filter(({ view }) => view.kind === 'thread' && view.id === threadId);
+  if (stale.length === 0) return layout;
+  const isShown = (id: string) => shown.some(({ view }) => view.kind === 'thread' && view.id === id);
+  const next = pinnedThreads(threads, spaceId).find((t) => t.id !== threadId && !isShown(t.id));
+  const view: View = next ? { kind: 'thread', id: next.id } : NEW_THREAD;
+  return { ...layout, root: stale.reduce((root, l) => setLeafView(root, l.id, view), layout.root) };
 }
 
 /** Another slice (a new thread) wrote `views` directly: move that view into the focused leaf. */
