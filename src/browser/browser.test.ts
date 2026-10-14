@@ -11,6 +11,8 @@ test('normalizeUrl adds the right scheme or searches', () => {
   assert.equal(normalizeUrl('example.com/docs'), 'https://example.com/docs');
   assert.equal(normalizeUrl('HTTPS://x.dev'), 'HTTPS://x.dev');
   assert.equal(normalizeUrl('  '), 'about:blank');
+  assert.equal(normalizeUrl('file:///tmp/a.html'), 'file:///tmp/a.html');
+  assert.equal(normalizeUrl('/Users/me/my site/index.html'), 'file:///Users/me/my%20site/index.html');
   assert.equal(normalizeUrl('react use effect'), 'https://duckduckgo.com/?q=react%20use%20effect');
   assert.equal(normalizeUrl('javascript:alert(1)'), 'https://duckduckgo.com/?q=javascript%3Aalert(1)');
   assert.equal(displayUrl('https://example.com/'), 'example.com');

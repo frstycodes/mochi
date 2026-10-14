@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path';
 import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
-import { actOnView, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { actOnView, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { isAllowedUrl } from '../browser/navigation.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 // Under main's 30s limit for one Mochi call.
@@ -89,7 +90,7 @@ function actOf(value: unknown): BrowserAct {
 
 function url(value: unknown) {
   const s = string(value, 'url', 8192);
-  if (!isAllowedUrl(s)) throw new TypeError('url must be http(s) or about:');
+  if (!isAllowedUrl(s)) throw new TypeError('url must be http(s), file: or about:');
   return s;
 }
 

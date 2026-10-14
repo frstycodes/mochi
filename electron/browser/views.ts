@@ -5,6 +5,7 @@ import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDev
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
 import { clickScript, focusScript, hoverScript, locateScript, markScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
 import { evalResult, EVAL_TIMEOUT_MS, withTimeout, type CdpEvaluate } from './evaluate.ts';
+import { canNavigate } from './navigation.ts';
 
 interface Entry {
   view: WebContentsView;
@@ -32,14 +33,6 @@ const MAX_CAPTURE_HEIGHT = 16384;
 const views = new Map<string, Entry>();
 const hardenedSessions = new Set<string>();
 let nextId = 0;
-
-export const isAllowedUrl = (url: string) => {
-  try {
-    return ['http:', 'https:', 'about:'].includes(new URL(url).protocol);
-  } catch {
-    return false;
-  }
-};
 
 export function createView(owner: WebContents, url: string, spaceId: string) {
   const win = BrowserWindow.fromWebContents(owner);
@@ -346,10 +339,10 @@ function wire(id: string, entry: Entry) {
     emit({ id, type: 'devtools', mode: 'closed' });
   });
   wc.setWindowOpenHandler(({ url }) => {
-    if (isAllowedUrl(url)) emit({ id, type: 'open', url });
+    if (canNavigate(wc.getURL(), url)) emit({ id, type: 'open', url });
     return { action: 'deny' };
   });
-  const guard = (event: { preventDefault(): void }, url: string) => !isAllowedUrl(url) && event.preventDefault();
+  const guard = (event: { preventDefault(): void }, url: string) => !canNavigate(wc.getURL(), url) && event.preventDefault();
   wc.on('will-navigate', (event) => guard(event, event.url));
   wc.on('will-redirect', (event) => guard(event, event.url));
 }
