@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import sodium from 'libsodium-wrappers';
-import type { ApprovalRequest, CommandResult, OtherMachine, RelayState, RemoteSettings, RemoteStatus } from '../../src/host/types/remote.ts';
+import type { ApprovalRequest, CommandResult, OtherMachine, RelayState, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
 import { accessToken, current as currentAccount, onAccountChange } from '../account/session.ts';
 import { createWindow, mainWindow } from '../window.ts';
 import { loadDeviceKeys, type DeviceKeys } from './crypto/keys.ts';
@@ -95,6 +95,14 @@ export function answerCommand(sender: WebContents, id: string, result: CommandRe
 
 export function removeDevice(id: string) {
   theRegistry().removeDevice(id);
+  server?.disconnect(id);
+  broadcast();
+  return remoteStatus();
+}
+
+/** New scopes take effect on the device's next connection: its open ones end now, so nothing runs under the old ones. */
+export function setDeviceScopes(id: string, scopes: Scope[]) {
+  theRegistry().setScopes(id, scopes);
   server?.disconnect(id);
   broadcast();
   return remoteStatus();

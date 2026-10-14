@@ -1,4 +1,5 @@
 import { SCOPES, type CommandResult, type RemoteCommand, type Scope } from '../../src/host/types/remote.ts';
+import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 
 /** Bumped on any frame change; a device on another version is refused rather than misread. */
 export const PROTOCOL_VERSION = 1;
@@ -8,6 +9,17 @@ export const COMMAND_SCOPES = {
   send: 'operate',
   resolve: 'operate',
   interrupt: 'operate',
+  fork: 'operate',
+  handoff: 'operate',
+  create: 'manage',
+  rename: 'manage',
+  'edit-goal': 'manage',
+  pin: 'manage',
+  settle: 'manage',
+  schedule: 'manage',
+  commit: 'manage',
+  push: 'manage',
+  'open-pr': 'manage',
 } satisfies Record<RemoteCommand['type'], Scope>;
 
 /** The first frame once paired (`pairing.ts`). `resume` is where the device left off; without it, or past the log, it gets a snapshot. */
@@ -64,6 +76,34 @@ function parseRemoteCommand(value: unknown): RemoteCommand | string {
       if (!isString(c.queueId, MAX_ID)) return 'resolve needs queueId';
       if (c.answers === undefined) return { type: 'resolve', queueId: c.queueId };
       return isAnswers(c.answers) ? { type: 'resolve', queueId: c.queueId, answers: c.answers } : 'answers must be lists of strings';
+    case 'fork': {
+      const p = c.point as Record<string, unknown> | null;
+      if (!isString(c.threadId, MAX_ID)) return 'fork needs threadId';
+      if (p?.kind === 'message' && isIndex(p.index)) return { type: 'fork', threadId: c.threadId, point: { kind: 'message', index: p.index } };
+      if (p?.kind === 'checkpoint' && isIndex(p.n)) return { type: 'fork', threadId: c.threadId, point: { kind: 'checkpoint', n: p.n } };
+      return 'fork needs a point: { kind: message, index } or { kind: checkpoint, n }';
+    }
+    case 'handoff':
+      return isString(c.threadId, MAX_ID) && isProvider(c.to) ? { type: 'handoff', threadId: c.threadId, to: c.to } : 'handoff needs threadId and to';
+    case 'create':
+      if (!isText(c.title, MAX_TEXT) || !isProvider(c.provider) || !(c.project === null || isString(c.project, MAX_PATH))) return 'create needs title, provider and project (or null)';
+      return { type: 'create', title: c.title.trim(), provider: c.provider, project: c.project };
+    case 'rename':
+      return isString(c.threadId, MAX_ID) && isText(c.title, MAX_TITLE) ? { type: 'rename', threadId: c.threadId, title: c.title.trim() } : 'rename needs threadId and title';
+    case 'edit-goal':
+      return isString(c.threadId, MAX_ID) && isText(c.goal, MAX_TEXT) ? { type: 'edit-goal', threadId: c.threadId, goal: c.goal.trim() } : 'edit-goal needs threadId and goal';
+    case 'pin':
+      return isString(c.threadId, MAX_ID) && typeof c.isPinned === 'boolean' ? { type: 'pin', threadId: c.threadId, isPinned: c.isPinned } : 'pin needs threadId and isPinned';
+    case 'settle':
+      return isString(c.threadId, MAX_ID) && typeof c.isSettled === 'boolean' ? { type: 'settle', threadId: c.threadId, isSettled: c.isSettled } : 'settle needs threadId and isSettled';
+    case 'schedule':
+      return isString(c.threadId, MAX_ID) && SCHEDULE_ACTIONS.includes(c.action as never) ? { type: 'schedule', threadId: c.threadId, action: c.action as (typeof SCHEDULE_ACTIONS)[number] } : `schedule needs threadId and action: ${SCHEDULE_ACTIONS.join(', ')}`;
+    case 'commit':
+      return isString(c.threadId, MAX_ID) && isText(c.message, MAX_TEXT) ? { type: 'commit', threadId: c.threadId, message: c.message } : 'commit needs threadId and message';
+    case 'push':
+      return isString(c.threadId, MAX_ID) ? { type: 'push', threadId: c.threadId } : 'push needs threadId';
+    case 'open-pr':
+      return isString(c.threadId, MAX_ID) && isText(c.title, MAX_TITLE) && isString(c.body, MAX_TEXT) ? { type: 'open-pr', threadId: c.threadId, title: c.title.trim(), body: c.body } : 'open-pr needs threadId, title and body';
     default:
       return `Unknown command ${JSON.stringify(c?.type)}`;
   }
@@ -111,6 +151,13 @@ function parseJson(raw: string): Record<string, unknown> | null {
 }
 
 const isString = (value: unknown, max: number): value is string => typeof value === 'string' && value.length <= max;
+/** A string with something in it besides whitespace. */
+const isText = (value: unknown, max: number): value is string => isString(value, max) && !!value.trim();
+const isIndex = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+const isProvider = (value: unknown): value is (typeof HARNESS_IDS)[number] => HARNESS_IDS.includes(value as never);
+const SCHEDULE_ACTIONS = ['pause', 'resume', 'run', 'remove'] as const;
+const MAX_TITLE = 256;
+const MAX_PATH = 4096;
 
 const isAnswers = (value: unknown): value is string[][] =>
   Array.isArray(value) && value.length <= 64 && value.every((a) => Array.isArray(a) && a.length <= 64 && a.every((s) => isString(s, 16 * 1024)));

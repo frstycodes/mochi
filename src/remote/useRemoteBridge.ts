@@ -45,8 +45,11 @@ export function useRemoteBridge(state: State, dispatch: Dispatch<Action>) {
   useEffect(
     () =>
       host.remote.onCommand(({ id, deviceName, command }) => {
-        const result = runRemoteCommand(command, { state: latest.current, dispatch, deviceName, whileWorking: getPrefs().whileWorking });
-        host.remote.commandResult(id, result).catch((error: unknown) => console.error('Answering the device failed', error));
+        void runRemoteCommand(command, { state: latest.current, dispatch, deviceName, whileWorking: getPrefs().whileWorking })
+          // A host call that throws (git refused a push, gh couldn't open the PR) is the device's answer, verbatim.
+          .catch((error: unknown) => ({ isOk: false as const, error: error instanceof Error ? error.message : String(error) }))
+          .then((result) => host.remote.commandResult(id, result))
+          .catch((error: unknown) => console.error('Answering the device failed', error));
       }),
     [dispatch],
   );
