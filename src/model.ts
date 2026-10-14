@@ -468,6 +468,8 @@ export interface Pane {
   shown?: Partial<Record<PaneTabKind, string>>;
   /** The browser tab the thread's agent last drove; it floats while the agent works and the tab is off screen. */
   drivenTab?: string;
+  /** Counts requests to bring the pane in front, so a narrow window, which shows the pane in place of the chat by its own state, swaps to it. */
+  reveals?: number;
 }
 
 export function seedPanes(): Pane[] {

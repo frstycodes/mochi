@@ -57,6 +57,12 @@ export function ThreadView({ thread }: { thread: Thread }) {
   const isPaneOpen = !!pane?.isOpen;
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
   const [isPaneTabOpen, setPaneTabOpen] = useState(false);
+  const reveals = pane?.reveals ?? 0;
+  const [seenReveals, setSeenReveals] = useState(reveals);
+  if (reveals !== seenReveals) {
+    setSeenReveals(reveals);
+    if (!isWide) setPaneTabOpen(true);
+  }
   const [isSummarySheetOpen, setSummarySheetOpen] = useState(false);
   const isPaneShown = isWide ? isPaneOpen : isPaneTabOpen;
   const inSplits = useSplitTabIds(thread.id);

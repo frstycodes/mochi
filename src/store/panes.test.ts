@@ -105,4 +105,6 @@ test('showing an agent opens the Agents pane with that agent picked', () => {
   const p = run(pane(), { type: 'pane-show-agent', threadId: 't', subagentId: 's1' });
   assert.equal(p.tabs.find((t) => t.kind === 'agents')?.agentId, 's1');
   assert.equal(p.layout?.focused, 'agents');
+  const again = run(p, { type: 'pane-show-agent', threadId: 't', subagentId: 's1' });
+  assert.equal(again.reveals, (p.reveals ?? 0) + 1, 'showing the same agent again still asks a narrow window to swap to the pane');
 });
