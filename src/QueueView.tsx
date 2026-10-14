@@ -33,6 +33,9 @@ import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode 
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
 import { useSendCiLog } from './notify/useSendCiLog';
+import { DeviceIcon } from './remote/DeviceIcon';
+import { remoteDecisions } from './remote/mirror';
+import { RemoteScope, useMachines } from './remote/useMachines';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
@@ -47,6 +50,7 @@ const KIND = {
 
 export function QueueView() {
   const items = useSpaceQueue();
+  const remote = useMachines().machines.flatMap(({ machine, state }) => (state ? [{ machine, state, items: remoteDecisions(state) }] : [])).filter((m) => m.items.length > 0);
   const isWorking = useSpaceThreads().some((t) => t.status === 'running' && (!t.live || t.live.isWorking));
   const { state } = useHarness();
   const review = useReviewEntry(state.spaceId);
@@ -74,7 +78,7 @@ export function QueueView() {
             </Button>
           )}
         </div>
-        {items.length === 0 && <EmptyQueue isWorking={isWorking} />}
+        {items.length === 0 && remote.length === 0 && <EmptyQueue isWorking={isWorking} />}
         <ol className="flex flex-col gap-3">
           <AnimatePresence initial={false}>
             {items.map((item, i) => (
@@ -92,6 +96,24 @@ export function QueueView() {
             ))}
           </AnimatePresence>
         </ol>
+        {/* Another computer's agents wait on you too; answering sends it there, and the card leaves when that computer says so. */}
+        {remote.map(({ machine, state, items: waiting }) => (
+          <section key={machine.id} aria-label={`On ${machine.name}`} className="flex flex-col gap-3">
+            <h2 className="flex items-center gap-1.5 type-meta font-medium text-muted-foreground">
+              <DeviceIcon kind={machine.kind} className="size-3.5" />
+              On {machine.name}
+            </h2>
+            <RemoteScope machine={machine} state={state}>
+              <ol className="flex flex-col gap-3">
+                {waiting.map((item) => (
+                  <li key={item.id}>
+                    <QueueDecision item={item} showThread />
+                  </li>
+                ))}
+              </ol>
+            </RemoteScope>
+          </section>
+        ))}
       </div>
     </ScrollArea>
   );

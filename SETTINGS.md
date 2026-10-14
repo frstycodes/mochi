@@ -65,7 +65,7 @@ One section for every agent harness, rendered from the registry in `src/settings
 |---|---|---|---|---|
 | Agent | Claude Code / Codex | Claude Code | now | src/NewThreadView.tsx:37 |
 | Permissions | Manual / Auto / Full access (Plan too in Claude threads; per-harness meaning in `src/runtime/access.ts`) | Auto | now | src/Composer.tsx |
-| Runs on | This Mac / … | This Mac | now | src/Composer.tsx:137 |
+| Runs on | This computer / each paired computer (shown once you've paired one; another computer's thread starts folderless there) | This computer | now | src/remote/RunsOnMenu.tsx |
 | Agents running at once | stepper 1–16 | 6 | R1 | RUNTIME.md:91 |
 | When a usage limit hits | Fixed: each harness's own behaviour (Claude Code waits and continues; Codex stops). Resume at reset, API key and handoff are per-thread choices on the limit card | — | done | RUNTIME.md › Usage limits |
 

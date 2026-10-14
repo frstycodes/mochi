@@ -1,5 +1,6 @@
 import sodium from 'libsodium-wrappers';
-import type { Scope } from '../../src/host/types/remote.ts';
+import type { DeviceKind, Scope } from '../../src/host/types/remote.ts';
+import { asKind, THIS_KIND } from './protocol.ts';
 import { createHandshake, E2EError, type Session } from './crypto/session.ts';
 import type { DeviceKeys } from './crypto/keys.ts';
 import type { Link, RawLink } from './link.ts';
@@ -7,7 +8,7 @@ import type { Link, RawLink } from './link.ts';
 /**
  * Every connection opens with one pairing exchange, then carries only ciphertext (DEVICES.md › End-to-end encryption):
  *
- *   device → machine   { type: 'pair', version, name, publicKey, hello }   its key, and a handshake signed with it
+ *   device → machine   { type: 'pair', version, name, kind, publicKey, hello, isReturning? }   its key, and a handshake signed with it
  *   machine → device   { type: 'paired', hello } | { type: 'refused', reason }
  *
  * The machine trusts only keys it approved on its own screen; the relay vouches for nothing but the account.
@@ -24,12 +25,14 @@ export type Origin = 'lan' | 'relay';
 export interface AuthenticatedDevice {
   deviceId: string;
   name: string;
+  kind?: DeviceKind;
   scopes: Scope[];
 }
 
 export interface PairedDevice {
   id: string;
   name: string;
+  kind?: DeviceKind;
   /** Ed25519, base64. */
   publicKey: string;
   scopes: Scope[];
@@ -41,7 +44,7 @@ export interface MachineSide {
   find(deviceId: string): PairedDevice | undefined;
   /** "Allow <name>?" on this machine's screen, showing `code`; false on No or after `APPROVAL_TIMEOUT_MS`. */
   approve(request: { name: string; code: string }): Promise<boolean>;
-  add(device: { id: string; name: string; publicKey: string }): PairedDevice;
+  add(device: { id: string; name: string; kind?: DeviceKind; publicKey: string }): PairedDevice;
 }
 
 export type Secured = { link: Link; device: AuthenticatedDevice } | { refusal: string };
@@ -66,33 +69,42 @@ export async function secureAsMachine(raw: RawLink, origin: Origin, side: Machin
   if (!device) {
     // On the LAN nothing vouches that the device is yours; through the relay it is signed in to your account.
     if (origin === 'lan') return refuse(raw, 'Pair this device through your Mochi account first');
+    // Reconnecting on its own after being removed here: nobody at that device asked, so nobody here is asked either.
+    if (pair.isReturning) return refuse(raw, 'That computer removed this one; pair again');
     const isAllowed = await side.approve({ name: pair.name, code: pairingCode(side.keys.publicKey, pair.publicKey) });
     if (!isAllowed) return refuse(raw, 'That computer didn’t allow this one');
     if (!raw.isOpen()) return { refusal: 'The device left' };
-    device = side.add({ id, name: pair.name, publicKey: sodium.to_base64(pair.publicKey, sodium.base64_variants.ORIGINAL) });
+    device = side.add({ id, name: pair.name, kind: pair.kind, publicKey: sodium.to_base64(pair.publicKey, sodium.base64_variants.ORIGINAL) });
   }
   sendJson(raw, { type: 'paired', hello: b64(handshake.hello) });
-  return { link: encrypted(raw, session), device: { deviceId: device.id, name: device.name, scopes: device.scopes } };
+  return { link: encrypted(raw, session), device: { deviceId: device.id, name: device.name, kind: pair.kind, scopes: device.scopes } };
 }
 
-/** A device's side: names itself, proves its key, and expects the machine at `machinePublicKey`. Rejects with the machine's reason. */
-export async function secureAsDevice(raw: RawLink, keys: DeviceKeys, machinePublicKey: Uint8Array, name: string): Promise<Link> {
+/**
+ * A device's side: names itself, proves its key, and expects the machine at `machinePublicKey`. Rejects with the machine's
+ * reason, as a `PairingRefused` when the machine said no. `isReturning`: following a machine it already paired with, so an
+ * unknown key is refused instead of asking that machine's user again.
+ */
+export async function secureAsDevice(raw: RawLink, keys: DeviceKeys, machinePublicKey: Uint8Array, name: string, isReturning = false): Promise<Link> {
   await sodium.ready;
   const handshake = await createHandshake(keys, machinePublicKey, 'device');
-  sendJson(raw, { type: 'pair', version: PAIRING_VERSION, name, publicKey: b64(keys.publicKey), hello: b64(handshake.hello) });
-  const frame = await firstFrame(raw, APPROVAL_TIMEOUT_MS + PAIR_TIMEOUT_MS);
+  sendJson(raw, { type: 'pair', version: PAIRING_VERSION, name, kind: THIS_KIND, publicKey: b64(keys.publicKey), hello: b64(handshake.hello), ...(isReturning && { isReturning }) });
+  const frame = await firstFrame(raw, (isReturning ? 0 : APPROVAL_TIMEOUT_MS) + PAIR_TIMEOUT_MS);
   const reply = frame && parseJson(frame);
-  if (reply?.type === 'refused') throw new Error(typeof reply.reason === 'string' ? reply.reason : 'Refused');
+  if (reply?.type === 'refused') throw new PairingRefused(typeof reply.reason === 'string' ? reply.reason : 'Refused');
   const hello = typeof reply?.hello === 'string' ? fromB64(reply.hello) : null;
   if (reply?.type !== 'paired' || !hello) throw new Error(frame ? 'The computer answered something unexpected' : 'The computer didn’t answer');
   try {
     return encrypted(raw, handshake.finish(hello));
   } catch (error) {
     // The key the relay listed isn't the one answering: a stale listing, or someone in between.
-    if (error instanceof E2EError) throw new Error('That computer’s key doesn’t match; pair again from its current listing');
+    if (error instanceof E2EError) throw new PairingRefused('That computer’s key doesn’t match; pair again from its current listing');
     throw error;
   }
 }
+
+/** The machine (or its key) said no: retrying the same way gets the same answer. */
+export class PairingRefused extends Error {}
 
 /**
  * Six digits both screens show while pairing. Derived from both public keys, so a relay that swapped either key would make
@@ -137,7 +149,7 @@ function parsePair(bytes: Uint8Array) {
   const publicKey = fromB64(frame.publicKey);
   const hello = fromB64(frame.hello);
   if (!name || publicKey?.length !== sodium.crypto_sign_PUBLICKEYBYTES || !hello) return null;
-  return { version: frame.version, name, publicKey, hello };
+  return { version: frame.version, name, kind: asKind(frame.kind), publicKey, hello, isReturning: frame.isReturning === true };
 }
 
 /** The first frame, or null when the link closed or `timeoutMs` passed. Later frames are the encrypted link's to read. */

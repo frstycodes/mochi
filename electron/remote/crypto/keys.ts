@@ -9,7 +9,7 @@ export type DeviceKeys = { publicKey: Uint8Array; privateKey: Uint8Array };
 /** `persisted: false` → the key lives in memory only and a new one is made on the next launch. */
 export type LoadedDeviceKeys = { keys: DeviceKeys; persisted: boolean };
 
-type KeyStorage = Pick<SafeStorage, 'isEncryptionAvailable' | 'getSelectedStorageBackend' | 'encryptString' | 'decryptString'>;
+export type KeyStorage = Pick<SafeStorage, 'isEncryptionAvailable' | 'getSelectedStorageBackend' | 'encryptString' | 'decryptString'>;
 
 const KEY_FILE = 'device-key';
 
@@ -28,7 +28,7 @@ export async function loadDeviceKeys(storage: KeyStorage, dir: string, platform:
 }
 
 /** `basic_text` encrypts with a hardcoded password; `unknown` means the app isn't ready. Neither may hold a device key. */
-function isWeakStorage(storage: KeyStorage, platform: NodeJS.Platform): boolean {
+export function isWeakStorage(storage: KeyStorage, platform: NodeJS.Platform): boolean {
   if (!storage.isEncryptionAvailable()) return true;
   if (platform !== 'linux') return false;
   const backend = storage.getSelectedStorageBackend();

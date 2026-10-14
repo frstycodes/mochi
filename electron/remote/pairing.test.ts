@@ -3,8 +3,9 @@ import test from 'node:test';
 import sodium from 'libsodium-wrappers';
 import { DEFAULT_SCOPES } from '../../src/host/types/remote.ts';
 import type { DeviceKeys } from './crypto/keys.ts';
+import { THIS_KIND } from './protocol.ts';
 import { queuedReader, type RawLink } from './link.ts';
-import { deviceId, pairingCode, secureAsDevice, secureAsMachine, type MachineSide, type Origin, type PairedDevice } from './pairing.ts';
+import { deviceId, pairingCode, PairingRefused, secureAsDevice, secureAsMachine, type MachineSide, type Origin, type PairedDevice } from './pairing.ts';
 
 await sodium.ready;
 
@@ -65,11 +66,22 @@ test('a new device through the relay is asked about on the machine with the code
 
   const secured = machineResult.status === 'fulfilled' && machineResult.value;
   assert.ok(secured && 'link' in secured);
-  assert.deepEqual(secured.device, { deviceId: deviceId(device.publicKey), name: 'Laptop', scopes: DEFAULT_SCOPES });
+  assert.deepEqual(secured.device, { deviceId: deviceId(device.publicKey), name: 'Laptop', kind: THIS_KIND, scopes: DEFAULT_SCOPES });
+  assert.equal(machine.added[0].kind, THIS_KIND, 'the device names its kind, for its icon');
   const deviceLink = deviceResult.status === 'fulfilled' ? deviceResult.value : assert.fail();
   const heard = new Promise<string>((resolve) => secured.link.onMessage(resolve));
   deviceLink.send('{"type":"hello"}');
   assert.equal(await heard, '{"type":"hello"}');
+});
+
+test('a device returning on its own after being removed is refused through the relay without asking anyone', async () => {
+  const machineKeys = keypair();
+  const machine = machineSide(machineKeys, true);
+  const ends = pipe();
+  const [machineResult, deviceResult] = await Promise.allSettled([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, keypair(), machineKeys.publicKey, 'Laptop', true)]);
+  assert.deepEqual(machine.asked, []);
+  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'That computer removed this one; pair again' });
+  assert.ok(deviceResult.status === 'rejected' && deviceResult.reason instanceof PairingRefused);
 });
 
 test('No on the machine refuses the device and trusts nothing', async () => {

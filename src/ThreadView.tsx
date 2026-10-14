@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
-import { ChevronDown, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
+import { ChevronDown, SidebarRight, TextalignLeft } from 'reicon-react';
+import type { FollowedMachine } from './host/types/remote';
+import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -271,18 +273,20 @@ function ThreadHeader({
   );
 }
 
-/** Where the agent runs. Only this computer exists yet, so it states that rather than offering choices that do nothing. */
-function DeviceIndicator() {
+/** Where the agent runs: this computer, or `machine` for another computer's thread. A thread stays where it started. */
+export function DeviceIndicator({ machine }: { machine?: Pick<FollowedMachine, 'name' | 'kind'> }) {
+  const machineName = machine?.name;
+  const label = `Runs on ${machineName ?? 'this computer'}`;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span tabIndex={0} aria-label="Runs on this computer" className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
-          <Laptop className="size-4" />
+        <span tabIndex={0} aria-label={label} className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
+          <DeviceIcon kind={machine ? machine.kind : THIS_DEVICE} className="size-4" />
         </span>
       </TooltipTrigger>
       <TooltipContent className="flex-col items-start gap-0.5">
-        <span className="block font-medium">Runs on this computer</span>
-        <span className="block opacity-80">The agent works in this thread's folder on your machine</span>
+        <span className="block font-medium">{label}</span>
+        <span className="block opacity-80">{machineName ? `The agent works in this thread's folder on ${machineName}; this computer steers it` : "The agent works in this thread's folder on your machine"}</span>
       </TooltipContent>
     </Tooltip>
   );

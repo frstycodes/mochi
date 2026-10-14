@@ -1,73 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import WebSocket from 'ws';
-import { DEFAULT_SCOPES, type CommandResult, type RemoteCommandRequest } from '../../src/host/types/remote.ts';
+import { DEFAULT_SCOPES } from '../../src/host/types/remote.ts';
+import { serve } from './fixtures.ts';
 import { isPrivate } from './interfaces.ts';
-import { ActionLog } from './log.ts';
-import { PROTOCOL_VERSION, type ServerFrame } from './protocol.ts';
-import type { RawLink } from './link.ts';
-import type { AuthenticatedDevice, Secured } from './pairing.ts';
-import { startRemoteServer, type RendererBridge } from './server.ts';
-
-const DEVICES = {
-  laptop: { deviceId: 'd-laptop', name: 'Laptop', scopes: DEFAULT_SCOPES },
-  viewer: { deviceId: 'd-viewer', name: 'Viewer', scopes: ['read' as const] },
-};
-
-/** A renderer stand-in: its store is a counter of applied actions, numbered within one epoch. */
-function renderer(epoch = 'e1') {
-  const runs: RemoteCommandRequest[] = [];
-  const store = { epoch, seq: 0 };
-  const bridge: RendererBridge = {
-    snapshot: async () => ({ epoch: store.epoch, seq: store.seq, saved: { threads: [{ activity: [{ patch: '+secret' }] }], checkpoints: { t: {} } } }),
-    run: async (request): Promise<CommandResult> => {
-      runs.push(request);
-      return { isOk: true };
-    },
-  };
-  return { bridge, runs, store };
-}
-
-async function serve(capacity?: number) {
-  const r = renderer();
-  const log = new ActionLog(capacity);
-  const server = await startRemoteServer({ hosts: ['127.0.0.1'], port: 0, secure: plainSecure(DEVICES), bridge: r.bridge, log, machineName: () => 'Studio' });
-  /** What the renderer does for each action: applies it, then pushes it. */
-  const act = (n = 1) => {
-    for (let i = 0; i < n; i++) server.publish(r.store.epoch, ++r.store.seq, { type: 'tick', n: r.store.seq });
-  };
-  return { server, act, ...r };
-}
-
-/**
- * Pairing without the crypto (`pairing.test.ts` covers that): the first frame names a device, then frames pass as text.
- * An unknown name gets the same `refused` frame real pairing sends.
- */
-function plainSecure(devices: Record<string, AuthenticatedDevice>) {
-  return async (raw: RawLink): Promise<Secured> => {
-    const name = await new Promise<string | null>((resolve) => {
-      raw.onMessage((bytes) => {
-        raw.onMessage(undefined);
-        resolve(Buffer.from(bytes).toString('utf8'));
-      });
-      raw.onClose(() => resolve(null));
-    });
-    if (!name || !Object.hasOwn(devices, name)) {
-      raw.send(Buffer.from(JSON.stringify({ type: 'refused', reason: 'Unknown device' })));
-      return { refusal: 'Unknown device' };
-    }
-    return {
-      device: devices[name],
-      link: {
-        send: (text) => raw.send(Buffer.from(text)),
-        close: (code, reason) => raw.close(code, reason),
-        onMessage: (listener) => raw.onMessage((bytes) => listener(Buffer.from(bytes).toString('utf8'))),
-        onClose: (listener) => raw.onClose(() => listener()),
-        isOpen: () => raw.isOpen(),
-      },
-    };
-  };
-}
+import { PROTOCOL_VERSION, THIS_KIND, type ServerFrame } from './protocol.ts';
 
 /** A device: every frame the server sends, readable in order. `auth` names it to `plainSecure`. */
 async function connect(port: string, { auth, ...hello }: { auth: string } & Record<string, unknown>) {
@@ -79,8 +16,8 @@ async function connect(port: string, { auth, ...hello }: { auth: string } & Reco
     waiters.splice(0).forEach((w) => w());
   });
   await new Promise((resolve, reject) => socket.once('open', resolve).once('error', reject));
-  socket.send(auth);
-  socket.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...hello }));
+  socket.send(Buffer.from(auth));
+  socket.send(Buffer.from(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...hello })));
   let read = 0;
   const next = async (): Promise<ServerFrame> => {
     while (read >= frames.length) await new Promise<void>((resolve) => waiters.push(resolve));
@@ -95,7 +32,7 @@ async function connect(port: string, { auth, ...hello }: { auth: string } & Reco
     }
     return seen;
   };
-  const command = (id: string, command: object) => socket.send(JSON.stringify({ type: 'command', id, command }));
+  const command = (id: string, command: object) => socket.send(Buffer.from(JSON.stringify({ type: 'command', id, command })));
   const close = () => new Promise((resolve) => (socket.once('close', resolve), socket.close()));
   return { next, until, command, close, frames };
 }
@@ -104,7 +41,7 @@ test('a new device gets a snapshot, then every action in order with its sequence
   const { server, act } = await serve();
   act(2);
   const device = await connect(server.addresses[0], { auth: 'laptop' });
-  assert.deepEqual(await device.next(), { type: 'welcome', version: PROTOCOL_VERSION, deviceId: 'd-laptop', machineName: 'Studio', scopes: DEFAULT_SCOPES });
+  assert.deepEqual(await device.next(), { type: 'welcome', version: PROTOCOL_VERSION, deviceId: 'd-laptop', machineName: 'Studio', machineKind: THIS_KIND, scopes: DEFAULT_SCOPES, addresses: [] });
   const snapshot = await device.next();
   assert.equal(snapshot.type === 'snapshot' && snapshot.seq, 2);
   act(3);
@@ -179,9 +116,9 @@ test('commands sent right behind hello wait for the device check and come after 
   const frames: ServerFrame[] = [];
   socket.on('message', (data) => frames.push(JSON.parse((data as Buffer).toString('utf8')) as ServerFrame));
   await new Promise((resolve) => socket.once('open', resolve));
-  socket.send('viewer');
-  socket.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION }));
-  socket.send(JSON.stringify({ type: 'command', id: 'early', command: { type: 'interrupt', threadId: 't1' } }));
+  socket.send(Buffer.from('viewer'));
+  socket.send(Buffer.from(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION })));
+  socket.send(Buffer.from(JSON.stringify({ type: 'command', id: 'early', command: { type: 'interrupt', threadId: 't1' } })));
   while (!frames.some((f) => f.type === 'result')) await new Promise((resolve) => setTimeout(resolve, 5));
   assert.deepEqual(frames.map((f) => f.type).slice(0, 2), ['welcome', 'result']);
   assert.equal(runs.length, 0, 'a refused command never reaches the renderer');

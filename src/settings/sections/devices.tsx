@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import { useMochiAccount } from '../../account/useMochiAccount';
 import { useConfirm } from '../../git/useConfirm';
 import { host } from '../../host';
-import { SCOPES, type OtherMachine, type PairedDeviceInfo, type RemoteStatus, type Scope } from '../../host/types/remote';
+import { SCOPES, type DeviceKind, type OtherMachine, type PairedDeviceInfo, type RemoteStatus, type Scope } from '../../host/types/remote';
+import { DeviceIcon } from '../../remote/DeviceIcon';
 import { PairingCode } from '../../remote/PairingCode';
 import { useOtherMachines } from '../../remote/useOtherMachines';
 import { useRemoteStatus } from '../../remote/useRemoteStatus';
@@ -97,7 +98,7 @@ function PairedDevices({ status }: { status: RemoteStatus }) {
       {status.pairedDevices.map((device) => (
         <SettingsRow
           key={device.id}
-          label={<span className="block truncate">{device.name}</span>}
+          label={<DeviceName kind={device.kind} name={device.name} />}
           description={pairedDescription(device, status)}
           control={
             <Button size="sm" variant="outline" onClick={() => void remove(device)}>
@@ -160,7 +161,7 @@ function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
       {machines?.map((machine) => (
         <SettingsRow
           key={machine.id}
-          label={<span className="block truncate">{machine.name}</span>}
+          label={<DeviceName kind={machine.kind} name={machine.name} />}
           description={machineDescription(machine)}
           control={<MachineAction machine={machine} onPair={() => void pair(machine)} onForget={() => void forget(machine)} />}
         />
@@ -215,5 +216,14 @@ function PairingDialog({ pairing, onClose }: { pairing: { machine: OtherMachine;
         </DialogContent>
       )}
     </Dialog>
+  );
+}
+
+function DeviceName({ kind, name }: { kind: DeviceKind | undefined; name: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <DeviceIcon kind={kind} className="size-4 shrink-0 text-muted-foreground" />
+      <span className="truncate">{name}</span>
+    </span>
   );
 }
