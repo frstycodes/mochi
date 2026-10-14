@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { ChevronDown, Flash, Monitor, Moon, Pause, Play, Refresh, RefreshCircle, Setting2, Sun, UserCircle } from 'reicon-react';
+import { ChevronDown, Flash, Login, Logout, Monitor, Moon, Pause, Play, Refresh, RefreshCircle, Setting2, Sun, UserCircle, UserEdit } from 'reicon-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -17,19 +17,22 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Spinner } from '@/components/ui/spinner';
 import { useMochiAccount } from './account/useMochiAccount';
 import { showsDemoData } from './demoData';
 import { host } from './host';
+import type { MochiUser } from './host/types/account';
 import type { AppUpdate } from './host/types/updates';
 import { openSettings } from './settings/open';
 import { BoundShortcut } from './Shortcut';
 import { useHarness } from './store';
 import { IconSwap } from './ui';
 
-/** The sidebar's bottom-left chip: your first name, opening account, settings, theme and app updates. */
+/** The sidebar's bottom-left chip: your first name, opening your Mochi account, settings, theme and app updates. */
 export function UserMenu() {
   const { state, dispatch } = useHarness();
-  const user = useMochiAccount().account?.user;
+  const mochiAccount = useMochiAccount();
+  const user = mochiAccount.account?.user;
   const name = firstName(user?.name ?? null);
   return (
     <DropdownMenu>
@@ -44,10 +47,7 @@ export function UserMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuItem onSelect={() => openSettings('account')}>
-          <UserCircle />
-          Account
-        </DropdownMenuItem>
+        <AccountItems {...mochiAccount} />
         <DropdownMenuItem onSelect={() => openSettings()}>
           <Setting2 />
           Settings
@@ -80,6 +80,62 @@ export function UserMenu() {
         <DropdownMenuLabel className="font-normal text-subtle-foreground">Hold Option, or long-press, for Orbit</DropdownMenuLabel>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Your Mochi account: sign in, or who you're signed in as with Clerk's Account Portal and Sign out. Nothing where sign-in isn't set up (web, builds without a Clerk app). */
+function AccountItems({ account, signIn, cancelSignIn, signOut, openAccountPortal }: ReturnType<typeof useMochiAccount>) {
+  if (!account || account.status === 'unconfigured') return null;
+  return (
+    <>
+      {account.status === 'signed-out' && (
+        <DropdownMenuItem onSelect={() => void signIn()}>
+          <Login />
+          Sign in
+          <span className="ml-auto text-subtle-foreground">Opens browser</span>
+        </DropdownMenuItem>
+      )}
+      {account.status === 'signing-in' && (
+        <>
+          <DropdownMenuLabel className="flex items-center gap-2 font-normal">
+            <Spinner className="size-3.5" />
+            Finish signing in in your browser
+          </DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => void cancelSignIn()}>Cancel sign-in</DropdownMenuItem>
+        </>
+      )}
+      {account.status === 'signed-in' && !!account.user && (
+        <>
+          <SignedInLabel user={account.user} isPersistent={account.isPersistent} />
+          <DropdownMenuItem onSelect={() => void openAccountPortal()}>
+            <UserEdit />
+            Manage account
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void signOut()}>
+            <Logout />
+            Sign out
+          </DropdownMenuItem>
+        </>
+      )}
+      <DropdownMenuSeparator />
+    </>
+  );
+}
+
+function SignedInLabel({ user, isPersistent }: { user: MochiUser; isPersistent: boolean }) {
+  const shown = user.name ?? user.email ?? 'Signed in';
+  return (
+    <DropdownMenuLabel className="flex min-w-0 items-center gap-2 font-normal">
+      <Avatar className="size-7">
+        {!!user.imageUrl && <AvatarImage src={user.imageUrl} alt="" />}
+        <AvatarFallback className="type-caption">{shown[0].toUpperCase()}</AvatarFallback>
+      </Avatar>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-foreground">{shown}</span>
+        {!!user.email && user.email !== shown && <span className="truncate type-caption text-subtle-foreground">{user.email}</span>}
+        {!isPersistent && <span className="type-caption text-subtle-foreground">Signed in until Mochi quits</span>}
+      </span>
+    </DropdownMenuLabel>
   );
 }
 
