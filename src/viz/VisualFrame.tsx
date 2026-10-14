@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import type { PaneVisual } from '../model';
 import { useHarness } from '../store';
-import { TooltipIconButton } from '../ui';
+import { IconSwap, TooltipIconButton } from '../ui';
 import { download, serializeSvg, svgToPng } from './exportVisual';
 import { useVizThreadId } from './WidgetVisual';
 
@@ -130,7 +130,7 @@ function CopyButton({ text, label = 'Copy source' }: { text: string; label?: str
     <Tooltip>
       <TooltipTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label={label} onClick={copy}>
-          {isCopied ? <Check /> : <Copy />}
+          <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <Copy />}</IconSwap>
         </Button>
       </TooltipTrigger>
       <TooltipContent>{isCopied ? 'Copied' : label}</TooltipContent>

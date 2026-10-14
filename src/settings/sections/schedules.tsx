@@ -8,7 +8,7 @@ import { openSchedule } from '../../schedule/ScheduleDialog';
 import { runOutcome } from '../../schedule/slice';
 import { triggerNextRun, useSchedules } from '../../schedule/useSchedules';
 import { useHarness } from '../../store';
-import { TooltipIconButton } from '../../ui';
+import { IconSwap, TooltipIconButton } from '../../ui';
 import { SettingsGroup, SettingsRow } from '../parts';
 
 export function SchedulesSection() {
@@ -50,7 +50,7 @@ function TriggerRow({ trigger }: { trigger: Trigger }) {
             </TooltipIconButton>
           )}
           <TooltipIconButton label={trigger.isPaused ? 'Resume' : 'Pause'} hint={trigger.isPaused ? 'Runs from the next scheduled time; missed ones stay skipped' : 'Stops runs until you resume'} onClick={() => attempt('Pausing', () => host.schedule.setPaused(trigger.threadId, !trigger.isPaused))}>
-            {trigger.isPaused ? <Play /> : <Pause />}
+            <IconSwap id={trigger.isPaused ? 'play' : 'pause'}>{trigger.isPaused ? <Play /> : <Pause />}</IconSwap>
           </TooltipIconButton>
           {!!thread && (
             <TooltipIconButton label="Edit" hint="Change when it runs and what it's asked" onClick={() => openSchedule(trigger.threadId)}>

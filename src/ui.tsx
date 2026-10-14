@@ -1,4 +1,5 @@
 import { type ComponentProps, type CSSProperties, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -160,3 +161,21 @@ export function OverflowIcon({ vertical, className, ...props }: IconProps & { ve
 export const ForkIcon = createIcon('ForkIcon', {
   O: `<path d="M3.75 12h5.5l6.5-6.25M9.25 12l6.5 6.25M13.25 5.75h2.5v2.5M13.25 18.25h2.5v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
 });
+
+export const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, transition: { duration: 0.2, ease: [0.23, 1, 0.32, 1] } } as const;
+
+/**
+ * Two different glyphs trading places (Sun for Moon, Play for Pause): the old one shrinks and blurs out as the new one grows in.
+ * Not for one glyph's own states (outline and filled, a slashed "off"): those switch in place.
+ */
+export function IconSwap({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <span className="grid shrink-0 place-items-center *:col-start-1 *:row-start-1">
+      <AnimatePresence initial={false}>
+        <motion.span key={id} {...ICON_SWAP} className="grid place-items-center">
+          {children}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
