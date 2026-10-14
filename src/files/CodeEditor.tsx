@@ -14,7 +14,7 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 
-export default function CodeEditor({ path, value, line, readOnly, onChange }: { path: string; value: string; line?: number; readOnly?: boolean; onChange?: (text: string) => void }) {
+export default function CodeEditor({ path, value, line, column, readOnly, onChange }: { path: string; value: string; line?: number; column?: [number, number]; readOnly?: boolean; onChange?: (text: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const onChangeRef = useRef(onChange);
@@ -38,8 +38,9 @@ export default function CodeEditor({ path, value, line, readOnly, onChange }: { 
     });
     view.current = editor;
     if (line) {
-      const at = editor.state.doc.line(Math.min(line, editor.state.doc.lines)).from;
-      editor.dispatch({ selection: { anchor: at }, effects: EditorView.scrollIntoView(at, { y: 'center' }) });
+      const target = editor.state.doc.line(Math.min(line, editor.state.doc.lines));
+      const [from, to] = (column ?? [0, 0]).map((c) => target.from + Math.min(c, target.length));
+      editor.dispatch({ selection: { anchor: from, head: to }, effects: EditorView.scrollIntoView(from, { y: 'center' }) });
     }
     if (!readOnly) editor.focus();
     return () => editor.destroy();

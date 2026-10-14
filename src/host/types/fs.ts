@@ -10,6 +10,10 @@ export interface FsHost {
   watch(root: string): Promise<void>;
   unwatch(root: string): Promise<void>;
   onChange(listener: (change: FsChange) => void): () => void;
+  /** Searches file contents under `root` (`.gitignore` honoured), pushing each file's hits through `onSearchHits` under `id`; resolves when done or cancelled. */
+  search(root: string, id: string, pattern: string, options: SearchOptions): Promise<SearchSummary>;
+  cancelSearch(id: string): Promise<void>;
+  onSearchHits(listener: (hits: SearchHits) => void): () => void;
   editors(): Promise<Editor[]>;
   openIn(editor: Editor, root: string, path: string, line?: number): Promise<void>;
   /** Selects `path` in Finder (Explorer, the file manager); an empty `path` reveals `root` itself. */
@@ -23,6 +27,34 @@ export interface FsHost {
 export type FileContent = { kind: 'text'; text: string; mtimeMs: number } | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
 
 export type WriteResult = { status: 'saved'; mtimeMs: number } | { status: 'conflict'; text: string; mtimeMs: number };
+
+export interface SearchOptions {
+  isCaseSensitive: boolean;
+  isRegex: boolean;
+  isWholeWord: boolean;
+}
+
+export interface SearchLine {
+  line: number;
+  /** A one-row preview of the line, leading indent dropped; `isCut` when text before it was dropped too. */
+  text: string;
+  isCut: boolean;
+  /** Match ranges inside `text`. */
+  ranges: [number, number][];
+  /** The first match's columns in the original line, for selecting it in the editor. */
+  column: [number, number];
+}
+
+export interface SearchHits {
+  id: string;
+  path: string;
+  lines: SearchLine[];
+}
+
+export interface SearchSummary {
+  /** Stopped at the match cap before every file was read. */
+  isTruncated: boolean;
+}
 
 export interface FsChange {
   root: string;
@@ -39,6 +71,9 @@ export const fsMethods = {
   watch: 'invoke',
   unwatch: 'invoke',
   onChange: 'event',
+  search: 'invoke',
+  cancelSearch: 'invoke',
+  onSearchHits: 'event',
   editors: 'invoke',
   openIn: 'invoke',
   reveal: 'invoke',
