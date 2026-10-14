@@ -47,7 +47,6 @@ import { hasGoal } from './drift';
 import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
-import { BranchIcon, BranchName } from './git/BranchLabel';
 
 export function ThreadView({ thread }: { thread: Thread }) {
   const { state, dispatch } = useHarness();
@@ -70,8 +69,21 @@ export function ThreadView({ thread }: { thread: Thread }) {
   };
   usePaneShortcuts(isFocused, toggleKind);
 
+  const header = (
+    <ThreadHeader
+      thread={thread}
+      isSummaryOpen={isWide ? summary.isShown : isSummarySheetOpen}
+      onToggleSummary={isWide ? summary.toggle : () => setSummarySheetOpen((o) => !o)}
+      isPaneOpen={isPaneShown}
+      onTogglePane={() => (isWide ? dispatch({ type: 'pane-toggle', threadId: thread.id }) : setPaneTabOpen((o) => !o))}
+      openKinds={openKinds}
+      onToggleKind={toggleKind}
+    />
+  );
+  // The header belongs to the chat column, so the panes run to the top of the window beside it, like Claude's.
   const chat = (
     <div className="relative flex h-full min-w-0 flex-col">
+      {header}
       <div
         className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
         style={{ gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}` }}
@@ -90,15 +102,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 flex-col">
-      <ThreadHeader
-        thread={thread}
-        isSummaryOpen={isWide ? summary.isShown : isSummarySheetOpen}
-        onToggleSummary={isWide ? summary.toggle : () => setSummarySheetOpen((o) => !o)}
-        isPaneOpen={isPaneShown}
-        onTogglePane={() => (isWide ? dispatch({ type: 'pane-toggle', threadId: thread.id }) : setPaneTabOpen((o) => !o))}
-        openKinds={openKinds}
-        onToggleKind={toggleKind}
-      />
+      {isChatHidden && header}
       <div className="min-h-0 flex-1">
         {isWide || isChatHidden ? <SidePane thread={thread} pane={isChatHidden ? { ...(pane ?? noPane(thread.id)), isOpen: true } : (pane ?? noPane(thread.id))} chat={isChatHidden ? undefined : chat} /> : chat}
       </div>
@@ -225,15 +229,9 @@ function ThreadHeader({
         <DeviceIndicator />
         <ThreadMenu thread={thread} />
         <LimitChip thread={thread} />
-        {!!thread.repo && (
-          <span className="hidden min-w-0 items-center gap-1 type-caption text-subtle-foreground @2xl:flex">
-            <BranchIcon repo={thread.repo} />
-            <BranchName repo={thread.repo} />
-          </span>
-        )}
         {thread.prs.map((pr) => (
           <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr}>
-            <Badge variant="secondary" tabIndex={0} aria-label={`#${pr.number}: ${pr.title}`} className="hidden @xl:inline-flex">
+            <Badge variant="secondary" tabIndex={0} aria-label={`#${pr.number}: ${pr.title}`} className="hidden @2xl:inline-flex">
               #{pr.number}
             </Badge>
           </ThreadPrHoverCard>
@@ -351,7 +349,7 @@ function TitleField({ thread }: { thread: Thread }) {
 function HeaderPins({ openKinds, onToggle, drop }: { openKinds: PaneTabKind[]; onToggle: (kind: PaneTabKind) => void; drop: ReturnType<typeof usePinDrop> }) {
   const pins = useHeaderPins();
   return (
-    <div className="hidden items-center gap-0.5 @md:flex">
+    <div className="hidden items-center gap-0.5 @xl:flex">
       {pins.map((kind) => (
         <PinnedTab key={kind} kind={kind} isOpen={openKinds.includes(kind)} onToggle={() => onToggle(kind)} />
       ))}
