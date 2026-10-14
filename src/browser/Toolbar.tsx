@@ -68,6 +68,7 @@ export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageI
       <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
         <Cursor />
       </IconAction>
+      <ScreenshotMenu pageId={pageId} page={page} />
       {page.console.length > 0 && <ConsoleButton thread={thread} pageId={pageId} page={page} />}
       <MoreMenu thread={thread} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
     </div>
@@ -133,6 +134,28 @@ function ConsoleButton({ thread, pageId, page }: { thread: Thread; pageId: strin
   );
 }
 
+function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
+  const isNative = !!page.hostId;
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Screenshot" disabled={!isNative}>
+              <Camera />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{isNative ? 'Screenshot to annotate and add to the composer' : DESKTOP_ONLY}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => screenshot(pageId, page, false)}>Visible area</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => screenshot(pageId, page, true)}>Full page</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; pageId: string; page: Page; onHardReload: () => void }) {
   const isNative = !!page.hostId;
   const hasFolder = !!threadCwd(thread);
@@ -168,16 +191,6 @@ function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; page
           Reload when files change
           {(!isNative || !hasFolder) && <DropdownMenuShortcut>{!isNative ? 'Desktop app' : 'Needs a folder'}</DropdownMenuShortcut>}
         </DropdownMenuCheckboxItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={!isNative}>
-            <Camera />
-            Screenshot
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuItem onSelect={() => screenshot(pageId, page, false)}>Visible area</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => screenshot(pageId, page, true)}>Full page</DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onHardReload}>
           Hard reload
