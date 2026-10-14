@@ -16,7 +16,7 @@ import { TooltipIconButton } from '../ui';
 // Lazy so CodeMirror parses only when a file is first opened as source.
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
-export function FileView({ root, path, line, toolbar }: { root: string; path: string; line?: number; toolbar: ReactNode }) {
+export function FileView({ root, path, line, column, toolbar }: { root: string; path: string; line?: number; column?: [number, number]; toolbar: ReactNode }) {
   const file = useOpenFile(root, path);
   const kind = previewKind(path);
   const hasSource = file.content?.kind === 'text';
@@ -57,14 +57,14 @@ export function FileView({ root, path, line, toolbar }: { root: string; path: st
         {file.conflict && isComparing ? (
           <ConflictDiff path={path} disk={file.conflict.text} mine={file.draft ?? ''} />
         ) : (
-          <FileBody file={file} path={path} line={line} showsPreview={showsPreview} />
+          <FileBody file={file} path={path} line={line} column={column} showsPreview={showsPreview} />
         )}
       </div>
     </div>
   );
 }
 
-function FileBody({ file, path, line, showsPreview }: { file: OpenFile; path: string; line?: number; showsPreview: boolean }) {
+function FileBody({ file, path, line, column, showsPreview }: { file: OpenFile; path: string; line?: number; column?: [number, number]; showsPreview: boolean }) {
   const kind = previewKind(path);
   if (file.error) return <p className="p-4 type-meta text-destructive">{file.error}</p>;
   if (!file.content) return null;
@@ -72,7 +72,7 @@ function FileBody({ file, path, line, showsPreview }: { file: OpenFile; path: st
   if (file.content.kind === 'binary') return <BinaryState />;
   return (
     <Suspense>
-      <CodeEditor path={path} value={file.draft ?? ''} line={line} onChange={file.setDraft} />
+      <CodeEditor path={path} value={file.draft ?? ''} line={line} column={column} onChange={file.setDraft} />
     </Suspense>
   );
 }

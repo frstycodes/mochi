@@ -3,7 +3,7 @@ import { Folder, Search, SidebarLeft } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { FileTree } from '@/files/FileTree';
+import { FileFinder, type FileTarget } from '@/files/FileFinder';
 import { FileView } from '@/files/FileView';
 import { QuickOpen } from '@/files/QuickOpen';
 import { useFileList } from '@/files/useFiles';
@@ -25,21 +25,34 @@ export function FilesTab({ thread, tab }: PaneTabProps) {
   return <FilesBrowser key={`${tab.id}:${root}:${tab.file?.path ?? ''}:${tab.file?.line ?? ''}`} threadId={thread.id} root={root} initial={tab.file} />;
 }
 
-function FilesBrowser({ threadId, root, initial }: { threadId: string; root: string; initial?: { path: string; line?: number } }) {
+function FilesBrowser({ threadId, root, initial }: { threadId: string; root: string; initial?: FileTarget }) {
   const { files, error } = useFileList(root);
-  const [selected, setSelected] = useState(initial ?? null);
+  const [selected, setSelected] = useState<FileTarget | null>(initial ?? null);
   const [isTreeOpen, setIsTreeOpen] = useState(!initial);
   const [isQuickOpen, setIsQuickOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [focusKey, setFocusKey] = useState(0);
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (selected) noteOpened(threadId, selected.path);
   }, [threadId, selected]);
-  const open = (path: string) => {
-    setSelected({ path });
+  const open = (target: FileTarget) => {
+    setSelected(target);
     if (container.current!.clientWidth < SIDE_BY_SIDE_MIN_WIDTH) setIsTreeOpen(false);
   };
+  const searchInFiles = () => {
+    setIsTreeOpen(true);
+    if (!query.startsWith('?')) setQuery('?');
+    setFocusKey((k) => k + 1);
+  };
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!isMod(e) || e.key !== 'p') return;
+    if (!isMod(e)) return;
+    const key = e.key.toLowerCase();
+    if (key === 'f' && e.shiftKey) {
+      e.preventDefault();
+      return searchInFiles();
+    }
+    if (key !== 'p' || e.shiftKey) return;
     e.preventDefault();
     setIsQuickOpen(true);
   };
@@ -69,18 +82,22 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
   return (
     <div ref={container} className="flex h-full min-h-0" onKeyDown={onKeyDown}>
       {isTreeOpen && (
-        <aside className="flex w-52 shrink-0 flex-col pt-11">
-          {error ? <p className="px-3 type-meta text-destructive">{error}</p> : <FileTree root={root} files={files ?? []} selected={selected?.path ?? null} onSelect={open} />}
+        <aside className={cn('flex shrink-0 flex-col', query.startsWith('?') ? 'w-72' : 'w-60')}>
+          {error ? (
+            <p className="px-3 pt-11 type-meta text-destructive">{error}</p>
+          ) : (
+            <FileFinder root={root} files={files ?? []} selected={selected?.path ?? null} query={query} onQueryChange={setQuery} focusKey={focusKey} onOpen={open} />
+          )}
         </aside>
       )}
       <div className={cn('min-w-0 flex-1', isTreeOpen && 'bg-background')}>
         {selected ? (
-          <FileView key={`${selected.path}:${selected.line ?? ''}`} root={root} path={selected.path} line={selected.line} toolbar={toolbar} />
+          <FileView key={`${selected.path}:${selected.line ?? ''}:${selected.column?.join('-') ?? ''}`} root={root} path={selected.path} line={selected.line} column={selected.column} toolbar={toolbar} />
         ) : (
           <NoFileState toolbar={toolbar} />
         )}
       </div>
-      <QuickOpen files={files ?? []} open={isQuickOpen} onOpenChange={setIsQuickOpen} onPick={open} />
+      <QuickOpen files={files ?? []} open={isQuickOpen} onOpenChange={setIsQuickOpen} onPick={(path) => open({ path })} />
     </div>
   );
 }
@@ -93,7 +110,7 @@ function NoFileState({ toolbar }: { toolbar: React.ReactNode }) {
         <EmptyHeader>
           <EmptyTitle>Pick a file</EmptyTitle>
           <EmptyDescription>
-            Choose one from the tree or press <Shortcut keys={['mod', 'P']} /> to search.
+            Choose one from the tree, press <Shortcut keys={['mod', 'P']} /> to go to a file or <Shortcut keys={['mod', 'shift', 'F']} /> to search inside files.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
