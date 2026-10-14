@@ -4,6 +4,7 @@ import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillInput, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
+import { CODEX_BROWSER_FEATURES_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 interface Live {
@@ -215,7 +216,7 @@ export class CodexAdapter {
   private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions) {
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
-    const params = { cwd: options.cwd, model: options.model ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const params = { cwd: options.cwd, model: options.model ?? null, developerInstructions: MOCHI_INSTRUCTIONS, config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume
       ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);

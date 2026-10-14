@@ -9,6 +9,7 @@ import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
+import { HIDDEN_CLAUDE_SKILLS, MOCHI_INSTRUCTIONS } from '../instructions.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 /**
@@ -152,6 +153,8 @@ async function launch(session: Session) {
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: MOCHI_INSTRUCTIONS },
+        settings: { skillOverrides: HIDDEN_CLAUDE_SKILLS },
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
