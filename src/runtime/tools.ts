@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
+import { gateRefusal, prGate } from '../goals/verdict.ts';
 import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
-import type { BranchList } from '../host/types/git.ts';
+import type { BranchList, CheckRun } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
@@ -58,7 +59,7 @@ export interface ToolEnv {
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
+  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
   now?: () => number;
 }
 
@@ -452,18 +453,38 @@ const GOAL_SPECS = {
     },
   },
   open_pr: {
-    run: async ({ env, caller, args, dispatch }) => {
+    run: async ({ env, state, caller, args, dispatch }) => {
       const cwd = caller.repo && env.cwdOf(caller);
       if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
       const { current, defaultBranch } = await env.git.branches(cwd);
       if (!current) throw new Error(`${cwd} is on a detached HEAD, so there is no branch to push. Commit on this thread's own branch, not in another worktree`);
       if (current === defaultBranch) throw new Error(`${cwd} is on ${defaultBranch}; open_pr would push straight to it. Commit on a branch of its own first`);
+      // Checks run again here: open_pr usually comes mid-turn, before the idle pass would have run them.
+      for (const c of caller.criteria ?? []) {
+        if (!c.command) continue;
+        const result = await env.git.runCheck(cwd, c.command).catch((error: Error) => ({ exitCode: null, output: error.message, ms: 0 }));
+        dispatch({ type: 'criterion-check', threadId: caller.id, criterionId: c.id, result });
+      }
+      const checked = target(state(), caller, caller.id);
+      const gate = prGate(checked, env.prefs.get().prGaps);
+      if (gate.blocking.length) throw new Error(gateRefusal(checked, gate.blocking));
       const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
       await env.git.push(cwd, githubUser);
-      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
+      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(checked, args.why, gate.noted) }, githubUser);
       const opened = openedPr(url, args.title.trim());
       if (opened) dispatch({ type: 'prs-seen', threadId: caller.id, prs: [opened] });
       return { changed: `opened ${url}`, result: { url } };
+    },
+  },
+  propose_goal: {
+    run: ({ state, env, caller, args, dispatch }) => {
+      if (caller.isGoalOff) throw new Error('The user removed this thread\'s goal; carry on without one');
+      if (caller.proposal && caller.proposal.state !== 'waiting' && caller.proposal.state !== 'undone') throw new Error('This thread already has the goal you proposed; edit_goal changes it');
+      const isApplied = env.prefs.get().proposedGoals === 'apply';
+      const criteria = args.criteria.map((c) => ({ text: c.text.trim(), ...(c.command?.trim() && { command: c.command.trim() }) }));
+      dispatch({ type: 'goal-propose', threadId: caller.id, goal: args.goal.trim(), criteria, basis: args.basis?.trim() || undefined, by: caller.providers[0], isApplied });
+      const result = isApplied ? 'Applied; the user can undo it. get_goal lists the new criterion ids.' : 'Waiting for the user to accept it; keep working on the current goal meanwhile.';
+      return { changed: isApplied ? `set the goal: ${args.goal}` : `proposed the goal: ${args.goal}`, result: { status: result, goal: goalOf(target(state(), caller, caller.id)) } };
     },
   },
   claim_criterion: {

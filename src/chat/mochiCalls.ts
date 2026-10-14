@@ -24,6 +24,7 @@ export const MOCHI_CALLS = {
   reorder_steps: ['Reordering the steps', 'Reordered the steps'],
   drop_step: ['Dropping a step', 'Dropped a step'],
   open_pr: ['Opening a pull request', 'Opened a pull request'],
+  propose_goal: ['Proposing the goal', 'Proposed the goal'],
   claim_criterion: ['Checking off a criterion', 'Checked off a criterion'],
   report_turn: ['Reporting progress', 'Reported progress'],
   get_report: ['Reading the progress report', 'Read the progress report'],

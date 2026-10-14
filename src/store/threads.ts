@@ -1,13 +1,13 @@
 import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
-import { applyDraft, type GoalDraft } from '../goals/edit.ts';
+import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { goalProgress } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
@@ -97,6 +97,12 @@ export type ThreadsAction =
   | { type: 'simplify-toggle'; threadId: string; index: number }
   | { type: 'criterion-claim'; threadId: string; criterionId: string; evidence: string; by: Provider }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
+  /** The agent went idle: a fresh record replaces the last turn's, accepted gaps and Open anyway included. */
+  /** The agent's `propose_goal`; `isApplied` when Settings › Goals applies proposals with an undo instead of asking. */
+  | { type: 'goal-propose'; threadId: string; goal: string; criteria: { text: string; command?: string }[]; basis?: string; by: Provider; isApplied: boolean }
+  | { type: 'goal-proposal'; threadId: string; decision: 'accept' | 'keep' | 'undo' }
+  | { type: 'idle-start'; threadId: string }
+  | { type: 'idle-update'; threadId: string; patch: Partial<Omit<IdleCheck, 'at'>> }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
@@ -239,6 +245,14 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => checkCriterion(t, action, state.now)) };
     case 'criterion-claim':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => claimCriterion(t, action, state.now)) };
+    case 'goal-propose':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => propose(t, action, state.now)) };
+    case 'goal-proposal':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => decideProposal(t, action.decision, state.now)) };
+    case 'idle-start':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, idle: { at: state.now, accepted: [], isGathering: true } })) };
+    case 'idle-update':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.idle ? { ...t, idle: { ...t.idle, ...action.patch } } : t)) };
     case 'report':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now } })) };
     case 'simplified':
@@ -578,6 +592,26 @@ function setDraftedGoal(t: Thread, outcome: string, criteria: DraftedCriterion[]
   const n = (t.revisions.at(-1)?.n ?? 0) + 1;
   const set = { ...t, goal: outcome, ...(similar.length && { similar }), criteria: criteria.map((c, i) => ({ id: `${t.id}-c${n}-${i}`, ...c })), revisions: [...t.revisions, { n, at: now, label: 'Goal drafted', by: 'harness' as const, diff: [`+ Goal: ${outcome}`, ...criteria.map((c) => `+ Done when: ${c.text}`)] }] };
   return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal: ${outcome}` });
+}
+
+function propose(t: Thread, action: Extract<Action, { type: 'goal-propose' }>, now: number): Thread {
+  const before = { goal: t.goal, criteria: (t.criteria ?? []).map(({ text, command }) => ({ text, command })) };
+  const proposal = { goal: action.goal, criteria: action.criteria, basis: action.basis, at: now, by: action.by, state: 'waiting' as const, before };
+  if (!action.isApplied) return log({ ...t, proposal }, { at: now, who: action.by, kind: 'event', text: `Proposed a goal: ${action.goal}`, detail: action.basis });
+  return { ...withGoal(t, proposal, now, action.by), proposal: { ...proposal, state: 'applied' } };
+}
+
+/** Accept puts the proposal in place, Keep leaves the draft, Undo puts back what an applied proposal replaced. */
+function decideProposal(t: Thread, decision: 'accept' | 'keep' | 'undo', now: number): Thread {
+  const p = t.proposal;
+  if (!p) return t;
+  if (decision === 'keep') return log({ ...t, proposal: { ...p, state: 'kept' } }, { at: now, who: 'you', kind: 'event', text: `Kept the draft goal: ${t.goal}` });
+  if (decision === 'undo') return { ...withGoal(t, p.before, now, 'you'), proposal: { ...p, state: 'undone' } };
+  return { ...withGoal(t, p, now, 'you'), proposal: { ...p, state: 'accepted' } };
+}
+
+function withGoal(t: Thread, goal: { goal: string; criteria: { text: string; command?: string }[] }, now: number, by: Author): Thread {
+  return applyDraft(t, { ...draftFrom(t), goal: goal.goal, criteria: goal.criteria }, now, by);
 }
 
 function checkCriterion(t: Thread, action: Extract<Action, { type: 'criterion-check' }>, now: number): Thread {

@@ -16,6 +16,7 @@ import { GitPullRequestIcon } from '@/icons/github';
 import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 import { groupBursts, hourLabel, type Burst, type NoticeKind } from './model';
 import { useJump } from './useNotifications';
+import type { VerdictKind } from '../goals/verdict';
 
 const KIND_ICONS = {
   'needs-you': { icon: AlertCircle, className: 'text-warning' },
@@ -27,7 +28,15 @@ const KIND_ICONS = {
   overlap: { icon: TriangleWarning, className: 'text-warning' },
   'race-lost': { icon: Flash, className: 'text-muted-foreground' },
   run: { icon: Clock, className: 'text-muted-foreground' },
+  idle: { icon: CheckCircle, className: 'text-success' },
 } satisfies Record<NoticeKind, { icon: IconComponent; className: string }>;
+
+/** An idle notice takes its verdict's look; done keeps the `idle` default. */
+const VERDICT_ICONS = {
+  gaps: { icon: TriangleWarning, className: 'text-warning' },
+  'needs-you': { icon: AlertCircle, className: 'text-warning' },
+  stalled: { icon: Hourglass, className: 'text-destructive' },
+} satisfies Partial<Record<VerdictKind, { icon: IconComponent; className: string }>>;
 
 export function NotificationBell({ spaceId }: { spaceId: string }) {
   const { state, dispatch } = useHarness();
@@ -84,7 +93,7 @@ function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
   const { state, dispatch } = useHarness();
   const jump = useJump();
   const [head, ...rest] = burst.notices;
-  const { icon: Icon, className } = KIND_ICONS[head.kind];
+  const { icon: Icon, className } = (head.verdict && head.verdict in VERDICT_ICONS ? VERDICT_ICONS[head.verdict as keyof typeof VERDICT_ICONS] : undefined) ?? KIND_ICONS[head.kind];
   const isUnread = burst.notices.some((n) => !n.isRead);
   const isMuted = state.notifications.muted.includes(burst.threadId);
   const thread = state.threads.find((t) => t.id === burst.threadId);

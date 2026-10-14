@@ -54,9 +54,12 @@ function restoreThread(thread: Thread, now: number): Thread {
   const live = { ...thread.live!, isWorking: false, isDetached: true, starting: undefined };
   const reviews = thread.reviews?.map((r) => (r.status === 'running' ? { ...r, status: 'failed' as const, error: 'Stopped when Mochi quit' } : r));
   const subagents = thread.subagents?.map((s) => (s.status === 'running' ? { ...s, status: 'stopped' as const, error: 'Stopped when Mochi quit', activity: undefined } : s));
+  // A check or audit Mochi quit during never finishes: the verdict would read Checking for good.
+  const criteria = thread.criteria?.map((c) => (c.check?.status === 'running' ? { ...c, check: undefined } : c));
+  const idle = thread.idle && { ...thread.idle, isGathering: undefined };
   const setup = thread.setup && (thread.setup.status === 'running' || thread.setup.status === 'failed') ? stoppedSetup(thread.setup) : thread.setup;
   // Sending the queue on launch would spend usage unasked.
-  const restored = pauseQueue({ ...thread, live, ...(reviews && { reviews }), ...(subagents && { subagents }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
+  const restored = pauseQueue({ ...thread, live, ...(criteria && { criteria }), ...(idle && { idle }), ...(reviews && { reviews }), ...(subagents && { subagents }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
   if (!thread.live!.isWorking) return restored;
   return { ...restored, activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
 }

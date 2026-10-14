@@ -13,6 +13,14 @@ export function currentReport(t: Thread) {
   return { report, criteria, met, isReady: criteria.length > 0 && met === criteria.length, changes: openTurn(t.activity) };
 }
 
+/** Whether the end-of-turn card shows: a goal thread gone idle, with a turn Mochi checked or the agent reported, and nothing from you since. */
+export function showsVerdictCard(t: Thread) {
+  const since = t.idle?.at ?? t.report?.at;
+  if (!t.goal || t.live?.isWorking || t.status === 'settled' || since === undefined) return false;
+  const lastYou = t.activity.findLast((e) => e.who === 'you' && e.kind === 'message');
+  return !lastYou || lastYou.at <= since;
+}
+
 /** The sidebar card's one line from the report: the question first, then readiness, then what's left. */
 export function reportHeadline(t: Thread) {
   const view = currentReport(t);

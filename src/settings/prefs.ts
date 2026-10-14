@@ -41,6 +41,14 @@ export interface Prefs {
   simplifyAuto: boolean;
   simplifyAutoWords: number;
   branchFrom: 'current' | 'base';
+  /** When the agent goes idle, whether Mochi runs the goal's criterion checks (`useIdleChecks`). */
+  idleChecks: 'edited' | 'always' | 'off';
+  /** What open_pr does with critical gaps: refuse until fixed or Open anyway, or open and list them. */
+  prGaps: 'block' | 'warn';
+  /** A goal the agent proposes (`propose_goal`) waits for your Accept, or applies at once with an undo. */
+  proposedGoals: 'ask' | 'apply';
+  /** VerdictKind values that notify when a thread you aren't looking at goes idle. */
+  idleAlerts: string[];
   branchPrefix: string;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
@@ -84,6 +92,10 @@ export const DEFAULT_PREFS: Prefs = {
   darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
+  idleChecks: 'edited',
+  proposedGoals: 'ask',
+  prGaps: 'block',
+  idleAlerts: ['gaps', 'needs-you', 'stalled'],
   alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
   watchedToasts: true,
   dockBadge: true,

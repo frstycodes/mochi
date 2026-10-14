@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
+import { useIdleVerdict, VerdictChip } from './goals/VerdictChip';
 import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
@@ -552,8 +553,12 @@ function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: Re
   );
 }
 
-function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
+export function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
   const row = useThreadRow(thread);
+  // Demo threads have no agent; their rows keep reading from goal steps.
+  const verdict = useIdleVerdict(thread);
+  const shown = thread.live ? verdict : null;
+  const hasChip = !!shown && shown.kind !== 'idle' && shown.kind !== 'checking';
   const { isSettled, toggle: settle } = useSettle(thread);
   return (
     <>
@@ -593,13 +598,16 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
               <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
             </span>
           ) : (
-            <span className="min-w-0 flex-1 truncate">{row.detail}</span>
+            <>
+              {hasChip && <VerdictChip verdict={shown} />}
+              <span className="min-w-0 flex-1 truncate">{shown?.reason ?? row.detail}</span>
+            </>
           )}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           <PrStack thread={thread} />
           <AgentsBadge thread={thread} />
           <NextRunBadge threadId={thread.id} />
-          {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
+          {row.needsYou && shown?.kind !== 'needs-you' && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
         </span>
       </SidebarMenuButton>
       <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] px-1.5 type-caption [&>svg]:size-3.5">

@@ -67,3 +67,16 @@ test('a usage limit notifies what the harness does; going on by itself notifies 
   assert.deepEqual(diff(stopped, running), ['limit'], 'Resume at reset went out');
   assert.deepEqual(diff(stopped, thread({ status: 'running', live: { ...working, isOnApiKey: true } })), [], 'moving to the API key is your own click');
 });
+
+test('one idle notice per turn, once Mochi has gathered its evidence; a failed turn says stalled, not waiting on you', () => {
+  const audit = { unverified: [{ text: 'Not checked in the app', quote: 'q' }] };
+  const goal = { goal: 'Ship it', criteria: [{ id: 'c', text: 'c', check: { status: 'passed' as const, at: 1 } }], live: { isWorking: false } };
+  const gathering = thread({ ...goal, idle: { at: 1, accepted: [], isGathering: true } });
+  const gathered = thread({ ...goal, idle: { at: 1, accepted: [], audit } });
+  const [notice] = diffNotices({ threads: [gathering], queue: [] }, { threads: [gathered], queue: [] }, 10);
+  assert.deepEqual([notice.kind, notice.verdict, notice.title, notice.body], ['idle', 'gaps', '1 gap in “Rate limits”', 'Not checked in the app']);
+  assert.deepEqual(diff(gathered, thread({ ...goal, idle: { at: 1, accepted: ['x'], audit } })), [], 'accepting a gap later is no new notice');
+  const failed = { ...goal, status: 'needs-you' as const, queuePause: 'failed' as const };
+  assert.deepEqual(diff(thread({ ...failed, idle: { at: 1, accepted: [], isGathering: true } }), thread({ ...failed, idle: { at: 1, accepted: [] } })), ['idle']);
+  assert.deepEqual(diff(thread(goal), thread({ ...failed })), [], 'the turn-end itself waits for the verdict');
+});

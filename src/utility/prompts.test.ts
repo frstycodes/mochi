@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { DiffFile } from '../host/types/git.ts';
 import { DEFAULT_SETTINGS, mergeSettings } from '../host/types/settings.ts';
-import { commitPrompt, goalPrompt, handoffPrompt, parseCommit, parsePr, parseSteps, parseTitle, prPrompt, titlePrompt, utilityCandidates, UTILITY_TASKS } from './prompts.ts';
+import { commitPrompt, goalPrompt, handoffPrompt, parseAudit, parseCommit, parsePr, parseSteps, parseTitle, prPrompt, titlePrompt, utilityCandidates, UTILITY_TASKS } from './prompts.ts';
 
 const file = (path: string, patch: string): DiffFile => ({ path, kind: 'modified', staged: true, binary: false, added: 2, removed: 1, patch, hunks: [] });
 
-test('every task defaults to Haiku 5.5, and changing one task keeps the others', () => {
-  for (const task of UTILITY_TASKS) assert.deepEqual(DEFAULT_SETTINGS.utilityModels[task], { provider: 'claude', model: 'claude-haiku-5-5' });
+test('every task but the turn audit defaults to Haiku 5.5, and changing one task keeps the others', () => {
+  assert.deepEqual(DEFAULT_SETTINGS.utilityModels.audit, { provider: 'claude', model: 'claude-sonnet-5-5' });
+  for (const task of UTILITY_TASKS.filter((t) => t !== 'audit')) assert.deepEqual(DEFAULT_SETTINGS.utilityModels[task], { provider: 'claude', model: 'claude-haiku-5-5' });
   const next = mergeSettings(DEFAULT_SETTINGS, { utilityModels: { pr: { provider: 'codex', model: 'gpt-6-sol' } } });
   assert.deepEqual(next.utilityModels.pr, { provider: 'codex', model: 'gpt-6-sol' });
   assert.deepEqual(next.utilityModels.title, DEFAULT_SETTINGS.utilityModels.title);
@@ -44,4 +45,11 @@ test('parsers clean what models add around the answer', () => {
   assert.equal(parseCommit('```\nfix(auth): keep next param\n\nThe callback dropped it.\n```'), 'fix(auth): keep next param\n\nThe callback dropped it.');
   assert.deepEqual(parsePr('Title: Keep ?next through login\n\n## What\nThe callback keeps it.'), { title: 'Keep ?next through login', body: '## What\nThe callback keeps it.' });
   assert.deepEqual(parseSteps('1. Read the auth flow\n- Fix the callback\n\n* Add a test'), ['Read the auth flow', 'Fix the callback', 'Add a test']);
+});
+
+test('an audit keeps only gaps quoted from what the agent wrote, and an empty question is none', () => {
+  const replies = ["Opened #135. I haven't checked it in the app."];
+  const answer = '```json\n{"question": "", "unverified": [{"text": "Not checked in the app", "quote": "I haven\'t checked it in the app"}, {"text": "Invented", "quote": "I never ran the tests"}]}\n```';
+  assert.deepEqual(parseAudit(answer, replies), { unverified: [{ text: 'Not checked in the app', quote: "I haven't checked it in the app" }] });
+  assert.equal(parseAudit('not json', replies), null);
 });
