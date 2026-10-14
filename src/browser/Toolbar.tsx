@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Refresh, RefreshCircle, TriangleWarning, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,8 +30,10 @@ import { ProviderMark } from '@/ui';
 import { consoleReport, openCompare, screenshot, toggleAutoReload, togglePick } from './actions';
 import { DEVICES, RESPONSIVE } from './devices';
 import { deviceSize, isDemoUrl } from './PageSurface';
-import { reloadPage, updatePage, useAddressHistory, type Page } from './pages';
-import { displayUrl, normalizeUrl } from './url';
+import { AddressBar } from './AddressBar';
+import { reloadPage, updatePage, type Page } from './pages';
+import { displayUrl } from './url';
+import { PaneActions } from '../pane/PaneHeader';
 import { OverflowIcon } from '../ui';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
@@ -63,59 +65,20 @@ export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageI
           <Refresh />
         </IconAction>
       )}
-      <AddressBar pageId={pageId} page={page} />
+      <AddressBar thread={thread} pageId={pageId} page={page} />
       {page.console.length > 0 && <ConsoleButton thread={thread} pageId={pageId} page={page} />}
-      <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
-        <Cursor />
-      </IconAction>
-      <IconAction label={page.device === RESPONSIVE ? 'Emulate a device' : 'Stop emulating'} pressed={page.device !== RESPONSIVE} onClick={() => updatePage(pageId, { device: page.device === RESPONSIVE ? DEVICES[1].id : RESPONSIVE })}>
-        <Mobile />
-      </IconAction>
-      <AutoReloadToggle thread={thread} pageId={pageId} page={page} />
-      <ScreenshotMenu pageId={pageId} page={page} />
+      <PaneActions>
+        <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
+          <Cursor />
+        </IconAction>
+        <IconAction label={page.device === RESPONSIVE ? 'Emulate a device' : 'Stop emulating'} pressed={page.device !== RESPONSIVE} onClick={() => updatePage(pageId, { device: page.device === RESPONSIVE ? DEVICES[1].id : RESPONSIVE })}>
+          <Mobile />
+        </IconAction>
+        <AutoReloadToggle thread={thread} pageId={pageId} page={page} />
+        <ScreenshotMenu pageId={pageId} page={page} />
+      </PaneActions>
       <MoreMenu thread={thread} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
     </div>
-  );
-}
-
-function AddressBar({ pageId, page }: { pageId: string; page: Page }) {
-  const history = useAddressHistory();
-  const listId = useId();
-  const [draft, setDraft] = useState<string | null>(null);
-
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (draft === null) return;
-    const url = normalizeUrl(draft);
-    setDraft(null);
-    e.currentTarget.querySelector('input')?.blur();
-    updatePage(pageId, { url, error: null });
-    if (page.hostId) void host.browser.navigate(page.hostId, url);
-  };
-
-  return (
-    <form onSubmit={submit} className="mx-1 min-w-0 flex-1">
-      <Input
-        aria-label="Address"
-        list={listId}
-        spellCheck={false}
-        autoCapitalize="off"
-        value={draft ?? displayUrl(page.url)}
-        onFocus={(e) => {
-          setDraft(page.url);
-          requestAnimationFrame(() => e.target.select());
-        }}
-        onBlur={() => setDraft(null)}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-        className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
-      />
-      <datalist id={listId}>
-        {history.map((url) => (
-          <option key={url} value={url} />
-        ))}
-      </datalist>
-    </form>
   );
 }
 

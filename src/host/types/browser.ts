@@ -27,6 +27,34 @@ export type BrowserCommand = 'back' | 'forward' | 'reload' | 'hard-reload' | 'st
 
 export type BrowserDevtools = 'docked' | 'detached' | 'closed';
 
+/** What the page's right-click menu asks the page itself to do, at the point it was opened. */
+export type BrowserMenuCommand = 'cut' | 'copy' | 'paste' | 'select-all' | 'copy-image' | 'save-image' | 'inspect';
+
+export interface FindOptions {
+  forward: boolean;
+  /** True for a new or changed query; false steps to the next or previous match of the same text. */
+  isNewSearch: boolean;
+  matchCase: boolean;
+}
+
+/** A right-click in the page, in view CSS px; the app draws its own menu there. */
+export interface BrowserContextMenu {
+  x: number;
+  y: number;
+  linkUrl: string;
+  linkText: string;
+  /** The image's (or video's) source when the click was on one. */
+  srcUrl: string;
+  mediaType: 'none' | 'image' | 'audio' | 'video' | 'canvas' | 'file' | 'plugin';
+  selectionText: string;
+  isEditable: boolean;
+  canCut: boolean;
+  canCopy: boolean;
+  canPaste: boolean;
+}
+
+export type SearchEngine = 'duckduckgo' | 'google' | 'bing' | 'kagi';
+
 export interface PickedElement {
   selector: string;
   html: string;
@@ -85,7 +113,11 @@ export type BrowserEvent =
   | { id: string; type: 'console'; level: 'error' | 'warning'; message: string; source: string; line: number }
   | { id: string; type: 'open'; url: string }
   | { id: string; type: 'devtools'; mode: BrowserDevtools }
-  | { id: string; type: 'frame'; data: string };
+  | { id: string; type: 'frame'; data: string }
+  | { id: string; type: 'found'; active: number; matches: number }
+  /** App shortcuts pressed while the page has focus: the page would swallow them otherwise. */
+  | { id: string; type: 'key'; key: 'find' | 'escape' }
+  | ({ id: string; type: 'context-menu' } & BrowserContextMenu);
 
 export interface BrowserHost {
   /** `spaceId` picks the persistent profile (`persist:space-<id>`): cookies and logins are isolated per space. */
@@ -124,6 +156,19 @@ export interface BrowserHost {
   compareStart(threadId: string, cwd: string, base?: string): Promise<CompareBase>;
   /** Stops the server and removes the temporary worktree `compareStart` made. */
   compareStop(threadId: string): Promise<void>;
+  /** Highlights matches of `text` in the page; results come back as `found` events. */
+  find(id: string, text: string, options: FindOptions): Promise<void>;
+  stopFind(id: string): Promise<void>;
+  /** Runs a context-menu command at `at` (the menu event's point); `save-image` downloads `url`. */
+  menuCommand(id: string, command: BrowserMenuCommand, at: { x: number; y: number }, url?: string): Promise<void>;
+  /** JPEG data URL of what the view shows now, for a stand-in while an overlay covers it. */
+  peek(id: string): Promise<string>;
+  /** Opens an http(s) URL in the system's default browser. */
+  openExternal(url: string): Promise<void>;
+  /** The default browser's name ("Arc"), or '' when the OS doesn't say. */
+  defaultBrowser(): Promise<string>;
+  /** Search suggestions for `query` from the engine; [] on any failure. */
+  suggest(engine: SearchEngine, query: string): Promise<string[]>;
   onEvent(listener: (event: BrowserEvent) => void): () => void;
 }
 
@@ -150,5 +195,12 @@ export const browserMethods = {
   scroll: 'invoke',
   compareStart: 'invoke',
   compareStop: 'invoke',
+  find: 'invoke',
+  stopFind: 'invoke',
+  menuCommand: 'invoke',
+  peek: 'invoke',
+  openExternal: 'invoke',
+  defaultBrowser: 'invoke',
+  suggest: 'invoke',
   onEvent: 'event',
 } satisfies Manifest<BrowserHost>;

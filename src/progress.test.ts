@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Step, Thread } from './model.ts';
-import { boardColumns, progressAt, similarity, statusAt, timeAgo, goalProgress, progressLabel } from './progress.ts';
+import { boardColumns, similarity, statusAt, timeAgo, goalProgress, progressLabel } from './progress.ts';
 
 function step(id: string, rest: Partial<Step> = {}): Step {
   return { id, title: id, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: 0, addedBy: 'you', revision: 1, ...rest };
@@ -24,13 +24,6 @@ test('statusAt replays a step through time', () => {
   assert.equal(statusAt(a, 10), 'done');
   assert.equal(statusAt(thread.steps[2], 4), 'ready');
   assert.equal(statusAt(thread.steps[2], 5), 'dropped');
-});
-
-test('every step counts the same, dropped ones are left out, scope grows over time', () => {
-  assert.deepEqual(progressAt(thread, 15, false), { scope: 2, done: 1, partial: 0, pct: 0.5 });
-  const live = progressAt(thread, 30, true);
-  assert.equal(live.scope, 3);
-  assert.equal(live.pct, (1 + 0.5) / 3);
 });
 
 test('the ring counts criteria only, never steps or a percent, and the phase follows what happened', () => {

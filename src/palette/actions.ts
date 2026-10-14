@@ -1,8 +1,9 @@
 import type { Dispatch } from 'react';
-import { Archive, Flag, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowUpRightSquare, Flag, Link, SearchNormal, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
-import { pageKey, reloadPage } from '../browser/pages';
+import { getPage, openFind, pageKey, reloadPage } from '../browser/pages';
+import { openExternally, openInLabel } from '../browser/systemBrowser';
 import { threadCwd } from '../host/cwd';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
@@ -122,9 +123,12 @@ export const ACTIONS = [
   { id: 'tab-close-others', group: 'Side pane', title: 'Close other tabs', icon: CloseSquare, when: when.otherTabs, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.filter((x) => x !== tab), ctx)) },
   { id: 'tab-close-right', group: 'Side pane', title: 'Close tabs to the right', icon: CloseSquare, when: when.tabsToRight, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.slice(ctx.scope.tabs.indexOf(tab) + 1), ctx)) },
   { id: 'tab-reload', group: 'Side pane', title: 'Reload page', icon: Refresh, when: when.browserTab, run: onTab((tab, t) => reloadPage(pageKey(t.id, tab.id))) },
-  { id: 'tab-duplicate', group: 'Side pane', title: 'Duplicate tab', icon: Copy, when: when.contentTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: tab.kind, url: tab.url, file: tab.file })) },
+  { id: 'tab-find', group: 'Side pane', title: 'Find in page', icon: SearchNormal, shortcut: ['mod', 'F'], keywords: 'search text', when: when.browserTab, run: onTab((tab, t, { dispatch }) => (dispatch({ type: 'pane-select-tab', threadId: t.id, tabId: tab.id }), openFind(pageKey(t.id, tab.id)))) },
+  { id: 'tab-copy-url', group: 'Side pane', title: 'Copy URL', icon: Link, when: when.webTab, run: onTab((tab, t) => copyText(tabUrl(tab, t), 'URL copied')) },
+  { id: 'tab-open-external', group: 'Side pane', title: 'Open in your browser', label: () => openInLabel(), icon: ArrowUpRightSquare, keywords: 'external system default browser', when: when.webTab, run: onTab((tab, t) => openExternally(tabUrl(tab, t))) },
+  { id: 'tab-duplicate', group: 'Side pane', title: 'Duplicate tab', icon: Copy, when: when.multiTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: tab.kind, url: tab.url, file: tab.file })) },
   { id: 'tab-pop', group: 'Side pane', title: 'Pop out into a floating window', icon: Pip, when: when.poppableTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-pop', threadId: t.id, tabId: tab.id, isPopped: true })) },
-  { id: 'tab-split', group: 'Side pane', title: 'Move tab to a new split', icon: RowVertical, when: when.contentTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'tab', threadId: t.id, tabId: tab.id } })) },
+  { id: 'tab-split', group: 'Side pane', title: 'Move tab to a new split', icon: RowVertical, when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'tab', threadId: t.id, tabId: tab.id } })) },
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),
@@ -181,6 +185,11 @@ function inThread(fn: (thread: Thread, ctx: ActionContext) => void) {
 function open({ dispatch }: ActionContext, action: Action) {
   dispatch(action);
   dispatch({ type: 'overview-toggle', isOpen: false });
+}
+
+/** The page's live URL; the tab's saved one until its page exists. */
+function tabUrl(tab: PaneTab, thread: Thread) {
+  return getPage(pageKey(thread.id, tab.id))?.url ?? tab.url ?? '';
 }
 
 function onTab(fn: (tab: PaneTab, thread: Thread, ctx: ActionContext) => void) {

@@ -9,6 +9,8 @@ import { clock } from '../progress';
 import { PROVIDER_NAME } from '../rewind/handoff';
 import { CriteriaList } from './CriteriaList';
 import { revisionDiff } from './edit';
+import { currentReport } from './report';
+import { ReportList, ReportQuestion } from './ReportCard';
 import { StepLine } from './steps';
 
 /** The expanded goal: the outcome, what done means with its checks, the agent's checklist while it works, and the goal's history. */
@@ -24,6 +26,7 @@ export function GoalDetails({ thread }: { thread: Thread }) {
           <CriteriaList thread={thread} />
         </DetailSection>
       )}
+      <LatestReport thread={thread} />
       {isShowingSteps && (
         <DetailSection title="Working on" hint="The agent's own checklist">
           <ol className="flex flex-col gap-1">
@@ -43,6 +46,22 @@ export function GoalDetails({ thread }: { thread: Thread }) {
         </ol>
       </DetailSection>
     </div>
+  );
+}
+
+/** The last turn's report stays here after the chat's report card gives way to your next message. */
+function LatestReport({ thread }: { thread: Thread }) {
+  const { report } = thread;
+  if (!report || (!report.question && !report.decisions.length && !report.left.length)) return null;
+  const isStale = !currentReport(thread);
+  return (
+    <DetailSection title="Report" hint={`${PROVIDER_NAME[report.by]} · ${clock(report.at)}${isStale ? ' · before your last message' : ''}`}>
+      <div className="flex flex-col gap-3">
+        {isStale ? <ReportList label="Asked" items={report.question ? [report.question] : []} /> : <ReportQuestion report={report} />}
+        <ReportList label="Decided" items={report.decisions} />
+        <ReportList label="Left" items={report.left} />
+      </div>
+    </DetailSection>
   );
 }
 

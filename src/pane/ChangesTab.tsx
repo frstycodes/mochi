@@ -21,6 +21,7 @@ import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { DiffStat } from '../WorkLog';
+import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
 export function ChangesTab({ thread }: PaneTabProps) {
@@ -48,9 +49,9 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="@container flex h-11 shrink-0 items-center gap-1.5 px-3">
+      <PaneTitle>
         <Select value={scope} onValueChange={(v) => setScope(v as DiffScope)}>
-          <SelectTrigger size="sm" aria-label="Compare" className="shrink-0">
+          <SelectTrigger size="sm" aria-label="Compare" className="-ml-1.5 shrink-0">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -77,7 +78,8 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
             </SelectContent>
           </Select>
         )}
-        <span className="flex-1" />
+      </PaneTitle>
+      <PaneActions>
         {files.length > 0 && (
           <span className="hidden @lg:flex">
             <DiffStat added={sum(files, 'added')} removed={sum(files, 'removed')} />
@@ -93,7 +95,7 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
           </ToggleGroupItem>
         </ToggleGroup>
         <WorktreeMenu cwd={cwd} base={thread.repo?.base} diff={diff} run={run} confirm={confirm} />
-      </div>
+      </PaneActions>
       {!!diffQuery.error && !diff && <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />}
       {diffQuery.isLoading && <ChangesSkeleton />}
       {isEmpty && <NoChanges scope={scope} />}

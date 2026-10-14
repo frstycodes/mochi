@@ -77,6 +77,7 @@
   --warning: oklch(0.48 0.13 65);
   --info: oklch(0.5 0.15 255);
   --merged: oklch(0.5 0.19 300);
+  --code: oklch(0.52 0.14 40);
   --border: oklch(0.25 0.02 285 / 0.1);
   --input: oklch(0.25 0.02 285 / 0.15);
   --ring: oklch(0.45 0.012 285);
@@ -129,6 +130,7 @@
     --warning: oklch(0.82 0.14 80);
     --info: oklch(0.76 0.12 250);
     --merged: oklch(0.74 0.14 300);
+    --code: oklch(0.8 0.1 45);
     --border: oklch(0.95 0.01 285 / 0.08);
     --input: oklch(0.95 0.01 285 / 0.12);
     --ring: oklch(0.75 0.01 285);
@@ -171,6 +173,7 @@
   --warning: oklch(0.82 0.14 80);
   --info: oklch(0.76 0.12 250);
   --merged: oklch(0.74 0.14 300);
+  --code: oklch(0.8 0.1 45);
   --border: oklch(0.95 0.01 285 / 0.08);
   --input: oklch(0.95 0.01 285 / 0.12);
   --ring: oklch(0.75 0.01 285);
@@ -218,6 +221,7 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
   --color-merged: var(--merged);
+  --color-code: var(--code);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -508,19 +512,6 @@
   backdrop-filter: blur(8px);
 }
 
-/* Toggling the side pane animates the panels' flex-grow; dragging the handle never does. */
-.pane-animating [data-panel] {
-  transition: flex-grow 260ms cubic-bezier(0.32, 0.72, 0, 1);
-}
-@media (prefers-reduced-motion: reduce) {
-  :root:not([data-reduce-motion='off']) .pane-animating [data-panel] {
-    transition: none;
-  }
-}
-:root[data-reduce-motion='on'] .pane-animating [data-panel] {
-  transition: none;
-}
-
 /* Native scrollers (chat, sidebar) match ScrollArea: thin, and visible only while scrolling. useIdleScrollbars sets data-scrolling. */
 * {
   scrollbar-width: thin;
@@ -580,4 +571,19 @@
 /* Pinned passages in chat messages (CSS Custom Highlight API, src/chat/SelectionPin.tsx): a neutral highlighter, not a status colour. */
 ::highlight(harness-pin) {
   background-color: color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+/* Panes slide when one opens, closes, moves or expands (`SidePane`), never while a window resize or a divider drag moves them. */
+.pane-layout-animating :is(.pane-card, .pane-chat) {
+  transition-property: left, top, width, height;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='off']) .pane-layout-animating :is(.pane-card, .pane-chat) {
+    transition: none;
+  }
+}
+:root[data-reduce-motion='on'] .pane-layout-animating :is(.pane-card, .pane-chat) {
+  transition: none;
 }

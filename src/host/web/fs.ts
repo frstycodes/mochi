@@ -1,4 +1,5 @@
-import type { FileContent, FsChange, FsHost } from '../types/fs.ts';
+import { compileQuery, matchLines } from '../../files/search.ts';
+import type { FileContent, FsChange, FsHost, SearchHits } from '../types/fs.ts';
 
 // In-memory files so the web build can show the tree, editor and previews; every root sees the same set.
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3987e5"/><path d="M20 20v24M44 20v24M20 32h24" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>\n`;
@@ -14,6 +15,8 @@ const files = new Map<string, { text: string; mtimeMs: number }>(
   }).map(([path, text]) => [path, { text, mtimeMs: 1 }]),
 );
 const listeners = new Set<(change: FsChange) => void>();
+const hitListeners = new Set<(hits: SearchHits) => void>();
+const SEARCH_LIMIT = 2_000;
 
 const FOLDERS: Record<string, string[]> = {
   '~': ['dev', 'work', 'Documents'],
@@ -45,6 +48,19 @@ export const fs: FsHost = {
   onChange(listener) {
     listeners.add(listener);
     return () => void listeners.delete(listener);
+  },
+  async search(_root, id, pattern, options) {
+    const regex = compileQuery(pattern, options);
+    for (const [path, { text }] of [...files].sort(([a], [b]) => a.localeCompare(b))) {
+      const lines = matchLines(text, regex, SEARCH_LIMIT);
+      if (lines.length) hitListeners.forEach((l) => l({ id, path, lines }));
+    }
+    return { isTruncated: false };
+  },
+  async cancelSearch() {},
+  onSearchHits(listener) {
+    hitListeners.add(listener);
+    return () => void hitListeners.delete(listener);
   },
   async editors() {
     return [];

@@ -19,7 +19,7 @@ const pane = (threadId: string, patch: Partial<Pane> = {}): Pane => ({
   tabs: [
     { id: 't1', kind: 'browser' },
     { id: 't2', kind: 'terminal' },
-    { id: 't3', kind: 'new' },
+    { id: 't3', kind: 'browser' },
     { id: 't4', kind: 'files', isPopped: true },
   ],
   activeTab: 't2',
@@ -86,7 +86,7 @@ const MENU = [
   { id: 'others', when: when.otherTabs },
   { id: 'right', when: when.tabsToRight },
   { id: 'reload', when: when.browserTab },
-  { id: 'pop', when: when.contentTab },
+  { id: 'pop', when: when.poppableTab },
 ];
 const menu = (s: State, target = {}, isDesktop = false) => available(MENU, scopeOf(s, target, isDesktop)).map((a) => a.id);
 
@@ -119,12 +119,12 @@ test('watched threads offer stop watching instead', () => {
   assert.equal(scopeOf(s).isWatched, true);
 });
 
-test('tab menus: close others and close to the right count docked tabs only; new-tab pages cannot pop out', () => {
+test('tab menus: close others and close to the right count docked tabs of the same pane only; browser tabs cannot pop out', () => {
   const s = state({ kind: 'thread', id: 'a' }, [thread('a')], [], [pane('a')]);
-  assert.deepEqual(scopeOf(s).tabs.map((t) => t.id), ['t1', 't2', 't3']);
-  assert.deepEqual(menu(s, { threadId: 'a', tabId: 't1' }), ['watch', 'close', 'others', 'right', 'reload', 'pop']);
-  assert.deepEqual(menu(s, { threadId: 'a', tabId: 't3' }), ['watch', 'close', 'others']);
-  assert.deepEqual(menu(s, { threadId: 'a', tabId: 't4' }), ['watch', 'close', 'pop'], 'a popped tab has no strip neighbours');
+  assert.deepEqual(scopeOf(s, { threadId: 'a', tabId: 't1' }).tabs.map((t) => t.id), ['t1', 't3']);
+  assert.deepEqual(menu(s, { threadId: 'a', tabId: 't1' }), ['watch', 'close', 'others', 'right', 'reload']);
+  assert.deepEqual(menu(s, { threadId: 'a', tabId: 't2' }), ['watch', 'close', 'pop']);
+  assert.deepEqual(menu(s, { threadId: 'a', tabId: 't4' }), ['watch', 'close', 'pop'], 'a popped tab has no pane neighbours');
 });
 
 test('the palette scopes to the open pane\'s active tab; a closed pane offers no tab actions', () => {

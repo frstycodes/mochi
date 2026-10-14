@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
-import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
+import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -50,6 +50,7 @@ import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
 import { Shortcut } from './Shortcut';
+import { BranchIcon, BranchName } from './git/BranchLabel';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
@@ -498,9 +499,9 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             <>
               <ProjectAvatar name={thread.repo.project} />
               <span className="shrink-0">{thread.repo.project}</span>
-              {/* A worktree is the default; working in the project's own checkout is worth a glance. */}
-              {thread.repo.mode === 'folder' && <Folder className="size-3.5 shrink-0" aria-label="In the project folder" />}
-              <span className="min-w-0 truncate">{thread.repo.branch}</span>
+              {/* A worktree is the default; working in the project's own checkout, or on a detached HEAD, is worth a glance. */}
+              {(thread.repo.mode === 'folder' || thread.repo.isDetached) && <BranchIcon repo={thread.repo} />}
+              <BranchName repo={thread.repo} />
             </>
           ) : (
             <>

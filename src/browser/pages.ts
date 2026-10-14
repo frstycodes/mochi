@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { host } from '@/host';
-import type { BrowserDevtools, BrowserEmulation, CompareBase } from '@/host/types/browser';
+import type { BrowserContextMenu, BrowserDevtools, BrowserEmulation, CompareBase } from '@/host/types/browser';
 import { DEVICES, RESPONSIVE } from './devices';
 import { pushHistory } from './url';
 
@@ -9,6 +9,15 @@ export interface ConsoleEntry {
   message: string;
   source: string;
   line: number;
+}
+
+/** The find bar: open while non-null. `focusAt` changes whenever ⌘F asks for the field again. */
+export interface FindState {
+  query: string;
+  matchCase: boolean;
+  active: number;
+  matches: number;
+  focusAt: number;
 }
 
 export type CompareState = { mode: 'split' | 'slider' } & ({ status: 'starting' } | { status: 'ready'; base: CompareBase } | { status: 'error'; message: string });
@@ -39,16 +48,21 @@ export interface Page {
   /** A capture waiting in the annotation editor, as a PNG data URL. */
   annotating: { image: string; name: string } | null;
   compare: CompareState | null;
+  find: FindState | null;
+  /** The page's right-click menu while it's open, at the point the page reported. */
+  menu: BrowserContextMenu | null;
 }
 
 const CONSOLE_LIMIT = 50;
 const HISTORY_KEY = 'harness.browser.history.v1';
+const TITLES_KEY = 'harness.browser.titles.v1';
 
 const pages = new Map<string, Page>();
 const listeners = new Set<() => void>();
 const byHostId = new Map<string, string>();
 let openListener: ((key: string, url: string) => void) | null = null;
-let history = loadHistory();
+let history = load<string[]>(HISTORY_KEY, []);
+let titles = load<Record<string, string>>(TITLES_KEY, {});
 
 export const pageKey = (threadId: string, tabId: string) => `${threadId}/${tabId}`;
 /** The base branch's page in a before/after compare lives beside its tab's page and goes with it. */
@@ -63,13 +77,31 @@ export function useAddressHistory() {
   return useSyncExternalStore(subscribe, () => history);
 }
 
+/** The title a history URL last had, for the address bar's suggestions. */
+export function historyTitle(url: string) {
+  return titles[url] ?? '';
+}
+
 /** Replaces the address bar's history (empty to clear it); returns what was there, for an undo. */
 export function replaceAddressHistory(next: string[]) {
   const previous = history;
   history = next;
-  saveHistory(history);
+  saveHistory();
   listeners.forEach((l) => l());
   return previous;
+}
+
+export function openFind(key: string) {
+  const page = pages.get(key);
+  if (!page) return;
+  updatePage(key, { find: { ...(page.find ?? { query: '', matchCase: false, active: 0, matches: 0 }), focusAt: Date.now() } });
+}
+
+export function closeFind(key: string) {
+  const page = pages.get(key);
+  if (!page?.find) return;
+  if (page.hostId) void host.browser.stopFind(page.hostId);
+  updatePage(key, { find: null });
 }
 
 export function getPage(key: string) {
@@ -81,7 +113,10 @@ export function updatePage(key: string, patch: Partial<Page>) {
   if (!page) return;
   pages.set(key, { ...page, ...patch });
   if (patch.url) history = pushHistory(history, patch.url);
-  if (patch.url) saveHistory(history);
+  const url = patch.url ?? page.url;
+  const isNewTitle = !!patch.title && titles[url] !== patch.title;
+  if (isNewTitle) titles = { ...titles, [url]: patch.title! };
+  if (patch.url || isNewTitle) saveHistory();
   listeners.forEach((l) => l());
 }
 
@@ -155,6 +190,14 @@ if (host.isDesktop)
       updatePage(key, { console: [...(pages.get(key)?.console ?? []), { level, message, source, line }].slice(-CONSOLE_LIMIT) });
     } else if (event.type === 'devtools') updatePage(key, { devtools: event.mode });
     else if (event.type === 'open') openListener?.(key, event.url);
+    else if (event.type === 'found') {
+      const find = pages.get(key)?.find;
+      if (find) updatePage(key, { find: { ...find, active: event.active, matches: event.matches } });
+    } else if (event.type === 'key') (event.key === 'find' ? openFind : closeFind)(key);
+    else if (event.type === 'context-menu') {
+      const { id: _, type: __, ...menu } = event;
+      updatePage(key, { menu });
+    }
   });
 
 const viewports = new Map<string, { width: number; height: number }>();
@@ -198,23 +241,28 @@ function seed(key: string, url: string): Page {
     isAutoReloading: false,
     annotating: null,
     compare: null,
+    find: null,
+    menu: null,
   };
   // Seeding inside a getSnapshot must return the same object every call until it changes.
   pages.set(key, page);
   return page;
 }
 
-function loadHistory(): string[] {
+function load<T>(key: string, fallback: T): T {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
+    return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function saveHistory(list: string[]) {
+/** Titles are kept only for URLs still in the history, so clearing it clears them too. */
+function saveHistory() {
+  titles = Object.fromEntries(history.flatMap((url) => (titles[url] ? [[url, titles[url]]] : [])));
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    localStorage.setItem(TITLES_KEY, JSON.stringify(titles));
   } catch {
     // Storage blocked (private window, artifact sandbox): history lasts for the session.
   }

@@ -11,48 +11,6 @@ export function statusAt(step: Step, t: number): StepStatus | null {
   return step.status;
 }
 
-export interface Progress {
-  scope: number;
-  done: number;
-  partial: number;
-  pct: number;
-}
-
-export function progressAt(thread: Thread, t: number, isLive: boolean): Progress {
-  let scope = 0;
-  let done = 0;
-  let partial = 0;
-  for (const step of thread.steps) {
-    const status = statusAt(step, t);
-    if (!status || status === 'dropped') continue;
-    // Every step counts the same: agents' plans have no honest sizes.
-    scope += 1;
-    if (status === 'done') done += 1;
-    else if (isLive) partial += step.progress;
-  }
-  const pct = scope === 0 ? 0 : (done + partial) / scope;
-  return { scope, done, partial, pct };
-}
-
-export interface BurnPoint {
-  t: number;
-  scope: number;
-  done: number;
-}
-
-export function burnSeries(thread: Thread, now: number): BurnPoint[] {
-  const times = new Set<number>([thread.startedAt, now]);
-  for (const step of thread.steps) {
-    for (const t of [step.addedAt, step.doneAt, step.droppedAt]) if (t !== undefined && t <= now) times.add(t);
-  }
-  return [...times]
-    .sort((a, b) => a - b)
-    .map((t) => {
-      const { scope, done } = progressAt(thread, t, false);
-      return { t, scope, done };
-    });
-}
-
 export type Phase = 'planning' | 'building' | 'verifying' | 'ready' | 'settled';
 
 export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Settled' } satisfies Record<Phase, string>;

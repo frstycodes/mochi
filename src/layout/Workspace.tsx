@@ -17,6 +17,7 @@ import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
 import { useSplitTabDrag } from './useSplitTabDrag';
+import { PaneSlotBar, PaneSlots } from '../pane/PaneHeader';
 import { LeafBar } from './SplitControls';
 import { PreviewContext, SplitContext } from './SplitContext';
 import { displayRoot, equalSizes, findLeaf, leaves, snapSizes, type Leaf, type LayoutNode, type Split, type View, type Zone } from './tree';
@@ -177,7 +178,7 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
   const thread = state.threads.find((t) => t.id === threadId);
   const pane = state.panes.find((p) => p.threadId === threadId);
   const tab = pane?.tabs.find((t) => t.id === tabId);
-  const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind ?? 'new', tab ? tabTitle(tab) : '');
+  const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind, tab ? tabTitle(tab) : '');
   if (!thread || !pane || !tab) return <ClosedTab />;
   const { icon: Icon, component: Content } = PANE_TABS[tab.kind];
 
@@ -192,9 +193,12 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
           {thread.title}
         </button>
       </LeafBar>
-      <div className="min-h-0 flex-1">
-        <Content thread={thread} pane={pane} tab={tab} />
-      </div>
+      <PaneSlots>
+        <PaneSlotBar />
+        <div className="min-h-0 flex-1">
+          <Content thread={thread} pane={pane} tab={tab} />
+        </div>
+      </PaneSlots>
     </div>
   );
 }

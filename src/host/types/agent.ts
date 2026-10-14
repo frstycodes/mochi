@@ -35,7 +35,7 @@ export type AgentEvent =
   /** Main is preparing the new worktree before the agent's first turn; each event carries the whole setup so far. */
   | { threadId: string; type: 'setup'; setup: WorktreeSetup }
   /** A project folder thread's agent runs on this branch of the project's checkout. */
-  | { threadId: string; type: 'branch'; branch: string }
+  | { threadId: string; type: 'branch'; branch: string; isDetached?: boolean }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }

@@ -8,13 +8,17 @@ import { Annotator } from './browser/Annotate';
 import { ComparePane } from './browser/Compare';
 import { RESPONSIVE } from './browser/devices';
 import { deviceSize, PageSurface, useSize } from './browser/PageSurface';
-import { destroyPage, ensureView, getPage, onOpenTab, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
+import { FindBar } from './browser/FindBar';
+import { destroyPage, ensureView, getPage, onOpenTab, openFind, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
 import { BrowserToolbar, DeviceBar, DriveBar } from './browser/Toolbar';
 import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
+import { isTabOnScreen } from './store/panes';
+import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { useHarness } from './store';
 import { isWorking } from './agentPhase';
+import { isMod } from './keys';
 import { PreviewContext } from './layout/SplitContext';
 
 type Corner = 'tl' | 'tr' | 'bl' | 'br';
@@ -36,9 +40,17 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
   useTabSync(thread.id, tab, page);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      onKeyDown={(e) => {
+        if (!isMod(e) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') return;
+        e.preventDefault();
+        openFind(pageId);
+      }}
+    >
       <BrowserToolbar thread={thread} pageId={pageId} page={page} />
       {page.device !== RESPONSIVE && <DeviceBar pageId={pageId} page={page} />}
+      {!!page.find && <FindBar pageId={pageId} page={page} find={page.find} />}
       {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} />}
       <div className="min-h-0 flex-1">
         {page.annotating ? (
@@ -150,7 +162,7 @@ export function drivenTab(thread: Thread, pane: Pane) {
 /** Tabs you popped out, plus the agent's browser while it works off screen. Browser tabs never float on their own. */
 function floatingTabs(thread: Thread, pane: Pane) {
   const driven = drivenTab(thread, pane);
-  const isDrivenHidden = !!driven && !(pane.isOpen && pane.activeTab === driven.id);
+  const isDrivenHidden = !!driven && !isTabOnScreen(pane, driven);
   return pane.tabs.filter((t) => (t.isPopped && t.kind !== 'browser') || (isDrivenHidden && t === driven));
 }
 
@@ -314,8 +326,13 @@ function FrameStream({ pageId, hostId, spaceId, viewport: { width, height } }: {
 function PoppedTab({ thread, pane, tab }: { thread: Thread; pane: Pane; tab: PaneTab }) {
   const Content = PANE_TABS[tab.kind].component;
   return (
-    <div className="h-full bg-sidebar">
-      <Content thread={thread} pane={pane} tab={tab} />
+    <div className="flex h-full flex-col bg-card">
+      <PaneSlots>
+        <PaneSlotBar />
+        <div className="min-h-0 flex-1">
+          <Content thread={thread} pane={pane} tab={tab} />
+        </div>
+      </PaneSlots>
     </div>
   );
 }

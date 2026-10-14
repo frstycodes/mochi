@@ -11,6 +11,7 @@ import { AskInSideChat } from '../sidechat/AskInSideChat';
 import { IconAction } from '../terminal/IconAction';
 import { addShell, closeSession, showSession, toggleSplit, type TerminalSession } from '../terminal/sessions';
 import { useTerminals } from '../terminal/useTerminals';
+import { PaneActions, PaneTitle } from './PaneHeader';
 import { PlannedTab } from './PlannedTab';
 import type { PaneTabProps } from './tabs';
 import { isMod } from '../keys';
@@ -36,9 +37,9 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
   };
 
   return (
-    <div className="@container flex h-full flex-col gap-2 p-2" onKeyDown={onKeyDown}>
-      <div className="flex items-center gap-1">
-        <div role="tablist" aria-label="Terminals" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+    <div className="@container flex h-full flex-col gap-2 px-2 pb-2" onKeyDown={onKeyDown}>
+      <PaneTitle>
+        <div role="tablist" aria-label="Terminals" className="-ml-1.5 flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {group.sessions.map((s) => (
             <Button
               key={s.id}
@@ -54,10 +55,12 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
               {!!s.failure && <AlertTriangle className="text-destructive" aria-label="Last command failed" />}
             </Button>
           ))}
-          <IconAction aria-label="New terminal" onClick={() => addShell(key, context)}>
+          <IconAction aria-label="New terminal" className="text-muted-foreground" onClick={() => addShell(key, context)}>
             <Add />
           </IconAction>
         </div>
+      </PaneTitle>
+      <PaneActions>
         {!!focused?.selection && (
           <Button variant="secondary" size="sm" onClick={() => sendSelection(focused)}>
             <Send aria-hidden />
@@ -76,7 +79,7 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
             <X />
           </IconAction>
         )}
-      </div>
+      </PaneActions>
       {isSearching && !!focused && <SearchBar session={focused} onClose={() => setIsSearching(false)} />}
       {!!focused?.failure && (
         <Alert variant="destructive">

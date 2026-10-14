@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Branch, BranchList, ChangeStat, SwitchOptions } from '../../src/host/types/git.ts';
+import type { Branch, BranchList, ChangeStat, Head, SwitchOptions } from '../../src/host/types/git.ts';
 import { listWorktrees, runGit } from './run.ts';
 
 const MAX_BRANCHES = 500;
@@ -114,6 +114,13 @@ async function lineCount(path: string) {
   const text = await readFile(path, 'utf8').catch(() => '');
   if (!text || text.includes('\0')) return 0;
   return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
+}
+
+/** What `top` has checked out: a branch by name, or the short commit of a detached HEAD, said as such. Throws before a first commit. */
+export async function headOf(top: string): Promise<Head> {
+  const branch = await currentBranch(top);
+  if (branch) return { branch, isDetached: false };
+  return { branch: (await runGit(top, ['rev-parse', '--short', 'HEAD'])).trim(), isDetached: true };
 }
 
 async function currentBranch(top: string) {

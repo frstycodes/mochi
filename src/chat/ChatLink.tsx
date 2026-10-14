@@ -64,9 +64,9 @@ export function RefChip({ githubRef, children }: { githubRef: GithubRef; childre
               dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url });
             }}
             aria-label={`${children ? textOf(children) : label}: ${state?.title ? `${state.title}, ` : ''}${description}`}
-            className={cn('inline-flex max-w-full items-center gap-1 rounded-md px-1.5 align-baseline font-medium no-underline transition-colors', REF_CHIP_CLASS[refTone(state)])}
+            className={cn('inline-flex max-w-full items-center gap-[0.3em] rounded-md px-[0.4em] align-baseline text-[0.9em] leading-snug font-medium no-underline transition-colors', REF_CHIP_CLASS[refTone(state)])}
           >
-            <RefIcon item={{ githubRef, label, state }} className="size-3.5" />
+            <RefIcon item={{ githubRef, label, state }} className="size-[1em]" />
             <span className="truncate tabular">{children ?? label}</span>
             {state?.checks === 'fail' && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />}
           </a>

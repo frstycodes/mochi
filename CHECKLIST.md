@@ -4,22 +4,32 @@ Status: `[x]` shipped in the prototype, `[ ]` to build. Goal items marked shippe
 
 ## 1. Right panel (side pane), fully functional
 
-Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src/SidePane.tsx`, `src/Browser.tsx`). Most of it is mocked.
+Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, Side chat, Agents) as its own card beside the chat, laid out by `src/pane/layout.ts` and drawn by `src/SidePane.tsx`; pop-out PiP (`src/Browser.tsx`).
 
 ### Panel shell
-- [x] Browser-style tab strip, `+` new tab, close, active chip
-- [x] Pop a Preview tab out to a PiP window
-- [x] Drag tabs to reorder (Alt ← / → from the keyboard)
-- [x] Drag a tab out of the pane to make a split (ties into §3): over a split it previews the half it takes (a pane tab never replaces a split), the tab leaves the strip while it's a split, drag its title back onto the strip (or "Put back in the pane") to dock it, Esc cancels, a new tab says on hover it can't split. GAP: dropping on another thread's strip doesn't move a tab between threads
-- [x] Pop any tab kind out, not just Preview
-- [x] Tabs persist per thread across reloads
-- [x] Cmd 1–9 / Ctrl Tab to switch pane tabs; Cmd W closes the active one
-- [x] New-tab page lists every tab kind
-- [x] New-tab page lists detected ports and recent files: running dev servers open in a Preview tab, recent files (work log reads and edits, files opened in a Files tab) open in a Files tab. GAP: files opened in a Files tab are remembered in memory only, so they drop off after a reload
+- [x] One pane per kind per thread, each a rounded `card` with its own header (`src/pane/PaneHeader.tsx`): title or the pane's own tabs (Preview, Side chat), the pane's actions, ⋯, Expand, Close. Contents fill the header through `PaneTitle` / `PaneActions` slots
+- [x] Launcher: pinned kinds as toggles in the thread header (pressed while open), every kind in the header's ⋮ menu with its shortcut, plus Pin to header; mod Alt + P / D / T / F / S / O / C / A toggles Preview / Changes / Terminal / Files / Simulator / Ports / Side chat / Agents
+- [x] Layout engine (`resolveLayout`, tested): a new pane opens below the focused one in its column; a column too short for its panes (240px each) splits into a second column when one fits beside the chat (chat keeps 420px), else panes fold to their header, never the focused one; the simulator takes a column of its own, or folds the rest of a shared column to headers; clicking a folded header gives it the space
+- [x] Resizable dividers (chat | panes, between columns, between panes), invisible until hover, double-click resets; per-thread layout persisted
+- [x] Expand fills the thread area over the chat, Esc returns; the native browser view follows its card every frame (expand, resize, split)
+- [x] Drag a pane by its header: between panes of a column, to a new column at either outer edge (a line shows where), onto a split to open it there, onto the thread header to pin its kind; Esc cancels
+- [x] Close keeps the pane's tabs, so it opens again where it was; the last Preview tab closing closes the pane
+- [x] Pop any pane but Preview out to a PiP window; put back opens and focuses it
+- [x] Keyboard: Ctrl Tab / Ctrl Shift Tab between panes, mod 1–9 picks a Preview tab, mod W closes the focused Preview tab or pane
+- [x] Panes persist per thread across reloads; panes saved before this layout open the pane of their last active tab, the other tabs wait closed
+- [x] With every pane closed but the panes shown: open buttons for each kind, detected ports (open in Preview) and recent files (open in Files). GAP: files opened in Files are remembered in memory only, so they drop off after a reload
+- [ ] "Changes wants full height when the column is narrow": not done, only the simulator is full height
+- [ ] GAP: a Preview tab whose pane is folded to its header or hidden behind an expanded pane still counts as on screen, so the agent-driven PiP doesn't float then
+- GAP: dropping a pane on another thread doesn't move it between threads
 
 ### Browser
 - [x] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
 - [x] Address bar with history, back / forward / reload, hard reload, zoom
+- [x] Address bar suggestions (cmdk list under the field): what you typed (go or search), the thread's other tabs (switch to), its running dev servers, history with titles and site favicons, the search engine's suggestions; arrows + Enter, inline completion of the top URL match (→ / End accepts)
+- [x] Find in page (⌘F from the pane or the page): n of m, previous / next, match case, Esc closes
+- [x] Page right-click menu in the app's own menu style: link (new tab, open in the default browser, copy), image (open, save, copy, copy address), selection (copy, search), text field (cut, copy, paste, select all), else back / forward / reload; Inspect element docks DevTools
+- [x] Tab right-click and ⋮: Copy URL, "Open in <default browser>" (named from the OS's https handler, "your browser" when it doesn't say). GAP: Linux name lookup not run on a real Linux box
+- [x] Menus, popovers and dialogs over the page show a live snapshot of it (refreshed every 400ms) instead of a black box; overlays elsewhere leave the page live. GAP: verified by tests and typecheck only, not yet by hand in both themes
 - [x] Multiple browser tabs per thread
 - [x] Device emulation: preset sizes, custom size, rotate, DPR, touch
 - [x] Light / dark `prefers-color-scheme` toggle, reduced-motion toggle
@@ -97,13 +107,13 @@ Principles: no assumed orientation (portrait monitors are first class), every la
 - [x] Drop zones while dragging a thread or pane tab: left / right / top / bottom / center (replace)
 - [x] Resize with handles; double-click equalizes; snap to 1/3, 1/2, 2/3
 - [x] Auto orientation from aspect ratio: portrait window defaults to stacked (top/bottom), landscape to side-by-side; user override sticks
-- [x] Each split has its own composer, header and side pane; side pane can also be shared across the split (panes are per thread; a pane tab dragged out becomes its own split)
+- [x] Each split has its own composer, header and side pane; side pane can also be shared across the split (panes are per thread; a pane dragged out by its header becomes its own split)
 - [x] Focus ring on the active split; Cmd [ / ] or Ctrl Arrow moves focus; Cmd Shift Enter maximizes one split (zoom) and back
 - [x] Composer target follows focus; Cmd Enter in an unfocused split never sends there
 - [x] Swap splits, rotate layout (H ↔ V), close split
 - [x] Layout presets: 2-up, 3 columns, 2×2, main + stack, portrait stack of 3
 - [x] Save layout as a workspace per space; restore on launch (one saved layout per space; named workspaces not yet)
-- [x] Narrow split degrades gracefully: summary column folds into a sheet, side pane becomes a tab
+- [x] Narrow split degrades gracefully: summary column folds into a sheet, the panes take the chat's place while shown
 
 ### Pinned tabs, made useful
 - [x] Pinned threads show live state at a glance: progress ring, now-step, needs-you dot (already on rows; also on the overview cards)
@@ -206,7 +216,7 @@ Ranked by how much they help running many agents at once.
 - [x] **Thread forking**: fork at a message to try an alternative approach, then compare diffs and keep one (pairs with race). Fork at any message or checkpoint from the thread menu or a step row; the fork gets its own branch and a worktree seeded from the checkpoint's files; Compare shows both branch diffs side by side and keeping one settles the other. GAP: no per-message fork button in the chat yet (the chat belongs to `viz`), the fork dialog lists the messages instead.
 - [x] **Review mode**: walk all threads in `review` one after another — diff, preview, approve / request changes — like an inbox. From the sidebar, the Queue and Cmd K; J/K, Skip, Esc.
 - [x] **Scheduled and background threads**: run nightly, on a PR event, or on a cron; land in the Queue when done. One trigger per thread, owned by main (`electron/schedule/scheduler.ts`, `schedules.json`): cron with presets (nightly, weekdays, hourly) and a preview of the next three runs (`src/schedule/cron.ts`, local time, DST-aware), or a PR event (opened, review requested, CI failed; branch pattern or label) polled through gh every 2 minutes. Runs go through the same `startAgent` as the renderer (concurrency cap, profile account, limit pauses), never overlap, and missed ones run once on launch or are skipped. A finished run is a `run` Queue item (Open, Settle), a notification and an entry in the thread's history; while no window is open, run and agent events wait in an outbox for the next one. Editor in the thread menu and the new-thread composer's clock (also Run in background); clock badge on sidebar rows; Settings › Schedules. GAP: with no window open, the OS notification waits until a window opens; a run that started while windows were closed replays its agent output when one opens, so a window opened mid-run can show that run's early output after its later output; PR polling uses the profile's GitHub account but not webhooks.
-- [x] **PR status on thread rows + PR preview cards**: a sidebar row shows all its thread's PRs as overlapping Octicon discs coloured by live state, most-needs-you first (conflicts / failing checks / changes requested, then review requested, open, draft, merged, closed; `byAttention` in `src/chat/refs.ts`), at most 3 plus a "+N" disc (`src/git/PrStack.tsx`). Every PR reference (chat chips and links, the row discs, summary chips and rows, the ship bar, header badges, the new-tab page, Review, PR-review notifications) previews on hover (300ms) or keyboard focus in one card (`src/chat/RefHoverCard.tsx`): title, `owner/repo#n`, state, author and updated time, branch → base, +/− and files, checks, review, Open on GitHub; "+N" lists them all. State comes from the one batched gh GraphQL query (`refsQuery`, extended with author, branches, diff size, review decision, updated time) through the `useRefState` cache, no second fetch. GAP: a thread PR with no URL in a project with no GitHub origin shows only what the thread recorded (title, open/draft/merged)
+- [x] **PR status on thread rows + PR preview cards**: a sidebar row shows all its thread's PRs as overlapping Octicon discs coloured by live state, most-needs-you first (conflicts / failing checks / changes requested, then review requested, open, draft, merged, closed; `byAttention` in `src/chat/refs.ts`), at most 3 plus a "+N" disc (`src/git/PrStack.tsx`). Every PR reference (chat chips and links, the row discs, summary chips and rows, the ship bar, header badges, Review, PR-review notifications) previews on hover (300ms) or keyboard focus in one card (`src/chat/RefHoverCard.tsx`): title, `owner/repo#n`, state, author and updated time, branch → base, +/− and files, checks, review, Open on GitHub; "+N" lists them all. State comes from the one batched gh GraphQL query (`refsQuery`, extended with author, branches, diff size, review decision, updated time) through the `useRefState` cache, no second fetch. GAP: a thread PR with no URL in a project with no GitHub origin shows only what the thread recorded (title, open/draft/merged)
 - [ ] **Shared / team spaces**: see teammates' threads on the metro board so overlaps catch cross-person duplication too.
 - [x] **Session recording / replay** of a thread for demos and debugging. Recording (`src/replay/recorder.ts`): every store action that changes one of your threads (raw agent events, plus your messages, answers and goal edits) is appended to `replays/<thread>.jsonl` in main's userData with its wall clock and app clock, after a base line holding the thread and its queue items; runs of message deltas fold into one line, each thread caps at 8 MB (a `capped` line ends the replay there), deleting a thread deletes its recording, Settings › Data turns it off and shows the size. Replay (thread menu, ⌘K): the steps run through the store's own thread and queue slices into a scratch store (`src/replay/rebuild.ts`, snapshots every 32 steps for scrubbing) and the real chat view renders it read-only; play/pause, 1×/2×/4×/8×, skip idle gaps (pauses over 3 s play as 0.6 s), a scrubbable timeline marking your messages, tool calls, file edits, approvals and errors, and the diff at that point from the nearest checkpoint whose files were saved (`git.checkpointDiff`), else the files touched so far; Space/K, ←/→ (Shift for markers), J/L, Home/End, Esc. Export replay writes the app's own single-file page with the recording and every checkpoint diff inlined as JSON, each string passed through the profile import's secret patterns (`redactSecrets`); opened anywhere, the page renders only the replay, with no network. Demo threads replay a script built from their transcript (`src/replay/demo.ts`). GAP: a recording starts with the thread's next action, so threads from before this shipped replay from then on; a new session writes a fresh base and the replay jumps over the restart; export needs the built app (the dev server's page isn't self-contained).
 - [x] **Composer drafts**: the unsent text (skill tokens and argument slots are part of it), attachments and `@thread` / `@window` mentions are kept per thread, and the new-thread page's per profile with its model, effort, permission mode and project, across switching threads, Settings, closing the window and relaunch (`src/chat/drafts.ts`). Memory first so a switch restores at once; IndexedDB in userData behind a 400 ms debounce, attachments stored as Blobs (25 MB per draft, the rest stay in the composer only). Sending clears it; a deleted thread drops its draft; queued messages are untouched (a thread's model, effort and permissions already live on the thread)
@@ -218,7 +228,7 @@ Ranked by how much they help running many agents at once.
 
 ## 7. Chat visualizations
 
-Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```chart ````, ```` ```svg ````, ```` ```html ````, ```` ```harness-burnup ````, ```` ```harness-metro ````, ```` ```harness-diff ```` (schemas in `src/viz/fence.ts`, examples in `src/viz/fixtures.ts`).
+Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```chart ````, ```` ```svg ````, ```` ```html ````, ```` ```harness-metro ````, ```` ```harness-diff ```` (schemas in `src/viz/fence.ts`, examples in `src/viz/fixtures.ts`).
 
 - [x] Re-enable Streamdown plugins: syntax-highlighted code, KaTeX math, Mermaid diagrams, CJK (lazy-loaded; artifact stays under 16 MB)
 - [x] Charts from data in a message (recharts, already a dependency), using the thread line palette and both themes
@@ -229,7 +239,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [x] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). The `visual` pane tab kind re-renders the fence; Pop out opens it as a floating tab
 - [x] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
 - [x] Theme-aware: re-render on light / dark switch; contrast checked in both (colours come from the theme tokens; no separate contrast measurement)
-- [x] Mochi-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
+- [x] Mochi-native visuals the agent can emit: metro snippet of linked threads, diff summary card
 
 ## 8. Viewers
 
