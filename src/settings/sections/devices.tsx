@@ -2,13 +2,16 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { toast } from 'sonner';
 import { useMochiAccount } from '../../account/useMochiAccount';
 import { useConfirm } from '../../git/useConfirm';
 import { host } from '../../host';
-import type { OtherMachine, PairedDeviceInfo, RemoteStatus } from '../../host/types/remote';
+import { SCOPES, type OtherMachine, type PairedDeviceInfo, type RemoteStatus, type Scope } from '../../host/types/remote';
 import { PairingCode } from '../../remote/PairingCode';
 import { useOtherMachines } from '../../remote/useOtherMachines';
 import { useRemoteStatus } from '../../remote/useRemoteStatus';
+import { ipcMessage } from '../AgentSettings';
 import { openSettings } from '../open';
 import { CommitInput, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 
@@ -88,7 +91,7 @@ function PairedDevices({ status }: { status: RemoteStatus }) {
     if (isConfirmed) await host.remote.removeDevice(device.id);
   };
   return (
-    <SettingsGroup id="pairedDevices" title="Paired devices" footer="Devices you allowed on this computer. A new one pairs from its own Settings › Devices, and you approve it here.">
+    <SettingsGroup id="pairedDevices" title="Paired devices" footer={PAIRED_FOOTER}>
       {dialog}
       {status.pairedDevices.length === 0 && <SettingsRow label={<span className="text-muted-foreground">No paired devices</span>} />}
       {status.pairedDevices.map((device) => (
@@ -101,16 +104,43 @@ function PairedDevices({ status }: { status: RemoteStatus }) {
               Remove
             </Button>
           }
-        />
+        >
+          <ScopeToggles device={device} />
+        </SettingsRow>
       ))}
     </SettingsGroup>
   );
 }
 
+const SCOPE_LABELS = { read: 'Read', operate: 'Operate', manage: 'Manage', code: 'Code', terminal: 'Terminal' } satisfies Record<Scope, string>;
+
+const PAIRED_FOOTER =
+  'Read follows threads and the Queue. Operate answers, sends, stops, forks and hands off. Manage starts, renames, pins and settles threads, edits goals and schedules, and commits, pushes and opens PRs. Code reads files and diffs. Terminal is a shell on this computer. A change reconnects the device. A new device pairs from its own Settings › Devices, and you approve it here.';
+
+/** What the device may do here; terminal starts off, as a shell on this computer. */
+function ScopeToggles({ device }: { device: PairedDeviceInfo }) {
+  return (
+    <ToggleGroup
+      type="multiple"
+      size="sm"
+      variant="outline"
+      spacing={1}
+      value={device.scopes}
+      aria-label={`What ${device.name} may do`}
+      onValueChange={(next) => void host.remote.setDeviceScopes(device.id, SCOPES.filter((s) => next.includes(s))).catch((e: Error) => toast.error('Couldn’t change what it may do', { description: ipcMessage(e) }))}
+    >
+      {SCOPES.map((scope) => (
+        <ToggleGroupItem key={scope} value={scope}>
+          {SCOPE_LABELS[scope]}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
 function pairedDescription(device: PairedDeviceInfo, status: RemoteStatus) {
   const isConnected = status.devices.some((d) => d.id === device.id);
-  const scopes = new Intl.ListFormat('en', { type: 'unit' }).format(device.scopes);
-  return `${isConnected ? 'Connected' : `Paired ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(device.pairedAt)}`} · ${scopes}`;
+  return isConnected ? 'Connected' : `Paired ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(device.pairedAt)}`;
 }
 
 function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {

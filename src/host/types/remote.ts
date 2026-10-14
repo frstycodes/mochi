@@ -1,3 +1,4 @@
+import type { Provider } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
 /** What a paired device may do on this machine (DEVICES.md › Devices and what they can do). */
@@ -68,13 +69,31 @@ export interface RemoteStatus {
   error?: string;
 }
 
-/** The first command set (DEVICES.md › PRs 3); the rest arrives with `remote-commands`. */
+/**
+ * What a device can ask this computer to do, each run through the same store action or host call the UI uses
+ * (DEVICES.md › Devices and what they can do). `operate` steers threads; `manage` changes them and ships their work.
+ * GAP: `code` and `terminal` commands (files, diffs, terminals), rewind, side chat, settings and delete are the next PR.
+ */
 export type RemoteCommand =
+  // operate
   | { type: 'send'; threadId: string; text: string }
   | { type: 'resolve'; queueId: string; answers?: string[][] }
-  | { type: 'interrupt'; threadId: string };
+  | { type: 'interrupt'; threadId: string }
+  | { type: 'fork'; threadId: string; point: { kind: 'message'; index: number } | { kind: 'checkpoint'; n: number } }
+  | { type: 'handoff'; threadId: string; to: Provider }
+  // manage
+  | { type: 'create'; title: string; provider: Provider; /** A project ref; null for a folderless chat. */ project: string | null }
+  | { type: 'rename'; threadId: string; title: string }
+  | { type: 'edit-goal'; threadId: string; goal: string }
+  | { type: 'pin'; threadId: string; isPinned: boolean }
+  | { type: 'settle'; threadId: string; isSettled: boolean }
+  | { type: 'schedule'; threadId: string; action: 'pause' | 'resume' | 'run' | 'remove' }
+  | { type: 'commit'; threadId: string; message: string }
+  /** Visible to others: the device asks its user first, as the machine's ship bar does. */
+  | { type: 'push'; threadId: string }
+  | { type: 'open-pr'; threadId: string; title: string; body: string };
 
-export type CommandResult = { isOk: true } | { isOk: false; error: string };
+export type CommandResult = { isOk: true; /** A short outcome a device can show: a commit's sha, a PR's URL. */ detail?: string } | { isOk: false; error: string };
 
 /** A device's command as the renderer runs it. */
 export interface RemoteCommandRequest {
@@ -100,6 +119,8 @@ export interface RemoteHost {
   commandResult(id: string, result: CommandResult): Promise<void>;
   /** Forgets a paired device and ends its connections; it has to pair again. */
   removeDevice(id: string): Promise<RemoteStatus>;
+  /** What a paired device may do; its open connections end so the next one runs under these. */
+  setDeviceScopes(id: string, scopes: Scope[]): Promise<RemoteStatus>;
   onApproval(listener: (request: ApprovalRequest) => void): () => void;
   answerApproval(id: string, isAllowed: boolean): Promise<void>;
   /** Your account's other computers, through the relay. */
@@ -119,6 +140,7 @@ export const remoteMethods = {
   onCommand: 'event',
   commandResult: 'invoke',
   removeDevice: 'invoke',
+  setDeviceScopes: 'invoke',
   onApproval: 'event',
   answerApproval: 'invoke',
   otherMachines: 'invoke',

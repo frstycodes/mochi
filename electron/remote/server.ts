@@ -145,7 +145,7 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
     devices: () => [...connections].map(({ device, connectedAt }) => ({ id: device.deviceId, name: device.name, scopes: device.scopes, connectedAt })),
     attach: (raw) => void accept(raw, 'relay'),
     disconnect(deviceId) {
-      for (const { socket, device } of connections) if (device.deviceId === deviceId) socket.close(4401, 'Removed from this computer');
+      for (const { socket, device } of connections) if (device.deviceId === deviceId) socket.close(4401, 'Removed or changed on this computer');
     },
     publish(epoch, seq, action) {
       const isNewEpoch = epoch !== log.epoch;

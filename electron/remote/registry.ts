@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_SCOPES } from '../../src/host/types/remote.ts';
+import { DEFAULT_SCOPES, type Scope } from '../../src/host/types/remote.ts';
 import type { PairedDevice } from './pairing.ts';
 
 /** A computer this one paired with, to control it (DEVICES.md › multi-machine uses the list). */
@@ -49,6 +49,10 @@ export class Registry {
     const paired: PairedDevice = { ...device, scopes: DEFAULT_SCOPES, pairedAt: now };
     this.save({ ...this.stored, devices: [...this.stored.devices.filter((d) => d.id !== device.id), paired] });
     return paired;
+  }
+
+  setScopes(id: string, scopes: Scope[]) {
+    this.save({ ...this.stored, devices: this.stored.devices.map((d) => (d.id === id ? { ...d, scopes } : d)) });
   }
 
   removeDevice(id: string) {

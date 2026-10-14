@@ -19,6 +19,9 @@ export const remote: RemoteHost = {
   async removeDevice() {
     return OFF;
   },
+  async setDeviceScopes() {
+    return OFF;
+  },
   onApproval: () => () => {},
   async answerApproval() {},
   async otherMachines() {

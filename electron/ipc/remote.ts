@@ -1,5 +1,6 @@
 import type { CommandResult, RemoteHost, RemoteSettings } from '../../src/host/types/remote.ts';
-import { answerApproval, answerCommand, answerSnapshot, forgetMachine, otherMachines, pair, pushAction, remoteStatus, removeDevice, setRemote } from '../remote/index.ts';
+import { isScopes } from '../remote/protocol.ts';
+import { answerApproval, answerCommand, answerSnapshot, forgetMachine, otherMachines, pair, pushAction, remoteStatus, removeDevice, setDeviceScopes, setRemote } from '../remote/index.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 const MAX_ACTION_CHARS = 64 * 1024 * 1024;
@@ -31,6 +32,10 @@ export const remote = {
   },
   async removeDevice(_sender, id) {
     return removeDevice(string(id, 'id', 64));
+  },
+  async setDeviceScopes(_sender, id, scopes) {
+    if (!isScopes(scopes)) throw new TypeError('scopes must be a list of known scopes');
+    return setDeviceScopes(string(id, 'id', 64), [...new Set(scopes)]);
   },
   async answerApproval(_sender, id, isAllowed) {
     answerApproval(string(id, 'id', 64), boolean(isAllowed, 'isAllowed'));
