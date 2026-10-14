@@ -192,7 +192,6 @@ async function launch(session: Session) {
       options: {
         pathToClaudeCodeExecutable: install.path,
         cwd: options.cwd,
-        ...(options.additionalDirectories?.length && { additionalDirectories: options.additionalDirectories }),
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
         // The flag layer is also the Agent SDK's opt-in: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.

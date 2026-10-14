@@ -113,7 +113,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
-  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, ...extraDirs(thread), prompt, ...agentOptions(controls, provider), ...extra } }];
+  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
 }
 
 /** How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder. Undefined when it can't run. */
@@ -121,11 +121,7 @@ export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'
   const cwd = runFolder(thread);
   const provider = thread.session?.provider ?? thread.providers[0];
   if (cwd === undefined) return;
-  return { provider, spaceId: thread.spaceId, cwd, ...extraDirs(thread), workspace: startWorkspace(thread.repo), ...agentOptions(controlsOf(thread), provider) };
-}
-
-function extraDirs(thread: Thread) {
-  return thread.extraDirs?.length ? { additionalDirectories: thread.extraDirs } : {};
+  return { provider, spaceId: thread.spaceId, cwd, workspace: startWorkspace(thread.repo), ...agentOptions(controlsOf(thread), provider) };
 }
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */
