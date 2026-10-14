@@ -1,5 +1,5 @@
 import { useEffect, type Dispatch } from 'react';
-import { openTurn } from '../chat/turnChanges';
+import { mayHaveEdited } from '../chat/turnChanges';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { Thread } from '../model';
@@ -32,8 +32,8 @@ async function gather(t: Thread, dispatch: Dispatch<Action>) {
 /** One at a time: two test suites at once in one worktree fight over ports and temp files. */
 async function runChecks(t: Thread, dispatch: Dispatch<Action>) {
   const when = getPrefs().idleChecks;
-  // Only a turn that edited files can have changed a check's result; one after a plain question keeps the last results.
-  if (!t.goal || when === 'off' || (when === 'edited' && !openTurn(t.activity))) return;
+  // Only a turn that could have changed files can have changed a check's result; one after a plain question keeps the last results.
+  if (!t.goal || when === 'off' || (when === 'edited' && !mayHaveEdited(t.activity))) return;
   for (const c of t.criteria ?? []) if (c.command) await runCriterionCheck(dispatch, t, c);
 }
 

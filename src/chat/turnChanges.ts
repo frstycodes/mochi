@@ -51,6 +51,12 @@ export function openTurn(activity: ActivityEntry[]) {
   return last?.end === activity.length - 1 ? last : undefined;
 }
 
+/** Whether the open turn could have changed files: an Edit or Write, or any shell command (`sed -i`, `git commit`) the work log can't diff. */
+export function mayHaveEdited(activity: ActivityEntry[]) {
+  const start = activity.findLastIndex(isYourMessage);
+  return activity.slice(start + 1).some((e) => e.kind === 'tool' && !e.skill && !e.mcp && ['Edit', 'Write', 'Run'].includes(toolCall(e).verb));
+}
+
 /** Files of `turn` a later turn edited again: undoing `turn` puts them back to before it, so those later edits go too. */
 export function editedLater(turns: TurnChanges[], turn: TurnChanges) {
   const later = new Set(turns.filter((t) => t.start > turn.start).flatMap((t) => t.files.map((f) => f.path)));

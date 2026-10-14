@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ActivityEntry } from '../model.ts';
-import { editedLater, isTurnUndone, openTurn, turnChanges } from './turnChanges.ts';
+import { editedLater, isTurnUndone, mayHaveEdited, openTurn, turnChanges } from './turnChanges.ts';
 
 const e = (kind: ActivityEntry['kind'], who: ActivityEntry['who'], text: string, extra: Partial<ActivityEntry> = {}): ActivityEntry => ({ at: 0, who, kind, text, ...extra });
 const you = (text: string) => e('message', 'you', text);
@@ -71,4 +71,11 @@ test('undo state is the latest undo or redo logged for that turn', () => {
   assert.equal(isTurnUndone(activity, 0), true);
   assert.equal(isTurnUndone([...activity, undo(0, false)], 0), false);
   assert.equal(isTurnUndone(activity, 3), false);
+});
+
+test('a shell command in the open turn may have edited files; reads, Mochi calls and earlier turns may not', () => {
+  assert.equal(mayHaveEdited([you('add a test'), e('tool', 'claude', "Run sed -i '' 's/a/b/' sum.test.mjs")]), true, 'sed -i leaves no Edit entry');
+  assert.equal(mayHaveEdited([you('go'), edit('Edit a.ts  +1 −0')]), true);
+  assert.equal(mayHaveEdited([you('why?'), e('tool', 'claude', 'Read a.ts'), e('tool', 'claude', 'Mcp mochi: get_goal', { mcp: { server: 'mochi', tool: 'get_goal' } })]), false);
+  assert.equal(mayHaveEdited([you('go'), e('tool', 'claude', 'Run pnpm test'), you('and?'), e('message', 'claude', 'It passed.')]), false);
 });
