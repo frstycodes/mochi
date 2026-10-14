@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, ChatRound, ChevronDown, ChevronRight, Folder, FolderAdd } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -7,18 +7,36 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { host } from './host';
 import { getPrefs } from './settings/prefs';
 import { useHarness, useSpaceThreads } from './store';
+import { MetaChip } from './MetaChip';
 import { addRecentProject, projectName, projectRef, useSavedProjects } from './projects';
 
 /** Where a new thread runs: a folder this profile opened before, one opened by path, or no folder at all. `value` is a project ref (`src/projects.ts`). */
 export function ProjectPicker({ value, onChange }: { value: string | null; onChange: (project: string | null) => void }) {
+  const name = value && projectName(value);
+  return (
+    <FolderPopover value={value} onChoose={onChange}>
+      <MetaChip aria-label={`Project: ${name ?? 'No project'}`}>
+        {value ? <Folder /> : <ChatRound />}
+        <span className="truncate">{name ?? 'No project'}</span>
+        <ChevronDown data-icon="inline-end" />
+      </MetaChip>
+    </FolderPopover>
+  );
+}
+
+/**
+ * The folder list behind a chip: recent projects, then Open folder. With `exclude` it adds a folder (no "No project", those
+ * folders left out); without, it picks the thread's project and checks `value`.
+ */
+function FolderPopover({ value = null, exclude, onChoose, children }: { value?: string | null; exclude?: string[]; onChoose: (project: string | null) => void; children: ReactNode }) {
   const spaceId = useHarness().state.spaceId;
-  const projects = useRecentProjects();
+  const recent = useRecentProjects();
+  const projects = exclude ? recent.filter((p) => !exclude.includes(p)) : recent;
   const [isOpen, setOpen] = useState(false);
   const [isBrowsing, setBrowsing] = useState(false);
-  const name = value && projectName(value);
 
   const choose = (project: string | null) => {
-    onChange(project);
+    onChoose(project);
     setOpen(false);
     setBrowsing(false);
   };
@@ -35,15 +53,9 @@ export function ProjectPicker({ value, onChange }: { value: string | null; onCha
         if (!o) setBrowsing(false);
       }}
     >
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="xs" className="max-w-48 text-subtle-foreground hover:text-foreground" aria-label={`Project: ${name ?? 'No project'}`}>
-          {value ? <Folder /> : <ChatRound />}
-          <span className="truncate">{name ?? 'No project'}</span>
-          <ChevronDown data-icon="inline-end" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
-        {isBrowsing ? <FolderBrowser onBack={() => setBrowsing(false)} onChoose={openFolder} /> : <ProjectList projects={projects} value={value} onChoose={choose} onBrowse={() => setBrowsing(true)} />}
+        {isBrowsing ? <FolderBrowser onBack={() => setBrowsing(false)} onChoose={openFolder} /> : <ProjectList projects={projects} value={value} isAdding={!!exclude} onChoose={choose} onBrowse={() => setBrowsing(true)} />}
       </PopoverContent>
     </Popover>
   );
@@ -57,7 +69,7 @@ export function useRecentProjects() {
   return [...new Set([...saved, ...fromThreads])];
 }
 
-function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string[]; value: string | null; onChoose: (project: string | null) => void; onBrowse: () => void }) {
+function ProjectList({ projects, value, isAdding, onChoose, onBrowse }: { projects: string[]; value: string | null; isAdding: boolean; onChoose: (project: string | null) => void; onBrowse: () => void }) {
   return (
     <Command>
       <CommandInput placeholder="Search projects" />
@@ -65,7 +77,7 @@ function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string
         <CommandEmpty>No project matches.</CommandEmpty>
         {projects.length > 0 && (
           <>
-            <CommandGroup heading="Projects">
+            <CommandGroup heading={isAdding ? 'Add a folder' : 'Projects'}>
               {projects.map((p) => (
                 <CommandItem key={p} value={p} data-checked={p === value} onSelect={() => onChoose(p)}>
                   <Folder />
@@ -80,13 +92,15 @@ function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string
           </>
         )}
         <CommandGroup>
-          <CommandItem value="No project" keywords={['chat', 'folder']} data-checked={value === null} onSelect={() => onChoose(null)}>
-            <ChatRound />
-            <span className="flex min-w-0 flex-col">
-              No project
-              <span className="type-caption text-subtle-foreground">Chat without a folder, branch or files</span>
-            </span>
-          </CommandItem>
+          {!isAdding && (
+            <CommandItem value="No project" keywords={['chat', 'folder']} data-checked={value === null} onSelect={() => onChoose(null)}>
+              <ChatRound />
+              <span className="flex min-w-0 flex-col">
+                No project
+                <span className="type-caption text-subtle-foreground">Chat without a folder, branch or files</span>
+              </span>
+            </CommandItem>
+          )}
           <CommandItem value="Open folder" keywords={['add', 'project', 'path']} onSelect={onBrowse}>
             <FolderAdd />
             Open folder

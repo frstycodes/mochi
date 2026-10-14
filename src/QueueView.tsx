@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, BranchDown, BranchUp, CheckCircle, Clock, MessageQuestion, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { toast } from 'sonner';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { BoundShortcut } from './Shortcut';
 import {
   Questionnaire,
   QuestionnaireActions,
@@ -24,6 +24,7 @@ import {
   QuestionnaireTitle,
 } from '@/components/ui/questionnaire';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { GitPullRequestIcon } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import { answerText, isMochiCard, type QueueItem, type QueueKind, type Thread } from './model';
 import { duration } from './progress';
@@ -31,19 +32,26 @@ import { useReviewEntry } from './review/useReviewMode';
 import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode } from './store';
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
+import { useSendCiLog } from './notify/useSendCiLog';
+import { DeviceIcon } from './remote/DeviceIcon';
+import { remoteDecisions } from './remote/mirror';
+import { RemoteScope, useMachines } from './remote/useMachines';
+import { isCommand } from './keymap';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
   question: { icon: MessageQuestion, label: 'Question' },
-  review: { icon: BranchUp, label: 'Review' },
-  ci: { icon: BranchUp, label: 'CI failed' },
-  overlap: { icon: BranchDown, label: 'Overlap' },
+  review: { icon: ClipboardTick, label: 'Ready for review' },
+  ci: { icon: GitPullRequestIcon, label: 'CI failed' },
+  overlap: { icon: Hierarchy3, label: 'Overlap' },
+  collision: { icon: Copy3, label: 'Same files' },
   run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Setting2, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
 
 export function QueueView() {
   const items = useSpaceQueue();
+  const remote = useMachines().machines.flatMap(({ machine, state }) => (state ? [{ machine, state, items: remoteDecisions(state) }] : [])).filter((m) => m.items.length > 0);
   const isWorking = useSpaceThreads().some((t) => t.status === 'running' && (!t.live || t.live.isWorking));
   const { state } = useHarness();
   const review = useReviewEntry(state.spaceId);
@@ -59,11 +67,11 @@ export function QueueView() {
             <h1 className="type-heading">Queue</h1>
             <p className="type-meta text-muted-foreground">Decisions your agents are waiting on, most blocking first.</p>
           </div>
-          <KbdGroup className="hidden type-caption text-subtle-foreground md:flex">
-            <Kbd>J</Kbd>
-            <Kbd>K</Kbd>
+          <span className="hidden items-center gap-1 type-caption text-subtle-foreground md:flex">
+            <BoundShortcut command="list-next" />
+            <BoundShortcut command="list-previous" />
             move
-          </KbdGroup>
+          </span>
           {review.count > 0 && (
             <Button variant="outline" size="sm" onClick={review.open}>
               <TaskSquare data-icon="inline-start" />
@@ -71,7 +79,7 @@ export function QueueView() {
             </Button>
           )}
         </div>
-        {items.length === 0 && <EmptyQueue isWorking={isWorking} />}
+        {items.length === 0 && remote.length === 0 && <EmptyQueue isWorking={isWorking} />}
         <ol className="flex flex-col gap-3">
           <AnimatePresence initial={false}>
             {items.map((item, i) => (
@@ -89,6 +97,24 @@ export function QueueView() {
             ))}
           </AnimatePresence>
         </ol>
+        {/* Another computer's agents wait on you too; answering sends it there, and the card leaves when that computer says so. */}
+        {remote.map(({ machine, state, items: waiting }) => (
+          <section key={machine.id} aria-label={`On ${machine.name}`} className="flex flex-col gap-3">
+            <h2 className="flex items-center gap-1.5 type-meta font-medium text-muted-foreground">
+              <DeviceIcon kind={machine.kind} className="size-3.5" />
+              On {machine.name}
+            </h2>
+            <RemoteScope machine={machine} state={state}>
+              <ol className="flex flex-col gap-3">
+                {waiting.map((item) => (
+                  <li key={item.id}>
+                    <QueueDecision item={item} showThread />
+                  </li>
+                ))}
+              </ol>
+            </RemoteScope>
+          </section>
+        ))}
       </div>
     </ScrollArea>
   );
@@ -97,9 +123,8 @@ export function QueueView() {
 function useListKeys(count: number, index: number, setSelected: (i: number) => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLElement && e.target.closest('input, textarea')) return;
-      if (e.key === 'j') setSelected(Math.min(count - 1, index + 1));
-      if (e.key === 'k') setSelected(Math.max(0, index - 1));
+      if (isCommand(e, 'list-next')) setSelected(Math.min(count - 1, index + 1));
+      if (isCommand(e, 'list-previous')) setSelected(Math.max(0, index - 1));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -134,18 +159,29 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
       <CardContent className="flex flex-col gap-3">
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
         {isMochiCard(item) && <ShowCard item={item} />}
-        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} />}
+        {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} canOpenThread={!!showThread} />}
         {item.kind === 'question' && <QuestionChoices item={item} />}
         {item.kind === 'overlap' && <OverlapChoices item={item} />}
+        {!!item.collision && <SharedFiles files={item.collision.files} />}
       </CardContent>
       {item.kind === 'review' && (
         <CardFooter className="gap-2">
-          <ReviewActions item={item} />
+          <ReviewActions item={item} canOpenThread={!!showThread} />
+        </CardFooter>
+      )}
+      {!!item.collision && (
+        <CardFooter className="gap-2">
+          <CollisionActions item={item} otherId={item.collision.otherThreadId} />
         </CardFooter>
       )}
       {item.kind === 'run' && (
         <CardFooter className="gap-2">
           <RunActions item={item} />
+        </CardFooter>
+      )}
+      {item.kind === 'ci' && (
+        <CardFooter className="gap-2">
+          <CiActions item={item} />
         </CardFooter>
       )}
     </Card>
@@ -171,7 +207,8 @@ export function useUndoable() {
   };
 }
 
-function ApprovalRequest({ item }: { item: QueueItem }) {
+/** `canOpenThread`: false inside the thread itself (the composer's tray), where Open thread would go nowhere. */
+function ApprovalRequest({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
   return (
@@ -185,9 +222,11 @@ function ApprovalRequest({ item }: { item: QueueItem }) {
       )}
       <ConfirmationRequest>
         <ConfirmationActions>
-          <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
-            Open thread
-          </ConfirmationAction>
+          {canOpenThread && (
+            <ConfirmationAction variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+              Open thread
+            </ConfirmationAction>
+          )}
           <ConfirmationAction onClick={() => withUndo('Approved', () => dispatch({ type: 'answer', queueId: item.id }))}>Approve and run</ConfirmationAction>
         </ConfirmationActions>
       </ConfirmationRequest>
@@ -208,17 +247,42 @@ function ShowCard({ item }: { item: QueueItem }) {
   );
 }
 
-function ReviewActions({ item }: { item: QueueItem }) {
+function ReviewActions({ item, canOpenThread }: { item: QueueItem; canOpenThread: boolean }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
   return (
     <>
-      <Button onClick={() => withUndo('Merged', () => dispatch({ type: 'answer', queueId: item.id }))}>
+      <Button onClick={() => withUndo('Marked done', () => dispatch({ type: 'answer', queueId: item.id }))}>
         <CheckCircle data-icon="inline-start" />
-        Approve and merge
+        Mark done
       </Button>
-      <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
-        Open thread
+      {canOpenThread && (
+        <Button variant="outline" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>
+          Open thread
+        </Button>
+      )}
+    </>
+  );
+}
+
+function SharedFiles({ files }: { files: string[] }) {
+  return (
+    <p className="type-caption text-subtle-foreground">
+      Both edited <code className="rounded-sm bg-muted px-1 font-mono text-muted-foreground">{files.join(', ')}</code>
+    </p>
+  );
+}
+
+/** Never pauses an agent: open the other thread to coordinate, or keep both going. */
+function CollisionActions({ item, otherId }: { item: QueueItem; otherId: string }) {
+  const { state, dispatch } = useHarness();
+  const withUndo = useUndoable();
+  const other = state.threads.find((t) => t.id === otherId);
+  return (
+    <>
+      {!!other && <Button onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: other.id } })}>Open "{other.title}"</Button>}
+      <Button variant="outline" onClick={() => withUndo('Kept both', () => dispatch({ type: 'answer', queueId: item.id }))}>
+        Keep both
       </Button>
     </>
   );
@@ -230,6 +294,43 @@ function RunActions({ item }: { item: QueueItem }) {
   return (
     <>
       <Button onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: item.threadId } })}>Open thread</Button>
+      <Button variant="outline" onClick={() => withUndo('Settled', () => dispatch({ type: 'answer', queueId: item.id }))}>
+        <Archive data-icon="inline-start" />
+        Settle
+      </Button>
+    </>
+  );
+}
+
+function CiActions({ item }: { item: QueueItem }) {
+  const sendLog = useSendCiLog(item);
+  const withUndo = useUndoable();
+  const { dispatch } = useHarness();
+  const [isSending, setSending] = useState(false);
+  const send = async () => {
+    setSending(true);
+    try {
+      await sendLog();
+    } catch (error) {
+      toast.error("Couldn't fetch the failing log", { description: (error as Error).message });
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <>
+      {!!item.ci?.check?.link && (
+        <Button onClick={send} disabled={isSending}>
+          <Send2 data-icon="inline-start" />
+          {isSending ? 'Fetching log…' : 'Send failing log to agent'}
+        </Button>
+      )}
+      {!!item.ci && (
+        <Button variant="outline" onClick={() => window.open(item.ci!.check?.link ?? item.ci!.url, '_blank', 'noopener')}>
+          <ArrowUpRight data-icon="inline-start" />
+          Open on GitHub
+        </Button>
+      )}
       <Button variant="outline" onClick={() => withUndo('Settled', () => dispatch({ type: 'answer', queueId: item.id }))}>
         <Archive data-icon="inline-start" />
         Settle

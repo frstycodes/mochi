@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Add, AlertTriangle, Lock, Search, Send, SidebarRight, TerminalSquare, X } from 'reicon-react';
+import { Add, AlertTriangle, Lock, Search, Send, TerminalSquare, X } from 'reicon-react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
@@ -9,11 +9,12 @@ import { threadCwd } from '../host/cwd';
 import type { Thread } from '../model';
 import { AskInSideChat } from '../sidechat/AskInSideChat';
 import { IconAction } from '../terminal/IconAction';
-import { addShell, closeSession, showSession, toggleSplit, type TerminalSession } from '../terminal/sessions';
+import { addShell, closeSession, showSession, type TerminalSession } from '../terminal/sessions';
 import { useTerminals } from '../terminal/useTerminals';
+import { PaneActions, PaneTitle } from './PaneHeader';
 import { PlannedTab } from './PlannedTab';
 import type { PaneTabProps } from './tabs';
-import { isMod } from '../keys';
+import { isCommand } from '../keymap';
 
 export function TerminalTab({ thread, tab }: PaneTabProps) {
   const cwd = threadCwd(thread);
@@ -26,38 +27,41 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
   const [isSearching, setIsSearching] = useState(false);
   if (!group) return null;
   const focused = group.sessions.find((s) => s.id === group.focused);
-  const visible = group.visible.flatMap((id) => group.sessions.filter((s) => s.id === id));
-  const isSplit = visible.length > 1;
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!isMod(e) || e.key.toLowerCase() !== 'f') return;
+    if (!isCommand(e, 'find')) return;
     e.preventDefault();
     setIsSearching(true);
   };
 
   return (
-    <div className="@container flex h-full flex-col gap-2 p-2" onKeyDown={onKeyDown}>
-      <div className="flex items-center gap-1">
-        <div role="tablist" aria-label="Terminals" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-          {group.sessions.map((s) => (
-            <Button
-              key={s.id}
-              role="tab"
-              aria-selected={s.id === group.focused}
-              variant="ghost"
-              size="sm"
-              onClick={() => showSession(key, s.id)}
-              className="text-muted-foreground aria-selected:bg-accent aria-selected:text-foreground"
-            >
-              {s.kind === 'agent' && <Lock aria-hidden />}
-              {s.title}
-              {!!s.failure && <AlertTriangle className="text-destructive" aria-label="Last command failed" />}
-            </Button>
-          ))}
-          <IconAction aria-label="New terminal" onClick={() => addShell(key, context)}>
+    <div className="@container flex h-full flex-col gap-2 px-2 pb-2" onKeyDown={onKeyDown}>
+      <PaneTitle>
+        <div role="tablist" aria-label="Terminals" className="-ml-1.5 flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          {group.sessions.map((s) => {
+            const isSelected = s.id === group.focused;
+            return (
+              // The tab and its close sit in one chip; the agent's read-only terminal has no close.
+              <span key={s.id} className={cn('group/tab flex shrink-0 items-center rounded-md text-muted-foreground hover:bg-accent/60', isSelected && 'bg-accent text-foreground hover:bg-accent')}>
+                <Button role="tab" aria-selected={isSelected} variant="ghost" size="sm" onClick={() => showSession(key, s.id)} className={cn('hover:bg-transparent', s.kind === 'shell' && 'pr-1')}>
+                  {s.kind !== 'shell' && <Lock aria-hidden />}
+                  {s.title}
+                  {!!s.failure && <AlertTriangle className="text-destructive" aria-label="Last command failed" />}
+                </Button>
+                {s.kind === 'shell' && (
+                  <IconAction aria-label={`Close ${s.title}`} onClick={() => closeSession(key, s.id)} className={cn('mr-0.5 size-5 opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100', isSelected && 'opacity-100')}>
+                    <X />
+                  </IconAction>
+                )}
+              </span>
+            );
+          })}
+          <IconAction aria-label="New terminal" className="text-muted-foreground" onClick={() => addShell(key, context)}>
             <Add />
           </IconAction>
         </div>
+      </PaneTitle>
+      <PaneActions>
         {!!focused?.selection && (
           <Button variant="secondary" size="sm" onClick={() => sendSelection(focused)}>
             <Send aria-hidden />
@@ -68,16 +72,10 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
         <IconAction aria-label="Search output" aria-keyshortcuts="Meta+F" onClick={() => setIsSearching((v) => !v)}>
           <Search />
         </IconAction>
-        <IconAction aria-label={isSplit ? 'Unsplit' : 'Split terminal'} aria-pressed={isSplit} onClick={() => toggleSplit(key)}>
-          <SidebarRight />
-        </IconAction>
-        {focused?.kind === 'shell' && (
-          <IconAction aria-label={`Close ${focused.title}`} onClick={() => closeSession(key, focused.id)}>
-            <X />
-          </IconAction>
-        )}
-      </div>
+      </PaneActions>
       {isSearching && !!focused && <SearchBar session={focused} onClose={() => setIsSearching(false)} />}
+      {!!focused && <TerminalSurface key={focused.id} session={focused} />}
+      {/* A failed command reads under the output it came from, where your eye already is. */}
       {!!focused?.failure && (
         <Alert variant="destructive">
           <AlertTriangle />
@@ -90,17 +88,12 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
           </AlertAction>
         </Alert>
       )}
-      <div className={cn('grid min-h-0 flex-1 grid-cols-1 gap-2', isSplit && 'grid-rows-2 @xl:grid-cols-2 @xl:grid-rows-1')}>
-        {visible.map((s) => (
-          <TerminalSurface key={s.id} session={s} isFocused={s.id === group.focused} isSplit={isSplit} onFocus={() => showSession(key, s.id)} />
-        ))}
-      </div>
       {!host.isDesktop && <p className="px-1 type-caption text-subtle-foreground">Web preview: a recorded session. The desktop app runs a real shell here.</p>}
     </div>
   );
 }
 
-function TerminalSurface({ session, isFocused, isSplit, onFocus }: { session: TerminalSession; isFocused: boolean; isSplit: boolean; onFocus: () => void }) {
+function TerminalSurface({ session }: { session: TerminalSession }) {
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const box = boxRef.current!;
@@ -115,16 +108,8 @@ function TerminalSurface({ session, isFocused, isSplit, onFocus }: { session: Te
       session.element.remove();
     };
   }, [session]);
-  useEffect(() => {
-    if (isFocused) session.term.focus();
-  }, [session, isFocused]);
-  return (
-    <div
-      ref={boxRef}
-      onPointerDown={onFocus}
-      className={cn('min-h-0 min-w-0 overflow-hidden rounded-xl bg-card ring-1 ring-border', isSplit && isFocused && 'ring-ring/50')}
-    />
-  );
+  useEffect(() => session.term.focus(), [session]);
+  return <div ref={boxRef} className="min-h-0 min-w-0 flex-1 overflow-hidden" />;
 }
 
 function SearchBar({ session, onClose }: { session: TerminalSession; onClose: () => void }) {

@@ -20,13 +20,15 @@ const listeners = new Set<() => void>();
  * "is up" toast still fires while the user watches the terminal.
  * GAP: one lsof per watched thread every 3s; move to a single main-process poller pushing events if many threads get watched.
  */
-export function usePorts(threadId: string, cwd: string, openPreview: (port: number) => void) {
+export function usePorts(threadId: string, cwd: string | null, openPreview: (port: number) => void) {
   useEffect(() => {
+    // A folderless chat has no processes of its own to list.
+    if (!cwd) return;
     const watcher = watchers.get(threadId);
     if (watcher) watcher.openPreview = openPreview;
     else startWatcher(threadId, cwd, openPreview);
   }, [threadId, cwd, openPreview]);
-  const watcher = useSyncExternalStore(subscribe, () => watchers.get(threadId));
+  const watcher = useSyncExternalStore(subscribe, () => (cwd ? watchers.get(threadId) : undefined));
   return { ports: watcher?.ports, error: watcher?.error };
 }
 

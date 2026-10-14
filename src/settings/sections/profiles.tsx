@@ -11,15 +11,16 @@ import { formatGithubAccount, GITHUB_COM } from '../../git/github';
 import { gitError } from '../../git/useGit';
 import type { GhAccount } from '../../host/types/git';
 import { host } from '../../host';
-import { SPACE_ICON_NAMES, type Space, type SpaceIconName } from '../../model';
+import { keyName } from '../../keys';
+import { SPACE_ICON_NAMES, type Provider, type Space, type SpaceIconName } from '../../model';
 import { addProfile, getProfiles, MAX_PROFILES, removeProfile, updateProfile, useProfiles } from '../../profiles';
 import { useHarness } from '../../store';
 import { SPACE_ICONS, SpaceIcon } from '../../ui';
-import { linkedAccountId } from '../accounts';
 import { AgentConfigRows } from '../ProfileAgentConfig';
 import { useAgentSettings } from '../AgentSettings';
-import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { CommitInput, DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
+import { HARNESS_IDS } from '../harnesses';
+import { CatalogRow } from '../CatalogRow';
+import { DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
 
 /** One group per profile: what it's called, how it looks in the sidebar, and what it signs in with. */
 export function ProfilesSection() {
@@ -51,14 +52,10 @@ function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast
         </span>
       }
     >
-      <SettingsRow
-        id={`${id}-name`}
-        label="Name"
-        control={<CommitInput id={settingControlId(`${id}-name`)} value={profile.name} onCommit={(name) => name && updateProfile(id, { name })} />}
-      />
-      <SettingsRow id={`${id}-icon`} label="Icon" control={<IconPicker profile={profile} />} />
+      <CatalogRow settingKey="profile.name" profile={profile} />
+      <CatalogRow settingKey="profile.icon" profile={profile} />
       {host.isDesktop && <GitHubAccountRow profile={profile} gh={gh} />}
-      {host.isDesktop && <AccountRows profile={profile} />}
+      {host.isDesktop && HARNESS_IDS.map((provider) => <CatalogRow key={provider} settingKey={`profile.${provider}Account`} profile={profile} />)}
       <AgentConfigRows profile={profile} />
       {host.isDesktop && <ClearBrowsingRow profile={profile} confirm={confirm} />}
       <RemoveProfileRow profile={profile} isLast={isLast} />
@@ -69,15 +66,15 @@ function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast
 type GhAccountsState = { accounts?: GhAccount[]; error?: string };
 
 /** gh's logins, read when the page opens and again when the window regains focus (after a `gh auth login` in a terminal). */
-function useGhAccounts(): GhAccountsState {
+function useGhAccounts(isNeeded = true): GhAccountsState {
   const [state, setState] = useState<GhAccountsState>({});
   useEffect(() => {
-    if (!host.isDesktop) return;
+    if (!host.isDesktop || !isNeeded) return;
     const load = () => host.git.ghAccounts().then((accounts) => setState({ accounts }), (error: Error) => setState({ error: gitError(error) }));
     load();
     addEventListener('focus', load);
     return () => removeEventListener('focus', load);
-  }, []);
+  }, [isNeeded]);
   return state;
 }
 
@@ -86,14 +83,7 @@ const ACTIVE = 'gh-active';
 
 function GitHubAccountRow({ profile, gh }: { profile: Space; gh: GhAccountsState }) {
   const rowId = `${profile.id}-github`;
-  const working = gh.accounts?.filter((a) => a.isValid) ?? [];
-  const active = gh.accounts?.find((a) => a.isActive && a.host === GITHUB_COM);
-  const isMissing = !!profile.github && !!gh.accounts && !working.some((a) => formatGithubAccount(a) === profile.github);
-  const options = [
-    { value: ACTIVE, label: active ? `Active account (${active.login})` : 'Active account' },
-    ...working.map((a) => ({ value: formatGithubAccount(a), label: a.host === GITHUB_COM ? a.login : `${a.login} (${a.host})` })),
-    ...(isMissing ? [{ value: profile.github, label: `${profile.github} (signed out)` }] : []),
-  ];
+  const isMissing = !!profile.github && !!gh.accounts && !gh.accounts.some((a) => a.isValid && formatGithubAccount(a) === profile.github);
   const description = gh.error
     ? `Couldn't ask gh for its logins: ${gh.error}`
     : isMissing
@@ -104,24 +94,39 @@ function GitHubAccountRow({ profile, gh }: { profile: Space; gh: GhAccountsState
       id={rowId}
       label="GitHub account"
       description={<span className={cn(isMissing && 'text-warning')}>{description}</span>}
-      control={<SettingsSelect id={rowId} value={profile.github || ACTIVE} options={options} onChange={(v) => updateProfile(profile.id, { github: v === ACTIVE ? '' : v })} disabled={!gh.accounts} className="w-56" />}
+      control={<GitHubAccountSelect id={rowId} value={profile.github} gh={gh} onChange={(github) => updateProfile(profile.id, { github })} />}
     />
   );
+}
+
+/** gh's working logins plus "Active account" (stored as ''); pass `gh` when the caller already reads them. */
+export function GitHubAccountSelect({ id, value, gh: given, onChange }: { id: string; value: string; gh?: GhAccountsState; onChange: (github: string) => void }) {
+  const own = useGhAccounts(!given);
+  const gh = given ?? own;
+  const working = gh.accounts?.filter((a) => a.isValid) ?? [];
+  const active = gh.accounts?.find((a) => a.isActive && a.host === GITHUB_COM);
+  const isMissing = !!value && !!gh.accounts && !working.some((a) => formatGithubAccount(a) === value);
+  const options = [
+    { value: ACTIVE, label: active ? `Active account (${active.login})` : 'Active account' },
+    ...working.map((a) => ({ value: formatGithubAccount(a), label: a.host === GITHUB_COM ? a.login : `${a.login} (${a.host})` })),
+    ...(isMissing ? [{ value, label: `${value} (signed out)` }] : []),
+  ];
+  return <SettingsSelect id={id} value={value || ACTIVE} options={options} onChange={(v) => onChange(v === ACTIVE ? '' : v)} disabled={!gh.accounts} className="w-56" />;
 }
 
 const ICON_LABELS = { work: 'Briefcase', home: 'Home', layers: 'Layers', code: 'Code', book: 'Book', rocket: 'Rocket', coffee: 'Coffee', star: 'Star' } satisfies Record<SpaceIconName, string>;
 
 /** Profiles are told apart by icon, not colour, so each icon is one tap away. */
-function IconPicker({ profile }: { profile: Space }) {
+export function IconPicker({ id, value, onChange }: { id: string; value: string; onChange: (icon: string) => void }) {
   return (
     <ToggleGroup
-      id={settingControlId(`${profile.id}-icon`)}
+      id={id}
       type="single"
       size="sm"
       variant="outline"
       spacing={1}
-      value={profile.icon}
-      onValueChange={(icon) => icon && updateProfile(profile.id, { icon: icon as SpaceIconName })}
+      value={value}
+      onValueChange={(icon) => icon && onChange(icon)}
       className="flex-wrap"
     >
       {SPACE_ICON_NAMES.map((name) => {
@@ -144,28 +149,11 @@ function IconPicker({ profile }: { profile: Space }) {
   );
 }
 
-function AccountRows({ profile }: { profile: Space }) {
-  const { accounts, linkAccount } = useAgentSettings();
-  return HARNESS_IDS.map((provider) => {
-    const rowId = `${profile.id}-${provider}Account`;
-    const own = accounts?.accounts.filter((a) => a.provider === provider) ?? [];
-    return (
-      <SettingsRow
-        key={provider}
-        id={rowId}
-        label={`${HARNESSES[provider].name} account`}
-        control={
-          <SettingsSelect
-            id={rowId}
-            value={linkedAccountId(accounts?.links ?? {}, profile.id, provider)}
-            options={own.map((a) => ({ value: a.id, label: a.name }))}
-            onChange={(accountId) => void linkAccount(profile.id, provider, accountId)}
-            disabled={!accounts}
-          />
-        }
-      />
-    );
-  });
+/** The harness's accounts; one serves several profiles. */
+export function AccountSelect({ id, provider, value, onChange }: { id: string; provider: Provider; value: string; onChange: (accountId: string) => void }) {
+  const { accounts } = useAgentSettings();
+  const own = accounts?.accounts.filter((a) => a.provider === provider) ?? [];
+  return <SettingsSelect id={id} value={value} options={own.map((a) => ({ value: a.id, label: a.name }))} onChange={onChange} disabled={!accounts} />;
 }
 
 function ClearBrowsingRow({ profile, confirm }: { profile: Space; confirm: ReturnType<typeof useConfirm>['confirm'] }) {
@@ -231,7 +219,7 @@ function AddProfileGroup({ isFull }: { isFull: boolean }) {
     toast(`${profile.name} added`, { action: { label: 'Open', onClick: () => dispatch({ type: 'space', id: profile.id }) } });
   };
   return (
-    <SettingsGroup id="addProfile" footer={isFull ? `Mochi holds up to ${MAX_PROFILES} profiles, one per ⌥ digit.` : 'A new profile starts empty, on the default accounts, with a fresh browser session.'}>
+    <SettingsGroup id="addProfile" footer={isFull ? `Mochi holds up to ${MAX_PROFILES} profiles, one per ${keyName('nav')} + number shortcut.` : 'A new profile starts empty, on the default accounts, with a fresh browser session.'}>
       {name === null ? (
         <SettingsRow
           label={

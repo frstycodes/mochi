@@ -3,13 +3,15 @@ import { toast } from 'sonner';
 import { pinnedThreads, togglePin } from '../reorder';
 import { useHarness, type State } from '../store';
 import { ARROW_SIDE, findLeaf, neighbourInDirection, type Rect } from './tree';
-import { isMod, isNav } from '../keys';
+import { commandOf, pinnedCommand, type CommandId } from '../keymap';
 
-/**
- * Split and pin shortcuts. mod [ / ] and nav arrows move focus, mod Shift Enter zooms, mod \ splits,
- * mod 1–9 jumps to pinned N, mod alt 1–9 opens it in a new split, mod Shift P pins or unpins the focused thread.
- * Digits use `e.code`: Option turns `e.key` into symbols on macOS.
- */
+const FOCUS = { 'split-focus-left': 'ArrowLeft', 'split-focus-right': 'ArrowRight', 'split-focus-up': 'ArrowUp', 'split-focus-down': 'ArrowDown' } as const satisfies Partial<Record<CommandId, keyof typeof ARROW_SIDE>>;
+
+const PINNED = [1, 2, 3, 4, 5].flatMap((n) => [pinnedCommand(n), pinnedCommand(n, true)]);
+
+const COMMANDS = [...(Object.keys(FOCUS) as (keyof typeof FOCUS)[]), 'split-focus-previous', 'split-focus-next', 'layout-zoom', 'layout-split', 'thread-pin', ...PINNED] as const satisfies CommandId[];
+
+/** Split and pin commands (`src/keymap.ts`): move focus between splits, zoom, split, pin the focused thread, jump to pinned N here or in a new split. */
 export function useLayoutKeys() {
   const { state, dispatch } = useHarness();
   const latest = useRef(state);
@@ -18,40 +20,40 @@ export function useLayoutKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
+      const command = commandOf(e, COMMANDS);
+      if (!command) return;
       const s = latest.current;
       const layout = s.layouts[s.spaceId];
       const handled = () => e.preventDefault();
 
-      if (isNav(e) && e.key in ARROW_SIDE) {
-        const to = neighbourInDirection(leafRects(), layout.focusId, ARROW_SIDE[e.key as keyof typeof ARROW_SIDE]);
+      if (command in FOCUS) {
+        const to = neighbourInDirection(leafRects(), layout.focusId, ARROW_SIDE[FOCUS[command as keyof typeof FOCUS]]);
         if (!to) return;
         handled();
         return dispatch({ type: 'layout-focus', leafId: to });
       }
-      if (!isMod(e)) return;
-      if (!e.shiftKey && !e.altKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+      if (command === 'split-focus-previous' || command === 'split-focus-next') {
         handled();
-        return dispatch({ type: 'layout-focus-step', step: e.code === 'BracketLeft' ? -1 : 1 });
+        return dispatch({ type: 'layout-focus-step', step: command === 'split-focus-previous' ? -1 : 1 });
       }
-      if (e.shiftKey && e.key === 'Enter') {
+      if (command === 'layout-zoom') {
         handled();
         return dispatch({ type: 'layout-zoom' });
       }
-      if (!e.shiftKey && e.code === 'Backslash') {
+      if (command === 'layout-split') {
         handled();
         return dispatch({ type: 'layout-split', view: { kind: 'new' } });
       }
-      if (e.shiftKey && e.code === 'KeyP') {
+      if (command === 'thread-pin') {
         handled();
         return pinFocused(s, dispatch);
       }
-      const digit = /^Digit([1-9])$/.exec(e.code);
-      if (!digit || e.shiftKey) return;
-      const thread = pinnedThreads(s.threads, s.spaceId)[Number(digit[1]) - 1];
+      const index = PINNED.indexOf(command);
+      const thread = pinnedThreads(s.threads, s.spaceId)[Math.floor(index / 2)];
       if (!thread) return;
       handled();
       const view = { kind: 'thread', id: thread.id } as const;
-      dispatch(e.altKey ? { type: 'layout-split', view } : { type: 'go', view });
+      dispatch(index % 2 ? { type: 'layout-split', view } : { type: 'go', view });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

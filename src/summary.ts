@@ -1,14 +1,24 @@
 import type { ActivityEntry } from './model.ts';
+import { isMochiTarget } from './chat/mochiCalls.ts';
+import { isSendTarget } from './chat/threadMessages.ts';
 
-export type ToolVerb = 'Read' | 'Edit' | 'Write' | 'Run' | 'Browser' | 'Search' | 'Fetch';
+export type ToolVerb = 'Read' | 'Edit' | 'Write' | 'Run' | 'Browser' | 'Search' | 'Fetch' | 'Skill' | 'Mcp';
 
 export interface ThreadSummary {
-  tools: { verb: ToolVerb; count: number }[];
+  /** Built-in tools by verb; skills and MCP calls are counted in `skills` and `servers` instead. */
+  tools: { verb: CountedVerb; count: number }[];
+  /** Every tool call, MCP calls included. */
   toolTotal: number;
   added: number;
   removed: number;
   files: FileChange[];
+  /** Most recently used first; `lastAt` is the app clock's minute. */
+  skills: { name: string; uses: number; lastAt: number }[];
+  /** MCP calls by server, most called first. */
+  servers: { server: string; calls: number; tools: string[] }[];
 }
+
+export type CountedVerb = Exclude<ToolVerb, 'Skill' | 'Mcp'>;
 
 export interface FileChange {
   path: string;
@@ -16,7 +26,8 @@ export interface FileChange {
   removed: number;
 }
 
-const VERBS = ['Read', 'Edit', 'Write', 'Run', 'Browser', 'Search', 'Fetch'] satisfies ToolVerb[];
+const COUNTED = ['Read', 'Edit', 'Write', 'Run', 'Browser', 'Search', 'Fetch'] satisfies CountedVerb[];
+const VERBS = [...COUNTED, 'Skill', 'Mcp'] satisfies ToolVerb[];
 
 export function toolVerb(text: string): ToolVerb {
   const first = text.split(' ')[0];
@@ -38,15 +49,38 @@ export function parseTool(text: string): ToolCall {
   return { verb, target: rest.slice(0, diff.index), added: Number(diff[1]), removed: Number(diff[2]) };
 }
 
+/** A logged tool call, its diff stats read from the edit's patch when the agent sent one. */
+export function toolCall(entry: Pick<ActivityEntry, 'text' | 'patch'>): ToolCall {
+  const call = parseTool(entry.text);
+  if (!entry.patch) return call;
+  const lines = entry.patch.split('\n').filter((l) => !l.startsWith('+++') && !l.startsWith('---'));
+  return { ...call, added: lines.filter((l) => l.startsWith('+')).length, removed: lines.filter((l) => l.startsWith('-')).length };
+}
+
 export function summarize(activity: ActivityEntry[]): ThreadSummary {
   const counts = new Map<ToolVerb, number>();
   const files = new Map<string, FileChange>();
+  const skills = new Map<string, ThreadSummary['skills'][number]>();
+  const servers = new Map<string, ThreadSummary['servers'][number]>();
   let added = 0;
   let removed = 0;
+  let mcpCalls = 0;
 
   for (const entry of activity) {
     if (entry.kind !== 'tool') continue;
-    const call = parseTool(entry.text);
+    if (entry.skill) {
+      const skill = skills.get(entry.skill) ?? { name: entry.skill, uses: 0, lastAt: entry.at };
+      skills.set(entry.skill, { ...skill, uses: skill.uses + 1, lastAt: Math.max(skill.lastAt, entry.at) });
+      continue;
+    }
+    if (entry.mcp) {
+      const { server, tool } = entry.mcp;
+      const usage = servers.get(server) ?? { server, calls: 0, tools: [] };
+      servers.set(server, { server, calls: usage.calls + 1, tools: usage.tools.includes(tool) ? usage.tools : [...usage.tools, tool] });
+      mcpCalls++;
+      continue;
+    }
+    const call = toolCall(entry);
     counts.set(call.verb, (counts.get(call.verb) ?? 0) + 1);
     if (call.verb !== 'Edit' && call.verb !== 'Write') continue;
     const file = files.get(call.target) ?? { path: call.target, added: 0, removed: 0 };
@@ -57,46 +91,48 @@ export function summarize(activity: ActivityEntry[]): ThreadSummary {
     removed += call.removed ?? 0;
   }
 
-  const tools = VERBS.filter((v) => counts.has(v)).map((verb) => ({ verb, count: counts.get(verb)! }));
-  return { tools, toolTotal: tools.reduce((n, t) => n + t.count, 0), added, removed, files: [...files.values()] };
+  const tools = COUNTED.filter((v) => counts.has(v)).map((verb) => ({ verb, count: counts.get(verb)! }));
+  return {
+    tools,
+    toolTotal: tools.reduce((n, t) => n + t.count, mcpCalls),
+    added,
+    removed,
+    files: [...files.values()],
+    skills: [...skills.values()].sort((a, b) => b.lastAt - a.lastAt),
+    servers: [...servers.values()].sort((a, b) => b.calls - a.calls),
+  };
 }
 
 const PLURAL = new Intl.PluralRules('en');
 
 // Ordered by importance: what changed the repo, then what ran, then what was looked up.
-const TURN_PHRASES: { key: string; matches: (c: ToolCall) => boolean; forms: Record<'one' | 'other', string> }[] = [
+// `two` is English's "twice", which plural rules don't have; only phrases that read better with it set it.
+const TURN_PHRASES: { key: string; matches: (c: ToolCall) => boolean; forms: { one: string; two?: string; other: string } }[] = [
   { key: 'edit', matches: (c) => c.verb === 'Edit', forms: { one: 'edited # file', other: 'edited # files' } },
   { key: 'write', matches: (c) => c.verb === 'Write', forms: { one: 'created # file', other: 'created # files' } },
   { key: 'run', matches: (c) => c.verb === 'Run', forms: { one: 'ran # command', other: 'ran # commands' } },
-  { key: 'search', matches: (c) => c.verb === 'Search', forms: { one: 'searched once', other: 'searched # times' } },
+  { key: 'skill', matches: (c) => c.verb === 'Skill', forms: { one: 'used # skill', other: 'used # skills' } },
+  { key: 'message', matches: isSendTarget, forms: { one: 'messaged # thread', other: 'messaged # threads' } },
+  { key: 'mochi', matches: (c) => c.verb === 'Mcp' && !isSendTarget(c) && isMochiTarget(c.target), forms: { one: 'used Mochi', two: 'used Mochi twice', other: 'used Mochi # times' } },
+  { key: 'mcp', matches: (c) => c.verb === 'Mcp' && !isSendTarget(c) && !isMochiTarget(c.target), forms: { one: 'called # MCP tool', other: 'called # MCP tools' } },
+  { key: 'search', matches: (c) => c.verb === 'Search', forms: { one: 'searched the web', two: 'searched the web twice', other: 'searched the web # times' } },
   { key: 'fetch', matches: (c) => c.verb === 'Fetch', forms: { one: 'read # page', other: 'read # pages' } },
   { key: 'read', matches: (c) => c.verb === 'Read', forms: { one: 'read # file', other: 'read # files' } },
   { key: 'browser', matches: (c) => c.verb === 'Browser', forms: { one: 'used the browser', other: 'used the browser # times' } },
 ];
 
-/** A finished turn in one line: "Edited 2 files, ran 1 command, searched 4 times · 1m 12s". Files count once however often they were edited. */
+/** A finished work group in one line, like Claude's: "Edited 2 files, ran 1 command, searched the web twice". Files and skills count once however often they were used. */
 export function turnSummary(entries: ActivityEntry[]) {
-  const calls = entries.filter((e) => e.kind === 'tool').map((e) => parseTool(e.text));
+  const calls = entries.filter((e) => e.kind === 'tool').map(toolCall);
   const phrases = TURN_PHRASES.flatMap(({ matches, forms, key }) => {
     const hits = calls.filter(matches);
-    const count = key === 'edit' || key === 'write' ? new Set(hits.map((c) => c.target)).size : hits.length;
-    return count ? [forms[PLURAL.select(count) === 'one' ? 'one' : 'other'].replace('#', String(count))] : [];
+    const count = key === 'edit' || key === 'write' || key === 'skill' ? new Set(hits.map((c) => c.target)).size : hits.length;
+    if (!count) return [];
+    const form = count === 2 && forms.two ? forms.two : PLURAL.select(count) === 'one' ? forms.one : forms.other;
+    return [form.replace('#', String(count))];
   });
   const text = phrases.join(', ') || (entries.some((e) => e.kind === 'reasoning') ? 'thought it through' : 'worked');
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)} · ${turnDuration(entries)}`;
-}
-
-/** Wall-clock across the entries that carry it (a live agent's; your answers don't), else the app clock's minutes. */
-export function turnDuration(entries: ActivityEntry[]) {
-  const stamped = entries.flatMap((e) => (e.ms === undefined ? [] : [e.ms]));
-  if (stamped.length > 1) {
-    const s = Math.max(1, Math.round((Math.max(...stamped) - Math.min(...stamped)) / 1000));
-    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${s % 60 ? ` ${s % 60}s` : ''}`;
-  }
-  const first = entries[0];
-  const last = entries[entries.length - 1];
-  const minutes = Math.max(1, (last?.at ?? 0) - (first?.at ?? 0));
-  return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ''}`;
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }
 
 const DOMAINS_SHOWN = 2;

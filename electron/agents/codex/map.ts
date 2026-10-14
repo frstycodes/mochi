@@ -1,7 +1,8 @@
 import path from 'node:path';
-import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, LimitWindow } from '../../../src/host/types/agent.ts';
 import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
-import { MODEL_PRICES } from '../../../src/usage/model.ts';
+import { codexWindows, hottest, mergeWindows } from '../../../src/usage/limits.ts';
+import { posixPath } from '../../platform.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -19,23 +20,20 @@ export interface ThreadState {
   limits: AccountLimits;
 }
 
-type Totals = { input: number; cached: number; output: number };
+type Totals = { input: number; output: number; cached: number };
 
-/** When the account's most-used rate-limit window resets, in unix seconds. */
+/** The account's plan windows as Codex last reported them, merged across sparse updates. */
 export interface AccountLimits {
-  resetsAt?: number;
+  windows?: LimitWindow[];
 }
 
 export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits } = {}): ThreadState {
-  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, cached: 0, output: 0 }, account, limits };
+  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits };
 }
 
 /** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
 export function updateLimits(limits: AccountLimits, params: unknown) {
-  const snapshot = obj(obj(params)?.rateLimits);
-  const windows = [obj(snapshot?.primary), obj(snapshot?.secondary)].filter((w) => typeof w?.usedPercent === 'number' && typeof w.resetsAt === 'number');
-  const binding = windows.sort((a, b) => (b!.usedPercent as number) - (a!.usedPercent as number))[0];
-  if (binding) limits.resetsAt = binding.resetsAt as number;
+  limits.windows = mergeWindows(limits.windows ?? [], codexWindows(obj(obj(params)?.rateLimits) as Parameters<typeof codexWindows>[0]));
 }
 
 /** The Codex thread a notification or server request belongs to, if any. */
@@ -77,9 +75,9 @@ export function mapNotification(method: string, params: unknown, s: ThreadState)
       const error = obj(turn?.error);
       const end: AgentEvent = { threadId, type: 'turn-end', status, ...(typeof error?.message === 'string' && { error: apiMessage(error.message) }) };
       // The thread waits on the same account until the reset; moving it to another account is never automatic.
-      if (error?.codexErrorInfo !== 'usageLimitExceeded') return [end];
-      const resetsAt = s.limits.resetsAt;
-      return [{ threadId, type: 'limit', ...(resetsAt !== undefined && { resetsAt: new Date(resetsAt * 1000).toISOString() }) }, end];
+      if (error?.codexErrorInfo !== 'usageLimitExceeded' && error?.codexErrorInfo !== 'rateLimitExceeded') return [end];
+      const binding = hottest(s.limits.windows ?? []);
+      return [{ threadId, type: 'limit', ...(binding?.resetsAt && { resetsAt: binding.resetsAt }), ...(binding && { label: binding.label }) }, end];
     }
     case 'mcpServer/startupStatus/updated': {
       const status = STARTUP_STATUS[p.status as keyof typeof STARTUP_STATUS];
@@ -149,13 +147,24 @@ export function commandsFromSkills(reply: unknown): AgentCommand[] {
 }
 
 /**
- * The `skill` input item that makes Codex load the skill a message opens with (`/name args`): app-server takes no slash
- * commands in text, its TUI attaches the skill the same way. Null for a message that doesn't name one.
+ * The `skill` input items that make Codex load the skill a message opens with (`/name args`) and the ones named alongside it
+ * (`@` in the composer): app-server takes no slash commands in text, its TUI attaches skills the same way. Unknown names are left out.
  */
-export function skillInput(text: string, skills: AgentCommand[]) {
-  const name = /^\/(\S+)/.exec(text)?.[1];
-  const skill = name && skills.find((s) => s.name === name && s.path);
-  return skill ? { type: 'skill' as const, name: skill.name, path: skill.path! } : null;
+export function skillInputs(text: string, names: string[], skills: AgentCommand[]) {
+  const leading = /^\/(\S+)/.exec(text)?.[1];
+  const wanted = [...new Set([...(leading ? [leading] : []), ...names])];
+  return wanted.flatMap((name) => {
+    const skill = skills.find((s) => s.name === name && s.path);
+    return skill ? [{ type: 'skill' as const, name: skill.name, path: skill.path! }] : [];
+  });
+}
+
+/** One finished skill-load per attached skill, as the work log shows a Claude Skill tool call. */
+export function skillEvents(threadId: string, turnId: string, attached: { name: string }[]): AgentEvent[] {
+  return attached.flatMap(({ name }) => {
+    const call = { threadId, type: 'tool' as const, id: `skill:${turnId}:${name}`, text: `Skill ${name}`, skill: name };
+    return [{ ...call, phase: 'start' as const }, { ...call, phase: 'end' as const }];
+  });
 }
 
 /** Server requests that become queue cards. Anything else gets a JSON-RPC error reply from the caller. */
@@ -200,8 +209,7 @@ const CONNECTION_STATUS = { notStarted: 'pending', starting: 'pending', connecte
 const STARTUP_STATUS = { starting: 'pending', ready: 'connected', failed: 'failed', cancelled: 'failed' } as const satisfies Record<string, McpServer['status']>;
 const TURN_STATUS = { completed: 'done', interrupted: 'interrupted', failed: 'failed' } as const;
 const AGENT_END = { completed: 'done', errored: 'failed', interrupted: 'stopped', shutdown: 'stopped' } as const;
-// TODO(codex): threads don't report their model yet, so every Codex token is priced as the default model; cached input is left out of the cost.
-const PRICE = MODEL_PRICES['gpt-5.5-codex'];
+const OUTPUT_MAX = 4000;
 
 function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'end', s: ThreadState): AgentEvent[] {
   if (!item || typeof item.id !== 'string') return [];
@@ -218,20 +226,28 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
     case 'commandExecution': {
       if (typeof item.command !== 'string') return [];
       const exitCode = typeof item.exitCode === 'number' ? item.exitCode : undefined;
-      return [{ threadId, type: 'tool', id, phase, text: item.command, ...(phase === 'end' && exitCode !== undefined && { exitCode }) }];
+      const output = typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput.slice(-OUTPUT_MAX) : undefined;
+      // `command` is the shell wrapper (`/bin/zsh -lc '…'`); a single `commandActions` entry is what the agent actually typed.
+      const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
+      const typed = actions.length === 1 ? obj(actions[0])?.command : undefined;
+      const text = typeof typed === 'string' ? typed : item.command;
+      return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && exitCode !== undefined && { exitCode }), ...(phase === 'end' && output !== undefined && { output }) }];
     }
     case 'fileChange': {
       const files = Array.isArray(item.changes) ? item.changes.flatMap((c) => (typeof obj(c)?.path === 'string' ? [relative(s.cwd, obj(c)!.path as string)] : [])) : [];
       if (phase === 'start') s.changes.set(id, files);
       else s.changes.delete(id);
-      return [{ threadId, type: 'tool', id, phase, text: `Edit ${files.join(', ') || 'files'}`, ...(phase === 'end' && item.status === 'completed' && { files }) }];
+      const patch = phase === 'end' && item.status === 'completed' ? changesPatch(item.changes, s.cwd) : '';
+      return [{ threadId, type: 'tool', id, phase, text: `Edit ${files.join(', ') || 'files'}`, ...(phase === 'end' && item.status === 'completed' && { files }), ...(patch && { patch }) }];
     }
     case 'mcpToolCall':
-      return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `${item.server}: ${item.tool}` }] : [];
+      return typeof item.server === 'string' && typeof item.tool === 'string' ? [{ threadId, type: 'tool', id, phase, text: `Mcp ${item.server}: ${item.tool}`, mcp: { server: item.server, tool: item.tool } }] : [];
     case 'webSearch': {
       const { text, links } = webSearch(item);
       return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && links.length > 0 && { links }) }];
     }
+    case 'contextCompaction':
+      return [{ threadId, type: 'compaction', phase }];
     case 'subAgentActivity':
       return phase === 'end' ? subAgentActivity(item, threadId) : [];
     case 'collabAgentToolCall':
@@ -279,7 +295,7 @@ export function childEvents(method: string, params: unknown, s: ThreadState, sub
   if (method === 'thread/tokenUsage/updated') {
     const total = obj(obj(p.tokenUsage)?.total)?.totalTokens;
     // The parent's own usage leaves its children out, so their spend is added to the thread here, without touching its context meter.
-    const spend = mapUsage(obj(p.tokenUsage), s).flatMap((e): AgentEvent[] => (e.type === 'usage' ? [{ threadId: e.threadId, type: 'usage', inputTokens: e.inputTokens, outputTokens: e.outputTokens, ...(e.costUsd !== undefined && { costUsd: e.costUsd }) }] : []));
+    const spend = mapUsage(obj(p.tokenUsage), s).flatMap((e): AgentEvent[] => (e.type === 'usage' ? [{ threadId: e.threadId, type: 'usage', inputTokens: e.inputTokens, outputTokens: e.outputTokens }] : []));
     return [...spend, ...(typeof total === 'number' ? [progress({ tokens: total })] : [])];
   }
   if (method === 'turn/completed') {
@@ -292,7 +308,7 @@ export function childEvents(method: string, params: unknown, s: ThreadState, sub
   if (method !== 'item/started' && method !== 'item/completed') return [];
   const item = obj(p.item);
   if (item?.type === 'agentMessage') return method === 'item/completed' && typeof item.text === 'string' && item.text ? [progress({ message: item.text })] : [];
-  return mapItem(item, method === 'item/started' ? 'start' : 'end', s).flatMap((e) => (e.type === 'tool' ? [progress({ step: { id: e.id, phase: e.phase, text: e.text, ...(e.files && { files: e.files }), ...(e.exitCode !== undefined && { exitCode: e.exitCode }) } })] : []));
+  return mapItem(item, method === 'item/started' ? 'start' : 'end', s).flatMap((e) => (e.type === 'tool' ? [progress({ step: { id: e.id, phase: e.phase, text: e.text, ...(e.files && { files: e.files }), ...(e.exitCode !== undefined && { exitCode: e.exitCode }), ...(e.output !== undefined && { output: e.output }) } })] : []));
 }
 
 /** `/root/echo_hi` → "echo hi". */
@@ -325,17 +341,17 @@ function mapUsage(usage: Record<string, unknown> | undefined, s: ThreadState): A
   const total = obj(usage?.total);
   const last = obj(usage?.last);
   if (typeof total?.inputTokens !== 'number' || typeof total.outputTokens !== 'number') return [];
-  const now = { input: total.inputTokens, cached: num(total.cachedInputTokens), output: total.outputTokens };
+  const now = { input: total.inputTokens, output: total.outputTokens, cached: num(total.cachedInputTokens) };
   // After a resume, count only the request this update reports.
-  const before = s.total ?? { input: now.input - num(last?.inputTokens), cached: now.cached - num(last?.cachedInputTokens), output: now.output - num(last?.outputTokens) };
+  const before = s.total ?? { input: now.input - num(last?.inputTokens), output: now.output - num(last?.outputTokens), cached: now.cached - num(last?.cachedInputTokens) };
   s.total = now;
   const inputTokens = Math.max(0, now.input - before.input);
   const outputTokens = Math.max(0, now.output - before.output);
-  const uncached = Math.max(0, inputTokens - (now.cached - before.cached));
+  const cachedTokens = Math.max(0, now.cached - before.cached);
   const contextMax = typeof usage?.modelContextWindow === 'number' ? usage.modelContextWindow : undefined;
   const contextUsed = typeof last?.totalTokens === 'number' ? last.totalTokens : undefined;
-  const costUsd = (uncached * PRICE.input + outputTokens * PRICE.output) / 1_000_000;
-  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, costUsd, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
+  // Codex reports tokens, never spend; the summary shows tokens for it rather than a price Mochi would have to guess.
+  return [{ threadId: s.threadId, type: 'usage', inputTokens, outputTokens, cachedTokens, ...(contextUsed !== undefined && { contextUsed }), ...(contextMax !== undefined && { contextMax }) }];
 }
 
 /** Upstream API errors arrive as their raw JSON body; show the message inside. */
@@ -352,8 +368,36 @@ function num(value: unknown) {
   return typeof value === 'number' ? value : 0;
 }
 
+/**
+ * A fileChange item's changes as one unified diff, a `diff --git` section per file, so the work log and the turn's changes card count and
+ * show each file. An update's `diff` is already a unified diff (its hunks are kept, its headers replaced); an add or delete carries the
+ * file's content, written as all added or all removed lines.
+ */
+export function changesPatch(changes: unknown, cwd: string) {
+  if (!Array.isArray(changes)) return '';
+  return changes
+    .flatMap((c) => {
+      const change = obj(c);
+      if (typeof change?.path !== 'string' || typeof change.diff !== 'string') return [];
+      const file = relative(cwd, change.path);
+      const kind = obj(change.kind)?.type;
+      const hunks = /^@@/m.exec(change.diff);
+      const header = [`diff --git a/${file} b/${file}`, `--- ${kind === 'add' ? '/dev/null' : `a/${file}`}`, `+++ ${kind === 'delete' ? '/dev/null' : `b/${file}`}`];
+      if (hunks) return [[...header, change.diff.slice(hunks.index).trimEnd()].join('\n')];
+      if (kind !== 'add' && kind !== 'delete') return [];
+      // An empty file is created or deleted without a hunk.
+      if (!change.diff) return [header.join('\n')];
+      const lines = change.diff.replace(/\n$/, '').split('\n');
+      const hunk = kind === 'add' ? `@@ -0,0 +1,${lines.length} @@` : `@@ -1,${lines.length} +0,0 @@`;
+      return [[...header, hunk, ...lines.map((l) => (kind === 'add' ? '+' : '-') + l)].join('\n')];
+    })
+    .join('\n');
+}
+
 function relative(cwd: string, file: string) {
-  return path.isAbsolute(file) && file.startsWith(cwd + path.sep) ? path.relative(cwd, file) : file;
+  if (!path.isAbsolute(file)) return file;
+  const inside = path.relative(cwd, file);
+  return inside && !inside.startsWith('..') && !path.isAbsolute(inside) ? posixPath(inside) : file;
 }
 
 function obj(value: unknown): Record<string, unknown> | undefined {
@@ -368,6 +412,7 @@ export function codexModels(result: unknown): AgentModel[] {
     if (typeof m?.model !== 'string' || m.hidden === true) return [];
     const efforts = Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts.flatMap((e: { reasoningEffort?: unknown }) => (typeof e?.reasoningEffort === 'string' ? [e.reasoningEffort] : [])) : [];
     const defaultEffort = typeof m.defaultReasoningEffort === 'string' ? m.defaultReasoningEffort : undefined;
-    return [{ id: m.model, name: typeof m.displayName === 'string' ? m.displayName : m.model, description: typeof m.description === 'string' ? m.description : '', efforts, ...(defaultEffort && { defaultEffort }), isDefault: m.isDefault === true }];
+    const speeds = Array.isArray(m.serviceTiers) ? m.serviceTiers.flatMap((t: Record<string, unknown>) => (typeof t?.id === 'string' && typeof t.name === 'string' ? [{ id: t.id, name: t.name, description: typeof t.description === 'string' ? t.description : '' }] : [])) : [];
+    return [{ id: m.model, name: typeof m.displayName === 'string' ? m.displayName : m.model, description: typeof m.description === 'string' ? m.description : '', efforts, ...(defaultEffort && { defaultEffort }), speeds, isDefault: m.isDefault === true }];
   });
 }

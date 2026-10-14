@@ -2,14 +2,20 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
+import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '../layout/tree.ts';
-import { DEFAULT_PREFS, type AgentControl, type Prefs } from '../settings/prefs.ts';
+import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
+import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
+import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
+import type { ConfigChange, McpEntry, SkillEntry } from '../settings/agentConfig.ts';
+import { DEFAULT_PREFS, setPrefs, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
 import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { sidechatReducer } from '../store/sidechat.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
+import { CLAUDE_FALLBACK_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
@@ -18,7 +24,7 @@ const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidec
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
-function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/' } = {}) {
+function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/', gitBranches = null as string[] | null, gitCurrent = 'main' as string | null } = {}) {
   const view = { kind: 'thread', id: 'rl' } as const;
   let state = {
     ...initialThreads(undefined, true),
@@ -30,6 +36,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     orientation: 'row',
     watched: [],
     sidechats: {},
+    notifications: { quiet: { isOn: false, start: 22, end: 8 }, muted: [] },
   } as unknown as State;
   const toasts: { text: string; undo?: () => void }[] = [];
   const notices: string[] = [];
@@ -37,8 +44,12 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const commands: string[] = [];
   const removed: string[] = [];
   const evals: string[] = [];
+  const pushes: string[] = [];
+  const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
+  let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
+  const settings = fakeSettings();
   const env: ToolEnv = {
     getState: () => state,
     dispatch: (a) => void (state = reduce(state, a)),
@@ -61,7 +72,20 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       waitFor: async (_id, until) => ({ isMet: until.text === 'Hello', waitedMs: 120 }),
     },
     cwdOf: () => '/repo/rl',
+    models: async () => CLAUDE_FALLBACK_MODELS,
+    profiles: {
+      list: () => profiles,
+      update: (id, patch) => void (profiles = profiles.map((p) => (p.id === id ? { ...p, ...patch } : p))),
+      remove: (id) => void (profiles = profiles.filter((p) => p.id !== id)),
+    },
+    theme: () => 'system',
+    settings: settings.host,
+    themes: { list: async () => [] },
+    remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false }, hostName: 'mac', addresses: [], devices: [], pairedDevices: [], relay: { status: 'off' } }) },
     isDesktop: true,
+    git: {
+      branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
+      push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9') },
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
   const ok = async (name: string, args?: Record<string, unknown>, threadId?: string) => {
@@ -77,7 +101,83 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   };
   const thread = (id: string) => state.threads.find((t) => t.id === id)!;
   const card = () => state.queue.find((q) => q.tool)!;
-  return { env, call, ok, err, thread, card, state: () => state, prefs: () => prefs, toasts, notices, acts, commands, removed, evals, pages };
+  /** Starts an asking call and hands back its card once it's open (asks that preview first resolve a tick later). */
+  const asking = async (name: string, args?: Record<string, unknown>) => {
+    const queued = t.state().queue.length;
+    const result = call(name, args);
+    for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
+    return { result, card: t.state().queue.at(-1)! };
+  };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages, pushes, prs };
+  return t;
+}
+
+/**
+ * `host.settings` for the settings tools, over in-memory config files: preview shows each change as one file edit, apply
+ * refuses when a file moved since its preview (main's stale check). Any method outside the tools' slice throws: no
+ * credential and no settings write is reachable.
+ */
+function fakeSettings() {
+  const calls: string[] = [];
+  const files = new Map<string, string>();
+  const accounts: AccountsState = { accounts: [...DEFAULT_ACCOUNTS, { id: 'claude-work', provider: 'claude', name: 'Work', configDir: '/acct/claude-work' }], links: { personal: { claude: 'claude-work' } } };
+  const config = {
+    claude: {
+      instructions: 'Be brief.\nAPI_TOKEN=sk-live-abcdefghijklmnop\n',
+      servers: [
+        { def: { name: 'github', type: 'stdio', command: 'npx', args: ['gh-mcp', '--token', 'ghp_abcdefghijklmnopqrstuvwxyz'], env: { GITHUB_TOKEN: 'ghp_ZYXWVUTSRQPONMLKJIHGFEDCBA' } }, enabled: true, scope: 'user', needs: [] },
+        { def: { name: 'linear', type: 'http', url: 'https://mcp.linear.app/mcp', headers: { Authorization: 'Bearer ${LINEAR_TOKEN}' } }, enabled: false, scope: 'user', needs: ['LINEAR_TOKEN'] },
+      ] as McpEntry[],
+      skills: [{ name: 'review', description: 'Review a diff', dir: '/acct/skills/review', enabled: true }],
+    },
+    codex: { instructions: '', servers: [] as McpEntry[], skills: [] as SkillEntry[] },
+  };
+  const providerConfig = (spaceId: string, provider: Provider): ProviderConfig => ({
+    provider,
+    account: accounts.accounts.find((a) => a.id === linkedAccountId(accounts.links, spaceId, provider))!,
+    instructions: { path: `/acct/${provider}/${provider === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}`, text: config[provider].instructions },
+    mcpServers: config[provider].servers,
+    skills: config[provider].skills,
+    plugins: [],
+    projectInstructions: null,
+  });
+  const pathOf = (c: ConfigChange) => `/acct/${c.provider}/${c.kind === 'instructions' ? 'instructions' : c.kind.startsWith('skill') ? 'settings.json' : '.claude.json'}`;
+  const apply = (c: ConfigChange) => {
+    const own = config[c.provider];
+    if (c.kind === 'instructions') own.instructions = c.text;
+    if (c.kind === 'mcp-set') own.servers = [...own.servers, { def: c.server, enabled: true, scope: 'user', needs: [] }];
+    if (c.kind === 'mcp-remove') own.servers = own.servers.filter((s) => s.def.name !== c.name);
+    if (c.kind === 'mcp-enabled') own.servers = own.servers.map((s) => (s.def.name === c.name ? { ...s, enabled: c.enabled } : s));
+    if (c.kind === 'skill-enabled') own.skills = own.skills.map((s) => (s.name === c.name ? { ...s, enabled: c.enabled } : s));
+  };
+  const host: ToolEnv['settings'] = {
+    accounts: async () => accounts,
+    detect: async (accountId) => ({ provider: 'claude', accountId, path: '/bin/claude', version: '2.1', login: accountId === 'claude-work' ? { state: 'logged-in', method: 'Claude account', plan: 'Max' } : { state: 'logged-out' } }),
+    get: async () => DEFAULT_SETTINGS,
+    agentConfig: async (spaceId) => ({ claude: providerConfig(spaceId, 'claude'), codex: providerConfig(spaceId, 'codex') }),
+    previewConfig: async (_spaceId, changes) => ({
+      edits: changes.map((c) => ({ path: pathOf(c), before: files.get(pathOf(c)) ?? '', after: c.kind === 'instructions' ? c.text : JSON.stringify(c) })),
+      copies: [],
+      notes: [],
+    }),
+    applyConfig: async (_spaceId, changes, befores) => {
+      if (changes.some((c) => (files.get(pathOf(c)) ?? '') !== befores[pathOf(c)])) throw new Error('A file changed since you reviewed it');
+      for (const c of changes) {
+        apply(c);
+        files.set(pathOf(c), JSON.stringify(c));
+      }
+      return { backupDir: '/backups/1' };
+    },
+    testMcp: async () => ({ tools: ['search', 'open'] }),
+  };
+  const recorded = new Proxy(host, {
+    get: (target, key: string) => {
+      if (!(key in target)) throw new Error(`settings tools must not call settings.${key}`);
+      calls.push(key);
+      return target[key as keyof typeof target];
+    },
+  });
+  return { host: recorded, calls, files, accounts, config };
 }
 
 let nextView = 0;
@@ -92,7 +192,7 @@ test('every tool in the table has a handler', async () => {
 });
 
 test('only deletes and settings ask; everything else runs without a widget', () => {
-  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_setting']);
+  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'set_keybinding', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
 });
 
 test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
@@ -102,6 +202,43 @@ test('auto tools never wait: creating and messaging threads run straight through
   await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
   assert.ok(t.thread(created.id));
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no widget was shown');
+});
+
+test('create_thread names the branch from its prompt, unique among the repo branches, and falls back to the prompt alone without git', async () => {
+  const named = setup({ gitBranches: ['main', 'feat/rate-limit-dashboard'] });
+  const created = await named.ok('create_thread', { prompt: 'Add a rate limit dashboard' });
+  assert.equal(named.thread(created.id)?.repo?.branch, 'feat/rate-limit-dashboard-2');
+  const offline = setup();
+  const fallback = await offline.ok('create_thread', { prompt: 'Fix the login bug' });
+  assert.equal(offline.thread(fallback.id)?.repo?.branch, 'fix/login-bug');
+});
+
+test('create_thread gives the new thread its own worktree even when your Worktree box is unticked', async () => {
+  const t = setup({ gitBranches: ['main'] });
+  t.env.prefs.set({ workspaceMode: 'folder' });
+  setPrefs({ workspaceMode: 'folder' });
+  try {
+    const created = await t.ok('create_thread', { prompt: 'Fix the login bug' });
+    assert.notEqual(t.thread(created.id)?.repo?.mode, 'folder');
+    assert.equal(t.thread(created.id)?.repo?.branch, 'fix/login-bug');
+  } finally {
+    setPrefs({ workspaceMode: DEFAULT_PREFS.workspaceMode });
+  }
+});
+
+test('create_thread takes a model and effort at or below the default, and refuses dearer ones unless the setting allows', async () => {
+  const t = setup();
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', speed: '', access: 'Auto' } });
+  const cheaper = await t.ok('create_thread', { prompt: 'Rename a variable', model: 'claude-haiku-5-5', effort: 'low' });
+  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' });
+  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-opus-5-5' }), /claude-opus-5-5 costs more/);
+  assert.match(await t.err('create_thread', { prompt: 'x', effort: 'max' }), /max effort costs more/);
+  assert.match(await t.err('create_thread', { prompt: 'x', model: 'gpt-9' }), /isn't offered/);
+  t.env.prefs.set({ threadModels: 'any' });
+  await t.ok('create_thread', { prompt: 'x', model: 'claude-opus-5-5', effort: 'max' });
+  t.env.prefs.set({ threadModels: 'default' });
+  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-haiku-5-5' }), /Always the default/);
+  await t.ok('create_thread', { prompt: 'no choice still works' });
 });
 
 test('a delete always waits on its widget, and Cancel leaves everything as it was', async () => {
@@ -135,47 +272,19 @@ test('the widget sits in the caller’s thread where it asked, and collapses to 
   assert.equal(t.toasts.length, 0, 'you just answered it; no toast on top');
 });
 
-test('a setting change always waits, shows current and proposed, and Apply or Keep closes it with a record', async () => {
-  const t = setup();
-  const pending = t.call('update_setting', { key: 'diffStyle', value: 'split', reason: 'Split diffs read better for this refactor' });
-  assert.deepEqual(t.card().tool!.setting, { id: 'diffStyle', value: 'split' });
-  assert.equal(t.card().detail, 'Split diffs read better for this refactor');
-  assert.equal(t.prefs().diffStyle, 'unified', 'nothing changes while it waits');
-  decideTool(t.card().tool!.callId, { isApproved: true });
-  assert.equal(JSON.parse((await pending).text).changed, 'Set Diffs to Split');
-  assert.equal(t.prefs().diffStyle, 'split');
-  assert.equal(lastLog(t.thread('rl')), 'Set Diffs to Split');
-  const kept = t.call('update_setting', { key: 'driftGuard', value: 'false', reason: 'Too many prompts' });
-  decideTool(t.card().tool!.callId, { isApproved: false });
-  assert.match((await kept).text, /denied/);
-  assert.equal(t.prefs().driftGuard, true);
-  assert.equal(lastLog(t.thread('rl')), 'Kept Drift guard: On');
-});
-
-test('update_setting validates the key and value before asking, and never touches agent control or permissions', async () => {
-  const t = setup();
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'sideways', reason: 'x' }), /allowed: unified, split/);
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'unified', reason: 'x' }), /already Unified/);
-  assert.match(await t.err('update_setting', { key: 'agentControl', value: 'everything', reason: 'x' }), /isn't a setting agents can change/);
-  assert.match(await t.err('update_setting', { key: 'permissions', value: 'Full access', reason: 'x' }), /isn't a setting agents can change/);
-  assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
-  const settings = await t.ok('get_settings');
-  assert.ok(settings.some((x: { key: string; value: string }) => x.key === 'diffStyle' && x.value === 'unified'));
-  assert.equal(settings.some((x: { key: string }) => x.key === 'agentControl' || x.key === 'permissions'), false);
-});
-
 test('read only blocks every write, settings included, and shows agent control in the thread once', async () => {
   const t = setup({ control: 'read' });
   const before = t.state().threads;
   assert.match(await t.err('settle_thread', { threadIds: ['adm'] }), /Read only/);
   assert.match(await t.err('browser_click', { ref: 'e1' }), /Read only/);
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'split', reason: 'x' }), /Read only/);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' }), /Read only/);
   assert.match(await t.err('delete_thread', { threadIds: ['e2e'] }), /Read only/);
   assert.equal(t.state().threads.filter((x) => x.id !== 'rl').every((x, i) => x === before.filter((y) => y.id !== 'rl')[i]), true, 'no other thread changed');
   assert.equal(t.prefs().diffStyle, 'unified');
   const cards = t.state().queue.filter((q) => q.kind === 'setting');
   assert.equal(cards.length, 1, 'one widget, raised in place');
-  assert.deepEqual(cards[0].setting, { id: 'agentControl', suggested: 'everything' });
+  assert.deepEqual(cards[0].settings!.changes, [{ key: 'agentControl', value: 'everything' }]);
+  assert.equal(cards[0].settings!.by, 'harness');
   assert.equal(t.thread('rl').activity.filter((a) => a.card?.id === cards[0].id).length, 1);
   assert.ok((await t.ok('list_threads')).length > 0, 'reads still work');
 });
@@ -184,7 +293,7 @@ test('changes runs everything that doesn’t ask, and blocks deletes and setting
   const t = setup({ control: 'changes' });
   await t.ok('create_thread', { prompt: 'x' });
   assert.match(await t.err('delete_thread', { threadIds: ['e2e'] }), /Everything, asking before deletes and settings/);
-  assert.match(await t.err('update_setting', { key: 'diffStyle', value: 'split', reason: 'x' }), /Everything/);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' }), /Everything/);
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no tool widget was shown');
 });
 
@@ -220,7 +329,7 @@ test('another profile is out of reach and bad args are errors, not throws', asyn
 
 test('list_threads filters by status, pinned and project inside the profile', async () => {
   const t = setup();
-  assert.deepEqual((await t.ok('list_threads')).map((x: { id: string }) => x.id), ['rl', 'adm', 'e2e', 'auth', 'onb', 'viz']);
+  assert.deepEqual((await t.ok('list_threads')).map((x: { id: string }) => x.id), ['rl', 'limit', 'adm', 'e2e', 'auth', 'onb', 'viz']);
   assert.deepEqual((await t.ok('list_threads', { status: 'settled' })).map((x: { id: string }) => x.id), ['onb', 'viz']);
   assert.deepEqual((await t.ok('list_threads', { pinned: true })).map((x: { id: string }) => x.id), ['rl', 'adm', 'auth']);
   assert.equal((await t.ok('list_threads', { project: 'nope' })).length, 0);
@@ -289,7 +398,7 @@ test('create_thread creates in the same project without moving your view, and Un
   const t = setup();
   const r = await t.ok('create_thread', { prompt: 'Add a rate limit dashboard', provider: 'codex' });
   const created = t.thread(r.id);
-  assert.deepEqual([created.goal, created.providers[0], created.repo?.project], ['Add a rate limit dashboard', 'codex', 'latitude']);
+  assert.deepEqual([firstPrompt(created), created.providers[0], created.repo?.project], ['Add a rate limit dashboard', 'codex', 'latitude']);
   assert.deepEqual(t.state().views, { latitude: { kind: 'thread', id: 'rl' } });
   assert.equal(t.toasts.at(-1)!.text, 'Claude started "Add a rate limit dashboard"');
   t.toasts.at(-1)!.undo!();
@@ -298,8 +407,12 @@ test('create_thread creates in the same project without moving your view, and Un
 
 test('send_to_thread sends into the other thread as a message from this one, with no Undo', async () => {
   const t = setup();
-  await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new limits table' });
-  assert.ok(t.thread('adm').activity.some((a) => a.kind === 'message' && a.text.includes('Use the new limits table')));
+  const sender = t.thread('rl');
+  t.env.dispatch({ type: 'say', threadId: 'rl', entry: { who: 'claude', kind: 'tool', text: 'Mcp mochi: send_to_thread', mcp: { server: 'mochi', tool: 'send_to_thread' } } });
+  await t.ok('send_to_thread', { threadId: 'adm', text: '  Use the new limits table ' });
+  const received = t.thread('adm').activity.at(-1)!;
+  assert.deepEqual({ who: received.who, kind: received.kind, text: received.text, from: received.from }, { who: 'you', kind: 'message', text: 'Use the new limits table', from: { threadId: 'rl', title: sender.title } });
+  assert.deepEqual(t.thread('rl').activity.findLast((a) => a.kind === 'tool')!.sent, { threadId: 'adm', title: t.thread('adm').title, text: 'Use the new limits table' }, "the sender's call row knows what it sent");
   assert.equal(t.toasts.at(-1)!.undo, undefined);
 });
 
@@ -336,12 +449,12 @@ test('set_step_status sets the status as the agent and rejects unknown steps', a
   assert.match(await t.err('set_step_status', { stepId: 'nope', status: 'done' }), /No step nope/);
 });
 
-test('add_step lands as a goal revision by the agent', async () => {
+test('add_step lands as a plan step by the agent, not a goal revision', async () => {
   const t = setup();
   const before = t.thread('rl').revisions.length;
-  await t.ok('add_step', { title: 'Document the limits', size: 2 });
+  await t.ok('add_step', { title: 'Document the limits' });
   const added = t.thread('rl').steps.find((s) => s.title === 'Document the limits')!;
-  assert.deepEqual([added.size, added.addedBy, t.thread('rl').revisions.length], [2, 'claude', before + 1]);
+  assert.deepEqual([added.addedBy, t.thread('rl').revisions.length], ['claude', before]);
 });
 
 test('edit_goal changes the goal text and criteria as one revision', async () => {
@@ -611,4 +724,271 @@ test('widget ids carry a per-launch part, so a reload never reuses a saved entry
   assert.match(t.card().id, /^q-tool-rl-[a-z0-9]+-\d+$/);
   decideTool(t.card().tool!.callId, { isApproved: false });
   await pending;
+});
+
+// {SETTINGS}
+
+const SECRETS = ['sk-live-abcdefghijklmnop', 'ghp_abcdefghijklmnopqrstuvwxyz', 'ghp_ZYXWVUTSRQPONMLKJIHGFEDCBA'];
+
+type SettingView = { key: string; value: string | null; allowed?: string[]; locked?: string; server?: Record<string, unknown> };
+const byKey = (r: { settings: SettingView[] }, key: string) => r.settings.find((s) => s.key === key)!;
+const widget = (t: ReturnType<typeof setup>) => t.state().queue.find((q) => q.settings)!;
+
+test('get_settings reads every app setting and your profile’s, with values, allowed values and what’s locked', async () => {
+  const t = setup();
+  const r = await t.ok('get_settings');
+  assert.equal(r.profile.id, 'latitude');
+  assert.deepEqual([byKey(r, 'diffStyle').value, byKey(r, 'diffStyle').allowed], ['unified', ['unified', 'split']]);
+  assert.equal(byKey(r, 'theme').value, 'system');
+  assert.equal(byKey(r, 'concurrency').value, '6', 'host settings come from main');
+  assert.equal(byKey(r, 'alert.needs-you').value, 'true');
+  assert.equal(byKey(r, 'quietFrom').value, '22');
+  for (const key of ['agentControl', 'permissions', 'threadModels', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
+  assert.equal(byKey(r, 'profile.name').value, 'Latitude');
+  assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');
+  assert.equal(byKey(r, 'profile.claude.mcp.github').value, 'true');
+  assert.equal(byKey(r, 'profile.claude.skill.review').value, 'true');
+  assert.match(byKey(r, 'profile.claude.instructions').value!, /^Be brief\.\nAPI_TOKEN=\[redacted\]/);
+  assert.deepEqual(byKey(r, 'profile.claude.mcp.linear').server!.needs, ['needs LINEAR_TOKEN']);
+  assert.equal(byKey(r, 'profile.claude.mcp.github').server!.tools, undefined, 'servers start only for section: profile');
+  for (const secret of SECRETS) assert.doesNotMatch(JSON.stringify(r), new RegExp(secret), 'secret leaked');
+  const profile = await t.ok('get_settings', { section: 'profile' });
+  assert.ok(profile.settings.every((s: SettingView) => s.key.startsWith('profile.')));
+  assert.equal(byKey(profile, 'profile.claude.mcp.github').server!.tools, 2);
+  assert.equal(t.state().queue.length, 0, 'your own profile reads without a card');
+});
+
+test("another profile's settings are refused unless the user approves on a card", async () => {
+  const t = setup();
+  const denied = await t.asking('get_settings', { profileId: 'personal' });
+  assert.match(denied.card.title, /read Personal's settings\?/);
+  decideTool(denied.card.tool!.callId, { isApproved: false });
+  const refused = await denied.result;
+  assert.equal(refused.isError, true);
+  assert.doesNotMatch(refused.text, /Be brief/, 'nothing read');
+  const approved = await t.asking('get_settings', { profileId: 'personal' });
+  decideTool(approved.card.tool!.callId, { isApproved: true });
+  const r = JSON.parse((await approved.result).text);
+  assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-work');
+  assert.match(await setup({ control: 'changes' }).err('get_settings', { profileId: 'personal' }), /Everything/, 'below Everything another profile is out of reach');
+});
+
+test('update_settings puts one live widget in the thread with every suggestion grouped, returns at once, and changes nothing itself', async () => {
+  const t = setup();
+  const r = await t.ok('update_settings', {
+    changes: [
+      { key: 'diffStyle', value: 'split' },
+      { key: 'profile.name', value: 'Latitude HQ' },
+      { key: 'profile.claude.mcp.github', value: 'false' },
+      { key: 'profile.claude.instructions', value: 'Be brief.\nRun pnpm test before you push.\n' },
+    ],
+    reason: 'Set up this profile for the refactor',
+  });
+  assert.deepEqual(r.shown, ['Diffs', 'Name', 'MCP server github', 'CLAUDE.md']);
+  assert.match(r.note, /won't get their answer/);
+  assert.equal(r.changed, undefined, 'nothing changed, so no log line or toast');
+  const { settings, title, kind } = widget(t);
+  assert.equal(kind, 'setting');
+  assert.equal(title, 'Claude suggests 4 setting changes');
+  assert.equal(settings!.reason, 'Set up this profile for the refactor');
+  assert.deepEqual(settings!.changes.map((c) => [c.key, c.profileId]), [
+    ['diffStyle', undefined],
+    ['profile.name', 'latitude'],
+    ['profile.claude.mcp.github', 'latitude'],
+    ['profile.claude.instructions', 'latitude'],
+  ]);
+  assert.equal(settings!.before.diffStyle, 'unified');
+  assert.equal(settings!.before['latitude/profile.name'], 'Latitude');
+  assert.match(settings!.before['latitude/profile.claude.instructions'], /^\d+:-?\d+$/, 'instructions are kept as a hash, never their text');
+  assert.equal(t.thread('rl').activity.at(-1)!.card!.id, widget(t).id, 'it sits in the thread where the agent asked');
+  assert.equal(t.prefs().diffStyle, 'unified');
+  assert.equal(t.profiles()[0].name, 'Latitude');
+  assert.equal(t.settings.config.claude.servers[0].enabled, true);
+  assert.equal(t.settings.calls.some((c) => c === 'applyConfig' || c === 'previewConfig'), false, 'no file was even previewed');
+  assert.equal(t.toasts.length, 0);
+  for (const secret of SECRETS) assert.doesNotMatch(JSON.stringify(t.state().queue), new RegExp(secret), 'the saved widget holds no secret');
+});
+
+test('update_settings validates every change before showing anything', async () => {
+  const t = setup();
+  const one = (key: string, value: string, profileId?: string) => t.err('update_settings', { changes: [{ key, value, ...(profileId && { profileId }) }], reason: 'x' });
+  assert.match(await one('diffStyle', 'sideways'), /allowed: unified, split/);
+  assert.match(await one('diffStyle', 'unified'), /already Unified/);
+  assert.match(await one('terminalFontSize', '99'), /from 9 to 24/);
+  assert.match(await one('nope', 'x'), /No setting nope/);
+  assert.match(await one('agentControl', 'everything'), /the user's alone/);
+  assert.match(await one('permissions', 'Full access'), /the user's alone/);
+  assert.match(await one('claude.path', '/tmp/evil'), /the user's alone/);
+  assert.match(await one('diffStyle', 'split', 'latitude'), /isn't a profile setting/);
+  assert.match(await one('profile.icon', 'skull'), /isn't a value of profile.icon/);
+  assert.match(await one('profile.claude.instructions', 'API_TOKEN=[redacted]'), /still holds \[redacted\]/);
+  assert.match(await one('claude.model', 'claude-gpt-9'), /isn't offered/);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }, { key: 'diffStyle', value: 'split' }], reason: 'x' }), /appears twice/);
+  assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
+});
+
+test('get_keybindings lists every command with its chord now and its default, and get_settings leaves shortcuts to it', async () => {
+  const t = setup();
+  t.env.prefs.set({ keybindings: { palette: 'mod+shift+K', 'go-new': '' } });
+  const r = await t.ok('get_keybindings');
+  const palette = r.commands.find((c: { id: string }) => c.id === 'palette');
+  assert.deepEqual(palette, { id: 'palette', title: 'Command palette', group: 'General', scope: 'global', keys: 'mod+shift+K', default: 'mod+K', isCustom: true });
+  assert.equal(r.commands.find((c: { id: string }) => c.id === 'go-new').keys, '', 'a removed shortcut reads as ""');
+  assert.ok(r.fixed.some((f: { what: string }) => /composer/.test(f.what)));
+  assert.match(r.reserved, /Copy/);
+  const settings = await t.ok('get_settings');
+  assert.equal(settings.settings.some((s: { key: string }) => s.key.startsWith('keybinding.')), false);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'keybinding.palette', value: 'mod+J' }], reason: 'x' }), /set_keybinding/);
+});
+
+test('set_keybinding shows current → proposed on a settings widget, and refuses what Settings › Keyboard refuses', async () => {
+  const t = setup();
+  const r = await t.ok('set_keybinding', { command: 'palette', keys: 'shift+mod+k', reason: 'You asked for ⌘⇧K' });
+  assert.deepEqual(r.shown, ['keybinding.palette']);
+  const { settings, title } = widget(t);
+  assert.equal(title, 'Claude suggests a new shortcut for Command palette');
+  assert.deepEqual(settings!.changes, [{ key: 'keybinding.palette', value: 'mod+shift+K' }]);
+  assert.deepEqual(settings!.before, { 'keybinding.palette': 'mod+K' });
+  assert.deepEqual(t.prefs().keybindings, {}, 'only the user applies it');
+
+  const err = (args: Record<string, string>) => t.err('set_keybinding', { reason: 'x', ...args });
+  assert.match(await err({ command: 'nope', keys: 'mod+J' }), /No command nope/);
+  assert.match(await err({ command: 'palette', keys: 'cmd+J' }), /isn't a chord/);
+  assert.match(await err({ command: 'palette', keys: 'mod+K' }), /already mod\+K/);
+  assert.match(await err({ command: 'palette', keys: 'mod+C' }), /mod\+C is reserved: Copy/);
+  assert.match(await err({ command: 'palette', keys: 'Tab' }), /needs/);
+  assert.match(await err({ command: 'palette', keys: 'mod+P' }), /already used by Go to file \(files-go-to\); pass onConflict/);
+});
+
+test('set_keybinding settles a clash on the widget: swap gives the other command the old chord, replace clears it', async () => {
+  const swap = setup();
+  await swap.ok('set_keybinding', { command: 'palette', keys: 'mod+P', onConflict: 'swap', reason: 'x' });
+  assert.deepEqual(widget(swap).settings!.changes, [
+    { key: 'keybinding.palette', value: 'mod+P' },
+    { key: 'keybinding.files-go-to', value: 'mod+K' },
+  ]);
+  const replace = setup();
+  await replace.ok('set_keybinding', { command: 'palette', keys: 'mod+P', onConflict: 'replace', reason: 'x' });
+  assert.deepEqual(widget(replace).settings!.changes[1], { key: 'keybinding.files-go-to', value: '' });
+  const cleared = setup();
+  await cleared.ok('set_keybinding', { command: 'go-new', keys: '', reason: 'x' });
+  assert.match(widget(cleared).title, /removing the shortcut for New thread/);
+});
+
+test('account suggestions: only an existing account, only for a profile without its own, never under active threads', async () => {
+  const t = setup();
+  const account = (profileId: string, value: string) => t.call('update_settings', { changes: [{ key: 'profile.claudeAccount', value, profileId }], reason: 'x' });
+  assert.match((await account('scratch', 'claude-new')).text, /isn't a value/);
+  assert.match((await account('personal', 'claude-default')).text, /already has its own Claude Code account \(Work\)/);
+  assert.match((await account('latitude', 'claude-work')).text, /never switches a running thread's account/);
+  assert.ok(!(await account('scratch', 'claude-work')).isError);
+  assert.deepEqual(widget(t).settings!.changes, [{ key: 'profile.claudeAccount', value: 'claude-work', profileId: 'scratch' }]);
+  assert.equal(widget(t).title, 'Claude suggests changing Claude Code account (Scratch)', 'another profile is named on the widget');
+  assert.equal(t.settings.accounts.links.scratch, undefined, 'nothing linked');
+});
+
+test('add_mcp_server fills the server into a live widget, refusing anything that looks like a credential', async () => {
+  const t = setup();
+  assert.match(await t.err('add_mcp_server', { name: 'gh2', command: 'npx', env: { GITHUB_TOKEN: 'ghp_abcdefghijklmnopqrstuvwxyz' }, reason: 'x' }), /GITHUB_TOKEN looks like a secret/);
+  assert.match(await t.err('add_mcp_server', { name: 'api', url: 'https://api.example.com/mcp', headers: { Authorization: 'Bearer abcdef1234567890' }, reason: 'x' }), /looks like a secret/);
+  assert.match(await t.err('add_mcp_server', { name: 'github', command: 'npx', reason: 'x' }), /already has a server named github/);
+  assert.match(await t.err('add_mcp_server', { name: 'both', command: 'npx', url: 'https://x.dev/mcp', reason: 'x' }), /not both/);
+  assert.equal(t.state().queue.length, 0);
+  const r = await t.ok('add_mcp_server', { name: 'gh2', command: 'npx', args: ['gh-mcp'], env: { GITHUB_TOKEN: '${GITHUB_TOKEN}' }, reason: 'For PR reviews' });
+  assert.deepEqual(r.shown, ['MCP server gh2']);
+  assert.deepEqual(widget(t).settings!.addServer, { profileId: 'latitude', provider: 'claude', server: { name: 'gh2', type: 'stdio', command: 'npx', args: ['gh-mcp'], env: { GITHUB_TOKEN: '${GITHUB_TOKEN}' }, url: undefined, headers: undefined } });
+  assert.equal(t.settings.config.claude.servers.length, 2, 'nothing added');
+});
+
+test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {
+  const t = setup();
+  const denied = await t.asking('remove_mcp_server', { name: 'linear' });
+  assert.equal(denied.card.title, 'Remove MCP server linear from Latitude?');
+  assert.equal(denied.card.tool!.isDestructive, true);
+  assert.equal(denied.card.tool!.edits!.length, 1);
+  decideTool(denied.card.tool!.callId, { isApproved: false });
+  await denied.result;
+  assert.equal(t.settings.config.claude.servers.length, 2, 'cancelled: kept');
+  const stale = await t.asking('remove_mcp_server', { name: 'linear' });
+  t.settings.files.set('/acct/claude/.claude.json', 'edited in Claude Code meanwhile');
+  decideTool(stale.card.tool!.callId, { isApproved: true });
+  assert.match((await stale.result).text, /changed since you reviewed it/);
+  assert.equal(t.settings.config.claude.servers.length, 2, 'stale: kept');
+  const approved = await t.asking('remove_mcp_server', { name: 'linear' });
+  decideTool(approved.card.tool!.callId, { isApproved: true });
+  assert.ok(!(await approved.result).isError);
+  assert.deepEqual(t.settings.config.claude.servers.map((s) => s.def.name), ['github']);
+});
+
+test('remove_profile refuses the last profile and any with threads, and removes an empty one after Delete', async () => {
+  const t = setup();
+  assert.match(await t.err('remove_profile', { profileId: 'latitude' }), /still has \d+ threads \(\d+ live\)/);
+  const { result, card } = await t.asking('remove_profile', { profileId: 'scratch' });
+  assert.equal(card.title, 'Remove the profile Scratch?');
+  assert.equal(card.tool!.isDestructive, true);
+  decideTool(card.tool!.callId, { isApproved: true });
+  assert.ok(!(await result).isError);
+  assert.equal(t.profiles().some((p) => p.id === 'scratch'), false);
+  const alone = setup();
+  for (const p of alone.profiles()) if (p.id !== 'latitude') alone.env.profiles.remove(p.id);
+  assert.match(await alone.err('remove_profile', { profileId: 'latitude' }), /last profile/);
+});
+
+test('list_profiles shows every profile with its accounts, login state and GitHub account, and marks yours', async () => {
+  const t = setup();
+  const r = await t.ok('list_profiles');
+  assert.deepEqual(r.profiles.map((p: { id: string; isYours: boolean }) => [p.id, p.isYours]), [['latitude', true], ['personal', false], ['liane', false], ['scratch', false]]);
+  assert.deepEqual(r.profiles[1].accounts.claude, { id: 'claude-work', name: 'Work', login: { state: 'logged-in', method: 'Claude account', plan: 'Max' }, isOwn: true });
+  assert.equal(r.profiles[3].github, 'octo');
+  assert.deepEqual(r.accounts.map((a: { id: string }) => a.id), ['claude-default', 'codex-default', 'claude-work']);
+});
+
+test('Read only and Changes block every settings suggestion and delete with no widget, and nothing is touched', async () => {
+  const writes = {
+    update_settings: { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' },
+    add_mcp_server: { name: 'docs', command: 'npx', reason: 'x' },
+    set_keybinding: { command: 'palette', keys: 'mod+shift+K', reason: 'x' },
+    remove_mcp_server: { name: 'github' },
+    remove_profile: { profileId: 'scratch' },
+  };
+  for (const control of ['read', 'changes'] as const) {
+    const t = setup({ control });
+    for (const [name, args] of Object.entries(writes)) assert.match(await t.err(name, args), control === 'read' ? /Read only/ : /Everything/, name);
+    assert.equal(t.state().queue.some((q) => q.tool || (q.settings && q.settings.by !== 'harness')), false);
+    assert.deepEqual(t.settings.calls, [], 'not even a read');
+  }
+});
+
+test('claim_criterion records evidence; report and get_report give the turn as data', async () => {
+  const t = setup();
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }] } });
+  const [criterion] = t.thread('rl').criteria!;
+  assert.match(await t.err('claim_criterion', { criterionId: 'nope', evidence: 'x' }), /get_goal lists them/);
+  await t.ok('claim_criterion', { criterionId: criterion.id, evidence: 'curl -i shows Retry-After: 30' });
+  assert.deepEqual(t.thread('rl').criteria![0].claim, { evidence: 'curl -i shows Retry-After: 30', at: t.state().now, by: 'claude' });
+  await t.ok('report_turn', { decisions: ['Kept the old 429 body'], left: [], question: 'Switch the 429 body to JSON?' });
+  const r = await t.ok('get_report', {}, 'adm');
+  assert.equal(r.threadId, 'adm');
+  const mine = await t.ok('get_report');
+  assert.deepEqual([mine.criteria[0].claimed, mine.report.question, mine.report.decisions], ['curl -i shows Retry-After: 30', 'Switch the 429 body to JSON?', ['Kept the old 429 body']]);
+});
+
+test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and its checks', async () => {
+  const t = setup({ gitBranches: ['main', 'feat/rate-limit'], gitCurrent: 'feat/rate-limit' });
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }, { text: 'Tests pass', command: 'pnpm test' }] } });
+  const [first] = t.thread('rl').criteria!;
+  t.env.dispatch({ type: 'criterion-claim', threadId: 'rl', criterionId: first.id, evidence: 'curl -i shows it', by: 'claude' });
+  const r = await t.ok('open_pr', { title: 'feat(api): rate limit keys by plan', why: 'Enterprise keys need higher limits.' });
+  assert.equal(r.url, 'https://github.com/o/r/pull/9');
+  assert.deepEqual(t.pushes, ['/repo/rl']);
+  assert.equal(t.prs[0].title, 'feat(api): rate limit keys by plan');
+  assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [ ] Tests pass'].join('\n'));
+});
+
+test('open_pr refuses a detached HEAD and the default branch, and pushes nothing', async () => {
+  const detached = setup({ gitBranches: ['main'], gitCurrent: null });
+  assert.match(await detached.err('open_pr', { title: 'fix: x', why: 'y' }), /detached HEAD/);
+  const onMain = setup({ gitBranches: ['main'] });
+  assert.match(await onMain.err('open_pr', { title: 'fix: x', why: 'y' }), /push straight to it/);
+  assert.deepEqual([...detached.pushes, ...onMain.pushes], []);
 });

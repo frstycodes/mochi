@@ -2,8 +2,10 @@ import type { AgentPhase } from './agentShape.ts';
 import type { ActivityEntry, Thread, WebLink } from './model.ts';
 import { HARNESSES } from './settings/harnesses.ts';
 import { parseTool, toolVerb, type ToolCall, type ToolVerb } from './summary.ts';
+import { mochiCall } from './chat/mochiCalls.ts';
+import { isSendTarget } from './chat/threadMessages.ts';
 
-const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse' } satisfies Record<ToolVerb, AgentPhase>;
+const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse', Skill: 'read', Mcp: 'run' } satisfies Record<ToolVerb, AgentPhase>;
 
 export const PHASE_LABELS = { idle: 'Idle', start: 'Starting', think: 'Thinking', read: 'Reading', edit: 'Editing', run: 'Running', browse: 'Browsing', wait: 'Waiting on you' } satisfies Record<AgentPhase, string>;
 
@@ -30,9 +32,12 @@ export function isWorking(thread: Thread) {
   return thread.live ? thread.live.isWorking : thread.status === 'running';
 }
 
+export const SETUP_LABEL = 'Setting up worktree…';
+
 /** Between your message and the agent's first output, which would otherwise show nothing: what it's waiting on. */
 export function pendingWork(thread: Thread): { phase: AgentPhase; label: string } | undefined {
   if (!thread.live?.isWorking || thread.status === 'needs-you') return;
+  if (thread.setup?.status === 'running') return { phase: 'start', label: SETUP_LABEL };
   const last = [...thread.activity].reverse().find((e) => e.kind !== 'event');
   if (last?.who !== 'you') return;
   if (thread.live.starting) return { phase: 'start', label: `Starting ${HARNESSES[thread.live.starting].name}` };
@@ -57,6 +62,7 @@ export interface CurrentAction {
 export function currentAction(thread: Thread): CurrentAction | undefined {
   const isWaiting = thread.status === 'needs-you';
   if (!isWorking(thread) && !isWaiting) return;
+  if (thread.setup?.status === 'failed' && isWaiting) return { label: 'Worktree setup failed', isWaiting };
   const pending = pendingWork(thread);
   if (pending) return { label: pending.label };
   const last = thread.activity.findLast((e) => e.kind === 'tool' || e.kind === 'reasoning' || e.kind === 'message' || (isWaiting && isWaitEvent(e)));
@@ -86,6 +92,8 @@ function waitingLabel(call: ToolCall) {
     Browser: 'use the browser',
     Search: 'search the web',
     Fetch: `read ${hostname(call.target)}`,
+    Skill: `use the ${call.target} skill`,
+    Mcp: `call ${mcpLabel(call.target)}`,
   }[call.verb];
   return `Waiting for your approval to ${action}`;
 }
@@ -102,8 +110,16 @@ export function toolLabel(call: ToolCall) {
     Browser: 'Using the browser',
     Search: `Searching ${call.target}`,
     Fetch: `Reading ${hostname(call.target)}`,
+    Skill: `Using skill ${call.target}`,
+    Mcp: isSendTarget(call) ? 'Messaging another thread' : (mochiCall(call)?.[0] ?? `Calling ${mcpLabel(call.target)}`),
   }[call.verb];
 }
+
+/** `linear: get_issue` → `get_issue on linear`. */
+const mcpLabel = (target: string) => {
+  const [server, tool] = target.split(': ');
+  return tool ? `${tool} on ${server}` : target;
+};
 
 export function hostname(url: string) {
   try {

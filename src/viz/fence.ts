@@ -8,10 +8,6 @@ export interface ChartSpec {
   data: Record<string, string | number>[];
 }
 
-export interface BurnupSpec {
-  thread: string;
-}
-
 export interface MetroSpec {
   threads: string[];
 }
@@ -25,7 +21,6 @@ export interface VizSpecs {
   chart: ChartSpec;
   svg: string;
   html: string;
-  'harness-burnup': BurnupSpec;
   'harness-metro': MetroSpec;
   'harness-diff': DiffSpec;
 }
@@ -34,7 +29,7 @@ export type VizLanguage = keyof VizSpecs;
 
 export type Fence<L extends VizLanguage = VizLanguage> = { status: 'pending' } | { status: 'ready'; spec: VizSpecs[L] } | { status: 'error'; message: string };
 
-export const VIZ_LANGUAGES = ['chart', 'svg', 'html', 'harness-burnup', 'harness-metro', 'harness-diff'] as const satisfies readonly VizLanguage[];
+export const VIZ_LANGUAGES = ['chart', 'svg', 'html', 'harness-metro', 'harness-diff'] as const satisfies readonly VizLanguage[];
 
 const MARKUP = new Set<VizLanguage>(['svg', 'html']);
 
@@ -61,10 +56,6 @@ const PARSERS = {
     const source = code.trim();
     if (!source) throw new Error('empty widget');
     return source;
-  },
-  'harness-burnup': (code) => {
-    const v = record(json(code));
-    return { thread: text(v.thread, 'thread') };
   },
   'harness-metro': (code) => {
     const v = record(json(code));

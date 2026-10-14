@@ -1,108 +1,263 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
-import { Add, BranchDown, BranchUp, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
-import { toast } from 'sonner';
-import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextInputUsage, ContextOutputUsage, ContextTrigger } from '@/components/ai-elements/context';
+import { isValidElement, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { limitStatus } from './chat/LimitCard';
+import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Hourglass, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { threadCwd } from '@/host/cwd';
 import { cn } from '@/lib/utils';
-import type { AgentInfo, McpServer, Provider, Source, Step, Thread } from './model';
+import { copyText } from './clipboard';
+import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
+import { openFiles } from './files/viewer';
+import { RefHoverCard, RefIcon } from './chat/RefHoverCard';
+import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
+import type { McpServer, Provider, PullRequest, Source, Thread } from './model';
+import { isFolderSource, sourceFrom, sourceUrl } from './sources';
+import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
-import { GoalTimeline, StepLinkLine, etaLabel } from './GoalTimeline';
-import { GoalEditor } from './goals/GoalEditor';
+import { GoalDetails } from './goals/GoalDetails';
+import { StepLine, StepLinkLine } from './goals/steps';
+import { openGoalEditor } from './goals/GoalEditor';
+import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
-import { burnSeries, duration, minutesLeft, progressAt } from './progress';
+import { clock, duration, goalProgress, progressLabel } from './progress';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
-import { summarize, type ToolVerb } from './summary';
-import { lineColor, OverflowIcon, ProviderMark, StepStatusIcon, TooltipIconButton } from './ui';
-import { isKnownPlan, planUsage, spaceUsage, threadUsage, type PlanUsage } from './usage/model';
+import { summarize, type CountedVerb, type ThreadSummary } from './summary';
+import { isWorking } from './agentPhase';
+import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { spaceUsage, threadUsage, type Usage } from './usage/model';
+import { toneFor, untilLabel } from './usage/limits';
+import { useAccountLimits } from './usage/useAccountLimits';
+import { currentAction, PHASE_LABELS } from './agentPhase';
+import { isCollapsible, openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
+import { BranchName } from './git/BranchLabel';
 
 const LIST_LIMIT = 3;
 
-const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global, Search: GlobalSearch, Fetch: Global } satisfies Record<ToolVerb, IconComponent>;
-const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser', Search: 'Searched the web', Fetch: 'Read web pages' } satisfies Record<ToolVerb, string>;
+const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global, Search: GlobalSearch, Fetch: Global } satisfies Record<CountedVerb, IconComponent>;
+const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser', Search: 'Searched the web', Fetch: 'Read web pages' } satisfies Record<CountedVerb, string>;
 const SOURCE_ICONS = { link: Link, mcp: Setting, file: Document } satisfies Record<Source['kind'], IconComponent>;
 
-export function SummaryPanel({ thread, className }: { thread: Thread; className?: string }) {
-  const summary = summarize(thread.activity);
-  const notYet = () => toast('Not in the prototype yet', { description: 'This opens a tab in the side pane in the real app.' });
-
+/** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. */
+export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thread; className?: string; onPaneOpened?: () => void }) {
   return (
     <aside aria-label="Thread summary" className={cn('flex min-h-0 flex-col', className)}>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-0.5 px-2 pt-2 pb-3">
-          <PanelHeader thread={thread} />
-          {thread.status === 'settled' && <OutcomeSection thread={thread} />}
-          <GoalSection thread={thread} />
-          <Separator className="mx-2 my-2 w-auto!" />
-          <RateLimitWarning thread={thread} />
-          <SummaryRow icon={Edit} label="Changes" onClick={notYet}>
-            <span className="tabular type-caption">
-              <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span>
-            </span>
-          </SummaryRow>
-          <ContextRow thread={thread} />
-
-          <Section label="Pull requests" empty={thread.prs.length === 0 ? 'No PRs linked yet' : undefined}>
-            {thread.prs.map((pr) => (
-              <SummaryRow key={pr.number} icon={pr.state === 'merged' ? BranchDown : BranchUp} label={pr.title} onClick={notYet}>
-                <span className="tabular type-caption text-subtle-foreground">#{pr.number}</span>
-              </SummaryRow>
-            ))}
-          </Section>
-
-          <Section
-            label="Sources"
-            action={
-              <Button variant="ghost" size="icon-xs" aria-label="Add a source" onClick={notYet}>
-                <Add />
-              </Button>
-            }
-            empty={thread.sources.length === 0 ? 'No sources yet' : undefined}
-          >
-            <LimitedList items={thread.sources}>
-              {(source) => <SummaryRow key={source.label} icon={SOURCE_ICONS[source.kind]} label={source.label} onClick={notYet} />}
-            </LimitedList>
-          </Section>
-
-          <Section label="Skills used" empty={thread.skills.length === 0 ? 'No skills loaded' : undefined}>
-            <LimitedList items={thread.skills}>
-              {(skill) => (
-                <SummaryRow key={skill.name} icon={Note} label={<span className="font-mono type-caption">{skill.name}</span>}>
-                  <span className="tabular type-caption text-subtle-foreground">×{skill.uses}</span>
-                </SummaryRow>
-              )}
-            </LimitedList>
-          </Section>
-
-          <Section label={`Tools called · ${summary.toolTotal}`} empty={summary.tools.length === 0 ? 'No tool calls yet' : undefined}>
-            {summary.tools.map((t) => (
-              <SummaryRow key={t.verb} icon={TOOL_ICONS[t.verb]} label={TOOL_LABELS[t.verb]}>
-                <span className="tabular type-caption text-subtle-foreground">{t.count}</span>
-              </SummaryRow>
-            ))}
-          </Section>
-
-          {!!thread.agent && !!thread.session && <AgentSections agent={thread.agent} provider={thread.session.provider} spaceId={thread.spaceId} />}
-
-          <ThreadUsageSection thread={thread} />
-          <SpaceUsageSection thread={thread} />
-        </div>
+        <SummaryBody thread={thread} onPaneOpened={onPaneOpened} />
       </ScrollArea>
     </aside>
   );
 }
 
+/** The base panel says where the thread stands, what needs you and what shipped; the rest sits in sections below, most of them collapsed. */
+function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
+  const summary = summarize(thread.activity);
+  const sections = useSummarySections(thread, summary);
+  const open = useSummaryOpeners(thread, onPaneOpened);
+  const props = { thread, summary, open };
+
+  return (
+    <div className="flex flex-col gap-0.5 px-2 pt-2 pb-3">
+      <PanelHeader thread={thread} />
+      {hasGoal(thread) && (
+        <>
+          <GoalSection thread={thread} />
+          <Separator className="mx-2 my-2 w-auto!" />
+        </>
+      )}
+      <NeedsYou thread={thread} />
+      <RateLimitWarning thread={thread} />
+      <ChangesRow {...props} />
+      <PullRequests thread={thread} prs={thread.prs} onOpen={open.url} />
+      {sections.length > 0 && <SummarySections sections={sections} {...props} />}
+    </div>
+  );
+}
+
+function useSummarySections(thread: Thread, summary: ThreadSummary) {
+  const { state } = useHarness();
+  return summarySections({ thread, summary, threads: state.threads, space: profileById(thread.spaceId) });
+}
+
+interface SectionProps {
+  thread: Thread;
+  summary: ThreadSummary;
+  open: ReturnType<typeof useSummaryOpeners>;
+}
+
+const SECTION_BODIES = {
+  outcome: OutcomeDetails,
+  sources: SourceRows,
+  skills: SkillRows,
+  tools: ToolRows,
+  session: SessionDetails,
+  usage: ThreadUsageRows,
+  space: SpaceUsageRows,
+} satisfies Record<SummarySectionId, unknown>;
+
+function SummarySections({ sections, ...props }: SectionProps & { sections: SummarySection[] }) {
+  const remembered = useRememberedOpen();
+  return (
+    <Accordion
+      type="multiple"
+      value={openSectionIds(sections, remembered, props.thread.status === 'settled')}
+      onValueChange={(ids) => rememberOpen(sections, ids)}
+      className="gap-0.5 pt-2"
+    >
+      {sections.map((section) =>
+        isCollapsible(section) ? <CollapsibleSection key={section.id} section={section} {...props} /> : <ShownSection key={section.id} section={section} {...props} />,
+      )}
+    </Accordion>
+  );
+}
+
+function CollapsibleSection({ section, ...props }: SectionProps & { section: SummarySection }) {
+  const Body = SECTION_BODIES[section.id];
+  return (
+    <AccordionItem value={section.id} className="not-last:border-b-0">
+      <AccordionTrigger className="h-7 min-w-0 items-center gap-2 px-2 py-0 font-normal text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground hover:no-underline aria-expanded:text-foreground **:data-[slot=accordion-trigger-icon]:size-3.5">
+        <SectionHeading section={section} />
+      </AccordionTrigger>
+      <AccordionContent className="flex flex-col gap-0.5 pt-0.5 pb-2">
+        <Body {...props} />
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
+function ShownSection({ section, ...props }: SectionProps & { section: SummarySection }) {
+  const Body = SECTION_BODIES[section.id];
+  return (
+    <section className="flex flex-col text-sm">
+      <h3 className="flex h-7 items-center border border-transparent px-2">
+        <SectionHeading section={section} />
+      </h3>
+      <div className="flex flex-col gap-0.5 pt-0.5 pb-2">
+        <Body {...props} />
+      </div>
+    </section>
+  );
+}
+
+/** The title keeps its place; the detail gives way, truncated, so the row's end (a chevron) stays in view. */
+function SectionHeading({ section }: { section: SummarySection }) {
+  return (
+    <span className="flex min-w-0 flex-1">
+      <span className="max-w-full shrink-0 truncate">{section.title}</span>
+      {!!section.detail && <span className="min-w-0 truncate tabular text-subtle-foreground">{'\u00a0'}· {section.detail}</span>}
+    </span>
+  );
+}
+
+/** Pending approval or question; blocked steps say so in the goal block. */
+function NeedsYou({ thread }: { thread: Thread }) {
+  // A limit's own line is `RateLimitWarning`'s.
+  if (thread.status !== 'needs-you' || thread.live?.limit) return null;
+  return (
+    <p role="status" className="flex items-center gap-2.5 px-2 py-1 type-meta text-warning">
+      <span className="flex w-4 shrink-0 justify-center" aria-hidden>
+        <span className="size-1.5 rounded-full bg-warning" />
+      </span>
+      {currentAction(thread)?.label ?? PHASE_LABELS.wait}
+    </p>
+  );
+}
+
+function ChangesRow({ thread, summary, open }: SectionProps) {
+  if (!thread.repo && summary.files.length === 0) return null;
+  return (
+    <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
+      <span className="tabular type-caption text-subtle-foreground">
+        {summary.files.length === 0 ? (
+          (thread.status === 'settled' ? 'None' : 'None yet')
+        ) : (
+          <>
+            <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
+            {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
+          </>
+        )}
+      </span>
+    </SummaryRow>
+  );
+}
+
+function PullRequests({ thread, prs, onOpen }: { thread: Thread; prs: PullRequest[]; onOpen: (url: string) => void }) {
+  const items = useThreadPrs(thread, prs);
+  if (items.length === 0) return null;
+  return (
+    <Section label="Pull requests">
+      <LimitedList items={items}>{(item) => <PullRequestRow key={item.pr.number} item={item} onOpen={onOpen} />}</LimitedList>
+    </Section>
+  );
+}
+
+function SourceRows({ thread, open }: SectionProps) {
+  return (
+    <LimitedList items={thread.sources}>
+      {(source) => <SummaryRow key={source.label} icon={SOURCE_ICONS[source.kind]} label={source.label} onClick={open.source(source) ?? undefined} />}
+    </LimitedList>
+  );
+}
+
+function SkillRows({ thread, summary }: SectionProps) {
+  return (
+    <LimitedList items={summary.skills}>
+      {(skill) => (
+        <SummaryRow
+          key={skill.name}
+          icon={Note}
+          label={skill.name}
+          onClick={() => openProfileConfig(thread.spaceId, 'skills', thread.session?.provider ?? thread.providers[0])}
+        >
+          <span className="tabular type-caption text-subtle-foreground">
+            ×{skill.uses} · {clock(skill.lastAt)}
+          </span>
+        </SummaryRow>
+      )}
+    </LimitedList>
+  );
+}
+
+function ToolRows({ summary }: SectionProps) {
+  return (
+    <>
+      {summary.tools.map((t) => (
+        <SummaryRow key={t.verb} icon={TOOL_ICONS[t.verb]} label={TOOL_LABELS[t.verb]}>
+          <span className="tabular type-caption text-subtle-foreground">{t.count}</span>
+        </SummaryRow>
+      ))}
+      {summary.servers.map((s) => (
+        <SummaryRow key={s.server} icon={Server} label={<McpServerLabel usage={s} />}>
+          <span className="tabular type-caption text-subtle-foreground">{s.calls}</span>
+        </SummaryRow>
+      ))}
+    </>
+  );
+}
+
+/** An MCP server's calls: its name, then the tools it ran, muted. */
+function McpServerLabel({ usage }: { usage: ThreadSummary['servers'][number] }) {
+  return (
+    <span title={usage.tools.join(', ')}>
+      {usage.server}
+      <span className="text-subtle-foreground"> · {usage.tools.join(', ')}</span>
+    </span>
+  );
+}
+
 function PanelHeader({ thread }: { thread: Thread }) {
   const { repo } = thread;
+  const [isAdding, setAdding] = useState(false);
   return (
     <div className="flex items-center gap-2 px-2 pb-1">
       <span className="min-w-0 flex-1 truncate type-meta text-muted-foreground">
@@ -110,26 +265,155 @@ function PanelHeader({ thread }: { thread: Thread }) {
           <>
             {thread.repo.project}
             <span className="text-subtle-foreground"> · </span>
-            <span className="font-mono type-caption">{thread.repo.branch}</span>
+            <BranchName repo={thread.repo} className="font-mono type-caption" />
           </>
         ) : (
           'No project'
         )}
       </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-xs" aria-label="Summary options">
-            <OverflowIcon vertical />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuGroup>
-            {repo && <DropdownMenuItem onSelect={() => navigator.clipboard?.writeText(repo.branch).catch(() => undefined)}>Copy branch name</DropdownMenuItem>}
-            {!!thread.repo && <DropdownMenuItem onSelect={() => toast('Not in the prototype yet')}>Open in editor</DropdownMenuItem>}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <AddSource thread={thread} isOpen={isAdding} onOpenChange={setAdding}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-xs" aria-label="Summary options">
+              <OverflowIcon vertical />
+            </Button>
+          </DropdownMenuTrigger>
+          {/* Adding a source hands focus to its field; returning it to this trigger would close the popover. */}
+          <DropdownMenuContent align="end" onCloseAutoFocus={(e) => isAdding && e.preventDefault()}>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onSelect={() => setAdding(true)}>
+                <Add />
+                Add a source…
+              </DropdownMenuItem>
+              {repo && (
+                <DropdownMenuItem onSelect={() => navigator.clipboard?.writeText(repo.branch).catch(() => undefined)}>Copy branch name</DropdownMenuItem>
+              )}
+              <OpenInEditorItems thread={thread} />
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </AddSource>
     </div>
+  );
+}
+
+/** Where each summary row leads: the side pane for changes, links and folders, the file viewer for files, Settings for MCP. */
+function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
+  const { dispatch } = useHarness();
+  const toPane = (action: Action) => {
+    dispatch(action);
+    onPaneOpened?.();
+  };
+  const url = (address: string) => toPane({ type: 'pane-open-tab', threadId: thread.id, kind: 'browser', url: address });
+  const root = threadCwd(thread);
+
+  const source = (s: Source): (() => void) | null => {
+    if (s.kind === 'link') return () => url(sourceUrl(s.label));
+    if (s.kind === 'mcp') return () => openProfileConfig(thread.spaceId, 'mcp', thread.providers[0]);
+    if (!root) return null;
+    if (isFolderSource(s)) return () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'files' });
+    return () => openFiles({ files: [{ source: 'workspace', threadId: thread.id, root, path: s.label }], index: 0 });
+  };
+
+  return { changes: () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }), url, source };
+}
+
+function OpenInEditorItems({ thread }: { thread: Thread }) {
+  const editors = useInstalledEditors();
+  const root = threadCwd(thread);
+  if (!root) return null;
+  return editors.map((editor) => (
+    <DropdownMenuItem key={editor} onSelect={() => openInEditor(editor, root, '')}>
+      Open in {EDITOR_NAMES[editor]}
+    </DropdownMenuItem>
+  ));
+}
+
+// SummaryRow doesn't forward props, so the hover card and context menu triggers sit on a wrapper.
+function PullRequestRow({ item, onOpen }: { item: ThreadPr; onOpen: (url: string) => void }) {
+  const url = item.state.url;
+  const row = (
+    <div>
+      <SummaryRow icon={<RefIcon item={item} className="size-4" />} label={item.state.title} onClick={url ? () => onOpen(url) : undefined}>
+        <span className="tabular type-caption text-subtle-foreground">{item.label}</span>
+      </SummaryRow>
+    </div>
+  );
+  if (!url)
+    return (
+      <RefHoverCard item={item} side="left" align="start">
+        {row}
+      </RefHoverCard>
+    );
+  return (
+    <ContextMenu>
+      <RefHoverCard item={item} side="left" align="start">
+        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      </RefHoverCard>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => onOpen(url)}>Open in the side pane</ContextMenuItem>
+        {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
+        <ContextMenuItem onSelect={() => window.open(url, '_blank', 'noreferrer')}>Open in your browser</ContextMenuItem>
+        <ContextMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/** A URL or a path in the thread's folder; a live agent is told in a message of yours. Anchored on `children`, opened from the header menu. */
+function AddSource({
+  thread,
+  isOpen,
+  onOpenChange,
+  children,
+}: {
+  thread: Thread;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const { dispatch } = useHarness();
+  const [text, setText] = useState('');
+  const source = sourceFrom(text);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!source) return;
+    dispatch({ type: 'source-add', threadId: thread.id, source });
+    setText('');
+    onOpenChange(false);
+  };
+  return (
+    <Popover open={isOpen} onOpenChange={onOpenChange}>
+      <PopoverAnchor asChild>
+        <span className="flex">{children}</span>
+      </PopoverAnchor>
+      <PopoverContent align="end" side="left" className="w-72">
+        <form onSubmit={submit} className="flex flex-col gap-2">
+          <label htmlFor={`add-source-${thread.id}`} className="type-meta font-medium">
+            Add a source
+          </label>
+          <Input
+            id={`add-source-${thread.id}`}
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={thread.repo ? 'https://… or docs/api.md' : 'https://…'}
+          />
+          <p className="type-caption text-subtle-foreground">
+            {source
+              ? source.kind === 'link'
+                ? 'Adds a link'
+                : "Adds a file from this thread's folder"
+              : thread.live
+                ? 'A link or file the agent should use; it gets a message'
+                : 'Paste a URL or type a file path'}
+          </p>
+          <Button type="submit" size="sm" className="self-end">
+            Add source
+          </Button>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -145,11 +429,12 @@ function Section({ label, action, empty, children }: { label: string; action?: R
   );
 }
 
-function SummaryRow({ icon: Icon, label, onClick, children }: { icon: IconComponent; label: ReactNode; onClick?: () => void; children?: ReactNode }) {
+/** `icon`: a reicon drawn muted, or an element that brings its own colour (a PR's state icon). */
+function SummaryRow({ icon: Icon, label, onClick, children }: { icon: IconComponent | ReactElement; label: ReactNode; onClick?: () => void; children?: ReactNode }) {
   const content = (
     <>
       <ItemMedia>
-        <Icon className="size-4 text-muted-foreground" />
+        {isValidElement(Icon) ? Icon : <Icon className="size-4 text-muted-foreground" />}
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="w-full min-w-0 truncate font-normal">{label}</ItemTitle>
@@ -180,38 +465,10 @@ function LimitedList<T>({ items, children }: { items: T[]; children: (item: T) =
       {shown.map(children)}
       {items.length > LIST_LIMIT && (
         <Button variant="ghost" size="xs" className="self-start text-subtle-foreground" onClick={() => setOpen((o) => !o)}>
-          {isOpen ? 'Show less' : `View all ${items.length}`}
+          {isOpen ? 'Show less' : `Show ${items.length - LIST_LIMIT} more`}
         </Button>
       )}
     </>
-  );
-}
-
-function ContextRow({ thread }: { thread: Thread }) {
-  const { used, max } = thread.context;
-  return (
-    <Context usedTokens={used} maxTokens={max} openDelay={200}>
-      <ContextTrigger>
-        <Item asChild size="xs" className="gap-2.5 px-2 py-1 hover:bg-accent/60">
-          <button type="button">
-            <ItemMedia>
-              <Global className="size-4 text-muted-foreground" />
-            </ItemMedia>
-            <ItemContent>
-              <ItemTitle className="font-normal">Context</ItemTitle>
-            </ItemContent>
-            <ItemActions className="tabular type-caption text-subtle-foreground">{max ? `${Math.round((used / max) * 100)}%` : TOKENS.format(used)}</ItemActions>
-          </button>
-        </Item>
-      </ContextTrigger>
-      <ContextContent align="end" side="left">
-        <ContextContentHeader />
-        <ContextContentBody>
-          <ContextInputUsage />
-          <ContextOutputUsage />
-        </ContextContentBody>
-      </ContextContent>
-    </Context>
   );
 }
 
@@ -239,7 +496,10 @@ const MCP_STATUS_LABELS = { connected: '', pending: 'Connecting', 'needs-auth': 
 const MCP_STATUS_CLASSES = { connected: '', pending: 'text-subtle-foreground', 'needs-auth': 'text-warning', failed: 'text-destructive', disabled: 'text-subtle-foreground' } satisfies Record<McpServer['status'], string>;
 
 /** What the live agent reported at session start; a list the agent didn't report is left out rather than shown empty. */
-function AgentSections({ agent, provider, spaceId }: { agent: AgentInfo; provider: Provider; spaceId: string }) {
+function SessionDetails({ thread }: SectionProps) {
+  const { agent, session, spaceId } = thread;
+  if (!agent || !session) return null;
+  const { provider } = session;
   const plugins = agent.plugins ?? [];
   const manage = (part: 'mcp' | 'skills') => (
     <TooltipIconButton label={part === 'mcp' ? 'Manage MCP servers' : 'Manage skills'} hint="Opens this profile's settings" className="size-6" onClick={() => openProfileConfig(spaceId, part, provider)}>
@@ -248,14 +508,12 @@ function AgentSections({ agent, provider, spaceId }: { agent: AgentInfo; provide
   );
   return (
     <>
-      <Section label="Session">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-1 type-meta">
-          <SessionField label="Model" value={agent.model} />
-          <SessionField label="Permissions" value={agent.permissionMode && permissionLabel(agent.permissionMode)} className={cn(isFullAccess(agent.permissionMode) && 'text-warning')} />
-          <SessionField label={HARNESSES[provider].name} value={agent.version} />
-          <SessionField label="Folder" value={agent.cwd} />
-        </dl>
-      </Section>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-1 type-meta">
+        <SessionField label="Model" value={agent.model} />
+        <SessionField label="Permissions" value={agent.permissionMode && permissionLabel(agent.permissionMode)} className={cn(isFullAccess(agent.permissionMode) && 'text-warning')} />
+        <SessionField label={HARNESSES[provider].name} value={agent.version} />
+        <SessionField label="Folder" value={agent.cwd} />
+      </dl>
 
       {!!agent.mcpServers && (
         <Section label={`MCP servers · ${agent.mcpServers.length}`} action={manage('mcp')} empty={agent.mcpServers.length === 0 ? 'No MCP servers configured' : undefined}>
@@ -325,79 +583,64 @@ function ChipSection({ label, items, empty, action }: { label: string; items: st
   );
 }
 
-const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
-const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<PlanUsage['provider'], string>;
+const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<Provider, string>;
+const PLURAL = new Intl.PluralRules('en');
 
-function ThreadUsageSection({ thread }: { thread: Thread }) {
-  const usage = threadUsage(thread);
+function ThreadUsageRows({ thread }: SectionProps) {
+  return <UsageRows usage={threadUsage(thread)} />;
+}
+
+/** Plan limits live in the composer's context ring; this is only what the space's threads spent. */
+function SpaceUsageRows({ thread }: SectionProps) {
+  const { state } = useHarness();
+  return <UsageRows usage={spaceUsage(state.threads, profileById(thread.spaceId))} />;
+}
+
+function UsageRows({ usage }: { usage: Usage }) {
   return (
-    <Section label="Thread usage">
+    <>
       <SummaryRow icon={Coins} label="Tokens">
         <span className="tabular type-caption text-subtle-foreground">
           {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)} out
         </span>
       </SummaryRow>
-      <SummaryRow icon={DollarCircle} label="Est. cost">
-        <span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)}</span>
-      </SummaryRow>
-    </Section>
+      {usage.costUsd !== null && (
+        <SummaryRow icon={DollarCircle} label="Cost">
+          <span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)}</span>
+        </SummaryRow>
+      )}
+    </>
   );
 }
 
 function RateLimitWarning({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
-  const space = profileById(thread.spaceId);
   const provider = thread.providers[0];
-  const plan = planUsage(state.threads.filter((t) => t.spaceId === space.id), provider, space.plans[provider], state.now);
-  if (thread.status !== 'running' || !isKnownPlan(space.plans[provider]) || !plan.isWarning) return null;
+  const { limits } = useAccountLimits(provider, thread.spaceId);
+  const tight = limits?.windows.find((w) => toneFor(w.usedPct / 100) === 'destructive');
+  const limit = limitStatus(thread);
+  if (limit)
+    return (
+      <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
+        <Hourglass className="size-4 shrink-0" aria-hidden />
+        {limit}
+      </p>
+    );
+  if (thread.status !== 'running' || !tight) return null;
 
-  const name = `${PROVIDER_NAMES[plan.provider]} ${plan.plan}`;
+  const name = `${PROVIDER_NAMES[provider]} ${tight.label.toLowerCase()} limit`;
+  const resets = tight.resetsAt ? `, resets in ${untilLabel(Date.parse(tight.resetsAt) - Date.now())}` : '';
   return (
     <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
       <TriangleWarning className="size-4 shrink-0" aria-hidden />
-      {plan.remaining === 0 ? `${name} limit reached; this agent stalls until the window resets.` : `${name} limit in about ${duration(Math.max(1, Math.round(plan.minutesLeft ?? 0)))} at this pace.`}
+      {tight.usedPct >= 100 ? `${name} reached; this agent stalls until it resets${resets}.` : `${name} at ${Math.round(tight.usedPct)}%${resets}.`}
     </p>
   );
 }
 
-function SpaceUsageSection({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
-  const space = profileById(thread.spaceId);
-  const usage = spaceUsage(state.threads, space, state.now);
-  return (
-    <Section label={`${space.name} usage`} action={<span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)} est.</span>}>
-      {usage.plans.map((p) => (
-        <PlanRow key={p.provider} plan={p} />
-      ))}
-    </Section>
-  );
-}
-
-function PlanRow({ plan }: { plan: PlanUsage }) {
-  const share = Math.min(1, plan.used / plan.limit);
-  return (
-    <div className="flex flex-col gap-1.5 px-2 py-1">
-      <div className="flex items-center gap-2.5 type-body">
-        <ProviderMark provider={plan.provider} size={16} />
-        <span className="min-w-0 flex-1 truncate">
-          {PROVIDER_NAMES[plan.provider]} <span className="text-subtle-foreground">· {plan.plan}</span>
-        </span>
-        <span className={cn('tabular type-caption', plan.isWarning ? 'text-warning' : 'text-subtle-foreground')}>{TOKENS.format(plan.remaining)} left</span>
-      </div>
-      <Progress value={share * 100} style={{ '--progress-color': plan.isWarning ? 'var(--warning)' : 'var(--muted-foreground)' } as CSSProperties} aria-label={`${PROVIDER_NAMES[plan.provider]} ${plan.plan} plan used`} />
-    </div>
-  );
-}
-
 function GoalSection({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const [isEditing, setEditing] = useState(false);
-  const live = progressAt(thread, state.now, true);
-  const eta = minutesLeft(thread, state.now);
-  const latest = thread.revisions[thread.revisions.length - 1];
+  const progress = goalProgress(thread);
   const now = thread.steps.filter((s) => s.status === 'running' || s.status === 'blocked');
   const waiting = thread.steps.filter((s) => s.status === 'waiting');
   const next = thread.steps.filter((s) => s.status === 'ready').slice(0, 2);
@@ -408,32 +651,25 @@ function GoalSection({ thread }: { thread: Thread }) {
         <section aria-label="Goal" className="relative isolate flex flex-col gap-3 rounded-lg px-2 py-2 hover:bg-accent/40">
           <div className="flex items-center gap-2">
             <h2 className="type-title">Goal</h2>
-            <Badge variant="outline" title={latest.label}>
-              v{latest.n}
-            </Badge>
-            <span className="flex-1" />
-            {/* z-10 lifts it above the stretched open-timeline button. */}
-            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => setEditing(true)}>
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 tabular type-caption text-subtle-foreground">
+              <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+              <span className="truncate">{progressLabel(progress)}</span>
+            </span>
+            {/* z-10 lifts it above the stretched open-goal button. */}
+            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => openGoalEditor(thread.id)}>
               <Edit />
             </Button>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon-xs" className="after:absolute after:inset-0 after:rounded-lg" aria-label={isOpen ? 'Close the full timeline' : 'Open the full timeline'}>
+              <Button variant="ghost" size="icon-xs" className="after:absolute after:inset-0 after:rounded-lg" aria-label={isOpen ? 'Close the goal' : 'Open the goal'}>
                 <Maximize />
               </Button>
             </PopoverTrigger>
           </div>
-          {hasGoal(thread) ? <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p> : <p className="type-meta text-subtle-foreground">No goal yet. Your first real request sets it.</p>}
-          <div className="flex items-end justify-between gap-2">
-            <span className="tabular type-display">{Math.round(live.pct * 100)}%</span>
-            <span className="tabular pb-1 type-caption text-subtle-foreground">
-              {Math.round(live.done + live.partial)} of {live.scope} pts · {etaLabel(eta).toLowerCase()}
-            </span>
-          </div>
-          <Sparkline thread={thread} now={state.now} />
+          <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
+          {!!thread.criteria?.length && <CriteriaList thread={thread} />}
           {now.map((s) => (
             <div key={s.id} className="flex flex-col gap-1.5">
               <StepLine step={s} />
-              {s.status === 'running' && <Progress value={s.progress * 100} style={{ '--progress-color': lineColor(thread.line) } as CSSProperties} aria-label={`${s.title} progress`} />}
               {s.status === 'blocked' && <span className="type-caption text-warning">{s.note ?? 'Needs you'}</span>}
             </div>
           ))}
@@ -455,78 +691,50 @@ function GoalSection({ thread }: { thread: Thread }) {
         collisionPadding={16}
         onEscapeKeyDown={() => setPinned(false)}
         onInteractOutside={(e) => isPinned && e.preventDefault()}
-        className="surface-float w-[min(780px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
+        className="surface-float w-[min(440px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
       >
-        <div className="mb-4 flex items-start gap-3">
-          <p className="min-w-0 flex-1 type-body text-muted-foreground text-pretty">{thread.goal}</p>
+        <div className="mb-3 flex items-center gap-2">
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 tabular type-meta text-muted-foreground">
+            <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+            <span className="truncate">{progressLabel(progress)}</span>
+          </span>
           <Button variant="ghost" size="sm" onClick={() => setPinned((p) => !p)} aria-pressed={isPinned}>
             {isPinned ? <PinOff data-icon="inline-start" /> : <Pin data-icon="inline-start" />}
             {isPinned ? 'Unpin' : 'Keep open'}
           </Button>
         </div>
-        <GoalTimeline thread={thread} />
+        <GoalDetails thread={thread} />
       </PopoverContent>
-      {isEditing && <GoalEditor thread={thread} onClose={() => setEditing(false)} />}
     </Popover>
   );
 }
 
-function StepLine({ step }: { step: Step }) {
-  return (
-    <span className="flex min-w-0 items-center gap-2 type-meta">
-      <span className="flex w-4 justify-center">
-        <StepStatusIcon status={step.status} />
-      </span>
-      <span className="truncate">{step.title}</span>
-    </span>
-  );
-}
-
-function Sparkline({ thread, now }: { thread: Thread; now: number }) {
-  const series = burnSeries(thread, now);
-  const live = progressAt(thread, now, true);
-  const span = Math.max(1, now - thread.startedAt);
-  const max = Math.max(...series.map((p) => p.scope), live.scope, 1) * 1.1;
-  const W = 268;
-  const H = 36;
-  const x = (t: number) => ((t - thread.startedAt) / span) * W;
-  const y = (v: number) => H - (v / max) * H;
-  const path = (key: 'scope' | 'done') => series.map((p, i) => (i === 0 ? `M${x(p.t)} ${y(p[key])}` : `H${x(p.t)} V${y(p[key])}`)).join(' ');
-  const color = lineColor(thread.line);
-  const endY = y(live.done + live.partial);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-9 w-full overflow-visible" preserveAspectRatio="none" role="img" aria-label="Scope and done over time">
-      <path d={`${path('done')} H${W} V${endY} V${H} H0 Z`} fill={color} fillOpacity={0.14} />
-      <path d={`${path('done')} H${W} V${endY}`} fill="none" stroke={color} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-      <path d={`${path('scope')} H${W}`} fill="none" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeDasharray="3 2" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
-function OutcomeSection({ thread }: { thread: Thread }) {
+function OutcomeDetails({ thread }: SectionProps) {
   const outcome = outcomeOf(thread);
   return (
-    <section aria-label="Outcome" className="flex flex-col gap-1.5 rounded-lg px-2 py-2">
-      <h2 className="type-title">Outcome</h2>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 type-meta">
-        <dt className="text-subtle-foreground">Time</dt>
-        <dd className="tabular">{duration(outcome.minutes)} from start to settle</dd>
-        <dt className="text-subtle-foreground">Steps</dt>
-        <dd className="tabular">
-          {outcome.done} done
-          {outcome.dropped > 0 && `, ${outcome.dropped} dropped`}
-          {outcome.open > 0 && `, ${outcome.open} left open`}
-        </dd>
-        <dt className="text-subtle-foreground">Goal</dt>
-        <dd className="tabular">{outcome.revisions === 0 ? 'Unchanged since it was set' : `Revised to v${outcome.revisions + 1}`}</dd>
-        <dt className="text-subtle-foreground">PRs</dt>
-        <dd className="tabular">
-          {outcome.merged.length + outcome.unmerged.length === 0
-            ? 'None'
-            : [...outcome.merged.map((p) => `#${p.number} merged`), ...outcome.unmerged.map((p) => `#${p.number} ${p.state}`)].join(', ')}
-        </dd>
-      </dl>
-    </section>
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-1 type-meta">
+      <dt className="text-subtle-foreground">Time</dt>
+      <dd className="tabular">{duration(outcome.minutes)} from start to settle</dd>
+      <dt className="text-subtle-foreground">Steps</dt>
+      <dd className="tabular">
+        {outcome.done} done
+        {outcome.dropped > 0 && `, ${outcome.dropped} dropped`}
+        {outcome.open > 0 && `, ${outcome.open} left open`}
+      </dd>
+      <dt className="text-subtle-foreground">Goal</dt>
+      <dd className="tabular">{outcome.revisions === 0 ? 'Unchanged since it was set' : `Revised to v${outcome.revisions + 1}`}</dd>
+      <dt className="text-subtle-foreground">Cost</dt>
+      <dd className="tabular">
+        {outcome.usage.costUsd === null
+          ? `${TOKENS.format(outcome.usage.input + outcome.usage.output)} tokens, no cost reported`
+          : USD.format(outcome.usage.costUsd)}
+      </dd>
+      <dt className="text-subtle-foreground">PRs</dt>
+      <dd className="tabular">
+        {outcome.merged.length + outcome.unmerged.length === 0
+          ? 'None'
+          : [...outcome.merged.map((p) => `#${p.number} merged`), ...outcome.unmerged.map((p) => `#${p.number} ${p.state}`)].join(', ')}
+      </dd>
+    </dl>
   );
 }

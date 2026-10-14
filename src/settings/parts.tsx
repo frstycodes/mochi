@@ -10,7 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { host } from '../host';
-import { TooltipIconButton } from '../ui';
+import { IconSwap, TooltipIconButton } from '../ui';
 import type { InstallState } from './AgentSettings';
 
 /**
@@ -31,11 +31,12 @@ export function SettingsGroup({ id, title, footer, children }: { id?: string; ti
  * One row: label (and a short secondary line) on the left, control on the right, wrapping under on narrow screens.
  * `id` is the deep-link target and names the control `setting-<id>` for the label; `children` expand under the row.
  */
-export function SettingsRow({ id, label, description, control, children }: { id?: string; label: ReactNode; description?: ReactNode; control?: ReactNode; children?: ReactNode }) {
+export function SettingsRow({ id, label, description, control, children, className, ...props }: { id?: string; label: ReactNode; description?: ReactNode; control?: ReactNode } & Omit<React.ComponentProps<'div'>, 'id'>) {
   return (
     <div
       data-setting-id={id}
-      className="relative flex flex-col gap-2.5 px-3.5 py-2.5 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-3.5 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent"
+      {...props}
+      className={cn("relative flex flex-col gap-2.5 px-3.5 py-2.5 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-3.5 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent", className)}
     >
       <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 *:not-first:shrink-0">
         <div className="min-w-40 flex-1">
@@ -114,7 +115,7 @@ export function CommandLine({ command }: { command: string }) {
         {command}
       </code>
       <TooltipIconButton label={isCopied ? 'Copied' : 'Copy command'} hint="Paste it into a terminal" onClick={copy}>
-        {isCopied ? <Check /> : <Copy3 />}
+        <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <Copy3 />}</IconSwap>
       </TooltipIconButton>
     </div>
   );
@@ -204,5 +205,28 @@ export function SettingsChoice<T extends string>({ id, value, options, onChange,
         </ToggleGroupItem>
       ))}
     </ToggleGroup>
+  );
+}
+
+/** A whole number that saves on blur or Enter, clamped to its range. */
+export function NumberInput({ id, value, min, max, step, onCommit }: { id: string; value: number; min: number; max: number; step: number; onCommit: (value: number) => void }) {
+  const commit = (raw: string) => {
+    const next = Math.min(max, Math.max(min, Math.round(Number(raw) || value)));
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <Input
+      id={id}
+      key={value}
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      step={step}
+      defaultValue={value}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+      className="w-24 tabular"
+    />
   );
 }

@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, claudeModels, commandsFrom, createMapper, permissionResult, planFromTodos, withPlanTools } from './map.ts';
+import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, planFromTodos, userContent, withPlanTools } from './map.ts';
+import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
+import { claudeFast } from '../../../src/runtime/models.ts';
 
 const CWD = '/repo';
 
@@ -24,7 +26,7 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   const bash = events.find((e) => e.type === 'tool' && e.phase === 'end' && e.exitCode !== undefined);
   assert.equal(bash?.type === 'tool' && bash.exitCode, 2);
   const usage = events.find((e) => e.type === 'usage');
-  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
+  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 1300, outputTokens: 40, cachedTokens: 200, costUsd: 0.02, contextUsed: 1250, contextMax: 200_000 });
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
 });
 
@@ -81,7 +83,7 @@ test('usage after a second result is the difference from the first, since result
     ({ type: 'result', subtype: 'success', parent_tool_use_id: null, total_cost_usd: cost, modelUsage: { m: { inputTokens: input, outputTokens: 10, cacheReadInputTokens: 0, cacheCreationInputTokens: 0, contextWindow: 1000 } } }) as unknown as SDKMessage;
   map(result(100, 0.5));
   const [usage] = map(result(250, 0.75));
-  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 150, outputTokens: 0, costUsd: 0.25 });
+  assert.deepEqual(usage, { threadId: 't1', type: 'usage', inputTokens: 150, outputTokens: 0, cachedTokens: 0, costUsd: 0.25 });
 });
 
 test('a result after interrupt ends the turn as interrupted, not failed', () => {
@@ -156,12 +158,19 @@ test('approvals: Bash is a command, file tools are edits, deny carries a message
   assert.deepEqual(permissionResult('Bash', { command: 'ls' }, { kind: 'allow' }), { behavior: 'allow', updatedInput: { command: 'ls' } });
 });
 
-test('a rejected rate limit pauses the thread with its reset time; warnings pass', () => {
+test("Claude's limit states pass through as Claude Code reports them: held turn, extra usage, warning, reopened", () => {
   const { map } = createMapper('t1', CWD);
-  const event = (status: string, resetsAt?: number) => ({ type: 'rate_limit_event', rate_limit_info: { status, resetsAt } }) as unknown as SDKMessage;
-  assert.deepEqual(map(event('allowed_warning', 1_760_000_000)), []);
-  assert.deepEqual(map(event('rejected', 1_760_000_000)), [{ threadId: 't1', type: 'limit', resetsAt: '2025-10-09T08:53:20.000Z' }]);
-  assert.deepEqual(map(event('rejected')), [{ threadId: 't1', type: 'limit' }]);
+  const event = (status: string, extra?: object) => map({ type: 'rate_limit_event', rate_limit_info: { status, resetsAt: 1_760_000_000, rateLimitType: 'five_hour', ...extra } } as unknown as SDKMessage);
+  assert.deepEqual(event('allowed', { utilization: 0.4 }), []);
+  assert.deepEqual(event('allowed_warning', { utilization: 0.92 }), [{ threadId: 't1', type: 'limit-notice', text: "Claude's 5-hour limit is 92% used" }]);
+  assert.deepEqual(event('allowed_warning', { utilization: 0.94 }), [], 'one warning per window and reset');
+  assert.deepEqual(event('rejected'), [{ threadId: 't1', type: 'limit', isTurnHeld: true, resetsAt: '2025-10-09T08:53:20.000Z', label: '5-hour' }]);
+  assert.deepEqual(event('rejected'), [], 'repeats of a held window say nothing');
+  assert.deepEqual(event('allowed', { utilization: 0 }), [{ threadId: 't1', type: 'limit-cleared' }]);
+
+  const { map: overage } = createMapper('t2', CWD);
+  const rejected = overage({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', rateLimitType: 'seven_day', overageStatus: 'allowed', resetsAt: 1_760_000_000 } } as unknown as SDKMessage);
+  assert.deepEqual(rejected, [{ threadId: 't2', type: 'limit-notice', text: 'Claude is past its weekly limit and using extra usage, billed per use' }], 'extra usage keeps running: no pause');
 });
 
 test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
@@ -182,17 +191,17 @@ test('WebSearch ends with its hits as links, WebFetch with the page it read', ()
   assert.deepEqual(result('f1', fetched).at(0), { threadId: 't1', type: 'tool', id: 'f1', phase: 'end', text: 'Fetch http://redis.io/docs', links: [{ url: 'https://redis.io/docs/' }] });
 });
 
-test('supportedModels() lists each model once by its wire id, the default row marking the default', () => {
+test('supportedModels() lists each model once by its wire id, the default row marking the default, fast mode where reported', () => {
   const effort = { supportsEffort: true, supportedEffortLevels: ['low', 'high'] as ('low' | 'high')[] };
   const models = claudeModels([
     { value: 'default', resolvedModel: 'claude-opus-5-5', displayName: 'Default (recommended)', description: 'Opus 5.5', ...effort },
-    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Best for everyday, complex tasks', ...effort },
+    { value: 'opus', resolvedModel: 'claude-opus-5-5', displayName: 'Opus 5.5', description: 'Best for everyday, complex tasks', ...effort, supportsFastMode: true },
     { value: 'claude-opus-5-5', displayName: 'Opus 5.5 (explicit)', description: '' },
     { value: 'claude-haiku-4-5-20251001', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku 4.5', description: 'Fastest' },
   ]);
   assert.deepEqual(models, [
-    { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], isDefault: true },
-    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], isDefault: false },
+    { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'high'], speeds: [claudeFast('claude-opus-5-5')], isDefault: true },
+    { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', description: 'Fastest', efforts: [], speeds: [], isDefault: false },
   ]);
 });
 
@@ -237,4 +246,79 @@ test('commands keep skills and custom commands with their argument hints, not Cl
       { name: 'review', description: 'Review' },
     ],
   );
+});
+
+test('work-group rows: Bash keeps its own description, file paths read relative to the worktree, edits carry a renderable patch', () => {
+  assert.equal(callDescription('Bash', { command: 'gh run watch 1', description: "Waited for PR 42's CI run to finish" }), "Waited for PR 42's CI run to finish");
+  assert.equal(callDescription('Grep', { pattern: 'describeTool', path: '/repo/src' }), 'Searched for “describeTool” in src');
+  assert.equal(callDescription('Read', { file_path: '/repo/a.ts' }), undefined);
+  assert.equal(describeTool('Read', { file_path: '/repo/src/math.js' }, [], '/repo'), 'Read src/math.js');
+  assert.equal(describeTool('Read', { file_path: '/elsewhere/x.js' }, [], '/repo'), 'Read /elsewhere/x.js');
+  const patch = patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: [' a', '+b'] }] });
+  assert.equal(patch, 'diff --git a/math.js b/math.js\n--- a/math.js\n+++ b/math.js\n@@ -1,1 +1,2 @@\n a\n+b');
+  assert.equal(parsePatchFiles(patch!)[0].files[0].type, 'change');
+  assert.equal(patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [] }), undefined);
+});
+
+test('a Skill call is a skill load and an mcp__ call names its server and tool, read back through init', () => {
+  const { map } = createMapper('t1', CWD);
+  map({ type: 'system', subtype: 'init', session_id: 's', parent_tool_use_id: null, cwd: CWD, tools: [], mcp_servers: [{ name: 'claude.ai Linear', status: 'connected' }, { name: 'git', status: 'connected' }, { name: 'github', status: 'connected' }] } as unknown as SDKMessage);
+  const call = (id: string, name: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input }] } } as unknown as SDKMessage);
+  const result = (id: string) => map({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, content: 'Launching skill: ui' }] }, tool_use_result: { success: true, commandName: 'ui' } } as unknown as SDKMessage);
+
+  assert.deepEqual(call('k1', 'Skill', { skill: '/ui', args: 'the header' }), [{ threadId: 't1', type: 'tool', id: 'k1', phase: 'start', text: 'Skill ui', skill: 'ui' }]);
+  assert.deepEqual(result('k1'), [{ threadId: 't1', type: 'tool', id: 'k1', phase: 'end', text: 'Skill ui' }]);
+  assert.deepEqual(call('m1', 'mcp__claude_ai_Linear__get_issue', { id: 'LAT-1' })[0], { threadId: 't1', type: 'tool', id: 'm1', phase: 'start', text: 'Mcp claude.ai Linear: get_issue', mcp: { server: 'claude.ai Linear', tool: 'get_issue' } });
+  const github = call('m2', 'mcp__github__list_prs', {})[0];
+  assert.deepEqual(github.type === 'tool' && github.mcp, { server: 'github', tool: 'list_prs' }, 'the longer server name wins over a prefix of it');
+  const unknown = call('m3', 'mcp__later__do_it', {})[0];
+  assert.deepEqual(unknown.type === 'tool' && unknown.mcp, { server: 'later', tool: 'do_it' }, 'a server init did not list splits at its first __');
+  assert.deepEqual(call('b1', 'Skill', {})[0], { threadId: 't1', type: 'tool', id: 'b1', phase: 'start', text: 'Skill' }, 'no skill name, no skill load');
+});
+
+test('a message opening with a /skill reports the load itself, once init has listed the skills (2.1.296 emits nothing for it)', () => {
+  const mapper = createMapper('t1', CWD);
+  assert.deepEqual(mapper.sent('/shout what is 2+2?'), [], 'init not in yet: held');
+  const init = mapper.map({ type: 'system', subtype: 'init', session_id: 's', parent_tool_use_id: null, cwd: CWD, tools: [], mcp_servers: [], skills: ['shout'] } as unknown as SDKMessage);
+  assert.deepEqual(
+    init.filter((e) => e.type === 'tool').map((e) => e.type === 'tool' && [e.phase, e.text, e.skill]),
+    [
+      ['start', 'Skill shout', 'shout'],
+      ['end', 'Skill shout', 'shout'],
+    ],
+  );
+  assert.equal(mapper.sent('/shout again').length, 2, 'known now: reported at once');
+  assert.deepEqual(mapper.sent('/compact'), [], 'a command that is not a skill');
+  assert.deepEqual(mapper.sent('no command'), []);
+});
+
+test('images become base64 image blocks ahead of the text in the user message', () => {
+  assert.equal(userContent('hi'), 'hi');
+  assert.deepEqual(userContent('what is this?', [{ mediaType: 'image/gif', data: 'R0lGOD==' }]), [
+    { type: 'image', source: { type: 'base64', media_type: 'image/gif', data: 'R0lGOD==' } },
+    { type: 'text', text: 'what is this?' },
+  ]);
+});
+
+test('MCP status keeps an http or SSE server’s URL, never a claude.ai proxy’s', () => {
+  const servers = mcpServersFromStatus([
+    { name: 'linear', status: 'connected', config: { type: 'http', url: 'https://mcp.linear.app/mcp' } },
+    { name: 'claude.ai Gmail', status: 'connected', config: { type: 'claudeai-proxy', url: 'https://proxy.example/x', id: 'g' } },
+    { name: 'git', status: 'connected', config: { type: 'stdio', command: 'uvx' } },
+  ]);
+  assert.deepEqual(
+    servers.map((s) => s.url),
+    ['https://mcp.linear.app/mcp', undefined, undefined],
+  );
+});
+
+test('a compaction reports its start, then the sizes from the boundary, and the next usage counts from the smaller context', () => {
+  const { map } = createMapper('t1', CWD);
+  const status = (fields: object) => ({ type: 'system', subtype: 'status', uuid: 'a-b-c-d-e', session_id: 's', ...fields }) as unknown as SDKMessage;
+  assert.deepEqual(map(status({ status: 'compacting' })), [{ threadId: 't1', type: 'compaction', phase: 'start' }]);
+  assert.deepEqual(map({ type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'auto', pre_tokens: 182_000, post_tokens: 24_000 }, uuid: 'a-b-c-d-e', session_id: 's' } as SDKMessage), [
+    { threadId: 't1', type: 'compaction', phase: 'end', trigger: 'auto', preTokens: 182_000, postTokens: 24_000 },
+  ]);
+  assert.deepEqual(map(status({ status: null, compact_result: 'success' })), []);
+  assert.deepEqual(map(status({ status: null, compact_result: 'failed', compact_error: 'Not enough messages' })), [{ threadId: 't1', type: 'compaction', phase: 'end', error: 'Not enough messages' }]);
 });

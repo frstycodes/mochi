@@ -2,8 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode,
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
-import type { Thread } from '../model';
-import { Edit, Inbox, Route } from 'reicon-react';
+import { Edit, Forbidden, Inbox, Route } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -17,6 +16,8 @@ import { useHarness } from '../store';
 import { saveLayouts } from '../store/layout';
 import { ThreadView } from '../ThreadView';
 import { useDragSession } from './drag';
+import { useSplitTabDrag } from './useSplitTabDrag';
+import { PaneSlotBar, PaneSlots } from '../pane/PaneHeader';
 import { LeafBar } from './SplitControls';
 import { PreviewContext, SplitContext } from './SplitContext';
 import { displayRoot, equalSizes, findLeaf, leaves, snapSizes, type Leaf, type LayoutNode, type Split, type View, type Zone } from './tree';
@@ -30,11 +31,6 @@ const MIN_SPLIT_PX = 240;
 export function Workspace() {
   const { state } = useHarness();
   const layout = state.layouts[state.spaceId];
-  useWindowOrientation();
-  useLayoutPersistence();
-  useLayoutKeys();
-  useWatchToasts();
-
   const root = displayRoot(layout, state.orientation);
   const all = leaves(root);
   const zoomed = layout.zoomId ? findLeaf(root, layout.zoomId) : undefined;
@@ -44,9 +40,17 @@ export function Workspace() {
   return (
     <div className={cn('h-full min-h-0', isMulti && 'bg-sidebar p-1.5')}>
       {zoomed ? <LeafView leaf={zoomed} isMulti isZoomed isFirst /> : <NodeView node={root} isMulti={isMulti} firstId={all[0].id} />}
-      <DragChip />
     </div>
   );
+}
+
+/** What the workspace keeps running whichever page shows it: keys, persistence, watch toasts and the drag chip. */
+export function WorkspaceEffects() {
+  useWindowOrientation();
+  useLayoutPersistence();
+  useLayoutKeys();
+  useWatchToasts();
+  return <DragChip />;
 }
 
 function NodeView({ node, isMulti, firstId }: { node: LayoutNode; isMulti: boolean; firstId: string }) {
@@ -96,29 +100,37 @@ function SplitView({ split, firstId }: { split: Split; firstId: string }) {
   );
 }
 
-export function LeafView({ leaf, isMulti, isZoomed, isFirst }: { leaf: Leaf; isMulti: boolean; isZoomed: boolean; isFirst: boolean }) {
+/**
+ * `isPreview`: a pinned page beside the one in view, drawn the way a lone split draws it but read-only (`inert`, no native overlays, not a
+ * drop or focus target). Same element tree either way, so landing on it only flips these props and never remounts the thread.
+ */
+export function LeafView({ leaf, isMulti, isZoomed, isFirst, isPreview = false }: { leaf: Leaf; isMulti: boolean; isZoomed: boolean; isFirst: boolean; isPreview?: boolean }) {
   const { state, dispatch } = useHarness();
   const ref = useRef<HTMLElement>(null);
   const isWide = useIsWider(ref, WIDE_SPLIT_PX);
-  const isFocused = state.layouts[state.spaceId].focusId === leaf.id;
+  const isFocused = !isPreview && state.layouts[state.spaceId].focusId === leaf.id;
   useFocusFollows(ref, isFocused && isMulti);
-  const focus = () => dispatch({ type: 'layout-focus', leafId: leaf.id });
+  const focus = () => !isPreview && dispatch({ type: 'layout-focus', leafId: leaf.id });
 
   return (
     <SplitContext.Provider value={{ leafId: leaf.id, isFocused, isMulti, isZoomed, isFirst, isWide }}>
-      <section
-        ref={ref}
-        data-leaf-id={leaf.id}
-        aria-label={isMulti ? `Split${isFocused ? ', focused' : ''}` : undefined}
-        tabIndex={-1}
-        // Primary button only: right-clicking a split's tab or header opens its menu without focusing the split.
-        onPointerDownCapture={(e) => e.button === 0 && focus()}
-        onFocusCapture={() => isTabbing() && focus()}
-        className={cn('relative h-full min-h-0 min-w-0 bg-background outline-none', isMulti && 'overflow-hidden rounded-xl border border-transparent', isMulti && isFocused && 'border-foreground/20')}
-      >
-        <LeafContent leafId={leaf.id} view={leaf.view} />
-        <DropZone leafId={leaf.id} />
-      </section>
+      <PreviewContext.Provider value={isPreview}>
+        <section
+          ref={ref}
+          data-leaf-id={isPreview ? undefined : leaf.id}
+          inert={isPreview}
+          aria-hidden={isPreview || undefined}
+          aria-label={isMulti ? `Split${isFocused ? ', focused' : ''}` : undefined}
+          tabIndex={-1}
+          // Primary button only: right-clicking a split's tab or header opens its menu without focusing the split.
+          onPointerDownCapture={(e) => e.button === 0 && focus()}
+          onFocusCapture={() => isTabbing() && focus()}
+          className={cn('relative h-full min-h-0 min-w-0 bg-background outline-none', isMulti && 'overflow-hidden rounded-xl border border-transparent', isMulti && isFocused && 'border-foreground/20')}
+        >
+          <LeafContent leafId={leaf.id} view={leaf.view} />
+          <DropZone leafId={leaf.id} />
+        </section>
+      </PreviewContext.Provider>
     </SplitContext.Provider>
   );
 }
@@ -166,21 +178,27 @@ function TabLeaf({ threadId, tabId }: { threadId: string; tabId: string }) {
   const thread = state.threads.find((t) => t.id === threadId);
   const pane = state.panes.find((p) => p.threadId === threadId);
   const tab = pane?.tabs.find((t) => t.id === tabId);
+  const onDragHandle = useSplitTabDrag(threadId, tabId, tab?.kind, tab ? tabTitle(tab) : '');
   if (!thread || !pane || !tab) return <ClosedTab />;
   const { icon: Icon, component: Content } = PANE_TABS[tab.kind];
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <LeafBar>
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="truncate">{tabTitle(tab)}</span>
+        <span onPointerDown={onDragHandle} className="app-no-drag flex min-w-0 cursor-grab items-center gap-2 select-none active:cursor-grabbing">
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">{tabTitle(tab)}</span>
+        </span>
         <button type="button" onClick={() => dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } })} className="min-w-0 cursor-default truncate font-normal text-subtle-foreground hover:text-foreground">
           {thread.title}
         </button>
       </LeafBar>
-      <div className="min-h-0 flex-1">
-        <Content thread={thread} pane={pane} tab={tab} />
-      </div>
+      <PaneSlots>
+        <PaneSlotBar />
+        <div className="min-h-0 flex-1">
+          <Content thread={thread} pane={pane} tab={tab} />
+        </div>
+      </PaneSlots>
     </div>
   );
 }
@@ -213,16 +231,28 @@ const ZONE_RECT = {
 
 const ZONE_LABEL = { left: 'Open on the left', right: 'Open on the right', top: 'Open above', bottom: 'Open below', center: 'Replace this split' } satisfies Record<Zone, string>;
 
-/** While something is dragged over this split, shows the region it would take. */
+/** While something is dragged over this split, shows the region it would take, or why it can't open here. */
 function DropZone({ leafId }: { leafId: string }) {
   const drag = useDragSession();
   const hit = drag?.hit?.leafId === leafId ? drag.hit : null;
   if (!hit) return null;
+  if (drag?.refusal) return <RefusedZone reason={drag.refusal} />;
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 z-50 bg-background/40">
-      <div className={cn('absolute flex items-center justify-center rounded-xl bg-foreground/8 ring-1 ring-foreground/25', ZONE_RECT[hit.zone])}>
+      <div className={cn('absolute flex items-center justify-center rounded-xl border border-foreground/25 bg-foreground/8', ZONE_RECT[hit.zone])}>
         <span className="rounded-full bg-popover px-2.5 py-1 type-caption text-foreground shadow-popover">{ZONE_LABEL[hit.zone]}</span>
       </div>
+    </div>
+  );
+}
+
+function RefusedZone({ reason }: { reason: string }) {
+  return (
+    <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/40 p-4">
+      <span className="flex max-w-72 items-center gap-1.5 rounded-xl bg-popover px-3 py-2 type-caption text-foreground shadow-popover">
+        <Forbidden className="size-3.5 shrink-0 text-muted-foreground" />
+        {reason}
+      </span>
     </div>
   );
 }
@@ -235,21 +265,6 @@ function DragChip() {
       {drag.label}
     </div>,
     document.body,
-  );
-}
-
-/** A thread outside the layout, drawn the way a lone split draws it: Stage Manager's neighbouring pages, so a swipe slides real content in. */
-export function ThreadPreview({ thread }: { thread: Thread }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const isWide = useIsWider(ref, WIDE_SPLIT_PX);
-  return (
-    <div ref={ref} inert aria-hidden className="size-full min-h-0 min-w-0 bg-background">
-      <PreviewContext.Provider value>
-        <SplitContext.Provider value={{ leafId: `preview-${thread.id}`, isFocused: false, isMulti: false, isZoomed: false, isFirst: false, isWide }}>
-          <ThreadView thread={thread} />
-        </SplitContext.Provider>
-      </PreviewContext.Provider>
-    </div>
   );
 }
 
@@ -311,6 +326,6 @@ function useWindowOrientation() {
 function useLayoutPersistence() {
   const { state } = useHarness();
   useEffect(() => {
-    saveLayouts({ layouts: state.layouts, watched: state.watched, isNeedsYouNear: state.isNeedsYouNear });
-  }, [state.layouts, state.watched, state.isNeedsYouNear]);
+    saveLayouts({ layouts: state.layouts, watched: state.watched });
+  }, [state.layouts, state.watched]);
 }

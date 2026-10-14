@@ -1,4 +1,8 @@
+import { pauseQueue } from '../chat/outbox.ts';
+import { migrateReceived } from '../chat/threadMessages.ts';
+import { LIMIT_DEMO_IDS } from '../usage/limitDemo.ts';
 import { host } from '../host/index.ts';
+import type { WorktreeSetup } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
@@ -17,7 +21,7 @@ export interface Saved {
 }
 
 export function toSaved(state: State): Saved {
-  const threads = state.threads.filter((t) => t.live);
+  const threads = state.threads.filter((t) => t.live && !LIMIT_DEMO_IDS.includes(t.id));
   const ids = new Set(threads.map((t) => t.id));
   const pick = <T>(record: Record<string, T>) => Object.fromEntries(Object.entries(record).filter(([id]) => ids.has(id)));
   return {
@@ -38,7 +42,7 @@ export function parseSaved(json: string | null): Saved | null {
   try {
     const saved = JSON.parse(json) as Saved;
     if (saved?.version !== 1 || !Array.isArray(saved.threads) || !Array.isArray(saved.queue)) return null;
-    const threads = saved.threads.filter((t) => typeof t?.id === 'string' && t.live).map((t) => restoreThread(t, saved.now));
+    const threads = migrateReceived(saved.threads.filter((t) => typeof t?.id === 'string' && t.live).map((t) => restoreThread(t, saved.now)));
     // Agent requests and Mochi tool cards wait on a live call, which a restart ended.
     return { ...saved, threads, queue: saved.queue.filter((q) => !q.requestId && !q.tool) };
   } catch {
@@ -50,9 +54,16 @@ function restoreThread(thread: Thread, now: number): Thread {
   const live = { ...thread.live!, isWorking: false, isDetached: true, starting: undefined };
   const reviews = thread.reviews?.map((r) => (r.status === 'running' ? { ...r, status: 'failed' as const, error: 'Stopped when Mochi quit' } : r));
   const subagents = thread.subagents?.map((s) => (s.status === 'running' ? { ...s, status: 'stopped' as const, error: 'Stopped when Mochi quit', activity: undefined } : s));
-  const restored = { ...thread, live, ...(reviews && { reviews }), ...(subagents && { subagents }) };
+  const setup = thread.setup && (thread.setup.status === 'running' || thread.setup.status === 'failed') ? stoppedSetup(thread.setup) : thread.setup;
+  // Sending the queue on launch would spend usage unasked.
+  const restored = pauseQueue({ ...thread, live, ...(reviews && { reviews }), ...(subagents && { subagents }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
   if (!thread.live!.isWorking) return restored;
   return { ...restored, activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
+}
+
+/** A setup Mochi quit during: the next message starts the agent in the worktree as it is. */
+function stoppedSetup(setup: WorktreeSetup): WorktreeSetup {
+  return { ...setup, status: 'cancelled', steps: setup.steps.map((s) => (s.status === 'running' || s.status === 'pending' ? { ...s, status: 'skipped' } : s)) };
 }
 
 let restored: Saved | null = null;

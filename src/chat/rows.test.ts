@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ActivityEntry } from '../model.ts';
-import { chatRows, liveWorkIndex } from './rows.ts';
+import { chatRows, finalReplies, liveWorkIndex } from './rows.ts';
+import { turnChanges, type TurnChanges } from './turnChanges.ts';
 
 const e = (kind: ActivityEntry['kind'], who: ActivityEntry['who'], text: string): ActivityEntry => ({ at: 0, who, kind, text });
-const shape = (activity: ActivityEntry[]) => chatRows(activity).map((r) => (r.kind === 'work' ? `work(${r.entries.map((x) => x.text).join(', ')})` : r.kind === 'review' ? 'review' : r.entry.text));
+const shape = (activity: ActivityEntry[], changes: TurnChanges[] = []) =>
+  chatRows(activity, [], changes).map((r) => (r.kind === 'work' ? `work(${r.entries.map((x) => x.text).join(', ')})` : r.kind === 'review' ? 'review' : r.kind === 'changes' ? `changes(${r.turn.start})` : r.entry.text));
 
-test('a turn folds every tool call, approval and harness event into one work row; prose stays outside', () => {
+test('work groups interleave with prose: tools, message, tools, message, each group in transcript order', () => {
   assert.deepEqual(
     shape([
       e('message', 'you', 'find a monitor'),
@@ -25,8 +27,9 @@ test('a turn folds every tool call, approval and harness event into one work row
     [
       'find a monitor',
       'Sent off-goal · not counted',
-      'work(Search EX271UZ review, Waiting on you: Search the web, Approved: Search the web, Search EX271UZ rtings, Fetch https://rtings.com/x)',
+      'work(Search EX271UZ review, Waiting on you: Search the web, Approved: Search the web, Search EX271UZ rtings)',
       'Two reviews so far.',
+      'work(Fetch https://rtings.com/x)',
       'Done.',
       'Scheduled run: nightly',
       'thanks',
@@ -45,14 +48,85 @@ test("Mochi's approval widgets stay their own row mid-turn; the turn's later wor
   ]);
 });
 
-test('the live work row is the newest one, unless you spoke after it', () => {
-  const rows = chatRows([e('message', 'you', 'go'), e('tool', 'claude', 'Run a'), e('message', 'claude', 'ok')]);
-  assert.equal(liveWorkIndex(rows), 1);
-  assert.equal(liveWorkIndex(chatRows([e('message', 'you', 'go'), e('tool', 'claude', 'Run a'), e('message', 'you', 'more')])), -1);
+test('a turn of tools, prose, tools, prose, tools makes three groups in place', () => {
+  assert.deepEqual(
+    shape([
+      e('message', 'you', 'fix CI'),
+      e('tool', 'claude', 'Run gh run view 1'),
+      e('tool', 'claude', 'Read ci.yml'),
+      e('message', 'claude', 'Found the failing step.'),
+      e('tool', 'claude', 'Edit ci.yml  +2 −1'),
+      e('reasoning', 'claude', '…'),
+      e('tool', 'claude', 'Run pnpm test'),
+      e('message', 'claude', 'Tests pass.'),
+      e('tool', 'claude', 'Run git push'),
+    ]),
+    ['fix CI', 'work(Run gh run view 1, Read ci.yml)', 'Found the failing step.', 'work(Edit ci.yml  +2 −1, …, Run pnpm test)', 'Tests pass.', 'work(Run git push)'],
+  );
+});
+
+test('the live work row is the newest one, until anyone speaks after it', () => {
+  assert.equal(liveWorkIndex(chatRows([e('message', 'you', 'go'), e('tool', 'claude', 'Run a')])), 1);
+  assert.equal(liveWorkIndex(chatRows([e('message', 'you', 'go'), e('tool', 'claude', 'Run a'), e('message', 'claude', 'ok')])), -1);
+  assert.equal(liveWorkIndex(chatRows([e('message', 'you', 'go'), e('tool', 'claude', 'Run a'), e('message', 'claude', 'ok'), e('tool', 'claude', 'Run b')])), 3);
 });
 
 test('a subagent is its own row where it started, and the turn goes on in a new accordion after it', () => {
   const agent: ActivityEntry = { ...e('subagent', 'claude', 'Load test'), subagentId: 'toolu_1' };
   assert.deepEqual(shape([e('message', 'you', 'go'), e('tool', 'claude', 'Read a.ts'), agent, e('tool', 'claude', 'Edit a.ts')]), ['go', 'work(Read a.ts)', 'Load test', 'work(Edit a.ts)']);
   assert.deepEqual(chatRows([agent]).map((r) => r.kind), ['subagent']);
+});
+
+test('message actions go on the agent\'s last reply of each turn, and on the newest turn only once it is idle', () => {
+  const activity = [
+    e('message', 'you', 'fix it'),
+    e('message', 'claude', 'Looking.'),
+    e('tool', 'claude', 'Read a.ts'),
+    e('message', 'claude', 'Fixed.'),
+    e('event', 'harness', 'Goal v2'),
+    e('message', 'you', 'thanks, now tests'),
+    e('message', 'claude', 'Running them.'),
+  ];
+  const rows = chatRows(activity);
+  const text = (set: Set<number>) => [...set].map((i) => (rows[i].kind === 'message' ? rows[i].entry.text : '?'));
+  assert.deepEqual(text(finalReplies(rows, true)), ['Fixed.'], 'mid-turn replies and the working turn get none');
+  assert.deepEqual(text(finalReplies(rows, false)), ['Fixed.', 'Running them.']);
+});
+
+test("a turn's changes card sits after its last row, before your next message; an open turn's goes last", () => {
+  const activity = [
+    e('message', 'you', 'add charts'),
+    e('tool', 'claude', 'Edit charts.tsx  +12 −0'),
+    e('message', 'claude', 'Added.'),
+    e('message', 'you', 'thanks'),
+    e('message', 'claude', 'Anytime.'),
+    e('message', 'you', 'now tests'),
+    e('tool', 'claude', 'Write charts.test.ts  +30 −0'),
+    e('message', 'claude', 'Tested.'),
+  ];
+  assert.deepEqual(shape(activity, turnChanges(activity)), [
+    'add charts',
+    'work(Edit charts.tsx  +12 −0)',
+    'Added.',
+    'changes(0)',
+    'thanks',
+    'Anytime.',
+    'now tests',
+    'work(Write charts.test.ts  +30 −0)',
+    'Tested.',
+    'changes(5)',
+  ]);
+});
+
+test("another thread's message is its own log row: it ends the work group before it and starts a turn like yours", () => {
+  const received: ActivityEntry = { ...e('message', 'you', 'Keys rotate hourly'), from: { threadId: 't2', title: 'Crypto module' } };
+  const activity = [e('message', 'you', 'sync the keys'), e('tool', 'claude', 'Run pnpm test'), e('message', 'claude', 'Waiting on crypto.'), received, e('tool', 'claude', 'Edit keys.ts'), e('message', 'claude', 'Rotated.')];
+  const rows = chatRows(activity);
+  assert.deepEqual(
+    rows.map((r) => r.kind),
+    ['message', 'work', 'message', 'thread-message', 'work', 'message'],
+  );
+  assert.deepEqual(rows[3], { kind: 'thread-message', key: '0-3', entry: received, index: 3 });
+  assert.deepEqual([...finalReplies(rows, false)], [2, 5], 'the reply before it is final, like before your own message');
+  assert.equal(liveWorkIndex(chatRows(activity.slice(0, 4))), -1, 'the group before it is no longer live');
 });

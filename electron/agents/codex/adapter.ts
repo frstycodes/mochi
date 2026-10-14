@@ -1,10 +1,13 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
-import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
+import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillInput, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, type RpcId } from './rpc.ts';
 import { CODEX_BROWSER_FEATURES_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
+import { killTree, spawnable } from '../../platform.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 
 interface Live {
@@ -15,6 +18,8 @@ interface Live {
   /** Server generation the thread was opened on; after a crash it is resumed on the new server before the next turn. */
   gen: number;
   turnId?: string;
+  /** Turns this thread started on this Codex thread, oldest first, for `rewindPoint`. */
+  turns: { id: string; text: string }[];
   options: AgentRunOptions;
 }
 
@@ -82,6 +87,8 @@ export class CodexAdapter {
   private accountFor: AccountFor;
   private findCodex: FindCodex;
   private toolsUrl?: (threadId: string) => Promise<string>;
+  /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
+  onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
   /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. */
   constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string) => Promise<string>) {
@@ -106,7 +113,7 @@ export class CodexAdapter {
       const rpc = await server.client();
       await server.requireLogin(rpc);
       await this.open(server, rpc, threadId, options);
-      await this.turn(threadId, options.prompt, options.images);
+      await this.turn(threadId, options.prompt, options.images, options.skills);
     });
   }
 
@@ -116,9 +123,35 @@ export class CodexAdapter {
     await this.start(threadId, { ...options, permissionMode: 'review' });
   }
 
-  async send(threadId: string, text: string, images?: AgentImage[]) {
-    if (!this.threads.has(threadId)) throw new Error('No live Codex session for this thread; resume it first');
-    await this.report(threadId, () => this.turn(threadId, text, images));
+  /** `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. */
+  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string) {
+    const live = this.threads.get(threadId);
+    if (!live) throw new Error('No live Codex session for this thread; resume it first');
+    if (speed !== undefined) live.options = { ...live.options, speed: speed || undefined };
+    await this.report(threadId, () => this.turn(threadId, text, images, skills));
+  }
+
+  /** `thread/compact/start` runs as a turn of its own; it takes no instructions (0.155.1 schema), so the renderer re-sends what to keep after. */
+  async compact(threadId: string) {
+    const live = this.threads.get(threadId);
+    if (!live) throw new Error('No live Codex session for this thread; resume it first');
+    await this.report(threadId, async () => {
+      const rpc = await live.server.client();
+      if (live.gen !== live.server.gen) await this.open(live.server, rpc, threadId, live.options);
+      await rpc.request('thread/compact/start', { threadId: this.threads.get(threadId)!.codexId });
+    });
+  }
+
+  /** What a live thread runs on, with the speed its latest message set. */
+  runOptions(threadId: string) {
+    return this.threads.get(threadId)?.options;
+  }
+
+  /** The turn before the latest one started with this text, for `forkAt`; null when unknown or it was the first. */
+  rewindPoint(threadId: string, text: string) {
+    const turns = this.threads.get(threadId)?.turns ?? [];
+    const index = turns.findLastIndex((t) => t.text.includes(text));
+    return index > 0 ? turns[index - 1].id : null;
   }
 
   async interrupt(threadId: string) {
@@ -139,7 +172,7 @@ export class CodexAdapter {
 
   async resolve(requestId: string, decision: AgentDecision) {
     const pending = this.requests.get(requestId);
-    if (!pending) return;
+    if (!pending) throw new Error(NO_PENDING_REQUEST);
     this.requests.delete(requestId);
     pending.server.rpc?.respond(pending.id, reply(pending, decision));
   }
@@ -181,6 +214,15 @@ export class CodexAdapter {
     }
   }
 
+  /** The profile's account's full `account/rateLimits/read` snapshot. Throws when logged out. */
+  async readLimits(spaceId: string) {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    const result = (await rpc.request('account/rateLimits/read', {})) as { rateLimits?: Parameters<typeof codexWindows>[0] } | null;
+    return { accountId: server.account.id, windows: codexWindows(result?.rateLimits) };
+  }
+
   /** Every page of the profile's account's `model/list`. Throws when logged out. */
   async models(spaceId: string): Promise<AgentModel[]> {
     const server = this.server(await this.accountFor(spaceId, 'codex'));
@@ -214,16 +256,21 @@ export class CodexAdapter {
   }
 
   private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions) {
+    // A reopen after a server crash keeps the turns it knew; a fork starts a new Codex thread whose turns it doesn't.
+    const prior = this.threads.get(threadId);
+    const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
-    const params = { cwd: options.cwd, model: options.model ?? null, developerInstructions: MOCHI_INSTRUCTIONS, config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
-    const result = options.resume
-      ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
-      : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: MOCHI_INSTRUCTIONS, config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const result = options.resume && options.forkAt
+      ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
+      : options.resume
+        ? await rpc.request('thread/resume', { ...params, threadId: options.resume, excludeTurns: true }, THREAD_TIMEOUT_MS)
+        : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
     const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
     if (typeof codexId !== 'string') throw new Error(`codex ${options.resume ? 'thread/resume' : 'thread/start'} returned no thread id`);
     const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits });
-    const live: Live = { codexId, server, state, gen: server.gen, options: { ...options, resume: codexId } };
+    const live: Live = { codexId, server, state, gen: server.gen, turns, options: { ...options, resume: codexId, forkAt: undefined } };
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
@@ -241,18 +288,22 @@ export class CodexAdapter {
     if (this.threads.get(threadId)?.codexId === codexId) this.emit({ threadId, type: 'info', info: infoFromLists(mcp, skills, plugins) });
   }
 
-  private async turn(threadId: string, text: string, images: AgentImage[] = []) {
+  private async turn(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = []) {
     let live = this.threads.get(threadId)!;
     const rpc = await live.server.client();
     if (live.gen !== live.server.gen) {
       await this.open(live.server, rpc, threadId, live.options);
       live = this.threads.get(threadId)!;
     }
-    const skill = text.startsWith('/') ? skillInput(text, commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null))) : null;
-    const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...(skill ? [skill] : [])];
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, outputSchema: this.schemas.get(threadId) ?? null });
+    const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
+    const attached = skillInputs(text, skills, listed);
+    const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
+    const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
     if (typeof turnId === 'string') live.turnId = turnId;
+    if (typeof turnId === 'string') live.turns.push({ id: turnId, text });
+    // Codex reports no skill load of its own: an attached skill is loaded with the turn.
+    for (const event of skillEvents(threadId, typeof turnId === 'string' ? turnId : String(Date.now()), attached)) this.emit(event);
   }
 
   private async report(threadId: string, run: () => Promise<void>) {
@@ -279,7 +330,10 @@ export class CodexAdapter {
   }
 
   private notification(server: CodexServer, method: string, params: unknown) {
-    if (method === 'account/rateLimits/updated') return updateLimits(server.limits, params);
+    if (method === 'account/rateLimits/updated') {
+      this.onLimits?.(server.account.id, codexWindows((params as { rateLimits?: Parameters<typeof codexWindows>[0] }).rateLimits));
+      return updateLimits(server.limits, params);
+    }
     const ask = server.asks.get(codexThreadId(params) ?? '');
     if (ask) return ask.notify(method, params);
     const turnId = (params as { turn?: { id?: unknown } }).turn?.id;
@@ -367,7 +421,7 @@ class CodexServer {
   }
 
   dispose() {
-    this.child?.kill();
+    if (this.child) killTree(this.child);
   }
 
   private async boot(): Promise<RpcClient> {
@@ -377,7 +431,8 @@ class CodexServer {
 
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
-    const child = spawn(install.path, ['app-server'], { cwd: os.homedir(), env: accountEnv(this.account, install.env), stdio: ['pipe', 'pipe', 'pipe'] });
+    const target = spawnable(install.path, ['app-server']);
+    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: hooksEnv(accountEnv(this.account, install.env)), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
     const gen = ++this.gen;
     this.child = child;
     this.stderr = '';

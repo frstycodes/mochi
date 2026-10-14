@@ -10,7 +10,7 @@ import { getPrefs, subscribePrefs } from '../settings/prefs';
 import { filePathsIn } from './links';
 import { onThemeChange, terminalTheme } from './theme';
 
-export type SessionKind = 'shell' | 'agent';
+export type SessionKind = 'shell' | 'agent' | 'build';
 
 export interface TerminalSession {
   id: string;
@@ -109,15 +109,6 @@ export function showSession(key: string, id: string) {
   updateGroup(key, (g) => ({ ...g, visible: g.visible.includes(id) ? g.visible : replaceFocused(g, id), focused: id }));
 }
 
-/** Splits the focused terminal with a new shell, or unsplits back to the focused one. */
-export function toggleSplit(key: string) {
-  const group = groups.get(key);
-  if (!group) return;
-  if (group.visible.length > 1) return updateGroup(key, (g) => ({ ...g, visible: [g.focused] }));
-  const session = createSession(key, 'shell', shellTitle(group));
-  updateGroup(key, (g) => ({ ...g, sessions: [...g.sessions, session], visible: [g.focused, session.id], focused: session.id }));
-}
-
 export function closeSession(key: string, id: string) {
   const session = groups.get(key)?.sessions.find((s) => s.id === id);
   if (!session) return;
@@ -133,6 +124,17 @@ export function closeSession(key: string, id: string) {
     const shown = visible.length ? visible : fallback ? [fallback.id] : [];
     return { ...g, sessions, visible: shown, focused: g.focused === id ? (shown[0] ?? '') : g.focused };
   });
+}
+
+/** The group's read-only Build session, created on first use, wiped for a new run and shown in the focused slot. */
+export function startBuildLog(key: string, context: GroupContext) {
+  ensureGroup(key, context);
+  const existing = groups.get(key)!.sessions.find((s) => s.kind === 'build');
+  const session = existing ?? createSession(key, 'build', 'Build');
+  if (!existing) updateGroup(key, (g) => ({ ...g, sessions: [...g.sessions, session] }));
+  session.term.reset();
+  showSession(key, session.id);
+  return session;
 }
 
 export function clearFailure(key: string, id: string) {
@@ -153,7 +155,7 @@ function createSession(key: string, kind: SessionKind, title: string, options: {
     scrollback: getPrefs().terminalScrollback,
     macOptionIsMeta: true,
     // The web build has no shell; its mock plays a scripted session.
-    disableStdin: kind === 'agent' || !host.isDesktop,
+    disableStdin: kind !== 'shell' || !host.isDesktop,
     cursorInactiveStyle: 'none',
     // Token colors are tuned for text on `card`; programs also paint ANSI pairs like black on red. xterm nudges any pair under AA.
     minimumContrastRatio: 4.5,
@@ -178,6 +180,7 @@ function createSession(key: string, kind: SessionKind, title: string, options: {
   term.onSelectionChange(() => patchSession(key, session.id, { selection: term.getSelection() }));
   if (options.restored) term.write(`${options.restored}\r\n\x1b[2m[restored: new shell below]\x1b[0m\r\n`);
   if (kind === 'agent') term.write("\x1b[2mRead-only: the agent's commands show up here.\x1b[0m\r\n");
+  if (kind === 'build') term.write('\x1b[2mRead-only: Simulator builds stream here.\x1b[0m\r\n');
   if (kind === 'shell') startShell(key, session, options.command);
   return session;
 }

@@ -1,17 +1,29 @@
 /** Which registry actions each context menu offers, grouped by separator. Ids that aren't available on the target drop out. */
 export const THREAD_MENU = [
   ['thread-open', 'thread-open-split'],
-  ['thread-pin', 'thread-unpin', 'thread-watch', 'thread-unwatch'],
+  ['thread-rename', 'thread-pin', 'thread-unpin', 'thread-watch', 'thread-unwatch'],
+  ['thread-goal-make', 'thread-goal-remove'],
   ['thread-schedule', 'thread-fork', 'thread-handoff', 'thread-second-opinion', 'thread-rewind'],
+  ['thread-replay', 'thread-export-replay'],
   ['thread-copy-branch', 'thread-reveal'],
   ['thread-settle', 'thread-reactivate'],
 ] as const;
 
 export const TAB_MENU = [
   ['tab-reload', 'tab-duplicate'],
+  ['tab-copy-url', 'tab-open-external'],
   ['tab-pop', 'tab-split'],
   ['tab-close', 'tab-close-others', 'tab-close-right'],
 ] as const;
+
+/** A pane header's ⋯: the header has its own close. */
+export const PANE_MENU = [
+  ['tab-reload', 'tab-duplicate'],
+  ['tab-pop', 'tab-split'],
+] as const;
+
+/** The Preview pane's own actions, at the top of its header's ⋯. */
+export const BROWSER_PANE_MENU = [['tab-find'], ['tab-copy-url', 'tab-open-external']] as const;
 
 export const SPLIT_MENU = [
   ['layout-split', 'layout-split-down'],

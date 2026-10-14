@@ -31,3 +31,13 @@ export function pushHistory(history: string[], url: string) {
   if (!url || url === 'about:blank') return history;
   return [url, ...history.filter((h) => h !== url)].slice(0, HISTORY_LIMIT);
 }
+
+/** The same path, query and hash on another server: the thread's page on the base branch's dev server. */
+export function swapOrigin(url: string, origin: string) {
+  try {
+    const { pathname, search, hash } = new URL(url);
+    return `${origin}${pathname}${search}${hash}`;
+  } catch {
+    return origin;
+  }
+}

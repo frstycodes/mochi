@@ -1,11 +1,8 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
-import { useTheme } from 'next-themes';
-import { Archive, BranchUp, ChatRound, ChevronRight, Edit, Eye, Flash, Folder, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Kbd } from '@/components/ui/kbd';
+import { AnimatePresence, motion, useReducedMotionConfig, type MotionProps } from 'motion/react';
+import { Archive, ChatRound, ChevronRight, Edit, Eye, Hierarchy, Inbox, Route, Search, TaskSquare, Undo } from 'reicon-react';
 import {
   Sidebar,
   SidebarContent,
@@ -24,7 +21,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
-import { PIN_SLOTS, type PullRequest, type Thread } from './model';
+import { PrStack } from './git/PrStack';
+import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
@@ -32,21 +30,28 @@ import { ThreadRowMenu } from './menus/ThreadRowMenu';
 import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
 import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
-import { activeThreads, dropPin, pinnedThreads, stepPin } from './reorder';
+import { activeThreads, dropPin, lastActivityAt, pinnedThreads, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { useSettle } from './useSettle';
 import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
-import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
-import { duration, progressAt } from './progress';
-import { openSettings } from './settings/open';
-import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
+import { duration, goalProgress } from './progress';
+import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
+import { ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
-import { Shortcut } from './Shortcut';
+import { BoundShortcut } from './Shortcut';
+import { spaceCommand } from './keymap';
+import { BranchIcon, BranchName } from './git/BranchLabel';
+import { remoteDecisions, remoteThreads } from './remote/mirror';
+import { openRemoteThread, useRemoteThreadRoute } from './remote/open';
+import { DeviceIcon } from './remote/DeviceIcon';
+import { MachinePresence } from './remote/MachinePresence';
+import { RemoteScope, useMachines } from './remote/useMachines';
+import { UserMenu } from './UserMenu';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
@@ -117,7 +122,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
 function SpaceHeader() {
   const space = useSpace();
   return (
-    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:in-data-traffic-lights:pl-20">
+    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-10 md:in-data-traffic-lights:pl-[calc(var(--lights-end)+37px)]">
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex min-w-0 items-center gap-2 px-1">
@@ -146,6 +151,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
   const view = useView(spaceId);
   const threads = useSpaceThreads(spaceId);
   const queue = useSpaceQueue(spaceId);
+  const remoteQueueCount = useMachines().machines.reduce((n, m) => n + (m.state ? remoteDecisions(m.state).length : 0), 0);
   const review = useReviewEntry(spaceId);
   const { setOpenMobile } = useSidebar();
   const go = (v: View) => {
@@ -178,11 +184,11 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               label="Search"
               onClick={onSearch}
               trailing={
-                <Shortcut keys={['mod', 'K']} className="hidden md:inline-flex" />
+                <BoundShortcut command="palette" className="hidden md:inline-flex" />
               }
             />
-            <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<Kbd className="hidden md:inline-flex">N</Kbd>} />
-            <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length > 0 ? queue.length : undefined} />
+            <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<BoundShortcut command="go-new" className="hidden md:inline-flex" />} />
+            <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length + remoteQueueCount > 0 ? queue.length + remoteQueueCount : undefined} />
             {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NotificationBell spaceId={spaceId} />
             <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
@@ -195,32 +201,96 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
         <ThreadList pinned={pinned} active={active} row={row} selectedIds={selection.ids} />
 
         {settled.length > 0 && (
-          <Collapsible className="group/settled">
-            <SidebarGroup>
-              <SidebarGroupLabel asChild>
-                <CollapsibleTrigger className="hover:text-sidebar-foreground">
-                  Settled
-                  <span className="ml-1 tabular">{settled.length}</span>
-                  <ChevronRight className="ml-auto size-3 transition-transform duration-150 group-data-[state=open]/settled:rotate-90" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {settled.map((t) => (
-                      <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
-                        <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
-                      </ThreadRowMenu>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
+          <SettledGroup count={settled.length}>
+            {settled.map((t) => (
+              <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
+                <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
+              </ThreadRowMenu>
+            ))}
+          </SettledGroup>
         )}
       </div>
+      <MachineThreads />
     </>
   );
+}
+
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+const ACCORDION = { duration: 0.2, ease: EASE_OUT };
+const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
+
+/** Settled threads, folded under a count. */
+function SettledGroup({ count, children }: { count: number; children: ReactNode }) {
+  const [isOpen, setOpen] = useState(false);
+  const reduce = useReducedMotionConfig();
+  const contentId = useId();
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel asChild>
+        <button type="button" aria-expanded={isOpen} aria-controls={contentId} onClick={() => setOpen(!isOpen)} className="hover:text-sidebar-foreground">
+          Settled
+          <span className="ml-1 tabular">{count}</span>
+          <ChevronRight className={cn('ml-auto size-3 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none', isOpen && 'rotate-90')} />
+        </button>
+      </SidebarGroupLabel>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            id={contentId}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={reduce ? { duration: 0 } : ACCORDION}
+            className="overflow-hidden"
+          >
+            <SidebarGroupContent>
+              <SidebarMenu>{children}</SidebarMenu>
+            </SidebarGroupContent>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </SidebarGroup>
+  );
+}
+
+/** Your other computers' threads, each under its computer's name: they run there, and open here to follow and steer. */
+function MachineThreads() {
+  const { machines } = useMachines();
+  const route = useRemoteThreadRoute();
+  return machines.map(({ machine, state }) => {
+    const { active, settled } = state ? remoteThreads(state) : { active: [], settled: [] };
+    const row = (t: Thread) => (
+      <SidebarMenuItem key={t.id} data-remote-thread-row={t.id}>
+        <ThreadItem thread={t} isActive={route?.machineId === machine.id && route.threadId === t.id} onSelect={() => openRemoteThread({ machineId: machine.id, threadId: t.id })} />
+      </SidebarMenuItem>
+    );
+    const label = (
+      <SidebarGroupLabel className="gap-1.5">
+        <DeviceIcon kind={machine.kind} className="size-3.5! shrink-0" />
+        <span className="min-w-0 truncate">{machine.name}</span>
+        <MachinePresence machine={machine} />
+      </SidebarGroupLabel>
+    );
+    if (!state)
+      return (
+        <SidebarGroup key={machine.id}>
+          {label}
+        </SidebarGroup>
+      );
+    // Settled folds below as its own group, level with the machine's, as this computer's own does.
+    return (
+      <RemoteScope key={machine.id} machine={machine} state={state}>
+        <SidebarGroup>
+          {label}
+          <SidebarMenu>
+            {active.map(row)}
+            {active.length === 0 && <li className="px-2 type-caption text-subtle-foreground">No active threads</li>}
+          </SidebarMenu>
+        </SidebarGroup>
+        {settled.length > 0 && <SettledGroup count={settled.length}>{settled.map(row)}</SettledGroup>}
+      </RemoteScope>
+    );
+  });
 }
 
 /**
@@ -254,7 +324,7 @@ function useThreadSelection(order: string[], openId: string | undefined) {
   return { ids: current.ids, onClick, onKeyDown };
 }
 
-/** Pinned and active threads, split by the Threads label. Drag a row across the label to pin or unpin, within a section to reorder, or out onto a split to open it there. Alt ↑/↓ does the same from the keyboard. */
+/** Pinned threads in your order, then the rest by recent activity, split by the Threads label. Drag a row across the label to pin or unpin, within Pinned to reorder, or out onto a split to open it there. Alt ↑/↓ does the same from the keyboard. */
 function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; active: Thread[]; row: (t: Thread) => ReactNode; selectedIds: string[] }) {
   const { dispatch } = useHarness();
   const listRef = useRef<HTMLUListElement>(null);
@@ -275,6 +345,7 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
       const item = (
         <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selectedIds}>
           <SidebarMenuItem
+            asChild
             data-row-id={t.id}
             data-thread-row={t.id}
             data-pinned={isPinned || undefined}
@@ -286,41 +357,44 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
             }}
             aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
           >
-            {row(t)}
+            <motion.li {...glide}>{row(t)}</motion.li>
           </SidebarMenuItem>
         </ThreadRowMenu>
       );
-      if (!isPinned) return item;
       return (
-        <ThreadPeek key={t.id} thread={t} pinNumber={i + 1} isDisabled={!!drag.state}>
+        <ThreadPeek key={t.id} thread={t} pinNumber={isPinned ? i + 1 : undefined} isDisabled={!!drag.state}>
           {item}
         </ThreadPeek>
       );
     });
     const slot = drag.state?.slot;
-    if (slot && slot.toPinned === isPinned) rows.splice(slot.index, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} />);
+    // Threads sort by recency, so a row dropped there lands where its last activity puts it, not where the pointer is.
+    const at = slot && !isPinned && dragged ? threads.filter((t) => t.id !== dragged.id && lastActivityAt(t) > lastActivityAt(dragged)).length : slot?.index;
+    if (slot && slot.toPinned === isPinned) rows.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} glide={glide} />);
     return rows;
   };
   const showPinned = pinned.length > 0 || !!drag.state;
+  // Rows only re-measure when the order or the drop slot changes, so ticks, scrolling and space swipes never animate them.
+  const glide = { layout: 'position', layoutDependency: rowOrderKey(pinnedIds, activeIds, drag.state), transition: ROW_LAYOUT } as const;
   const isPinnedEmpty = pinned.filter((t) => t.id !== drag.state?.id).length === 0 && drag.state?.slot?.toPinned !== true;
 
   return (
     <SidebarGroup>
-      <SidebarMenu ref={listRef} className="select-none">
+      <SidebarMenu ref={listRef} className="relative select-none">
         {showPinned && (
-          <li>
+          <motion.li {...glide}>
             <SidebarGroupLabel>Pinned</SidebarGroupLabel>
-          </li>
+          </motion.li>
         )}
         {section(pinned, true)}
         {!!drag.state && isPinnedEmpty && (
-          <li aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
+          <motion.li {...glide} aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
             Drop here to pin
-          </li>
+          </motion.li>
         )}
-        <li data-threads-label className="mt-3">
+        <motion.li {...glide} data-threads-label className="mt-3">
           <SidebarGroupLabel>Threads</SidebarGroupLabel>
-        </li>
+        </motion.li>
         {section(active, false)}
       </SidebarMenu>
       {!!drag.state && !!dragged && <RowGhost thread={dragged} drag={drag.state} />}
@@ -328,11 +402,16 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
   );
 }
 
-function DropPlaceholder({ height }: { height: number }) {
+function rowOrderKey(pinnedIds: string[], activeIds: string[], drag: RowDragState | null) {
+  const slot = drag?.slot ? `${drag.slot.toPinned ? 'p' : 'u'}${drag.slot.index}` : '';
+  return `${pinnedIds.join(',')}|${activeIds.join(',')}|${drag?.id ?? ''}|${slot}`;
+}
+
+function DropPlaceholder({ height, glide }: { height: number; glide: MotionProps }) {
   return (
-    <li aria-hidden className="relative" style={{ height }}>
+    <motion.li {...glide} aria-hidden className="relative" style={{ height }}>
       <span className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-foreground/40" />
-    </li>
+    </motion.li>
   );
 }
 
@@ -398,7 +477,7 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
       pointerY = ev.clientY;
       if (!current) {
         if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD) return;
-        startDrag({ kind: 'thread', id: thread.id }, thread.title, ev.clientX, ev.clientY, true);
+        startDrag({ kind: 'thread', id: thread.id }, thread.title, ev.clientX, ev.clientY, { hasOwnGhost: true });
         document.documentElement.style.userSelect = 'none';
         window.getSelection()?.removeAllRanges();
         frame = requestAnimationFrame(autoScroll);
@@ -445,20 +524,18 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
 
 /**
  * Where a dragged row would land, read from the rows as rendered (the placeholder included), so moving the placeholder never flips the answer back.
+ * Positions come from `offsetTop` within the (relative) list, not `getBoundingClientRect`: rows gliding to their new place carry a transform that would flip the slot mid-animation.
  * Above the Threads label is Pinned; a full Pinned sends the row to the top of Threads.
  */
 function slotAt(list: HTMLUListElement | null, draggedId: string, pinnedIds: string[], x: number, y: number): RowDragState['slot'] {
   if (!list) return null;
   const box = list.getBoundingClientRect();
   if (x < box.left - LIST_SLACK_PX || x > box.right + LIST_SLACK_PX) return null;
-  const label = list.querySelector('[data-threads-label]')!.getBoundingClientRect();
+  const mid = (el: HTMLElement) => box.top + el.offsetTop + el.offsetHeight / 2;
   const isFull = pinnedIds.filter((id) => id !== draggedId).length >= PIN_SLOTS.length;
-  const toPinned = y < label.top + label.height / 2 && !isFull;
+  const toPinned = y < mid(list.querySelector<HTMLElement>('[data-threads-label]')!) && !isFull;
   const rows = [...list.querySelectorAll<HTMLElement>(toPinned ? '[data-row-id][data-pinned]' : '[data-row-id]:not([data-pinned])')];
-  const index = rows.filter((r) => {
-    const rr = r.getBoundingClientRect();
-    return rr.top + rr.height / 2 < y;
-  }).length;
+  const index = rows.filter((r) => mid(r) < y).length;
   return { toPinned, index };
 }
 
@@ -478,7 +555,6 @@ function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: Re
 function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
-  const pr = thread.prs[thread.prs.length - 1];
   return (
     <>
       <SidebarMenuButton
@@ -494,9 +570,9 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             <>
               <ProjectAvatar name={thread.repo.project} />
               <span className="shrink-0">{thread.repo.project}</span>
-              {/* A worktree is the default; working in the project's own checkout is worth a glance. */}
-              {thread.repo.mode === 'folder' && <Folder className="size-3.5 shrink-0" aria-label="In the project folder" />}
-              <span className="min-w-0 truncate">{thread.repo.branch}</span>
+              {/* A worktree is the default; working in the project's own checkout, or on a detached HEAD, is worth a glance. */}
+              {(thread.repo.mode === 'folder' || thread.repo.isDetached) && <BranchIcon repo={thread.repo} />}
+              <BranchName repo={thread.repo} />
             </>
           ) : (
             <>
@@ -508,9 +584,10 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
           <span className={cn('ml-auto shrink-0 tabular group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
         </span>
         <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
-        <span className="flex min-w-0 items-center gap-1.5 type-caption text-subtle-foreground">
-          <ProgressRing pct={row.pct} slot={thread.line} size={12} isWorking={row.isWorking} />
-          <span className="shrink-0 tabular">{Math.round(row.pct * 100)}%</span>
+        {/* overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line. */}
+        <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
+          <ProgressRing met={row.progress.met} total={row.progress.total} slot={thread.line} size={12} isWorking={row.isWorking} />
+          {!!row.progress.total && <span className="shrink-0 tabular">{`${row.progress.met}/${row.progress.total}`}</span>}
           {row.isWorking ? (
             <span className="flex min-w-0 flex-1" title={row.detail}>
               <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
@@ -519,7 +596,7 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
             <span className="min-w-0 flex-1 truncate">{row.detail}</span>
           )}
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
-          {!!pr && <PrBadge pr={pr} />}
+          <PrStack thread={thread} />
           <AgentsBadge thread={thread} />
           <NextRunBadge threadId={thread.id} />
           {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
@@ -535,17 +612,6 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
 
 function ProjectAvatar({ name }: { name: string }) {
   return <span aria-hidden className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[0.625rem] font-semibold text-foreground uppercase">{name[0]}</span>;
-}
-
-const PR_TONE = { open: 'text-success', merged: 'text-subtle-foreground', draft: 'text-subtle-foreground' } satisfies Record<PullRequest['state'], string>;
-
-function PrBadge({ pr }: { pr: PullRequest }) {
-  return (
-    <span className={cn('flex shrink-0 items-center gap-0.5 tabular', PR_TONE[pr.state])} title={`${pr.title} (${pr.state})`}>
-      <BranchUp className="size-3" />
-      {pr.number}
-    </span>
-  );
 }
 
 /** How many background agents the thread has running; nothing when none do. */
@@ -566,20 +632,22 @@ const AGENTS_LABEL = new Intl.PluralRules('en');
 /** What a thread row says under its title: the step in flight, or what it is waiting for. */
 function useThreadRow(thread: Thread) {
   const { state } = useHarness();
-  const { pct } = progressAt(thread, state.now, true);
-  const lastAt = thread.activity[thread.activity.length - 1]?.at ?? thread.startedAt;
+  const progress = goalProgress(thread);
+  const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { pct, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { progress, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {
+  const limit = limitStatus(thread);
+  if (limit) return limit;
   if (thread.status === 'needs-you') return question ?? 'Waiting on you';
   if (thread.status === 'settled') return 'Settled';
   const pr = thread.prs[thread.prs.length - 1];
-  if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : 'Ready for review';
-  // A live agent reports what it's doing; demo threads are told by their goal steps.
-  if (thread.live) return workingLabel(thread) ?? 'Idle';
+  if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : NEXT_STEP_TITLES['open-pr'];
+  // A live agent reports what it's doing; idle, its last report says where things stand; demo threads are told by their goal steps.
+  if (thread.live) return workingLabel(thread) ?? reportHeadline(thread) ?? 'Idle';
   const step = thread.steps.find((s) => s.status === 'running') ?? thread.steps.find((s) => s.status === 'ready');
   return step?.title ?? 'Idle';
 }
@@ -589,7 +657,9 @@ function SpaceFooter() {
   const profiles = useProfiles();
   return (
     <SidebarFooter className="flex-row items-center gap-1 px-2 py-2">
-      <div role="radiogroup" aria-label="Space" className="flex items-center gap-0.5">
+      <UserMenu />
+      <span className="flex-1" />
+      <div role="radiogroup" aria-label="Profile" className="flex items-center gap-0.5">
         {profiles.map((s, i) => {
           const isCurrent = s.id === state.spaceId;
           return (
@@ -599,7 +669,7 @@ function SpaceFooter() {
                   type="button"
                   role="radio"
                   aria-checked={isCurrent}
-                  aria-label={`${s.name} space`}
+                  aria-label={`${s.name} profile`}
                   onClick={() => dispatch({ type: 'space', id: s.id })}
                   className={cn('flex size-7 cursor-default items-center justify-center rounded-md text-subtle-foreground hover:bg-sidebar-accent/60 hover:text-foreground', isCurrent && 'bg-sidebar-accent text-foreground')}
                 >
@@ -607,66 +677,12 @@ function SpaceFooter() {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                {s.name} <Shortcut keys={['nav', String(i + 1)]} className="ml-1" />
+                {s.name} <BoundShortcut command={spaceCommand(i + 1)} className="ml-1" />
               </TooltipContent>
             </Tooltip>
           );
         })}
       </div>
-      <span className="flex-1" />
-      <ThemeButton />
-      <DemoMenu paused={state.paused} />
     </SidebarFooter>
-  );
-}
-
-function DemoMenu({ paused }: { paused: boolean }) {
-  const { dispatch } = useHarness();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Settings and prototype controls" className="text-muted-foreground">
-          <OverflowIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="end" className="w-56">
-        <DropdownMenuItem onSelect={() => openSettings()}>
-          <Setting2 />
-          Settings
-          <Shortcut keys={['mod', ',']} className="ml-auto" />
-        </DropdownMenuItem>
-        {showsDemoData() && (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Prototype</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
-              {paused ? <Play /> : <Pause />}
-              {paused ? 'Resume simulation' : 'Pause simulation'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'trigger-overlap' })}>
-              <Flash />
-              Trigger an overlap
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
-              <Refresh />
-              Reset demo
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        )}
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="font-normal text-subtle-foreground">Hold Option, or long-press, for Orbit</DropdownMenuLabel>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function ThemeButton() {
-  const { theme = 'system', setTheme } = useTheme();
-  const next = { system: 'light', light: 'dark', dark: 'system' }[theme] ?? 'system';
-  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
-  return (
-    <Button variant="ghost" size="icon-sm" onClick={() => setTheme(next)} aria-label={`Theme: ${theme}. Switch to ${next}`} title={`Theme: ${theme}`} className="text-muted-foreground">
-      <Icon />
-    </Button>
   );
 }

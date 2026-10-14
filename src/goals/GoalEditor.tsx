@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Trash3, Undo } from 'reicon-react';
+import { useState, useSyncExternalStore } from 'react';
+import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Sparkles, Trash3, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -8,30 +8,60 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { getPrefs } from '../settings/prefs';
-import type { Size, Thread } from '../model';
+import type { Thread } from '../model';
 import { useHarness } from '../store';
-import { StepStatusIcon, TooltipIconButton } from '../ui';
-import { applyDraft, draftFrom, type DraftStep, type GoalDraft } from './edit';
+import { IconSwap, StepStatusIcon, TooltipIconButton } from '../ui';
+import { applyDraft, draftFrom, type DraftCriterion, type DraftStep, type GoalDraft } from './edit';
 import { templatesFor } from './templates';
+import { goalPrompt, parseSteps } from '../utility/prompts';
+import { useDraft } from '../utility/useDraft';
 
-/** Every save is one goal revision. Mount it only while open so the draft starts fresh from the thread. */
+let openThreadId: string | null = null;
+const listeners = new Set<() => void>();
+
+/** Opens the goal editor for a thread (goal card, summary, thread menu); null closes it. */
+export function openGoalEditor(threadId: string | null) {
+  openThreadId = threadId;
+  listeners.forEach((l) => l());
+}
+
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+};
+
+/** Mounted once at the app root. */
+export function GoalEditorLayer() {
+  const threadId = useSyncExternalStore(subscribe, () => openThreadId);
+  const { state } = useHarness();
+  const thread = state.threads.find((t) => t.id === threadId);
+  if (!thread) return null;
+  return <GoalEditor key={thread.id} thread={thread} onClose={() => openGoalEditor(null)} />;
+}
+
+/** A save that changes the goal text or criteria is one goal revision; plan-only saves aren't. Mount it only while open so the draft starts fresh from the thread. */
 export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () => void }) {
   const { state, dispatch } = useHarness();
-  const { draft, setGoal, updateStep, moveStep, addSteps } = useGoalDraft(thread);
+  const { draft, setGoal, setCriterion, removeCriterion, addCriterion, updateStep, moveStep, addSteps } = useGoalDraft(thread);
   const [newTitle, setNewTitle] = useState('');
   const [isDriftMuted, setDriftMuted] = useState(!!thread.drift?.isMuted);
-  const hasEdits = applyDraft(thread, draft, state.now) !== thread;
+  const edited = applyDraft(thread, draft, state.now);
+  const hasEdits = edited !== thread;
+  const isRevision = edited.revisions.length > thread.revisions.length;
   const hasDriftEdits = isDriftMuted !== !!thread.drift?.isMuted;
-  const nextVersion = thread.revisions.length + 1;
+  const nextVersion = (thread.revisions.at(-1)?.n ?? 1) + 1;
   const templates = templatesFor(thread.spaceId);
+  const stepsDraft = useDraft('goal', thread.spaceId);
+  const draftSteps = async () => {
+    const text = await stepsDraft.draft(goalPrompt(draft.goal));
+    if (text) addSteps(parseSteps(text).map((title) => ({ title, size: 1, gate: false })));
+  };
 
   const add = () => {
     if (!newTitle.trim()) return;
-    addSteps([{ title: newTitle.trim(), size: getPrefs().stepSize, gate: false }]);
+    addSteps([{ title: newTitle.trim(), size: 1, gate: false }]);
     setNewTitle('');
   };
 
@@ -45,18 +75,48 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="gap-5 sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="type-title">Edit goal</DialogTitle>
-          <DialogDescription>Saving records the changes as v{nextVersion} in the timeline.</DialogDescription>
+          <DialogTitle className="type-title">{thread.goal ? 'Edit goal' : 'Make this a goal'}</DialogTitle>
+          <DialogDescription>Changing the goal or what done means saves v{nextVersion}; plan edits keep the version.</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="goal-text">Goal</Label>
-          <Textarea id="goal-text" rows={2} value={draft.goal} onChange={(e) => setGoal(e.target.value)} className="min-h-0 type-body" />
+          <Textarea id="goal-text" rows={2} value={draft.goal} onChange={(e) => setGoal(e.target.value)} placeholder="What will be true when this is done" className="min-h-0 type-body" />
         </div>
+
+        <section aria-label="Done when" className="flex flex-col gap-1.5">
+          <h3 className="type-body font-medium">Done when</h3>
+          <ul className="flex flex-col gap-1">
+            {draft.criteria.map((c, i) => (
+              <li key={c.id ?? `new-${i}`} className="flex items-center gap-1.5">
+                <Input value={c.text} onChange={(e) => setCriterion(i, { text: e.target.value })} aria-label={`Criterion ${i + 1}`} className="h-7 min-w-0 flex-1" />
+                <Input value={c.command ?? ''} onChange={(e) => setCriterion(i, { command: e.target.value })} placeholder="Check command" aria-label={`Criterion ${i + 1} check command`} className="h-7 w-40 font-mono type-caption" />
+                <TooltipIconButton label="Remove criterion" hint="Done no longer needs this" onClick={() => removeCriterion(i)}>
+                  <Trash3 />
+                </TooltipIconButton>
+              </li>
+            ))}
+          </ul>
+          <Button variant="ghost" size="sm" className="self-start" onClick={addCriterion}>
+            <Add data-icon="inline-start" />
+            Add criterion
+          </Button>
+        </section>
 
         <section aria-label="Steps" className="flex min-h-0 flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <h3 className="flex-1 type-body font-medium">Steps</h3>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button variant="ghost" size="sm" onClick={draftSteps} disabled={!draft.goal.trim() || stepsDraft.isDrafting}>
+                    <Sparkles data-icon="inline-start" />
+                    {stepsDraft.isDrafting ? 'Drafting…' : 'Draft steps'}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-60">Adds steps for the goal above, written on your Background tasks model. Review them before you save.</TooltipContent>
+            </Tooltip>
             {templates.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -121,7 +181,7 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
             Cancel
           </Button>
           <Button onClick={save} disabled={!hasEdits && !hasDriftEdits}>
-            {hasEdits ? `Save as v${nextVersion}` : 'Save'}
+            {isRevision ? `Save as v${nextVersion}` : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -132,6 +192,10 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
 function useGoalDraft(thread: Thread) {
   const [draft, setDraft] = useState<GoalDraft>(() => draftFrom(thread));
   const setGoal = (goal: string) => setDraft((d) => ({ ...d, goal }));
+  // Blank rows can stay while you type: `applyDraft` skips them.
+  const setCriterion = (i: number, patch: Partial<DraftCriterion>) => setDraft((d) => ({ ...d, criteria: d.criteria.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
+  const removeCriterion = (i: number) => setDraft((d) => ({ ...d, criteria: d.criteria.filter((_, j) => j !== i) }));
+  const addCriterion = () => setDraft((d) => ({ ...d, criteria: [...d.criteria, { text: '' }] }));
   const updateStep = (i: number, patch: Partial<DraftStep>) => setDraft((d) => ({ ...d, steps: d.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
   const moveStep = (i: number, by: -1 | 1) =>
     setDraft((d) => {
@@ -140,11 +204,9 @@ function useGoalDraft(thread: Thread) {
       return { ...d, steps };
     });
   const addSteps = (steps: Omit<DraftStep, 'id' | 'isRemoved' | 'isLocked'>[]) => setDraft((d) => ({ ...d, steps: [...d.steps, ...steps.map((s) => ({ ...s, isRemoved: false, isLocked: false }))] }));
-  return { draft, setGoal, updateStep, moveStep, addSteps };
+  return { draft, setGoal, setCriterion, removeCriterion, addCriterion, updateStep, moveStep, addSteps };
 }
 
-const SIZES = ['1', '2', '3'] as const;
-const SIZE_NAMES = { '1': 'Small', '2': 'Medium', '3': 'Large' } satisfies Record<(typeof SIZES)[number], string>;
 
 function StepEditRow({
   step,
@@ -175,21 +237,6 @@ function StepEditRow({
         ) : (
           <Input value={step.title} disabled={!isEditable} onChange={(e) => onChange({ title: e.target.value })} aria-label="Step title" className={cn('h-7 min-w-0 flex-1', step.isRemoved && 'line-through')} />
         )}
-        <ToggleGroup type="single" size="sm" variant="outline" spacing={0} value={String(step.size)} disabled={!isEditable} onValueChange={(v) => v && onChange({ size: Number(v) as Size })} aria-label="Step size">
-          {SIZES.map((s) => (
-            <Tooltip key={s}>
-              <TooltipTrigger asChild>
-                <ToggleGroupItem value={s} aria-label={`${SIZE_NAMES[s]} step`}>
-                  {SIZE_NAMES[s][0]}
-                </ToggleGroupItem>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-60 flex-col items-start gap-0.5">
-                <span className="block font-medium">{SIZE_NAMES[s]} step</span>
-                <span className="block opacity-80">Counts {s} {s === '1' ? 'point' : 'points'} toward the goal's progress and ETA.</span>
-              </TooltipContent>
-            </Tooltip>
-          ))}
-        </ToggleGroup>
         <TooltipIconButton
           label={step.gate ? 'Pauses before this step' : 'Pause before this step'}
           hint="The agent stops and asks you in the Queue before it starts this step."
@@ -210,7 +257,7 @@ function StepEditRow({
           <ArrowDown />
         </TooltipIconButton>
         <TooltipIconButton label={step.isRemoved ? 'Keep this step' : 'Remove this step'} hint={step.isLocked ? "Done steps stay in the goal's history." : undefined} disabled={step.isLocked} onClick={() => onChange({ isRemoved: !step.isRemoved })}>
-          {step.isRemoved ? <Undo /> : <Trash3 />}
+          <IconSwap id={step.isRemoved ? 'undo' : 'remove'}>{step.isRemoved ? <Undo /> : <Trash3 />}</IconSwap>
         </TooltipIconButton>
       </div>
       {isCriteriaOpen && !step.isRemoved && (

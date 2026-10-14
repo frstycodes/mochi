@@ -2,22 +2,15 @@ import { useEffect, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { Pin } from 'reicon-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
 
 export type OutlineItem = { rowIndex: number; text: string; time: string; pins: string[] };
 
 /** One tick per prompt down the chat's left edge; prompts in view light up, pinned prompts stand out, hovering shows the prompt, clicking jumps to it. */
-export function ThreadMinimap({ items, className }: { items: OutlineItem[]; className?: string }) {
+export function ThreadMinimap({ items, onJump, className }: { items: OutlineItem[]; onJump: (rowIndex: number) => void; className?: string }) {
   const { scrollRef } = useStickToBottomContext();
   const inView = useRowsInView(scrollRef, items.length);
   if (items.length < 2) return null;
-
-  const jump = (rowIndex: number) => {
-    const chat = scrollRef.current;
-    const row = chat?.querySelector(`[data-chat-row="${rowIndex}"]`);
-    if (chat && row) revealIn(chat, row, { align: 'start', behavior: 'smooth' });
-  };
 
   return (
     <nav aria-label="Prompt outline" className={cn('flex flex-col justify-center', className)}>
@@ -28,8 +21,8 @@ export function ThreadMinimap({ items, className }: { items: OutlineItem[]; clas
               type="button"
               aria-label={text}
               aria-current={inView.has(rowIndex) || undefined}
-              onClick={() => jump(rowIndex)}
-              className="group flex max-h-2.5 min-h-[3px] flex-1 cursor-default items-center justify-start px-2"
+              onClick={() => onJump(rowIndex)}
+              className="group flex max-h-2.5 min-h-[3px] flex-1 cursor-default items-center justify-start px-1"
             >
               <span
                 className={cn(

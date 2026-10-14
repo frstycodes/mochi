@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { haptic } from './haptic';
+import { DOCK_WHEEL_RATIO, dockDragOffset, dragSteps, wheelPx, wheelStep } from './scrub';
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotionConfig, useScroll, useTransform, type MotionValue } from 'motion/react';
 
 export interface DockItem<T> {
@@ -15,7 +16,6 @@ const DOCK_WIDTH = SPACING * 5.5;
 const CLOSE_AFTER_MS = 600;
 const LEAVE_RADIUS_PX = 120;
 const GESTURE_GAP_MS = 140;
-const STEP_PX = 32;
 const DRAG_START_PX = 4;
 // The fade is kept short so the scale, not the opacity, carries the motion; with one shared ease-out the scale was done before the dock was visible.
 const DOCK_IN = { opacity: { duration: 0.12, ease: 'linear' }, default: { type: 'spring', visualDuration: 0.3, bounce: 0.12 } } as const;
@@ -68,9 +68,10 @@ function listenDrag(el: HTMLElement, handlers: { onStart: () => void; onMove: (d
 /**
  * Hover the trigger and scroll either way, or press it and drag: a glass dock of icons rises from it. The icon row is a native scroller, so swipes and
  * momentum are the browser's own; Motion only reads the offset to magnify. The dock previews the item under the centre and the
- * trigger takes it when the dock closes, 600ms after scrolling stops or when the pointer leaves.
+ * trigger takes it when the dock closes, 600ms after scrolling stops or when the pointer leaves. With `onTap`, a press without a
+ * drag calls it instead of reaching the trigger (menus that open on pointerdown).
  */
-export function ScrollDock<T extends string>({ label, value, onChange, items, children }: { label: string; value: T; onChange: (v: T) => void; items: DockItem<T>[]; children: ReactNode }) {
+export function ScrollDock<T extends string>({ label, value, onChange, onTap, items, children }: { label: string; value: T; onChange: (v: T) => void; onTap?: () => void; items: DockItem<T>[]; children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
@@ -80,8 +81,8 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
   const index = Math.max(0, items.findIndex((i) => i.value === value));
   const [preview, setPreview] = useState(index);
   const previewRef = useRef(index);
-  const live = useRef({ index, items, onChange });
-  live.current = { index, items, onChange };
+  const live = useRef({ index, items, onChange, onTap });
+  live.current = { index, items, onChange, onTap };
 
   useEffect(() => {
     const el = ref.current;
@@ -123,8 +124,7 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
       if (live.current.items.length < 2) return;
       if (!isShown) return open();
       if (!strip) return;
-      const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-      strip.scrollBy({ left: (axis === 'x' ? e.deltaX : e.deltaY) * scale, behavior: 'instant' });
+      strip.scrollBy({ left: wheelPx(axis === 'x' ? e.deltaX : e.deltaY, e.deltaMode, window.innerHeight) * DOCK_WHEEL_RATIO, behavior: 'instant' });
     };
     const onMove = (e: PointerEvent) => {
       if (!isShown || isDragging) return;
@@ -140,6 +140,7 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
     window.addEventListener('pointermove', onMove);
     let dragFrom = 0;
     const stopDrag = listenDrag(el, {
+      onTap: () => live.current.onTap?.(),
       onStart: () => {
         if (live.current.items.length < 2) return;
         window.clearTimeout(closeTimer);
@@ -147,9 +148,8 @@ export function ScrollDock<T extends string>({ label, value, onChange, items, ch
         dragFrom = live.current.index * SPACING;
         if (!isShown) open();
       },
-      // Horizontal drags the strip with the hand (left moves forward), like the trackpad swipe; vertical runs down = forward.
       // `instant`: a smooth programmatic scroll would still be travelling when the release commits the item under the centre.
-      onMove: (distance, axis) => stripRef.current?.scrollTo({ left: dragFrom + (axis === 'x' ? -distance : distance), behavior: 'instant' }),
+      onMove: (distance, axis) => stripRef.current?.scrollTo({ left: dragFrom + dockDragOffset(distance, axis), behavior: 'instant' }),
       onEnd: () => isShown && close(),
     });
     return () => {
@@ -244,7 +244,7 @@ function DockTile({ pos, i, children }: { pos: MotionValue<number>; i: number; c
 
 /**
  * Hover the trigger and scroll, or press it and drag, to step through `values` in place, for controls whose trigger already shows
- * where you are (the effort meter): one level per 32px, with a haptic tick each. A press without a drag calls `onTap`.
+ * where you are (the effort meter): one level per `EFFORT_STEP_PX`, with a haptic tick each. A press without a drag calls `onTap`.
  */
 export function WheelStepper<T extends string>({ values, value, onChange, onTap, children }: { values: readonly T[]; value: T; onChange: (v: T) => void; onTap: () => void; children: ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -264,17 +264,14 @@ export function WheelStepper<T extends string>({ values, value, onChange, onTap,
         acc = 0;
       }
       lastT = e.timeStamp;
-      const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-      // Horizontal is inverted vs the model dock (swiping right raises effort); vertical is not (scrolling down raises it).
-      acc += (axis === 'x' ? -e.deltaX : e.deltaY) * scale;
       const { values: list, value: current, onChange: change } = live.current;
+      // Horizontal is inverted vs the model dock (swiping right raises effort); vertical is not (scrolling down raises it).
+      const delta = wheelPx(axis === 'x' ? -e.deltaX : e.deltaY, e.deltaMode, window.innerHeight);
       const from = list.indexOf(current);
-      // Pinned at an end: don't bank distance past it, so reversing responds on the first step back.
-      if ((from === 0 && acc < 0) || (from === list.length - 1 && acc > 0)) acc = 0;
-      if (Math.abs(acc) < STEP_PX) return;
-      const step = Math.sign(acc);
-      acc = Math.abs(acc) >= 2 * STEP_PX ? 0 : acc - step * STEP_PX;
-      const next = list[Math.min(list.length - 1, Math.max(0, from + step))];
+      const { acc: carried, step } = wheelStep(acc, delta, from, list.length);
+      acc = carried;
+      if (!step) return;
+      const next = list[from + step];
       live.current.value = next;
       change(next);
       haptic();
@@ -285,7 +282,7 @@ export function WheelStepper<T extends string>({ values, value, onChange, onTap,
       onStart: () => (dragFrom = live.current.values.indexOf(live.current.value)),
       onMove: (distance) => {
         const { values: list, value: current, onChange: change } = live.current;
-        const next = list[Math.min(list.length - 1, Math.max(0, dragFrom + Math.trunc(distance / STEP_PX)))];
+        const next = list[Math.min(list.length - 1, Math.max(0, dragFrom + dragSteps(distance)))];
         if (next === current) return;
         live.current.value = next;
         change(next);

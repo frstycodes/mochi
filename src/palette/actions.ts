@@ -1,8 +1,9 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowRight, Clock, Scale, ArrowSwapHorizontal, BranchUp, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, History, Inbox, Layers, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowUpRightSquare, Flag, Link, SearchNormal, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from 'sonner';
-import { pageKey, reloadPage } from '../browser/pages';
+import { getPage, openFind, pageKey, reloadPage } from '../browser/pages';
+import { openExternally, openInLabel } from '../browser/systemBrowser';
 import { threadCwd } from '../host/cwd';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
@@ -10,18 +11,25 @@ import { PRESETS, PRESET_LABELS } from '../layout/tree';
 import type { Provider, Thread } from '../model';
 import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
+import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
 import { openSchedule } from '../schedule/ScheduleDialog';
+import { openGoalEditor } from '../goals/GoalEditor';
+import { hasGoal } from '../drift';
+import { startRename } from '../rename';
 import { openSettings } from '../settings/open';
+import { openReplay } from '../replay/open';
+import { shareReplay } from '../replay/load';
 import { askInSideChat } from '../sidechat/AskInSideChat';
 import { askSecondOpinion } from '../secondOpinion/run';
 import { reviewerFor } from '../secondOpinion/reviewer';
 import { providerName } from '../secondOpinion/verdict';
 import { pinMany } from '../reorder';
+import { pinnedNeighbour, slotsOf } from '../pager/slots';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
-import type { Key } from '../keys';
+import { spaceCommand, type CommandId } from '../keymap';
 import type { PaneTab } from '../model';
 
 export const ACTION_GROUPS = ['Go to', 'Thread', 'Side pane', 'Layout', 'Space', 'Appearance'] as const;
@@ -40,7 +48,8 @@ export interface PaletteAction {
   title: string;
   icon: IconComponent;
   keywords?: string;
-  shortcut?: Key[];
+  /** The keymap command that runs this from the keyboard; menus and the palette show its chord. */
+  command?: CommandId;
   when?: (scope: ActionScope) => boolean;
   /** The title for this target, when it names something about it ("Ask Codex for a second opinion"). */
   label?: (scope: ActionScope) => string;
@@ -60,19 +69,24 @@ export const ACTIONS = [
   { id: 'go-queue', group: 'Go to', title: 'Queue', icon: Inbox, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'queue' } }) },
   { id: 'go-review', group: 'Go to', title: 'Review mode', icon: TaskSquare, keywords: 'inbox approve', when: when.reviews, run: ({ openReview }) => openReview() },
   { id: 'go-board', group: 'Go to', title: 'Board', icon: Route, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }) },
-  { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, shortcut: ['mod', ','], keywords: 'agents claude codex accounts login api key preferences', run: () => openSettings() },
-  { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, shortcut: ['N'], run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
+  { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, command: 'go-settings', keywords: 'agents claude codex accounts login api key preferences', run: () => openSettings() },
+  { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, command: 'go-new', run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 
   { id: 'thread-open', group: 'Thread', title: 'Open thread', icon: ArrowRight, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'go', view: { kind: 'thread', id: t.id } })) },
   { id: 'thread-open-split', group: 'Thread', title: 'Open in new split', icon: RowVertical, when: when.unfocusedThread, run: onThread((t, ctx) => openSplits([t], ctx)), many: { title: 'Open each in a new split', skipReason: 'already open', run: openSplits } },
   { id: 'thread-settle', group: 'Thread', title: 'Settle thread', icon: Archive, when: when.liveThread, run: onThread((t, { dispatch }) => toggleSettle([t], dispatch)), many: { title: 'Settle threads', skipReason: 'already settled', run: (ts, { dispatch }) => toggleSettle(ts, dispatch) } },
   { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => toggleSettle([t], dispatch)), many: { title: 'Reactivate threads', skipReason: 'not settled', run: (ts, { dispatch }) => toggleSettle(ts, dispatch) } },
-  { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: ['mod', 'shift', 'P'], when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
-  { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, shortcut: ['mod', 'shift', 'P'], when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
+  { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, command: 'thread-pin', when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
+  { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, command: 'thread-pin', when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
+  { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, keywords: 'title name', when: when.thread, run: inThread((t) => startRename(t.id)) },
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
-  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
+  { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, disabledReason: (s) => s.thread && rewindBlockedReason(s.thread), run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
+  { id: 'thread-replay', group: 'Thread', title: 'Replay thread', icon: VideoPlay, keywords: 'recording session playback demo debug', when: when.thread, run: onThread((t) => openReplay(t.id)) },
+  { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Export, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
+  { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
+  { id: 'thread-goal-remove', group: 'Thread', title: 'Remove goal', icon: CloseSquare, keywords: 'goal chat question untrack progress', when: (s) => when.thread(s) && hasGoal(s.thread!), run: onThread((t, { dispatch }) => dispatch({ type: 'goal-remove', threadId: t.id })) },
   { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: TransferH, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
   {
     id: 'thread-second-opinion',
@@ -88,7 +102,7 @@ export const ACTIONS = [
   },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
-  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: BranchUp, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
+  { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: Hierarchy2, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
   { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },
 
@@ -106,27 +120,31 @@ export const ACTIONS = [
       }) satisfies PaletteAction,
   ),
   { id: 'sidechat-ask', group: 'Side pane', title: 'Ask in side chat', icon: PANE_TABS.sidechat.icon, keywords: 'side question aside /side', when: when.thread, run: onThread((t, { dispatch }) => askInSideChat(dispatch, t.id)) },
-  { id: 'tab-close', group: 'Side pane', title: 'Close tab', icon: X, shortcut: ['mod', 'W'], when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-close-tab', threadId: t.id, tabId: tab.id })) },
+  { id: 'tab-close', group: 'Side pane', title: 'Close tab', icon: X, command: 'tab-close', when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-close-tab', threadId: t.id, tabId: tab.id })) },
   { id: 'tab-close-others', group: 'Side pane', title: 'Close other tabs', icon: CloseSquare, when: when.otherTabs, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.filter((x) => x !== tab), ctx)) },
   { id: 'tab-close-right', group: 'Side pane', title: 'Close tabs to the right', icon: CloseSquare, when: when.tabsToRight, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.slice(ctx.scope.tabs.indexOf(tab) + 1), ctx)) },
   { id: 'tab-reload', group: 'Side pane', title: 'Reload page', icon: Refresh, when: when.browserTab, run: onTab((tab, t) => reloadPage(pageKey(t.id, tab.id))) },
-  { id: 'tab-duplicate', group: 'Side pane', title: 'Duplicate tab', icon: Copy, when: when.contentTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: tab.kind, url: tab.url, file: tab.file })) },
-  { id: 'tab-pop', group: 'Side pane', title: 'Pop out into a floating window', icon: Pip, when: when.contentTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-pop', threadId: t.id, tabId: tab.id, isPopped: true })) },
-  { id: 'tab-split', group: 'Side pane', title: 'Move tab to a new split', icon: RowVertical, when: when.contentTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'tab', threadId: t.id, tabId: tab.id } })) },
+  { id: 'tab-find', group: 'Side pane', title: 'Find in page', icon: SearchNormal, command: 'find', keywords: 'search text', when: when.browserTab, run: onTab((tab, t, { dispatch }) => (dispatch({ type: 'pane-select-tab', threadId: t.id, tabId: tab.id }), openFind(pageKey(t.id, tab.id)))) },
+  { id: 'tab-copy-url', group: 'Side pane', title: 'Copy URL', icon: Link, when: when.webTab, run: onTab((tab, t) => copyText(tabUrl(tab, t), 'URL copied')) },
+  { id: 'tab-open-external', group: 'Side pane', title: 'Open in your browser', label: () => openInLabel(), icon: ArrowUpRightSquare, keywords: 'external system default browser', when: when.webTab, run: onTab((tab, t) => openExternally(tabUrl(tab, t))) },
+  { id: 'tab-duplicate', group: 'Side pane', title: 'Duplicate tab', icon: Copy, when: when.multiTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: tab.kind, url: tab.url, file: tab.file })) },
+  { id: 'tab-pop', group: 'Side pane', title: 'Pop out into a floating window', icon: Pip, when: when.poppableTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-pop', threadId: t.id, tabId: tab.id, isPopped: true })) },
+  { id: 'tab-split', group: 'Side pane', title: 'Move tab to a new split', icon: RowVertical, when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'layout-split', view: { kind: 'tab', threadId: t.id, tabId: tab.id } })) },
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),
-  { id: 'layout-stage', group: 'Layout', title: 'Toggle Stage Manager', icon: Layers, shortcut: ['mod', 'shift', 'S'], run: ({ dispatch }) => dispatch({ type: 'stage-toggle' }) },
-  { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, shortcut: ['mod', 'up'], keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
-  { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, shortcut: ['mod', '\\'], run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
+  { id: 'pinned-previous', group: 'Layout', title: 'Previous pinned thread', icon: ArrowLeft, command: 'pinned-previous', keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, -1) },
+  { id: 'pinned-next', group: 'Layout', title: 'Next pinned thread', icon: ArrowRight, command: 'pinned-next', keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, 1) },
+  { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, command: 'layout-overview', keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
+  { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, command: 'layout-split', run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
   { id: 'layout-split-down', group: 'Layout', title: 'Split down', icon: RowHorizontal, run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId, side: 'bottom' }) },
   { id: 'layout-rotate', group: 'Layout', title: 'Rotate split', icon: Rotation, when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-rotate', leafId: scope.leafId }) },
   { id: 'layout-swap', group: 'Layout', title: 'Swap with next split', icon: ArrowSwapHorizontal, when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-swap', leafId: scope.leafId }) },
-  { id: 'layout-zoom', group: 'Layout', title: 'Zoom split', icon: Fullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-zoom', leafId: scope.leafId }) },
-  { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
+  { id: 'layout-zoom', group: 'Layout', title: 'Zoom split', icon: Fullscreen, command: 'layout-zoom', when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-zoom', leafId: scope.leafId }) },
+  { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, command: 'layout-zoom', when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
   { id: 'layout-close', group: 'Layout', title: 'Close split', icon: X, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-close', leafId: scope.leafId }) },
 
-  // One per ⌥ digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
+  // One per `nav` + digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
   ...Array.from({ length: MAX_PROFILES }, (_, i) => ({
     id: `space-${i + 1}`,
     group: 'Space',
@@ -134,7 +152,7 @@ export const ACTIONS = [
       return `Switch to ${getProfiles()[i]?.name ?? `profile ${i + 1}`}`;
     },
     icon: Monitor,
-    shortcut: ['nav', String(i + 1)],
+    command: spaceCommand(i + 1),
     exists: () => i < getProfiles().length,
     when: (scope: ActionScope) => i < getProfiles().length && when.otherSpace(getProfiles()[i].id)(scope),
     run: ({ dispatch }: ActionContext) => dispatch({ type: 'space', id: getProfiles()[i].id }),
@@ -145,6 +163,12 @@ export const ACTIONS = [
   { id: 'theme-system', group: 'Appearance', title: 'System theme', icon: Monitor, run: ({ setTheme }) => setTheme('system') },
   { id: 'sim-pause', group: 'Appearance', title: 'Pause or resume agents', icon: Pause, keywords: 'simulation tick', run: ({ dispatch }) => dispatch({ type: 'pause' }) },
 ] satisfies PaletteAction[];
+
+/** The pinned pager's keys: the next or previous pinned thread, instantly (keyboard navigation never animates). */
+function goPinned(state: State, dispatch: Dispatch<Action>, step: 1 | -1) {
+  const id = pinnedNeighbour(slotsOf(state), step);
+  if (id) dispatch({ type: 'go', view: { kind: 'thread', id } });
+}
 
 function onThread(fn: (thread: Thread, ctx: ActionContext) => void) {
   return (ctx: ActionContext) => ctx.scope.thread && fn(ctx.scope.thread, ctx);
@@ -162,6 +186,11 @@ function inThread(fn: (thread: Thread, ctx: ActionContext) => void) {
 function open({ dispatch }: ActionContext, action: Action) {
   dispatch(action);
   dispatch({ type: 'overview-toggle', isOpen: false });
+}
+
+/** The page's live URL; the tab's saved one until its page exists. */
+function tabUrl(tab: PaneTab, thread: Thread) {
+  return getPage(pageKey(thread.id, tab.id))?.url ?? tab.url ?? '';
 }
 
 function onTab(fn: (tab: PaneTab, thread: Thread, ctx: ActionContext) => void) {

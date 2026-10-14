@@ -1,0 +1,20 @@
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-13T20:26:06.281Z","sessionId":"03773868-7457-443a-b076-64735ee88874","content":"first"}
+{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-13T20:26:06.282Z","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-13T20:26:06.289Z","sessionId":"03773868-7457-443a-b076-64735ee88874","content":"mid-turn second"}
+{"parentUuid":null,"isSidechain":false,"type":"attachment","uuid":"1b01af07-9de5-40af-8aa7-a09f79a6646a","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"1b01af07-9de5-40af-8aa7-a09f79a6646a","isSidechain":false,"type":"attachment","uuid":"0d20d352-f215-4ae9-83d2-6282ae39401d","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"0d20d352-f215-4ae9-83d2-6282ae39401d","isSidechain":false,"type":"attachment","uuid":"738ec314-aad5-4d86-b731-dda5f2b73b97","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"738ec314-aad5-4d86-b731-dda5f2b73b97","isSidechain":false,"type":"attachment","uuid":"1363da17-856c-425b-a2d6-93152099dac9","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"1363da17-856c-425b-a2d6-93152099dac9","isSidechain":false,"type":"attachment","uuid":"e053d592-5e6f-4fb7-ba05-178fbf398693","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"e053d592-5e6f-4fb7-ba05-178fbf398693","isSidechain":false,"type":"attachment","uuid":"dec37d54-6a42-4bb4-a1cc-82120feff3e1","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"dec37d54-6a42-4bb4-a1cc-82120feff3e1","isSidechain":false,"type":"attachment","uuid":"ca8de70a-dbfd-4708-8e17-b115a2ce8ccb","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"ca8de70a-dbfd-4708-8e17-b115a2ce8ccb","isSidechain":false,"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"uuid":"c51e2cba-0230-4490-95fd-b1e42533c263","timestamp":"2026-10-13T20:26:06.340Z","cwd":"/tmp/proj","sessionId":"03773868-7457-443a-b076-64735ee88874","version":"2.1.296"}
+{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-13T20:26:06.374Z","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"c51e2cba-0230-4490-95fd-b1e42533c263","isSidechain":false,"type":"user","message":{"role":"user","content":"mid-turn second"},"uuid":"bbbbbbbb-0000-4000-8000-000000000002","timestamp":"2026-10-13T20:26:06.383Z","cwd":"/tmp/proj","sessionId":"03773868-7457-443a-b076-64735ee88874","version":"2.1.296"}
+{"parentUuid":"bbbbbbbb-0000-4000-8000-000000000002","isSidechain":false,"type":"attachment","uuid":"aed8e75d-1dbe-4997-80bc-99fa197f2952","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"aed8e75d-1dbe-4997-80bc-99fa197f2952","isSidechain":false,"type":"attachment","uuid":"dca3b066-f667-4379-a0de-acea7e29a11d","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"dca3b066-f667-4379-a0de-acea7e29a11d","isSidechain":false,"type":"attachment","uuid":"396bc348-68d0-423d-957c-be8e28db0057","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"396bc348-68d0-423d-957c-be8e28db0057","isSidechain":false,"type":"attachment","uuid":"2332519e-4a8e-4f73-bda4-ab5dd2858827","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"2332519e-4a8e-4f73-bda4-ab5dd2858827","isSidechain":false,"type":"attachment","uuid":"e0b0a159-4c82-4306-9af4-899f424e9258","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"e0b0a159-4c82-4306-9af4-899f424e9258","isSidechain":false,"type":"attachment","uuid":"aaa6d37d-24fc-4ce6-bf79-54aa04794272","sessionId":"03773868-7457-443a-b076-64735ee88874"}
+{"parentUuid":"aaa6d37d-24fc-4ce6-bf79-54aa04794272","isSidechain":false,"type":"assistant","uuid":"ec049f75-6f4d-41a0-bc06-f5f5c37bda41","timestamp":"2026-10-13T20:26:12.708Z","message":{"role":"assistant","content":[{"type":"text","text":"Not logged in \u00b7 Please run /login"}]},"cwd":"/tmp/proj","sessionId":"03773868-7457-443a-b076-64735ee88874","version":"2.1.296"}

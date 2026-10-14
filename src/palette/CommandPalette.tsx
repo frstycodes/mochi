@@ -6,7 +6,7 @@ import { ACTION_GROUPS, type PaletteAction } from './actions';
 import type { ActionScope } from './when';
 import { useActions } from './useActions';
 import { ActionIcon } from '../menus/ActionItems';
-import { Shortcut } from '../Shortcut';
+import { Shortcut, useBinding } from '../Shortcut';
 import { useReviewerChecks } from '../secondOpinion/reviewer';
 
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -69,6 +69,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 function ActionItem({ action, scope, onSelect }: { action: PaletteAction; scope: ActionScope; onSelect: () => void }) {
   const title = action.label?.(scope) ?? action.title;
   const reason = action.disabledReason?.(scope);
+  const keys = useBinding(action.command);
   return (
     <CommandItem value={`${title} ${action.keywords ?? ''}`} disabled={!!reason} onSelect={onSelect}>
       <ActionIcon action={action} scope={scope} />
@@ -80,9 +81,9 @@ function ActionItem({ action, scope, onSelect }: { action: PaletteAction; scope:
       ) : (
         title
       )}
-      {!!action.shortcut && (
+      {!!keys && (
         <CommandShortcut className="tracking-normal">
-          <Shortcut keys={action.shortcut} />
+          <Shortcut keys={keys} />
         </CommandShortcut>
       )}
     </CommandItem>

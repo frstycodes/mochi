@@ -161,7 +161,7 @@ function useObjectUrl(data: string | Uint8Array, type: string) {
   return url;
 }
 
-function imageMime(path: string) {
+export function imageMime(path: string) {
   const ext = path.split('.').pop()!.toLowerCase();
   return ext === 'jpg' ? 'image/jpeg' : ext === 'ico' ? 'image/x-icon' : `image/${ext}`;
 }

@@ -11,7 +11,8 @@ import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
-import { Stage } from './stage/Stage';
+import { SidebarToggle } from './SidebarToggle';
+import { PinnedPager } from './pager/PinnedPager';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
 import { useGlobalKeys } from './palette/useGlobalKeys';
@@ -24,29 +25,48 @@ import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
+import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
-import { useWorktreeManager } from './git/useWorktreeManager';
+import { useCheckoutRecovery, useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
+import { readEmbeddedReplay } from './replay/export';
+import { useReplayRoute } from './replay/open';
+import { ReplayPage, ReplayView } from './replay/ReplayView';
+import { ColorThemeController } from './themes/ColorThemeController';
+import { DeviceApprovalLayer } from './remote/DeviceApproval';
+import { useRemoteThreadRoute } from './remote/open';
+import { RemoteThreadView } from './remote/RemoteThreadView';
+import { MachinesProvider } from './remote/useMachines';
+
+// An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
+const embeddedReplay = readEmbeddedReplay();
 
 export function App() {
   const route = useHashRoute();
   useIdleScrollbars();
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ColorThemeController />
       <ReducedMotion>
         <TooltipProvider delayDuration={400}>
-          {route === 'design' ? (
+          {embeddedReplay ? (
+            <ReplayPage payload={embeddedReplay} />
+          ) : route === 'design' ? (
             <DesignPage />
           ) : route.startsWith('/window/') ? (
             <TornWindow threadId={route.slice('/window/'.length)} />
           ) : (
             <HarnessProvider>
-              <ReviewModeProvider>
-                <Shell />
-              </ReviewModeProvider>
+              <MachinesProvider>
+                <ReviewModeProvider>
+                  <Shell />
+                </ReviewModeProvider>
+              </MachinesProvider>
               <Orbit />
               <PhotoViewer />
               <FileViewer />
               <ScheduleLayer />
+              <GoalEditorLayer />
+              <DeviceApprovalLayer />
               <Toaster position="bottom-right" />
             </HarnessProvider>
           )}
@@ -84,8 +104,12 @@ function Shell() {
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
   useWorktreeManager();
+  useCheckoutRecovery();
+  useWorktreeCleanup();
   const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
+  const isReplayOpen = !!useReplayRoute();
+  const isRemoteOpen = !!useRemoteThreadRoute();
   useSettingsShortcut();
 
   return (
@@ -100,10 +124,12 @@ function Shell() {
       )}
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : review.isOpen ? <ReviewView /> : <Stage />}
+          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
+      {/* Last on purpose: Electron applies app-region in document order, so the headers' drag regions after it would swallow its clicks. */}
+      <SidebarToggle />
     </SidebarProvider>
   );
 }

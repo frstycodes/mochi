@@ -1,21 +1,33 @@
 import { randomBytes } from 'node:crypto';
 import { stat } from 'node:fs/promises';
-import { BrowserWindow, session, WebContentsView, type WebContents } from 'electron';
-import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserSnapshot, PickedElement } from '../../src/host/types/browser.ts';
+import { BrowserWindow, screen, session, WebContentsView, type WebContents } from 'electron';
+import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserMenuCommand, BrowserSnapshot, FindOptions, PickedElement } from '../../src/host/types/browser.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
 import { clickScript, focusScript, hoverScript, locateScript, markScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
 import { evalResult, EVAL_TIMEOUT_MS, withTimeout, type CdpEvaluate } from './evaluate.ts';
-import { canNavigate } from './navigation.ts';
+import { canNavigate, isAllowedUrl } from './navigation.ts';
+import { HMR_GRACE_MS, isHmrLog, READ_SCROLL_SCRIPT, restoreScrollScript, ScrollMemory, watchTree, type ScrollPos } from './reload.ts';
 
 interface Entry {
   view: WebContentsView;
   win: BrowserWindow;
   owner: WebContents;
   bounds: BrowserBounds | null;
+  mirror: { width: number; height: number; timer: NodeJS.Timeout | null } | null;
+  emulation: BrowserEmulation | null;
   zoom: number;
   devtools: WebContentsView | null;
   error: string | null;
   logs: BrowserLog[];
+  stopAutoReload: (() => void) | null;
+  scroll: ScrollMemory;
+  /** Epoch ms of the last main-frame load start and the last HMR log, to tell whether the dev server handled a change itself. */
+  loadedAt: number;
+  hmrAt: number;
+  /** Scroll polling pauses while a restore settles, or it would record the top of the freshly loaded page. */
+  holdScrollUntil: number;
+  /** Escape in the page closes the find bar only while a search is open. */
+  isFinding: boolean;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -29,6 +41,12 @@ const LOG_LIMIT = 200;
 const LOG_LEVELS = ['debug', 'info', 'warning', 'error'] as const;
 // Chromium refuses captures taller than this.
 const MAX_CAPTURE_HEIGHT = 16384;
+// The floating window is at most ~480 CSS px wide, so frames past 2x that are wasted bytes.
+const MIRROR_MAX_WIDTH = 960;
+const MIRROR_INTERVAL_MS = 100;
+const MIRROR_QUALITY = 70;
+const SCROLL_POLL_MS = 300;
+const SCROLL_HOLD_MS = 2500;
 
 const views = new Map<string, Entry>();
 const hardenedSessions = new Set<string>();
@@ -44,19 +62,24 @@ export function createView(owner: WebContents, url: string, spaceId: string) {
     webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
   });
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, zoom: 1, devtools: null, error: null, logs: [] };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
   wire(id, entry);
-  win.once('closed', () => views.delete(id));
+  win.once('closed', () => {
+    entry.stopAutoReload?.();
+    views.delete(id);
+  });
   void view.webContents.loadURL(url);
   return { id };
 }
 
 export function destroyView(owner: WebContents, id: string) {
   const entry = get(owner, id);
+  stopMirror(entry);
   views.delete(id);
+  entry.stopAutoReload?.();
   closeDevtools(entry);
   entry.win.contentView.removeChildView(entry.view);
   entry.view.webContents.close();
@@ -81,6 +104,80 @@ export function setViewBounds(owner: WebContents, id: string, bounds: BrowserBou
   layout(entry);
 }
 
+/** The page hidden at `viewport` and sent as frames: the floating window draws it in the DOM, scaled down, with controls over it. */
+export async function setViewMirror(owner: WebContents, id: string, viewport: { width: number; height: number } | null) {
+  const entry = get(owner, id);
+  stopMirror(entry);
+  entry.mirror = viewport && { ...viewport, timer: null };
+  layout(entry);
+  const e = entry.emulation;
+  const dbg = await debuggerFor(entry.view.webContents);
+  if (!entry.mirror) return e ? applyEmulation(entry, e) : void (await dbg.sendCommand('Emulation.clearDeviceMetricsOverride'));
+  // A hidden view lays out at 0 × 0, so the viewport is emulated; the page's own pixel ratio and mobile mode carry over.
+  await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: Math.round(viewport!.width), height: Math.round(viewport!.height), deviceScaleFactor: e?.dpr ?? 0, mobile: !!e?.mobile });
+  void sendFrame(id, entry);
+}
+
+async function sendFrame(id: string, entry: Entry) {
+  const mirror = entry.mirror;
+  if (!mirror || entry.owner.isDestroyed() || entry.view.webContents.isDestroyed()) return;
+  const dbg = await debuggerFor(entry.view.webContents);
+  // CDP, not capturePage: the view is hidden, and CDP renders it anyway. Screencast sends no frames for a hidden view.
+  const scale = Math.min(1, MIRROR_MAX_WIDTH / (mirror.width * screen.getDisplayMatching(entry.win.getBounds()).scaleFactor));
+  const shot = await (async () => {
+    // The clip is in document coordinates, so it follows the scroll position to stay on the viewport.
+    const { cssVisualViewport: v } = (await dbg.sendCommand('Page.getLayoutMetrics')) as { cssVisualViewport: { pageX: number; pageY: number; clientWidth: number; clientHeight: number } };
+    const clip = { x: v.pageX, y: v.pageY, width: v.clientWidth, height: v.clientHeight, scale };
+    return (await dbg.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: MIRROR_QUALITY, clip })) as { data: string };
+  })().catch(() => null);
+  if (entry.mirror !== mirror) return;
+  if (shot && !entry.owner.isDestroyed()) entry.owner.send('browser:onEvent', { id, type: 'frame', data: `data:image/jpeg;base64,${shot.data}` } satisfies BrowserEvent);
+  mirror.timer = setTimeout(() => void sendFrame(id, entry), MIRROR_INTERVAL_MS);
+}
+
+function stopMirror(entry: Entry) {
+  if (entry.mirror?.timer) clearTimeout(entry.mirror.timer);
+  entry.mirror = null;
+}
+
+/**
+ * Watches `root` (the thread's worktree) and reloads the page when a file changes and the dev server didn't hot-reload or reload
+ * it within the grace period; every load of the same URL gets its scroll position back. `null` stops.
+ */
+export function setAutoReload(owner: WebContents, id: string, root: string | null) {
+  const entry = get(owner, id);
+  entry.stopAutoReload?.();
+  entry.stopAutoReload = null;
+  if (!root) return;
+  const wc = entry.view.webContents;
+  let isOn = true;
+  const poll = setInterval(() => void rememberScroll(entry), SCROLL_POLL_MS);
+  const stopWatch = watchTree(root, (since) =>
+    setTimeout(() => {
+      if (isOn && !wc.isDestroyed() && entry.loadedAt < since && entry.hmrAt < since) wc.reload();
+    }, HMR_GRACE_MS),
+  );
+  entry.stopAutoReload = () => {
+    isOn = false;
+    clearInterval(poll);
+    stopWatch();
+  };
+}
+
+async function rememberScroll(entry: Entry) {
+  const wc = entry.view.webContents;
+  if (wc.isDestroyed() || wc.isLoading() || Date.now() < entry.holdScrollUntil) return;
+  const pos = (await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: READ_SCROLL_SCRIPT }]).catch(() => null)) as ScrollPos | null;
+  if (pos) entry.scroll.remember(wc.getURL(), pos);
+}
+
+/** Reads the page's scroll position, after moving it to `to` when given. */
+export async function scrollView(owner: WebContents, id: string, to: ScrollPos | null): Promise<ScrollPos> {
+  const wc = get(owner, id).view.webContents;
+  const code = to ? `(scrollTo(${to.x}, ${to.y}), ${READ_SCROLL_SCRIPT})` : READ_SCROLL_SCRIPT;
+  return (await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code }])) as ScrollPos;
+}
+
 export function setViewZoom(owner: WebContents, id: string, factor: number) {
   const entry = get(owner, id);
   entry.zoom = factor;
@@ -88,7 +185,13 @@ export function setViewZoom(owner: WebContents, id: string, factor: number) {
 }
 
 export async function emulateView(owner: WebContents, id: string, e: BrowserEmulation) {
-  const dbg = await debuggerFor(get(owner, id).view.webContents);
+  const entry = get(owner, id);
+  entry.emulation = e;
+  if (!entry.mirror) await applyEmulation(entry, e);
+}
+
+async function applyEmulation(entry: Entry, e: BrowserEmulation) {
+  const dbg = await debuggerFor(entry.view.webContents);
   if (e.width || e.dpr || e.mobile)
     await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: e.width, height: e.height, scale: e.scale, deviceScaleFactor: e.dpr, mobile: e.mobile });
   else await dbg.sendCommand('Emulation.clearDeviceMetricsOverride');
@@ -133,6 +236,51 @@ export async function captureView(owner: WebContents, id: string, fullPage: bool
   const clip = { x: 0, y: 0, width: cssContentSize.width, height: Math.min(cssContentSize.height, MAX_CAPTURE_HEIGHT), scale: 1 };
   const { data } = (await dbg.sendCommand('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, clip })) as { data: string };
   return `data:image/png;base64,${data}`;
+}
+
+const PEEK_QUALITY = 85;
+
+export async function peekView(owner: WebContents, id: string) {
+  const wc = get(owner, id).view.webContents;
+  // capturePage is the cheap path while the view is on screen; once hidden it comes back empty and CDP renders it instead.
+  const image = await wc.capturePage().catch(() => null);
+  if (image && !image.isEmpty()) return `data:image/jpeg;base64,${image.toJPEG(PEEK_QUALITY).toString('base64')}`;
+  const dbg = await debuggerFor(wc);
+  const { data } = (await dbg.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: PEEK_QUALITY })) as { data: string };
+  return `data:image/jpeg;base64,${data}`;
+}
+
+export function findInView(owner: WebContents, id: string, text: string, o: FindOptions) {
+  const entry = get(owner, id);
+  entry.isFinding = true;
+  // Electron's `findNext` means "start a new session", the opposite of Chromium's name for it.
+  entry.view.webContents.findInPage(text, { forward: o.forward, findNext: o.isNewSearch, matchCase: o.matchCase });
+}
+
+export function stopFindInView(owner: WebContents, id: string) {
+  const entry = get(owner, id);
+  entry.isFinding = false;
+  entry.view.webContents.stopFindInPage('keepSelection');
+}
+
+export function menuCommandInView(owner: WebContents, id: string, command: BrowserMenuCommand, at: { x: number; y: number }, url?: string) {
+  const entry = get(owner, id);
+  const wc = entry.view.webContents;
+  // The app's menu took focus from the page; edits act on the page's focused element and selection.
+  wc.focus();
+  if (command === 'cut') wc.cut();
+  else if (command === 'copy') wc.copy();
+  else if (command === 'paste') wc.paste();
+  else if (command === 'select-all') wc.selectAll();
+  else if (command === 'copy-image') wc.copyImageAt(at.x, at.y);
+  else if (command === 'save-image' && url) wc.downloadURL(url);
+  else if (command === 'inspect') {
+    if (!wc.isDevToolsOpened()) {
+      setDevtools(owner, id, 'docked');
+      if (!owner.isDestroyed()) owner.send('browser:onEvent', { id, type: 'devtools', mode: 'docked' } satisfies BrowserEvent);
+    }
+    wc.inspectElement(at.x, at.y);
+  }
 }
 
 export async function pickElement(owner: WebContents, id: string): Promise<PickedElement | null> {
@@ -318,7 +466,16 @@ function wire(id: string, entry: Entry) {
     });
 
   // Before `state` so the new load reports no stale error.
-  wc.on('did-start-loading', () => (entry.error = null));
+  wc.on('did-start-loading', () => {
+    entry.error = null;
+    entry.loadedAt = Date.now();
+  });
+  wc.on('did-finish-load', () => {
+    const pos = entry.stopAutoReload && entry.scroll.take(wc.getURL());
+    if (!pos) return;
+    entry.holdScrollUntil = Date.now() + SCROLL_HOLD_MS;
+    void wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: restoreScrollScript(pos) }]).catch(() => {});
+  });
   for (const name of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(name as 'did-start-loading', state);
   wc.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     if (!isMainFrame || code === ERR_ABORTED) return;
@@ -330,9 +487,39 @@ function wire(id: string, entry: Entry) {
   wc.on('console-message', ({ level, message, sourceId, lineNumber }) => {
     // Electron logs its own dev-only security warnings into every page; they're not the page's.
     if (sourceId.startsWith('node:electron/')) return;
+    if (isHmrLog(message)) entry.hmrAt = Date.now();
     entry.logs = [...entry.logs, { level: LOG_LEVELS.includes(level as BrowserLog['level']) ? (level as BrowserLog['level']) : 'info', message, source: sourceId, line: lineNumber }].slice(-LOG_LIMIT);
     if (level === 'error' || level === 'warning') emit({ id, type: 'console', level, message, source: sourceId, line: lineNumber });
   });
+  wc.on('found-in-page', (_event, r) => emit({ id, type: 'found', active: r.activeMatchOrdinal, matches: r.matches }));
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+    const isMod = process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta;
+    if (isMod && !input.alt && !input.shift && input.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      emit({ id, type: 'key', key: 'find' });
+    } else if (input.key === 'Escape' && entry.isFinding) {
+      event.preventDefault();
+      emit({ id, type: 'key', key: 'escape' });
+    }
+  });
+  wc.on('context-menu', (_event, p) =>
+    emit({
+      id,
+      type: 'context-menu',
+      x: p.x,
+      y: p.y,
+      linkUrl: isAllowedUrl(p.linkURL) ? p.linkURL : '',
+      linkText: p.linkText,
+      srcUrl: p.srcURL,
+      mediaType: p.mediaType,
+      selectionText: p.selectionText,
+      isEditable: p.isEditable,
+      canCut: p.editFlags.canCut,
+      canCopy: p.editFlags.canCopy,
+      canPaste: p.editFlags.canPaste,
+    }),
+  );
   wc.on('devtools-closed', () => {
     closeDevtools(entry);
     layout(entry);
@@ -347,12 +534,15 @@ function wire(id: string, entry: Entry) {
   wc.on('will-redirect', (event) => guard(event, event.url));
 }
 
-function layout({ view, devtools, bounds }: Entry) {
-  view.setVisible(!!bounds);
-  devtools?.setVisible(!!bounds);
+function layout({ view, devtools, bounds, mirror, owner }: Entry) {
+  view.setVisible(!!bounds && !mirror);
+  devtools?.setVisible(!!bounds && !mirror);
+  if (mirror) return view.setBounds({ x: 0, y: 0, width: Math.round(mirror.width), height: Math.round(mirror.height) });
   if (!bounds) return;
-  view.setBorderRadius(Math.round(bounds.radius));
-  const r = round(bounds);
+  // The renderer measures in CSS px; child views are placed in window DIPs, which differ by the app's ⌘+ / ⌘− zoom.
+  const zoom = owner.isDestroyed() ? 1 : owner.getZoomFactor();
+  view.setBorderRadius(Math.round(bounds.radius * zoom));
+  const r = round(bounds, zoom);
   if (!devtools) return view.setBounds(r);
   const tools = Math.round(r.height * DEVTOOLS_SHARE);
   view.setBounds({ ...r, height: r.height - tools });
@@ -385,6 +575,6 @@ function harden(partition: string) {
   ses.setPermissionCheckHandler((_wc, permission) => permission === 'fullscreen' || permission === 'clipboard-sanitized-write');
 }
 
-function round(b: BrowserBounds) {
-  return { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
+function round(b: BrowserBounds, zoom: number) {
+  return { x: Math.round(b.x * zoom), y: Math.round(b.y * zoom), width: Math.round(b.width * zoom), height: Math.round(b.height * zoom) };
 }

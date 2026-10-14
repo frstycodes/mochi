@@ -53,6 +53,8 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
+  /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/main.tsx` sets the zoom. */
+  --lights-end: calc(75px / var(--app-zoom, 1));
 
   --background: oklch(0.975 0.003 285);
   --foreground: oklch(0.2 0.01 285);
@@ -76,6 +78,8 @@
   --success: oklch(0.5 0.14 150);
   --warning: oklch(0.48 0.13 65);
   --info: oklch(0.5 0.15 255);
+  --merged: oklch(0.5 0.19 300);
+  --code: oklch(0.52 0.14 40);
   --border: oklch(0.25 0.02 285 / 0.1);
   --input: oklch(0.25 0.02 285 / 0.15);
   --ring: oklch(0.45 0.012 285);
@@ -103,6 +107,7 @@
   --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
   --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
 }
@@ -127,6 +132,8 @@
     --success: oklch(0.74 0.16 150);
     --warning: oklch(0.82 0.14 80);
     --info: oklch(0.76 0.12 250);
+    --merged: oklch(0.74 0.14 300);
+    --code: oklch(0.8 0.1 45);
     --border: oklch(0.95 0.01 285 / 0.08);
     --input: oklch(0.95 0.01 285 / 0.12);
     --ring: oklch(0.75 0.01 285);
@@ -145,6 +152,7 @@
     --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
     --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+    --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
 }
@@ -168,6 +176,8 @@
   --success: oklch(0.74 0.16 150);
   --warning: oklch(0.82 0.14 80);
   --info: oklch(0.76 0.12 250);
+  --merged: oklch(0.74 0.14 300);
+  --code: oklch(0.8 0.1 45);
   --border: oklch(0.95 0.01 285 / 0.08);
   --input: oklch(0.95 0.01 285 / 0.12);
   --ring: oklch(0.75 0.01 285);
@@ -186,6 +196,7 @@
   --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
   --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
 
@@ -214,6 +225,8 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-merged: var(--merged);
+  --color-code: var(--code);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -243,6 +256,7 @@
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
+  --shadow-composer: var(--elev-composer);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
@@ -313,7 +327,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Desktop title bar: `hiddenInset` leaves no native one, so the 44px headers drag the window. Gated on `data-traffic-lights`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them, and overlays that can sit over them, opt back out. */
+/* Desktop title bar: `hiddenInset` leaves no native one, so the 44px headers drag the window. Gated on `data-traffic-lights`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them or after a `DragStrip`, and overlays that can sit over them, opt back out. */
 @utility app-drag {
   :root[data-traffic-lights] & {
     -webkit-app-region: drag;
@@ -344,7 +358,7 @@
     margin: 0;
     overflow: hidden;
   }
-  :root[data-traffic-lights] .app-drag :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
+  :root[data-traffic-lights] :is(.app-drag, [data-drag-strip] ~ *) :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
   :root[data-traffic-lights] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
     @apply app-no-drag;
   }
@@ -449,6 +463,41 @@
   }
 }
 
+/* Pane headers stay compact so the pane's content gets the room: every icon button there, the shell's and what panes put in
+   PaneActions, hugs a full-size icon (2px of padding) in a plain rounded rectangle, and its hit area reaches 24px through an
+   invisible ::after. Unlayered so it wins over the button sizes and the squircle rule above. */
+[data-pane-header] button[data-size^='icon'] {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  corner-shape: round;
+}
+[data-pane-header] button[data-size^='icon']::after {
+  content: '';
+  position: absolute;
+  /* From inside the button's 1px border: 3px reaches 2px past its edge, a 24px tall target; 2px sideways stays inside the 2px gap. */
+  inset: -3px -2px;
+}
+/* A toggle group there is one joined segment at the same height; only its outer corners round. */
+[data-pane-header] [data-slot='toggle-group-item'] {
+  height: 20px;
+  min-width: 24px;
+  padding-inline: 4px;
+}
+/* Squircle like the rest of the app (the corner scale keeps it as round as the fallback), sized for a 20px control. */
+[data-pane-header] [data-slot='toggle-group-item']:first-child {
+  border-radius: calc(5px * var(--corner-scale)) 0 0 calc(5px * var(--corner-scale));
+}
+[data-pane-header] [data-slot='toggle-group-item']:last-child {
+  border-radius: 0 calc(5px * var(--corner-scale)) calc(5px * var(--corner-scale)) 0;
+}
+[data-pane-header] [data-slot='toggle-group-item'] svg,
+[data-pane-header] button[data-size^='icon'] svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* One diagonal band crosses every skeleton on screen in step: the gradient is pinned to the viewport. */
 @keyframes skeleton-sheen {
   to {
@@ -468,25 +517,40 @@
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* The soft blurred patch behind the PiP's hover controls, like Codex: blur that fades out from the corner. */
-.pip-blur {
-  backdrop-filter: blur(14px);
-  background: oklch(0.18 0.01 285 / 0.55);
-  -webkit-mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, black 50%, transparent 90%);
-  mask-image: radial-gradient(ellipse 100% 100% at 0% 0%, black 50%, transparent 90%);
+/*
+ * The PiP's hover scrim: a progressive blur, strongest under the buttons and spilling past the window's corner; the icons carry their own shadow.
+ * Centred on the buttons, every layer reaches transparent before its box edge, or the edge shows as a hard line.
+ * The strongest layer stays fully opaque out past the window's corner: a partly masked blur is a crossfade, so a sharp edge
+ * under it ghosts through.
+ * Each layer (2/4/8px) blurs more over a smaller radius, so the blur ramps instead of ending at one edge.
+ * It fades in by animating the blur itself, never opacity: a backdrop-filter under opacity < 1 blurs only its own layer.
+ */
+.pip-scrim > span {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transition: backdrop-filter 150ms;
 }
-
-/* Toggling the side pane animates the panels' flex-grow; dragging the handle never does. */
-.pane-animating [data-panel] {
-  transition: flex-grow 260ms cubic-bezier(0.32, 0.72, 0, 1);
+.pip-scrim > :nth-child(1) {
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, black 50%, transparent);
 }
-@media (prefers-reduced-motion: reduce) {
-  :root:not([data-reduce-motion='off']) .pane-animating [data-panel] {
-    transition: none;
-  }
+.pip-scrim > :nth-child(2) {
+  mask-image: radial-gradient(ellipse 48% 48% at 50% 50%, black 60%, transparent);
 }
-:root[data-reduce-motion='on'] .pane-animating [data-panel] {
-  transition: none;
+.pip-scrim > :nth-child(3) {
+  mask-image: radial-gradient(ellipse 42% 43% at 50% 50%, black 75%, transparent);
+}
+:hover > .pip-scrim > :nth-child(1),
+:focus-within > .pip-scrim > :nth-child(1) {
+  backdrop-filter: blur(2px);
+}
+:hover > .pip-scrim > :nth-child(2),
+:focus-within > .pip-scrim > :nth-child(2) {
+  backdrop-filter: blur(4px);
+}
+:hover > .pip-scrim > :nth-child(3),
+:focus-within > .pip-scrim > :nth-child(3) {
+  backdrop-filter: blur(8px);
 }
 
 /* Native scrollers (chat, sidebar) match ScrollArea: thin, and visible only while scrolling. useIdleScrollbars sets data-scrolling. */
@@ -548,4 +612,74 @@
 /* Pinned passages in chat messages (CSS Custom Highlight API, src/chat/SelectionPin.tsx): a neutral highlighter, not a status colour. */
 ::highlight(harness-pin) {
   background-color: color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+/* Panes slide when one opens, closes, moves or expands (`SidePane`), never while a window resize or a divider drag moves them. */
+.pane-card-entering {
+  animation: pane-enter 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+/* The first pane in and the last one out move like the sidebar: a drawer slide from the right edge, the chat resizing with it. */
+.pane-card-entering[data-motion='slide'] {
+  animation: pane-slide-in 260ms var(--ease-drawer);
+}
+.pane-card-leaving[data-motion='slide'] {
+  animation: pane-slide-out 260ms var(--ease-drawer) forwards;
+}
+@keyframes pane-slide-in {
+  from {
+    translate: calc(100% + 8px) 0;
+  }
+}
+@keyframes pane-slide-out {
+  to {
+    translate: calc(100% + 8px) 0;
+  }
+}
+.pane-layout-animating[data-motion='slide'] :is(.pane-card, .pane-chat) {
+  transition-duration: 260ms;
+  transition-timing-function: var(--ease-drawer);
+}
+@keyframes pane-enter {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='off']) .pane-card-entering {
+    animation: none;
+  }
+}
+:root[data-reduce-motion='on'] .pane-card-entering {
+  animation: none;
+}
+.pane-card-leaving {
+  animation: pane-leave 180ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+@keyframes pane-leave {
+  to {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='off']) .pane-card-leaving {
+    display: none;
+  }
+}
+:root[data-reduce-motion='on'] .pane-card-leaving {
+  display: none;
+}
+.pane-layout-animating :is(.pane-card, .pane-chat) {
+  transition-property: left, top, width, height;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='off']) .pane-layout-animating :is(.pane-card, .pane-chat) {
+    transition: none;
+  }
+}
+:root[data-reduce-motion='on'] .pane-layout-animating :is(.pane-card, .pane-chat) {
+  transition: none;
 }

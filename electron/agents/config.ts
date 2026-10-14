@@ -1,5 +1,4 @@
 import { app, safeStorage } from 'electron';
-import { execFile } from 'node:child_process';
 import { access, constants } from 'node:fs/promises';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -8,6 +7,10 @@ import { DEFAULT_SETTINGS, mergeSettings, migrateSettings, type Account, type Ac
 import type { Provider } from '../../src/model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId, newAccountId } from '../../src/settings/accounts.ts';
 import { HARNESSES } from '../../src/settings/harnesses.ts';
+import { fallbackShell } from '../platform.ts';
+import { userPath } from '../shellPath.ts';
+
+export { userPath };
 
 /**
  * Agent settings shared by the settings UI and the harness adapters. Main process only.
@@ -21,17 +24,19 @@ interface Stored extends AgentSettings, AccountsState {
   pastWorktreeRoots: string[];
 }
 
-const DEFAULT_WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
+const DEFAULT_WORKTREE_ROOT = join(homedir(), '.mochi', 'worktrees');
+/** The default before `~/.mochi`: its worktrees stay Mochi's. */
+const LEGACY_WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
 
 const listeners = new Set<(settings: AgentSettings) => void>();
 let stored: Stored | undefined;
 
 export function agentSettings(): AgentSettings {
-  const { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel } = load();
-  return { concurrency, harnesses, worktreeRoot, shell, prDrafts, sideChatModel };
+  const { concurrency, harnesses, worktreeRoot, shell, prDrafts, prepareWorktrees, worktreeInclude, setupCommands, sideChatModel, utilityModels } = load();
+  return { concurrency, harnesses, worktreeRoot, shell, prDrafts, prepareWorktrees, worktreeInclude, setupCommands, sideChatModel, utilityModels };
 }
 
-/** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.harness/worktrees`. */
+/** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.mochi/worktrees`. */
 export function worktreeRoot(): string {
   const root = expandHome(load().worktreeRoot);
   return root ? resolve(root) : DEFAULT_WORKTREE_ROOT;
@@ -39,12 +44,12 @@ export function worktreeRoot(): string {
 
 /** The current root first, then every earlier one, so moving the folder never orphans existing worktrees. */
 export function worktreeRoots(): string[] {
-  return [...new Set([worktreeRoot(), ...load().pastWorktreeRoots, DEFAULT_WORKTREE_ROOT])];
+  return [...new Set([worktreeRoot(), ...load().pastWorktreeRoots, DEFAULT_WORKTREE_ROOT, LEGACY_WORKTREE_ROOT])];
 }
 
 /** The terminal's shell: the user's choice, else `$SHELL`. */
 export function terminalShell(): string {
-  return expandHome(load().shell) || process.env.SHELL || '/bin/zsh';
+  return expandHome(load().shell) || process.env.SHELL || fallbackShell();
 }
 
 export function prDrafts(): boolean {
@@ -175,28 +180,6 @@ export function setApiKey(provider: Provider, key: string | null) {
   if (key !== null && !safeStorage.isEncryptionAvailable()) throw new Error('The OS keychain is not available, so the key cannot be stored safely');
   const { [provider]: _, ...apiKeys } = load().apiKeys;
   save({ ...load(), apiKeys: key === null ? apiKeys : { ...apiKeys, [provider]: safeStorage.encryptString(key).toString('base64') } });
-}
-
-let pathLookup: Promise<string> | undefined;
-
-/** Memoized for the app's lifetime: a PATH change in the user's shell needs a Harness restart. */
-export function userPath(): Promise<string> {
-  pathLookup ??= readLoginShellPath().catch(() => process.env.PATH ?? '');
-  return pathLookup;
-}
-
-// An interactive login shell, because version managers (mise, nvm) usually activate in .zshrc, not .zprofile.
-// The command is a constant; markers cut away whatever the rc files print.
-function readLoginShellPath(): Promise<string> {
-  if (process.platform === 'win32') return Promise.resolve(process.env.PATH ?? '');
-  const shell = process.env.SHELL || '/bin/zsh';
-  return new Promise((resolve, reject) =>
-    execFile(shell, ['-ilc', 'printf "__HARNESS_PATH__%s__HARNESS_PATH__" "$PATH"'], { timeout: 5000 }, (error, stdout) => {
-      const path = stdout.match(/__HARNESS_PATH__(.*)__HARNESS_PATH__/)?.[1];
-      if (path) resolve(path);
-      else reject(error ?? new Error('login shell printed no PATH'));
-    }),
-  );
 }
 
 function load(): Stored {

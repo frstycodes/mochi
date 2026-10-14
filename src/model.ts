@@ -1,7 +1,14 @@
-import type { AgentQuestion, SubagentStatus } from './host/types/agent.ts';
+import type { AgentImage, AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
+import type { Mention } from './chat/mentions.ts';
+import type { FileEdit } from './host/types/settings.ts';
+import type { McpServerDef } from './settings/agentConfig.ts';
 import type { ThreadControls } from './runtime/controls.ts';
 import type { Review } from './secondOpinion/verdict.ts';
+import type { VizLanguage } from './viz/fence.ts';
+import type { PaneLayout } from './pane/layout.ts';
 import { vizGalleryThread } from './viz/fixtures.ts';
+import { longThreadFromUrl } from './longThread.ts';
+import { claudeLimitThread, codexLimitThread } from './usage/limitDemo.ts';
 export type Provider = 'claude' | 'codex';
 export type Author = Provider | 'you' | 'harness';
 export type Size = 1 | 2 | 3;
@@ -36,6 +43,36 @@ export interface Step {
   owner?: Provider;
 }
 
+/** What done means for a goal: checkable (a command Mochi can run) or judged (a sentence). */
+export interface Criterion {
+  id: string;
+  text: string;
+  command?: string;
+  /** The agent says it's met (`claim_criterion`), with one line of evidence; checking it is yours or Mochi's. */
+  claim?: { evidence: string; at: number; by: Provider };
+  /** Mochi ran `command` in the worktree when you asked; a failed check outweighs a claim. */
+  check?: { status: 'running' | 'passed' | 'failed'; at: number; ms?: number; output?: string };
+}
+
+/** Met when its check passed, or the agent claimed it and no check failed since. */
+export const isMet = (c: Criterion) => c.check?.status === 'passed' || (!!c.claim && c.check?.status !== 'failed');
+
+/** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
+export interface TurnReport {
+  at: number;
+  by: Provider;
+  decisions: string[];
+  left: string[];
+  /** The one thing that needs you, if anything. */
+  question?: string;
+}
+
+/** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
+export interface Similar {
+  threadId: string;
+  relation: 'same' | 'related';
+}
+
 export interface Revision {
   n: number;
   at: number;
@@ -49,12 +86,21 @@ export interface ActivityEntry {
   who: Author;
   kind: 'message' | 'tool' | 'event' | 'reasoning' | 'subagent';
   text: string;
+  /** A reply rewritten as bullets for you (Simplify). Display only: never sent to an agent. `rulesKey`: the settings it was made with. */
+  simplified?: { text: string; rulesKey: string; isShown: boolean };
   /** Events only: the why, shown muted under the label. */
   detail?: string;
   seconds?: number;
   drift?: 'on-goal' | 'scope-add' | 'off-goal';
   /** The agent's id for a tool call, so its end can find the entry its start logged. */
   toolId?: string;
+  /** Tool calls: the agent's own plain-language line for it, the command's output and exit code, an edit's unified diff. */
+  description?: string;
+  output?: string;
+  exitCode?: number;
+  patch?: string;
+  /** Events only: the thread paused here on a usage limit; the latest such entry renders the live limit card while the pause lasts. */
+  isLimit?: boolean;
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
@@ -62,6 +108,49 @@ export interface ActivityEntry {
   subagentId?: string;
   /** Wall-clock milliseconds, stamped on live agents' entries; `at` is the app clock's minute. */
   ms?: number;
+  /** Tool entries: the skill this call loaded. */
+  skill?: string;
+  /** Tool entries: the MCP server tool this call ran. */
+  mcp?: McpCall;
+  /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
+  wasQueued?: boolean;
+  /** Your messages: thumbnails (data URLs) of the images sent with it. */
+  images?: string[];
+  /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
+  turnUndo?: { start: number; isUndone: boolean };
+  /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
+  from?: ThreadRef;
+  /** Tool entries: the message this `send_to_thread` call delivered. */
+  sent?: ThreadRef & { text: string };
+  /** Events only: the harness compacted the conversation here. */
+  compaction?: Compaction;
+}
+
+/**
+ * One compaction of a thread's conversation. `pins` and `hasGoal`: what Mochi asked it to keep. `focus`: what you typed after
+ * `/compact`. Token counts as the harness reported them; Codex reports none after a compaction (0.155.1), so its rows carry no sizes.
+ */
+export interface Compaction {
+  trigger: 'manual' | 'auto';
+  status: 'running' | 'done' | 'failed';
+  pins: number;
+  hasGoal: boolean;
+  focus?: string;
+  preTokens?: number;
+  postTokens?: number;
+  summary?: string;
+  error?: string;
+}
+
+/** Another thread, with its title when the entry was written; a renamed or deleted thread still reads. `threadId` is missing only on messages migrated from the old `From "…":` prefix whose sender is gone. */
+export interface ThreadRef {
+  threadId?: string;
+  title: string;
+}
+
+export interface McpCall {
+  server: string;
+  tool: string;
 }
 
 export interface WebLink {
@@ -69,13 +158,13 @@ export interface WebLink {
   title?: string;
 }
 
-export function authorName(who: Author) {
-  return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Mochi' }[who];
+/** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
+export function firstPrompt(thread: Thread) {
+  return thread.activity.find((e) => e.who === 'you' && e.kind === 'message')?.text ?? thread.goal;
 }
 
-export interface SkillUse {
-  name: string;
-  uses: number;
+export function authorName(who: Author) {
+  return { you: 'You', claude: 'Claude', codex: 'Codex', harness: 'Mochi' }[who];
 }
 
 export interface Source {
@@ -112,12 +201,16 @@ export interface McpServer {
   name: string;
   status: 'connected' | 'pending' | 'needs-auth' | 'failed' | 'disabled';
   toolCount?: number;
+  /** An http or SSE server's endpoint, whose site's favicon marks its calls. */
+  url?: string;
 }
 
 export interface PullRequest {
   number: number;
   state: 'open' | 'merged' | 'draft';
   title: string;
+  /** Live PRs from `gh`; the demo fixtures have none, so their rows don't open anything. */
+  url?: string;
 }
 
 /**
@@ -133,6 +226,8 @@ export interface Repo {
   mode?: 'folder';
   base?: string;
   isExisting?: boolean;
+  /** The checkout is on a detached HEAD: `branch` holds its short commit, shown as such, never as a branch name. */
+  isDetached?: boolean;
 }
 
 export interface Thread {
@@ -141,7 +236,19 @@ export interface Thread {
   /** null: a chat with no folder, so no files, branch or PRs. */
   repo: Repo | null;
   title: string;
+  /** Renamed by you (or by the agent at your request): a generated title never replaces it. */
+  isTitleRenamed?: boolean;
+  /** A model named the thread after its first exchange (`useAutoTitles`). */
+  isTitleGenerated?: boolean;
+  /** The drafted or edited outcome; '' while the thread has no goal (a question, a chat). */
   goal: string;
+  criteria?: Criterion[];
+  /** Open until you dismiss them on the goal card. */
+  similar?: Similar[];
+  /** You removed the goal: drafts don't bring it back, an edit does. */
+  isGoalOff?: boolean;
+  /** The latest `report`; a newer message from you starts a turn it no longer describes. */
+  report?: TurnReport;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;
@@ -150,24 +257,50 @@ export interface Thread {
   revisions: Revision[];
   activity: ActivityEntry[];
   prs: PullRequest[];
-  skills: SkillUse[];
   sources: Source[];
   context: { used: number; max: number };
   orbitSlot?: number;
   settledAt?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };
-  session?: { provider: Provider; id: string; usage?: { input: number; output: number; costUsd?: number } };
+  session?: { provider: Provider; id: string; usage?: { input: number; output: number; cached?: number; costUsd?: number } };
   controls?: ThreadControls;
   /** From the live agent's session start; reset each time a session (re)starts. */
   agent?: AgentInfo;
   /** Set when a real agent runs the thread (desktop); the demo adapter leaves it alone. */
   live?: LiveRun;
+  /** Its new worktree's preparation before the agent's first turn; unset when there was nothing to prepare. */
+  setup?: WorktreeSetup;
   /** Second opinions from the other provider, oldest first. */
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
   subagents?: Subagent[];
+  /** Messages you wrote while the agent worked, sent one per turn end, first first (`src/chat/outbox.ts`). */
+  queued?: QueuedMessage[];
+  /** Why the queue stopped sending; cleared by your next send or Resume. */
+  queuePause?: QueuePause;
 }
+
+/** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
+export interface QueuedMessage {
+  id: string;
+  /** The text as typed: what the transcript shows, and what Edit puts back in the composer. */
+  draft: string;
+  /** Unset on messages queued before images were sent. */
+  images?: SentImage[];
+  mentions: Mention[];
+  /** The text starts with a `/` command, so mention tags go after it. */
+  isCommand: boolean;
+  /** Skills typed as `/name` later in the text. */
+  typedSkills: string[];
+}
+
+/** An image you sent: what the agent gets, and the small copy (`thumb`, a data URL) the transcript shows. */
+export interface SentImage extends AgentImage {
+  thumb: string;
+}
+
+export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
 
 /** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a Mochi background agent (`start_background_agent`). */
 export interface Subagent {
@@ -201,8 +334,11 @@ export interface SubagentStep {
   id: string;
   text: string;
   isDone: boolean;
+  description?: string;
   files?: string[];
   exitCode?: number;
+  output?: string;
+  patch?: string;
 }
 
 export interface LiveRun {
@@ -211,20 +347,25 @@ export interface LiveRun {
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
   cwd?: string;
-  /** The account hit its usage limit; the thread waits for you to resume, continue on an API key, or hand off. */
-  limit?: { resetsAt?: string };
+  /**
+   * The account hit its usage limit. `isTurnHeld`: Claude Code holds the turn and continues it at the reset. Otherwise (Codex)
+   * the turn ended and the thread waits for you to resume (`autoResume`: you chose Resume at reset), use an API key, or hand off.
+   */
+  limit?: { resetsAt?: string; label?: string; isTurnHeld?: boolean; autoResume?: boolean };
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
-  /** Reported tokens per usage event, for the plan window. */
-  usage: { at: number; provider: Provider; tokens: number }[];
+  /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
+  restart?: { forkAt: string } | { seed: string };
+  /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
+  isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
-export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'setting' | 'run';
+export type QueueKind = 'approval' | 'question' | 'review' | 'ci' | 'overlap' | 'collision' | 'setting' | 'run';
 
 export interface QueueItem {
   id: string;
@@ -236,21 +377,45 @@ export interface QueueItem {
   blocks: { steps: number; threads: number };
   questions?: AgentQuestion[];
   overlap?: { threadId: string; stepId: string; otherThreadId: string; otherStepId: string; sharedFiles: string[] };
+  /** Two live threads of one project edited the same files (repo-relative). */
+  collision?: { otherThreadId: string; files: string[] };
   requestId?: string;
   /** A Mochi tool call waiting on this widget (`src/runtime/tools.ts`); `options` are checkboxes, all off by default. */
   tool?: ToolWidget;
-  /** A `setting` card: the setting an agent (or a blocked Mochi call) put in front of you. */
-  setting?: { id: string; suggested?: string };
+  /** A `setting` card: settings an agent (or a blocked Mochi call) suggests, as live rows you change in place. */
+  settings?: SettingsSuggestion;
+  /** A `ci` card: the PR and the first failed check, whose log "Send failing log to agent" fetches. */
+  ci?: { pr: number; url: string; check?: { name: string; link?: string } };
   createdAt: number;
 }
 
-/** What a Mochi widget asks: a setting change (current → `value`), a delete naming exactly what goes, or a browser escalation. */
+/** What a Mochi widget asks and waits on: a delete naming exactly what goes, or a browser escalation. */
 export interface ToolWidget {
   callId: string;
   options?: { id: string; label: string }[];
-  setting?: { id: string; value: string };
   isDestructive?: boolean;
+  /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
+  edits?: FileEdit[];
+  /** Mochi's own facts under the title, like which other profiles share the account. */
+  notes?: string[];
 }
+
+/**
+ * Settings shown as their real rows with a suggested value each. Nothing waits on it: the rows change settings live, and
+ * Done closes it into a record of what changed while it was open.
+ */
+export interface SettingsSuggestion {
+  by: Author;
+  reason?: string;
+  changes: { key: string; value: string; profileId?: string }[];
+  /** An MCP server to add, filled into Settings' add form. */
+  addServer?: { profileId: string; provider: Provider; server: McpServerDef };
+  /** Each row's value when the widget opened, by `settingRef`, so Done can say what changed. */
+  before: Record<string, string>;
+}
+
+/** One row of a settings suggestion: the key, in a profile for profile settings. */
+export const settingRef = (change: { key: string; profileId?: string }) => (change.profileId ? `${change.profileId}/${change.key}` : change.key);
 
 /** Mochi's own widgets render inline in the thread where the agent asked, not in the composer tray. */
 export const isMochiCard = (item: QueueItem) => !!item.tool || item.kind === 'setting';
@@ -265,7 +430,7 @@ export function answerText(answers: string[][]) {
   return answers.filter((a) => a.length).map((a) => a.join(', ')).join(' · ');
 }
 
-export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'new'] as const;
+export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual'] as const;
 export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
 export interface PaneTab {
@@ -277,14 +442,32 @@ export interface PaneTab {
   isPopped?: boolean;
   /** Agents tabs: the agent shown expanded, picked from the chat's "Open". */
   agentId?: string;
+  /** Visual tabs: the chat visual's fence, rendered again here. */
+  visual?: PaneVisual;
 }
 
+export interface PaneVisual {
+  language: VizLanguage;
+  code: string;
+}
+
+/** Kinds that keep several tabs in one pane, shown as tabs in its header; every other kind is one tab per thread. */
+const MULTI_TAB_KINDS = new Set<PaneTabKind>(['browser', 'sidechat', 'visual']);
+
+export const isMultiTab = (kind: PaneTabKind) => MULTI_TAB_KINDS.has(kind);
+
+/** One pane per kind, laid out in `layout`; `isOpen` shows or hides them all without forgetting the layout. */
 export interface Pane {
   threadId: string;
   isOpen: boolean;
   tabs: PaneTab[];
+  /** The tab picked last, in whichever pane. */
   activeTab: string;
-  driver?: Provider;
+  layout?: PaneLayout;
+  /** The tab each multi-tab pane shows. */
+  shown?: Partial<Record<PaneTabKind, string>>;
+  /** The browser tab the thread's agent last drove; it floats while the agent works and the tab is off screen. */
+  drivenTab?: string;
 }
 
 export function seedPanes(): Pane[] {
@@ -293,7 +476,8 @@ export function seedPanes(): Pane[] {
       threadId: 'adm',
       isOpen: true,
       activeTab: 'adm-browser',
-      driver: 'codex',
+      drivenTab: 'adm-browser',
+      layout: { columns: [['browser']], focused: 'browser' },
       tabs: [
         { id: 'adm-browser', kind: 'browser', title: 'API usage', url: 'localhost:3000/admin/usage' },
         { id: 'adm-changes', kind: 'changes' },
@@ -372,27 +556,44 @@ function rateLimiting(): Thread {
       { at: at(s, 2), who: 'claude', kind: 'message', text: 'Plan: tiers doc, schema, gateway wiring, Redis-backed token bucket, load test, docs. I will rate limit by API key, not IP, since every public route needs a key.' },
       { at: at(s, 92), who: 'you', kind: 'message', text: 'Also add per-key overrides, sales wants to raise limits for a few customers.' },
       { at: at(s, 93), who: 'harness', kind: 'event', text: 'Goal v2: +1 step "Per-key overrides"' },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Skill sizing-the-change', skill: 'sizing-the-change' },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp linear: get_issue', mcp: { server: 'linear', tool: 'get_issue' } },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp mochi: get_goal', mcp: { server: 'mochi', tool: 'get_goal' } },
+      { at: at(s, 94), who: 'claude', kind: 'tool', text: 'Mcp mochi: add_step', mcp: { server: 'mochi', tool: 'add_step' } },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Search redis token bucket rate limiter lua script atomic', links: DEMO_LINKS['Search redis token bucket rate limiter lua script atomic'] },
       { at: at(s, 95), who: 'claude', kind: 'tool', text: 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', links: DEMO_LINKS['Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/'] },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts' },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Run node -e "\\\n  const lua = require(\'fs\').readFileSync(\'packages/cache/bucket.lua\', \'utf8\');\\\n  console.log(lua.length)"' },
       { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Read packages/cache/index.ts' },
+      { at: at(s, 96), who: 'claude', kind: 'tool', text: 'Read src/logo.svg' },
       { at: at(s, 101), who: 'claude', kind: 'tool', text: 'Edit packages/cache/redis.ts  +38 −0' },
       { at: at(s, 104), who: 'claude', kind: 'tool', text: 'Run pnpm --filter cache test' },
+      { at: at(s, 105), who: 'claude', kind: 'tool', text: 'Skill code-review', skill: 'code-review' },
+      { at: at(s, 106), who: 'claude', kind: 'tool', text: 'Mcp mochi: send_to_thread', mcp: MOCHI_SEND, sent: { threadId: 'adm', title: 'Admin usage dashboard', text: LIMITS_NOTE } },
+      { at: at(s, 109), who: 'you', kind: 'message', text: USAGE_REPLY, from: { threadId: 'adm', title: 'Admin usage dashboard' } },
+      { at: at(s, 110), who: 'claude', kind: 'message', text: 'Admin usage will badge overridden keys, so I will keep `override_rpm` nullable rather than defaulting it to the tier limit.' },
     ],
     prs: [],
-    skills: [
-      { name: 'sizing-the-change', uses: 1 },
-      { name: 'code-review', uses: 1 },
-    ],
     sources: [
       { kind: 'mcp', label: 'Linear · LAT-198 Rate limits' },
       { kind: 'file', label: 'docs/api/limits.md' },
       { kind: 'link', label: 'redis.io/docs/latest/develop/use/patterns' },
     ],
     context: { used: 84_000, max: 200_000 },
+    // What @ offers with tool counts; no session, so the summary's live-agent sections stay hidden.
+    agent: {
+      mcpServers: [
+        { name: 'linear', status: 'connected', toolCount: 23, url: 'https://mcp.linear.app/mcp' },
+        { name: 'github', status: 'needs-auth' },
+      ],
+    },
   };
 }
+
+// The demo's two threads messaging each other (`send_to_thread`).
+const MOCHI_SEND = { server: 'mochi', tool: 'send_to_thread' };
+const LIMITS_NOTE = 'Heads up: the limits table now has a `tier` column and a nullable `override_rpm` per key.\n\n- Read limits from `packages/db/schema/limits.ts` instead of hardcoding 60/600\n- Enterprise keys have no tier default, only an override';
+const USAGE_REPLY = 'Got it. The usage page now reads the limit per key and shows **Override** on keys with `override_rpm` set. Tell me if the column gets renamed.';
 
 function adminDashboard(): Thread {
   const s = 770;
@@ -416,6 +617,8 @@ function adminDashboard(): Thread {
     ],
     activity: [
       { at: s, who: 'you', kind: 'message', text: 'Build the admin usage dashboard. Per key, per day, exportable. It has to stay fast at 10k keys.' },
+      { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Skill ui', skill: 'ui' },
+      { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Mcp linear: get_issue', mcp: { server: 'linear', tool: 'get_issue' } },
       { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Read packages/db/schema/usage.ts' },
       { at: at(s, 1), who: 'codex', kind: 'tool', text: 'Read apps/web/components/charts/BarChart.tsx' },
       { at: at(s, 2), who: 'codex', kind: 'reasoning', seconds: 14, text: 'api_usage_daily is append-only and partitioned by day, so grouping by key and day is cheap if the query filters on the partition first. Offset pagination would drift while new rows land; a (key_id, day) cursor stays stable at 10k keys.' },
@@ -424,15 +627,18 @@ function adminDashboard(): Thread {
       { at: at(s, 10), who: 'codex', kind: 'tool', text: 'Write apps/api/routes/admin/usage.ts  +18 −0' },
       { at: at(s, 24), who: 'codex', kind: 'tool', text: 'Run pnpm --filter api test usage' },
       { at: at(s, 38), who: 'codex', kind: 'message', text: 'Endpoint is done and paginated by cursor. p95 is 140ms on the 10k-key seed database. Setup notes are in `README.md`, the page mounts from `src/App.tsx` and the scripts live in `package.json`. Moving on to the charts page.' },
+      { at: at(s, 39), who: 'codex', kind: 'message', text: 'Related work: #45 is open, #49 is still a draft, #47 merged and #30 was closed. #46 has conflicts with main and #48 is failing CI. Issues: #12 is open, #9 was fixed, #8 closed as not planned, and #999 is one gh cannot read. Upstream there is vercel/streamdown#120 and https://github.com/frstycodes/mochi/pull/45. The header lives in src/App.tsx:3 and styles in [the stylesheet](src/index.css); src/missing.ts stays plain, and this is our #1 priority. On GitHub: frstycodes/mochi#45, frstycodes/mochi#47, frstycodes/mochi#7 and frstycodes/mochi#50.' },
       { at: at(s, 40), who: 'harness', kind: 'event', text: 'Finished "Usage query endpoint"' },
+      { at: at(s, 41), who: 'codex', kind: 'tool', text: 'Skill dataviz', skill: 'dataviz' },
+      { at: at(s, 41), who: 'codex', kind: 'tool', text: 'Skill ui', skill: 'ui' },
+      { at: at(s, 42), who: 'codex', kind: 'tool', text: 'Mcp figma: get_design_context', mcp: { server: 'figma', tool: 'get_design_context' } },
+      { at: at(s, 42), who: 'codex', kind: 'tool', text: 'Mcp figma: get_screenshot', mcp: { server: 'figma', tool: 'get_screenshot' } },
       { at: at(s, 44), who: 'codex', kind: 'tool', text: 'Edit apps/web/routes/admin/usage.tsx  +120 −4' },
+      { at: at(s, 45), who: 'you', kind: 'message', text: LIMITS_NOTE, from: { threadId: 'rl', title: 'Public API rate limiting' } },
+      { at: at(s, 46), who: 'codex', kind: 'tool', text: 'Read packages/db/schema/limits.ts' },
+      { at: at(s, 47), who: 'codex', kind: 'tool', text: 'Mcp mochi: send_to_thread', mcp: MOCHI_SEND, sent: { threadId: 'rl', title: 'Public API rate limiting', text: USAGE_REPLY } },
     ],
     prs: [],
-    skills: [
-      { name: 'ui', uses: 3 },
-      { name: 'dataviz', uses: 2 },
-      { name: 'shadcn', uses: 1 },
-    ],
     sources: [
       { kind: 'mcp', label: 'Linear · LAT-212 Admin usage' },
       { kind: 'mcp', label: 'Figma · Admin / Usage' },
@@ -465,11 +671,11 @@ function flakyCheckout(): Thread {
       { at: s, who: 'you', kind: 'message', text: 'checkout.spec fails about 1 in 6 runs on CI only. Find out why and fix it.' },
       { at: at(s, 2), who: 'codex', kind: 'tool', text: 'Read e2e/checkout.spec.ts' },
       { at: at(s, 3), who: 'codex', kind: 'tool', text: 'Read e2e/fixtures/stripe.ts' },
+      { at: at(s, 4), who: 'codex', kind: 'tool', text: 'Skill run', skill: 'run' },
       { at: at(s, 5), who: 'codex', kind: 'tool', text: 'Run pnpm e2e checkout.spec --repeat-each 6' },
       { at: at(s, 47), who: 'codex', kind: 'message', text: 'The flake is the Stripe webhook arriving after the success page asserts. I can either stub webhooks in e2e, or record real fixtures and replay them. Which do you prefer?' },
     ],
     prs: [],
-    skills: [{ name: 'run', uses: 2 }],
     sources: [{ kind: 'link', label: 'github.com/latitude-media/latitude/actions/runs/1182' }],
     context: { used: 46_000, max: 272_000 },
   };
@@ -513,10 +719,9 @@ function authMigration(): Thread {
     prs: [
       { number: 479, state: 'merged', title: 'Better Auth core' },
       { number: 482, state: 'open', title: 'Session backfill + legacy removal' },
-    ],
-    skills: [
-      { name: 'security-review', uses: 1 },
-      { name: 'code-review', uses: 2 },
+      { number: 484, state: 'open', title: 'Keep the latitude.sid cookie name' },
+      { number: 485, state: 'draft', title: 'Passkeys on the login page' },
+      { number: 487, state: 'open', title: 'Docs: migrating to Better Auth' },
     ],
     sources: [
       { kind: 'link', label: 'better-auth.com/docs/concepts/session-management' },
@@ -545,7 +750,6 @@ function onboardingEmails(): Thread {
     ],
     activity: [],
     prs: [{ number: 471, state: 'merged', title: 'Onboarding sequence' }],
-    skills: [],
     sources: [],
     context: { used: 52_000, max: 200_000 },
   };
@@ -572,7 +776,6 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
     }),
     activity: [{ at: s, who: 'you', kind: 'message', text: title }],
     prs: [],
-    skills: [],
     sources: [],
     context: { used: 30_000, max: 200_000 },
   };
@@ -581,16 +784,19 @@ function simpleThread(id: string, spaceId: string, project: string | null, title
 export function seedThreads(): Thread[] {
   return [
     rateLimiting(),
+    claudeLimitThread(),
     adminDashboard(),
     flakyCheckout(),
     authMigration(),
     onboardingEmails(),
     vizGalleryThread(),
     simpleThread('lobby', 'personal', 'map-veto', 'Realtime veto lobby', 'claude', 1, 700, ['Presence channel', 'Lobby state machine', 'Veto turn timer', 'Reconnect handling'], 2, 1),
+    codexLimitThread(),
     simpleThread('timer', 'personal', 'focus-mode', 'Sync timer across devices', 'codex', 2, 760, ['CRDT timer state', 'Sync over relay', 'Conflict UI'], 1),
     simpleThread('queues', 'personal', null, 'Compare Postgres job queues', 'claude', 3, 790, ['Collect the options', 'Compare tradeoffs'], 1),
     simpleThread('cfg', 'liane', 'liane', 'Per-space config dirs', 'claude', 1, 720, ['Materialize CODEX_HOME per space', 'Materialize CLAUDE_CONFIG_DIR per space', 'Stop global writes', 'Migration for existing users'], 1, 1),
     simpleThread('tele', 'liane', 'liane', 'Skill telemetry', 'codex', 2, 800, ['Log skill loads per thread', 'Dead skill report'], 0),
+    ...[longThreadFromUrl()].filter((t) => !!t),
   ];
 }
 
@@ -632,7 +838,7 @@ export function seedQueue(): QueueItem[] {
 }
 
 export const FAKE_TOOLS: Record<string, string[]> = {
-  rl5: ['Search ioredis cluster evalsha NOSCRIPT retry', 'Run pnpm --filter cache add ioredis', 'Search upstash ratelimit sliding window vs token bucket', 'Read packages/cache/index.ts', 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts', 'Search redis token bucket rate limiter lua script atomic', 'Edit packages/cache/redis.ts  +12 −2', 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
+  rl5: ['Search ioredis cluster evalsha NOSCRIPT retry', 'Run pnpm --filter cache add ioredis', 'Search upstash ratelimit sliding window vs token bucket', 'Read packages/cache/index.ts', 'Read src/logo.svg', 'Run REDIS_URL=redis://localhost:6379/0 RATE_LIMIT_TIERS=free:60,pro:600,enterprise:custom pnpm --filter @acme/api exec vitest run apps/api/middleware/__tests__/ratelimit.integration.test.ts apps/api/middleware/__tests__/ratelimit.overrides.test.ts --reporter=verbose --coverage.enabled --coverage.include=apps/api/middleware/ratelimit.ts', 'Search redis token bucket rate limiter lua script atomic', 'Edit packages/cache/redis.ts  +12 −2', 'Fetch https://redis.io/docs/latest/develop/interact/programmability/eval-intro/', 'Run pnpm --filter cache test', 'Read packages/cache/index.ts', 'Edit packages/cache/index.ts  +4 −0'],
   rl6: ['Write apps/api/middleware/ratelimit.ts', 'Edit apps/api/gateway.ts  +6 −1', 'Run pnpm --filter api test ratelimit'],
   rl7: ['Edit packages/db/schema/limits.ts  +14 −0', 'Edit apps/api/middleware/ratelimit.ts  +22 −3'],
   rl8: ['Write scripts/load/ratelimit.k6.js', 'Run k6 run scripts/load/ratelimit.k6.js'],

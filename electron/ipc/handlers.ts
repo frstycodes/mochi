@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron';
+import type { AgentDecision } from '../../src/host/types/agent.ts';
 
 // Event methods (returning an unsubscribe) are pushed from main with `sender.send`, so only promise methods get a handler.
 // Args arrive untyped from the renderer: every handler validates them before use.
@@ -27,4 +28,16 @@ export function record(value: unknown, name: string): Record<string, unknown> {
 export function integer(value: unknown, name: string, min: number, max: number): number {
   if (!Number.isInteger(value) || (value as number) < min || (value as number) > max) throw new TypeError(`${name} must be an integer in ${min}–${max}`);
   return value as number;
+}
+
+const DECISIONS = ['allow', 'deny', 'answer'];
+
+/** A queue card's answer as the renderer or a notification sent it; `answers` holds one list of picks per question. */
+export function agentDecision(value: unknown): AgentDecision {
+  const d = record(value, 'decision');
+  if (!DECISIONS.includes(d.kind as string)) throw new TypeError('decision.kind must be allow, deny or answer');
+  if (d.kind === 'answer' && !(Array.isArray(d.answers) && d.answers.every((a) => Array.isArray(a) && a.every((x) => typeof x === 'string')))) throw new TypeError('decision.answers must be a list of string lists, one per question');
+  if (d.kind === 'deny' && d.message !== undefined) string(d.message, 'decision.message', 4096);
+  for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
+  return d as unknown as AgentDecision;
 }

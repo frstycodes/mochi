@@ -1,6 +1,6 @@
 /**
  * Keyboard shortcuts across platforms. `mod` is the primary modifier (⌘ on macOS, Ctrl on Windows and Linux);
- * `nav` is the secondary one for moving between spaces, splits and stage cards (⌃ on macOS, Alt elsewhere, because Ctrl is `mod` there).
+ * `nav` is the secondary one for moving between spaces and splits (⌃ on macOS, Alt elsewhere, because Ctrl is `mod` there).
  */
 export type Modifier = 'mod' | 'nav' | 'shift' | 'alt';
 export type Arrow = 'up' | 'down' | 'left' | 'right';
@@ -11,6 +11,8 @@ interface ModifierState {
   ctrlKey: boolean;
   altKey: boolean;
 }
+
+export const IS_WINDOWS = typeof navigator !== 'undefined' && /win/i.test((navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform);
 
 export const IS_MAC = typeof navigator !== 'undefined' && isMacPlatform((navigator as Navigator & { userAgentData?: { platform: string } }).userAgentData?.platform ?? navigator.platform);
 
@@ -63,4 +65,9 @@ export function shortcutText(keys: Key[], isMac = IS_MAC) {
   return orderKeys(keys, isMac)
     .map((k) => keyName(k, isMac))
     .join(isMac ? ' ' : '+');
+}
+
+/** Keys typed into a field, or inside a dialog or menu, belong there, not to a page's own shortcuts. */
+export function isTyping(target: EventTarget | null) {
+  return target instanceof HTMLElement && !!target.closest('input:not([type=checkbox]):not([role=switch]), textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu]');
 }

@@ -1,6 +1,7 @@
-import type { QueueItem, Step, Thread, ThreadStatus } from '../model.ts';
+import type { ActivityEntry, QueueItem, Step, Thread, ThreadStatus } from '../model.ts';
 import { statusAt } from '../progress.ts';
 import { log, mapThread } from '../store/threads.ts';
+import { isWorking } from '../agentPhase.ts';
 import type { State } from '../store/index.tsx';
 
 /** The thread's transcript and steps at a step boundary, plus the commit holding its worktree's files once one was saved. */
@@ -12,7 +13,12 @@ export interface Checkpoint {
   thread: Thread;
   ref?: string;
   wantsFiles?: boolean;
+  /** Saved just before your message at this activity index, so rewinding to it restores exactly the files it found. */
+  before?: number;
 }
+
+/** `chat`: transcript, steps and the agent's session go back, files stay. `files`: the worktree goes back too. */
+export type RewindMode = 'chat' | 'files';
 
 export interface RewindUndo {
   threadId: string;
@@ -21,6 +27,13 @@ export interface RewindUndo {
   queue: QueueItem[];
   hasFiles: boolean;
 }
+
+/** Why a rewind can't run now, or undefined when it can. Rewinding under a working agent would race its edits and its session. */
+export function rewindBlockedReason(thread: Thread) {
+  return isWorking(thread) ? STOP_TO_REWIND : undefined;
+}
+
+export const STOP_TO_REWIND = 'Stop the agent to rewind';
 
 /** The label inside a sentence: "Rewound to after "Charts page"". */
 export function checkpointPhrase(checkpoint: Pick<Checkpoint, 'label'>) {
@@ -87,49 +100,68 @@ export function recordCheckpoints(prev: State, next: State): State {
     }
     const doneBefore = new Set(before?.steps.filter((s) => s.status === 'done').map((s) => s.id));
     const finished = thread.steps.filter((s) => s.status === 'done' && !doneBefore.has(s.id));
-    if (finished.length === 0) continue;
-    const added = finished.map((s) => ({ n: seq++, at: next.now, label: `After "${s.title}"`, stepId: s.id, thread, wantsFiles: true }));
+    const sent = before ? yourNewMessages(before, thread) : [];
+    if (finished.length === 0 && sent.length === 0) continue;
+    const added = [
+      ...sent.map((index): Checkpoint => ({ n: seq++, at: next.now, label: `Before "${excerpt(thread.activity[index].text)}"`, before: index, thread: { ...before!, activity: thread.activity.slice(0, index) }, wantsFiles: true })),
+      ...finished.map((s): Checkpoint => ({ n: seq++, at: next.now, label: `After "${s.title}"`, stepId: s.id, thread, wantsFiles: true })),
+    ];
     checkpoints = { ...checkpoints, [thread.id]: [...list, ...added] };
   }
   if (checkpoints === next.checkpoints) return next;
   return { ...next, checkpoints, checkpointSeq: seq };
 }
 
+/** Activity indexes of your messages that `next` added after `prev`'s transcript. */
+function yourNewMessages(prev: Thread, next: Thread) {
+  if (next.activity.length <= prev.activity.length) return [];
+  return next.activity.flatMap((e, i) => (i >= prev.activity.length && isYourMessage(e) ? [i] : []));
+}
+
+const isYourMessage = (e: ActivityEntry) => e.who === 'you' && e.kind === 'message';
+
 /** Puts the thread's steps, transcript and goal back to checkpoint `n` and drops later checkpoints and queue items; one undo is kept. */
-export function rewind(state: State, threadId: string, n: number): State {
+export function rewind(state: State, threadId: string, n: number, mode: RewindMode = 'files', forkAt?: string | null): State {
   const list = state.checkpoints[threadId] ?? [];
   const index = list.findIndex((c) => c.n === n);
   if (index < 0) return state;
-  return restore(state, threadId, list[index].thread, index, checkpointPhrase(list[index]));
+  return restore(state, threadId, list[index].thread, index, checkpointPhrase(list[index]), mode, forkAt);
 }
 
 /**
  * Back to just before the message at `index` in the thread's activity: the transcript stops before it, steps and goal are rebuilt for that moment,
  * and the worktree's files come from the latest checkpoint at or before it (the closest saved files).
  */
-export function rewindToMessage(state: State, threadId: string, index: number): State {
+export function rewindToMessage(state: State, threadId: string, index: number, mode: RewindMode = 'files', forkAt?: string | null): State {
   const current = state.threads.find((t) => t.id === threadId);
   const entry = current?.activity[index];
   const list = state.checkpoints[threadId] ?? [];
   if (!current || !entry || list.length === 0) return state;
-  const cpIndex = list.indexOf(checkpointAt(list, entry.at));
+  const cpIndex = list.indexOf(checkpointForMessage(state, threadId, index)!);
   // Times are whole minutes and a message often shares its minute with the step it added: rebuild from just before it. The transcript is cut by position.
   const before = { ...threadAt(current, entry.at - 0.001), activity: current.activity.slice(0, index) };
-  return restore(state, threadId, before, cpIndex, `before "${excerpt(entry.text)}"`);
+  return restore(state, threadId, before, cpIndex, `before "${excerpt(entry.text)}"`, mode, forkAt);
 }
 
-/** The point a message sits at for rewinding: its files come from this checkpoint. */
+/** The point a message sits at for rewinding: the checkpoint saved just before it, else the latest one before it. */
 export function checkpointForMessage(state: State, threadId: string, index: number) {
   const entry = state.threads.find((t) => t.id === threadId)?.activity[index];
   const list = state.checkpoints[threadId] ?? [];
-  return entry && list.length ? checkpointAt(list, entry.at) : undefined;
+  if (!entry || !list.length) return;
+  // A message sent in the same minute as a later one: its own checkpoint, never the later message's.
+  return list.findLast((c) => c.before === index) ?? checkpointAt(list.filter((c) => c.before === undefined || c.before < index), entry.at);
 }
 
-function restore(state: State, threadId: string, base: Thread, cpIndex: number, phrase: string): State {
+/** The first of your messages a rewind to `base` drops: the agent's session goes back to just before it. */
+export function firstDroppedMessage(current: Thread, keptLength: number) {
+  return current.activity.slice(keptLength).find(isYourMessage);
+}
+
+function restore(state: State, threadId: string, base: Thread, cpIndex: number, phrase: string, mode: RewindMode, forkAt?: string | null): State {
   const current = state.threads.find((t) => t.id === threadId);
   const list = state.checkpoints[threadId] ?? [];
   const cp = list[cpIndex];
-  if (!current || !cp) return state;
+  if (!current || !cp || rewindBlockedReason(current)) return state;
   const revision = base.revisions.length + 1;
   const restored: Thread = {
     ...base,
@@ -139,19 +171,44 @@ function restore(state: State, threadId: string, base: Thread, cpIndex: number, 
     line: current.line,
     orbitSlot: current.orbitSlot,
     providers: current.providers,
+    session: current.session,
+    live: current.live && liveAfterRewind(current, base, forkAt),
     revisions: [...base.revisions, { n: revision, at: state.now, label: `Rewound to ${phrase}`, by: 'you', diff: rewindDiff(current, base) }],
   };
-  const files = cp.ref ? 'files and transcript' : 'transcript';
+  const hasFiles = mode === 'files' && !!cp.ref;
+  const files = hasFiles ? 'files and transcript' : 'transcript';
   return {
     ...state,
     threads: mapThread(state.threads, threadId, () => log(restored, { at: state.now, who: 'harness', kind: 'event', text: `Rewound ${files} to ${phrase}` })),
     checkpoints: { ...state.checkpoints, [threadId]: list.slice(0, cpIndex + 1) },
     queue: state.queue.filter((q) => q.threadId !== threadId || q.createdAt <= cp.at),
-    rewindUndo: { threadId, thread: current, checkpoints: list, queue: state.queue.filter((q) => q.threadId === threadId), hasFiles: !!cp.ref },
+    rewindUndo: { threadId, thread: current, checkpoints: list, queue: state.queue.filter((q) => q.threadId === threadId), hasFiles },
   };
 }
 
-function excerpt(text: string) {
+/**
+ * The agent stops (`agentCalls`) and its next start continues a session cut where the transcript now ends: a fork at `forkAt`
+ * when main knew the point, else a fresh session handed the transcript. A rewind that drops none of your messages keeps the session.
+ */
+function liveAfterRewind(current: Thread, base: Thread, forkAt?: string | null): Thread['live'] {
+  const live = { ...current.live!, isWorking: false, isDetached: true };
+  if (!firstDroppedMessage(current, base.activity.length)) return live;
+  return { ...live, restart: forkAt ? { forkAt } : { seed: transcriptSeed(base.activity) } };
+}
+
+// The last 40 messages, 1500 chars each, keeps the seed under main's 100k prompt cap; a summary pass if long threads need more of their past.
+const SEED_MESSAGES = 40;
+const SEED_CHARS = 1500;
+
+/** What a fresh session is told when its old one couldn't be cut at the rewind point. */
+export function transcriptSeed(activity: ActivityEntry[]) {
+  const messages = activity.filter((e) => e.kind === 'message').slice(-SEED_MESSAGES);
+  if (!messages.length) return '';
+  const lines = messages.map((e) => `${e.who === 'you' ? 'User' : 'Assistant'}: ${e.text.length > SEED_CHARS ? `${e.text.slice(0, SEED_CHARS)}…` : e.text}`);
+  return `[The user rewound this conversation; your earlier session was replaced. The conversation so far:]\n\n${lines.join('\n\n')}\n\n[End of the earlier conversation. The user's new message follows.]`;
+}
+
+export function excerpt(text: string) {
   const line = text.replace(/\s+/g, ' ').trim();
   return line.length > 40 ? `${line.slice(0, 39)}…` : line;
 }
@@ -165,12 +222,23 @@ function rewindDiff(from: Thread, to: Thread) {
 
 export function undoRewind(state: State): State {
   const undo = state.rewindUndo;
-  if (!undo) return state;
+  const thread = state.threads.find((t) => t.id === undo?.threadId);
+  if (!undo || (thread && rewindBlockedReason(thread))) return state;
   return {
     ...state,
-    threads: mapThread(state.threads, undo.threadId, () => log(undo.thread, { at: state.now, who: 'harness', kind: 'event', text: 'Undid the rewind' })),
+    // The agent stops (`agentCalls`) and resumes the session it had: rewinds fork it, so the original is still whole.
+    threads: mapThread(state.threads, undo.threadId, () => log({ ...undo.thread, live: undo.thread.live && { ...undo.thread.live, isWorking: false, isDetached: true } }, { at: state.now, who: 'harness', kind: 'event', text: 'Undid the rewind' })),
     checkpoints: { ...state.checkpoints, [undo.threadId]: undo.checkpoints },
     queue: [...state.queue.filter((q) => q.threadId !== undo.threadId), ...undo.queue],
     rewindUndo: null,
+  };
+}
+
+/** Logs a turn's file changes undone or put back. The `undo` file save now holds this undo's files, so a rewind's undo can no longer put its own back. */
+export function turnUndo(state: State, threadId: string, turnUndo: NonNullable<ActivityEntry['turnUndo']>, text: string): State {
+  return {
+    ...state,
+    threads: mapThread(state.threads, threadId, (t) => log(t, { at: state.now, who: 'harness', kind: 'event', text, turnUndo })),
+    rewindUndo: state.rewindUndo?.threadId === threadId && state.rewindUndo.hasFiles ? null : state.rewindUndo,
   };
 }

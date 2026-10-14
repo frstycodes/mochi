@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ACTIONS, type PaletteAction } from '../palette/actions';
 import { scopeOf, splitByRule, type ActionScope, type ScopeTarget } from '../palette/when';
 import { useActionContext, useActions } from '../palette/useActions';
-import { Shortcut } from '../Shortcut';
+import { Shortcut, useBinding } from '../Shortcut';
 import { ProviderMark } from '../ui';
 import { useReviewerChecks } from '../secondOpinion/reviewer';
 
@@ -82,7 +82,8 @@ export function BulkActionItems({ threadIds, groups }: { threadIds: string[]; gr
 }
 
 // Not Radix `disabled`: that drops the item from keyboard focus and pointer events, so its reason could never show.
-function SkippedItem({ menu, icon, title, reason }: { menu: MenuKind; icon: ReactNode; title: string; reason: string }) {
+/** A menu item that can't run right now, its reason in a tooltip. */
+export function SkippedItem({ menu, icon, title, reason }: { menu: MenuKind; icon: ReactNode; title: string; reason: string }) {
   const { Item, tooltipSide } = MENU_PARTS[menu];
   return (
     <Tooltip>
@@ -101,13 +102,14 @@ function SkippedItem({ menu, icon, title, reason }: { menu: MenuKind; icon: Reac
 
 function ActionItem({ menu, action, icon, title, onSelect }: { menu: MenuKind; action: PaletteAction; icon: ReactNode; title: string; onSelect: () => void }) {
   const { Item, Shortcut: ItemShortcut } = MENU_PARTS[menu];
+  const keys = useBinding(action.command);
   return (
     <Item onSelect={onSelect}>
       {icon}
       {title}
-      {!!action.shortcut && (
+      {!!keys && (
         <ItemShortcut className="tracking-normal">
-          <Shortcut keys={action.shortcut} />
+          <Shortcut keys={keys} />
         </ItemShortcut>
       )}
     </Item>

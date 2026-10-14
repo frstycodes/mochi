@@ -4,7 +4,7 @@ import { agentPhase, currentAction, pendingWork, workingLabel } from './agentPha
 import type { ActivityEntry, Thread } from './model.ts';
 
 const thread = (patch: Partial<Thread>) => ({ status: 'running', activity: [{ at: 0, who: 'you', kind: 'message', text: 'hi' }], ...patch }) as Thread;
-const live = (patch: Partial<NonNullable<Thread['live']>>) => ({ isWorking: true, usage: [], ...patch });
+const live = (patch: Partial<NonNullable<Thread['live']>>) => ({ isWorking: true, ...patch });
 
 test('the avatar reads idle once a live turn ends, even though the thread stays running', () => {
   assert.equal(agentPhase(thread({ live: live({ starting: 'codex' }) })), 'start');

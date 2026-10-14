@@ -1,9 +1,10 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
-import { ArrowUp, BranchUp, ClipboardList, Folder, Hand, Laptop, Mic, Monitor, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { toast } from 'sonner';
+import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
+import { BranchIcon, BranchName } from './git/BranchLabel';
 import { openPhotos } from './photo/photos';
 import {
   PromptInput,
@@ -13,27 +14,28 @@ import {
   PromptInputActionMenuContent,
   PromptInputActionMenuTrigger,
   PromptInputBody,
-  PromptInputButton,
   PromptInputFooter,
   PromptInputHeader,
   PromptInputSubmit,
   PromptInputTools,
   usePromptInputAttachments,
+  usePromptInputController,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input';
 import { AutoHeight } from '@/components/ui/auto-height';
-import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { MetaChip } from './MetaChip';
 import type { Provider, Repo } from './model';
-import { EffortPicker, ModelPicker, useModels } from './ModelControls';
+import { EffortPicker, ModelPicker, SpeedPicker, useModels } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
 import { accessFor, PERMISSIONS, type Access } from './runtime/access';
-import { getPrefs, type Prefs } from './settings/prefs';
 import type { SlashItem } from './chat/slash';
 import { TokenTextarea } from './chat/SlashToken';
+import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
+import { IMAGE_ERRORS, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES } from './chat/images';
 
 // Sending from a new thread hands its composer to the thread's: both carry the same layoutId, so one card travels down instead of two swapping.
 // Each new thread page takes a fresh id, so nothing mounted later animates from a composer that already docked.
@@ -66,7 +68,7 @@ export function useComposerHandoff(leafId: string) {
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-lift transition-colors has-[textarea:focus]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
+    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-composer transition-colors has-[textarea:focus]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
       <AutoHeight className="justify-end">{children}</AutoHeight>
     </div>
   );
@@ -81,38 +83,55 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   /** `/` commands and skills a token in the text can resolve to. */
   slashItems: SlashItem[];
   /** Return `false` to hold the message: the text stays in the input. */
-  onSend: (message: PromptInputMessage) => void | boolean;
+  onSend: (message: PromptInputMessage) => void | boolean | Promise<void | boolean>;
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
+  /** Text only: no attachments or model controls, for a thread another computer starts with its own defaults. */
+  isTextOnly?: boolean;
+  /** Beside send: the context ring. */
+  meter?: ReactNode;
+  /** Where the unsent text and attachments are kept (`threadDraftKey`, `newThreadDraftKey`); sending clears it. */
+  draftKey: string;
+  /** Kept with the draft; memoize it, a new object saves again. */
+  draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', isTextOnly, meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
   const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
+  const draft = useComposerDraft(draftKey, draftExtra);
+  const send = async (message: PromptInputMessage) => {
+    const result = await onSend(message);
+    if (result !== false) draft.clear();
+    hold(result);
+  };
   return (
-    <PromptInput multiple globalDrop onSubmit={(message) => hold(onSend(message))}>
+    <PromptInput multiple globalDrop accept={IMAGE_TYPES.join(',')} maxFileSize={MAX_IMAGE_BYTES} maxFiles={MAX_IMAGES} onError={(e) => toast.error(IMAGE_ERRORS[e.code])} onSubmit={send}>
       <ComposerAttachments />
       <PromptInputBody>
         <TokenTextarea items={slashItems} className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>
-          <PromptInputActionMenu>
-            <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
-              <Paperclip className="size-4" />
-            </PromptInputActionMenuTrigger>
-            <PromptInputActionMenuContent>
-              <PromptInputActionAddAttachments />
-              <PromptInputActionAddScreenshot />
-            </PromptInputActionMenuContent>
-          </PromptInputActionMenu>
-          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
-          <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
+          {!isTextOnly && (
+            <>
+              <PromptInputActionMenu>
+                <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
+                  <Paperclip className="size-4" />
+                </PromptInputActionMenuTrigger>
+                <PromptInputActionMenuContent>
+                  <PromptInputActionAddAttachments />
+                  <PromptInputActionAddScreenshot />
+                </PromptInputActionMenuContent>
+              </PromptInputActionMenu>
+              <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
+              <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
+              <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} />
+            </>
+          )}
         </PromptInputTools>
         <PromptInputTools>
-          <PromptInputButton tooltip="Dictate" className="rounded-full" onClick={() => toast('Dictation is not in the prototype yet')}>
-            <Mic className="size-4" />
-          </PromptInputButton>
+          {meter}
           {onStop ? (
             <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent" className="rounded-full">
               <Stop className="size-4" />
@@ -128,9 +147,53 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
   );
 }
 
-// PromptInput clears the input after onSubmit unless it throws; it swallows the throw.
+// PromptInput clears the input after onSubmit unless it throws (or rejects); it swallows the throw.
 function hold(result: void | boolean) {
   if (result === false) throw new Error('Message held');
+}
+
+/** Puts the saved draft back into the composer once, then saves every change; needs the composer's `PromptInputProvider`. */
+function useComposerDraft(key: string, extra: unknown) {
+  const { textInput, attachments } = usePromptInputController();
+  const [isRestored, setIsRestored] = useState(false);
+  const didRestore = useRef(false);
+  const blobs = useRef(new Map<string, Promise<Blob>>());
+  // Blobs resolve async: only the newest save lands, and a send drops any still in flight.
+  const seq = useRef(0);
+  const text = textInput.value;
+  const { files } = attachments;
+
+  useEffect(() => {
+    // A ref, not the state: StrictMode runs this twice before the state updates, and the files would be added twice.
+    if (didRestore.current) return;
+    didRestore.current = true;
+    const saved = getDraft(key);
+    if (saved) {
+      textInput.setInput(saved.text);
+      attachments.add(saved.files.map((f) => new File([f.blob], f.filename ?? 'Attachment', { type: f.mediaType })));
+    }
+    setIsRestored(true);
+  }, [key, textInput, attachments]);
+
+  useEffect(() => {
+    if (!isRestored) return;
+    const n = ++seq.current;
+    const blobOf = (url: string) => blobs.current.get(url) ?? blobs.current.set(url, fetch(url).then((r) => r.blob())).get(url)!;
+    Promise.all(files.map((f) => blobOf(f.url)))
+      .then((list) => {
+        if (n !== seq.current) return;
+        const kept: DraftFile[] = files.map((f, i) => ({ filename: f.filename, mediaType: f.mediaType, blob: list[i] }));
+        saveDraft(key, { text, files: kept, extra });
+      })
+      .catch((error: unknown) => console.error('Reading an attachment for the draft failed', error));
+  }, [isRestored, key, text, files, extra]);
+
+  return {
+    clear: () => {
+      seq.current++;
+      clearDraft(key);
+    },
+  };
 }
 
 function ComposerAttachments() {
@@ -178,20 +241,12 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'relative flex min-h-8 flex-wrap items-center gap-x-1 px-1 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
+        'relative flex min-h-8 flex-wrap items-center gap-1.5 px-1 pt-2 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
         className,
       )}
       {...props}
     />
   );
-}
-
-export const DEVICES = ['This Mac', 'Studio', 'Cloud sandbox'] as const satisfies Prefs['runsOn'][];
-
-// GAP: only This Mac runs anything; the choice isn't kept or sent to an agent.
-export function RunOnMenu() {
-  const [device, setDevice] = useState<string>(() => getPrefs().runsOn);
-  return <MetaMenu icon={device === 'Cloud sandbox' ? <Monitor /> : <Laptop />} label="Run on" value={device} options={DEVICES} onChange={setDevice} />;
 }
 
 /**
@@ -211,15 +266,10 @@ export function PermissionsMenu({ threadId, provider, value, onChange }: { threa
   return (
     <DropdownMenu onOpenChange={(open) => !open && setIsArmed(false)}>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn('text-subtle-foreground hover:text-foreground', access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:hover:bg-warning/20')}
-          aria-label={`Permissions: ${access}`}
-        >
+        <MetaChip className={cn(access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:bg-warning/12 dark:hover:bg-warning/20')} aria-label={`Permissions: ${access}`}>
           <AccessIcon access={access} />
           {access}
-        </Button>
+        </MetaChip>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-76">
         <DropdownMenuGroup>
@@ -257,36 +307,10 @@ function AccessIcon({ access, className }: { access: Access; className?: string 
 
 /** Where a started thread works: its project folder or its own worktree, and the branch. */
 export function BranchLabel({ repo }: { repo: Repo }) {
-  const isFolder = repo.mode === 'folder';
   return (
     <span className="flex min-w-0 items-center gap-1 px-1.5">
-      {isFolder ? <Folder className="size-3.5 shrink-0" aria-label="Project folder" /> : <BranchUp className="size-3.5 shrink-0" aria-label="Own worktree" />}
-      <span className="truncate">{repo.branch}</span>
+      <BranchIcon repo={repo} />
+      <BranchName repo={repo} />
     </span>
-  );
-}
-
-function MetaMenu({ icon, label, value, options, onChange }: { icon: ReactNode; label: string; value: string; options: readonly string[]; onChange: (v: string) => void }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="xs" className="text-subtle-foreground hover:text-foreground" aria-label={`${label}: ${value}`}>
-          {icon}
-          {value}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-44">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>{label}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
-            {options.map((o) => (
-              <DropdownMenuRadioItem key={o} value={o}>
-                {o}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

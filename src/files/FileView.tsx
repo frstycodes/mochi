@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { MultiFileDiff } from '@pierre/diffs/react';
-import { useTheme } from 'next-themes';
+import { useDiffTheme } from '../themes/highlight';
 import { AlertTriangle, Code, Document, Export, Eye } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -10,13 +10,13 @@ import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './editors';
 import { previewKind } from './kinds';
 import { FilePreview } from './previews';
 import { useOpenFile, type OpenFile } from './useFiles';
-import { isMod } from '../keys';
+import { isCommand } from '../keymap';
 import { TooltipIconButton } from '../ui';
 
 // Lazy so CodeMirror parses only when a file is first opened as source.
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
-export function FileView({ root, path, line, toolbar }: { root: string; path: string; line?: number; toolbar: ReactNode }) {
+export function FileView({ root, path, line, column, toolbar }: { root: string; path: string; line?: number; column?: [number, number]; toolbar: ReactNode }) {
   const file = useOpenFile(root, path);
   const kind = previewKind(path);
   const hasSource = file.content?.kind === 'text';
@@ -24,7 +24,7 @@ export function FileView({ root, path, line, toolbar }: { root: string; path: st
   const [isComparing, setIsComparing] = useState(false);
   const showsPreview = !!kind && (!hasSource || mode === 'preview');
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!isMod(e) || e.key !== 's') return;
+    if (!isCommand(e, 'file-save')) return;
     e.preventDefault();
     void file.save();
   };
@@ -57,14 +57,14 @@ export function FileView({ root, path, line, toolbar }: { root: string; path: st
         {file.conflict && isComparing ? (
           <ConflictDiff path={path} disk={file.conflict.text} mine={file.draft ?? ''} />
         ) : (
-          <FileBody file={file} path={path} line={line} showsPreview={showsPreview} />
+          <FileBody file={file} path={path} line={line} column={column} showsPreview={showsPreview} />
         )}
       </div>
     </div>
   );
 }
 
-function FileBody({ file, path, line, showsPreview }: { file: OpenFile; path: string; line?: number; showsPreview: boolean }) {
+function FileBody({ file, path, line, column, showsPreview }: { file: OpenFile; path: string; line?: number; column?: [number, number]; showsPreview: boolean }) {
   const kind = previewKind(path);
   if (file.error) return <p className="p-4 type-meta text-destructive">{file.error}</p>;
   if (!file.content) return null;
@@ -72,7 +72,7 @@ function FileBody({ file, path, line, showsPreview }: { file: OpenFile; path: st
   if (file.content.kind === 'binary') return <BinaryState />;
   return (
     <Suspense>
-      <CodeEditor path={path} value={file.draft ?? ''} line={line} onChange={file.setDraft} />
+      <CodeEditor path={path} value={file.draft ?? ''} line={line} column={column} onChange={file.setDraft} />
     </Suspense>
   );
 }
@@ -120,13 +120,13 @@ function ConflictBar({ file, isComparing, onCompare }: { file: OpenFile; isCompa
 }
 
 function ConflictDiff({ path, disk, mine }: { path: string; disk: string; mine: string }) {
-  const { resolvedTheme } = useTheme();
+  const diffTheme = useDiffTheme();
   return (
     <MultiFileDiff
       oldFile={{ name: path, contents: disk }}
       newFile={{ name: path, contents: mine }}
       disableWorkerPool
-      options={{ diffStyle: 'unified', disableFileHeader: true, overflow: 'scroll', themeType: resolvedTheme === 'light' ? 'light' : 'dark' }}
+      options={{ diffStyle: 'unified', disableFileHeader: true, overflow: 'scroll', ...diffTheme }}
       style={{ '--diffs-font-family': 'var(--font-mono)', '--diffs-font-size': '12px', '--diffs-line-height': '20px' } as React.CSSProperties}
       className="h-full overflow-auto"
     />

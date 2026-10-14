@@ -1,4 +1,5 @@
-import type { Step, StepStatus, Thread } from './model.ts';
+import { isMet, type Step, type StepStatus, type Thread } from './model.ts';
+import { summarize } from './summary.ts';
 
 export function statusAt(step: Step, t: number): StepStatus | null {
   if (step.addedAt > t) return null;
@@ -10,57 +11,32 @@ export function statusAt(step: Step, t: number): StepStatus | null {
   return step.status;
 }
 
-export interface Progress {
-  scope: number;
-  done: number;
-  partial: number;
-  pct: number;
+export type Phase = 'planning' | 'building' | 'verifying' | 'ready' | 'settled';
+
+export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Settled' } satisfies Record<Phase, string>;
+
+/**
+ * The ring: criteria met out of the goal's criteria (what done means); no criteria, no count. Steps never count: they aren't
+ * equal in size and a re-plan would move the count backwards. `phase` is read from what Mochi saw happen (edits, claims,
+ * checks), never from the agent's own percentage.
+ */
+export function goalProgress(thread: Thread) {
+  const criteria = thread.criteria ?? [];
+  const met = criteria.filter(isMet).length;
+  return { met, total: criteria.length, phase: phaseOf(thread, criteria.length > 0 && met === criteria.length) };
 }
 
-export function progressAt(thread: Thread, t: number, isLive: boolean): Progress {
-  let scope = 0;
-  let done = 0;
-  let partial = 0;
-  for (const step of thread.steps) {
-    const status = statusAt(step, t);
-    if (!status || status === 'dropped') continue;
-    scope += step.size;
-    if (status === 'done') done += step.size;
-    else if (isLive) partial += step.size * step.progress;
-  }
-  const pct = scope === 0 ? 0 : (done + partial) / scope;
-  return { scope, done, partial, pct };
+function phaseOf(thread: Thread, isAllMet: boolean): Phase {
+  if (thread.status === 'settled') return 'settled';
+  if (isAllMet || thread.status === 'review') return 'ready';
+  if (thread.criteria?.some((c) => c.claim || c.check)) return 'verifying';
+  if (thread.steps.some((s) => s.status === 'done' || s.status === 'running') || summarize(thread.activity).files.length) return 'building';
+  return 'planning';
 }
 
-export interface BurnPoint {
-  t: number;
-  scope: number;
-  done: number;
-}
-
-export function burnSeries(thread: Thread, now: number): BurnPoint[] {
-  const times = new Set<number>([thread.startedAt, now]);
-  for (const step of thread.steps) {
-    for (const t of [step.addedAt, step.doneAt, step.droppedAt]) if (t !== undefined && t <= now) times.add(t);
-  }
-  return [...times]
-    .sort((a, b) => a - b)
-    .map((t) => {
-      const { scope, done } = progressAt(thread, t, false);
-      return { t, scope, done };
-    });
-}
-
-const MIN_PACE_SAMPLE = 15;
-
-export function minutesLeft(thread: Thread, now: number): number | null {
-  if (now - thread.startedAt < MIN_PACE_SAMPLE) return null;
-  const live = progressAt(thread, now, true);
-  const pace = (live.done + live.partial) / Math.max(1, now - thread.startedAt);
-  const remaining = live.scope - live.done - live.partial;
-  if (remaining <= 0) return 0;
-  if (pace <= 0) return null;
-  return Math.round(remaining / pace);
+/** "Building · 1/3" with criteria, "Building" without. */
+export function progressLabel(p: ReturnType<typeof goalProgress>) {
+  return p.total ? `${GOAL_PHASE_LABELS[p.phase]} · ${p.met}/${p.total}` : GOAL_PHASE_LABELS[p.phase];
 }
 
 export function boardColumns(lines: Step[][]): Map<string, number> {

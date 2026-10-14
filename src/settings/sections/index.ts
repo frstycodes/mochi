@@ -1,20 +1,27 @@
 import type { ComponentType } from 'react';
-import { BranchUp, Clock, Compass, Cpu, Database, Global, Keyboard, Notification, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent } from 'reicon-react';
+import { Clock, Hierarchy2, Sparkles, Compass, Cpu, Database, Devices, Global, Keyboard, Notification, Palette, People, Setting2, Setting4, ShieldCheck, TerminalSquare, type IconComponent, ProfileCircle } from 'reicon-react';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
+import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
+import { AccountSection } from './account';
+import { BackgroundSection } from './background';
 import { BrowserSection } from './browser';
 import { DataSection } from './data';
 import { DefaultsSection } from './defaults';
+import { DevicesSection } from './devices';
 import { GeneralSection } from './general';
 import { GitSection } from './git';
 import { GoalsSection } from './goals';
 import { HarnessesSection } from './harnesses';
-import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
+import { COMMANDS } from '../../keymap';
+import { KeyboardSection, shortcutRowId, shownCommands } from './keyboard';
 import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
 import { SchedulesSection } from './schedules';
+import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
+import { ThemesSection } from './themes';
 import { ToolsSection } from './tools';
 
 export const SECTION_GROUPS = ['App', 'Agents', 'Workspace'] as const;
@@ -32,6 +39,14 @@ export interface SettingsSection {
 /** The settings page in sidebar order (SETTINGS.md). */
 export const SETTINGS_SECTIONS = [
   {
+    id: 'account',
+    group: 'App',
+    title: 'Account',
+    icon: ProfileCircle,
+    component: AccountSection,
+    settings: [{ id: 'mochiAccount', label: 'Mochi account', keywords: 'sign in sign out login logout clerk devices computers sync' }],
+  },
+  {
     id: 'general',
     group: 'App',
     title: 'General',
@@ -39,9 +54,38 @@ export const SETTINGS_SECTIONS = [
     component: GeneralSection,
     settings: [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
+      { id: 'colorThemes', label: 'Color themes', keywords: 'vs code vscode theme marketplace open vsx colors' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
       { id: 'projectsFolder', label: 'Projects folder', keywords: 'path open folder directory' },
       { id: 'restoreLayout', label: 'Restore layout on launch', keywords: 'splits views startup' },
+    ],
+  },
+  {
+    id: 'simplify',
+    group: 'App',
+    title: 'Simplify',
+    icon: Sparkles,
+    component: SimplifySection,
+    settings: [
+      { id: 'simplifyLength', label: 'Length', keywords: 'simplify bullets summary short detailed' },
+      { id: 'simplifyNeedsFirst', label: 'Put what needs you first', keywords: 'simplify question decision' },
+      { id: 'simplifyRules', label: 'Your rules', keywords: 'simplify custom instructions rules' },
+      { id: 'simplifyAuto', label: 'Simplify long replies automatically', keywords: 'simplify auto automatic' },
+      { id: 'simplifyAutoWords', label: 'Long means more than (words)', keywords: 'simplify threshold words length' },
+    ],
+  },
+  {
+    id: 'themes',
+    group: 'App',
+    title: 'Themes',
+    icon: Palette,
+    component: ThemesSection,
+    settings: [
+      { id: 'lightTheme', label: 'Light theme', keywords: 'color theme appearance vs code' },
+      { id: 'darkTheme', label: 'Dark theme', keywords: 'color theme appearance vs code' },
+      { id: 'installedThemes', label: 'Installed themes', keywords: 'uninstall remove color theme' },
+      { id: 'customTheme', label: 'Custom theme', keywords: 'import paste json jsonc vs code color theme file' },
+      { id: 'themeMarketplace', label: 'Open VSX themes', keywords: 'marketplace browse install vs code color theme one dark catppuccin github dracula' },
     ],
   },
   {
@@ -53,9 +97,25 @@ export const SETTINGS_SECTIONS = [
     settings: [
       ...Object.entries(ALERT_KINDS).map(([kind, label]) => ({ id: `alert-${kind}`, label: `${label} alerts`, keywords: 'system notification background' })),
       { id: 'watchedToasts', label: 'Toasts for watched threads', keywords: 'notification popup watch' },
-      { id: 'dockBadge', label: 'Dock badge counts', keywords: 'badge icon needs you' },
+      { id: 'dockBadge', label: 'App icon badge counts', keywords: 'badge icon needs you' },
       { id: 'quietHours', label: 'Quiet hours', keywords: 'do not disturb night silence' },
       { id: 'mutedThreads', label: 'Muted threads', keywords: 'mute unmute silence' },
+    ],
+  },
+  {
+    id: 'devices',
+    group: 'App',
+    title: 'Devices',
+    icon: Devices,
+    component: DevicesSection,
+    settings: [
+      { id: 'remoteEnabled', label: 'Let devices control this computer', keywords: 'remote control phone laptop server connect' },
+      { id: 'remoteNetwork', label: 'Allow devices on this network', keywords: 'lan tailscale wifi firewall remote' },
+      { id: 'remoteAnywhere', label: 'Reach this computer from anywhere', keywords: 'relay internet away remote account' },
+      { id: 'pairedDevices', label: 'Paired devices', keywords: 'remove trusted devices approve' },
+      { id: 'otherComputers', label: 'Your other computers', keywords: 'pair computer machine account relay' },
+      { id: 'machineName', label: 'Computer name', keywords: 'machine host name remote' },
+      { id: 'connectedDevices', label: 'Connected devices', keywords: 'remote paired' },
     ],
   },
   {
@@ -65,7 +125,7 @@ export const SETTINGS_SECTIONS = [
     icon: Keyboard,
     component: KeyboardSection,
     get settings() {
-      return SHORTCUTS.filter((a) => a.exists?.() ?? true).map((a) => ({ id: shortcutSettingId(a), label: a.title, keywords: `shortcut key ${a.keywords ?? ''}` }));
+      return shownCommands(getProfiles().length).map((id) => ({ id: shortcutRowId(id), label: COMMANDS[id].title, keywords: `shortcut key keybinding ${COMMANDS[id].group}` }));
     },
   },
   {
@@ -89,6 +149,7 @@ export const SETTINGS_SECTIONS = [
       }),
       { id: 'starredModels', label: 'Starred models', keywords: 'favorite star dock model claude codex opus sonnet haiku gpt' },
       { id: 'effort', label: 'Default effort', keywords: 'reasoning thinking' },
+      { id: 'speed', label: 'Default speed', keywords: 'fast mode service tier priority' },
     ],
   },
   {
@@ -100,11 +161,19 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread' },
       { id: 'permissions', label: 'Permissions', keywords: 'manual ask auto edit full access bypass plan' },
-      { id: 'runsOn', label: 'Runs on', keywords: 'device machine cloud sandbox' },
+      { id: 'whileWorking', label: 'While the agent is working, new messages', keywords: 'queue steer send message interrupt busy' },
       { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
     ],
+  },
+  {
+    id: 'background',
+    group: 'Agents',
+    title: 'Background tasks',
+    icon: Sparkles,
+    component: BackgroundSection,
+    settings: UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr goal steps handoff summary' })),
   },
   {
     id: 'tools',
@@ -123,7 +192,6 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
-      { id: 'stepSize', label: 'New step size', keywords: 'points progress eta small medium large' },
     ],
   },
   {
@@ -157,7 +225,7 @@ export const SETTINGS_SECTIONS = [
     id: 'git',
     group: 'Workspace',
     title: 'Git',
-    icon: BranchUp,
+    icon: Hierarchy2,
     component: GitSection,
     settings: [
       { id: 'worktreeRoot', label: 'Worktrees folder', keywords: 'worktree path directory' },
@@ -200,6 +268,8 @@ export const SETTINGS_SECTIONS = [
     component: DataSection,
     settings: [
       { id: 'demoData', label: 'Show demo data', keywords: 'sample example fixture threads prototype' },
+      { id: 'recordReplays', label: 'Record threads for replay', keywords: 'replay recording session playback demo debug events' },
+      { id: 'clearReplays', label: 'Clear replay recordings', keywords: 'replay recording delete disk space' },
       { id: 'storage', label: 'Storage used', keywords: 'disk space size' },
       { id: 'clearPins', label: 'Clear pins', keywords: 'reset delete' },
       { id: 'clearSideChats', label: 'Clear side chats', keywords: 'reset delete' },

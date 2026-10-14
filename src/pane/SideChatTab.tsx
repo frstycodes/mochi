@@ -1,4 +1,5 @@
-import { ArrowUp, Broom, Code, Document, Edit, MessageAdd, MessageQuestion, Send, X, type IconComponent } from 'reicon-react';
+import { ArrowUp, Broom, Document, MessageAdd, MessageQuestion, Send, X, type IconComponent } from 'reicon-react';
+import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageActions, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputHeader, PromptInputSubmit, PromptInputTextarea, PromptInputTools } from '@/components/ai-elements/prompt-input';
@@ -8,27 +9,25 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ComposerCard } from '../Composer';
 import { ModelPicker, useUnavailableHarnesses } from '../ModelControls';
 import { useSideChat } from '../sidechat/useSideChat';
-import { useHarness } from '../store';
 import { SOURCE_NAMES, type Quote, type QuoteSource, type SideMessage } from '../store/sidechat';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from '../viz/FenceVisual';
 import { VizThreadProvider } from '../viz/WidgetVisual';
+import { PaneActions } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
 export function SideChatTab({ thread, tab }: PaneTabProps) {
-  const { dispatch } = useHarness();
   const side = useSideChat(thread, tab.id);
   const unavailable = useUnavailableHarnesses(thread.spaceId);
   const isEmpty = side.chat.messages.length === 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex h-11 shrink-0 items-center gap-1 pr-2 pl-3">
-        <p className="min-w-0 flex-1 truncate type-meta text-muted-foreground">
-          Aside from <span className="text-foreground">{thread.title}</span>
-        </p>
-        <HeaderAction label="New side chat" icon={MessageAdd} onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind: 'sidechat' })} />
+      <p className="shrink-0 truncate px-3 pb-1 type-meta text-muted-foreground">
+        Aside from <span className="text-foreground">{thread.title}</span>
+      </p>
+      <PaneActions>
         <HeaderAction label="Clear side chat" icon={Broom} disabled={isEmpty || side.isStreaming} onClick={side.clear} />
-      </header>
+      </PaneActions>
       {isEmpty ? (
         <EmptySideChat />
       ) : (
@@ -133,7 +132,7 @@ function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 
   );
 }
 
-const SOURCE_ICONS = { diff: Edit, terminal: Code, file: Document } satisfies Record<QuoteSource, IconComponent>;
+const SOURCE_ICONS = { diff: DiffIcon, terminal: TerminalIcon, file: Document } satisfies Record<QuoteSource, IconComponent>;
 
 function QuoteCard({ quote, onRemove }: { quote: Quote; onRemove?: () => void }) {
   const Icon = SOURCE_ICONS[quote.source];

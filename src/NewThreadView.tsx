@@ -1,30 +1,35 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Folder, BranchDown as GitMerge, Warning as TriangleAlert } from 'reicon-react';
+import { Folder, Link, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { getPrefs, setPrefs } from './settings/prefs';
 import { useHarness, useSpace, useSpaceThreads } from './store';
 import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
+import { resolveToken, typedSkills } from './chat/slash';
+import { withReferences } from './chat/mentions';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
-import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, RunOnMenu, handOffComposer, newComposerLayoutId } from './Composer';
+import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
 import { host } from './host';
+import { getDraft, newThreadDraftKey } from './chat/drafts';
 import { useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
+import { contextMax } from './runtime/models';
+import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
 import { toast } from 'sonner';
-import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
-import { toWhen } from './schedule/form';
-import { describeTrigger } from './schedule/describe';
+import { imageProblem, sentImages } from './chat/images';
 import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from './git/WorkspacePicker';
 import type { WorkspaceDraft } from './git/workspace';
+import { RunsOnMenu } from './remote/RunsOnMenu';
+import { useMachines } from './remote/useMachines';
 
 const MATCH_THRESHOLD = 0.5;
 const MAX_SHORTCUTS = 3;
@@ -35,10 +40,18 @@ interface Match {
   score: number;
 }
 
+/** The new-thread page's picks, kept with its draft. */
+interface NewThreadPicks {
+  provider: Provider;
+  picked: ThreadControls | null;
+  project: string | null;
+}
+
 export function NewThreadView() {
   return (
     <ScrollArea className="h-full [&_[data-slot=scroll-area-viewport]>div]:h-full">
-      <PromptInputProvider>
+      {/* One draft per profile: switching profiles swaps it. */}
+      <PromptInputProvider key={useSpace().id}>
         <NewThread />
       </PromptInputProvider>
     </ScrollArea>
@@ -49,25 +62,33 @@ function NewThread() {
   const { dispatch } = useHarness();
   const { leafId } = useSplit();
   const [layoutId] = useState(() => newComposerLayoutId(leafId));
-  const { textInput } = usePromptInputController();
-  const [provider, setProvider] = useState<Provider>(() => getPrefs().agent);
+  const { textInput, attachments } = usePromptInputController();
+  const spaceId = useSpace().id;
+  const draftKey = newThreadDraftKey(spaceId);
+  const [saved] = useState(() => getDraft<NewThreadPicks>(draftKey)?.extra);
+  const [provider, setProvider] = useState<Provider>(() => saved?.provider ?? getPrefs().agent);
   const defaults = useDefaultModels();
   // The Settings default model until you pick one here.
-  const [picked, setPicked] = useState<ThreadControls | null>(null);
+  const [picked, setPicked] = useState<ThreadControls | null>(saved?.picked ?? null);
   const controls = picked ?? initialControls(provider, defaults?.[provider] ?? '');
   const setControls = (next: ThreadControls, model?: { harness: Provider }) => {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
   // /side needs a thread to ask about.
-  const slashItems = useSlashItems(provider, useSpace().id).filter((i) => i.source !== 'mochi');
+  const slashItems = useSlashItems(provider, spaceId).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
-  const [project, setProject] = useState<string | null>(recentProjects[0] ?? null);
+  const [project, setProject] = useState<string | null>(saved ? saved.project : (recentProjects[0] ?? null));
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const [dependOn, setDependOn] = useState<Match | null>(null);
-  const [run, setRun] = useState<RunChoice>(RUN_NOW);
+  const machines = useMachines();
+  const [runsOn, setRunsOn] = useState<string | null>(null);
+  const remote = machines.machines.find((m) => m.machine.id === runsOn)?.machine;
   const draft = textInput.value;
+  // Picks only ride along with something typed or attached; on their own they aren't a draft.
+  const hasDraft = !!draft || attachments.files.length > 0;
+  const draftExtra = useMemo<NewThreadPicks | undefined>(() => (hasDraft ? { provider, picked, project } : undefined), [hasDraft, provider, picked, project]);
   const matches = useStepMatches(draft);
   const linked = dependOn && matches.some((m) => m.step.id === dependOn.step.id) ? dependOn : null;
   // The worktree checkbox remembers your last choice for the next new thread.
@@ -83,32 +104,28 @@ function NewThread() {
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
 
-  const start = ({ text, files }: PromptInputMessage) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const title = files.length ? `${trimmed} (${files.length} attached)` : trimmed;
-    if (project && workspace.error) {
-      toast.error(workspace.error);
+  const start = async ({ text, files }: PromptInputMessage) => {
+    const title = text.trim();
+    if (!title) return;
+    // GAP: another computer's thread starts folderless, with its defaults: its projects and models aren't listed here yet.
+    if (remote) {
+      if (files.length > 0) {
+        toast.error(`Images can’t go to ${remote.name} yet`);
+        return false;
+      }
+      const result = await machines.run(remote.id, { type: 'create', title, provider, project: null });
+      if (!result.isOk) return false;
+      return void toast.success(`Started on ${remote.name}`, { description: 'It’s in the sidebar under that computer.' });
+    }
+    const problem = (project && workspace.error) || imageProblem(files);
+    if (problem) {
+      toast.error(problem);
       return false;
     }
-    const create = { type: 'create', title, provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
-    if (run.mode === 'now') {
-      handOffComposer(leafId, layoutId);
-      return dispatch(create);
-    }
-    if (run.mode === 'background') {
-      dispatch({ ...create, isBackground: true });
-      return void toast.success('Started in the background');
-    }
-    const result = toWhen(run.form);
-    if ('error' in result) {
-      toast.error(`Fix the schedule first: ${result.error}`);
-      // Keeps your text in the composer.
-      return false;
-    }
-    dispatch({ ...create, isBackground: true, schedule: { when: result.when, missed: run.form.missed } });
-    toast.success(`Scheduled: ${describeTrigger(result.when)}`);
-    setRun(RUN_NOW);
+    const images = await sentImages(files);
+    const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
+    handOffComposer(leafId, layoutId);
+    return dispatch({ type: 'create', title, ...(skills.length > 0 && { prompt, skills }), ...(images.length > 0 && { images }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
   };
 
   return (
@@ -125,28 +142,36 @@ function NewThread() {
           <ComposerCard>
             <ComposerInput
               autoFocus
+              draftKey={draftKey}
+              draftExtra={draftExtra}
               controls={controls}
               provider={provider}
               onControlsChange={setControls}
               slashItems={slashItems}
               {...slash.textareaProps}
               onSend={start}
-              submitLabel={submitLabel(run, !!linked)}
-              placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
+              submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
+              isTextOnly={!!remote}
+              meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
+              placeholder={remote ? `Ask anything; runs on ${remote.name}, no folder attached` : project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
             />
           </ComposerCard>
         </div>
         <ComposerMeta>
-          <ProjectPicker value={project} onChange={changeProject} />
-          {!!project && <WorkspaceControls workspace={workspace} />}
-          <RunMenu value={run} onChange={setRun} />
-          {!!project && <RunOnMenu />}
-          {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+          <RunsOnMenu value={runsOn} onChange={setRunsOn} />
+          {!remote && (
+            <>
+              <ProjectPicker value={project} onChange={changeProject} />
+              {!!project && <WorkspaceControls workspace={workspace} />}
+              {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+            </>
+          )}
         </ComposerMeta>
-        {!!project && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
 
+      {/* In the bottom row, so a note coming or going never re-centres the composer. */}
       <div className="flex flex-col gap-5 pt-4 pb-16">
+        {!remote && !!project && <WorkspaceNotes workspace={workspace} />}
         <AnimatePresence initial={false}>
           {matches.length > 0 && (
             <motion.section
@@ -178,12 +203,6 @@ function NewThread() {
 /** The draft with the branch spelled out: the generated name, or the folder's current branch. */
 function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
   return { ...draft, branch };
-}
-
-function submitLabel(run: RunChoice, isLinked: boolean) {
-  if (run.mode === 'trigger') return 'Schedule thread';
-  if (run.mode === 'background') return 'Start in background';
-  return isLinked ? 'Start thread, linked' : 'Start thread';
 }
 
 function greeting(now: Date) {
@@ -236,14 +255,11 @@ function MatchRow({ match, isLinked, onToggle }: { match: Match; isLinked: boole
           <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: lineColor(thread.line) }} />
           <span className="truncate">{thread.title}</span>
           <ProviderMark provider={thread.providers[0]} size={12} />
-          <span className="tabular">
-            · {stepLabel(step.status)}
-            {step.status === 'running' && ` ${Math.round(step.progress * 100)}%`}
-          </span>
+          <span>· {stepLabel(step.status)}</span>
         </span>
       </div>
       <Button variant={isLinked ? 'default' : 'outline'} className="h-7 px-2.5 text-xs" onClick={onToggle} aria-pressed={isLinked}>
-        <GitMerge className="size-3.5" />
+        <Link className="size-3.5" />
         {isLinked ? 'Linked' : 'Depend on it'}
       </Button>
     </div>

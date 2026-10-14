@@ -1,35 +1,41 @@
-import { useTheme } from 'next-themes';
-import { Switch } from '@/components/ui/switch';
-import { FolderInput, SettingsChoice, SettingsGroup, SettingsRow, settingControlId } from '../parts';
-import { DEFAULT_PREFS, setPrefs, usePrefs } from '../prefs';
-import { MOTION } from '../settingOptions';
+import { CatalogRow } from '../CatalogRow';
+import { Button } from '@/components/ui/button';
+import { useColorTheme } from '../../themes/store';
+import { openSettings } from '../open';
+import { SettingsGroup, SettingsRow } from '../parts';
 
 export function GeneralSection() {
-  const { theme = 'system', setTheme } = useTheme();
-  const { reduceMotion, projectsFolder, restoreLayout } = usePrefs();
   return (
     <div className="flex flex-col gap-8">
       <SettingsGroup footer="System follows your OS appearance and its Reduce motion setting.">
-        <SettingsRow id="theme" label="Theme" control={<SettingsChoice id="theme" value={theme as (typeof THEMES)[number]['value']} options={THEMES} onChange={setTheme} />} />
-        <SettingsRow id="reduceMotion" label="Reduce motion" control={<SettingsChoice id="reduceMotion" value={reduceMotion} options={MOTION} onChange={(v) => setPrefs({ reduceMotion: v })} />} />
+        <CatalogRow settingKey="theme" />
+        <ColorThemesRow />
+        <CatalogRow settingKey="reduceMotion" />
       </SettingsGroup>
       <SettingsGroup footer="Open folder in the new thread's project picker starts here.">
-        <SettingsRow
-          id="projectsFolder"
-          label="Projects folder"
-          control={<FolderInput id="projectsFolder" value={projectsFolder} placeholder={DEFAULT_PREFS.projectsFolder} onCommit={(path) => setPrefs({ projectsFolder: path || DEFAULT_PREFS.projectsFolder })} />}
-        />
+        <CatalogRow settingKey="projectsFolder" />
       </SettingsGroup>
       <SettingsGroup footer="Off: every launch opens each space on its default view.">
-        <SettingsRow id="restoreLayout" label="Restore layout on launch" control={<Switch id={settingControlId('restoreLayout')} checked={restoreLayout} onCheckedChange={(on) => setPrefs({ restoreLayout: on })} />} />
+        <CatalogRow settingKey="restoreLayout" />
       </SettingsGroup>
     </div>
   );
 }
 
-const THEMES = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
-] as const;
 
+/** Which color theme each appearance uses; the browser and the custom themes live in Settings › Themes. */
+function ColorThemesRow() {
+  const { light, dark } = useColorTheme();
+  return (
+    <SettingsRow
+      id="colorThemes"
+      label="Color themes"
+      description={`Light: ${light?.label ?? 'Mochi'} · Dark: ${dark?.label ?? 'Mochi'}`}
+      control={
+        <Button variant="outline" size="sm" onClick={() => openSettings('themes')}>
+          Browse themes
+        </Button>
+      }
+    />
+  );
+}

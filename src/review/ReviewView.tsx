@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useConfirm } from '../git/useConfirm';
@@ -15,11 +14,14 @@ import { ChangesTab } from '../pane/ChangesTab';
 import { useUndoable } from '../QueueView';
 import { useHarness } from '../store';
 import { summarize } from '../summary';
+import { TitleBar } from '../TitleBar';
 import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
+import { isCommand } from '../keymap';
+import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
 export function ReviewView() {
@@ -49,10 +51,8 @@ export function ReviewView() {
 }
 
 function ReviewHeader({ position, onClose }: { position?: string; onClose: () => void }) {
-  const { state, isMobile } = useSidebar();
   return (
-    <div className="app-drag flex h-11 shrink-0 items-center gap-2 px-3">
-      {(isMobile || state === 'collapsed') && <SidebarTrigger className="-ml-1" />}
+    <TitleBar>
       <TaskSquare className="size-4 text-muted-foreground" />
       <span className="type-meta font-medium">Review</span>
       {!!position && <span className="tabular type-caption text-subtle-foreground">{position}</span>}
@@ -67,7 +67,7 @@ function ReviewHeader({ position, onClose }: { position?: string; onClose: () =>
       <Button variant="ghost" size="icon-sm" aria-label="Close review" onClick={onClose} className="text-muted-foreground">
         <X />
       </Button>
-    </div>
+    </TitleBar>
   );
 }
 
@@ -105,11 +105,13 @@ function ReviewSummary({ thread, onSkip }: { thread: Thread; onSkip: () => void 
             ) : (
               <ul className="flex flex-col gap-1">
                 {thread.prs.map((pr) => (
-                  <li key={pr.number} className="flex min-w-0 items-center gap-2">
-                    <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
-                    <span className="min-w-0 truncate">{pr.title}</span>
-                    <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
-                  </li>
+                  <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr} align="start">
+                    <li tabIndex={0} className="flex min-w-0 items-center gap-2">
+                      <span className={pr.state === 'open' ? 'tabular text-success' : 'tabular text-muted-foreground'}>#{pr.number}</span>
+                      <span className="min-w-0 truncate">{pr.title}</span>
+                      <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{pr.state}</span>
+                    </li>
+                  </ThreadPrHoverCard>
                 ))}
               </ul>
             )}
@@ -142,14 +144,14 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
 
   const approve = async () => {
     const ok = await confirm({
-      title: `Approve "${thread.title}"?`,
-      description: openPrs.length ? `${openPrs.map((p) => `#${p.number}`).join(', ')} merge and the thread settles.` : 'There is no open pull request; the thread settles as it is.',
-      confirm: openPrs.length ? 'Approve and merge' : 'Approve and settle',
+      title: `Mark "${thread.title}" done?`,
+      description: openPrs.length ? `The thread settles. ${openPrs.map((p) => `#${p.number}`).join(', ')} stay open on GitHub; merge them there.` : 'The thread settles.',
+      confirm: 'Mark done',
       cancel: 'Not yet',
     });
     if (!ok) return;
     const item = state.queue.find((q) => q.kind === 'review' && q.threadId === thread.id);
-    withUndo(`Approved ${thread.title}`, () => {
+    withUndo(`Marked ${thread.title} done`, () => {
       if (item) dispatch({ type: 'answer', queueId: item.id });
       dispatch({ type: 'settle', threadId: thread.id });
     });
@@ -261,10 +263,11 @@ function NothingToReview({ onClose }: { onClose: () => void }) {
 function useReviewKeys(step: (by: 1 | -1) => void, close: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.defaultPrevented) return;
+      if (isCommand(e, 'list-next')) return step(1);
+      if (isCommand(e, 'list-previous')) return step(-1);
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable], [role=dialog], [role=alertdialog]')) return;
-      if (e.key === 'j') step(1);
-      if (e.key === 'k') step(-1);
       if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);

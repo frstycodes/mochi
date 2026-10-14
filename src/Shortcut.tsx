@@ -1,6 +1,8 @@
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Command, createIcon, type IconComponent } from 'reicon-react';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { IS_MAC, keyName, orderKeys, shortcutText, type Key } from './keys';
+import { bindingOf, type CommandId } from './keymap';
+import { usePrefs } from './settings/prefs';
 
 /** A keyboard shortcut as key caps: macOS modifiers as icons (⌘ ⇧ ⌥ ⌃), Windows and Linux as their printed names (Ctrl, Shift, Alt). */
 export function Shortcut({ keys, className }: { keys: Key[]; className?: string }) {
@@ -11,6 +13,17 @@ export function Shortcut({ keys, className }: { keys: Key[]; className?: string 
       ))}
     </KbdGroup>
   );
+}
+
+/** A command's chord as it's bound now (Settings › Keyboard), live; nothing while it has none. */
+export function BoundShortcut({ command, className }: { command: CommandId; className?: string }) {
+  const keys = useBinding(command);
+  return !!keys && <Shortcut keys={keys} className={className} />;
+}
+
+export function useBinding(command: CommandId | undefined) {
+  const { keybindings } = usePrefs();
+  return command ? bindingOf(command, keybindings) : null;
 }
 
 function KeyCap({ name }: { name: Key }) {

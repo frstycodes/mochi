@@ -1,32 +1,20 @@
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { ALERT_KINDS, hourLabel } from '../../notify/model';
+import { ALERT_KINDS } from '../../notify/model';
 import { useHarness } from '../../store';
-import { SettingsChoice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
-import { setPrefs, usePrefs } from '../prefs';
+import { CatalogRow } from '../CatalogRow';
+import { SettingsGroup, SettingsRow } from '../parts';
 
 export function NotificationsSection() {
-  const { alertKinds, watchedToasts, dockBadge } = usePrefs();
-  const toggleKind = (kind: string, isOn: boolean) => setPrefs({ alertKinds: isOn ? [...alertKinds, kind] : alertKinds.filter((k) => k !== kind) });
   return (
     <div className="flex flex-col gap-8">
-      <SettingsGroup id="alertKinds" title="System alerts" footer="An OS notification while Mochi is in the background. Every notice still lands in the notification list.">
-        {Object.entries(ALERT_KINDS).map(([kind, label]) => (
-          <SettingsRow
-            key={kind}
-            id={`alert-${kind}`}
-            label={label}
-            control={<Switch id={settingControlId(`alert-${kind}`)} checked={alertKinds.includes(kind)} onCheckedChange={(on) => toggleKind(kind, on)} />}
-          />
+      <SettingsGroup id="alertKinds" title="System alerts" footer="An OS notification while Mochi is in the background. Watched threads also alert when their turn finishes, fails or hits the usage limit, and with every window closed. Every notice still lands in the notification list.">
+        {Object.keys(ALERT_KINDS).map((kind) => (
+          <CatalogRow key={kind} settingKey={`alert.${kind}`} />
         ))}
       </SettingsGroup>
       <SettingsGroup footer="Toasts show while Mochi is in front, only for threads you watch.">
-        <SettingsRow id="watchedToasts" label="Toasts for watched threads" control={<Switch id={settingControlId('watchedToasts')} checked={watchedToasts} onCheckedChange={(on) => setPrefs({ watchedToasts: on })} />} />
-        <SettingsRow
-          id="dockBadge"
-          label="Dock badge counts"
-          control={<SettingsChoice id="dockBadge" value={dockBadge ? 'on' : 'off'} options={BADGE} onChange={(v) => setPrefs({ dockBadge: v === 'on' })} />}
-        />
+        <CatalogRow settingKey="watchedToasts" />
+        <CatalogRow settingKey="dockBadge" />
       </SettingsGroup>
       <QuietHoursGroup />
       <MutedThreadsGroup />
@@ -34,28 +22,17 @@ export function NotificationsSection() {
   );
 }
 
-const BADGE = [
-  { value: 'on', label: 'Needs you' },
-  { value: 'off', label: 'Off' },
-] as const;
-
-const HOURS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: hourLabel(h) }));
-
 function QuietHoursGroup() {
-  const { state, dispatch } = useHarness();
-  const { quiet } = state.notifications;
-  const setQuiet = (patch: Partial<typeof quiet>) => dispatch({ type: 'notify-quiet', quiet: { ...quiet, ...patch } });
+  const { state } = useHarness();
   return (
     <SettingsGroup footer="No alerts or toasts in these hours; the notification list still fills.">
-      <SettingsRow id="quietHours" label="Quiet hours" control={<Switch id={settingControlId('quietHours')} checked={quiet.isOn} onCheckedChange={(isOn) => setQuiet({ isOn })} />}>
-        {quiet.isOn && (
-          <div className="flex items-center gap-2 type-meta text-muted-foreground">
-            <SettingsSelect aria-label="Quiet from" value={String(quiet.start)} options={HOURS} onChange={(h) => setQuiet({ start: Number(h) })} className="w-24" />
-            to
-            <SettingsSelect aria-label="Quiet until" value={String(quiet.end)} options={HOURS} onChange={(h) => setQuiet({ end: Number(h) })} className="w-24" />
-          </div>
-        )}
-      </SettingsRow>
+      <CatalogRow settingKey="quietHours" />
+      {state.notifications.quiet.isOn && (
+        <>
+          <CatalogRow settingKey="quietFrom" />
+          <CatalogRow settingKey="quietUntil" />
+        </>
+      )}
     </SettingsGroup>
   );
 }

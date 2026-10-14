@@ -38,15 +38,16 @@ test('setPrefs persists, notifies, and survives a reload from storage', () => {
   unsubscribe();
 });
 
-test("new threads' branches start with mochi/ by default and follow the Branch prefix setting", async () => {
-  assert.equal(DEFAULT_PREFS.branchPrefix, 'mochi/');
+test("new threads' branches have no prefix by default, follow the Branch prefix setting, and drop the old mochi/ default", async () => {
+  assert.equal(DEFAULT_PREFS.branchPrefix, '');
+  assert.equal(parsePrefs(JSON.stringify({ branchPrefix: 'mochi/' }), null).branchPrefix, '');
   const { initialThreads, threadsReducer } = await import('../store/threads.ts');
   const create = { type: 'create', title: 'x', provider: 'claude', project: '/Users/me/dev/app' } as const;
   const branchOf = () => threadsReducer({ ...initialThreads(), spaceId: 'latitude', views: {} } as never, create).threads.at(-1)!.repo!.branch;
   setPrefs({ branchPrefix: DEFAULT_PREFS.branchPrefix });
-  assert.match(branchOf(), /^mochi\//);
+  assert.equal(branchOf(), 'feat/x');
   setPrefs({ branchPrefix: 'me/' });
-  assert.match(branchOf(), /^me\//);
+  assert.equal(branchOf(), 'me/feat/x');
 });
 
 test('agent control: the old Reversible default becomes Everything (deletes and settings still ask); unknown values fall back', async () => {
@@ -55,4 +56,14 @@ test('agent control: the old Reversible default becomes Everything (deletes and 
   assert.equal(parsePrefs(JSON.stringify({ agentControl: 'yolo' })).agentControl, 'everything');
   assert.equal(parsePrefs(JSON.stringify({ agentControl: 'read' })).agentControl, 'read');
   assert.equal(parsePrefs(JSON.stringify({ agentControl: 'changes' })).agentControl, 'changes');
+});
+
+test('prefs saved before launch load at startup, rebound shortcuts included; a malformed shortcut map falls back', async () => {
+  storage.set(PREFS_KEY, JSON.stringify({ diffStyle: 'split', keybindings: { palette: 'mod+P' } }));
+  // A query gives a fresh module instance, so its startup load reads the storage seeded above.
+  const launched = (await import(`./prefs.ts?${'launch'}`)) as typeof import('./prefs.ts');
+  assert.equal(launched.getPrefs().diffStyle, 'split');
+  assert.deepEqual(launched.getPrefs().keybindings, { palette: 'mod+P' });
+  assert.deepEqual(parsePrefs(JSON.stringify({ keybindings: { palette: 3 } })).keybindings, {});
+  assert.deepEqual(parsePrefs(JSON.stringify({ keybindings: ['mod+P'] })).keybindings, {});
 });

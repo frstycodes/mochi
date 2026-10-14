@@ -4,3 +4,5 @@ artifact
 *.tsbuildinfo
 dist-electron
 release
+build/native
+.wrangler

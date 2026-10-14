@@ -1,48 +1,33 @@
-import { useId, useState, type KeyboardEvent } from 'react';
+import { useId, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Compass } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { judgeDrift, type DriftKind, type DriftVerdict } from '../drift';
-import type { AgentImage } from '../host/types/agent';
-import type { Thread } from '../model';
+import { sendMessage, setDriftPending, useDriftPending } from '../chat/outbox';
+import type { DriftKind } from '../drift';
+import type { QueuedMessage, Thread } from '../model';
 import { isMod, isNav } from '../keys';
-import { progressAt } from '../progress';
+import { goalProgress } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { Shortcut } from '../Shortcut';
 import { snapshot, useHarness } from '../store';
-
-interface Pending {
-  prompt: string;
-  text: string;
-  verdict: DriftVerdict;
-}
-
-/** What the agent gets in place of the shown message, when the composer added referenced threads or windows. */
-type References = { prompt: string; images: AgentImage[] };
 
 type BranchFrom = 'current' | 'base';
 
 /** Every message goes out at once; a confident off-goal verdict, usually arriving late from the model, then suggests moving it to a new thread. `onSent` runs once a message goes. */
 export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const { state, dispatch } = useHarness();
-  const [pending, setPending] = useState<Pending | null>(null);
+  const pending = useDriftPending(thread.id);
+  const setPending = (next: null) => setDriftPending(thread.id, next);
   const [branchFrom, setBranchFrom] = useRememberedBranchFrom();
 
   const tag = (text: string, drift: DriftKind, reason: string) => dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift, reason });
 
   /** Always sends: the suggestion never holds a message back. */
-  const submit = (prompt: string, prefix = '', references?: References) => {
-    const text = `${prefix}${prompt}`;
-    // A new message answers an open suggestion by ignoring it.
-    setPending(null);
-    const verdict = judgeDrift(prompt, thread);
-    const isSettled = !(verdict instanceof Promise);
-    dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references });
+  const submit = (message: QueuedMessage, extra?: Parameters<typeof sendMessage>[4]) => {
+    sendMessage(dispatch, state, thread, message, extra);
     onSent?.();
-    void Promise.resolve(verdict).then((v) => (v.kind === 'off-goal' ? setPending({ prompt, text, verdict: v }) : !isSettled && tag(text, v.kind, v.reason)));
-    return true;
   };
 
   const resolve = (drift: DriftKind, reason: string) => {
@@ -62,10 +47,10 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const newThread = () => {
     if (!pending) return;
     const before = snapshot(state);
-    const isGoalDone = isDone(thread, state.now);
+    const isGoalDone = isDone(thread);
     // GAP: undo restores the store, but the interrupted turn stays interrupted.
     if (thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
-    dispatch({ type: 'drift-new-thread', threadId: thread.id, prompt: pending.prompt, branchFrom });
+    dispatch({ type: 'drift-new-thread', threadId: thread.id, prompt: pending.text, branchFrom });
     setPending(null);
     toast(isGoalDone ? `Settled "${thread.title}" and started a new thread` : 'Started a new thread', {
       duration: UNDO_MS,
@@ -85,8 +70,8 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
 
 export type DriftGuard = ReturnType<typeof useDriftGuard>;
 
-function isDone(thread: Thread, now: number) {
-  return thread.status === 'review' || progressAt(thread, now, true).pct >= 1;
+function isDone(thread: Thread) {
+  return goalProgress(thread).phase === 'ready';
 }
 
 // Undo covers two changes at once, so it stays up longer than a plain toast.
@@ -103,7 +88,6 @@ function useRememberedBranchFrom() {
  * composer; once you Tab into it, 1 2 3 pick the buttons in order and Esc keeps the message here.
  */
 export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread }) {
-  const { state } = useHarness();
   const { pending } = guard;
   const titleId = useId();
 
@@ -131,11 +115,11 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
             <Compass aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <div className="flex min-w-0 flex-col gap-0.5">
               <p id={titleId} className="type-body">
-                “{pending.prompt}” sounds like a separate task from <em className="font-medium not-italic">{thread.title}</em>.
+                “{pending.text}” sounds like a separate task from <em className="font-medium not-italic">{thread.title}</em>.
               </p>
               <p className="type-caption text-subtle-foreground">
                 {pending.verdict.reason}
-                {isDone(thread, state.now) && '. The goal is done, so a new thread settles this one first.'}
+                {isDone(thread) && '. The goal is done, so a new thread settles this one first.'}
               </p>
             </div>
           </div>

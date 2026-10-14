@@ -7,6 +7,7 @@ import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
 import { oneLine } from './subagents.ts';
+import { setWorktreePath } from '../git/worktrees.ts';
 import { DEFAULT_PREFS } from '../settings/prefs.ts';
 import { runTool, type ToolEnv } from './tools.ts';
 
@@ -35,6 +36,8 @@ function setup() {
     isLive: true,
   });
   const id = state.threads[0].id;
+  // As the store's event listener does: the path goes on record beside the reducer's live run.
+  setWorktreePath(id, '/wt/main');
   dispatch({
     type: 'agent',
     event: { threadId: id, type: 'worktree', path: '/wt/main' },
@@ -293,4 +296,16 @@ test("a report's one line drops markdown marks and link targets", () => {
   assert.equal(oneLine('## Summary'), 'Summary');
   assert.equal(oneLine('- first item'), 'first item');
   assert.equal(oneLine(undefined), '');
+});
+
+test("a subagent's steps keep what a work-group row shows: the agent's description, then output, exit code and patch", () => {
+  const { id, event, thread } = setup();
+  const sub = { threadId: id, type: 'subagent', id: 'toolu_a' } as const;
+  event({ ...sub, phase: 'start', toolId: 'toolu_a', name: 'Check tests', isBackground: false });
+  event({ ...sub, phase: 'progress', step: { id: 's1', phase: 'start', text: 'Run pnpm test', description: 'Run the test suite' } });
+  event({ ...sub, phase: 'progress', step: { id: 's1', phase: 'end', text: 'Run pnpm test', exitCode: 1, output: '✖ add' } });
+  event({ ...sub, phase: 'progress', step: { id: 's2', phase: 'end', text: 'Edit a.ts', patch: '--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b' } });
+  const steps = thread().subagents![0].steps;
+  assert.deepEqual(steps[0], { id: 's1', text: 'Run pnpm test', isDone: true, description: 'Run the test suite', exitCode: 1, output: '✖ add' });
+  assert.equal(steps[1].patch, '--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b');
 });

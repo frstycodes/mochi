@@ -1,16 +1,17 @@
 import { app, BrowserWindow, Menu, nativeTheme, screen, shell, type Rectangle } from 'electron';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 // DESIGN.md `background` (oklch 0.145 / 0.975) in sRGB: shown before the page paints.
 const background = () => (nativeTheme.shouldUseDarkColors ? '#0a0a0d' : '#f6f6f9');
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
+export const indexHtml = path.join(import.meta.dirname, '../dist/index.html');
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json');
 
 export const isTrustedUrl = (url: string) =>
-  devServerUrl ? url.startsWith(devServerUrl) : url.startsWith(`file://${indexHtml.split(path.sep).join('/')}`);
+  devServerUrl ? url.startsWith(devServerUrl) : url.startsWith(pathToFileURL(indexHtml).href);
 
 const routed = new Map<string, BrowserWindow>();
 
@@ -26,7 +27,25 @@ export function openRoute(route: string) {
   win.on('closed', () => routed.delete(route));
 }
 
-export function createWindow(route = '', bounds?: Rectangle) {
+/** Brings the main window back, hidden or minimized, or opens one. */
+export function showMainWindow() {
+  const win = mainWindow();
+  if (!win) return void createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+/** `isHidden`: the main window that keeps the store running for remote devices while no window is open. */
+const HEADER_PX = 44;
+const LIGHTS_PX = 14;
+
+/** Centres the lights on the 44px headers, which scale with the page zoom while the lights stay native size; `--lights-end` in CSS follows. */
+export function trafficLightsAt(zoom: number) {
+  return { x: 16, y: Math.round((HEADER_PX * zoom - LIGHTS_PX) / 2) };
+}
+
+export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
   const win = new BrowserWindow({
     width: 1280,
@@ -36,8 +55,7 @@ export function createWindow(route = '', bounds?: Rectangle) {
     ...(isMain ? savedBounds() : bounds),
     show: false,
     titleBarStyle: 'hiddenInset',
-    // Centres the lights on the 44px headers; the fixed sidebar toggle starts at 88px (`SidebarToggle`).
-    trafficLightPosition: { x: 16, y: 15 },
+    trafficLightPosition: trafficLightsAt(1),
     backgroundColor: background(),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),
@@ -46,7 +64,7 @@ export function createWindow(route = '', bounds?: Rectangle) {
       nodeIntegration: false,
     },
   });
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => !isHidden && win.show());
   win.on('enter-full-screen', () => win.webContents.send('windows:onFullScreenChange', true));
   win.on('leave-full-screen', () => win.webContents.send('windows:onFullScreenChange', false));
   if (isMain) win.on('close', () => writeFileSync(stateFile(), JSON.stringify(win.getNormalBounds())));

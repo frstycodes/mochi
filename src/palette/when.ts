@@ -1,5 +1,5 @@
 import { findLeaf, leaves, type View } from '../layout/tree.ts';
-import type { PaneTab, Thread } from '../model.ts';
+import { isMultiTab, type PaneTab, type Thread } from '../model.ts';
 import { pinnedThreads } from '../reorder.ts';
 import { reviewThreads } from '../review/order.ts';
 import type { State } from '../store/index.tsx';
@@ -53,9 +53,13 @@ export const when = {
   reviews: (s: ActionScope) => s.reviewCount > 0,
   otherSpace: (id: string) => (s: ActionScope) => s.spaceId !== id,
   tab: (s: ActionScope) => !!s.tab,
-  /** A real tab, not the new-tab page: it can float or take a split of its own. */
-  contentTab: (s: ActionScope) => !!s.tab && s.tab.kind !== 'new',
+  /** A tab of a pane that holds several (Preview, side chat): it can be duplicated. */
+  multiTab: (s: ActionScope) => !!s.tab && isMultiTab(s.tab.kind),
+  /** Browser tabs float only while an agent drives them. */
+  poppableTab: (s: ActionScope) => !!s.tab && s.tab.kind !== 'browser',
   browserTab: (s: ActionScope) => s.tab?.kind === 'browser',
+  /** A browser tab showing a web page, not about:blank. */
+  webTab: (s: ActionScope) => s.tab?.kind === 'browser' && /^https?:/i.test(s.tab.url ?? ''),
   otherTabs: (s: ActionScope) => tabIndex(s) >= 0 && s.tabs.length > 1,
   tabsToRight: (s: ActionScope) => tabIndex(s) >= 0 && tabIndex(s) < s.tabs.length - 1,
 };
@@ -79,8 +83,10 @@ export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_D
   const threadId = target.threadId ?? threadOf(view);
   const thread = state.threads.find((t) => t.id === threadId);
   const pane = state.panes.find((p) => p.threadId === threadId);
-  const tabs = pane?.tabs.filter((t) => !t.isPopped) ?? [];
   const tabId = target.tabId ?? (view?.kind === 'tab' ? view.tabId : !target.threadId && pane?.isOpen ? pane.activeTab : undefined);
+  const tab = pane?.tabs.find((t) => t.id === tabId);
+  // Close others / to the right work within the tab's own pane.
+  const tabs = pane?.tabs.filter((t) => !t.isPopped && t.kind === tab?.kind) ?? [];
   return {
     thread,
     isFocused: !!thread && thread.id === threadOf(findLeaf(layout.root, layout.focusId)?.view),
@@ -88,7 +94,7 @@ export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_D
     isWatched: !!thread && state.watched.includes(thread.id),
     isDesktop,
     leafId,
-    tab: pane?.tabs.find((t) => t.id === tabId),
+    tab,
     tabs,
     spaceId: state.spaceId,
     leafCount: leaves(layout.root).length,

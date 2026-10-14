@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { argumentSlots, parseSlash, resolveToken, slashItems, slashMatches, slotPlaceholder } from './slash.ts';
+import { argumentSlots, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
 
 test('parses /side with its question, keeping line breaks', () => {
   assert.deepEqual(parseSlash('/side why Redis?')?.arg, 'why Redis?');
@@ -12,7 +12,7 @@ test('parses /side with its question, keeping line breaks', () => {
 test('leaves plain text and commands Mochi does not own to the agent', () => {
   assert.equal(parseSlash('why /side?'), null);
   assert.equal(parseSlash('/sidebar open'), null);
-  assert.equal(parseSlash('/compact'), null);
+  assert.equal(parseSlash('/clear'), null);
   assert.equal(parseSlash('/'), null);
 });
 
@@ -24,18 +24,22 @@ const items = slashItems(
     { name: 'side', description: 'Shadowed by Mochi' },
   ],
   'claude',
+  ['review', 'frontend-design:audit'],
 );
 
 test('lists Mochi commands first and leaves a shared name to Mochi', () => {
   assert.deepEqual(
     items.map((i) => `${i.source}:${i.name}`),
-    ['mochi:side', 'claude:fix-lint', 'claude:review', 'claude:frontend-design:audit'],
+    ['mochi:side', 'mochi:compact', 'claude:fix-lint', 'claude:review', 'claude:frontend-design:audit'],
   );
 });
 
 test('menu filters while the name is typed: prefix, then substring, then in-order letters', () => {
-  const names = (text: string) => slashMatches(text, items).map((c) => c.name);
-  assert.deepEqual(names('/'), ['side', 'fix-lint', 'review', 'frontend-design:audit']);
+  const names = (text: string) => {
+    const range = slashQueryAt(text);
+    return range ? slashMatches(range.query, items).map((c) => c.name) : [];
+  };
+  assert.deepEqual(names('/'), ['side', 'compact', 'fix-lint', 'review', 'frontend-design:audit']);
   assert.deepEqual(names('/si'), ['side', 'frontend-design:audit']);
   assert.deepEqual(names('/fi'), ['fix-lint', 'frontend-design:audit']);
   assert.deepEqual(names('/lint'), ['fix-lint']);
@@ -44,6 +48,43 @@ test('menu filters while the name is typed: prefix, then substring, then in-orde
   assert.deepEqual(names('/zq'), []);
   assert.deepEqual(names('/side '), []);
   assert.deepEqual(names('side'), []);
+});
+
+test('a / opens the menu mid-message after a space or at a line start, not inside a word or path', () => {
+  assert.deepEqual(slashQueryAt('fix this /rev'), { start: 9, end: 13, query: 'rev' });
+  assert.deepEqual(slashQueryAt('first line\n/'), { start: 11, end: 12, query: '' });
+  assert.deepEqual(slashQueryAt('fix /rev later', 8), { start: 4, end: 8, query: 'rev' });
+  assert.equal(slashQueryAt('fix /rev later', 6), null, 'caret inside the word');
+  assert.equal(slashQueryAt('and/or'), null);
+  assert.equal(slashQueryAt('see /usr/bin'), null);
+  assert.equal(slashQueryAt('fix /rev '), null, 'a space closes it');
+});
+
+test('picking puts the name exactly where it was typed and moves nothing else', () => {
+  const review = items.find((i) => i.name === 'review')!;
+  const pick = (text: string, caret = text.length) => insertToken(text, slashQueryAt(text, caret)!, review);
+  assert.deepEqual(pick('/re'), { text: '/review ', caret: 8 });
+  assert.deepEqual(pick('check the auth flow /re'), { text: 'check the auth flow /review ', caret: 28 });
+  assert.deepEqual(pick('use /re skill on this', 7), { text: 'use /review skill on this', caret: 11 }, 'text after it keeps its own space');
+  assert.deepEqual(pick('line one\n/re\nline two', 12), { text: 'line one\n/review\nline two', caret: 16 });
+  assert.equal(pick('/fix-lint a.ts and /rev').text, '/fix-lint a.ts and /review ', 'a command at the start stays');
+});
+
+test('tokens resolve anywhere a word starts, and only mid-text skills are sent by name', () => {
+  const text = '/fix-lint a.ts, then use /review skill on it and /frontend-design:audit; see /usr/bin and /fix-lint';
+  assert.deepEqual(
+    slashTokens(text, items).map((t) => [t.item.name, text.slice(t.start, t.end)]),
+    [
+      ['fix-lint', '/fix-lint'],
+      ['review', '/review'],
+      ['fix-lint', '/fix-lint'],
+    ],
+    'a name glued to punctuation is not a token',
+  );
+  assert.deepEqual(typedSkills(text, items), ['review'], 'the leading command runs itself, a mid-text command is no skill');
+  assert.deepEqual(typedSkills('/review this and /review that', items), ['review']);
+  assert.deepEqual(typedSkills('please use /review', items), ['review']);
+  assert.deepEqual(typedSkills('use /reviewer', items), []);
 });
 
 test('resolves only an exact known name at the very start', () => {

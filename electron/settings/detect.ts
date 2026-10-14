@@ -4,6 +4,7 @@ import type { Account, AgentInstall, AgentLogin } from '../../src/host/types/set
 import type { Provider } from '../../src/model.ts';
 import { parseClaudeAuth, parseCodexAccount, parseVersion } from '../../src/settings/parse.ts';
 import { accountEnv, resolveExecutable, userPath } from '../agents/config.ts';
+import { killTree, spawnable } from '../platform.ts';
 
 const TIMEOUT_MS = 10_000;
 
@@ -34,10 +35,11 @@ async function claudeLogin(path: string, env: NodeJS.ProcessEnv): Promise<AgentL
 // that it reports an existing `codex login` with no login call.
 function codexLogin(path: string, env: NodeJS.ProcessEnv): Promise<AgentLogin> {
   return new Promise((resolve) => {
-    const child = spawn(path, ['app-server'], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const target = spawnable(path, ['app-server']);
+    const child = spawn(target.file, target.args, { env, stdio: ['pipe', 'pipe', 'ignore'], shell: target.shell, windowsHide: true });
     const finish = (login: AgentLogin) => {
       clearTimeout(timer);
-      child.kill();
+      killTree(child);
       resolve(login);
     };
     const timer = setTimeout(() => finish({ state: 'unknown', reason: 'codex app-server did not answer in time' }), TIMEOUT_MS);
@@ -63,8 +65,9 @@ function codexLogin(path: string, env: NodeJS.ProcessEnv): Promise<AgentLogin> {
 }
 
 function run(file: string, args: string[], env: NodeJS.ProcessEnv): Promise<{ stdout: string; error?: string }> {
+  const target = spawnable(file, args);
   return new Promise((resolve) =>
-    execFile(file, args, { env, timeout: TIMEOUT_MS, maxBuffer: 1 << 20 }, (error, stdout) =>
+    execFile(target.file, target.args, { env, timeout: TIMEOUT_MS, maxBuffer: 1 << 20, shell: target.shell, windowsHide: true }, (error, stdout) =>
       resolve({ stdout: String(stdout), error: error ? (error.killed ? `${args.join(' ')} timed out` : error.message.split('\n')[0]) : undefined }),
     ),
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, Clock, BellOff, BranchUp, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, Hourglass, Clock, BellOff, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -12,15 +12,18 @@ import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
 import { openSettings } from '../settings/open';
 import { useHarness } from '../store';
+import { GitPullRequestIcon } from '@/icons/github';
+import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 import { groupBursts, hourLabel, type Burst, type NoticeKind } from './model';
 import { useJump } from './useNotifications';
 
 const KIND_ICONS = {
   'needs-you': { icon: AlertCircle, className: 'text-warning' },
+  limit: { icon: Hourglass, className: 'text-warning' },
   'step-done': { icon: CheckCircle, className: 'text-success' },
   review: { icon: Eye, className: 'text-muted-foreground' },
   ci: { icon: CloseCircle, className: 'text-destructive' },
-  'pr-review': { icon: BranchUp, className: 'text-muted-foreground' },
+  'pr-review': { icon: GitPullRequestIcon, className: 'text-muted-foreground' },
   overlap: { icon: TriangleWarning, className: 'text-warning' },
   'race-lost': { icon: Flash, className: 'text-muted-foreground' },
   run: { icon: Clock, className: 'text-muted-foreground' },
@@ -84,14 +87,16 @@ function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
   const { icon: Icon, className } = KIND_ICONS[head.kind];
   const isUnread = burst.notices.some((n) => !n.isRead);
   const isMuted = state.notifications.muted.includes(burst.threadId);
-  const threadTitle = state.threads.find((t) => t.id === burst.threadId)?.title;
+  const thread = state.threads.find((t) => t.id === burst.threadId);
+  const threadTitle = thread?.title;
+  const pr = head.kind === 'pr-review' ? thread?.prs.find((p) => p.number === head.prNumber) : undefined;
   const open = () => {
     dispatch({ type: 'notify-read', ids: rest.map((n) => n.id) });
     jump(head);
     onJump();
   };
 
-  return (
+  const row = (
     <Item size="xs" className="group/notice relative isolate items-start gap-2.5 px-2 py-1.5 hover:bg-accent/60">
       <ItemMedia className="pt-0.5">
         <Icon className={cn('size-4', className)} aria-hidden />
@@ -120,6 +125,12 @@ function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
         </Button>
       </ItemActions>
     </Item>
+  );
+  if (!thread || !pr) return row;
+  return (
+    <ThreadPrHoverCard thread={thread} pr={pr} side="right" align="start">
+      {row}
+    </ThreadPrHoverCard>
   );
 }
 

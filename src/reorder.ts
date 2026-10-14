@@ -13,13 +13,18 @@ export function reorderThreads(threads: Thread[], pinned: string[], unpinned: st
   return threads.map((t) => (rank(t) >= 0 ? moved[i++] : t));
 }
 
-/** A space's pinned threads in pin order: the order behind Orbit slots, mod 1–9 and Stage Manager. */
+/** A space's pinned threads in pin order: the order behind Orbit slots, mod 1–9 and the pinned pager. */
 export function pinnedThreads(threads: Thread[], spaceId: string) {
   return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot !== undefined && t.status !== 'settled').sort((a, b) => a.orbitSlot! - b.orbitSlot!);
 }
 
+/** A space's unpinned threads, most recent activity first; only pinned threads keep a manual order. */
 export function activeThreads(threads: Thread[], spaceId: string) {
-  return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot === undefined && t.status !== 'settled');
+  return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot === undefined && t.status !== 'settled').sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
+}
+
+export function lastActivityAt(thread: Thread) {
+  return thread.activity[thread.activity.length - 1]?.at ?? thread.startedAt;
 }
 
 /** mod Shift P: the `reorder` lists that pin a thread at the end of Pinned, or unpin it to the top of Threads. Null when Pinned is full. */
@@ -43,19 +48,17 @@ export function pinMany(threads: Thread[], spaceId: string, ids: string[]) {
   return lists;
 }
 
-/** Alt ↑/↓ over the combined list [...pinned, ...unpinned]: crossing the boundary pins or unpins. */
+/** Alt ↑/↓: moves a pinned thread within Pinned, and down past the last pin unpins it; an unpinned thread (sorted by recency, no manual order) pins on ↑. */
 export function stepPin(pinned: string[], unpinned: string[], id: string, step: 1 | -1) {
-  const isPinned = pinned.includes(id);
-  const list = isPinned ? pinned : unpinned;
-  const i = list.indexOf(id);
+  if (!pinned.includes(id)) return step === -1 && pinned.length < PIN_SLOTS.length ? { pinned: [...pinned, id], unpinned: unpinned.filter((u) => u !== id) } : null;
+  const i = pinned.indexOf(id);
   const j = i + step;
-  if (j >= 0 && j < list.length) {
-    const next = [...list];
+  if (j >= 0 && j < pinned.length) {
+    const next = [...pinned];
     [next[i], next[j]] = [next[j], next[i]];
-    return isPinned ? { pinned: next, unpinned } : { pinned, unpinned: next };
+    return { pinned: next, unpinned };
   }
-  if (isPinned && step === 1) return { pinned: pinned.filter((p) => p !== id), unpinned: [id, ...unpinned] };
-  if (!isPinned && step === -1 && pinned.length < PIN_SLOTS.length) return { pinned: [...pinned, id], unpinned: unpinned.filter((u) => u !== id) };
+  if (step === 1) return { pinned: pinned.filter((p) => p !== id), unpinned: [id, ...unpinned] };
   return null;
 }
 

@@ -1,9 +1,9 @@
 import { type ComponentProps, type CSSProperties, type ReactNode } from 'react';
-import { Badge } from '@/components/ui/badge';
+import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Book, Briefcase, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, BranchUp as GitPullRequest, Hand, Link as Link2, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
+import { Book, Briefcase, ClipboardTick, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, Hand, Link as Link2, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
@@ -61,7 +61,7 @@ export function LiveDot({ className, style }: { className?: string; style?: CSSP
 export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
   if (status === 'running') return <LiveDot className="mx-1 text-success" />;
   if (status === 'needs-you') return <MessageCircleQuestion aria-label="Needs you" className="size-4 shrink-0 text-warning" />;
-  if (status === 'review') return <GitPullRequest aria-label="Ready for review" className="size-4 shrink-0 text-muted-foreground" />;
+  if (status === 'review') return <ClipboardTick aria-label="Ready for review" className="size-4 shrink-0 text-muted-foreground" />;
   return <CircleCheck aria-label="Settled" className="size-4 shrink-0 text-subtle-foreground" />;
 }
 
@@ -88,7 +88,7 @@ export function StepStatusIcon({ status }: { status: StepStatus }) {
   return <Icon aria-label={STEP_LABELS[status]} className="size-4 shrink-0" style={{ color: stepColor(status) }} />;
 }
 
-export function stepColor(status: StepStatus) {
+function stepColor(status: StepStatus) {
   return STEP_COLORS[status];
 }
 
@@ -105,38 +105,28 @@ export function stepLabel(status: StepStatus) {
   return STEP_LABELS[status];
 }
 
-/** `isWorking` set: the arc spins in the line colour while the agent works (at least a quarter, so 0% still moves) and rests grey when idle. */
-export function ProgressRing({ pct, slot, size = 16, isWorking }: { pct: number; slot: LineSlot; size?: number; isWorking?: boolean }) {
+/**
+ * One segment per criterion, filled as each is met and green once all are, so it reads as a count, never a share of the work.
+ * No criteria: the ring shows state only. `isWorking` set: it spins in the line colour (a quarter arc when nothing is met yet,
+ * so it still moves) and rests grey when idle.
+ */
+export function ProgressRing({ met, total, slot, size = 16, isWorking }: { met: number; total: number; slot: LineSlot; size?: number; isWorking?: boolean }) {
   const r = size / 2 - 2;
   const c = 2 * Math.PI * r;
-  const arc = isWorking ? Math.max(pct, 0.25) : pct;
+  const gap = total > 1 ? Math.min(2, c / total / 3) : 0;
+  const segment = total ? c / total - gap : 0;
+  const isDone = total > 0 && met === total;
+  const color = isDone ? 'var(--success)' : isWorking === false ? 'var(--muted-foreground)' : lineColor(slot);
+  // Dash pattern: `met` segments then the rest of the circle blank; with nothing met while working, the spinner's quarter arc.
+  const fill = met > 0 ? `${Array.from({ length: met }, () => `${segment} ${gap}`).join(' ')} 0 ${c}` : isWorking ? `${c / 4} ${c}` : `0 ${c}`;
+  const circle = { cx: size / 2, cy: size / 2, r, fill: 'none', strokeWidth: 2 };
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="shrink-0 -rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={2} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={isWorking === false ? 'var(--subtle-foreground)' : lineColor(slot)}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeDasharray={`${c * arc} ${c}`}
-        className={cn(isWorking && 'origin-center animate-spin motion-reduce:animate-none')}
-      />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className={cn('shrink-0 -rotate-90', isWorking && 'origin-center animate-spin motion-reduce:animate-none')}>
+      <circle {...circle} stroke="var(--muted-foreground)" strokeOpacity={0.4} strokeDasharray={total > 1 ? `${segment} ${gap}` : undefined} />
+      <circle {...circle} stroke={color} strokeDasharray={fill} />
     </svg>
   );
 }
-
-export function SizeBadge({ size }: { size: 1 | 2 | 3 }) {
-  return (
-    <Badge variant="secondary" aria-label={`Size ${SIZE_LABEL[size]}`}>
-      {SIZE_LABEL[size]}
-    </Badge>
-  );
-}
-
-const SIZE_LABEL = { 1: 'S', 2: 'M', 3: 'L' } satisfies Record<1 | 2 | 3, string>;
 
 /**
  * Icon-only button with a real tooltip (never a native `title`). `label` is also its accessible name; `hint` adds a second line.
@@ -171,3 +161,21 @@ export function OverflowIcon({ vertical, className, ...props }: IconProps & { ve
 export const ForkIcon = createIcon('ForkIcon', {
   O: `<path d="M3.75 12h5.5l6.5-6.25M9.25 12l6.5 6.25M13.25 5.75h2.5v2.5M13.25 18.25h2.5v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
 });
+
+export const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, transition: { duration: 0.2, ease: [0.23, 1, 0.32, 1] } } as const;
+
+/**
+ * Two different glyphs trading places (Sun for Moon, Play for Pause): the old one shrinks and blurs out as the new one grows in.
+ * Not for one glyph's own states (outline and filled, a slashed "off"): those switch in place.
+ */
+export function IconSwap({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <span className="grid shrink-0 place-items-center *:col-start-1 *:row-start-1">
+      <AnimatePresence initial={false}>
+        <motion.span key={id} {...ICON_SWAP} className="grid place-items-center">
+          {children}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AgentAskContext } from '../../src/host/types/agent.ts';
-import { migrateSettings } from '../../src/host/types/settings.ts';
+import { migrateSettings, type ModelChoice } from '../../src/host/types/settings.ts';
 import { sideChatChoice } from '../../src/runtime/controls.ts';
-import { ask, type Asker } from './ask.ts';
+import { ask, utility, type Asker } from './ask.ts';
 
 const context: AgentAskContext = { spaceId: 'work', title: 'Rate limiter', goal: 'Add a rate limiter', steps: [], activity: [], diff: null };
 
@@ -28,6 +28,32 @@ test('a side chat choice reaches its own provider with the same context, on the 
   );
   assert.equal(calls[0][2], calls[1][2], 'both providers get the same instructions');
   assert.match(calls[0][2] as string, /Add a rate limiter/);
+});
+
+test('a background task runs on your choice, then Haiku, then Luna, and gives up with null for the local fallback', async () => {
+  const tried: string[] = [];
+  const askers = (fails: string[], slow = false) => {
+    const asker = (provider: 'claude' | 'codex'): Asker =>
+      async function* (_spaceId, _instructions, _prompt, model, abort) {
+        tried.push(`${provider}:${model}`);
+        if (fails.includes(provider)) throw new Error(`${provider} is signed out`);
+        if (slow) await new Promise((resolve) => abort.signal.addEventListener('abort', resolve, { once: true }));
+        yield `title from ${model}`;
+      };
+    return { claude: asker('claude'), codex: asker('codex') };
+  };
+  const offers = async () => [];
+  const run = (fails: string[], choice: ModelChoice = { provider: 'claude', model: 'claude-haiku-5-5' }, slow = false) => utility(askers(fails, slow), offers, choice, 'work', 'title', 'User: fix login', slow ? 20 : undefined);
+
+  assert.equal((await run([]))?.text, 'title from claude-haiku-5-5');
+  assert.equal((await run(['claude']))?.text, 'title from gpt-6-luna', 'Claude signed out: Codex answers');
+  assert.equal(await run(['claude', 'codex']), null, 'neither signed in: the caller keeps its truncated title');
+  tried.length = 0;
+  assert.equal((await run(['codex'], { provider: 'codex', model: 'gpt-6-sol' }))?.text, 'title from claude-haiku-5-5');
+  assert.deepEqual(tried, ['codex:gpt-6-sol', 'claude:claude-haiku-5-5'], 'your choice first, then the cheapest, Claude first');
+  assert.equal(await run([], undefined, true), null, 'past the deadline: null, not a half answer');
+  const unlisted = await utility(askers([]), async (p) => (p === 'claude' ? ['claude-opus-5-5'] : ['gpt-6-luna']), { provider: 'claude', model: 'claude-haiku-5-5' }, 'work', 'title', 'x');
+  assert.equal(unlisted?.text, 'title from gpt-6-luna', 'a model the account does not offer is skipped, never swapped for its pricier default');
 });
 
 test('saved side chat choices read as provider model ids', () => {

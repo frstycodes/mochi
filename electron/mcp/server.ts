@@ -5,7 +5,7 @@ import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, type ToolName } from '../../src/runtime/toolTable.ts';
+import { MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, type ToolName } from '../../src/runtime/toolTable.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
 
@@ -13,16 +13,20 @@ import { toolCalls } from './calls.ts';
  * Mochi's own tools for the agent in a thread. Each call goes to the renderer, which runs it as the store action the UI
  * dispatches for the same change (`src/runtime/tools.ts`), so the thread view updates as if you had done it.
  */
-export const SERVER = 'mochi';
+export const SERVER = MOCHI_SERVER;
 
 const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
+
+/** Shown to the model as the server's instructions (MCP `initialize`); the same for every thread, so it reads its own goal. */
+export const INSTRUCTIONS =
+  "Mochi runs this thread and shows the user its goal. Call get_goal at the start of a task. A question or chat has no goal: then ignore the rest. With a goal: keep your plan current in your own task tools; call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (decisions, what's left, at most one question for the user).";
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
 export const AUTO_ALLOWED = TOOL_NAMES.map((name) => `mcp__${SERVER}__${name}`);
 
 /** Claude: an in-process server per session, bound to its thread. A server instance serves one connection. */
 export function claudeServer(thread: string) {
-  return createSdkMcpServer({ name: SERVER, tools: TOOLS.map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args))) });
+  return createSdkMcpServer({ name: SERVER, instructions: INSTRUCTIONS, tools: TOOLS.map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args))) });
 }
 
 /** Codex: a streamable-HTTP URL on localhost for its `mcp_servers` config, one path per thread behind a per-launch secret. */
@@ -54,7 +58,7 @@ function listening() {
       if (!match || match[1] !== SECRET) return void res.writeHead(404).end();
       // Codex sends no Origin; a browser page always does, so this keeps web pages off the port even if they learn the URL.
       if (req.headers.origin !== undefined) return void res.writeHead(403).end();
-      const mcp = new McpServer({ name: SERVER, version: '1.0.0' });
+      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: INSTRUCTIONS });
       for (const t of TOOLS) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => void transport.close().then(() => mcp.close()));

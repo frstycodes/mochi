@@ -58,7 +58,10 @@ export const sim: SimHost = {
     return '/tmp/simulator-recording.mp4';
   },
   async buildAndRun(udid) {
-    for (const text of ['$ xcodebuild -scheme App build', 'web preview: no Xcode here', '** BUILD SUCCEEDED **']) logListeners.forEach((l) => l({ udid, text }));
+    for (const text of ['$ xcodebuild -scheme App build', 'web preview: no Xcode here', '** BUILD SUCCEEDED **']) {
+      logListeners.forEach((l) => l({ udid, text }));
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
     return { bundleId: 'com.example.app' };
   },
   onBuildLog(listener) {

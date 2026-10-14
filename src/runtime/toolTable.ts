@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { STEP_STATUSES } from '../host/types/agent.ts';
+import { SETTING_SECTIONS } from '../settings/settingSections.ts';
 
 /**
  * Every Mochi tool an agent can call, in one table (RUNTIME.md › Mochi tools): main builds the MCP servers from it and
@@ -9,7 +10,7 @@ export type Tier = 'read' | 'change' | 'destructive' | 'setting';
 
 export const TIERS = ['read', 'change', 'destructive', 'setting'] as const satisfies Tier[];
 
-/** Tiers that wait on the user's widget in the thread every time; everything else runs without asking. */
+/** Tiers that put a widget in the thread every time: a delete waits for its answer, a setting widget is the user's to change. */
 export const ASKING_TIERS = ['destructive', 'setting'] as const satisfies Tier[];
 
 const threadId = z.string().optional().describe('A thread in this profile (ids come from list_threads); defaults to your own thread');
@@ -18,6 +19,12 @@ const threadIds = z.array(z.string()).min(1).describe('Threads in this profile; 
 const stepId = z.string().describe('A step id from get_goal');
 const tabId = z.string().optional().describe("One of your thread's browser tabs from browser_tabs; defaults to the active one");
 const ref = z.string().describe('An element ref like "e12" from the latest browser_snapshot');
+const profileId = z.string().optional().describe('A profile id from list_profiles; defaults to your own');
+const configProvider = z.enum(['claude', 'codex']).optional().describe("Which harness's config; defaults to your own");
+const reason = z.string().min(1).max(240).describe('Why, in a sentence the user reads on the widget');
+
+/** The MCP server Mochi's tools are on: agents see them as `mcp__mochi__<tool>`. */
+export const MOCHI_SERVER = 'mochi';
 
 export const TOOL_TABLE = {
   // {THREADS}
@@ -58,8 +65,14 @@ export const TOOL_TABLE = {
   watch_thread: { tier: 'change', quiet: true, description: 'Watch a thread (its events toast for the user) or stop watching it.', shape: { threadId: otherThread, watch: z.boolean() } },
   create_thread: {
     tier: 'change',
-    description: 'Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast.',
-    shape: { prompt: z.string(), provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent") },
+    description:
+      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Leave model and effort out unless the user named them, or the task is clearly simple enough for a cheaper model or lower effort; never pick something more expensive than the default on your own. The user's setting may refuse a choice; relay its reason.",
+    shape: {
+      prompt: z.string(),
+      provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
+      model: z.string().optional().describe("A model id the account offers, like \"claude-sonnet-5-5\"; defaults to this thread's"),
+      effort: z.string().optional().describe("low, medium, high, xhigh or max; defaults to this thread's"),
+    },
   },
   send_to_thread: {
     tier: 'change',
@@ -72,7 +85,7 @@ export const TOOL_TABLE = {
     shape: { threadIds },
   },
   // {GOALS}
-  get_goal: { tier: 'read', description: "Read a thread's goal and its steps, with each step's id, status, size and acceptance criteria.", shape: { threadId } },
+  get_goal: { tier: 'read', description: "Read a thread's goal (empty for a question or chat), what done means (criteria), and its steps with each step's id, status, size and acceptance criteria.", shape: { threadId } },
   set_step_status: {
     tier: 'change',
     quiet: true,
@@ -82,8 +95,8 @@ export const TOOL_TABLE = {
   add_step: {
     tier: 'change',
     quiet: true,
-    description: "Add a step to a thread's goal, as a new goal revision.",
-    shape: { title: z.string(), size: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe('1 small, 2 medium, 3 large'), threadId },
+    description: "Add a step to a thread's plan. Plan changes don't change the goal's version.",
+    shape: { title: z.string(), threadId },
   },
   edit_goal: {
     tier: 'change',
@@ -98,6 +111,37 @@ export const TOOL_TABLE = {
   },
   reorder_steps: { tier: 'change', description: 'Reorder goal steps. List step ids top first; steps left out keep their place after them.', shape: { threadId, order: z.array(z.string()).min(1) } },
   drop_step: { tier: 'change', description: "Drop a step that's no longer needed. Done steps can't be dropped.", shape: { threadId, stepId, reason: z.string().optional() } },
+  open_pr: {
+    tier: 'change',
+    description:
+      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first. Use this instead of `gh pr create`.',
+    shape: {
+      title: z.string().min(1).max(72).describe('Conventional Commits style, like "fix(auth): keep the session cookie"'),
+      why: z.string().min(1).max(300).describe('One sentence: why this change'),
+    },
+  },
+  claim_criterion: {
+    tier: 'change',
+    quiet: true,
+    description: "Say one of your goal's criteria is met, with one line of evidence the user can check (a command and its result, a file, a URL). Call it as soon as each criterion is met; get_goal lists the criterion ids.",
+    shape: { criterionId: z.string().describe('A criterion id from get_goal'), evidence: z.string().min(1).max(240) },
+  },
+  report_turn: {
+    tier: 'change',
+    quiet: true,
+    description:
+      'At the end of a turn where you changed anything for a goal, report once so the user can skip reading your reply: decisions you made, what is left, and at most one question that needs them. Short lines, no prose.',
+    shape: {
+      decisions: z.array(z.string().max(160)).max(5).describe('Choices you made that the user should know about'),
+      left: z.array(z.string().max(160)).max(5).describe('What is still not done'),
+      question: z.string().max(240).optional().describe('The one thing you need from the user, if anything'),
+    },
+  },
+  get_report: {
+    tier: 'read',
+    description: "Read a thread's latest report as data: goal, criteria with claims, decisions, what's left, the open question, PRs and status. For coordinating other threads without reading their transcripts.",
+    shape: { threadId },
+  },
   settle_goal: {
     tier: 'change',
     description: 'Close out a goal: drops every open step with your reason and settles the thread. Use when the goal is met or no longer wanted. Not your own thread.',
@@ -224,12 +268,75 @@ export const TOOL_TABLE = {
     shape: { title: z.string().min(1).max(80), reason: z.string().min(1).max(240) },
   },
   // {SETTINGS}
-  get_settings: { tier: 'read', description: 'Read the Mochi settings you can propose changes to: each key with its label, current value and allowed values.', shape: {} },
-  update_setting: {
+  get_settings: {
+    tier: 'read',
+    description:
+      "Read Mochi's settings: each key with its label, section, current value, the values it takes, and whether you may propose it. Profile settings (name, icon, GitHub and agent accounts, instructions files, MCP servers, skills) are your profile's unless you pass profileId. section: profile adds each MCP server's tool count (it starts the servers). Secret values are never returned.",
+    shape: {
+      section: z.enum(SETTING_SECTIONS).optional(),
+      profileId,
+    },
+  },
+  update_settings: {
     tier: 'setting',
     description:
-      'Propose changing one Mochi setting (keys and allowed values from get_settings). The user sees the current and proposed value in your thread and applies or keeps it; you get the outcome. Say why in `reason`.',
-    shape: { key: z.string().describe('A key from get_settings'), value: z.string().describe('One of the allowed values from get_settings'), reason: z.string().min(1).max(240) },
+      "Suggest setting changes to the user: one settings widget in your thread shows each setting's real control with your value as a suggestion, and the user changes what they want there, now or later. Group related changes in one call. Returns once the widget is shown; you don't get the user's answer (get_settings reads the values later). Keys and values from get_settings; locked keys are refused.",
+    shape: {
+      changes: z
+        .array(z.object({ key: z.string().describe('A key from get_settings'), value: z.string().describe('As get_settings shows values: "true"/"false", an allowed value, a number or text'), profileId }))
+        .min(1)
+        .max(20),
+      reason,
+    },
+  },
+  get_keybindings: {
+    tier: 'read',
+    description:
+      "Read Mochi's keyboard shortcuts: each command's id, title, group, where it listens (global, pane, list), its chord now and its default (\"\" = none), the keys that can't be rebound, and this platform's reserved chords. Chords read like \"mod+shift+K\": mod is ⌘ on macOS and Ctrl elsewhere, nav is ⌃ on macOS and Alt elsewhere, then alt, shift and one key.",
+    shape: {},
+  },
+  set_keybinding: {
+    tier: 'setting',
+    description:
+      'Suggest a new shortcut for one command: a settings widget in your thread shows its current → proposed chord with your reason, and the user applies it there. Ids and chords from get_keybindings; keys "" suggests removing the shortcut. Reserved chords (⌘Q, ⌘Tab, ⌃←/→ on macOS, Alt+Tab elsewhere, Copy and Paste) are refused. A chord another command uses is refused unless onConflict says what happens to it: swap (it gets this command\'s old chord) or replace (it loses its shortcut); both rows show on the widget.',
+    shape: {
+      command: z.string().describe('A command id from get_keybindings'),
+      keys: z.string().describe('Like "mod+shift+K", "nav+1" or "J"; "" for no shortcut'),
+      onConflict: z.enum(['swap', 'replace']).optional(),
+      reason,
+    },
+  },
+  list_profiles: {
+    tier: 'read',
+    description:
+      "List Mochi's profiles: id, name, icon, the Claude and Codex accounts each runs on (with login state), its GitHub account, and which one is yours. Also every existing agent account, for proposing profile.claudeAccount / profile.codexAccount.",
+    shape: {},
+  },
+  add_mcp_server: {
+    tier: 'setting',
+    description:
+      "Suggest adding an MCP server to a profile's account: a `command` (stdio) or a `url` (http). The user sees it filled in on a settings widget in your thread and adds it there if they want; you don't get their answer. Never pass secrets: put `${VAR}` where a token goes; a value that looks like a credential is refused.",
+    shape: {
+      profileId,
+      provider: configProvider,
+      name: z.string().regex(/^[\w-]{1,64}$/).describe('Letters, digits, - and _'),
+      command: z.string().min(1).optional(),
+      args: z.array(z.string()).optional(),
+      env: z.record(z.string(), z.string()).optional().describe('Values like "${GITHUB_TOKEN}" read from the environment'),
+      url: z.string().url().optional(),
+      headers: z.record(z.string(), z.string()).optional(),
+      reason,
+    },
+  },
+  remove_mcp_server: {
+    tier: 'destructive',
+    description: "Remove an MCP server from a profile's account config. The user approves on a delete card showing the file diff; the file is backed up first.",
+    shape: { profileId, provider: configProvider, name: z.string().min(1) },
+  },
+  remove_profile: {
+    tier: 'destructive',
+    description: "Remove a profile from Mochi. Refused for the last profile and for any profile that still has threads (so never your own). Its accounts and browser data stay on disk.",
+    shape: { profileId: z.string().describe('A profile id from list_profiles') },
   },
 } as const satisfies Record<string, { tier: Tier; quiet?: true; description: string; shape: z.ZodRawShape }>;
 

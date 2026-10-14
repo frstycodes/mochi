@@ -1,18 +1,20 @@
+import { agentImage } from '../chat/images.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
-import type { Provider, Thread } from '../model.ts';
-import { startWorkspace } from '../git/workspace.ts';
+import { firstPrompt, type Provider, type Thread } from '../model.ts';
+import { startWorkspace, workspaceMode } from '../git/workspace.ts';
+import { worktreePath } from '../git/worktrees.ts';
+import { sourcePrompt } from '../sources.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
-/** The composer marks a held-key message with this in the transcript; the agent gets the message without it. */
-export const QUEUED_PREFIX = 'Queued: ';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
-  | { method: 'send'; threadId: string; text: string; images?: AgentImage[] }
+  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string }
+  | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop'; threadId: string }
   | { method: 'stopSubagent'; threadId: string; subagentId: string };
 
@@ -24,16 +26,31 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       if (action.schedule) return [];
     // falls through
     case 'drift-new-thread':
-    case 'sidechat-promote':
+    case 'sidechat-promote': {
+      const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
+      const images = action.type === 'create' && action.images?.length ? { images: action.images.map(agentImage) } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), t.goal, { workspace: startWorkspace(t.repo) }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }), ...images }));
+    }
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
-      const text = withNotes(thread, action.prompt ?? action.text.replace(QUEUED_PREFIX, ''));
+      const text = withNotes(thread, action.prompt ?? action.text);
       const images = action.images?.length ? { images: action.images } : {};
-      return thread.live.isDetached ? reattach(thread, text, undefined, images.images) : [{ method: 'send', threadId: thread.id, text, ...images }];
+      const skills = action.skills?.length ? { skills: action.skills } : {};
+      // Every message carries the thread's speed, so a change in the composer applies from the next one.
+      const speed = thread.controls ? { speed: controlsOf(thread).speed } : {};
+      if (thread.live.isDetached) return reattach(thread, text, undefined, images.images, skills.skills);
+      const interrupt = action.interrupts && thread.live.isWorking ? [{ method: 'interrupt' as const, threadId: thread.id }] : [];
+      return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed }];
+    }
+    case 'compact':
+      return hasAgent(state, action.threadId) ? [{ method: 'compact', threadId: action.threadId, focus: action.focus }] : [];
+    case 'source-add': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      if (thread?.sources.some((s) => s.label === action.source.label)) return [];
+      return agentCalls(state, { type: 'send', threadId: action.threadId, text: sourcePrompt(action.source), reason: '' }, next);
     }
     case 'resume': {
       const thread = state.threads.find((t) => t.id === action.threadId);
@@ -45,6 +62,13 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     }
     case 'interrupt':
       return hasAgent(state, action.threadId) ? [{ method: 'interrupt', threadId: action.threadId }] : [];
+    case 'rewind':
+    case 'rewind-message':
+    case 'rewind-undo': {
+      // The next message starts the agent again on the rewound session (`reattach`).
+      const threadId = action.type === 'rewind-undo' ? state.rewindUndo?.threadId : action.threadId;
+      return threadId && hasAgent(state, threadId) ? [{ method: 'stop', threadId }] : [];
+    }
     case 'settle':
       return [...(hasAgent(state, action.threadId) ? [{ method: 'stop' as const, threadId: action.threadId }] : []), ...stopBackground(state, [action.threadId])];
     case 'delete':
@@ -86,7 +110,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
   }
 }
 
-function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Pick<AgentStartOptions, 'model' | 'resume' | 'useApiKey' | 'workspace' | 'images'>): AgentCall[] {
+function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
@@ -102,15 +126,33 @@ export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */
 function runFolder(thread: Thread) {
-  const cwd = thread.live?.cwd ?? threadCwd(thread);
+  const cwd = threadCwd(thread);
   if (thread.repo && !cwd) return undefined;
   return cwd ?? null;
 }
 
 /** A thread restored after a restart: its agent starts again on the session it had, with this message as the prompt. */
-function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[]) {
+/** A send that found no agent process (it ended without Mochi noticing): start it again with `resume`, carrying the same message. */
+export function resumeAfterLostProcess(thread: Thread, call: Extract<AgentCall, { method: 'send' }>): AgentCall[] {
+  return thread.live ? reattach(thread, call.text, undefined, call.images, call.skills) : [];
+}
+
+function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: AgentImage[], skills?: string[]) {
   const provider = thread.session?.provider ?? thread.providers[0];
-  return start(thread, provider, controlsOf(thread), prompt, { resume: thread.session?.id, useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }) });
+  const restart = thread.live?.restart;
+  const seed = restart && 'seed' in restart ? restart.seed : undefined;
+  const resume = seed === undefined ? thread.session?.id : undefined;
+  const forkAt = restart && 'forkAt' in restart ? restart.forkAt : undefined;
+  // Cleanup removed its worktree: main makes it again on the same branch, at the same path, so `resume` still finds the session.
+  const remake = isCleanedUp(thread) ? { cwd: projectRoot(thread.repo!), workspace: startWorkspace(thread.repo) } : {};
+  return start(thread, provider, controlsOf(thread), seed ? `${seed}\n\n${prompt}` : prompt, { resume, ...(forkAt && { forkAt }), useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }), ...remake });
+}
+
+/** A worktree thread whose agent ran in a worktree that's gone from the list (Settings › Git cleanup, Clean up settled worktrees). */
+function isCleanedUp(thread: Thread) {
+  if (!thread.repo || workspaceMode(thread.repo) !== 'worktree' || !thread.live?.cwd) return false;
+  const root = projectRoot(thread.repo);
+  return !!root && thread.live.cwd !== root && !worktreePath(thread.id);
 }
 
 /** Mochi background agents of these threads that are still running. */

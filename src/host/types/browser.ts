@@ -27,6 +27,34 @@ export type BrowserCommand = 'back' | 'forward' | 'reload' | 'hard-reload' | 'st
 
 export type BrowserDevtools = 'docked' | 'detached' | 'closed';
 
+/** What the page's right-click menu asks the page itself to do, at the point it was opened. */
+export type BrowserMenuCommand = 'cut' | 'copy' | 'paste' | 'select-all' | 'copy-image' | 'save-image' | 'inspect';
+
+export interface FindOptions {
+  forward: boolean;
+  /** True for a new or changed query; false steps to the next or previous match of the same text. */
+  isNewSearch: boolean;
+  matchCase: boolean;
+}
+
+/** A right-click in the page, in view CSS px; the app draws its own menu there. */
+export interface BrowserContextMenu {
+  x: number;
+  y: number;
+  linkUrl: string;
+  linkText: string;
+  /** The image's (or video's) source when the click was on one. */
+  srcUrl: string;
+  mediaType: 'none' | 'image' | 'audio' | 'video' | 'canvas' | 'file' | 'plugin';
+  selectionText: string;
+  isEditable: boolean;
+  canCut: boolean;
+  canCopy: boolean;
+  canPaste: boolean;
+}
+
+export type SearchEngine = 'duckduckgo' | 'google' | 'bing' | 'kagi';
+
 export interface PickedElement {
   selector: string;
   html: string;
@@ -59,6 +87,20 @@ export interface BrowserSnapshot {
   refs: Record<string, { role: string; name: string; isSubmit: boolean; isPassword: boolean }>;
 }
 
+export interface ScrollPosition {
+  x: number;
+  y: number;
+}
+
+/** The base branch's dev server for a before/after compare. */
+export interface CompareBase {
+  /** `http://localhost:<port>`; the thread page's path goes after it. */
+  origin: string;
+  branch: string;
+  /** An already running server in the project's own checkout; Mochi didn't start it and won't stop it. */
+  isReused: boolean;
+}
+
 export interface BrowserLog {
   level: 'debug' | 'info' | 'warning' | 'error';
   message: string;
@@ -70,7 +112,12 @@ export type BrowserEvent =
   | { id: string; type: 'state'; url: string; title: string; isLoading: boolean; canGoBack: boolean; canGoForward: boolean; error: string | null }
   | { id: string; type: 'console'; level: 'error' | 'warning'; message: string; source: string; line: number }
   | { id: string; type: 'open'; url: string }
-  | { id: string; type: 'devtools'; mode: BrowserDevtools };
+  | { id: string; type: 'devtools'; mode: BrowserDevtools }
+  | { id: string; type: 'frame'; data: string }
+  | { id: string; type: 'found'; active: number; matches: number }
+  /** App shortcuts pressed while the page has focus: the page would swallow them otherwise. */
+  | { id: string; type: 'key'; key: 'find' | 'escape' }
+  | ({ id: string; type: 'context-menu' } & BrowserContextMenu);
 
 export interface BrowserHost {
   /** `spaceId` picks the persistent profile (`persist:space-<id>`): cookies and logins are isolated per space. */
@@ -81,6 +128,8 @@ export interface BrowserHost {
   /** Window content coordinates in CSS px. `null` hides the view without destroying it. */
   setBounds(id: string, bounds: BrowserBounds | null): Promise<void>;
   setZoom(id: string, factor: number): Promise<void>;
+  /** Hides the view at `viewport` CSS px and streams it as `frame` events (JPEG data URLs) until called with `null`. */
+  mirror(id: string, viewport: { width: number; height: number } | null): Promise<void>;
   emulate(id: string, emulation: BrowserEmulation): Promise<void>;
   devtools(id: string, mode: BrowserDevtools): Promise<void>;
   /** PNG data URL of the viewport, or of the whole scrollable page. */
@@ -99,6 +148,27 @@ export interface BrowserHost {
   /** Runs `script` in the page's own world (top-level await allowed): the last expression's JSON, capped at 20k chars; throws the page's error. */
   eval(id: string, script: string): Promise<{ value: string; isTruncated: boolean }>;
   waitFor(id: string, until: BrowserWait): Promise<{ isMet: boolean; waitedMs: number }>;
+  /** Reloads the page when a file under `root` changes and the dev server didn't hot-reload it, keeping scroll per URL. `null` stops. */
+  autoReload(id: string, root: string | null): Promise<void>;
+  /** The page's scroll position, after scrolling to `to` when given. */
+  scroll(id: string, to: ScrollPosition | null): Promise<ScrollPosition>;
+  /** Serves `base` (default branch when unset) of the repo at `cwd` for `threadId`; resolves once its dev server listens. */
+  compareStart(threadId: string, cwd: string, base?: string): Promise<CompareBase>;
+  /** Stops the server and removes the temporary worktree `compareStart` made. */
+  compareStop(threadId: string): Promise<void>;
+  /** Highlights matches of `text` in the page; results come back as `found` events. */
+  find(id: string, text: string, options: FindOptions): Promise<void>;
+  stopFind(id: string): Promise<void>;
+  /** Runs a context-menu command at `at` (the menu event's point); `save-image` downloads `url`. */
+  menuCommand(id: string, command: BrowserMenuCommand, at: { x: number; y: number }, url?: string): Promise<void>;
+  /** JPEG data URL of what the view shows now, for a stand-in while an overlay covers it. */
+  peek(id: string): Promise<string>;
+  /** Opens an http(s) URL in the system's default browser. */
+  openExternal(url: string): Promise<void>;
+  /** The default browser's name ("Arc"), or '' when the OS doesn't say. */
+  defaultBrowser(): Promise<string>;
+  /** Search suggestions for `query` from the engine; [] on any failure. */
+  suggest(engine: SearchEngine, query: string): Promise<string[]>;
   onEvent(listener: (event: BrowserEvent) => void): () => void;
 }
 
@@ -109,6 +179,7 @@ export const browserMethods = {
   command: 'invoke',
   setBounds: 'invoke',
   setZoom: 'invoke',
+  mirror: 'invoke',
   emulate: 'invoke',
   devtools: 'invoke',
   capture: 'invoke',
@@ -120,5 +191,16 @@ export const browserMethods = {
   logs: 'invoke',
   eval: 'invoke',
   waitFor: 'invoke',
+  autoReload: 'invoke',
+  scroll: 'invoke',
+  compareStart: 'invoke',
+  compareStop: 'invoke',
+  find: 'invoke',
+  stopFind: 'invoke',
+  menuCommand: 'invoke',
+  peek: 'invoke',
+  openExternal: 'invoke',
+  defaultBrowser: 'invoke',
+  suggest: 'invoke',
   onEvent: 'event',
 } satisfies Manifest<BrowserHost>;

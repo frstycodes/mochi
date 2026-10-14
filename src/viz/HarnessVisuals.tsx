@@ -1,39 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { BurnUp, timeScale } from '../BurnUp';
 import type { Step, Thread } from '../model';
-import { boardColumns, progressAt } from '../progress';
-import { useHarness } from '../store';
+import { boardColumns } from '../progress';
 import { lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
 import type { DiffSpec } from './fence';
-
-export function BurnupVisual({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
-  const [box, width] = useWidth();
-  const [scrubAt, setScrubAt] = useState<number | null>(null);
-  const live = progressAt(thread, state.now, true);
-  return (
-    <div ref={box} data-visual-svg className="flex flex-col gap-2">
-      <p className="tabular type-meta text-muted-foreground">
-        {Math.round(live.pct * 100)}% · {live.done} of {live.scope} pts
-      </p>
-      {width > 0 && <BurnUp thread={thread} now={state.now} scale={timeScale(thread.startedAt, state.now, width)} live={live} projection={null} scrubAt={scrubAt} onScrub={setScrubAt} />}
-    </div>
-  );
-}
-
-function useWidth() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.floor(e.contentRect.width)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return [ref, width] as const;
-}
 
 const GUTTER = 132;
 const COL = 104;

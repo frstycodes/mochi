@@ -1,29 +1,51 @@
-import { ACTION_GROUPS, ACTIONS, type PaletteAction } from '../../palette/actions';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { COMMAND_GROUPS, COMMAND_IDS, COMMANDS, FIXED_KEYS, type CommandId } from '../../keymap';
 import { useProfiles } from '../../profiles';
 import { Shortcut } from '../../Shortcut';
+import { CatalogRow } from '../CatalogRow';
 import { SettingsGroup, SettingsRow } from '../parts';
+import { getPrefs, setPrefs, usePrefs } from '../prefs';
 
-/** Read-only: every palette action with a shortcut, in the palette's groups. Rebinding comes later (SETTINGS.md). */
+/** Every keymap command with its chord, rebindable in place (`ShortcutRecorder`), then the keys that stay fixed. */
 export function KeyboardSection() {
-  // The Space shortcuts follow the profiles, so a rename or a new profile shows here.
-  useProfiles();
+  const shown = shownCommands(useProfiles().length);
+  const { keybindings } = usePrefs();
   return (
     <div className="flex flex-col gap-8">
-      {ACTION_GROUPS.map((group) => {
-        const actions = SHORTCUTS.filter((a) => a.group === group && (a.exists?.() ?? true));
-        if (!actions.length) return null;
-        return (
-          <SettingsGroup key={group} title={group}>
-            {actions.map((a) => (
-              <SettingsRow key={a.id} id={shortcutSettingId(a)} label={a.title} control={<Shortcut keys={a.shortcut!} />} />
+      <div className="flex items-center justify-between gap-3 px-3">
+        <p className="type-meta text-muted-foreground">Click a shortcut to record a new one. Changes apply right away.</p>
+        <Button variant="outline" size="sm" disabled={!Object.keys(keybindings).length} onClick={resetAll}>
+          Reset all
+        </Button>
+      </div>
+      {COMMAND_GROUPS.map((group) => (
+        <SettingsGroup key={group} title={group}>
+          {shown
+            .filter((id) => COMMANDS[id].group === group)
+            .map((id) => (
+              <CatalogRow key={id} settingKey={`keybinding.${id}`} />
             ))}
-          </SettingsGroup>
-        );
-      })}
+        </SettingsGroup>
+      ))}
+      <SettingsGroup title="Fixed" footer="These belong to a field, a viewer or a gesture, so they can't be changed.">
+        {FIXED_KEYS.map(({ keys, what }) => (
+          <SettingsRow key={what} label={what} control={<Shortcut keys={keys} />} />
+        ))}
+      </SettingsGroup>
     </div>
   );
 }
 
-export const SHORTCUTS = (ACTIONS as readonly PaletteAction[]).filter((a) => !!a.shortcut);
+/** Profile shortcuts only for the profiles there are. */
+export function shownCommands(profileCount: number): CommandId[] {
+  return COMMAND_IDS.filter((id) => !id.startsWith('space-') || Number(id.slice('space-'.length)) <= profileCount);
+}
 
-export const shortcutSettingId = (action: PaletteAction) => `shortcut-${action.id}`;
+export const shortcutRowId = (id: CommandId) => `shortcut-${id}`;
+
+function resetAll() {
+  const before = getPrefs().keybindings;
+  setPrefs({ keybindings: {} });
+  toast('Shortcuts reset to the defaults', { action: { label: 'Undo', onClick: () => setPrefs({ keybindings: before }) } });
+}

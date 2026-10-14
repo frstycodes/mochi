@@ -1,17 +1,18 @@
 import { useRef } from 'react';
 import type { Author, LineSlot, Thread, ThreadStatus } from '../model';
-import { progressAt } from '../progress';
+import { goalProgress } from '../progress';
 import { isWorking } from '../agentPhase';
 import { threadDetail } from '../Sidebar';
 import { useHarness, type State } from '../store';
 
-/** What a Stage Manager or overview card shows: plain data, so cards never mount a thread's live React tree. */
+/** What an overview card shows: plain data, so cards never mount a thread's live React tree. */
 export interface ThreadSnapshot {
   id: string;
   title: string;
   line: LineSlot;
   status: ThreadStatus;
-  pct: number;
+  met: number;
+  total: number;
   nowStep: string;
   isWorking: boolean;
   lastMessage: { who: Author; text: string } | null;
@@ -40,12 +41,14 @@ export function useThreadSnapshots(ids: string[]) {
 function snapshotOf(thread: Thread, state: State): ThreadSnapshot {
   const last = thread.activity.findLast((a) => a.kind === 'message');
   const tab = state.panes.find((p) => p.threadId === thread.id)?.tabs.find((t) => t.kind === 'browser');
+  const { met, total } = goalProgress(thread);
   return {
     id: thread.id,
     title: thread.title,
     line: thread.line,
     status: thread.status,
-    pct: Math.round(progressAt(thread, state.now, true).pct * 100) / 100,
+    met,
+    total,
     nowStep: threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title),
     isWorking: isWorking(thread),
     lastMessage: last ? { who: last.who, text: last.text } : null,

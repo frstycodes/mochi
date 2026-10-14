@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowSwapHorizontal, CarouselH, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
+import { ArrowSwapHorizontal, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { host } from '@/host';
 import {
@@ -14,22 +14,21 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { LIGHTS_RESERVE, useToggleSlot } from '../SidebarToggle';
+import { useToggleSlot } from '../SidebarToggle';
+import { DragStrip, TitleBar } from '../TitleBar';
 import { useHarness } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
-import { Shortcut } from '../Shortcut';
+import { BoundShortcut } from '../Shortcut';
 import { SPLIT_MENU } from '../menus/menus';
 import { TargetContextMenu } from '../menus/TargetContextMenu';
 
-/** Per-split actions in a split's header: the Stage Manager toggle (first split only), the layout menu and close. */
+/** Per-split actions in a split's header: the layout menu and close. */
 export function SplitControls() {
   const { state, dispatch } = useHarness();
-  const { leafId, isMulti, isZoomed, isFirst } = useSplit();
-  if (!isMulti) return isFirst && <StageToggle />;
+  const { leafId, isMulti, isZoomed } = useSplit();
+  if (!isMulti) return null;
   const run = (action: Parameters<typeof dispatch>[0]) => {
     dispatch({ type: 'layout-focus', leafId });
     dispatch(action);
@@ -42,7 +41,6 @@ export function SplitControls() {
 
   return (
     <>
-      {isFirst && <StageToggle />}
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -60,7 +58,7 @@ export function SplitControls() {
               {isZoomed ? <ExitFullscreen /> : <Fullscreen />}
               {isZoomed ? 'Show all splits' : 'Zoom this split'}
               <DropdownMenuShortcut>
-                <Shortcut keys={['mod', 'shift', 'Enter']} />
+                <BoundShortcut command="layout-zoom" />
               </DropdownMenuShortcut>
             </DropdownMenuItem>
             <DropdownMenuItem disabled={isZoomed} onSelect={() => run({ type: 'layout-swap', leafId })}>
@@ -98,25 +96,6 @@ export function SplitControls() {
   );
 }
 
-function StageToggle() {
-  const { state, dispatch } = useHarness();
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Stage Manager" aria-pressed={state.isStage} onClick={() => dispatch({ type: 'stage-toggle' })} className={cn('text-muted-foreground', state.isStage && 'bg-accent text-foreground')}>
-          <CarouselH />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent className="flex items-center gap-2">
-        {state.isStage ? 'Leave Stage Manager' : 'Stage Manager'}
-        <Shortcut keys={['mod', 'shift', 'S']} />
-        <span className="text-subtle-foreground">All sessions</span>
-        <Shortcut keys={['mod', 'up']} />
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 function PresetSubmenu() {
   const { dispatch } = useHarness();
   return (
@@ -136,18 +115,17 @@ function PresetSubmenu() {
   );
 }
 
-/** Header for splits that aren't threads (Queue, Board, New thread, a dropped tab). Hidden for a lone split unless it must carry the sidebar toggle. */
+/** Header for splits that aren't threads (Queue, Board, New thread, a dropped tab). A lone split shows it only to carry or clear the sidebar toggle; otherwise just its drag strip. */
 export function LeafBar({ children }: { children: ReactNode }) {
   const { isMulti, isFirst, leafId } = useSplit();
-  const { hasTrigger, reservesLights } = useToggleSlot(isFirst);
-  if (!isMulti && !hasTrigger && !reservesLights) return null;
+  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
+  if (!isMulti && !hasTrigger && !reservesToggle) return <DragStrip />;
   return (
     <TargetContextMenu target={{ leafId }} groups={SPLIT_MENU}>
-      <div className={cn('app-drag flex h-11 shrink-0 items-center gap-2 px-3', reservesLights && LIGHTS_RESERVE)}>
-        {hasTrigger && <SidebarTrigger className="-ml-1" />}
+      <TitleBar isFirst={isFirst}>
         <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
         <SplitControls />
-      </div>
+      </TitleBar>
     </TargetContextMenu>
   );
 }

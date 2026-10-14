@@ -5,9 +5,11 @@ import type { Manifest } from './manifest.ts';
 export type ScreenAccess = 'granted' | 'denied' | 'restricted' | 'not-determined' | 'unknown' | 'unsupported';
 
 export interface AppWindow {
-  /** desktopCapturer source id, valid until the window closes. */
+  /** The window's id (ScreenCaptureKit window id on macOS, else a desktopCapturer source id), valid until it closes. */
   id: string;
   title: string;
+  /** The owning app's name, when the OS gives one. */
+  app?: string;
   /** The owning app's icon as a data URL, when the OS gives one. */
   icon?: string;
 }
@@ -20,7 +22,9 @@ export interface WindowsHost {
   onMessage(listener: (message: unknown) => void): () => void;
   isFullScreen(): Promise<boolean>;
   onFullScreenChange(listener: (isFullScreen: boolean) => void): () => void;
-  /** Other apps' windows on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
+  /** The page zoom (⌘+ / ⌘−). Asking also re-centres the traffic lights on the headers at that zoom. */
+  zoomFactor(): Promise<number>;
+  /** Other apps' windows on every Space (macOS) or on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
   listApps(): Promise<{ access: ScreenAccess; windows: AppWindow[] }>;
   /** A JPEG of that window, or null once it has closed. */
   captureApp(id: string): Promise<AgentImage | null>;
@@ -33,6 +37,7 @@ export const windowsMethods = {
   onMessage: 'event',
   isFullScreen: 'invoke',
   onFullScreenChange: 'event',
+  zoomFactor: 'invoke',
   listApps: 'invoke',
   captureApp: 'invoke',
   openScreenRecordingSettings: 'invoke',
