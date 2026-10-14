@@ -104,7 +104,7 @@ test('handoff moves one step or the whole thread and logs an event and the summa
   const rl = thread(s, 'rl');
   const summary = handoffSummary(rl, 'codex', undefined, { files: 3, added: 40, removed: 6 });
   assert.match(summary, /Goal:\*\* Every public API key/);
-  assert.match(summary, /Add Redis client \(running, 12%\)/);
+  assert.match(summary, /Add Redis client \(running\)/);
   assert.match(summary, /3 files, \+40 −6/);
 
   s = threadsReducer(s, { type: 'handoff', threadId: 'rl', stepId: 'rl6', to: 'codex', summary });

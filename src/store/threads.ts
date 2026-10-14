@@ -422,7 +422,7 @@ function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State
       context: { used: 12_000, max: 200_000 },
       steps: [{ ...ownerStep, id: `${ownerStep.id}-x`, addedAt: now, startedAt: now, addedBy: 'harness', revision: 1, sharedKey: key, link: { mode: 'provides-for', threadIds: [otherThreadId, threadId] }, note: undefined }],
       activity: [
-        { at: now, who: 'harness', kind: 'event', text: `Extracted from "${owner.title}" and "${asker.title}". Kept ${Math.round(ownerStep.progress * 100)}% of Claude's work.` },
+        { at: now, who: 'harness', kind: 'event', text: `Extracted from "${owner.title}" and "${asker.title}". Kept Claude's work so far.` },
       ],
       prs: [],
     };

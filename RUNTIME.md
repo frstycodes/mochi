@@ -98,7 +98,7 @@ The agent's plan list arrives whole each time (TodoWrite input, `turn/plan/updat
 - no match → add the step through the existing scope-add revision flow, `addedBy` = the provider, so the timeline shows where scope came from and the drift guard's rules apply;
 - a step the agent drops from its list stays, marked `dropped` with "Dropped by <provider>".
 
-Sizes for new steps default to 2 until the agent says otherwise. Progress, burn-up and ETA keep their math.
+Sizes for new steps default to 2 until the agent says otherwise.
 
 Being replaced by Goals v2 below: steps mirror the plan with no sizes, and new plan items stop bumping the goal version.
 
