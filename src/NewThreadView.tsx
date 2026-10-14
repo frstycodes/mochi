@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
-import { ProjectPicker, useRecentProjects } from './ProjectPicker';
+import { ExtraFolders, ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
@@ -26,9 +26,6 @@ import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
 import { toast } from 'sonner';
 import { imageProblem, sentImages } from './chat/images';
-import { RunMenu, RUN_NOW, type RunChoice } from './schedule/RunMenu';
-import { toWhen } from './schedule/form';
-import { describeTrigger } from './schedule/describe';
 import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from './git/WorkspacePicker';
 import type { WorkspaceDraft } from './git/workspace';
 
@@ -81,9 +78,9 @@ function NewThread() {
   const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(saved ? saved.project : (recentProjects[0] ?? null));
+  const [extraDirs, setExtraDirs] = useState<string[]>([]);
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const [dependOn, setDependOn] = useState<Match | null>(null);
-  const [run, setRun] = useState<RunChoice>(RUN_NOW);
   const draft = textInput.value;
   // Picks only ride along with something typed or attached; on their own they aren't a draft.
   const hasDraft = !!draft || attachments.files.length > 0;
@@ -100,39 +97,22 @@ function NewThread() {
   // Bases and branch names belong to one project.
   const changeProject = (next: string | null) => {
     setProject(next);
+    setExtraDirs((dirs) => dirs.filter((d) => d !== next));
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
 
   const start = async ({ text, files }: PromptInputMessage) => {
     const title = text.trim();
     if (!title) return;
-    // GAP: a schedule's start leaves out images (`src/host/types/schedule.ts`).
-    const isScheduled = run.mode !== 'now' && run.mode !== 'background';
-    const problem = (project && workspace.error) || (isScheduled && files.length > 0 ? 'Scheduled threads can’t start with images yet' : imageProblem(files));
+    const problem = (project && workspace.error) || imageProblem(files);
     if (problem) {
       toast.error(problem);
       return false;
     }
     const images = await sentImages(files);
     const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
-    const create = { type: 'create', title, ...(skills.length > 0 && { prompt, skills }), ...(images.length > 0 && { images }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined } as const;
-    if (run.mode === 'now') {
-      handOffComposer(leafId, layoutId);
-      return dispatch(create);
-    }
-    if (run.mode === 'background') {
-      dispatch({ ...create, isBackground: true });
-      return void toast.success('Started in the background');
-    }
-    const result = toWhen(run.form);
-    if ('error' in result) {
-      toast.error(`Fix the schedule first: ${result.error}`);
-      // Keeps your text in the composer.
-      return false;
-    }
-    dispatch({ ...create, isBackground: true, schedule: { when: result.when, missed: run.form.missed } });
-    toast.success(`Scheduled: ${describeTrigger(result.when)}`);
-    setRun(RUN_NOW);
+    handOffComposer(leafId, layoutId);
+    return dispatch({ type: 'create', title, ...(skills.length > 0 && { prompt, skills }), ...(images.length > 0 && { images }), provider, project, ...(extraDirs.length > 0 && { extraDirs }), workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
   };
 
   return (
@@ -157,7 +137,7 @@ function NewThread() {
               slashItems={slashItems}
               {...slash.textareaProps}
               onSend={start}
-              submitLabel={submitLabel(run, !!linked)}
+              submitLabel={linked ? 'Start thread, linked' : 'Start thread'}
               meter={<ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
               placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
             />
@@ -166,7 +146,7 @@ function NewThread() {
         <ComposerMeta>
           <ProjectPicker value={project} onChange={changeProject} />
           {!!project && <WorkspaceControls workspace={workspace} />}
-          <RunMenu value={run} onChange={setRun} />
+          {!!project && <ExtraFolders project={project} value={extraDirs} onChange={setExtraDirs} />}
           {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
         </ComposerMeta>
         {!!project && <WorkspaceNotes workspace={workspace} />}
@@ -204,12 +184,6 @@ function NewThread() {
 /** The draft with the branch spelled out: the generated name, or the folder's current branch. */
 function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
   return { ...draft, branch };
-}
-
-function submitLabel(run: RunChoice, isLinked: boolean) {
-  if (run.mode === 'trigger') return 'Schedule thread';
-  if (run.mode === 'background') return 'Start in background';
-  return isLinked ? 'Start thread, linked' : 'Start thread';
 }
 
 function greeting(now: Date) {

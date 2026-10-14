@@ -235,6 +235,8 @@ export interface Thread {
   spaceId: string;
   /** null: a chat with no folder, so no files, branch or PRs. */
   repo: Repo | null;
+  /** More project folders the agent works in besides `repo`'s, picked when the thread started. */
+  extraDirs?: string[];
   title: string;
   /** Renamed by you (or by the agent at your request): a generated title never replaces it. */
   isTitleRenamed?: boolean;

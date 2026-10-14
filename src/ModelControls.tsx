@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, Flash, Search, Star } from 'reicon-react';
+import { ArrowLeft, Bolt, ChevronDown, ChevronRight, Search, Star } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,6 +15,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
@@ -498,22 +499,26 @@ export function SpeedPicker({ model, value, onChange }: { model: AgentModel; val
   if (!speeds.length) return null;
   const speed = speeds.find((s) => s.id === speedFor(model, value));
   const choose = (id: string) => onChange(id === STANDARD ? '' : id === speeds[0].id ? FAST : id);
+  const label = `Speed: ${speed?.name ?? 'Standard'}`;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className={cn('gap-1.5 px-2', speed ? 'text-foreground' : 'text-muted-foreground')} aria-label={`Speed: ${speed?.name ?? 'Standard'}`}>
-          <Flash weight={speed ? 'Filled' : undefined} className="size-3.5" />
-          {speed?.name ?? 'Standard'}
-          <ChevronDown data-icon="inline-end" className="text-subtle-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" className={speed ? 'text-foreground' : 'text-muted-foreground'} aria-label={label}>
+              <SpeedIcon level={speed ? speeds.indexOf(speed) + 1 : 0} />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Speed</DropdownMenuLabel>
           <DropdownMenuRadioGroup value={speed?.id ?? STANDARD} onValueChange={choose}>
-            <SpeedItem value={STANDARD} name="Standard" description="The model's usual speed and price" />
-            {speeds.map((s) => (
-              <SpeedItem key={s.id} value={s.id} name={s.name} description={s.description} />
+            <SpeedItem value={STANDARD} level={0} name="Standard" description="The model's usual speed and price" />
+            {speeds.map((s, i) => (
+              <SpeedItem key={s.id} value={s.id} level={i + 1} name={s.name} description={s.description} />
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
@@ -525,14 +530,29 @@ export function SpeedPicker({ model, value, onChange }: { model: AgentModel; val
 // Radix menus treat '' as no value.
 const STANDARD = 'standard';
 
-function SpeedItem({ value, name, description }: { value: string; name: string; description: string }) {
+function SpeedItem({ value, level, name, description }: { value: string; level: number; name: string; description: string }) {
   return (
-    <DropdownMenuRadioItem value={value} className="items-start">
+    <DropdownMenuRadioItem value={value} className="items-start gap-2">
+      <span className="flex h-5 w-7 shrink-0 items-center">
+        <SpeedIcon level={level} />
+      </span>
       <span className="flex min-w-0 flex-col">
         {name}
         {!!description && <span className="type-caption text-muted-foreground">{description}</span>}
       </span>
     </DropdownMenuRadioItem>
+  );
+}
+
+/** Standard is an outlined bolt; each tier above it adds a filled one. */
+function SpeedIcon({ level }: { level: number }) {
+  if (!level) return <Bolt className="size-4" />;
+  return (
+    <span aria-hidden className="flex -space-x-1.5">
+      {Array.from({ length: level }, (_, i) => (
+        <Bolt key={i} weight="Filled" className="size-4" />
+      ))}
+    </span>
   );
 }
 
