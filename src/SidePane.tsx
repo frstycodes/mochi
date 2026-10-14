@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { Reorder } from 'motion/react';
 import { Add, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const resolved = belowTopGap(resolveLayout(layout, size.w, paneH, chatMin));
   const kinds = layout.columns.flat();
   const isAnimating = useLayoutAnimation(layout, pane.isOpen);
+  const leaving = useLeavingPanes(kinds, resolved.rects);
   const [isResizing, setResizing] = useState(false);
   const move = usePaneMove(thread.id, pane, resolved, areaRef);
   const onKeyDown = usePaneKeys(thread.id, pane, layout);
@@ -68,6 +69,9 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
             onHeaderPointerDown={(e) => move.start(e, kind)}
           />
         ))}
+      {leaving.map(({ kind, rect }) => (
+        <div key={`leaving:${kind}`} aria-hidden className="pane-card pane-card-leaving pointer-events-none absolute rounded-lg border border-border bg-card" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} />
+      ))}
       {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
       {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onResizing={setResizing} />}
       {!!move.indicator && <span aria-hidden className="pointer-events-none absolute z-30 rounded-full bg-foreground/50" style={move.indicator} />}
@@ -112,6 +116,24 @@ function useLayoutAnimation(layout: PaneLayout, isOpen: boolean) {
     return () => window.clearTimeout(t);
   }, [isAnimating, shape]);
   return isAnimating;
+}
+
+/**
+ * A pane that closes leaves its card behind for one exit animation while the others slide into its room; the pane's own content
+ * is already gone (its tab left the state), so what fades is the empty card. A layout effect, so no frame shows the gap first.
+ */
+function useLeavingPanes(kinds: PaneTabKind[], rects: ResolvedLayout['rects']) {
+  const last = useRef({ kinds, rects });
+  const [leaving, setLeaving] = useState<{ kind: PaneTabKind; rect: PaneRect }[]>([]);
+  useLayoutEffect(() => {
+    const before = last.current;
+    last.current = { kinds, rects };
+    const gone = before.kinds.filter((k) => !kinds.includes(k) && before.rects[k] && !before.rects[k]!.isHidden);
+    if (!gone.length) return;
+    setLeaving((l) => [...l.filter((x) => !gone.includes(x.kind)), ...gone.map((kind) => ({ kind, rect: before.rects[kind]! }))]);
+    window.setTimeout(() => setLeaving((l) => l.filter((x) => !gone.includes(x.kind))), LAYOUT_ANIMATION_MS);
+  });
+  return leaving.filter((x) => !kinds.includes(x.kind));
 }
 
 function PaneCard({
