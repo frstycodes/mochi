@@ -72,6 +72,7 @@ test('a report counts until you write again; rewording a criterion drops its cla
   assert.equal(reportHeadline(idle(s.threads.at(-1)!)), '1 of 2 criteria done');
   s = threadsReducer({ ...s, now: s.now + 1 }, { type: 'send', threadId: id, text: 'also log it', reason: '' });
   assert.equal(currentReport(idle(s.threads.at(-1)!)), null, 'your newer message starts a turn the report no longer describes');
+  assert.deepEqual(s.threads.at(-1)!.report?.left, ['Tests'], 'the report stays on the thread for the goal popover');
   const draft = draftFrom(s.threads.at(-1)!);
   draft.criteria[0].text = 'Header present on every 429';
   s = threadsReducer(s, { type: 'edit-goal', threadId: id, draft });

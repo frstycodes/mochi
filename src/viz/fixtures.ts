@@ -150,11 +150,7 @@ const GALLERY: Omit<ActivityEntry, 'at'>[] = [
     who: 'claude',
     kind: 'message',
     text: [
-      'Where the rate limiting thread stands:',
-      '',
-      fence('harness-burnup', '{ "thread": "rl" }'),
-      '',
-      'And how it lines up with the threads around it:',
+      'How the rate limiting thread lines up with the threads around it:',
       '',
       fence('harness-metro', '{ "threads": ["rl", "adm", "e2e"] }'),
       '',

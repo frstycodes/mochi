@@ -262,10 +262,7 @@ function MatchRow({ match, isLinked, onToggle }: { match: Match; isLinked: boole
           <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: lineColor(thread.line) }} />
           <span className="truncate">{thread.title}</span>
           <ProviderMark provider={thread.providers[0]} size={12} />
-          <span className="tabular">
-            · {stepLabel(step.status)}
-            {step.status === 'running' && ` ${Math.round(step.progress * 100)}%`}
-          </span>
+          <span>· {stepLabel(step.status)}</span>
         </span>
       </div>
       <Button variant={isLinked ? 'default' : 'outline'} className="h-7 px-2.5 text-xs" onClick={onToggle} aria-pressed={isLinked}>

@@ -228,7 +228,7 @@ Ranked by how much they help running many agents at once.
 
 ## 7. Chat visualizations
 
-Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```chart ````, ```` ```svg ````, ```` ```html ````, ```` ```harness-burnup ````, ```` ```harness-metro ````, ```` ```harness-diff ```` (schemas in `src/viz/fence.ts`, examples in `src/viz/fixtures.ts`).
+Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```chart ````, ```` ```svg ````, ```` ```html ````, ```` ```harness-metro ````, ```` ```harness-diff ```` (schemas in `src/viz/fence.ts`, examples in `src/viz/fixtures.ts`).
 
 - [x] Re-enable Streamdown plugins: syntax-highlighted code, KaTeX math, Mermaid diagrams, CJK (lazy-loaded; artifact stays under 16 MB)
 - [x] Charts from data in a message (recharts, already a dependency), using the thread line palette and both themes
@@ -239,7 +239,7 @@ Inline visuals in agent messages, like Claude's and Codex's. Fences: ```` ```cha
 - [x] Each visual: expand to a side-pane tab or PiP, copy, download (PNG / SVG / source). The `visual` pane tab kind re-renders the fence; Pop out opens it as a floating tab
 - [x] Streaming: placeholder while the code block is incomplete, render once it parses, show source on error instead of a broken frame
 - [x] Theme-aware: re-render on light / dark switch; contrast checked in both (colours come from the theme tokens; no separate contrast measurement)
-- [x] Mochi-native visuals the agent can emit: burn-up chart, metro snippet of linked threads, diff summary card
+- [x] Mochi-native visuals the agent can emit: metro snippet of linked threads, diff summary card
 
 ## 8. Viewers
 

@@ -272,7 +272,7 @@ function holdOverlap(state: State, threadId: string, step: Step): State {
     threadId,
     title: `Two threads want to ${step.title.charAt(0).toLowerCase()}${step.title.slice(1)}`,
     detail: isBusy
-      ? `${NAMES[step.addedBy as Provider] ?? 'The agent'} just planned it here. ${NAMES[actor(other.thread)]} is already ${Math.round(other.step.progress * 100)}% through the same step in "${other.thread.title}".`
+      ? `${NAMES[step.addedBy as Provider] ?? 'The agent'} just planned it here. ${NAMES[actor(other.thread)]} is already working on the same step in "${other.thread.title}".`
       : `${NAMES[step.addedBy as Provider] ?? 'The agent'} just planned it here. "${other.thread.title}" has the same step.`,
     blocks: { steps: 1, threads: 2 },
     overlap: { threadId, stepId: step.id, otherThreadId: other.thread.id, otherStepId: other.step.id, sharedFiles: shared.length ? shared : other.step.footprint },

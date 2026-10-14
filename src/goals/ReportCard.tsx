@@ -2,7 +2,7 @@ import { ClipboardText } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import type { Thread } from '../model';
+import type { Thread, TurnReport } from '../model';
 import { RefChip } from '../chat/ChatLink';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { useThreadPrs } from '../git/useThreadPrs';
@@ -29,15 +29,7 @@ export function ReportCard({ thread }: { thread: Thread }) {
         <CardTitle className={cn(isReady && 'text-success')}>{status}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {!!report.question && (
-          <p className="flex gap-2 type-body text-pretty">
-            <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning" />
-            <span>
-              <span className="font-medium text-warning">Needs you: </span>
-              {report.question}
-            </span>
-          </p>
-        )}
+        <ReportQuestion report={report} />
         {criteria.length > 0 && <CriteriaList thread={thread} />}
         <ReportList label="Decided" items={report.decisions} />
         <ReportList label="Left" items={report.left} />
@@ -73,7 +65,21 @@ function NextStepButton({ thread, step }: { thread: Thread; step: Exclude<NextSt
   );
 }
 
-function ReportList({ label, items }: { label: string; items: string[] }) {
+/** The one line in a report that asks for anything. */
+export function ReportQuestion({ report }: { report: TurnReport }) {
+  if (!report.question) return null;
+  return (
+    <p className="flex gap-2 type-body text-pretty">
+      <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-warning" />
+      <span>
+        <span className="font-medium text-warning">Needs you: </span>
+        {report.question}
+      </span>
+    </p>
+  );
+}
+
+export function ReportList({ label, items }: { label: string; items: string[] }) {
   if (!items.length) return null;
   return (
     <section aria-label={label} className="flex flex-col gap-1">

@@ -6,7 +6,7 @@ import { useHarness } from '../store';
 import { ChartVisual } from './ChartVisual';
 import { withThemeVars } from './exportVisual';
 import { parseFence, VIZ_LANGUAGES, type VizLanguage, type VizSpecs } from './fence';
-import { BurnupVisual, DiffVisual, MetroVisual } from './HarnessVisuals';
+import { DiffVisual, MetroVisual } from './HarnessVisuals';
 import { ImageVisual } from './ImageVisual';
 import { SortableTable } from './SortableTable';
 import { VisualFrame, type VisualSource } from './VisualFrame';
@@ -69,15 +69,6 @@ function ReadyVisual({ language, spec, source, code, title }: { language: VizLan
         </VisualFrame>
       );
     }
-    case 'harness-burnup': {
-      const thread = threadOf((spec as VizSpecs['harness-burnup']).thread);
-      if (!thread) return <BrokenVisual language={language} code={code} message={`no thread "${(spec as VizSpecs['harness-burnup']).thread}"`} />;
-      return (
-        <VisualFrame fence={{ language, code }} title={title ?? `Burn-up · ${thread.title}`} source={source}>
-          <BurnupVisual thread={thread} />
-        </VisualFrame>
-      );
-    }
     case 'harness-metro': {
       const ids = (spec as VizSpecs['harness-metro']).threads;
       const missing = ids.filter((id) => !threadOf(id));
@@ -105,7 +96,6 @@ const SOURCES = {
   chart: JSON_SOURCE,
   svg: (text) => ({ text, ext: 'svg', type: 'image/svg+xml' }),
   html: (text) => ({ text, ext: 'html', type: 'text/html' }),
-  'harness-burnup': JSON_SOURCE,
   'harness-metro': JSON_SOURCE,
   'harness-diff': JSON_SOURCE,
 } satisfies Record<VizLanguage, (text: string) => VisualSource>;
@@ -114,7 +104,6 @@ const PENDING_LABELS = {
   chart: 'Drawing chart',
   svg: 'Drawing image',
   html: 'Building widget',
-  'harness-burnup': 'Drawing burn-up',
   'harness-metro': 'Drawing metro',
   'harness-diff': 'Summing changes',
 } satisfies Record<VizLanguage, string>;

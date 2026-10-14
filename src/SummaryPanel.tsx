@@ -1,4 +1,4 @@
-import { isValidElement, useState, type CSSProperties, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { isValidElement, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
 import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Hourglass, Link, Maximize, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { threadCwd } from '@/host/cwd';
@@ -35,7 +34,7 @@ import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
 import { isWorking } from './agentPhase';
-import { lineColor, OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
@@ -646,7 +645,6 @@ function GoalSection({ thread }: { thread: Thread }) {
           {now.map((s) => (
             <div key={s.id} className="flex flex-col gap-1.5">
               <StepLine step={s} />
-              {s.status === 'running' && <Progress value={s.progress * 100} style={{ '--progress-color': lineColor(thread.line) } as CSSProperties} aria-label={`${s.title} progress`} />}
               {s.status === 'blocked' && <span className="type-caption text-warning">{s.note ?? 'Needs you'}</span>}
             </div>
           ))}

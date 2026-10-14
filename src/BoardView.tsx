@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { QueueItem, Step, Thread } from './model';
-import { boardColumns, progressAt } from './progress';
+import { isWorking } from './agentPhase';
+import { boardColumns, goalProgress, progressLabel } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads } from './store';
-import { ProviderMarks, ThreadStatusIcon, lineColor, stepLabel } from './ui';
+import { ProgressRing, ProviderMarks, ThreadStatusIcon, lineColor, stepLabel } from './ui';
 
 const ROW = 112;
 const LABEL_ANGLE = 28;
@@ -21,7 +22,7 @@ interface Hovered {
 }
 
 export function BoardView() {
-  const { state, dispatch } = useHarness();
+  const { dispatch } = useHarness();
   const threads = useSpaceThreads().filter((t) => t.status !== 'settled');
   const queue = useSpaceQueue();
   const [hovered, setHovered] = useState<Hovered | null>(null);
@@ -59,7 +60,7 @@ export function BoardView() {
                 <span className="flex items-center gap-2 pl-3 text-xs text-subtle-foreground">
                   <ThreadStatusIcon status={t.status} />
                   <ProviderMarks providers={t.providers} size={12} />
-                  <span className="tabular">{Math.round(progressAt(t, state.now, true).pct * 100)}%</span>
+                  <GoalStatus thread={t} />
                 </span>
               </button>
             </li>
@@ -79,7 +80,7 @@ export function BoardView() {
             ))}
 
             {threads.map((t, row) => (
-              <Line key={t.id} thread={t} row={row} cols={layout.cols} now={state.now} />
+              <Line key={t.id} thread={t} row={row} cols={layout.cols} />
             ))}
 
             {layout.interchanges.map((ix) => (
@@ -120,6 +121,17 @@ export function BoardView() {
   );
 }
 
+function GoalStatus({ thread }: { thread: Thread }) {
+  if (!thread.goal) return null;
+  const progress = goalProgress(thread);
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 tabular">
+      <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={12} isWorking={isWorking(thread)} />
+      <span className="truncate">{progressLabel(progress)}</span>
+    </span>
+  );
+}
+
 function visibleSteps(t: Thread) {
   return t.steps.filter((s) => s.status !== 'dropped');
 }
@@ -156,14 +168,15 @@ function useBoardLayout(threads: Thread[], queue: QueueItem[]) {
   return { cols, interchanges, pending, flagged, width: X0 + maxCol * COL + 200 };
 }
 
-function Line({ thread, row, cols, now }: { thread: Thread; row: number; cols: Map<string, number>; now: number }) {
+function Line({ thread, row, cols }: { thread: Thread; row: number; cols: Map<string, number> }) {
   const steps = visibleSteps(thread);
   if (steps.length === 0) return null;
   const y = row * ROW + ROW / 2;
   const xs = steps.map((s) => X0 + cols.get(s.id)! * COL);
   const first = xs[0];
   const last = xs[xs.length - 1];
-  const progressX = first + (last - first + 40) * progressAt(thread, now, true).pct;
+  const lastDone = steps.findLastIndex((s) => s.status === 'done');
+  const progressX = lastDone < 0 ? first : xs[lastDone];
   const color = lineColor(thread.line);
 
   return (

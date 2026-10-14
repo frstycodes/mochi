@@ -25,7 +25,7 @@ export function handoffSummary(thread: Thread, to: Provider, step: Step | undefi
     `**Handoff to ${PROVIDER_NAME[to]}**: ${step ? `step "${step.title}"` : 'the whole thread'}`,
     `**Goal:** ${thread.goal}`,
     `**Done**\n${list(thread.steps.filter((s) => s.status === 'done').map((s) => s.title))}`,
-    `**Open**\n${list(thread.steps.filter(isOpen).map((s) => (s.status === 'running' ? `${s.title} (running, ${Math.round(s.progress * 100)}%)` : `${s.title} (${s.status})`)))}`,
+    `**Open**\n${list(thread.steps.filter(isOpen).map((s) => `${s.title} (${s.status})`))}`,
     `**Recent decisions**\n${list(decisions.map((d) => (d.text.length > 140 ? `${d.text.slice(0, 139)}…` : d.text)))}`,
     `**Diff so far:** ${diff ? `${diff.files} files, +${diff.added} −${diff.removed}` : 'not read'}`,
   ].join('\n\n');
