@@ -1042,3 +1042,20 @@ test('propose_goal waits for Accept by default; Keep leaves the draft; Apply wit
   assert.equal(applied.thread('rl').goal, draft);
   assert.deepEqual(applied.thread('rl').criteria?.map((c) => c.text) ?? [], before?.map((c) => c.text) ?? []);
 });
+
+test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and report_turn wait for propose_goal", async () => {
+  const t = setup();
+  const { id } = await t.ok('create_thread', { prompt: 'Something is off with sum' });
+  t.env.dispatch({ type: 'goal-drafted', threadId: id, outcome: 'sum returns correct results', criteria: [{ text: 'Tests pass', command: 'npm test' }] });
+  const drafted = await t.ok('get_goal', {}, id);
+  assert.equal(drafted.isDraft, true);
+  assert.match(drafted.next, /call propose_goal/);
+  const [criterion] = t.thread(id).criteria!;
+  assert.match(await t.err('claim_criterion', { criterionId: criterion.id, evidence: 'x' }, id), /^Call propose_goal first/);
+  assert.match(await t.err('report_turn', { decisions: [], left: [] }, id), /^Call propose_goal first/);
+  await t.ok('propose_goal', { goal: 'sum adds its arguments', criteria: [{ text: 'node sum.test.mjs prints ok', command: 'node sum.test.mjs' }] }, id);
+  assert.equal((await t.ok('get_goal', {}, id)).isDraft, undefined, 'a proposal waiting on the user is enough');
+  await t.ok('report_turn', { decisions: ['Fixed a - b'], left: [] }, id);
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: draftFrom(t.thread('rl')) });
+  assert.equal((await t.ok('get_goal')).isDraft, undefined, 'a goal you wrote is never a draft');
+});

@@ -491,6 +491,7 @@ const GOAL_SPECS = {
     run: ({ state, caller, args, dispatch }) => {
       const criterion = caller.criteria?.find((c) => c.id === args.criterionId);
       if (!caller.goal) throw new Error('This thread has no goal; nothing to claim');
+      if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
       if (!criterion) throw new Error(`No criterion ${args.criterionId}; get_goal lists them`);
       dispatch({ type: 'criterion-claim', threadId: caller.id, criterionId: criterion.id, evidence: args.evidence.trim(), by: caller.providers[0] });
       return { changed: `claimed "${criterion.text}"`, result: goalOf(target(state(), caller, caller.id)) };
@@ -499,6 +500,7 @@ const GOAL_SPECS = {
   report_turn: {
     run: ({ state, caller, args, dispatch }) => {
       if (!caller.goal) throw new Error('This thread has no goal; there is nothing to report against');
+      if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
       dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }) } });
       return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
     },
@@ -718,8 +720,17 @@ function agentOf(s: Subagent, now = Date.now()) {
 }
 
 function goalOf(thread: Thread) {
-  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, steps: thread.steps.map(stepOf) };
+  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, steps: thread.steps.map(stepOf), ...(isDraftGoal(thread) && { isDraft: true, next: DRAFT_NEXT }) };
 }
+
+/** A goal only Mochi's drafter has written: guessed from the first message, never checked against the code, so the agent replaces it with propose_goal. */
+function isDraftGoal(thread: Thread) {
+  return !!thread.goal && !thread.proposal && thread.revisions.every((r) => r.by === 'harness');
+}
+
+const DRAFT_NEXT = "This goal is Mochi's guess from the user's first message, not checked against the code. Once you've looked at the code, call propose_goal with the real outcome and 2 to 4 criteria (a command for each where one proves it); claim_criterion and report_turn wait until you have.";
+
+const DRAFT_REFUSAL = `Call propose_goal first. ${DRAFT_NEXT}`;
 
 function stepOf(s: Thread['steps'][number]) {
   return { id: s.id, title: s.title, status: s.status, size: s.size, ...(s.acceptance && { acceptance: s.acceptance }), ...(s.note && { note: s.note }) };
