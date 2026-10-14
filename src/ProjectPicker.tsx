@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, ChatRound, ChevronDown, ChevronRight, Folder, FolderAdd, X } from 'reicon-react';
+import { ArrowLeft, ChatRound, ChevronDown, ChevronRight, Folder, FolderAdd } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command';
@@ -21,27 +21,6 @@ export function ProjectPicker({ value, onChange }: { value: string | null; onCha
         <ChevronDown data-icon="inline-end" />
       </MetaChip>
     </FolderPopover>
-  );
-}
-
-/** Claude's add-folder button: more project folders the agent works in besides `project`, each a chip that removes itself. */
-export function ExtraFolders({ project, value, onChange }: { project: string; value: string[]; onChange: (dirs: string[]) => void }) {
-  const taken = [project, ...value];
-  return (
-    <>
-      {value.map((dir) => (
-        <MetaChip key={dir} onClick={() => onChange(value.filter((d) => d !== dir))} aria-label={`Remove ${projectName(dir)}`} className="group/folder">
-          <Folder className="group-hover/folder:hidden group-focus-visible/folder:hidden" />
-          <X className="hidden group-hover/folder:block group-focus-visible/folder:block" />
-          <span className="truncate">{projectName(dir)}</span>
-        </MetaChip>
-      ))}
-      <FolderPopover exclude={taken} onChoose={(dir) => dir && onChange([...value, dir])}>
-        <MetaChip size="icon-sm" aria-label="Add a folder" className="w-7 px-0">
-          <FolderAdd />
-        </MetaChip>
-      </FolderPopover>
-    </>
   );
 }
 

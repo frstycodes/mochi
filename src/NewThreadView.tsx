@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
-import { ExtraFolders, ProjectPicker, useRecentProjects } from './ProjectPicker';
+import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
@@ -80,7 +80,6 @@ function NewThread() {
   const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(saved ? saved.project : (recentProjects[0] ?? null));
-  const [extraDirs, setExtraDirs] = useState<string[]>([]);
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const [dependOn, setDependOn] = useState<Match | null>(null);
   const machines = useMachines();
@@ -102,7 +101,6 @@ function NewThread() {
   // Bases and branch names belong to one project.
   const changeProject = (next: string | null) => {
     setProject(next);
-    setExtraDirs((dirs) => dirs.filter((d) => d !== next));
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
 
@@ -127,7 +125,7 @@ function NewThread() {
     const images = await sentImages(files);
     const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
     handOffComposer(leafId, layoutId);
-    return dispatch({ type: 'create', title, ...(skills.length > 0 && { prompt, skills }), ...(images.length > 0 && { images }), provider, project, ...(extraDirs.length > 0 && { extraDirs }), workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
+    return dispatch({ type: 'create', title, ...(skills.length > 0 && { prompt, skills }), ...(images.length > 0 && { images }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
   };
 
   return (
@@ -165,15 +163,15 @@ function NewThread() {
             <>
               <ProjectPicker value={project} onChange={changeProject} />
               {!!project && <WorkspaceControls workspace={workspace} />}
-              {!!project && <ExtraFolders project={project} value={extraDirs} onChange={setExtraDirs} />}
               {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
             </>
           )}
         </ComposerMeta>
-        {!remote && !!project && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
 
+      {/* In the bottom row, so a note coming or going never re-centres the composer. */}
       <div className="flex flex-col gap-5 pt-4 pb-16">
+        {!remote && !!project && <WorkspaceNotes workspace={workspace} />}
         <AnimatePresence initial={false}>
           {matches.length > 0 && (
             <motion.section

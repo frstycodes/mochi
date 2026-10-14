@@ -245,7 +245,7 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
   ].filter((n): n is string => !!n);
   if (!notes.length) return null;
   return (
-    <ul role="status" className="flex flex-col gap-0.5 px-2 pb-1 type-caption text-subtle-foreground">
+    <ul role="status" className="flex flex-col gap-0.5 px-2 pt-2 pb-1 type-caption text-subtle-foreground">
       {notes.map((note) => (
         <li key={note} className="flex gap-1.5">
           <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />

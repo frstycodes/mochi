@@ -56,7 +56,7 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; /** More project folders the agent works in. */ extraDirs?: string[]; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[] }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[] }
   /** What the thread's checkout really has (`useWorktreeRecovery`); `worktree`: its own worktree, found on disk. */
   | { type: 'repo-head'; threadId: string; head: Head; worktree?: string }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
@@ -503,7 +503,6 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     sources: [],
     context: { used: isLive ? 0 : 4_000, max: contextMax(action.provider) },
     controls: action.controls,
-    ...(action.project && action.extraDirs?.length && { extraDirs: action.extraDirs }),
   };
   if (isLive) thread.live = { isWorking: true, cwd: threadCwd(thread) ?? undefined };
   // Detached: a message before the first run starts the agent the way a restored thread does.
