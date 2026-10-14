@@ -125,7 +125,7 @@ function TerminalSurface({ session, isFocused, isSplit, onFocus }: { session: Te
     <div
       ref={boxRef}
       onPointerDown={onFocus}
-      className={cn('min-h-0 min-w-0 overflow-hidden rounded-xl bg-card ring-1 ring-border', isSplit && isFocused && 'ring-ring/50')}
+      className={cn('terminal-box min-h-0 min-w-0 overflow-hidden rounded-[6px] bg-card ring-1 ring-border', isSplit && isFocused && 'ring-ring/50')}
     />
   );
 }

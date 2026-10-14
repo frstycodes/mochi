@@ -38,6 +38,7 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const kinds = layout.columns.flat();
   const isAnimating = useLayoutAnimation(layout, pane.isOpen);
   const leaving = useLeavingPanes(kinds, resolved.rects);
+  const entering = useEnteringPanes(kinds);
   const [isResizing, setResizing] = useState(false);
   const move = usePaneMove(thread.id, pane, resolved, areaRef);
   const onKeyDown = usePaneKeys(thread.id, pane, layout);
@@ -66,6 +67,7 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
             showFocus={showFocus}
             isExpanded={layout.expanded === kind}
             isMoving={move.kind === kind}
+            isEntering={entering.includes(kind)}
             onHeaderPointerDown={(e) => move.start(e, kind)}
           />
         ))}
@@ -118,6 +120,20 @@ function useLayoutAnimation(layout: PaneLayout, isOpen: boolean) {
   return isAnimating;
 }
 
+/** Panes opened since the last render scale in; what was there when the panes mounted (a thread opened, a swipe landed) never animates. */
+function useEnteringPanes(kinds: PaneTabKind[]) {
+  const last = useRef(kinds);
+  const [entering, setEntering] = useState<PaneTabKind[]>([]);
+  useLayoutEffect(() => {
+    const added = kinds.filter((k) => !last.current.includes(k));
+    last.current = kinds;
+    if (!added.length) return;
+    setEntering((e) => [...new Set([...e, ...added])]);
+    window.setTimeout(() => setEntering((e) => e.filter((k) => !added.includes(k))), LAYOUT_ANIMATION_MS);
+  });
+  return entering;
+}
+
 /**
  * A pane that closes leaves its card behind for one exit animation while the others slide into its room; the pane's own content
  * is already gone (its tab left the state), so what fades is the empty card. A layout effect, so no frame shows the gap first.
@@ -145,6 +161,7 @@ function PaneCard({
   showFocus,
   isExpanded,
   isMoving,
+  isEntering,
   onHeaderPointerDown,
 }: {
   thread: Thread;
@@ -155,6 +172,7 @@ function PaneCard({
   showFocus: boolean;
   isExpanded: boolean;
   isMoving: boolean;
+  isEntering: boolean;
   onHeaderPointerDown: (e: ReactPointerEvent) => void;
 }) {
   const { dispatch } = useHarness();
@@ -175,6 +193,7 @@ function PaneCard({
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       className={cn(
         'pane-card absolute flex flex-col overflow-hidden rounded-lg border bg-card outline-none',
+        isEntering && 'pane-card-entering',
         showFocus && isFocused ? 'border-foreground/20' : 'border-border',
         isExpanded && 'z-20',
         isMoving && 'opacity-60',
