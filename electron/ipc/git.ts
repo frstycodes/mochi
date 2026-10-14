@@ -139,8 +139,11 @@ export const git = {
     if (!Array.isArray(value)) throw new TypeError('refs must be an array');
     const refs = value.slice(0, MAX_REFS).map(validRef).filter((r) => r !== null);
     if (refs.length === 0) return {};
-    const dir = cwd === null ? homedir() : string(cwd, 'cwd');
-    const account = cwd === null ? undefined : githubAccount(user);
+    // A settled thread's worktree is gone; spawning gh there fails with ENOENT, so read as gh's active account from home.
+    const folder = cwd === null ? null : string(cwd, 'cwd');
+    const hasFolder = folder !== null && existsSync(folder);
+    const dir = hasFolder ? folder : homedir();
+    const account = hasFolder ? githubAccount(user) : undefined;
     // gh exits 1 when any ref doesn't resolve and still prints the others; no gh, no login or offline leaves every ref unknown.
     const json = await runGh(dir, refsQuery(refs), account, { okCodes: [0, 1] }).catch(() => '');
     try {
