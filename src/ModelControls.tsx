@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
 import { effortFor, effortName, FAST, optionFor, searchModels, speedFor, type ModelOption } from './runtime/models';
-import { setPrefs, usePrefs } from './settings/prefs';
+import { setPrefs, toggleStar, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
 import type { AgentInstall } from './host/types/settings';
@@ -416,7 +416,6 @@ export function useModels(spaceId: string) {
   return models;
 }
 
-export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
 /** Each harness's default model from Settings ('' = the harness's own); null until read. */
 export function useDefaultModels() {
   const [models, setModels] = useState<Record<Provider, string> | null>(null);

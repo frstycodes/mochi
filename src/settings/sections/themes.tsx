@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ClipboardText, Download, Edit2, Import, SearchNormal, TickCircle, Trash3 } from 'reicon-react';
+import { ClipboardText, Download, Edit2, Import, SearchNormal, Star, TickCircle, Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { host } from '../../host';
 import { themeTokens } from '../../themes/map';
-import { groupThemes, type PackageGroup } from '../../themes/groups';
+import { groupThemes, splitStarred, type PackageGroup } from '../../themes/groups';
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeKind, type ThemeSlot } from '../../themes/model';
 import type { MarketplaceExtension } from '../../themes/openVsx';
 import { refreshThemes, setThemePreview, useColorTheme, useThemesState } from '../../themes/store';
 import { installExtension, removeCustomTheme, uninstallPackage, useApplyTheme, useInspectedThemes, useMarketplaceSearch, useSeen } from '../../themes/useMarketplace';
-import { usePrefs } from '../prefs';
+import { setPrefs, toggleStar, usePrefs } from '../prefs';
 import { TooltipIconButton } from '../../ui';
 import { SettingsGroup, SettingsRow, settingControlId } from '../parts';
 
@@ -41,6 +41,7 @@ export function SlotSelect({ slot }: { slot: ThemeSlot }) {
   const { installed } = useThemesState();
   const apply = useApplyTheme();
   const options = installed.filter((t) => slotOf(t.kind) === slot);
+  const { starred, rest } = splitStarred(options, prefs.starredThemes);
   const chosen = slot === 'light' ? prefs.lightTheme : prefs.darkTheme;
   const value = options.some((t) => t.id === chosen) ? chosen : MOCHI_VALUE;
   const choose = (id: string) => apply(options.find((t) => t.id === id) ?? null, slot);
@@ -50,18 +51,38 @@ export function SlotSelect({ slot }: { slot: ThemeSlot }) {
         <SelectValue />
       </SelectTrigger>
       <SelectContent align="end">
-        <SelectItem value={MOCHI_VALUE} onFocus={() => setThemePreview(null)}>
-          <ThemeSwatch theme={null} slot={slot} />
-          Mochi
-        </SelectItem>
-        {options.map((theme) => (
-          <SelectItem key={theme.id} value={theme.id} onFocus={() => setThemePreview(theme)}>
-            <ThemeSwatch theme={theme} slot={slot} />
-            <span className="truncate">{theme.label}</span>
+        {starred.length > 0 && (
+          <>
+            <SelectGroup>
+              <SelectLabel>Starred</SelectLabel>
+              {starred.map((theme) => (
+                <ThemeOption key={theme.id} theme={theme} slot={slot} />
+              ))}
+            </SelectGroup>
+            <SelectSeparator />
+          </>
+        )}
+        <SelectGroup>
+          {starred.length > 0 && <SelectLabel>All themes</SelectLabel>}
+          <SelectItem value={MOCHI_VALUE} onFocus={() => setThemePreview(null)}>
+            <ThemeSwatch theme={null} slot={slot} />
+            Mochi
           </SelectItem>
-        ))}
+          {rest.map((theme) => (
+            <ThemeOption key={theme.id} theme={theme} slot={slot} />
+          ))}
+        </SelectGroup>
       </SelectContent>
     </Select>
+  );
+}
+
+function ThemeOption({ theme, slot }: { theme: ColorTheme; slot: ThemeSlot }) {
+  return (
+    <SelectItem value={theme.id} onFocus={() => setThemePreview(theme)}>
+      <ThemeSwatch theme={theme} slot={slot} />
+      <span className="truncate">{theme.label}</span>
+    </SelectItem>
   );
 }
 
@@ -213,10 +234,28 @@ function ThemeRow({ theme, slot, label, kind, children }: { theme: ColorTheme | 
               Use
             </Button>
           )}
+          {!!theme && <StarButton theme={theme} />}
           {children}
         </div>
       }
     />
+  );
+}
+
+/** Starred themes come first in the Light and Dark pickers and show up in ⌘K. */
+function StarButton({ theme }: { theme: ColorTheme }) {
+  const { starredThemes } = usePrefs();
+  const isStarred = starredThemes.includes(theme.id);
+  return (
+    <TooltipIconButton
+      label={isStarred ? `Unstar ${theme.label}` : `Star ${theme.label}`}
+      hint={isStarred ? undefined : 'Starred themes come first in the theme pickers and in ⌘K'}
+      aria-pressed={isStarred}
+      onClick={() => setPrefs({ starredThemes: toggleStar(starredThemes, theme.id) })}
+      className={isStarred ? 'text-warning! [&_*]:text-warning!' : 'text-muted-foreground'}
+    >
+      <Star weight={isStarred ? 'Filled' : undefined} />
+    </TooltipIconButton>
   );
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { groupThemes, slotsUsing } from './groups.ts';
+import { groupThemes, slotsUsing, splitStarred } from './groups.ts';
 import { marketplaceThemeId, type ColorTheme, type ThemeKind } from './model.ts';
 
 const theme = { colors: {}, tokenColors: [] };
@@ -35,4 +35,10 @@ test('slotsUsing names the slots a removed package was filling and leaves the ot
   assert.deepEqual(slotsUsing(catppuccin.themes, { lightTheme: latte.id, darkTheme: mocha.id }), ['light', 'dark']);
   assert.deepEqual(slotsUsing(catppuccin.themes, { lightTheme: 'mochi', darkTheme: mocha.id }), ['dark']);
   assert.deepEqual(slotsUsing(catppuccin.themes, { lightTheme: 'mochi', darkTheme: ayu.id }), []);
+});
+
+test('splitStarred keeps starring order, skips stars of removed themes, and leaves the rest in place', () => {
+  const { starred, rest } = splitStarred([latte, mocha, ayu], [ayu.id, 'marketplace:gone.pkg:Old', latte.id]);
+  assert.deepEqual(starred.map((t) => t.label), ['Ayu Dark', 'Latte']);
+  assert.deepEqual(rest.map((t) => t.label), ['Mocha']);
 });

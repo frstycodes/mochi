@@ -26,6 +26,12 @@ export function groupThemes(installed: ColorTheme[]) {
   return { packages: [...packages.values()].sort((a, b) => a.displayName.localeCompare(b.displayName)), custom };
 }
 
+/** The starred themes that are installed, in the order you starred them, and every other theme in its own order. */
+export function splitStarred(themes: ColorTheme[], starred: string[]) {
+  const byId = new Map(themes.map((t) => [t.id, t]));
+  return { starred: starred.flatMap((id) => byId.get(id) ?? []), rest: themes.filter((t) => !starred.includes(t.id)) };
+}
+
 /** The slots whose chosen theme is one of `themes`, so removing them can hand those slots back to Mochi. */
 export function slotsUsing(themes: ColorTheme[], chosen: Record<`${ThemeSlot}Theme`, string>) {
   return themes.filter((t) => chosen[`${slotOf(t.kind)}Theme`] === t.id).map((t) => slotOf(t.kind));

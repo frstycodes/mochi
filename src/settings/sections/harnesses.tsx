@@ -3,7 +3,7 @@ import { ChevronDown, Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ModelMenu, toggleStar, useModels } from '../../ModelControls';
+import { ModelMenu, useModels } from '../../ModelControls';
 import { optionFor, type ModelOption } from '../../runtime/models';
 import { useSpace } from '../../store';
 import type { Provider } from '../../model';
@@ -14,6 +14,7 @@ import { CatalogRow } from '../CatalogRow';
 import { AccountsGroup, ProfilesGroup } from '../HarnessAccounts';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { CommandLine, DesktopOnly, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
+import { toggleStar } from '../prefs';
 
 /** Every harness from the registry, one after another; nothing here names a specific harness. */
 export function HarnessesSection() {
