@@ -68,6 +68,39 @@ export interface TurnReport {
 }
 
 /** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
+/** A goal the agent wrote after its first look: waiting for your Accept, or applied with an Undo (Settings › Goals). */
+export interface GoalProposal {
+  goal: string;
+  criteria: { text: string; command?: string }[];
+  /** What the agent saw that makes this the goal, one line. */
+  basis?: string;
+  at: number;
+  by: Provider;
+  state: 'waiting' | 'accepted' | 'applied' | 'kept' | 'undone';
+  /** The goal it replaces: struck through on the card, put back by Undo. */
+  before: { goal: string; criteria: { text: string; command?: string }[] };
+}
+
+export interface IdleCheck {
+  at: number;
+  /** Uncommitted files in the thread's folder; unset without one or until read. */
+  uncommitted?: number;
+  /** Checks, git status and the transcript audit are still coming in; the verdict reads Checking until they have. */
+  isGathering?: boolean;
+  /** Unset when no model could read the turn. */
+  audit?: TurnAudit;
+  /** Gap ids you accepted this turn. */
+  accepted: string[];
+  /** You chose Open anyway: open_pr goes ahead past this turn's critical gaps. */
+  canOpenPr?: boolean;
+}
+
+/** What the agent's last turn says, read by a model: a question it asked in prose, things it says it didn't verify. */
+export interface TurnAudit {
+  question?: string;
+  unverified: { text: string; quote: string }[];
+}
+
 export interface Similar {
   threadId: string;
   relation: 'same' | 'related';
@@ -249,6 +282,9 @@ export interface Thread {
   isGoalOff?: boolean;
   /** The latest `report`; a newer message from you starts a turn it no longer describes. */
   report?: TurnReport;
+  /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
+  idle?: IdleCheck;
+  proposal?: GoalProposal;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;

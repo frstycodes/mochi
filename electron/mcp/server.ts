@@ -19,7 +19,7 @@ const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
 
 /** Shown to the model as the server's instructions (MCP `initialize`); the same for every thread, so it reads its own goal. */
 export const INSTRUCTIONS =
-  "Mochi runs this thread and shows the user its goal. Call get_goal at the start of a task. A question or chat has no goal: then ignore the rest. With a goal: keep your plan current in your own task tools; call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (decisions, what's left, at most one question for the user).";
+  "Mochi runs this thread and shows the user its goal. Call get_goal at the start of a task. A question or chat has no goal: then ignore the rest. A task starts with Mochi's draft goal (get_goal says isDraft): after your first look at the code, call propose_goal once with the concrete outcome and checkable criteria, before claiming or reporting anything. With a goal: keep your plan current in your own task tools; call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (decisions, what's left, at most one question for the user).";
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
 export const AUTO_ALLOWED = TOOL_NAMES.map((name) => `mcp__${SERVER}__${name}`);

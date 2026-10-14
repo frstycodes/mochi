@@ -6,6 +6,7 @@ import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
 import { useWorktreePath } from '../git/worktrees';
 import { checkBlockedReason, runCriterionCheck } from './checks';
+import { failureLine } from './verdict';
 
 /** What done means for a goal, one line per criterion: the agent's claim, and a check you can run when it has a command. */
 export function CriteriaList({ thread, className }: { thread: Thread; className?: string }) {
@@ -36,7 +37,7 @@ function CriterionRow({ thread, criterion: c }: { thread: Thread; criterion: Cri
 function CriterionEvidence({ criterion: c }: { criterion: Criterion }) {
   if (c.check?.status === 'running') return <Shimmer as="span" className="type-caption">{`Running ${c.command}`}</Shimmer>;
   if (c.check) {
-    const lastLine = c.check.output?.split('\n').at(-1);
+    const lastLine = failureLine(c.check.output);
     const seconds = Math.round((c.check.ms ?? 0) / 1000);
     return <span className={cn('type-caption', c.check.status === 'failed' ? 'text-destructive' : 'text-subtle-foreground')}>{c.check.status === 'passed' ? `Check passed in ${seconds}s` : `Check failed${lastLine ? `: ${lastLine}` : ''}`}</span>;
   }

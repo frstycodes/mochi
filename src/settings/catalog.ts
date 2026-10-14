@@ -15,7 +15,7 @@ import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type C
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, MOTION, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -355,6 +355,24 @@ const APP_SETTINGS: Setting[] = [
   ),
   pref('driftGuard', 'Drift guard', 'goals', SWITCH),
   pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM)),
+  pref('proposedGoals', 'Agent-proposed goals', 'goals', select(PROPOSED_GOALS)),
+  pref('idleChecks', 'Run criterion checks', 'goals', select(IDLE_CHECKS)),
+  pref('prGaps', 'Gaps when opening a pull request', 'goals', select(PR_GAPS)),
+  ...IDLE_ALERTS.map(
+    ({ value, label }): Setting => ({
+      key: `idleAlert.${value}`,
+      label,
+      section: 'goals',
+      context: 'Notify when a thread goes idle with',
+      control: SWITCH,
+      read: ({ prefs }) => String(prefs.idleAlerts.includes(value)),
+      write: (raw, { prefs }) => {
+        const isOn = parseValue(SWITCH, raw);
+        if (isOn === null) return null;
+        return { to: 'prefs', patch: { idleAlerts: isOn ? [...new Set([...prefs.idleAlerts, value])] : prefs.idleAlerts.filter((k) => k !== value) } };
+      },
+    }),
+  ),
   hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.mochi/worktrees', isPath: true }),
   hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH),
   hostSetting('prepareWorktrees', 'Prepare worktrees before starting', 'git', SWITCH),

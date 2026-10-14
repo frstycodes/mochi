@@ -24,7 +24,7 @@ const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidec
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
-function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/', gitBranches = null as string[] | null, gitCurrent = 'main' as string | null } = {}) {
+function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/', gitBranches = null as string[] | null, gitCurrent = 'main' as string | null, failing = [] as string[] } = {}) {
   const view = { kind: 'thread', id: 'rl' } as const;
   let state = {
     ...initialThreads(undefined, true),
@@ -85,7 +85,9 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     isDesktop: true,
     git: {
       branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
-      push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9') },
+      push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9'),
+      runCheck: async (_cwd, command) => (failing.includes(command) ? { exitCode: 1, output: 'ℹ tests 714\nℹ fail 5', ms: 9 } : { exitCode: 0, output: 'ok', ms: 9 }),
+    },
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
   const ok = async (name: string, args?: Record<string, unknown>, threadId?: string) => {
@@ -982,7 +984,22 @@ test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and 
   assert.equal(r.url, 'https://github.com/o/r/pull/9');
   assert.deepEqual(t.pushes, ['/repo/rl']);
   assert.equal(t.prs[0].title, 'feat(api): rate limit keys by plan');
-  assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [ ] Tests pass'].join('\n'));
+  assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [x] Tests pass: `pnpm test` passed'].join('\n'));
+});
+
+test('open_pr runs the checks first and refuses on a failing one with the same reason the card shows; Open anyway lets it through, noted', async () => {
+  const t = setup({ gitBranches: ['main', 'feat/rate-limit'], gitCurrent: 'feat/rate-limit', failing: ['pnpm test'] });
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: 'Tests pass', command: 'pnpm test' }] } });
+  const [tests] = t.thread('rl').criteria!;
+  t.env.dispatch({ type: 'criterion-claim', threadId: 'rl', criterionId: tests.id, evidence: 'all green', by: 'claude' });
+  const refusal = await t.err('open_pr', { title: 'fix: x', why: 'y' });
+  assert.match(refusal, /open_pr refused: 1 critical gap: Check fails: Tests pass \(ℹ fail 5\)\. Fix it, or ask the user to choose Open anyway/);
+  assert.equal(t.thread('rl').criteria![0].check?.status, 'failed', 'the claim no longer counts');
+  assert.deepEqual(t.pushes, []);
+  t.env.dispatch({ type: 'idle-start', threadId: 'rl' });
+  t.env.dispatch({ type: 'idle-update', threadId: 'rl', patch: { canOpenPr: true, audit: { unverified: [{ text: 'Not checked in the app', quote: "I haven't checked it in the app" }] } } });
+  await t.ok('open_pr', { title: 'fix: x', why: 'y' });
+  assert.match(t.prs[0].body, /## Not verified\n- \*\*Critical, opened anyway:\*\* Check fails: Tests pass\n- Not checked in the app \(agent: "I haven't checked it in the app"\)$/);
 });
 
 test('open_pr refuses a detached HEAD and the default branch, and pushes nothing', async () => {
@@ -991,4 +1008,54 @@ test('open_pr refuses a detached HEAD and the default branch, and pushes nothing
   const onMain = setup({ gitBranches: ['main'] });
   assert.match(await onMain.err('open_pr', { title: 'fix: x', why: 'y' }), /push straight to it/);
   assert.deepEqual([...detached.pushes, ...onMain.pushes], []);
+});
+
+test('propose_goal waits for Accept by default; Keep leaves the draft; Apply with undo sets it and Undo puts the draft back', async () => {
+  const proposal = { goal: 'PR chips in a deleted worktree show live GitHub state', criteria: [{ text: 'Home folder reads PR state', command: 'pnpm test' }, { text: 'Chip #133 shows its state in the app' }], basis: 'refStates runs gh in the removed folder' };
+  const t = setup();
+  const draft = t.thread('rl').goal;
+  const waiting = await t.ok('propose_goal', proposal);
+  assert.match(waiting.status, /Waiting for the user/);
+  assert.equal(t.thread('rl').goal, draft, 'nothing changes until you accept');
+  t.env.dispatch({ type: 'goal-proposal', threadId: 'rl', decision: 'accept' });
+  assert.equal(t.thread('rl').goal, proposal.goal);
+  assert.deepEqual(
+    t.thread('rl').criteria!.map((c) => [c.text, c.command]),
+    [
+      ['Home folder reads PR state', 'pnpm test'],
+      ['Chip #133 shows its state in the app', undefined],
+    ],
+  );
+  assert.match(await t.err('propose_goal', proposal), /already has the goal you proposed/);
+
+  const kept = setup();
+  await kept.ok('propose_goal', proposal);
+  kept.env.dispatch({ type: 'goal-proposal', threadId: 'rl', decision: 'keep' });
+  assert.deepEqual([kept.thread('rl').goal, kept.thread('rl').proposal?.state], [draft, 'kept']);
+
+  const applied = setup();
+  applied.env.prefs.set({ proposedGoals: 'apply' });
+  const before = applied.thread('rl').criteria;
+  assert.match((await applied.ok('propose_goal', proposal)).status, /Applied; the user can undo/);
+  assert.equal(applied.thread('rl').goal, proposal.goal);
+  applied.env.dispatch({ type: 'goal-proposal', threadId: 'rl', decision: 'undo' });
+  assert.equal(applied.thread('rl').goal, draft);
+  assert.deepEqual(applied.thread('rl').criteria?.map((c) => c.text) ?? [], before?.map((c) => c.text) ?? []);
+});
+
+test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and report_turn wait for propose_goal", async () => {
+  const t = setup();
+  const { id } = await t.ok('create_thread', { prompt: 'Something is off with sum' });
+  t.env.dispatch({ type: 'goal-drafted', threadId: id, outcome: 'sum returns correct results', criteria: [{ text: 'Tests pass', command: 'npm test' }] });
+  const drafted = await t.ok('get_goal', {}, id);
+  assert.equal(drafted.isDraft, true);
+  assert.match(drafted.next, /call propose_goal/);
+  const [criterion] = t.thread(id).criteria!;
+  assert.match(await t.err('claim_criterion', { criterionId: criterion.id, evidence: 'x' }, id), /^Call propose_goal first/);
+  assert.match(await t.err('report_turn', { decisions: [], left: [] }, id), /^Call propose_goal first/);
+  await t.ok('propose_goal', { goal: 'sum adds its arguments', criteria: [{ text: 'node sum.test.mjs prints ok', command: 'node sum.test.mjs' }] }, id);
+  assert.equal((await t.ok('get_goal', {}, id)).isDraft, undefined, 'a proposal waiting on the user is enough');
+  await t.ok('report_turn', { decisions: ['Fixed a - b'], left: [] }, id);
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: draftFrom(t.thread('rl')) });
+  assert.equal((await t.ok('get_goal')).isDraft, undefined, 'a goal you wrote is never a draft');
 });
