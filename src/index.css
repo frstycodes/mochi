@@ -460,14 +460,14 @@
 /* Pane headers stay compact so the pane's content gets the room: every icon button there, the shell's and what panes put in
    PaneActions, is a small plain rounded rectangle. Unlayered so it wins over the button sizes and the squircle rule above. */
 [data-pane-header] [data-slot='button'][data-size^='icon'] {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
   corner-shape: round;
 }
 [data-pane-header] [data-slot='button'][data-size^='icon'] svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 /* One diagonal band crosses every skeleton on screen in step: the gradient is pinned to the viewport. */

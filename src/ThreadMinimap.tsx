@@ -22,7 +22,7 @@ export function ThreadMinimap({ items, onJump, className }: { items: OutlineItem
               aria-label={text}
               aria-current={inView.has(rowIndex) || undefined}
               onClick={() => onJump(rowIndex)}
-              className="group flex max-h-2.5 min-h-[3px] flex-1 cursor-default items-center justify-start px-2"
+              className="group flex max-h-2.5 min-h-[3px] flex-1 cursor-default items-center justify-start px-1"
             >
               <span
                 className={cn(
