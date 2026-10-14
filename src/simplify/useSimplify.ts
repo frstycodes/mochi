@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore, type Dispatch } from 'react';
+import { useCallback, useEffect, useSyncExternalStore, type Dispatch } from 'react';
 import { toast } from 'sonner';
 import { host } from '../host';
 import type { Thread } from '../model';
@@ -14,7 +14,7 @@ const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.del
 
 export const useIsSimplifying = (threadId: string, index: number) => useSyncExternalStore(subscribe, () => pending.has(`${threadId}:${index}`));
 
-/** Shows a reply's stored bullets, or makes them with the Simplify settings when there are none or they're out of date. */
+/** Shows a reply's stored simplified version, or makes them with the Simplify settings when there are none or they're out of date. */
 export function useSimplify(dispatch: Dispatch<Action>) {
   return useCallback((thread: Thread, index: number) => simplify(thread, index, dispatch), [dispatch]);
 }
@@ -56,23 +56,4 @@ export function useAutoSimplify(threads: Thread[], dispatch: Dispatch<Action>) {
       void simplify(t, index, dispatch);
     }
   }, [threads, dispatch]);
-}
-
-const REVEAL_MS = 1600;
-
-/** True for a moment after a reply's bullets arrive, so they come in with the chat's word reveal. */
-export function useSimplifyReveal(threadId: string, index: number) {
-  const isSimplifying = useIsSimplifying(threadId, index);
-  const [isRevealing, setRevealing] = useState(false);
-  const [wasSimplifying, setWasSimplifying] = useState(isSimplifying);
-  if (wasSimplifying !== isSimplifying) {
-    setWasSimplifying(isSimplifying);
-    if (!isSimplifying) setRevealing(true);
-  }
-  useEffect(() => {
-    if (!isRevealing) return;
-    const timer = setTimeout(() => setRevealing(false), REVEAL_MS);
-    return () => clearTimeout(timer);
-  }, [isRevealing]);
-  return { isSimplifying, isRevealing };
 }

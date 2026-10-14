@@ -22,6 +22,8 @@ export interface WindowsHost {
   onMessage(listener: (message: unknown) => void): () => void;
   isFullScreen(): Promise<boolean>;
   onFullScreenChange(listener: (isFullScreen: boolean) => void): () => void;
+  /** The page zoom (⌘+ / ⌘−). Asking also re-centres the traffic lights on the headers at that zoom. */
+  zoomFactor(): Promise<number>;
   /** Other apps' windows on every Space (macOS) or on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
   listApps(): Promise<{ access: ScreenAccess; windows: AppWindow[] }>;
   /** A JPEG of that window, or null once it has closed. */
@@ -35,6 +37,7 @@ export const windowsMethods = {
   onMessage: 'event',
   isFullScreen: 'invoke',
   onFullScreenChange: 'event',
+  zoomFactor: 'invoke',
   listApps: 'invoke',
   captureApp: 'invoke',
   openScreenRecordingSettings: 'invoke',

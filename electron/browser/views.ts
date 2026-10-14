@@ -541,13 +541,15 @@ function wire(id: string, entry: Entry) {
   wc.on('will-redirect', (event) => guard(event, event.url));
 }
 
-function layout({ view, devtools, bounds, mirror }: Entry) {
+function layout({ view, devtools, bounds, mirror, owner }: Entry) {
   view.setVisible(!!bounds && !mirror);
   devtools?.setVisible(!!bounds && !mirror);
   if (mirror) return view.setBounds({ x: 0, y: 0, width: Math.round(mirror.width), height: Math.round(mirror.height) });
   if (!bounds) return;
-  view.setBorderRadius(Math.round(bounds.radius));
-  const r = round(bounds);
+  // The renderer measures in CSS px; child views are placed in window DIPs, which differ by the app's ⌘+ / ⌘− zoom.
+  const zoom = owner.isDestroyed() ? 1 : owner.getZoomFactor();
+  view.setBorderRadius(Math.round(bounds.radius * zoom));
+  const r = round(bounds, zoom);
   if (!devtools) return view.setBounds(r);
   const tools = Math.round(r.height * DEVTOOLS_SHARE);
   view.setBounds({ ...r, height: r.height - tools });
@@ -580,6 +582,6 @@ function harden(partition: string) {
   ses.setPermissionCheckHandler((_wc, permission) => permission === 'fullscreen' || permission === 'clipboard-sanitized-write');
 }
 
-function round(b: BrowserBounds) {
-  return { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
+function round(b: BrowserBounds, zoom: number) {
+  return { x: Math.round(b.x * zoom), y: Math.round(b.y * zoom), width: Math.round(b.width * zoom), height: Math.round(b.height * zoom) };
 }

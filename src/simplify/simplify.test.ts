@@ -12,13 +12,13 @@ test('the local fallback makes one bullet per sentence and keeps code blocks who
   assert.equal(wordCount(reply), 17, 'code is not counted toward "long"');
 });
 
-test('the prompt carries your rules, and any rule change makes stored bullets stale', () => {
+test('the prompt asks for the simplest form, carries your rules, and any rule change makes stored versions stale', () => {
   const prompt = simplifyPrompt('x', { ...DEFAULT_PREFS, simplifyRules: ' no jargon ' });
-  assert.match(prompt, /At most 5 bullets\.\nIf anything needs the reader.*\nThe reader's own rules: no jargon\n\nReply to simplify:\nx$/s);
+  assert.match(prompt, /^Write the simplest form that fits.*Use bullets only when.*number steps only when their order matters\.\nKeep it short.*\n.*stay exactly as written\.\nIf anything needs the reader.*\nThe reader's own rules: no jargon\n\nReply to simplify:\nx$/s);
   assert.notEqual(rulesKey(DEFAULT_PREFS), rulesKey({ ...DEFAULT_PREFS, simplifyLength: 'detailed' }));
 });
 
-test('simplified bullets sit on the message for display; the message text the agent saw is unchanged', () => {
+test('the simplified version sits on the message for display; the message text the agent saw is unchanged', () => {
   const state = { ...initialThreads(), queue: [], spaceId: 'latitude', views: {} } as unknown as State;
   const rl = state.threads.find((t) => t.id === 'rl')!;
   const index = rl.activity.findIndex((e) => e.kind === 'message' && e.who === 'claude');

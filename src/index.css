@@ -53,6 +53,8 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
+  /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/main.tsx` sets the zoom. */
+  --lights-end: calc(75px / var(--app-zoom, 1));
 
   --background: oklch(0.975 0.003 285);
   --foreground: oklch(0.2 0.01 285);
@@ -105,6 +107,7 @@
   --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
   --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
 }
@@ -149,6 +152,7 @@
     --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
     --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+    --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
 }
@@ -192,6 +196,7 @@
   --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
   --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
 
@@ -251,6 +256,7 @@
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
+  --shadow-composer: var(--elev-composer);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);

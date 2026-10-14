@@ -11,6 +11,8 @@ export interface AgentStartOptions {
   cwd: string | null;
   /** Where in `cwd` the agent works; unset runs it in `cwd` as is (restarts, folderless chats). */
   workspace?: StartWorkspace;
+  /** More absolute folders the agent may read and edit besides `cwd` (Claude's `--add-dir`). */
+  additionalDirectories?: string[];
   prompt: string;
   /** Sent with the first prompt. */
   images?: AgentImage[];

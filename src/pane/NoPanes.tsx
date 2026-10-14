@@ -1,5 +1,4 @@
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Global } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,6 +8,7 @@ import { useHarness } from '../store';
 import { usePorts } from '../terminal/ports';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { PINNABLE_KINDS } from './headerPins';
+import { PortIcon } from './PortIcon';
 import { useRecentFiles } from './recentFiles';
 import { PANE_TABS } from './tabs';
 
@@ -53,7 +53,7 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
           <Item key={`${p.pid}:${p.port}`} asChild variant="muted" size="sm" className="rounded-xl">
             <button type="button" aria-label={`Preview localhost:${p.port}`} onClick={() => openPort(p.port)}>
               <ItemMedia>
-                <Global className="size-4" />
+                <PortIcon />
               </ItemMedia>
               <ItemContent className="min-w-0">
                 <ItemTitle className="font-normal tabular-nums">localhost:{p.port}</ItemTitle>

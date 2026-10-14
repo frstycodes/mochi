@@ -39,7 +39,7 @@ import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
+import { isCollapsible, openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
 import { BranchName } from './git/BranchLabel';
 
 const LIST_LIMIT = 3;
@@ -59,7 +59,7 @@ export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thre
   );
 }
 
-/** The base panel says where the thread stands, what needs you and what shipped; everything else waits in collapsed sections. */
+/** The base panel says where the thread stands, what needs you and what shipped; the rest sits in sections below, most of them collapsed. */
 function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
   const summary = summarize(thread.activity);
   const sections = useSummarySections(thread, summary);
@@ -114,23 +114,48 @@ function SummarySections({ sections, ...props }: SectionProps & { sections: Summ
       onValueChange={(ids) => rememberOpen(sections, ids)}
       className="gap-0.5 pt-2"
     >
-      {sections.map((section) => {
-        const Body = SECTION_BODIES[section.id];
-        return (
-          <AccordionItem key={section.id} value={section.id} className="not-last:border-b-0">
-            <AccordionTrigger className="h-7 items-center gap-2 px-2 py-0 font-normal text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground hover:no-underline aria-expanded:text-foreground **:data-[slot=accordion-trigger-icon]:size-3.5">
-              <span className="min-w-0 flex-1 truncate">
-                {section.title}
-                {!!section.detail && <span className="tabular text-subtle-foreground"> · {section.detail}</span>}
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-0.5 pt-0.5 pb-2">
-              <Body {...props} />
-            </AccordionContent>
-          </AccordionItem>
-        );
-      })}
+      {sections.map((section) =>
+        isCollapsible(section) ? <CollapsibleSection key={section.id} section={section} {...props} /> : <ShownSection key={section.id} section={section} {...props} />,
+      )}
     </Accordion>
+  );
+}
+
+function CollapsibleSection({ section, ...props }: SectionProps & { section: SummarySection }) {
+  const Body = SECTION_BODIES[section.id];
+  return (
+    <AccordionItem value={section.id} className="not-last:border-b-0">
+      <AccordionTrigger className="h-7 min-w-0 items-center gap-2 px-2 py-0 font-normal text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground hover:no-underline aria-expanded:text-foreground **:data-[slot=accordion-trigger-icon]:size-3.5">
+        <SectionHeading section={section} />
+      </AccordionTrigger>
+      <AccordionContent className="flex flex-col gap-0.5 pt-0.5 pb-2">
+        <Body {...props} />
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
+function ShownSection({ section, ...props }: SectionProps & { section: SummarySection }) {
+  const Body = SECTION_BODIES[section.id];
+  return (
+    <section className="flex flex-col text-sm">
+      <h3 className="flex h-7 items-center border border-transparent px-2">
+        <SectionHeading section={section} />
+      </h3>
+      <div className="flex flex-col gap-0.5 pt-0.5 pb-2">
+        <Body {...props} />
+      </div>
+    </section>
+  );
+}
+
+/** The title keeps its place; the detail gives way, truncated, so the row's end (a chevron) stays in view. */
+function SectionHeading({ section }: { section: SummarySection }) {
+  return (
+    <span className="flex min-w-0 flex-1">
+      <span className="max-w-full shrink-0 truncate">{section.title}</span>
+      {!!section.detail && <span className="min-w-0 truncate tabular text-subtle-foreground">{'\u00a0'}· {section.detail}</span>}
+    </span>
   );
 }
 

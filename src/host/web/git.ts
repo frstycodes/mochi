@@ -170,7 +170,7 @@ export const git: GitHost = {
       current: 'main',
       defaultBranch: 'main',
       changes,
-      branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.harness/worktrees/latitude/adm' : undefined })),
+      branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.mochi/worktrees/latitude/adm' : undefined })),
     };
   },
   async branchNameError(_root, name) {
@@ -182,7 +182,7 @@ export const git: GitHost = {
     if (changes === 'bring' && branch === 'feat/api-rate-limits') throw new Error('error: Your local changes to the following files would be overwritten by checkout:\n\tsrc/limits/schema.ts\nPlease commit your changes or stash them before you switch branches.\nAborting');
   },
   async addWorktree(_root, threadId) {
-    return `~/.harness/worktrees/demo/${threadId}`;
+    return `~/.mochi/worktrees/demo/${threadId}`;
   },
   async worktrees() {
     return [];
@@ -212,7 +212,7 @@ export const git: GitHost = {
     return { exitCode: 0, output: `$ ${command}\n(demo) passed`, ms: 1200 };
   },
   async forkWorktree(_cwd, threadId) {
-    return `~/.harness/worktrees/demo/${threadId}`;
+    return `~/.mochi/worktrees/demo/${threadId}`;
   },
 };
 
