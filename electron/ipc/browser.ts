@@ -4,7 +4,8 @@ import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, Browse
 import { startCompare, stopCompare } from '../browser/compare.ts';
 import { browserLabel, parseSuggestions, SUGGEST_URLS, type SuggestEngine } from '../browser/external.ts';
 import { resolveCwd } from '../pty/cwd.ts';
-import { actOnView, findInView, menuCommandInView, peekView, stopFindInView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { actOnView, findInView, menuCommandInView, peekView, stopFindInView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { isAllowedUrl } from '../browser/navigation.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 // Under main's 30s limit for one Mochi call.
@@ -149,7 +150,7 @@ function actOf(value: unknown): BrowserAct {
 
 function url(value: unknown) {
   const s = string(value, 'url', 8192);
-  if (!isAllowedUrl(s)) throw new TypeError('url must be http(s) or about:');
+  if (!isAllowedUrl(s)) throw new TypeError('url must be http(s), file: or about:');
   return s;
 }
 
