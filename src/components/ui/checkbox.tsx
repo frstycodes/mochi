@@ -16,9 +16,11 @@ function Checkbox({
       )}
       {...props}
     >
+      {/* Mounted while unchecked too, so the check can shrink and blur out as well as in. */}
       <CheckboxPrimitive.Indicator
+        forceMount
         data-slot="checkbox-indicator"
-        className="grid place-content-center text-current transition-none [&>svg]:size-3.5"
+        className="grid place-content-center text-current transition-[opacity,scale,filter] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] data-[state=unchecked]:scale-50 data-[state=unchecked]:opacity-0 data-[state=unchecked]:blur-[2px] motion-reduce:transition-none [&>svg]:size-3.5"
       >
         <CheckIcon
         />

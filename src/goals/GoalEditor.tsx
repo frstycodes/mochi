@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
-import { StepStatusIcon, TooltipIconButton } from '../ui';
+import { IconSwap, StepStatusIcon, TooltipIconButton } from '../ui';
 import { applyDraft, draftFrom, type DraftCriterion, type DraftStep, type GoalDraft } from './edit';
 import { templatesFor } from './templates';
 import { goalPrompt, parseSteps } from '../utility/prompts';
@@ -257,7 +257,7 @@ function StepEditRow({
           <ArrowDown />
         </TooltipIconButton>
         <TooltipIconButton label={step.isRemoved ? 'Keep this step' : 'Remove this step'} hint={step.isLocked ? "Done steps stay in the goal's history." : undefined} disabled={step.isLocked} onClick={() => onChange({ isRemoved: !step.isRemoved })}>
-          {step.isRemoved ? <Undo /> : <Trash3 />}
+          <IconSwap id={step.isRemoved ? 'undo' : 'remove'}>{step.isRemoved ? <Undo /> : <Trash3 />}</IconSwap>
         </TooltipIconButton>
       </div>
       {isCriteriaOpen && !step.isRemoved && (
