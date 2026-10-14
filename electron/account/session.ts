@@ -8,11 +8,12 @@ import { authorizeUrl, codeExchange, codeFromCallback, ENDPOINTS, newPkce, token
 
 /**
  * The Clerk instance's Frontend API URL and its OAuth application's client id: public values, not secrets (a public PKCE
- * client has none). TODO(owner: Sandesh): fill in once the Clerk app exists; the env vars override them for dev runs.
- * The OAuth app must be Public with Require PKCE on and redirect URI `http://127.0.0.1/callback` (any port is accepted).
+ * client has none). The env vars override them for dev runs against another instance. The OAuth app is Public with
+ * Require PKCE on and redirect URI `http://127.0.0.1/callback` (any port is accepted).
+ * TODO(owner: Sandesh): this is the development instance; switch to the production one before shipping to other people.
  */
-const ISSUER = process.env.MOCHI_CLERK_ISSUER ?? '';
-const CLIENT_ID = process.env.MOCHI_CLERK_CLIENT_ID ?? '';
+const ISSUER = process.env.MOCHI_CLERK_ISSUER ?? 'https://amazed-hyena-4980.clerk.accounts.dev';
+const CLIENT_ID = process.env.MOCHI_CLERK_CLIENT_ID ?? 'DrmXYYxWDX3SDT5B';
 
 const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
 
