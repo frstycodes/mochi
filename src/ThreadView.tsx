@@ -429,7 +429,8 @@ function PanesMenu({ openKinds, onToggle }: { openKinds: PaneTabKind[]; onToggle
           {PINNABLE_KINDS.map((kind) => {
             const { title, icon: Icon } = PANE_TABS[kind];
             return (
-              <DropdownMenuCheckboxItem key={kind} checked={openKinds.includes(kind)} onCheckedChange={() => onToggle(kind)}>
+              // No check column: the label's strength says the pane is open, so the shortcut keys sit at the item's right padding.
+              <DropdownMenuCheckboxItem key={kind} checked={openKinds.includes(kind)} onCheckedChange={() => onToggle(kind)} className="pr-1.5 text-muted-foreground data-[state=checked]:text-foreground *:data-[slot=dropdown-menu-checkbox-item-indicator]:hidden">
                 <Icon />
                 {title}
                 <DropdownMenuShortcut>
