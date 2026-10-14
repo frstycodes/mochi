@@ -458,12 +458,20 @@
 }
 
 /* Pane headers stay compact so the pane's content gets the room: every icon button there, the shell's and what panes put in
-   PaneActions, is a small plain rounded rectangle. Unlayered so it wins over the button sizes and the squircle rule above. */
+   PaneActions, hugs a full-size icon (2px of padding) in a plain rounded rectangle, and its hit area reaches 24px through an
+   invisible ::after. Unlayered so it wins over the button sizes and the squircle rule above. */
 [data-pane-header] button[data-size^='icon'] {
+  position: relative;
   width: 20px;
   height: 20px;
   border-radius: 5px;
   corner-shape: round;
+}
+[data-pane-header] button[data-size^='icon']::after {
+  content: '';
+  position: absolute;
+  /* From inside the button's 1px border: 3px reaches 2px past its edge, a 24px tall target; 2px sideways stays inside the 2px gap. */
+  inset: -3px -2px;
 }
 /* A toggle group there is one joined segment at the same height; only its outer corners round. */
 [data-pane-header] [data-slot='toggle-group-item'] {
