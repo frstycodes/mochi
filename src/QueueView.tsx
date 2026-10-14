@@ -33,6 +33,7 @@ import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode 
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
 import { useSendCiLog } from './notify/useSendCiLog';
+import { isCommand } from './keymap';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
@@ -100,9 +101,8 @@ export function QueueView() {
 function useListKeys(count: number, index: number, setSelected: (i: number) => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLElement && e.target.closest('input, textarea')) return;
-      if (e.key === 'j') setSelected(Math.min(count - 1, index + 1));
-      if (e.key === 'k') setSelected(Math.max(0, index - 1));
+      if (isCommand(e, 'list-next')) setSelected(Math.min(count - 1, index + 1));
+      if (isCommand(e, 'list-previous')) setSelected(Math.max(0, index - 1));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

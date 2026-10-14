@@ -20,7 +20,7 @@ import { DragStrip, TitleBar } from '../TitleBar';
 import { useHarness } from '../store';
 import { useSplit } from './SplitContext';
 import { findLeaf, PRESETS, PRESET_LABELS } from './tree';
-import { Shortcut } from '../Shortcut';
+import { BoundShortcut } from '../Shortcut';
 import { SPLIT_MENU } from '../menus/menus';
 import { TargetContextMenu } from '../menus/TargetContextMenu';
 
@@ -58,7 +58,7 @@ export function SplitControls() {
               {isZoomed ? <ExitFullscreen /> : <Fullscreen />}
               {isZoomed ? 'Show all splits' : 'Zoom this split'}
               <DropdownMenuShortcut>
-                <Shortcut keys={['mod', 'shift', 'Enter']} />
+                <BoundShortcut command="layout-zoom" />
               </DropdownMenuShortcut>
             </DropdownMenuItem>
             <DropdownMenuItem disabled={isZoomed} onSelect={() => run({ type: 'layout-swap', leafId })}>

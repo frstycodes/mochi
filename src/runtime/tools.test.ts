@@ -192,7 +192,7 @@ test('every tool in the table has a handler', async () => {
 });
 
 test('only deletes and settings ask; everything else runs without a widget', () => {
-  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
+  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'set_keybinding', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
 });
 
 test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
@@ -827,6 +827,54 @@ test('update_settings validates every change before showing anything', async () 
   assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
 });
 
+test('get_keybindings lists every command with its chord now and its default, and get_settings leaves shortcuts to it', async () => {
+  const t = setup();
+  t.env.prefs.set({ keybindings: { palette: 'mod+shift+K', 'go-new': '' } });
+  const r = await t.ok('get_keybindings');
+  const palette = r.commands.find((c: { id: string }) => c.id === 'palette');
+  assert.deepEqual(palette, { id: 'palette', title: 'Command palette', group: 'General', scope: 'global', keys: 'mod+shift+K', default: 'mod+K', isCustom: true });
+  assert.equal(r.commands.find((c: { id: string }) => c.id === 'go-new').keys, '', 'a removed shortcut reads as ""');
+  assert.ok(r.fixed.some((f: { what: string }) => /composer/.test(f.what)));
+  assert.match(r.reserved, /Copy/);
+  const settings = await t.ok('get_settings');
+  assert.equal(settings.settings.some((s: { key: string }) => s.key.startsWith('keybinding.')), false);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'keybinding.palette', value: 'mod+J' }], reason: 'x' }), /set_keybinding/);
+});
+
+test('set_keybinding shows current → proposed on a settings widget, and refuses what Settings › Keyboard refuses', async () => {
+  const t = setup();
+  const r = await t.ok('set_keybinding', { command: 'palette', keys: 'shift+mod+k', reason: 'You asked for ⌘⇧K' });
+  assert.deepEqual(r.shown, ['keybinding.palette']);
+  const { settings, title } = widget(t);
+  assert.equal(title, 'Claude suggests a new shortcut for Command palette');
+  assert.deepEqual(settings!.changes, [{ key: 'keybinding.palette', value: 'mod+shift+K' }]);
+  assert.deepEqual(settings!.before, { 'keybinding.palette': 'mod+K' });
+  assert.deepEqual(t.prefs().keybindings, {}, 'only the user applies it');
+
+  const err = (args: Record<string, string>) => t.err('set_keybinding', { reason: 'x', ...args });
+  assert.match(await err({ command: 'nope', keys: 'mod+J' }), /No command nope/);
+  assert.match(await err({ command: 'palette', keys: 'cmd+J' }), /isn't a chord/);
+  assert.match(await err({ command: 'palette', keys: 'mod+K' }), /already mod\+K/);
+  assert.match(await err({ command: 'palette', keys: 'mod+C' }), /mod\+C is reserved: Copy/);
+  assert.match(await err({ command: 'palette', keys: 'Tab' }), /needs/);
+  assert.match(await err({ command: 'palette', keys: 'mod+P' }), /already used by Go to file \(files-go-to\); pass onConflict/);
+});
+
+test('set_keybinding settles a clash on the widget: swap gives the other command the old chord, replace clears it', async () => {
+  const swap = setup();
+  await swap.ok('set_keybinding', { command: 'palette', keys: 'mod+P', onConflict: 'swap', reason: 'x' });
+  assert.deepEqual(widget(swap).settings!.changes, [
+    { key: 'keybinding.palette', value: 'mod+P' },
+    { key: 'keybinding.files-go-to', value: 'mod+K' },
+  ]);
+  const replace = setup();
+  await replace.ok('set_keybinding', { command: 'palette', keys: 'mod+P', onConflict: 'replace', reason: 'x' });
+  assert.deepEqual(widget(replace).settings!.changes[1], { key: 'keybinding.files-go-to', value: '' });
+  const cleared = setup();
+  await cleared.ok('set_keybinding', { command: 'go-new', keys: '', reason: 'x' });
+  assert.match(widget(cleared).title, /removing the shortcut for New thread/);
+});
+
 test('account suggestions: only an existing account, only for a profile without its own, never under active threads', async () => {
   const t = setup();
   const account = (profileId: string, value: string) => t.call('update_settings', { changes: [{ key: 'profile.claudeAccount', value, profileId }], reason: 'x' });
@@ -899,6 +947,7 @@ test('Read only and Changes block every settings suggestion and delete with no w
   const writes = {
     update_settings: { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' },
     add_mcp_server: { name: 'docs', command: 'npx', reason: 'x' },
+    set_keybinding: { command: 'palette', keys: 'mod+shift+K', reason: 'x' },
     remove_mcp_server: { name: 'github' },
     remove_profile: { profileId: 'scratch' },
   };

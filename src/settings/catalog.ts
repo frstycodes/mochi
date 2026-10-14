@@ -11,6 +11,8 @@ import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSe
 import { linkedAccountId } from './accounts.ts';
 import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
+import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type CommandId } from '../keymap.ts';
+import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
 import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, MOTION, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
@@ -56,7 +58,9 @@ export type Control =
   | { type: 'account'; provider: Provider }
   | { type: 'instructions'; provider: Provider }
   | { type: 'mcp'; provider: Provider; name: string }
-  | { type: 'skill'; provider: Provider; name: string };
+  | { type: 'skill'; provider: Provider; name: string }
+  /** A command's chord as `chordText` writes it; '' is no shortcut. */
+  | { type: 'shortcut'; command: CommandId };
 
 /** Everything a value can live in. Optional parts aren't loaded everywhere (the web build has no host settings). */
 export interface SettingSources {
@@ -98,6 +102,7 @@ export function valueLabel(setting: Setting, value: string | undefined) {
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return value === 'true' ? 'On' : 'Off';
   if (control.type === 'choice' || control.type === 'select') return control.options.find((o) => o.value === value)?.label ?? value;
   if (control.type === 'instructions') return `${value.trimEnd().split('\n').length} lines`;
+  if (control.type === 'shortcut') return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
   // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
   if (control.type === 'colorTheme') return value === MOCHI_THEME_ID ? 'Mochi' : value.split(':').pop()!;
   return value || 'Not set';
@@ -225,6 +230,30 @@ function remoteSetting(key: keyof RemoteSettings, label: string, control: Contro
       return parsed === null || (typeof parsed === 'string' && parsed.length > 64) ? null : { to: 'remote', patch: { [key]: parsed } };
     },
     ...extra,
+  };
+}
+
+/**
+ * One row per keymap command. A write takes the chord from whichever command holds it (the widget's Use, after
+ * `set_keybinding` showed that command's row too); Settings › Keyboard asks first instead (`ShortcutRecorder`).
+ */
+function keybinding(id: CommandId): Setting {
+  return {
+    key: `keybinding.${id}`,
+    label: COMMANDS[id].title,
+    section: 'keyboard',
+    context: 'Keyboard shortcut',
+    control: { type: 'shortcut', command: id },
+    read: ({ prefs }) => chordText(bindingOf(id, prefs.keybindings)),
+    write: (value, { prefs }) => {
+      const keys = value === '' ? null : parseChord(value);
+      if (value !== '' && !keys) return null;
+      try {
+        return { to: 'prefs', patch: { keybindings: rebind(prefs.keybindings, id, keys, 'replace') } };
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
@@ -381,6 +410,7 @@ const APP_SETTINGS: Setting[] = [
       harness('secondOpinionModel', 'second opinion model', { type: 'model', provider, emptyLabel: 'Default model' }, { description: `What ${name} reviews other threads on.` }),
     ];
   }),
+  ...COMMAND_IDS.map(keybinding),
 ];
 
 // {PROFILE}

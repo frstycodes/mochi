@@ -666,6 +666,31 @@
         "CLERK_CLIENT_ID:mochi_client"
       ],
       "port": 8787
+    },
+    {
+      "name": "mochi-keymap",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5741",
+        "--strictPort"
+      ],
+      "port": 5741
+    },
+    {
+      "name": "mochi-keymap-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5743",
+        "--strictPort"
+      ],
+      "port": 5743,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-stoic-germain-f38599/058fe85c-748c-4e34-acf0-2cbc744065fe/scratchpad/mochi-userdata"
+      }
     }
   ]
 }

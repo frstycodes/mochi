@@ -29,7 +29,7 @@ import { pinnedNeighbour, slotsOf } from '../pager/slots';
 import type { Action, State } from '../store';
 import { toggleSettle } from '../useSettle';
 import { when, type ActionScope } from './when';
-import type { Key } from '../keys';
+import { spaceCommand, type CommandId } from '../keymap';
 import type { PaneTab } from '../model';
 
 export const ACTION_GROUPS = ['Go to', 'Thread', 'Side pane', 'Layout', 'Space', 'Appearance'] as const;
@@ -48,7 +48,8 @@ export interface PaletteAction {
   title: string;
   icon: IconComponent;
   keywords?: string;
-  shortcut?: Key[];
+  /** The keymap command that runs this from the keyboard; menus and the palette show its chord. */
+  command?: CommandId;
   when?: (scope: ActionScope) => boolean;
   /** The title for this target, when it names something about it ("Ask Codex for a second opinion"). */
   label?: (scope: ActionScope) => string;
@@ -68,15 +69,15 @@ export const ACTIONS = [
   { id: 'go-queue', group: 'Go to', title: 'Queue', icon: Inbox, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'queue' } }) },
   { id: 'go-review', group: 'Go to', title: 'Review mode', icon: TaskSquare, keywords: 'inbox approve', when: when.reviews, run: ({ openReview }) => openReview() },
   { id: 'go-board', group: 'Go to', title: 'Board', icon: Route, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }) },
-  { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, shortcut: ['mod', ','], keywords: 'agents claude codex accounts login api key preferences', run: () => openSettings() },
-  { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, shortcut: ['N'], run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
+  { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, command: 'go-settings', keywords: 'agents claude codex accounts login api key preferences', run: () => openSettings() },
+  { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, command: 'go-new', run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 
   { id: 'thread-open', group: 'Thread', title: 'Open thread', icon: ArrowRight, when: when.unfocusedThread, run: onThread((t, ctx) => open(ctx, { type: 'go', view: { kind: 'thread', id: t.id } })) },
   { id: 'thread-open-split', group: 'Thread', title: 'Open in new split', icon: RowVertical, when: when.unfocusedThread, run: onThread((t, ctx) => openSplits([t], ctx)), many: { title: 'Open each in a new split', skipReason: 'already open', run: openSplits } },
   { id: 'thread-settle', group: 'Thread', title: 'Settle thread', icon: Archive, when: when.liveThread, run: onThread((t, { dispatch }) => toggleSettle([t], dispatch)), many: { title: 'Settle threads', skipReason: 'already settled', run: (ts, { dispatch }) => toggleSettle(ts, dispatch) } },
   { id: 'thread-reactivate', group: 'Thread', title: 'Reactivate thread', icon: Refresh, when: when.settledThread, run: onThread((t, { dispatch }) => toggleSettle([t], dispatch)), many: { title: 'Reactivate threads', skipReason: 'not settled', run: (ts, { dispatch }) => toggleSettle(ts, dispatch) } },
-  { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, shortcut: ['mod', 'shift', 'P'], when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
-  { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, shortcut: ['mod', 'shift', 'P'], when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
+  { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, command: 'thread-pin', when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
+  { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, command: 'thread-pin', when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
   { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, keywords: 'title name', when: when.thread, run: inThread((t) => startRename(t.id)) },
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
@@ -119,11 +120,11 @@ export const ACTIONS = [
       }) satisfies PaletteAction,
   ),
   { id: 'sidechat-ask', group: 'Side pane', title: 'Ask in side chat', icon: PANE_TABS.sidechat.icon, keywords: 'side question aside /side', when: when.thread, run: onThread((t, { dispatch }) => askInSideChat(dispatch, t.id)) },
-  { id: 'tab-close', group: 'Side pane', title: 'Close tab', icon: X, shortcut: ['mod', 'W'], when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-close-tab', threadId: t.id, tabId: tab.id })) },
+  { id: 'tab-close', group: 'Side pane', title: 'Close tab', icon: X, command: 'tab-close', when: when.tab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-close-tab', threadId: t.id, tabId: tab.id })) },
   { id: 'tab-close-others', group: 'Side pane', title: 'Close other tabs', icon: CloseSquare, when: when.otherTabs, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.filter((x) => x !== tab), ctx)) },
   { id: 'tab-close-right', group: 'Side pane', title: 'Close tabs to the right', icon: CloseSquare, when: when.tabsToRight, run: onTab((tab, t, ctx) => closeTabs(t.id, ctx.scope.tabs.slice(ctx.scope.tabs.indexOf(tab) + 1), ctx)) },
   { id: 'tab-reload', group: 'Side pane', title: 'Reload page', icon: Refresh, when: when.browserTab, run: onTab((tab, t) => reloadPage(pageKey(t.id, tab.id))) },
-  { id: 'tab-find', group: 'Side pane', title: 'Find in page', icon: SearchNormal, shortcut: ['mod', 'F'], keywords: 'search text', when: when.browserTab, run: onTab((tab, t, { dispatch }) => (dispatch({ type: 'pane-select-tab', threadId: t.id, tabId: tab.id }), openFind(pageKey(t.id, tab.id)))) },
+  { id: 'tab-find', group: 'Side pane', title: 'Find in page', icon: SearchNormal, command: 'find', keywords: 'search text', when: when.browserTab, run: onTab((tab, t, { dispatch }) => (dispatch({ type: 'pane-select-tab', threadId: t.id, tabId: tab.id }), openFind(pageKey(t.id, tab.id)))) },
   { id: 'tab-copy-url', group: 'Side pane', title: 'Copy URL', icon: Link, when: when.webTab, run: onTab((tab, t) => copyText(tabUrl(tab, t), 'URL copied')) },
   { id: 'tab-open-external', group: 'Side pane', title: 'Open in your browser', label: () => openInLabel(), icon: ArrowUpRightSquare, keywords: 'external system default browser', when: when.webTab, run: onTab((tab, t) => openExternally(tabUrl(tab, t))) },
   { id: 'tab-duplicate', group: 'Side pane', title: 'Duplicate tab', icon: Copy, when: when.multiTab, run: onTab((tab, t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: tab.kind, url: tab.url, file: tab.file })) },
@@ -132,15 +133,15 @@ export const ACTIONS = [
   { id: 'pane-dev-server', group: 'Side pane', title: 'Run a dev server', icon: Play, keywords: 'ports start npm pnpm', when: when.repo, run: onThread((t, { dispatch }) => dispatch({ type: 'pane-open-tab', threadId: t.id, kind: 'ports' })) },
 
   ...PRESETS.map((preset) => ({ id: `layout-${preset}`, group: 'Layout', title: `Layout: ${PRESET_LABELS[preset]}`, icon: Grid, run: ({ dispatch }) => dispatch({ type: 'layout-preset', preset }) }) satisfies PaletteAction),
-  { id: 'pinned-previous', group: 'Layout', title: 'Previous pinned thread', icon: ArrowLeft, shortcut: ['mod', 'shift', '['], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, -1) },
-  { id: 'pinned-next', group: 'Layout', title: 'Next pinned thread', icon: ArrowRight, shortcut: ['mod', 'shift', ']'], keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, 1) },
-  { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, shortcut: ['mod', 'up'], keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
-  { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, shortcut: ['mod', '\\'], run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
+  { id: 'pinned-previous', group: 'Layout', title: 'Previous pinned thread', icon: ArrowLeft, command: 'pinned-previous', keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, -1) },
+  { id: 'pinned-next', group: 'Layout', title: 'Next pinned thread', icon: ArrowRight, command: 'pinned-next', keywords: 'swipe switch tab', run: ({ state, dispatch }) => goPinned(state, dispatch, 1) },
+  { id: 'layout-overview', group: 'Layout', title: 'Show all sessions', icon: Grid, command: 'layout-overview', keywords: 'overview mission control', run: ({ dispatch }) => dispatch({ type: 'overview-toggle', isOpen: true }) },
+  { id: 'layout-split', group: 'Layout', title: 'Split right', icon: RowVertical, command: 'layout-split', run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId }) },
   { id: 'layout-split-down', group: 'Layout', title: 'Split down', icon: RowHorizontal, run: ({ dispatch, scope }) => dispatch({ type: 'layout-split', view: { kind: 'new' }, leafId: scope.leafId, side: 'bottom' }) },
   { id: 'layout-rotate', group: 'Layout', title: 'Rotate split', icon: Rotation, when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-rotate', leafId: scope.leafId }) },
   { id: 'layout-swap', group: 'Layout', title: 'Swap with next split', icon: ArrowSwapHorizontal, when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-swap', leafId: scope.leafId }) },
-  { id: 'layout-zoom', group: 'Layout', title: 'Zoom split', icon: Fullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-zoom', leafId: scope.leafId }) },
-  { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, shortcut: ['mod', 'shift', 'Enter'], when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
+  { id: 'layout-zoom', group: 'Layout', title: 'Zoom split', icon: Fullscreen, command: 'layout-zoom', when: when.unzoomedSplits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-zoom', leafId: scope.leafId }) },
+  { id: 'layout-unzoom', group: 'Layout', title: 'Show all splits', icon: ExitFullscreen, command: 'layout-zoom', when: when.zoomed, run: ({ dispatch }) => dispatch({ type: 'layout-zoom' }) },
   { id: 'layout-close', group: 'Layout', title: 'Close split', icon: X, when: when.splits, run: ({ dispatch, scope }) => dispatch({ type: 'layout-close', leafId: scope.leafId }) },
 
   // One per `nav` + digit, bound to whichever profile sits at that position now (Settings › Profiles adds and removes them).
@@ -151,7 +152,7 @@ export const ACTIONS = [
       return `Switch to ${getProfiles()[i]?.name ?? `profile ${i + 1}`}`;
     },
     icon: Monitor,
-    shortcut: ['nav', String(i + 1)],
+    command: spaceCommand(i + 1),
     exists: () => i < getProfiles().length,
     when: (scope: ActionScope) => i < getProfiles().length && when.otherSpace(getProfiles()[i].id)(scope),
     run: ({ dispatch }: ActionContext) => dispatch({ type: 'space', id: getProfiles()[i].id }),

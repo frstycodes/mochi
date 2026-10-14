@@ -14,7 +14,7 @@ import { useTerminals } from '../terminal/useTerminals';
 import { PaneActions, PaneTitle } from './PaneHeader';
 import { PlannedTab } from './PlannedTab';
 import type { PaneTabProps } from './tabs';
-import { isMod } from '../keys';
+import { isCommand } from '../keymap';
 
 export function TerminalTab({ thread, tab }: PaneTabProps) {
   const cwd = threadCwd(thread);
@@ -29,7 +29,7 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
   const focused = group.sessions.find((s) => s.id === group.focused);
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!isMod(e) || e.key.toLowerCase() !== 'f') return;
+    if (!isCommand(e, 'find')) return;
     e.preventDefault();
     setIsSearching(true);
   };

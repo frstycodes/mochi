@@ -22,10 +22,10 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Pane, PaneTabKind, Thread } from './model';
-import { PANE_TABS, paneShortcut, PANE_SHORTCUTS } from './pane/tabs';
+import { PANE_TABS } from './pane/tabs';
 import { layoutOf } from './store/panes';
-import { Shortcut } from './Shortcut';
-import { isMod } from './keys';
+import { BoundShortcut } from './Shortcut';
+import { commandOf, paneCommand } from './keymap';
 import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop, type PinnableKind } from './pane/headerPins';
 import { AgentLoader } from './AgentLoader';
 import { agentPhase, isWorking } from './agentPhase';
@@ -130,16 +130,16 @@ function noPane(threadId: string): Pane {
   return { threadId, isOpen: false, tabs: [], activeTab: '' };
 }
 
-/** mod Alt + a pane's letter toggles that pane in the focused split. `e.code`: Option turns `e.key` into symbols on macOS. */
+/** Each pane's toggle command (mod Alt + its letter by default) toggles that pane in the focused split. */
 function usePaneShortcuts(isFocused: boolean, onToggle: (kind: PaneTabKind) => void) {
   const toggle = useRef(onToggle);
   toggle.current = onToggle;
   useEffect(() => {
     if (!isFocused) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!isMod(e) || !e.altKey || e.shiftKey) return;
-      const kind = PINNABLE_KINDS.find((k) => `Key${PANE_SHORTCUTS[k]}` === e.code);
-      if (!kind) return;
+      const command = commandOf(e, PINNABLE_KINDS.map(paneCommand));
+      if (!command) return;
+      const kind = PINNABLE_KINDS[PINNABLE_KINDS.map(paneCommand).indexOf(command)];
       e.preventDefault();
       toggle.current(kind);
     };
@@ -390,7 +390,7 @@ function PinnedTab({ kind, isOpen, onToggle }: { kind: PinnableKind; isOpen: boo
         label={title}
         hint={
           <>
-            {isOpen ? `Close ${title}.` : `Open ${title} beside the chat.`} <Shortcut keys={paneShortcut(kind)} />
+            {isOpen ? `Close ${title}.` : `Open ${title} beside the chat.`} <BoundShortcut command={paneCommand(kind)} />
           </>
         }
         aria-pressed={isOpen}
@@ -432,7 +432,7 @@ function PanesMenu({ openKinds, onToggle }: { openKinds: PaneTabKind[]; onToggle
                 <Icon />
                 {title}
                 <DropdownMenuShortcut>
-                  <Shortcut keys={paneShortcut(kind)} />
+                  <BoundShortcut command={paneCommand(kind)} />
                 </DropdownMenuShortcut>
               </DropdownMenuCheckboxItem>
             );

@@ -10,7 +10,7 @@ import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './editors';
 import { previewKind } from './kinds';
 import { FilePreview } from './previews';
 import { useOpenFile, type OpenFile } from './useFiles';
-import { isMod } from '../keys';
+import { isCommand } from '../keymap';
 import { TooltipIconButton } from '../ui';
 
 // Lazy so CodeMirror parses only when a file is first opened as source.
@@ -24,7 +24,7 @@ export function FileView({ root, path, line, column, toolbar }: { root: string; 
   const [isComparing, setIsComparing] = useState(false);
   const showsPreview = !!kind && (!hasSource || mode === 'preview');
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!isMod(e) || e.key !== 's') return;
+    if (!isCommand(e, 'file-save')) return;
     e.preventDefault();
     void file.save();
   };

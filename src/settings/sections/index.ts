@@ -14,7 +14,8 @@ import { GeneralSection } from './general';
 import { GitSection } from './git';
 import { GoalsSection } from './goals';
 import { HarnessesSection } from './harnesses';
-import { KeyboardSection, SHORTCUTS, shortcutSettingId } from './keyboard';
+import { COMMANDS } from '../../keymap';
+import { KeyboardSection, shortcutRowId, shownCommands } from './keyboard';
 import { NotificationsSection } from './notifications';
 import { ProfilesSection } from './profiles';
 import { SchedulesSection } from './schedules';
@@ -124,7 +125,7 @@ export const SETTINGS_SECTIONS = [
     icon: Keyboard,
     component: KeyboardSection,
     get settings() {
-      return SHORTCUTS.filter((a) => a.exists?.() ?? true).map((a) => ({ id: shortcutSettingId(a), label: a.title, keywords: `shortcut key ${a.keywords ?? ''}` }));
+      return shownCommands(getProfiles().length).map((id) => ({ id: shortcutRowId(id), label: COMMANDS[id].title, keywords: `shortcut key keybinding ${COMMANDS[id].group}` }));
     },
   },
   {

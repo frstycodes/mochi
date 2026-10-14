@@ -6,7 +6,6 @@ import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Hierarchy, Inbox, M
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Kbd } from '@/components/ui/kbd';
 import {
   Sidebar,
   SidebarContent,
@@ -49,7 +48,8 @@ import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
-import { Shortcut } from './Shortcut';
+import { BoundShortcut } from './Shortcut';
+import { spaceCommand } from './keymap';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
@@ -182,10 +182,10 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               label="Search"
               onClick={onSearch}
               trailing={
-                <Shortcut keys={['mod', 'K']} className="hidden md:inline-flex" />
+                <BoundShortcut command="palette" className="hidden md:inline-flex" />
               }
             />
-            <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<Kbd className="hidden md:inline-flex">N</Kbd>} />
+            <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<BoundShortcut command="go-new" className="hidden md:inline-flex" />} />
             <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length > 0 ? queue.length : undefined} />
             {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NotificationBell spaceId={spaceId} />
@@ -603,7 +603,7 @@ function SpaceFooter() {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                {s.name} <Shortcut keys={['nav', String(i + 1)]} className="ml-1" />
+                {s.name} <BoundShortcut command={spaceCommand(i + 1)} className="ml-1" />
               </TooltipContent>
             </Tooltip>
           );
@@ -629,7 +629,7 @@ function DemoMenu({ paused }: { paused: boolean }) {
         <DropdownMenuItem onSelect={() => openSettings()}>
           <Setting2 />
           Settings
-          <Shortcut keys={['mod', ',']} className="ml-auto" />
+          <BoundShortcut command="go-settings" className="ml-auto" />
         </DropdownMenuItem>
         {showsDemoData() && (
           <DropdownMenuGroup>
