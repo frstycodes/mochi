@@ -26,7 +26,7 @@ export function recentFiles(activity: ActivityEntry[], opened: RecentFile[], roo
     .slice(0, limit);
 }
 
-// GAP: in memory only, so files opened in a Files tab drop off the new-tab page after a reload; the work log's files stay.
+// GAP: in memory only, so files opened in a Files tab drop off the empty pane's list after a reload; the work log's files stay.
 const opened = new Map<string, RecentFile[]>();
 const listeners = new Set<() => void>();
 

@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { PaneActions, PaneTitle } from './PaneHeader';
 import { Camera, CloseCircle, Code, Home, Link, LockKeyhole, Mobile, Moon, Play, Power, Record, StopCircle, Sun, Tablet, Text, TickCircle, X } from 'reicon-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -50,18 +51,19 @@ export function SimulatorTab({ thread }: PaneTabProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-1 px-2">
+      <PaneTitle>
         <DevicePicker simulators={simulators} value={device.udid} onChange={setPickedUdid} />
         <IconAction label={isBooted ? `Shut down ${device.name}` : `Boot ${device.name}`} onClick={() => setPower(!isBooted)}>
           <Power />
         </IconAction>
-        <span className="flex-1" />
+      </PaneTitle>
+      <PaneActions>
         <IconAction label={settings.appearance === 'dark' ? 'Switch to light appearance' : 'Switch to dark appearance'} disabled={!isBooted} onClick={() => settings.setAppearance(settings.appearance === 'dark' ? 'light' : 'dark')}>
           {settings.appearance === 'dark' ? <Moon /> : <Sun />}
         </IconAction>
         <ContentSizeMenu value={settings.contentSize} disabled={!isBooted} onChange={settings.setContentSize} />
         <DeepLinkPopover udid={device.udid} disabled={!isBooted} />
-      </div>
+      </PaneActions>
       {!host.isDesktop && <MockNotice />}
       <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-3">
         {!isBooted && <ShutDownState device={device} onBoot={() => setPower(true)} />}
@@ -107,7 +109,7 @@ const FAMILIES = [
 function DevicePicker({ simulators, value, onChange }: { simulators: Simulator[]; value: string; onChange: (udid: string) => void }) {
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger size="sm" aria-label="Simulator" className="max-w-56 min-w-0 border-transparent bg-transparent shadow-none dark:bg-transparent">
+      <SelectTrigger size="sm" aria-label="Simulator" className="-ml-2.5 max-w-56 min-w-0 border-transparent bg-transparent shadow-none dark:bg-transparent">
         <SelectValue />
       </SelectTrigger>
       <SelectContent position="popper" align="start">

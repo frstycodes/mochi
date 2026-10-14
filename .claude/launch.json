@@ -623,6 +623,31 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-happy-clarke-94f128/ae987ffd-afe2-45ce-ad25-b1c951e4285a/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-panes",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5711",
+        "--strictPort"
+      ],
+      "port": 5711
+    },
+    {
+      "name": "mochi-panes-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5713",
+        "--strictPort"
+      ],
+      "port": 5713,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-serene-goldstine-e4f446/2d6dc8f7-a5a4-4750-9693-34032234bac6/scratchpad/mochi-userdata"
+      }
     }
   ]
 }

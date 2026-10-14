@@ -1,81 +1,53 @@
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Global } from 'reicon-react';
-import { GitPullRequestIcon } from '@/icons/github';
+import { Button } from '@/components/ui/button';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { threadCwd } from '@/host/cwd';
-import { PANE_TAB_KINDS, type Thread } from '../model';
+import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { usePorts } from '../terminal/ports';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
+import { PINNABLE_KINDS } from './headerPins';
 import { useRecentFiles } from './recentFiles';
-import { PANE_TABS, type PaneTabProps } from './tabs';
-import { ThreadPrHoverCard } from '../chat/RefHoverCard';
+import { PANE_TABS } from './tabs';
 
-// A visual tab opens from its chat visual, never empty from here.
-const OPENABLE = PANE_TAB_KINDS.filter((k) => k !== 'new' && k !== 'visual');
-
-export function NewTab({ thread }: PaneTabProps) {
+/** The panes are shown but every one is closed: what can open, running dev servers and recent files. */
+export function NoPanes({ thread }: { thread: Thread }) {
   const { dispatch } = useHarness();
   const cwd = threadCwd(thread);
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea type="scroll" className="h-full">
       <div className="flex flex-col gap-6 p-4">
         <section className="flex flex-col gap-2">
-          <h3 className="type-caption text-subtle-foreground">Open</h3>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2">
-            {OPENABLE.map((kind) => {
+          <h2 className="type-caption text-subtle-foreground">Open a pane</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {PINNABLE_KINDS.map((kind) => {
               const { title, icon: Icon } = PANE_TABS[kind];
               return (
-                <Item key={kind} asChild variant="muted" size="sm" className="rounded-xl">
-                  <button type="button" onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind })}>
-                    <ItemMedia>
-                      <Icon className="size-4" />
-                    </ItemMedia>
-                    <ItemContent>
-                      <ItemTitle className="font-normal">{title}</ItemTitle>
-                    </ItemContent>
-                  </button>
-                </Item>
+                <Button key={kind} variant="outline" size="sm" onClick={() => dispatch({ type: 'pane-show-tab', threadId: thread.id, kind })}>
+                  <Icon />
+                  {title}
+                </Button>
               );
             })}
           </div>
         </section>
         {!!cwd && <DetectedPorts thread={thread} cwd={cwd} />}
         {!!cwd && <RecentFiles thread={thread} cwd={cwd} />}
-        {thread.prs.length > 0 && (
-          <section className="flex flex-col gap-1">
-            <h3 className="type-caption text-subtle-foreground">Pull requests</h3>
-            {thread.prs.map((pr) => (
-              <ThreadPrHoverCard key={pr.number} thread={thread} pr={pr} side="left" align="start">
-                <Item size="sm" tabIndex={0} className="px-2">
-                  <ItemMedia>
-                    <GitPullRequestIcon className="size-4 text-muted-foreground" />
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle className="font-normal">{pr.title}</ItemTitle>
-                    <ItemDescription>
-                      #{pr.number} · {pr.state}
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
-              </ThreadPrHoverCard>
-            ))}
-          </section>
-        )}
       </div>
     </ScrollArea>
   );
 }
 
-/** Dev servers listening under the thread's folder; one click opens it in a Preview tab in place of this one. */
+/** Dev servers listening under the thread's folder; one click opens it in Preview. */
 function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
   const { openPort } = usePaneOpeners(thread.id);
   const { ports } = usePorts(thread.id, cwd, openPort);
   if (!ports?.length) return null;
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="type-caption text-subtle-foreground">Running</h3>
+      <h2 className="type-caption text-subtle-foreground">Running</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-2">
         {ports.map((p) => (
           <Item key={`${p.pid}:${p.port}`} asChild variant="muted" size="sm" className="rounded-xl">
@@ -95,14 +67,14 @@ function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
   );
 }
 
-/** Files the agent read or edited and files opened in a Files tab; opens one in a Files tab in place of this one. */
+/** Files the agent read or edited and files opened in Files; opens one there. */
 function RecentFiles({ thread, cwd }: { thread: Thread; cwd: string }) {
   const { dispatch } = useHarness();
   const files = useRecentFiles(thread, cwd);
   if (!files.length) return null;
   return (
     <section className="flex flex-col gap-1">
-      <h3 className="type-caption text-subtle-foreground">Recent files</h3>
+      <h2 className="type-caption text-subtle-foreground">Recent files</h2>
       {files.map(({ path }) => {
         const slash = path.lastIndexOf('/');
         return (

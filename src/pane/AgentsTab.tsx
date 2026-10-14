@@ -20,6 +20,7 @@ import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
 import { VizThreadProvider } from '../viz/WidgetVisual';
 import { CallList, CallRow, DiffStat, DiffView, Expand } from '../WorkLog';
+import { PaneActions } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
 /** Every agent this thread's agent started, running first, each with its live log, a stop button and what it changed. */
@@ -31,10 +32,12 @@ export function AgentsTab({ thread, tab }: PaneTabProps) {
     // The log's file rows open in the thread's file viewer.
     <VizThreadProvider value={thread.id}>
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex h-11 shrink-0 items-center gap-2 px-4 type-meta text-muted-foreground">
-          <span className="tabular">{running} running</span>
-          <span className="tabular text-subtle-foreground">{agents.length - running} finished</span>
-        </div>
+        <PaneActions>
+          <span className="flex gap-2 px-1.5 type-meta text-muted-foreground">
+            <span className="tabular">{running} running</span>
+            <span className="tabular text-subtle-foreground">{agents.length - running} finished</span>
+          </span>
+        </PaneActions>
         <ScrollArea type="scroll" className="min-h-0 flex-1">
           <ol className="flex flex-col gap-2 px-2 pb-3">
             {agents.map((s) => (

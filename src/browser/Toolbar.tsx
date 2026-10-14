@@ -33,15 +33,14 @@ import { deviceSize, isDemoUrl } from './PageSurface';
 import { AddressBar } from './AddressBar';
 import { reloadPage, updatePage, type Page } from './pages';
 import { displayUrl } from './url';
-import { BROWSER_PANE_MENU } from '../menus/menus';
-import { ActionItems } from '../menus/ActionItems';
+import { PaneActions } from '../pane/PaneHeader';
 import { OverflowIcon } from '../ui';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const DPRS = [0, 1, 2, 3];
 const DESKTOP_ONLY = 'Needs the desktop app';
 
-export function BrowserToolbar({ thread, tabId, pageId, page }: { thread: Thread; tabId: string; pageId: string; page: Page }) {
+export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
   const isNative = !!page.hostId;
   const canPick = isNative || isDemoUrl(page.url);
   const command = (c: BrowserCommand) => {
@@ -68,15 +67,17 @@ export function BrowserToolbar({ thread, tabId, pageId, page }: { thread: Thread
       )}
       <AddressBar thread={thread} pageId={pageId} page={page} />
       {page.console.length > 0 && <ConsoleButton thread={thread} pageId={pageId} page={page} />}
-      <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
-        <Cursor />
-      </IconAction>
-      <IconAction label={page.device === RESPONSIVE ? 'Emulate a device' : 'Stop emulating'} pressed={page.device !== RESPONSIVE} onClick={() => updatePage(pageId, { device: page.device === RESPONSIVE ? DEVICES[1].id : RESPONSIVE })}>
-        <Mobile />
-      </IconAction>
-      <AutoReloadToggle thread={thread} pageId={pageId} page={page} />
-      <ScreenshotMenu pageId={pageId} page={page} />
-      <MoreMenu thread={thread} tabId={tabId} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
+      <PaneActions>
+        <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
+          <Cursor />
+        </IconAction>
+        <IconAction label={page.device === RESPONSIVE ? 'Emulate a device' : 'Stop emulating'} pressed={page.device !== RESPONSIVE} onClick={() => updatePage(pageId, { device: page.device === RESPONSIVE ? DEVICES[1].id : RESPONSIVE })}>
+          <Mobile />
+        </IconAction>
+        <AutoReloadToggle thread={thread} pageId={pageId} page={page} />
+        <ScreenshotMenu pageId={pageId} page={page} />
+      </PaneActions>
+      <MoreMenu thread={thread} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
     </div>
   );
 }
@@ -172,7 +173,7 @@ function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
   );
 }
 
-function MoreMenu({ thread, tabId, pageId, page, onHardReload }: { thread: Thread; tabId: string; pageId: string; page: Page; onHardReload: () => void }) {
+function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; pageId: string; page: Page; onHardReload: () => void }) {
   const isNative = !!page.hostId;
   const canCompare = isNative && !!threadCwd(thread) && !page.compare;
   const zoomBy = (step: 1 | -1) => {
@@ -197,8 +198,6 @@ function MoreMenu({ thread, tabId, pageId, page, onHardReload }: { thread: Threa
         <TooltipContent>More</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-56">
-        <ActionItems menu="dropdown" target={{ threadId: thread.id, tabId }} groups={BROWSER_PANE_MENU} />
-        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onHardReload}>
           Hard reload
         </DropdownMenuItem>

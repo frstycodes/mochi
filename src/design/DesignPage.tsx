@@ -641,7 +641,7 @@ function Recipes() {
         <Block title="Same files" use="Two live threads of one project edited the same file; never pauses either agent." wide>
           <QueueDecision item={{ id: 'q-collision-demo', kind: 'collision', threadId: rl.id, title: `"${adm.title}" is editing the same file`, detail: '', blocks: { steps: 0, threads: 2 }, createdAt: rl.startedAt, collision: { otherThreadId: adm.id, files: ['apps/api/middleware/ratelimit.ts'] } }} showThread />
         </Block>
-        <Block title="Side pane" use="Docked to the right of the chat, like Codex: Preview, Changes, Terminal and a new-tab page. The preview pops out into a floating window." wide>
+        <Block title="Side pane" use="One card per pane kind beside the chat, like Claude: each has its own header with its tabs or title, its actions, ⋯, expand and close. Panes stack in columns and fold to their header when there is no room." wide>
           <div className="h-[460px] overflow-hidden rounded-xl border">{admPane && <SidePane thread={adm} pane={admPane} />}</div>
         </Block>
         <Block title="Floating window" use="Chromeless, like Codex: hover to reveal close and put back over a blurred corner that spills past the edge. Drag anywhere and throw it to a corner, past the edge to tuck it away. The browser floats on its own while the agent drives it off screen, as a scaled-down, view-only mirror." wide>
