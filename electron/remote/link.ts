@@ -1,5 +1,8 @@
 import type { WebSocket } from 'ws';
 
+/** A socket can die without a close reaching either end; one unanswered ping in this long and it's dropped. */
+export const HEARTBEAT_MS = 30_000;
+
 /**
  * One connection between a device and this machine, whatever carries it: a LAN WebSocket or a relay channel. Binary only:
  * the relay forwards nothing else from devices, and after pairing every frame is ciphertext.
@@ -22,9 +25,10 @@ export interface Link {
   isOpen(): boolean;
 }
 
+/** Text frames are never protocol: they are the relay's heartbeat, so they never reach the reader. */
 export function socketLink(socket: WebSocket): RawLink {
   const reader = queuedReader();
-  socket.on('message', (data) => reader.deliver(toBytes(data as Buffer)));
+  socket.on('message', (data, isBinary) => isBinary && reader.deliver(toBytes(data as Buffer)));
   return {
     send: (bytes) => socket.readyState === socket.OPEN && socket.send(bytes),
     close: (code, reason) => socket.close(code, reason),
@@ -50,4 +54,18 @@ export function queuedReader() {
 /** ws hands a message over as one Buffer, fragments or an ArrayBuffer depending on `binaryType`. */
 export function toBytes(data: Buffer | ArrayBuffer | Buffer[]): Uint8Array {
   return new Uint8Array(Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data));
+}
+
+/** Pings every `HEARTBEAT_MS` and terminates the socket when nothing came back since the last one. */
+export function keepAlive(socket: WebSocket, ping: () => void) {
+  let isAwaitingPong = false;
+  const alive = () => (isAwaitingPong = false);
+  socket.on('message', alive);
+  socket.on('pong', alive);
+  const timer = setInterval(() => {
+    if (isAwaitingPong) return socket.terminate();
+    isAwaitingPong = true;
+    if (socket.readyState === socket.OPEN) ping();
+  }, HEARTBEAT_MS);
+  socket.on('close', () => clearInterval(timer));
 }

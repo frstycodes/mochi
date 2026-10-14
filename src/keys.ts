@@ -66,3 +66,8 @@ export function shortcutText(keys: Key[], isMac = IS_MAC) {
     .map((k) => keyName(k, isMac))
     .join(isMac ? ' ' : '+');
 }
+
+/** Keys typed into a field, or inside a dialog or menu, belong there, not to a page's own shortcuts. */
+export function isTyping(target: EventTarget | null) {
+  return target instanceof HTMLElement && !!target.closest('input:not([type=checkbox]):not([role=switch]), textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu]');
+}

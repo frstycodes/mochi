@@ -31,4 +31,17 @@ export const remote: RemoteHost = {
     throw new Error('Pairing needs the desktop app');
   },
   async forgetMachine() {},
+  async machines() {
+    return [];
+  },
+  onMachines: () => () => {},
+  async follow() {},
+  onMachineFrame: () => () => {},
+  async cacheMachine() {},
+  async cachedMachines() {
+    return [];
+  },
+  async command() {
+    return { isOk: false, error: 'Other computers need the desktop app' };
+  },
 };

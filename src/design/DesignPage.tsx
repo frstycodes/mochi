@@ -8,7 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Marker, MarkerContent } from '@/components/ui/marker';
-import { Questionnaire, QuestionnaireActions, QuestionnaireChoice, QuestionnaireChoices, QuestionnaireItem, QuestionnaireSubmit, QuestionnaireTitle } from '@/components/ui/questionnaire';
+import {
+  Questionnaire,
+  QuestionnaireActions,
+  QuestionnaireChoice,
+  QuestionnaireChoices,
+  QuestionnaireItem,
+  QuestionnaireSubmit,
+  QuestionnaireTitle,
+} from '@/components/ui/questionnaire';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +31,9 @@ import { Spinner } from '@/components/ui/spinner';
 import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
+import type { DeviceKind } from '../host/types/remote';
+import { DeviceIcon } from '../remote/DeviceIcon';
+import { MachinesProvider } from '../remote/useMachines';
 import { BoardView } from '../BoardView';
 import { seedQueue, type LineSlot, type Thread } from '../model';
 import { Orbit } from '../Orbit';
@@ -68,25 +79,27 @@ const SECTIONS = [
 export function DesignPage() {
   return (
     <HarnessProvider>
-      <ReviewModeProvider>
-        <ScrollArea className="h-full">
-          <DesignHeader />
-          <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
-            <Overview />
-            <Foundations />
-            <Actions />
-            <InputsSection />
-            <NavigationSection />
-            <Display />
-            <DataSection />
-            <Feedback />
-            <OverlaysSection />
-            <Conversation />
-            <Recipes />
-            <Rules />
-          </main>
-        </ScrollArea>
-      </ReviewModeProvider>
+      <MachinesProvider>
+        <ReviewModeProvider>
+          <ScrollArea className="h-full">
+            <DesignHeader />
+            <main className="mx-auto flex max-w-[1120px] flex-col gap-20 px-4 pt-10 pb-32 md:px-8">
+              <Overview />
+              <Foundations />
+              <Actions />
+              <InputsSection />
+              <NavigationSection />
+              <Display />
+              <DataSection />
+              <Feedback />
+              <OverlaysSection />
+              <Conversation />
+              <Recipes />
+              <Rules />
+            </main>
+          </ScrollArea>
+        </ReviewModeProvider>
+      </MachinesProvider>
       <Orbit />
       <Toaster position="bottom-right" />
     </HarnessProvider>
@@ -136,7 +149,8 @@ function Overview() {
     <section className="flex flex-col gap-3">
       <h1 className="type-display">Mochi design system</h1>
       <p className="max-w-[62ch] type-prose text-muted-foreground">
-        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and reicon, themed from DESIGN.md. Dark first, cool neutrals, squircle corners, hairline separation.
+        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and reicon, themed from DESIGN.md. Dark first, cool neutrals,
+        squircle corners, hairline separation.
       </p>
       <p className="flex flex-wrap items-center gap-1.5 type-caption text-subtle-foreground">
         Hold <Shortcut keys={['alt']} /> anywhere on this page to try Orbit.
@@ -191,7 +205,11 @@ const RADII = [
 
 function Foundations() {
   return (
-    <Section id="foundations" title="Foundations" intro="Colour roles with live contrast, the palette, type, radius, elevation and motion. Toggle the theme in the header to re-measure.">
+    <Section
+      id="foundations"
+      title="Foundations"
+      intro="Colour roles with live contrast, the palette, type, radius, elevation and motion. Toggle the theme in the header to re-measure."
+    >
       <Block title="Colour roles" use="Each surface with the ink it carries. Contrast is measured live in the current theme." wide>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {ROLE_PAIRS.map(([name, bg, fg]) => (
@@ -240,8 +258,12 @@ function Foundations() {
           </table>
         </div>
         <p className="max-w-[62ch] type-prose">
-          Running text sits at 15px in the chat. Paths like <code className="rounded-sm bg-muted px-1 font-mono type-caption">packages/cache/redis.ts</code> switch to mono, and{' '}
-          <a href="#design-rules" className="underline underline-offset-4">links</a> stay in the ink colour with an underline.
+          Running text sits at 15px in the chat. Paths like <code className="rounded-sm bg-muted px-1 font-mono type-caption">packages/cache/redis.ts</code>{' '}
+          switch to mono, and{' '}
+          <a href="#design-rules" className="underline underline-offset-4">
+            links
+          </a>{' '}
+          stay in the ink colour with an underline.
         </p>
       </Block>
       <Grid>
@@ -417,6 +439,8 @@ function Actions() {
   );
 }
 
+const DEVICE_SPECIMENS = ['mac', 'windows', 'linux', 'phone', undefined] satisfies (DeviceKind | undefined)[];
+
 function Display() {
   return (
     <Section id="display" title="Display" intro="Items for rows, cards for decisions, rings and bars for progress.">
@@ -446,6 +470,23 @@ function Display() {
             </Item>
           </div>
         </Block>
+        <Block title="Device" use="A computer or phone of yours, lit like Mochi in its own subtle colour; the same in both themes.">
+          <div data-design="devices" className="flex flex-col gap-4">
+            <div className="flex items-end gap-6">
+              {DEVICE_SPECIMENS.map((kind) => (
+                <DeviceIcon key={kind ?? 'unknown'} kind={kind} className="size-12" />
+              ))}
+            </div>
+            <div className="flex items-center gap-6 type-meta text-muted-foreground">
+              {DEVICE_SPECIMENS.map((kind) => (
+                <span key={kind ?? 'unknown'} className="flex items-center gap-1.5">
+                  <DeviceIcon kind={kind} />
+                  {kind ?? 'unknown'}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Block>
         <Block title="Card" use="Decisions and grouped content. Hairline ring, no shadow.">
           <Card size="sm">
             <CardHeader>
@@ -461,7 +502,10 @@ function Display() {
             </CardFooter>
           </Card>
         </Block>
-        <Block title="Progress" use="One segment per criterion, in the thread's line colour, the count beside it; green once all are met, spinning while the agent works, no count without criteria. Never a percent.">
+        <Block
+          title="Progress"
+          use="One segment per criterion, in the thread's line colour, the count beside it; green once all are met, spinning while the agent works, no count without criteria. Never a percent."
+        >
           <div className="flex flex-col gap-3">
             {RING_SAMPLES.map(({ met, total, isWorking }, i) => (
               <div key={i} className="flex items-center gap-2 type-caption text-muted-foreground">
@@ -485,7 +529,15 @@ function Display() {
         <Block title="Scroll area and separator" use="Long lists inside fixed panels.">
           <ScrollArea className="h-40 rounded-xl border">
             <div className="flex flex-col p-3">
-              {['Read packages/cache/index.ts', 'Edit packages/cache/redis.ts  +38 −0', 'Run pnpm --filter cache test', 'Edit packages/cache/index.ts  +4 −0', 'Read apps/api/gateway.ts', 'Run pnpm --filter api test ratelimit', 'Edit apps/api/middleware/ratelimit.ts  +22 −3'].map((t, i) => (
+              {[
+                'Read packages/cache/index.ts',
+                'Edit packages/cache/redis.ts  +38 −0',
+                'Run pnpm --filter cache test',
+                'Edit packages/cache/index.ts  +4 −0',
+                'Read apps/api/gateway.ts',
+                'Run pnpm --filter api test ratelimit',
+                'Edit apps/api/middleware/ratelimit.ts  +22 −3',
+              ].map((t, i) => (
                 <div key={t}>
                   {i > 0 && <Separator className="my-2" />}
                   <span className="font-mono type-caption text-muted-foreground">{t}</span>
@@ -519,7 +571,12 @@ function Feedback() {
         </Block>
         <Block title="Toast" use="Every reversible action gets an undo.">
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => toast('Thread settled', { description: 'Idle terminals closed, PR watches stopped.', action: { label: 'Undo', onClick: () => undefined } })}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                toast('Thread settled', { description: 'Idle terminals closed, PR watches stopped.', action: { label: 'Undo', onClick: () => undefined } })
+              }
+            >
               Settle a thread
             </Button>
             <Button variant="outline" onClick={() => toast.success('Merged #482')}>
@@ -562,7 +619,11 @@ function Conversation() {
   const { state } = useHarness();
   const adm = state.threads.find((t) => t.id === 'adm')!;
   return (
-    <Section id="conversation" title="Conversation" intro="AI Elements on live demo data: messages, reasoning, the tool-call chain, inline decisions and the prompt input. Reasoning and tool chains collapse like Codex's work log.">
+    <Section
+      id="conversation"
+      title="Conversation"
+      intro="AI Elements on live demo data: messages, reasoning, the tool-call chain, inline decisions and the prompt input. Reasoning and tool chains collapse like Codex's work log."
+    >
       <div className="flex h-[620px] flex-col overflow-hidden rounded-xl border">
         <SplitContext.Provider value={{ leafId: 'design', isFocused: false, isMulti: false, isZoomed: false, isFirst: false, isWide: true }}>
           <ChatView thread={adm} />
@@ -570,7 +631,12 @@ function Conversation() {
       </div>
       <Grid>
         <Block title="Questionnaire" use="How agents ask you things: one choice, number keys, then send.">
-          <Questionnaire items={[{ name: 'stripe', required: true, choices: [{ value: 'stub' }, { value: 'record' }] }]} defaultItem="stripe" shortcuts="numbers" onSubmit={(e) => (e.preventDefault(), toast('Answer sent'))}>
+          <Questionnaire
+            items={[{ name: 'stripe', required: true, choices: [{ value: 'stub' }, { value: 'record' }] }]}
+            defaultItem="stripe"
+            shortcuts="numbers"
+            onSubmit={(e) => (e.preventDefault(), toast('Answer sent'))}
+          >
             <QuestionnaireItem name="stripe" required>
               <QuestionnaireTitle>Stub Stripe webhooks or record fixtures?</QuestionnaireTitle>
               <QuestionnaireChoices>
@@ -583,7 +649,11 @@ function Conversation() {
             </QuestionnaireActions>
           </Questionnaire>
         </Block>
-        <Block wide title="Worktree setup" use="Tops a new worktree thread while its ignored files, dependencies and setup command get ready; the agent starts after. Open while it runs or waits on you, folded once done.">
+        <Block
+          wide
+          title="Worktree setup"
+          use="Tops a new worktree thread while its ignored files, dependencies and setup command get ready; the agent starts after. Open while it runs or waits on you, folded once done."
+        >
           <div className="flex flex-col gap-4">
             {SETUP_SAMPLES.map((setup) => (
               <SetupRow key={setup.status} thread={adm} setup={setup} />
@@ -617,18 +687,33 @@ function Recipes() {
             </SidebarProvider>
           </div>
         </Block>
-        <Block title="Summary card" use="Codex-style card under its header toggle: goal, changes, context, PRs, skills used, tools called, sources. Hover the goal for the full timeline.">
+        <Block
+          title="Summary card"
+          use="Codex-style card under its header toggle: goal, changes, context, PRs, skills used, tools called, sources. Hover the goal for the full timeline."
+        >
           <div className="flex h-[560px] justify-end overflow-hidden rounded-xl border">
             <SummaryPanel thread={rl} className="m-3 w-[300px] rounded-xl bg-popover shadow-popover" />
           </div>
         </Block>
-        <Block title="Report card" use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes." wide>
+        <Block
+          title="Report card"
+          use="End of a turn of work on a goal: what needs you, criteria with the agent's evidence, decisions, what's left, the turn's changes."
+          wide
+        >
           <ReportCard thread={reportFixture(rl)} />
         </Block>
-        <Block title="Report, criteria met" use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to run open_pr; with a PR open the chip is the next step; merged, Settle thread." wide>
+        <Block
+          title="Report, criteria met"
+          use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to run open_pr; with a PR open the chip is the next step; merged, Settle thread."
+          wide
+        >
           <ReportCard thread={metReportFixture(rl)} />
         </Block>
-        <Block title="Turn changes" use="Under a finished turn that changed files, like Claude's: totals and Undo, a row per file opening to its diff, the first three then Show more. Undo is disabled here: these threads have no worktree." wide>
+        <Block
+          title="Turn changes"
+          use="Under a finished turn that changed files, like Claude's: totals and Undo, a row per file opening to its diff, the first three then Show more. Undo is disabled here: these threads have no worktree."
+          wide
+        >
           <div className="flex flex-col gap-3">
             {turnChanges(changesFixture(rl).activity).map((turn) => (
               <TurnChangesCard key={turn.start} thread={changesFixture(rl)} turn={turn} />
@@ -639,17 +724,39 @@ function Recipes() {
           <QueueDecision item={decision} showThread />
         </Block>
         <Block title="Same files" use="Two live threads of one project edited the same file; never pauses either agent." wide>
-          <QueueDecision item={{ id: 'q-collision-demo', kind: 'collision', threadId: rl.id, title: `"${adm.title}" is editing the same file`, detail: '', blocks: { steps: 0, threads: 2 }, createdAt: rl.startedAt, collision: { otherThreadId: adm.id, files: ['apps/api/middleware/ratelimit.ts'] } }} showThread />
+          <QueueDecision
+            item={{
+              id: 'q-collision-demo',
+              kind: 'collision',
+              threadId: rl.id,
+              title: `"${adm.title}" is editing the same file`,
+              detail: '',
+              blocks: { steps: 0, threads: 2 },
+              createdAt: rl.startedAt,
+              collision: { otherThreadId: adm.id, files: ['apps/api/middleware/ratelimit.ts'] },
+            }}
+            showThread
+          />
         </Block>
-        <Block title="Side pane" use="One card per pane kind beside the chat, like Claude: each has its own header with its tabs or title, its actions, ⋯, expand and close. Panes stack in columns and fold to their header when there is no room." wide>
+        <Block
+          title="Side pane"
+          use="One card per pane kind beside the chat, like Claude: each has its own header with its tabs or title, its actions, ⋯, expand and close. Panes stack in columns and fold to their header when there is no room."
+          wide
+        >
           <div className="h-[460px] overflow-hidden rounded-xl border">{admPane && <SidePane thread={adm} pane={admPane} />}</div>
         </Block>
-        <Block title="Floating window" use="Chromeless, like Codex: hover to reveal close and put back over a blurred corner that spills past the edge. Drag anywhere and throw it to a corner, past the edge to tuck it away. The browser floats on its own while the agent drives it off screen, as a scaled-down, view-only mirror." wide>
+        <Block
+          title="Floating window"
+          use="Chromeless, like Codex: hover to reveal close and put back over a blurred corner that spills past the edge. Drag anywhere and throw it to a corner, past the edge to tuck it away. The browser floats on its own while the agent drives it off screen, as a scaled-down, view-only mirror."
+          wide
+        >
           <div className="relative h-[560px] overflow-hidden rounded-xl border bg-[repeating-linear-gradient(135deg,var(--muted)_0_8px,transparent_8px_16px)]">
             <PipLayer thread={adm} />
             {!admPane?.tabs.some((t) => t.isPopped && t.kind !== 'browser') && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Button onClick={() => admPane && dispatch({ type: 'pane-pop', threadId: 'adm', tabId: admPane.tabs[1].id, isPopped: true })}>Pop out the changes</Button>
+                <Button onClick={() => admPane && dispatch({ type: 'pane-pop', threadId: 'adm', tabId: admPane.tabs[1].id, isPopped: true })}>
+                  Pop out the changes
+                </Button>
               </div>
             )}
           </div>
@@ -748,7 +855,15 @@ const RING_SAMPLES = [
 function metReportFixture(rl: Thread): Thread {
   const at = rl.activity.at(-1)?.at ?? 0;
   const claim = { evidence: 'pnpm test: 214 passed', at, by: 'claude' as const };
-  return { ...reportFixture(rl), prs: [], criteria: [{ id: 'c1', text: 'Every 429 carries Retry-After', claim }, { id: 'c2', text: 'pnpm test passes', command: 'pnpm test', claim }], report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body'], left: [] } };
+  return {
+    ...reportFixture(rl),
+    prs: [],
+    criteria: [
+      { id: 'c1', text: 'Every 429 carries Retry-After', claim },
+      { id: 'c2', text: 'pnpm test passes', command: 'pnpm test', claim },
+    ],
+    report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body'], left: [] },
+  };
 }
 
 /** A goal thread as it looks after its agent claimed one criterion and reported. */
@@ -761,11 +876,32 @@ function reportFixture(rl: Thread): Thread {
       { id: 'c1', text: 'Every 429 carries Retry-After', claim: { evidence: 'curl -i /v1/search shows Retry-After: 30', at, by: 'claude' } },
       { id: 'c2', text: 'pnpm test passes', command: 'pnpm test' },
     ],
-    report: { at, by: 'claude', decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'], left: ['Per-key overrides in the admin UI'], question: 'Switch the 429 body to JSON now, or in a follow-up?' },
+    report: {
+      at,
+      by: 'claude',
+      decisions: ['Kept the plain-text 429 body so existing clients keep parsing it'],
+      left: ['Per-key overrides in the admin UI'],
+      question: 'Switch the 429 body to JSON now, or in a follow-up?',
+    },
   };
 }
 
-const CHANGED_FILES = ['packages/cache/redis.ts', 'apps/api/routes/admin/usage.ts', 'apps/web/routes/admin/usage.tsx', 'apps/api/middleware/ratelimit.ts', 'apps/api/middleware/__tests__/ratelimit.integration.test.ts', 'apps/api/gateway.ts', 'packages/db/schema/limits.ts', 'packages/db/migrations/0042_api_limits.sql', 'docs/api/limits.md', 'apps/web/components/charts/BarChart.tsx', 'apps/web/routes/admin/usage.css', 'scripts/load/ratelimit.k6.js', 'package.json', 'README.md'];
+const CHANGED_FILES = [
+  'packages/cache/redis.ts',
+  'apps/api/routes/admin/usage.ts',
+  'apps/web/routes/admin/usage.tsx',
+  'apps/api/middleware/ratelimit.ts',
+  'apps/api/middleware/__tests__/ratelimit.integration.test.ts',
+  'apps/api/gateway.ts',
+  'packages/db/schema/limits.ts',
+  'packages/db/migrations/0042_api_limits.sql',
+  'docs/api/limits.md',
+  'apps/web/components/charts/BarChart.tsx',
+  'apps/web/routes/admin/usage.css',
+  'scripts/load/ratelimit.k6.js',
+  'package.json',
+  'README.md',
+];
 
 /** One turn that changed 14 files, then a small one whose changes were undone. */
 function changesFixture(rl: Thread): Thread {
@@ -776,23 +912,73 @@ function changesFixture(rl: Thread): Thread {
     live: undefined,
     activity: [
       { at, who: 'you', kind: 'message', text: 'Wire the limits through the gateway and the admin page' },
-      ...CHANGED_FILES.map((path, i) => tool(`${i % 4 === 1 ? 'Write' : 'Edit'} ${path}  +${(i * 37) % 210 + 4} −${i % 3 === 0 ? 0 : i * 2}`)),
+      ...CHANGED_FILES.map((path, i) => tool(`${i % 4 === 1 ? 'Write' : 'Edit'} ${path}  +${((i * 37) % 210) + 4} −${i % 3 === 0 ? 0 : i * 2}`)),
       { at, who: 'claude', kind: 'message', text: 'Wired through. Tests pass.' },
       { at, who: 'you', kind: 'message', text: 'Bump the README too' },
       tool('Edit README.md  +3 −1'),
       { at, who: 'claude', kind: 'message', text: 'Done.' },
-      { at, who: 'harness', kind: 'event', text: 'Undid the changes to 1 file from "Bump the README too"', turnUndo: { start: CHANGED_FILES.length + 2, isUndone: true } },
+      {
+        at,
+        who: 'harness',
+        kind: 'event',
+        text: 'Undid the changes to 1 file from "Bump the README too"',
+        turnUndo: { start: CHANGED_FILES.length + 2, isUndone: true },
+      },
     ],
   };
 }
 
 const AGO = Date.now();
-const COPY = { id: 'copy', label: 'Copy .env, .env.local', status: 'done', startedAt: AGO - 14_000, endedAt: AGO - 13_800, output: '.env\n.env.local' } as const;
-const INSTALL = { id: 'install', label: 'Install dependencies with pnpm', command: 'pnpm install --frozen-lockfile --prefer-offline', startedAt: AGO - 13_800 } as const;
+const COPY = {
+  id: 'copy',
+  label: 'Copy .env, .env.local',
+  status: 'done',
+  startedAt: AGO - 14_000,
+  endedAt: AGO - 13_800,
+  output: '.env\n.env.local',
+} as const;
+const INSTALL = {
+  id: 'install',
+  label: 'Install dependencies with pnpm',
+  command: 'pnpm install --frozen-lockfile --prefer-offline',
+  startedAt: AGO - 13_800,
+} as const;
 const SCRIPT = { id: 'script', label: 'Run setup command', command: 'pnpm build:native' } as const;
 
 const SETUP_SAMPLES: WorktreeSetup[] = [
-  { status: 'running', startedAt: AGO - 14_000, steps: [COPY, { ...INSTALL, status: 'running', output: 'Lockfile is up to date, resolution step is skipped\nProgress: resolved 812, reused 812, downloaded 0, added 640\n' }, { ...SCRIPT, status: 'pending' }] },
-  { status: 'failed', startedAt: AGO - 14_000, steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 9_000 }, { ...SCRIPT, status: 'failed', startedAt: AGO - 9_000, endedAt: AGO - 6_000, exitCode: 1, output: 'node-gyp rebuild\ngyp ERR! find Python Python is not set from command line or npm configuration\n' }] },
-  { status: 'ready', startedAt: AGO - 14_000, endedAt: AGO, steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 2_000 }, { ...SCRIPT, status: 'done', startedAt: AGO - 2_000, endedAt: AGO }] },
+  {
+    status: 'running',
+    startedAt: AGO - 14_000,
+    steps: [
+      COPY,
+      {
+        ...INSTALL,
+        status: 'running',
+        output: 'Lockfile is up to date, resolution step is skipped\nProgress: resolved 812, reused 812, downloaded 0, added 640\n',
+      },
+      { ...SCRIPT, status: 'pending' },
+    ],
+  },
+  {
+    status: 'failed',
+    startedAt: AGO - 14_000,
+    steps: [
+      COPY,
+      { ...INSTALL, status: 'done', endedAt: AGO - 9_000 },
+      {
+        ...SCRIPT,
+        status: 'failed',
+        startedAt: AGO - 9_000,
+        endedAt: AGO - 6_000,
+        exitCode: 1,
+        output: 'node-gyp rebuild\ngyp ERR! find Python Python is not set from command line or npm configuration\n',
+      },
+    ],
+  },
+  {
+    status: 'ready',
+    startedAt: AGO - 14_000,
+    endedAt: AGO,
+    steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 2_000 }, { ...SCRIPT, status: 'done', startedAt: AGO - 2_000, endedAt: AGO }],
+  },
 ];

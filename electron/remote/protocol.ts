@@ -1,4 +1,4 @@
-import { SCOPES, type CommandResult, type RemoteCommand, type Scope } from '../../src/host/types/remote.ts';
+import { DEVICE_KINDS, SCOPES, type CommandResult, type DeviceKind, type RemoteCommand, type Scope, type StreamFrame } from '../../src/host/types/remote.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 
 /** Bumped on any frame change; a device on another version is refused rather than misread. */
@@ -37,10 +37,10 @@ export interface CommandFrame {
 }
 
 export type ServerFrame =
-  | { type: 'welcome'; version: number; deviceId: string; machineName: string; scopes: Scope[] }
+  /** `addresses`: where the machine listens on its LAN or Tailscale, so the device tries those before the relay next time. */
+  | { type: 'welcome'; version: number; deviceId: string; machineName: string; machineKind: DeviceKind; scopes: Scope[]; addresses: string[] }
   | { type: 'refused'; reason: string }
-  | { type: 'snapshot'; epoch: string; seq: number; saved: unknown }
-  | { type: 'action'; epoch: string; seq: number; action: unknown }
+  | StreamFrame
   | ({ type: 'result'; id: string } & CommandResult);
 
 const MAX_ID = 128;
@@ -56,6 +56,20 @@ export function parseHello(raw: string): HelloFrame | string {
   if (!isString(resume?.epoch, MAX_ID) || !resume.epoch || !Number.isSafeInteger(resume.seq) || (resume.seq as number) < 0) return 'resume must be { epoch, seq }';
   return { type: 'hello', version: PROTOCOL_VERSION, resume: { epoch: resume.epoch, seq: resume.seq as number } };
 }
+
+/** This computer's kind, from its OS. */
+export const THIS_KIND: DeviceKind = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'windows' : 'linux';
+
+/** A kind from the other side, or undefined for one this version doesn't know. */
+export const asKind = (value: unknown): DeviceKind | undefined => (DEVICE_KINDS.includes(value as never) ? (value as DeviceKind) : undefined);
+
+/** A machine's frame on the device. The machine proved its key at pairing, so only the shape is checked. */
+export function parseServerFrame(raw: string): ServerFrame | null {
+  const frame = parseJson(raw);
+  return SERVER_FRAMES.includes(frame?.type as never) ? (frame as unknown as ServerFrame) : null;
+}
+
+const SERVER_FRAMES = ['welcome', 'refused', 'snapshot', 'action', 'result'] satisfies ServerFrame['type'][];
 
 export function parseCommand(raw: string): CommandFrame | string {
   const frame = parseJson(raw);
@@ -130,7 +144,10 @@ export function visibleSnapshot<T extends SavedShape>(saved: T, scopes: readonly
   return { ...saved, threads: saved.threads.map((t) => ({ ...t, activity: t.activity.map(({ patch: _patch, ...entry }) => entry) })), checkpoints: {} };
 }
 
-// GAP: the stream carries the machine's local UI actions too (layout, panes); `multi-machine` decides which a device applies.
+/**
+ * The stream carries the machine's local UI actions too (layout, panes). A device applies every action through the store's
+ * own reducer to a scratch store and reads only its threads and queue (`src/remote/mirror.ts`), so they move nothing there.
+ */
 export function visibleAction(action: unknown, scopes: readonly Scope[]): unknown {
   if (scopes.includes('code')) return action;
   const a = action as { type?: string; event?: { type?: string; patch?: string } };

@@ -51,6 +51,11 @@ import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
 import { Shortcut } from './Shortcut';
 import { BranchIcon, BranchName } from './git/BranchLabel';
+import { remoteDecisions, remoteThreads } from './remote/mirror';
+import { openRemoteThread, useRemoteThreadRoute } from './remote/open';
+import { DeviceIcon } from './remote/DeviceIcon';
+import { MachinePresence } from './remote/MachinePresence';
+import { RemoteScope, useMachines } from './remote/useMachines';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
@@ -150,6 +155,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
   const view = useView(spaceId);
   const threads = useSpaceThreads(spaceId);
   const queue = useSpaceQueue(spaceId);
+  const remoteQueueCount = useMachines().machines.reduce((n, m) => n + (m.state ? remoteDecisions(m.state).length : 0), 0);
   const review = useReviewEntry(spaceId);
   const { setOpenMobile } = useSidebar();
   const go = (v: View) => {
@@ -186,7 +192,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               }
             />
             <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<Kbd className="hidden md:inline-flex">N</Kbd>} />
-            <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length > 0 ? queue.length : undefined} />
+            <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length + remoteQueueCount > 0 ? queue.length + remoteQueueCount : undefined} />
             {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NotificationBell spaceId={spaceId} />
             <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
@@ -199,15 +205,16 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
         <ThreadList pinned={pinned} active={active} row={row} selectedIds={selection.ids} />
 
         {settled.length > 0 && (
-          <SettledSection count={settled.length}>
+          <SettledGroup count={settled.length}>
             {settled.map((t) => (
               <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
                 <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
               </ThreadRowMenu>
             ))}
-          </SettledSection>
+          </SettledGroup>
         )}
       </div>
+      <MachineThreads />
     </>
   );
 }
@@ -216,7 +223,8 @@ const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 const ACCORDION = { duration: 0.2, ease: EASE_OUT };
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
 
-function SettledSection({ count, children }: { count: number; children: ReactNode }) {
+/** Settled threads, folded under a count. */
+function SettledGroup({ count, children }: { count: number; children: ReactNode }) {
   const [isOpen, setOpen] = useState(false);
   const reduce = useReducedMotionConfig();
   const contentId = useId();
@@ -247,6 +255,46 @@ function SettledSection({ count, children }: { count: number; children: ReactNod
       </AnimatePresence>
     </SidebarGroup>
   );
+}
+
+/** Your other computers' threads, each under its computer's name: they run there, and open here to follow and steer. */
+function MachineThreads() {
+  const { machines } = useMachines();
+  const route = useRemoteThreadRoute();
+  return machines.map(({ machine, state }) => {
+    const { active, settled } = state ? remoteThreads(state) : { active: [], settled: [] };
+    const row = (t: Thread) => (
+      <SidebarMenuItem key={t.id} data-remote-thread-row={t.id}>
+        <ThreadItem thread={t} isActive={route?.machineId === machine.id && route.threadId === t.id} onSelect={() => openRemoteThread({ machineId: machine.id, threadId: t.id })} />
+      </SidebarMenuItem>
+    );
+    const label = (
+      <SidebarGroupLabel className="gap-1.5">
+        <DeviceIcon kind={machine.kind} className="size-3.5! shrink-0" />
+        <span className="min-w-0 truncate">{machine.name}</span>
+        <MachinePresence machine={machine} />
+      </SidebarGroupLabel>
+    );
+    if (!state)
+      return (
+        <SidebarGroup key={machine.id}>
+          {label}
+        </SidebarGroup>
+      );
+    // Settled folds below as its own group, level with the machine's, as this computer's own does.
+    return (
+      <RemoteScope key={machine.id} machine={machine} state={state}>
+        <SidebarGroup>
+          {label}
+          <SidebarMenu>
+            {active.map(row)}
+            {active.length === 0 && <li className="px-2 type-caption text-subtle-foreground">No active threads</li>}
+          </SidebarMenu>
+        </SidebarGroup>
+        {settled.length > 0 && <SettledGroup count={settled.length}>{settled.map(row)}</SettledGroup>}
+      </RemoteScope>
+    );
+  });
 }
 
 /**

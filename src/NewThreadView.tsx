@@ -28,6 +28,8 @@ import { toast } from 'sonner';
 import { imageProblem, sentImages } from './chat/images';
 import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from './git/WorkspacePicker';
 import type { WorkspaceDraft } from './git/workspace';
+import { RunsOnMenu } from './remote/RunsOnMenu';
+import { useMachines } from './remote/useMachines';
 
 const MATCH_THRESHOLD = 0.5;
 const MAX_SHORTCUTS = 3;
@@ -81,6 +83,9 @@ function NewThread() {
   const [extraDirs, setExtraDirs] = useState<string[]>([]);
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const [dependOn, setDependOn] = useState<Match | null>(null);
+  const machines = useMachines();
+  const [runsOn, setRunsOn] = useState<string | null>(null);
+  const remote = machines.machines.find((m) => m.machine.id === runsOn)?.machine;
   const draft = textInput.value;
   // Picks only ride along with something typed or attached; on their own they aren't a draft.
   const hasDraft = !!draft || attachments.files.length > 0;
@@ -104,6 +109,16 @@ function NewThread() {
   const start = async ({ text, files }: PromptInputMessage) => {
     const title = text.trim();
     if (!title) return;
+    // GAP: another computer's thread starts folderless, with its defaults: its projects and models aren't listed here yet.
+    if (remote) {
+      if (files.length > 0) {
+        toast.error(`Images can’t go to ${remote.name} yet`);
+        return false;
+      }
+      const result = await machines.run(remote.id, { type: 'create', title, provider, project: null });
+      if (!result.isOk) return false;
+      return void toast.success(`Started on ${remote.name}`, { description: 'It’s in the sidebar under that computer.' });
+    }
     const problem = (project && workspace.error) || imageProblem(files);
     if (problem) {
       toast.error(problem);
@@ -137,19 +152,25 @@ function NewThread() {
               slashItems={slashItems}
               {...slash.textareaProps}
               onSend={start}
-              submitLabel={linked ? 'Start thread, linked' : 'Start thread'}
-              meter={<ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
-              placeholder={project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
+              submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
+              isTextOnly={!!remote}
+              meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
+              placeholder={remote ? `Ask anything; runs on ${remote.name}, no folder attached` : project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
             />
           </ComposerCard>
         </div>
         <ComposerMeta>
-          <ProjectPicker value={project} onChange={changeProject} />
-          {!!project && <WorkspaceControls workspace={workspace} />}
-          {!!project && <ExtraFolders project={project} value={extraDirs} onChange={setExtraDirs} />}
-          {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+          <RunsOnMenu value={runsOn} onChange={setRunsOn} />
+          {!remote && (
+            <>
+              <ProjectPicker value={project} onChange={changeProject} />
+              {!!project && <WorkspaceControls workspace={workspace} />}
+              {!!project && <ExtraFolders project={project} value={extraDirs} onChange={setExtraDirs} />}
+              {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+            </>
+          )}
         </ComposerMeta>
-        {!!project && <WorkspaceNotes workspace={workspace} />}
+        {!remote && !!project && <WorkspaceNotes workspace={workspace} />}
       </motion.div>
 
       <div className="flex flex-col gap-5 pt-4 pb-16">
