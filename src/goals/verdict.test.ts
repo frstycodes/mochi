@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { bareState, type RefState } from '../chat/refs.ts';
 import type { Criterion, Step, Thread } from '../model.ts';
-import { idleVerdict, verdictTiles } from './verdict.ts';
+import { failureLine, idleVerdict, verdictTiles } from './verdict.ts';
 
 const met = (id: string, command?: string): Criterion => ({ id, text: id, command, check: { status: 'passed', at: 1 } });
 const failed = (id: string, command: string): Criterion => ({ id, text: id, command, check: { status: 'failed', at: 1, output: '5 failed' } });
@@ -101,4 +101,11 @@ test('the evidence strip reads the #135 turn: a failing check, an open PR with C
     ],
   );
   assert.deepEqual(tiles[1].bars, ['success', 'destructive']);
+});
+
+test("a failed check is summed up by its error line, not Node's trailing version line", () => {
+  const output = 'node:internal/modules/run_main:107\n    triggerUncaughtException(\n\nAssertionError [ERR_ASSERTION]: -1 == 5\n    at file:///sum.test.mjs:3:8\n\nNode.js v26.0.0';
+  assert.equal(failureLine(output), 'AssertionError [ERR_ASSERTION]: -1 == 5');
+  assert.equal(failureLine('exit 2\nsomething odd'), 'something odd');
+  assert.equal(failureLine(undefined), undefined);
 });

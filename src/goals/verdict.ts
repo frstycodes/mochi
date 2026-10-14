@@ -234,8 +234,14 @@ export function prGate(thread: Thread, policy: 'block' | 'warn' = 'block') {
 export function gateRefusal(thread: Thread, blocking: Gap[]) {
   const reasons = blocking.map((g) => {
     const check = thread.criteria?.find((c) => c.id === g.criterionId)?.check;
-    const last = check?.output?.trim().split('\n').at(-1);
-    return last ? `${g.text} (${last})` : g.text;
+    const line = failureLine(check?.output);
+    return line ? `${g.text} (${line})` : g.text;
   });
   return `open_pr refused: ${blocking.length} critical ${blocking.length === 1 ? 'gap' : 'gaps'}: ${reasons.join('; ')}. Fix ${blocking.length === 1 ? 'it' : 'them'}, or ask the user to choose Open anyway on the verdict card.`;
+}
+
+/** The line of a failed check's output that says what failed: the first error-looking line, else the last. Node ends a crash with its version, so the last line alone reads "Node.js v26.0.0". */
+export function failureLine(output: string | undefined) {
+  const lines = output?.trim().split('\n').map((l) => l.trim()).filter(Boolean) ?? [];
+  return lines.find((l) => /\b(error|fail(ed|ing|ure)?|assert)/i.test(l)) ?? lines.at(-1);
 }
