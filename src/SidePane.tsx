@@ -144,7 +144,7 @@ function PaneCard({
       onFocusCapture={focus}
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       className={cn(
-        'pane-card absolute flex flex-col overflow-hidden rounded-xl border bg-card outline-none',
+        'pane-card absolute flex flex-col overflow-hidden rounded-lg border bg-card outline-none',
         showFocus && isFocused ? 'border-foreground/20' : 'border-border',
         isExpanded && 'z-20',
         isMoving && 'opacity-60',
@@ -236,7 +236,7 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
 
 function EmptyPanes({ thread, rect }: { thread: Thread; rect: PaneRect }) {
   return (
-    <section aria-label="Panes" data-panes-of={thread.id} data-side-pane style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} className="pane-card absolute overflow-hidden rounded-xl border bg-card">
+    <section aria-label="Panes" data-panes-of={thread.id} data-side-pane style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} className="pane-card absolute overflow-hidden rounded-lg border bg-card">
       <NoPanes thread={thread} />
     </section>
   );
