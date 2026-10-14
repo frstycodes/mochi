@@ -1,14 +1,19 @@
 import { isAbsolute } from 'node:path';
-import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost } from '../../src/host/types/browser.ts';
+import { app, net, shell } from 'electron';
+import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost, BrowserMenuCommand } from '../../src/host/types/browser.ts';
 import { startCompare, stopCompare } from '../browser/compare.ts';
+import { browserLabel, parseSuggestions, SUGGEST_URLS, type SuggestEngine } from '../browser/external.ts';
 import { resolveCwd } from '../pty/cwd.ts';
-import { actOnView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { actOnView, findInView, menuCommandInView, peekView, stopFindInView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, isAllowedUrl, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
 // Under main's 30s limit for one Mochi call.
 const MAX_WAIT_MS = 25_000;
 const COMMANDS = ['back', 'forward', 'reload', 'hard-reload', 'stop'] satisfies BrowserCommand[];
 const DEVTOOLS = ['docked', 'detached', 'closed'] satisfies BrowserDevtools[];
+const MENU_COMMANDS = ['cut', 'copy', 'paste', 'select-all', 'copy-image', 'save-image', 'inspect'] satisfies BrowserMenuCommand[];
+const ENGINES = Object.keys(SUGGEST_URLS) as SuggestEngine[];
+const SUGGEST_TIMEOUT_MS = 2500;
 
 export const browser = {
   async create(sender, options) {
@@ -81,6 +86,36 @@ export const browser = {
   },
   async compareStop(_sender, threadId) {
     await stopCompare(threadKey(threadId));
+  },
+  async find(sender, id, text, options) {
+    const o = record(options, 'options');
+    findInView(sender, viewId(id), string(text, 'text', 1000), { forward: bool(o.forward, 'forward'), isNewSearch: bool(o.isNewSearch, 'isNewSearch'), matchCase: bool(o.matchCase, 'matchCase') });
+  },
+  async stopFind(sender, id) {
+    stopFindInView(sender, viewId(id));
+  },
+  async menuCommand(sender, id, command, at, saveUrl) {
+    const p = record(at, 'at');
+    const target = saveUrl === undefined ? undefined : string(saveUrl, 'url', 1_000_000);
+    if (target !== undefined && !isAllowedUrl(target) && !target.startsWith('data:image/')) throw new TypeError('url must be http(s) or an image data URL');
+    menuCommandInView(sender, viewId(id), oneOf(command, MENU_COMMANDS, 'command'), { x: number(p.x, 'x', -1e5, 1e5), y: number(p.y, 'y', -1e5, 1e5) }, target);
+  },
+  async peek(sender, id) {
+    return peekView(sender, viewId(id));
+  },
+  async openExternal(_sender, to) {
+    const target = url(to);
+    if (!/^https?:/i.test(target)) throw new TypeError('url must be http(s)');
+    await shell.openExternal(target);
+  },
+  async defaultBrowser() {
+    return browserLabel(app.getApplicationNameForProtocol('https://'), app.getName());
+  },
+  async suggest(_sender, engine, query) {
+    const q = string(query, 'query', 500).trim();
+    if (!q) return [];
+    const res = await net.fetch(SUGGEST_URLS[oneOf(engine, ENGINES, 'engine')] + encodeURIComponent(q), { signal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS) }).catch(() => null);
+    return res?.ok ? parseSuggestions(await res.json().catch(() => null)) : [];
   },
 } satisfies Handlers<BrowserHost>;
 

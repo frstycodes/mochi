@@ -20,6 +20,11 @@ Today: tabs for Preview (browser), Changes, Terminal, New tab; pop-out PiP (`src
 ### Browser
 - [x] Real webview (Electron `WebContentsView` / Tauri webview), not a mock
 - [x] Address bar with history, back / forward / reload, hard reload, zoom
+- [x] Address bar suggestions (cmdk list under the field): what you typed (go or search), the thread's other tabs (switch to), its running dev servers, history with titles and site favicons, the search engine's suggestions; arrows + Enter, inline completion of the top URL match (→ / End accepts)
+- [x] Find in page (⌘F from the pane or the page): n of m, previous / next, match case, Esc closes
+- [x] Page right-click menu in the app's own menu style: link (new tab, open in the default browser, copy), image (open, save, copy, copy address), selection (copy, search), text field (cut, copy, paste, select all), else back / forward / reload; Inspect element docks DevTools
+- [x] Tab right-click and ⋮: Copy URL, "Open in <default browser>" (named from the OS's https handler, "your browser" when it doesn't say). GAP: Linux name lookup not run on a real Linux box
+- [x] Menus, popovers and dialogs over the page show a live snapshot of it (refreshed every 400ms) instead of a black box; overlays elsewhere leave the page live. GAP: verified by tests and typecheck only, not yet by hand in both themes
 - [x] Multiple browser tabs per thread
 - [x] Device emulation: preset sizes, custom size, rotate, DPR, touch
 - [x] Light / dark `prefers-color-scheme` toggle, reduced-motion toggle

@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Bug, Camera, Cursor, Danger, Mobile, PhoneRotate, Refresh, RefreshCircle, TriangleWarning, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,15 +30,18 @@ import { ProviderMark } from '@/ui';
 import { consoleReport, openCompare, screenshot, toggleAutoReload, togglePick } from './actions';
 import { DEVICES, RESPONSIVE } from './devices';
 import { deviceSize, isDemoUrl } from './PageSurface';
-import { reloadPage, updatePage, useAddressHistory, type Page } from './pages';
-import { displayUrl, normalizeUrl } from './url';
+import { AddressBar } from './AddressBar';
+import { reloadPage, updatePage, type Page } from './pages';
+import { displayUrl } from './url';
+import { BROWSER_PANE_MENU } from '../menus/menus';
+import { ActionItems } from '../menus/ActionItems';
 import { OverflowIcon } from '../ui';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
 const DPRS = [0, 1, 2, 3];
 const DESKTOP_ONLY = 'Needs the desktop app';
 
-export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
+export function BrowserToolbar({ thread, tabId, pageId, page }: { thread: Thread; tabId: string; pageId: string; page: Page }) {
   const isNative = !!page.hostId;
   const canPick = isNative || isDemoUrl(page.url);
   const command = (c: BrowserCommand) => {
@@ -63,7 +66,7 @@ export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageI
           <Refresh />
         </IconAction>
       )}
-      <AddressBar pageId={pageId} page={page} />
+      <AddressBar thread={thread} pageId={pageId} page={page} />
       {page.console.length > 0 && <ConsoleButton thread={thread} pageId={pageId} page={page} />}
       <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
         <Cursor />
@@ -73,49 +76,8 @@ export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageI
       </IconAction>
       <AutoReloadToggle thread={thread} pageId={pageId} page={page} />
       <ScreenshotMenu pageId={pageId} page={page} />
-      <MoreMenu thread={thread} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
+      <MoreMenu thread={thread} tabId={tabId} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
     </div>
-  );
-}
-
-function AddressBar({ pageId, page }: { pageId: string; page: Page }) {
-  const history = useAddressHistory();
-  const listId = useId();
-  const [draft, setDraft] = useState<string | null>(null);
-
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (draft === null) return;
-    const url = normalizeUrl(draft);
-    setDraft(null);
-    e.currentTarget.querySelector('input')?.blur();
-    updatePage(pageId, { url, error: null });
-    if (page.hostId) void host.browser.navigate(page.hostId, url);
-  };
-
-  return (
-    <form onSubmit={submit} className="mx-1 min-w-0 flex-1">
-      <Input
-        aria-label="Address"
-        list={listId}
-        spellCheck={false}
-        autoCapitalize="off"
-        value={draft ?? displayUrl(page.url)}
-        onFocus={(e) => {
-          setDraft(page.url);
-          requestAnimationFrame(() => e.target.select());
-        }}
-        onBlur={() => setDraft(null)}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === 'Escape' && e.currentTarget.blur()}
-        className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
-      />
-      <datalist id={listId}>
-        {history.map((url) => (
-          <option key={url} value={url} />
-        ))}
-      </datalist>
-    </form>
   );
 }
 
@@ -210,7 +172,7 @@ function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
   );
 }
 
-function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; pageId: string; page: Page; onHardReload: () => void }) {
+function MoreMenu({ thread, tabId, pageId, page, onHardReload }: { thread: Thread; tabId: string; pageId: string; page: Page; onHardReload: () => void }) {
   const isNative = !!page.hostId;
   const canCompare = isNative && !!threadCwd(thread) && !page.compare;
   const zoomBy = (step: 1 | -1) => {
@@ -235,6 +197,8 @@ function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; page
         <TooltipContent>More</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-56">
+        <ActionItems menu="dropdown" target={{ threadId: thread.id, tabId }} groups={BROWSER_PANE_MENU} />
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onHardReload}>
           Hard reload
         </DropdownMenuItem>
