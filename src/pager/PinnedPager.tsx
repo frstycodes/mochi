@@ -1,5 +1,4 @@
 import { useDeferredValue, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
-import { useReducedMotionConfig } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { haptic } from '../haptic';
 import { LeafView, Workspace, WorkspaceEffects } from '../layout/Workspace';
@@ -10,7 +9,6 @@ import { useHarness, type State } from '../store';
 import { useSnapPager } from '../useSnapPager';
 import { isHot, OFF_PIN, slotsOf } from './slots';
 import { usePagerKeys } from './usePagerKeys';
-import { useDragToSwipe } from './useDragToSwipe';
 import { useOnePagePerSwipe } from './useOnePagePerSwipe';
 
 /**
@@ -21,7 +19,6 @@ import { useOnePagePerSwipe } from './useOnePagePerSwipe';
 export function PinnedPager() {
   const { state, dispatch } = useHarness();
   useWindowSyncHost();
-  const reduce = !!useReducedMotionConfig();
   const slots = slotsOf(state);
   const live = liveLeaf(state, slots.ids[slots.center]);
   // Every pinned page stays mounted (pins cap at five, and a virtualized thread is cheap), so a quick run of swipes never lands on an empty page.
@@ -33,14 +30,13 @@ export function PinnedPager() {
   const open = (id: string | undefined) => {
     if (id && id !== OFF_PIN) dispatch({ type: 'go', view: { kind: 'thread', id } });
   };
-  // A swipe commits once it's over (`useDragToSwipe` and `useOnePagePerSwipe` fire that scrollend), not on the ones raised along the way.
+  // A swipe commits once it's over (`useOnePagePerSwipe` fires that scrollend), not on the ones raised along the way.
   const onSettle = (page: number) => {
     const el = scroller.current;
-    if (el && el.dataset.swiping === undefined && el.dataset.wheeling === undefined) open(slots.ids[page]);
+    if (el && el.dataset.wheeling === undefined) open(slots.ids[page]);
   };
   useSnapPager(scroller, { axis: 'x', index: slots.center, onSettle, onCross: haptic });
   usePagerKeys();
-  useDragToSwipe(scroller, reduce);
   useOnePagePerSwipe(scroller);
   useCaretFollowsPage(slots.ids[slots.center]);
   const pages = slots.ids.length;
@@ -52,7 +48,7 @@ export function PinnedPager() {
         ref={scroller}
         // Inline: the global unlayered `* { scrollbar-width: thin }` in index.css beats any Tailwind utility.
         style={{ scrollbarWidth: 'none' }}
-        className="h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain data-swiping:cursor-grabbing data-swiping:select-none"
+        className="h-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
       >
         <div className="relative h-full" style={{ width: `${pages * 100}%` }}>
           {slots.ids.map((_, i) => (
