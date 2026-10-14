@@ -32,6 +32,7 @@ import { readEmbeddedReplay } from './replay/export';
 import { useReplayRoute } from './replay/open';
 import { ReplayPage, ReplayView } from './replay/ReplayView';
 import { ColorThemeController } from './themes/ColorThemeController';
+import { DeviceApprovalLayer } from './remote/DeviceApproval';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
@@ -60,6 +61,7 @@ export function App() {
               <FileViewer />
               <ScheduleLayer />
               <GoalEditorLayer />
+              <DeviceApprovalLayer />
               <Toaster position="bottom-right" />
             </HarnessProvider>
           )}

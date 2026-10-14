@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import sodium from 'libsodium-wrappers';
-import { createChallenge, proveKey, verifyProof } from './auth.ts';
 import { loadDeviceKeys, type DeviceKeys } from './keys.ts';
 import { createHandshake, E2EError, type E2EErrorCode, type Session } from './session.ts';
 
@@ -84,15 +83,6 @@ test('frames from another session are rejected', async () => {
   const ours = await pair(machine, device);
   const theirs = await pair(keypair(), device);
   assert.throws(() => ours.device.decrypt(theirs.machine.encrypt(bytes('x'))), rejects('tampered'));
-});
-
-test('the challenge proves the device holds its key', async () => {
-  const device = keypair();
-  const challenge = await createChallenge();
-  assert.equal(await verifyProof(device.publicKey, challenge, await proveKey(device, challenge)), true);
-  assert.equal(await verifyProof(device.publicKey, challenge, await proveKey(keypair(), challenge)), false);
-  assert.equal(await verifyProof(device.publicKey, await createChallenge(), await proveKey(device, challenge)), false);
-  assert.equal(await verifyProof(device.publicKey, challenge, new Uint8Array(3)), false);
 });
 
 function fakeStorage(backend: 'basic_text' | 'gnome_libsecret' | 'unknown', available = true) {

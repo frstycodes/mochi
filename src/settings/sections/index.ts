@@ -110,6 +110,9 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'remoteEnabled', label: 'Let devices control this computer', keywords: 'remote control phone laptop server connect' },
       { id: 'remoteNetwork', label: 'Allow devices on this network', keywords: 'lan tailscale wifi firewall remote' },
+      { id: 'remoteAnywhere', label: 'Reach this computer from anywhere', keywords: 'relay internet away remote account' },
+      { id: 'pairedDevices', label: 'Paired devices', keywords: 'remove trusted devices approve' },
+      { id: 'otherComputers', label: 'Your other computers', keywords: 'pair computer machine account relay' },
       { id: 'machineName', label: 'Computer name', keywords: 'machine host name remote' },
       { id: 'connectedDevices', label: 'Connected devices', keywords: 'remote paired' },
     ],

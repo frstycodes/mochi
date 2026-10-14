@@ -1,6 +1,6 @@
 import type { RemoteHost } from '../types/remote.ts';
 
-const OFF = { settings: { isEnabled: false, allowsNetwork: false, machineName: '' }, hostName: 'This browser', addresses: [], devices: [] };
+const OFF = { settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false }, hostName: 'This browser', addresses: [], devices: [], pairedDevices: [], relay: { status: 'off' as const } };
 
 // Devices control the desktop app; the web build has no server to reach.
 export const remote: RemoteHost = {
@@ -16,4 +16,16 @@ export const remote: RemoteHost = {
   onSnapshotRequest: () => () => {},
   onCommand: () => () => {},
   async commandResult() {},
+  async removeDevice() {
+    return OFF;
+  },
+  onApproval: () => () => {},
+  async answerApproval() {},
+  async otherMachines() {
+    return [];
+  },
+  async pair() {
+    throw new Error('Pairing needs the desktop app');
+  },
+  async forgetMachine() {},
 };

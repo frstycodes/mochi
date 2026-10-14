@@ -1,5 +1,5 @@
 import type { CommandResult, RemoteHost, RemoteSettings } from '../../src/host/types/remote.ts';
-import { answerCommand, answerSnapshot, pushAction, remoteStatus, setRemote } from '../remote/index.ts';
+import { answerApproval, answerCommand, answerSnapshot, forgetMachine, otherMachines, pair, pushAction, remoteStatus, removeDevice, setRemote } from '../remote/index.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 const MAX_ACTION_CHARS = 64 * 1024 * 1024;
@@ -15,6 +15,7 @@ export const remote = {
     if (p.isEnabled !== undefined) next.isEnabled = boolean(p.isEnabled, 'isEnabled');
     if (p.allowsNetwork !== undefined) next.allowsNetwork = boolean(p.allowsNetwork, 'allowsNetwork');
     if (p.machineName !== undefined) next.machineName = string(p.machineName, 'machineName', MAX_NAME).trim();
+    if (p.reachesAnywhere !== undefined) next.reachesAnywhere = boolean(p.reachesAnywhere, 'reachesAnywhere');
     return setRemote(next);
   },
   async push(sender, epoch, seq, action) {
@@ -27,6 +28,19 @@ export const remote = {
     const r = record(result, 'result');
     const checked: CommandResult = r.isOk === true ? { isOk: true } : { isOk: false, error: string(r.error, 'error') };
     answerCommand(sender, string(id, 'id', 128), checked);
+  },
+  async removeDevice(_sender, id) {
+    return removeDevice(string(id, 'id', 64));
+  },
+  async answerApproval(_sender, id, isAllowed) {
+    answerApproval(string(id, 'id', 64), boolean(isAllowed, 'isAllowed'));
+  },
+  otherMachines: async () => otherMachines(),
+  async pair(_sender, machineId) {
+    await pair(string(machineId, 'machineId', 64));
+  },
+  async forgetMachine(_sender, machineId) {
+    forgetMachine(string(machineId, 'machineId', 64));
   },
 } satisfies Handlers<RemoteHost>;
 

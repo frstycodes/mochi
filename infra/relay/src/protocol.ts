@@ -10,6 +10,9 @@ export type MachineFrame = { type: 'register'; name: string; publicKey: string }
 
 export type RelayToMachine = { type: 'open'; channel: number; deviceId: string } | { type: 'close'; channel: number };
 
+/** Text frames either side may send to keep a socket provably alive; the relay's runtime answers them itself. */
+export const HEARTBEAT = { ping: 'ping', pong: 'pong' } as const;
+
 export const MAX_FRAME_BYTES = 1024 * 1024;
 const CHANNEL_BYTES = 4;
 const MAX_NAME = 64;

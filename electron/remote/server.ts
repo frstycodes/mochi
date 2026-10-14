@@ -1,9 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { WebSocketServer, type RawData, type WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
 import type { CommandResult, ConnectedDevice, RemoteCommandRequest } from '../../src/host/types/remote.ts';
-import type { AuthenticateDevice, AuthenticatedDevice } from './auth.ts';
+import { socketLink, type Link, type RawLink } from './link.ts';
 import type { ActionLog } from './log.ts';
+import type { AuthenticatedDevice, Origin, Secured } from './pairing.ts';
 import { COMMAND_SCOPES, hasScope, parseCommand, parseHello, PROTOCOL_VERSION, visibleAction, visibleSnapshot, type HelloFrame, type ServerFrame } from './protocol.ts';
 
 /** The renderer, which owns the store: it snapshots it and runs commands through the UI's own code paths. */
@@ -16,7 +17,8 @@ export interface RendererBridge {
 export interface RemoteServerOptions {
   hosts: string[];
   port: number;
-  authenticate: AuthenticateDevice;
+  /** The pairing exchange every connection opens with (`pairing.ts`): who the device is, and its decrypted link. */
+  secure: (raw: RawLink, origin: Origin) => Promise<Secured>;
   bridge: RendererBridge;
   log: ActionLog;
   machineName: () => string;
@@ -27,6 +29,10 @@ export interface RemoteServer {
   /** `host:port` per bound interface. */
   addresses: string[];
   devices(): ConnectedDevice[];
+  /** A relay channel: the same pairing and protocol as a LAN socket, but the device came through your account. */
+  attach(raw: RawLink): void;
+  /** Ends a device's connections, after it was removed. */
+  disconnect(deviceId: string): void;
   /** One renderer action: logged, then sent to every device that is caught up and may read. */
   publish(epoch: string, seq: number, action: unknown): void;
   close(): Promise<void>;
@@ -37,7 +43,7 @@ const MAX_FRAME_BYTES = 1024 * 1024;
 const MAX_RECEIPTS = 1000;
 const SYNC_ATTEMPTS = 3;
 
-/** A WebSocket server on each of `hosts`. No secret travels in the URL: the first frame authenticates. */
+/** A WebSocket server on each of `hosts`. No secret travels in the URL: the first frames pair and encrypt. */
 export async function startRemoteServer(options: RemoteServerOptions): Promise<RemoteServer> {
   const { log, bridge } = options;
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
@@ -46,26 +52,47 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
   const receipts = new Map<string, Promise<CommandResult>>();
 
   const servers = await Promise.all(options.hosts.map((host) => listen(host, options.port, wss)));
-  wss.on('connection', (socket) => void accept(socket));
+  wss.on('connection', (socket) => void accept(socketLink(socket), 'lan'));
 
-  async function accept(socket: WebSocket) {
-    const held: RawData[] = [];
-    const hello = await firstFrame(socket, held);
+  async function accept(raw: RawLink, origin: Origin) {
+    const secured = await options.secure(raw, origin).catch((error: unknown) => ({ refusal: `Couldn’t pair: ${String(error)}` }));
+    if ('refusal' in secured) return raw.close(4401, 'Refused');
+    const { link: socket, device } = secured;
+    // One listener for the connection's life: the hello, then frames that arrive while it's checked, then commands.
+    const held: string[] = [];
+    let connection: Connection | undefined;
+    let takeHello: ((text: string | null) => void) | undefined;
+    const hello = await new Promise<HelloFrame | string | null>((resolve) => {
+      const timer = setTimeout(() => resolve('No hello within 10 seconds'), HELLO_TIMEOUT_MS);
+      takeHello = (text) => {
+        clearTimeout(timer);
+        resolve(text === null ? null : parseHello(text));
+      };
+      socket.onClose(() => takeHello?.(null));
+      socket.onMessage((text) => {
+        if (takeHello) {
+          const take = takeHello;
+          takeHello = undefined;
+          return take(text);
+        }
+        if (connection?.isAccepting) return void onCommand(connection, text);
+        held.push(text);
+      });
+    });
+    takeHello = undefined;
     if (!hello) return;
     if (typeof hello === 'string') return refuse(socket, hello);
-    const device = await options.authenticate(hello).catch((error: unknown) => ({ refusal: `Couldn’t check this device: ${String(error)}` }));
-    if ('refusal' in device) return refuse(socket, device.refusal);
-    if (socket.readyState !== socket.OPEN) return;
-    const connection: Connection = { socket, device, connectedAt: Date.now(), isLive: false };
+    if (!socket.isOpen()) return;
+    connection = { socket, device, connectedAt: Date.now(), isLive: false };
     connections.add(connection);
     options.onDevicesChange?.();
-    socket.on('close', () => {
-      connections.delete(connection);
+    const live = connection;
+    socket.onClose(() => {
+      connections.delete(live);
       options.onDevicesChange?.();
     });
     send(socket, { type: 'welcome', version: PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), scopes: device.scopes });
-    socket.removeAllListeners('message');
-    socket.on('message', (data) => void onCommand(connection, data));
+    connection.isAccepting = true;
     for (const data of held) void onCommand(connection, data);
     if (!device.scopes.includes('read')) return;
     await catchUp(connection, hello.resume);
@@ -77,7 +104,7 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
     if (missed) return goLive(connection, missed);
     for (let attempt = 0; attempt < SYNC_ATTEMPTS; attempt++) {
       const snapshot = await bridge.snapshot().catch(() => null);
-      if (connection.socket.readyState !== connection.socket.OPEN) return;
+      if (!connection.socket.isOpen()) return;
       if (!snapshot) continue;
       // Nothing of this epoch logged yet: the renderer started streaming and hasn't acted since.
       if (log.epoch !== snapshot.epoch) log.begin(snapshot.epoch, snapshot.seq);
@@ -98,8 +125,8 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
     send(connection.socket, { type: 'action', epoch: log.epoch, seq, action: visibleAction(action, connection.device.scopes) });
   }
 
-  async function onCommand(connection: Connection, data: RawData) {
-    const frame = parseCommand(text(data));
+  async function onCommand(connection: Connection, data: string) {
+    const frame = parseCommand(data);
     if (typeof frame === 'string') return send(connection.socket, { type: 'result', id: '', isOk: false, error: frame });
     const { id, command } = frame;
     if (!hasScope(connection.device.scopes, command)) return send(connection.socket, { type: 'result', id, isOk: false, error: `This device can’t ${command.type}: it needs the ${COMMAND_SCOPES[command.type]} scope` });
@@ -116,6 +143,10 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
   return {
     addresses: servers.map((s) => formatAddress(s.address() as AddressInfo)),
     devices: () => [...connections].map(({ device, connectedAt }) => ({ id: device.deviceId, name: device.name, scopes: device.scopes, connectedAt })),
+    attach: (raw) => void accept(raw, 'relay'),
+    disconnect(deviceId) {
+      for (const { socket, device } of connections) if (device.deviceId === deviceId) socket.close(4401, 'Removed from this computer');
+    },
     publish(epoch, seq, action) {
       const isNewEpoch = epoch !== log.epoch;
       log.append(epoch, seq, action);
@@ -139,7 +170,9 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
 }
 
 interface Connection {
-  socket: WebSocket;
+  socket: Link;
+  /** Welcomed: commands run as they arrive. Before that, they wait in `held`. */
+  isAccepting?: boolean;
   device: AuthenticatedDevice;
   connectedAt: number;
   /** Caught up: gets each action as it happens. */
@@ -155,29 +188,13 @@ function listen(host: string, port: number, wss: WebSocketServer) {
   });
 }
 
-/** The parsed hello, an error to refuse with, or null when the socket closed. Frames sent right behind it wait in `held` while the device is checked. */
-function firstFrame(socket: WebSocket, held: RawData[]): Promise<HelloFrame | string | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve('No hello within 10 seconds'), HELLO_TIMEOUT_MS);
-    socket.once('close', () => resolve(null));
-    socket.once('message', (data) => {
-      clearTimeout(timer);
-      socket.on('message', (next) => held.push(next));
-      resolve(parseHello(text(data)));
-    });
-  });
-}
-
-function refuse(socket: WebSocket, reason: string) {
+function refuse(socket: Link, reason: string) {
   send(socket, { type: 'refused', reason });
   socket.close(4401, 'Refused');
 }
 
-function send(socket: WebSocket, frame: ServerFrame) {
-  if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(frame));
+function send(socket: Link, frame: ServerFrame) {
+  if (socket.isOpen()) socket.send(JSON.stringify(frame));
 }
-
-/** ws hands a message over as one Buffer, fragments or an ArrayBuffer depending on `binaryType`. */
-const text = (data: RawData) => (Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data)).toString('utf8');
 
 const formatAddress = ({ address, port, family }: AddressInfo) => (family === 'IPv6' ? `[${address}]:${port}` : `${address}:${port}`);

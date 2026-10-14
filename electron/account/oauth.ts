@@ -14,6 +14,8 @@ export interface Pkce {
 export interface Tokens {
   accessToken: string;
   refreshToken?: string;
+  /** Epoch ms. */
+  expiresAt: number;
 }
 
 export function newPkce(): Pkce {
@@ -40,12 +42,16 @@ export function codeFromCallback(url: URL, state: string): string {
 export const codeExchange = (clientId: string, code: string, verifier: string, redirectUri: string) =>
   new URLSearchParams({ grant_type: 'authorization_code', client_id: clientId, code, code_verifier: verifier, redirect_uri: redirectUri });
 
-export function tokensFrom(body: unknown): Tokens {
-  const b = body as { access_token?: unknown; refresh_token?: unknown };
+export const refreshExchange = (clientId: string, refreshToken: string) => new URLSearchParams({ grant_type: 'refresh_token', client_id: clientId, refresh_token: refreshToken });
+
+export function tokensFrom(body: unknown, now: number): Tokens {
+  const b = body as { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
   if (typeof b?.access_token !== 'string') throw new Error('Sign-in failed: the token response had no access token');
   return {
     accessToken: b.access_token,
     refreshToken: typeof b.refresh_token === 'string' ? b.refresh_token : undefined,
+    // Clerk's access tokens last a day; an answer without `expires_in` is treated as an hour.
+    expiresAt: now + (typeof b.expires_in === 'number' ? b.expires_in : 3600) * 1000,
   };
 }
 
