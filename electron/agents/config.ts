@@ -24,7 +24,9 @@ interface Stored extends AgentSettings, AccountsState {
   pastWorktreeRoots: string[];
 }
 
-const DEFAULT_WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
+const DEFAULT_WORKTREE_ROOT = join(homedir(), '.mochi', 'worktrees');
+/** The default before `~/.mochi`: its worktrees stay Mochi's. */
+const LEGACY_WORKTREE_ROOT = join(homedir(), '.harness', 'worktrees');
 
 const listeners = new Set<(settings: AgentSettings) => void>();
 let stored: Stored | undefined;
@@ -34,7 +36,7 @@ export function agentSettings(): AgentSettings {
   return { concurrency, harnesses, worktreeRoot, shell, prDrafts, prepareWorktrees, worktreeInclude, setupCommands, sideChatModel, utilityModels };
 }
 
-/** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.harness/worktrees`. */
+/** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.mochi/worktrees`. */
 export function worktreeRoot(): string {
   const root = expandHome(load().worktreeRoot);
   return root ? resolve(root) : DEFAULT_WORKTREE_ROOT;
@@ -42,7 +44,7 @@ export function worktreeRoot(): string {
 
 /** The current root first, then every earlier one, so moving the folder never orphans existing worktrees. */
 export function worktreeRoots(): string[] {
-  return [...new Set([worktreeRoot(), ...load().pastWorktreeRoots, DEFAULT_WORKTREE_ROOT])];
+  return [...new Set([worktreeRoot(), ...load().pastWorktreeRoots, DEFAULT_WORKTREE_ROOT, LEGACY_WORKTREE_ROOT])];
 }
 
 /** The terminal's shell: the user's choice, else `$SHELL`. */

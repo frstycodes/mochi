@@ -6,7 +6,7 @@ import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequ
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { BoundShortcut } from './Shortcut';
 import {
   Questionnaire,
   QuestionnaireActions,
@@ -33,6 +33,9 @@ import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode 
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
 import { useSendCiLog } from './notify/useSendCiLog';
+import { DeviceIcon } from './remote/DeviceIcon';
+import { remoteDecisions } from './remote/mirror';
+import { RemoteScope, useMachines } from './remote/useMachines';
 import { isCommand } from './keymap';
 
 const KIND = {
@@ -48,6 +51,7 @@ const KIND = {
 
 export function QueueView() {
   const items = useSpaceQueue();
+  const remote = useMachines().machines.flatMap(({ machine, state }) => (state ? [{ machine, state, items: remoteDecisions(state) }] : [])).filter((m) => m.items.length > 0);
   const isWorking = useSpaceThreads().some((t) => t.status === 'running' && (!t.live || t.live.isWorking));
   const { state } = useHarness();
   const review = useReviewEntry(state.spaceId);
@@ -63,11 +67,11 @@ export function QueueView() {
             <h1 className="type-heading">Queue</h1>
             <p className="type-meta text-muted-foreground">Decisions your agents are waiting on, most blocking first.</p>
           </div>
-          <KbdGroup className="hidden type-caption text-subtle-foreground md:flex">
-            <Kbd>J</Kbd>
-            <Kbd>K</Kbd>
+          <span className="hidden items-center gap-1 type-caption text-subtle-foreground md:flex">
+            <BoundShortcut command="list-next" />
+            <BoundShortcut command="list-previous" />
             move
-          </KbdGroup>
+          </span>
           {review.count > 0 && (
             <Button variant="outline" size="sm" onClick={review.open}>
               <TaskSquare data-icon="inline-start" />
@@ -75,7 +79,7 @@ export function QueueView() {
             </Button>
           )}
         </div>
-        {items.length === 0 && <EmptyQueue isWorking={isWorking} />}
+        {items.length === 0 && remote.length === 0 && <EmptyQueue isWorking={isWorking} />}
         <ol className="flex flex-col gap-3">
           <AnimatePresence initial={false}>
             {items.map((item, i) => (
@@ -93,6 +97,24 @@ export function QueueView() {
             ))}
           </AnimatePresence>
         </ol>
+        {/* Another computer's agents wait on you too; answering sends it there, and the card leaves when that computer says so. */}
+        {remote.map(({ machine, state, items: waiting }) => (
+          <section key={machine.id} aria-label={`On ${machine.name}`} className="flex flex-col gap-3">
+            <h2 className="flex items-center gap-1.5 type-meta font-medium text-muted-foreground">
+              <DeviceIcon kind={machine.kind} className="size-3.5" />
+              On {machine.name}
+            </h2>
+            <RemoteScope machine={machine} state={state}>
+              <ol className="flex flex-col gap-3">
+                {waiting.map((item) => (
+                  <li key={item.id}>
+                    <QueueDecision item={item} showThread />
+                  </li>
+                ))}
+              </ol>
+            </RemoteScope>
+          </section>
+        ))}
       </div>
     </ScrollArea>
   );

@@ -1,4 +1,5 @@
-import { ArrowUp, Broom, Code, Document, Edit, MessageAdd, MessageQuestion, Send, X, type IconComponent } from 'reicon-react';
+import { ArrowUp, Broom, Document, MessageAdd, MessageQuestion, Send, X, type IconComponent } from 'reicon-react';
+import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageActions, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputHeader, PromptInputSubmit, PromptInputTextarea, PromptInputTools } from '@/components/ai-elements/prompt-input';
@@ -131,7 +132,7 @@ function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 
   );
 }
 
-const SOURCE_ICONS = { diff: Edit, terminal: Code, file: Document } satisfies Record<QuoteSource, IconComponent>;
+const SOURCE_ICONS = { diff: DiffIcon, terminal: TerminalIcon, file: Document } satisfies Record<QuoteSource, IconComponent>;
 
 function QuoteCard({ quote, onRemove }: { quote: Quote; onRemove?: () => void }) {
   const Icon = SOURCE_ICONS[quote.source];

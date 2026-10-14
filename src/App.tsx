@@ -33,6 +33,9 @@ import { useReplayRoute } from './replay/open';
 import { ReplayPage, ReplayView } from './replay/ReplayView';
 import { ColorThemeController } from './themes/ColorThemeController';
 import { DeviceApprovalLayer } from './remote/DeviceApproval';
+import { useRemoteThreadRoute } from './remote/open';
+import { RemoteThreadView } from './remote/RemoteThreadView';
+import { MachinesProvider } from './remote/useMachines';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
@@ -53,9 +56,11 @@ export function App() {
             <TornWindow threadId={route.slice('/window/'.length)} />
           ) : (
             <HarnessProvider>
-              <ReviewModeProvider>
-                <Shell />
-              </ReviewModeProvider>
+              <MachinesProvider>
+                <ReviewModeProvider>
+                  <Shell />
+                </ReviewModeProvider>
+              </MachinesProvider>
               <Orbit />
               <PhotoViewer />
               <FileViewer />
@@ -104,6 +109,7 @@ function Shell() {
   const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
   const isReplayOpen = !!useReplayRoute();
+  const isRemoteOpen = !!useRemoteThreadRoute();
   useSettingsShortcut();
 
   return (
@@ -118,7 +124,7 @@ function Shell() {
       )}
       <SidebarInset className="min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
+          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />

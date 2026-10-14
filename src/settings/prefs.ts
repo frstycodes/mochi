@@ -13,6 +13,8 @@ export interface Prefs {
   /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
   lightTheme: string;
   darkTheme: string;
+  /** Installed color theme ids, in the order you starred them: first in the theme pickers and in ⌘K. Kept when a package is removed, so reinstalling brings them back. */
+  starredThemes: string[];
   projectsFolder: string;
   restoreLayout: boolean;
   /** NoticeKind values that raise an OS notification while the window is in the background. */
@@ -73,6 +75,9 @@ export const AGENT_CONTROLS = ['read', 'changes', 'everything'] as const;
 
 export type AgentControl = (typeof AGENT_CONTROLS)[number];
 
+/** Adds `id` to a starred list (models, themes) or takes it out. */
+export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
+
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
   lightTheme: 'mochi',
@@ -83,6 +88,7 @@ export const DEFAULT_PREFS: Prefs = {
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
+  starredThemes: [],
   effort: 'high',
   speed: '',
   agent: 'claude',

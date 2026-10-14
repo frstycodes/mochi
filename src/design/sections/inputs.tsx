@@ -39,7 +39,7 @@ export function InputsSection() {
           </Field>
           <Field data-disabled>
             <FieldLabel htmlFor="worktree">Worktree path</FieldLabel>
-            <Input id="worktree" defaultValue="~/.harness/worktrees/admin-usage" disabled />
+            <Input id="worktree" defaultValue="~/.mochi/worktrees/admin-usage" disabled />
             <FieldDescription>Set by the harness when the thread starts.</FieldDescription>
           </Field>
         </FieldGroup>

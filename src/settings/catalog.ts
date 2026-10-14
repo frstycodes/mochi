@@ -47,7 +47,7 @@ export type Control =
   | { type: 'switch' }
   | { type: 'number'; min: number; max: number; step: number }
   /** `fallback` is what an emptied field saves; without it, empty is a value of its own ("use $SHELL"). */
-  | { type: 'text'; placeholder: string; fallback?: string; isPath?: boolean; isMono?: boolean }
+  | { type: 'text'; placeholder: string; fallback?: string; isPath?: boolean; isMono?: boolean; isMultiline?: boolean }
   /** A model id; `provider` limits it to one harness, else the value is `provider:model`. */
   | { type: 'model'; provider?: Provider; emptyLabel?: string }
   | { type: 'starredModels' }
@@ -335,7 +335,7 @@ const APP_SETTINGS: Setting[] = [
   pref('whileWorking', 'While the agent is working, new messages', 'defaults', select(WHILE_WORKING)),
   pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS)),
   pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH),
-  pref('simplifyRules', 'Your rules', 'simplify', { type: 'text', placeholder: 'Keep numbers, no jargon, one line per file' }),
+  pref('simplifyRules', 'Your rules', 'simplify', { type: 'text', placeholder: 'Keep numbers, no jargon, one line per file', isMultiline: true }),
   pref('simplifyAuto', 'Simplify long replies automatically', 'simplify', SWITCH),
   pref('simplifyAutoWords', 'Long means more than (words)', 'simplify', { type: 'number', min: 50, max: 2000, step: 50 }),
   hostSetting('concurrency', 'Agents running at once', 'defaults', { type: 'number', ...CONCURRENCY_RANGE, step: 1 }),
@@ -355,7 +355,7 @@ const APP_SETTINGS: Setting[] = [
   ),
   pref('driftGuard', 'Drift guard', 'goals', SWITCH),
   pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM)),
-  hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.harness/worktrees', isPath: true }),
+  hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.mochi/worktrees', isPath: true }),
   hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH),
   hostSetting('prepareWorktrees', 'Prepare worktrees before starting', 'git', SWITCH),
   hostSetting('worktreeInclude', 'Ignored files to copy', 'git', { type: 'text', placeholder: '.env*, .claude/settings.local.json', isMono: true }),

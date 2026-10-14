@@ -23,9 +23,9 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input';
 import { AutoHeight } from '@/components/ui/auto-height';
-import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { MetaChip } from './MetaChip';
 import type { Provider, Repo } from './model';
 import { EffortPicker, ModelPicker, SpeedPicker, useModels } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
@@ -68,7 +68,7 @@ export function useComposerHandoff(leafId: string) {
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-lift transition-colors has-[textarea:focus]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
+    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-composer transition-colors has-[textarea:focus]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
       <AutoHeight className="justify-end">{children}</AutoHeight>
     </div>
   );
@@ -87,6 +87,8 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
+  /** Text only: no attachments or model controls, for a thread another computer starts with its own defaults. */
+  isTextOnly?: boolean;
   /** Beside send: the context ring. */
   meter?: ReactNode;
   /** Where the unsent text and attachments are kept (`threadDraftKey`, `newThreadDraftKey`); sending clears it. */
@@ -95,7 +97,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', isTextOnly, meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
   const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
   const draft = useComposerDraft(draftKey, draftExtra);
   const send = async (message: PromptInputMessage) => {
@@ -111,18 +113,22 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>
-          <PromptInputActionMenu>
-            <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
-              <Paperclip className="size-4" />
-            </PromptInputActionMenuTrigger>
-            <PromptInputActionMenuContent>
-              <PromptInputActionAddAttachments />
-              <PromptInputActionAddScreenshot />
-            </PromptInputActionMenuContent>
-          </PromptInputActionMenu>
-          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
-          <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
-          <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} />
+          {!isTextOnly && (
+            <>
+              <PromptInputActionMenu>
+                <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
+                  <Paperclip className="size-4" />
+                </PromptInputActionMenuTrigger>
+                <PromptInputActionMenuContent>
+                  <PromptInputActionAddAttachments />
+                  <PromptInputActionAddScreenshot />
+                </PromptInputActionMenuContent>
+              </PromptInputActionMenu>
+              <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
+              <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
+              <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} />
+            </>
+          )}
         </PromptInputTools>
         <PromptInputTools>
           {meter}
@@ -235,7 +241,7 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'relative flex min-h-8 flex-wrap items-center gap-x-1 px-1 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
+        'relative flex min-h-8 flex-wrap items-center gap-1.5 px-1 pt-2 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
         className,
       )}
       {...props}
@@ -260,15 +266,10 @@ export function PermissionsMenu({ threadId, provider, value, onChange }: { threa
   return (
     <DropdownMenu onOpenChange={(open) => !open && setIsArmed(false)}>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn('text-subtle-foreground hover:text-foreground', access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:hover:bg-warning/20')}
-          aria-label={`Permissions: ${access}`}
-        >
+        <MetaChip className={cn(access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:bg-warning/12 dark:hover:bg-warning/20')} aria-label={`Permissions: ${access}`}>
           <AccessIcon access={access} />
           {access}
-        </Button>
+        </MetaChip>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-76">
         <DropdownMenuGroup>

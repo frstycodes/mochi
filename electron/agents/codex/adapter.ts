@@ -260,7 +260,7 @@ export class CodexAdapter {
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
-    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, config: { ...PLAN_TOOL, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, config: { ...PLAN_TOOL, ...tools, ...(options.additionalDirectories?.length && { 'sandbox_workspace_write.writable_roots': options.additionalDirectories }) }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume

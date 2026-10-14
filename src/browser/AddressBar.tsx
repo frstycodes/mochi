@@ -113,7 +113,7 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
         >
           <CommandList>
             {rows.map((row) => (
-              <CommandItem key={row.value} value={row.value} onSelect={() => open(row)} className="gap-2.5">
+              <CommandItem key={row.value} value={row.value} onSelect={() => open(row)} className="gap-2.5 rounded-[calc(var(--radius-xl)-var(--spacing)*var(--corner-scale))]">
                 <RowIcon row={row} />
                 <span className="min-w-0 truncate text-foreground">{row.label}</span>
                 {!!row.detail && <span className="min-w-0 shrink-[2] truncate type-caption text-muted-foreground">{row.detail}</span>}

@@ -37,6 +37,14 @@ export function showMainWindow() {
 }
 
 /** `isHidden`: the main window that keeps the store running for remote devices while no window is open. */
+const HEADER_PX = 44;
+const LIGHTS_PX = 14;
+
+/** Centres the lights on the 44px headers, which scale with the page zoom while the lights stay native size; `--lights-end` in CSS follows. */
+export function trafficLightsAt(zoom: number) {
+  return { x: 16, y: Math.round((HEADER_PX * zoom - LIGHTS_PX) / 2) };
+}
+
 export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
   const isMain = BrowserWindow.getAllWindows().length === 0;
   const win = new BrowserWindow({
@@ -47,8 +55,7 @@ export function createWindow(route = '', bounds?: Rectangle, isHidden = false) {
     ...(isMain ? savedBounds() : bounds),
     show: false,
     titleBarStyle: 'hiddenInset',
-    // Centres the lights on the 44px headers; the fixed sidebar toggle starts at 88px (`SidebarToggle`).
-    trafficLightPosition: { x: 16, y: 15 },
+    trafficLightPosition: trafficLightsAt(1),
     backgroundColor: background(),
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'),

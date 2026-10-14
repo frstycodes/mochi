@@ -1,6 +1,6 @@
 import type { CommandResult, RemoteHost, RemoteSettings } from '../../src/host/types/remote.ts';
-import { isScopes } from '../remote/protocol.ts';
-import { answerApproval, answerCommand, answerSnapshot, forgetMachine, otherMachines, pair, pushAction, remoteStatus, removeDevice, setDeviceScopes, setRemote } from '../remote/index.ts';
+import { isScopes, parseCommand } from '../remote/protocol.ts';
+import { answerApproval, answerCommand, answerSnapshot, cachedMachines, cacheMachine, commandMachine, follow, followedMachines, forgetMachine, otherMachines, pair, pushAction, remoteStatus, removeDevice, setDeviceScopes, setRemote } from '../remote/index.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 const MAX_ACTION_CHARS = 64 * 1024 * 1024;
@@ -27,7 +27,7 @@ export const remote = {
   },
   async commandResult(sender, id, result) {
     const r = record(result, 'result');
-    const checked: CommandResult = r.isOk === true ? { isOk: true } : { isOk: false, error: string(r.error, 'error') };
+    const checked: CommandResult = r.isOk === true ? { isOk: true, ...(r.detail !== undefined && { detail: string(r.detail, 'detail') }) } : { isOk: false, error: string(r.error, 'error') };
     answerCommand(sender, string(id, 'id', 128), checked);
   },
   async removeDevice(_sender, id) {
@@ -46,6 +46,20 @@ export const remote = {
   },
   async forgetMachine(_sender, machineId) {
     forgetMachine(string(machineId, 'machineId', 64));
+  },
+  machines: async () => followedMachines(),
+  async cacheMachine(sender, machineId, saved) {
+    cacheMachine(sender, string(machineId, 'machineId', 64), string(saved, 'saved', MAX_ACTION_CHARS));
+  },
+  cachedMachines: async () => cachedMachines(),
+  async follow(sender) {
+    follow(sender);
+  },
+  async command(_sender, machineId, command) {
+    // The same check a machine runs on a device's frame, so nothing malformed leaves this computer.
+    const frame = parseCommand(JSON.stringify({ type: 'command', id: 'renderer', command }));
+    if (typeof frame === 'string') throw new TypeError(frame);
+    return commandMachine(string(machineId, 'machineId', 64), frame.command);
   },
 } satisfies Handlers<RemoteHost>;
 

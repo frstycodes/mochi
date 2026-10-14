@@ -1,14 +1,12 @@
 import WebSocket from 'ws';
 import { HEARTBEAT, splitChannel, withChannel, type RelayToMachine } from '../../infra/relay/src/protocol.ts';
 import type { RelayState } from '../../src/host/types/remote.ts';
-import { queuedReader, socketLink, toBytes, type RawLink } from './link.ts';
+import { HEARTBEAT_MS, keepAlive, queuedReader, socketLink, toBytes, type RawLink } from './link.ts';
 
 /** Mochi's hosted relay (`infra/relay`); `MOCHI_RELAY_URL` points dev runs and self-hosters at another. */
 export const RELAY_URL = process.env.MOCHI_RELAY_URL ?? 'https://mochi-relay.sandeshpandey.workers.dev';
 
 const MAX_BACKOFF_MS = 60_000;
-/** A socket can die without a close reaching either end; one unanswered ping in this long and it's dropped and redialed. */
-const HEARTBEAT_MS = 30_000;
 
 export interface RelayMachine {
   id: string;
@@ -115,11 +113,17 @@ export function connectMachine(options: {
   };
 }
 
-/** A device's own connection to one machine through the relay: its bytes, unprefixed. Rejects when the machine is offline. */
+/**
+ * A device's own connection to one machine through the relay: its bytes, unprefixed, kept alive by text pings the relay's
+ * runtime answers. Rejects when the machine is offline.
+ */
 export function openDeviceChannel(machineId: string, deviceId: string, token: string): Promise<RawLink> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url('/v1/connect', { role: 'device', machine: machineId, device: deviceId }), { headers: { authorization: `Bearer ${token}` } });
-    ws.on('open', () => resolve(socketLink(ws)));
+    ws.on('open', () => {
+      keepAlive(ws, () => ws.send(HEARTBEAT.ping));
+      resolve(socketLink(ws));
+    });
     ws.on('unexpected-response', (_request, response) => {
       reject(new Error(response.statusCode === 404 ? 'That computer is offline' : `The relay answered ${response.statusCode}`));
       ws.terminate();

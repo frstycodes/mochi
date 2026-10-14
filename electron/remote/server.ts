@@ -5,7 +5,7 @@ import type { CommandResult, ConnectedDevice, RemoteCommandRequest } from '../..
 import { socketLink, type Link, type RawLink } from './link.ts';
 import type { ActionLog } from './log.ts';
 import type { AuthenticatedDevice, Origin, Secured } from './pairing.ts';
-import { COMMAND_SCOPES, hasScope, parseCommand, parseHello, PROTOCOL_VERSION, visibleAction, visibleSnapshot, type HelloFrame, type ServerFrame } from './protocol.ts';
+import { COMMAND_SCOPES, hasScope, parseCommand, parseHello, PROTOCOL_VERSION, THIS_KIND, visibleAction, visibleSnapshot, type HelloFrame, type ServerFrame } from './protocol.ts';
 
 /** The renderer, which owns the store: it snapshots it and runs commands through the UI's own code paths. */
 export interface RendererBridge {
@@ -52,6 +52,9 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
   const receipts = new Map<string, Promise<CommandResult>>();
 
   const servers = await Promise.all(options.hosts.map((host) => listen(host, options.port, wss)));
+  const addresses = servers.map((s) => formatAddress(s.address() as AddressInfo));
+  // Loopback would reach the device's own computer.
+  const reachable = addresses.filter((a) => !a.startsWith('127.') && !a.startsWith('[::1]'));
   wss.on('connection', (socket) => void accept(socketLink(socket), 'lan'));
 
   async function accept(raw: RawLink, origin: Origin) {
@@ -91,7 +94,7 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
       connections.delete(live);
       options.onDevicesChange?.();
     });
-    send(socket, { type: 'welcome', version: PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), scopes: device.scopes });
+    send(socket, { type: 'welcome', version: PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), machineKind: THIS_KIND, scopes: device.scopes, addresses: reachable });
     connection.isAccepting = true;
     for (const data of held) void onCommand(connection, data);
     if (!device.scopes.includes('read')) return;
@@ -141,8 +144,8 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
   }
 
   return {
-    addresses: servers.map((s) => formatAddress(s.address() as AddressInfo)),
-    devices: () => [...connections].map(({ device, connectedAt }) => ({ id: device.deviceId, name: device.name, scopes: device.scopes, connectedAt })),
+    addresses,
+    devices: () => [...connections].map(({ device, connectedAt }) => ({ id: device.deviceId, name: device.name, kind: device.kind, scopes: device.scopes, connectedAt })),
     attach: (raw) => void accept(raw, 'relay'),
     disconnect(deviceId) {
       for (const { socket, device } of connections) if (device.deviceId === deviceId) socket.close(4401, 'Removed or changed on this computer');

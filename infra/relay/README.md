@@ -7,9 +7,11 @@ between a device and its machine. It can't read what it forwards.
 ## Deploy
 
 1. In `wrangler.jsonc`, `CLERK_ISSUER` and `CLERK_CLIENT_ID` name the Clerk instance and Mochi's OAuth client (set for the development instance); add a `routes` entry for your domain.
-2. `pnpm --dir infra/relay exec wrangler login`, then `pnpm --dir infra/relay deploy`.
+2. `pnpm --dir infra/relay exec wrangler login`, then `pnpm --dir infra/relay exec wrangler deploy` (not `pnpm deploy`, which is pnpm's own command).
 
-Self-hosting is the same Worker on your own Cloudflare account; Mochi takes the relay URL in Settings › Devices.
+Deployed (development instance): `https://mochi-relay.sandeshpandey.workers.dev`.
+
+Self-hosting is the same Worker on your own Cloudflare account; point Mochi at it with the `MOCHI_RELAY_URL` environment variable (there is no setting for it yet).
 
 ## Run locally
 

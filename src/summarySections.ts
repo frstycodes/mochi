@@ -6,8 +6,11 @@ import type { ThreadSummary } from './summary.ts';
 import { spaceUsage, threadUsage, type Usage } from './usage/model.ts';
 
 export type SummarySectionId = 'outcome' | 'sources' | 'skills' | 'tools' | 'session' | 'usage' | 'space';
+type AlwaysShownSectionId = 'skills' | 'tools';
+export type CollapsibleSectionId = Exclude<SummarySectionId, AlwaysShownSectionId>;
+const ALWAYS_SHOWN = new Set<SummarySectionId>(['skills', 'tools'] satisfies AlwaysShownSectionId[]);
 
-/** A collapsible section of the summary: `title`, then `detail`, so a closed one still says something. */
+/** A section of the summary: `title`, then `detail`, so a closed one still says something. */
 export interface SummarySection {
   id: SummarySectionId;
   title: string;
@@ -47,9 +50,13 @@ function usageSection(id: SummarySectionId, title: string, usage: Usage): Summar
   return { id, title, detail: [`${TOKENS.format(tokens)} tokens`, usage.costUsd !== null && USD.format(usage.costUsd)].filter(Boolean).join(' · ') };
 }
 
-/** Which sections start open: what you last chose for each, else Outcome on a settled thread. */
-export function openSectionIds(sections: SummarySection[], remembered: Partial<Record<SummarySectionId, boolean>>, isSettled: boolean) {
-  return sections.filter((s) => remembered[s.id] ?? (s.id === 'outcome' && isSettled)).map((s) => s.id);
+export function isCollapsible(section: SummarySection): section is SummarySection & { id: CollapsibleSectionId } {
+  return !ALWAYS_SHOWN.has(section.id);
+}
+
+/** Which collapsible sections start open: what you last chose for each, else Outcome on a settled thread. */
+export function openSectionIds(sections: SummarySection[], remembered: Partial<Record<CollapsibleSectionId, boolean>>, isSettled: boolean) {
+  return sections.filter(isCollapsible).filter((s) => remembered[s.id] ?? (s.id === 'outcome' && isSettled)).map((s) => s.id);
 }
 
 // Open state is remembered per section, not per thread, and shared by the docked column and the floating card.
@@ -57,7 +64,7 @@ const OPEN_KEY = 'mochi.summary.open.v1';
 let remembered = loadOpen();
 const listeners = new Set<() => void>();
 
-function loadOpen(): Partial<Record<SummarySectionId, boolean>> {
+function loadOpen(): Partial<Record<CollapsibleSectionId, boolean>> {
   try {
     const saved: unknown = JSON.parse(globalThis.localStorage?.getItem(OPEN_KEY) ?? '{}');
     return saved && typeof saved === 'object' ? saved : {};
@@ -76,9 +83,9 @@ export function useRememberedOpen() {
   );
 }
 
-/** Records the open state of every section shown; sections not on screen keep what they had. */
+/** Records the open state of every collapsible section shown; sections not on screen keep what they had. */
 export function rememberOpen(shown: SummarySection[], open: string[]) {
-  remembered = { ...remembered, ...Object.fromEntries(shown.map((s) => [s.id, open.includes(s.id)])) };
+  remembered = { ...remembered, ...Object.fromEntries(shown.filter(isCollapsible).map((s) => [s.id, open.includes(s.id)])) };
   globalThis.localStorage?.setItem(OPEN_KEY, JSON.stringify(remembered));
   listeners.forEach((l) => l());
 }

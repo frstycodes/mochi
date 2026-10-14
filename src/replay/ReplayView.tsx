@@ -16,6 +16,7 @@ import { FilePath } from '../files/FileView';
 import type { DiffFile } from '../host/types/git';
 import { PreviewContext, SplitContext, type SplitInfo } from '../layout/SplitContext';
 import type { Thread } from '../model';
+import { isTyping } from '../keys';
 import { Shortcut } from '../Shortcut';
 import { HarnessContext, useHarness, type State } from '../store';
 import { TITLE_BAR, TitleBar } from '../TitleBar';
@@ -265,10 +266,6 @@ function useReplayKeys(playback: Playback) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-}
-
-function isTyping(target: EventTarget | null) {
-  return target instanceof HTMLElement && !!target.closest('input:not([type=checkbox]):not([role=switch]), textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu]');
 }
 
 function Transport({ playback, isCapped, files }: { playback: Playback; isCapped: boolean; files: ReactNode }) {

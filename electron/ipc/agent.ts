@@ -48,6 +48,17 @@ function images(value: unknown) {
 
 const MAX_SKILLS = 16;
 
+const MAX_DIRECTORIES = 16;
+
+function directories(value: unknown) {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length > MAX_DIRECTORIES) throw new TypeError(`additionalDirectories must be an array of up to ${MAX_DIRECTORIES}`);
+  for (const v of value) {
+    string(v, 'additionalDirectory', 4096);
+    if (!isAbsolute(v)) throw new TypeError(`An added folder must be an absolute path, not "${v}"`);
+  }
+}
+
 function skillNames(value: unknown) {
   if (value === undefined) return;
   if (!Array.isArray(value) || value.length > MAX_SKILLS) throw new TypeError(`skills must be an array of up to ${MAX_SKILLS}`);
@@ -264,6 +275,7 @@ export async function startAgent(threadId: unknown, options: unknown) {
   if (o.useApiKey && o.provider !== 'claude') throw new TypeError('Only Claude threads can continue on an API key');
   images(o.images);
   skillNames(o.skills);
+  directories(o.additionalDirectories);
   // `speed` goes only through `offered`, which drops one the model doesn't list.
   const { workspace, worktree, speed, ...rest } = o;
   const id = threadId as string;

@@ -1,8 +1,10 @@
+import type { ComponentProps } from 'react';
 import { useTheme } from 'next-themes';
 import { TickCircle } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { ModelPicker, useUnavailableHarnesses } from '../ModelControls';
 import { host } from '../host';
 import { authorName, type Author, type Provider, type Space } from '../model';
@@ -96,9 +98,20 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
         {line}
       </StarredModelsRow>
     );
+  const description = suggestion ? (setting.description ?? setting.context) : setting.description;
+  if (control.type === 'text' && control.isMultiline && value !== undefined)
+    return (
+      <>
+        <SettingsRow id={rowId} label={setting.label} description={description}>
+          <CommitTextarea id={settingControlId(rowId)} value={value} placeholder={control.placeholder} onCommit={set} />
+          {line}
+        </SettingsRow>
+        {apply.dialog}
+      </>
+    );
   return (
     <>
-      <SettingsRow id={rowId} label={setting.label} description={suggestion ? (setting.description ?? setting.context) : setting.description} control={value === undefined ? <Unavailable /> : <SettingControl setting={setting} value={value} rowId={rowId} onChange={set} />}>
+      <SettingsRow id={rowId} label={setting.label} description={description} control={value === undefined ? <Unavailable /> : <SettingControl setting={setting} value={value} rowId={rowId} onChange={set} />}>
         {line}
       </SettingsRow>
       {apply.dialog}
@@ -147,6 +160,11 @@ function SettingControl({ setting, value, rowId, onChange }: { setting: Setting;
     default:
       return null;
   }
+}
+
+/** Free text over several lines, under its label at full width: saved on blur, so Enter makes a new line. */
+function CommitTextarea({ value, onCommit, ...props }: { value: string; onCommit: (value: string) => void } & Omit<ComponentProps<typeof Textarea>, 'value' | 'defaultValue' | 'onBlur'>) {
+  return <Textarea key={value} defaultValue={value} onBlur={(e) => e.target.value.trim() !== value && onCommit(e.target.value.trim())} className="min-h-[calc(3lh+1rem+2px)] resize-none" {...props} />;
 }
 
 /** `provider:model`, the way the side chat stores its default. */
