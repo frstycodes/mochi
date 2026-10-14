@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
-import { Chart, Code, Edit, Folder, Global, Hierarchy, MessageAdd, Mobile, Plug, type IconComponent } from 'reicon-react';
+import { Chart, Folder, Global, Hierarchy, MessageAdd, Mobile, Plug, type IconComponent } from 'reicon-react';
 import type { Pane, PaneTab, PaneTabKind, Thread } from '../model';
+import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { AgentsTab } from './AgentsTab';
 import { BrowserTab } from './BrowserTab';
 import { ChangesTab } from './ChangesTab';
@@ -19,8 +20,8 @@ export interface PaneTabProps {
 
 export const PANE_TABS = {
   browser: { title: 'Preview', icon: Global, component: BrowserTab },
-  changes: { title: 'Changes', icon: Edit, component: ChangesTab },
-  terminal: { title: 'Terminal', icon: Code, component: TerminalTab },
+  changes: { title: 'Changes', icon: DiffIcon, component: ChangesTab },
+  terminal: { title: 'Terminal', icon: TerminalIcon, component: TerminalTab },
   files: { title: 'Files', icon: Folder, component: FilesTab },
   simulator: { title: 'Simulator', icon: Mobile, component: SimulatorTab },
   ports: { title: 'Ports', icon: Plug, component: PortsTab },
