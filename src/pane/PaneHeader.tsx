@@ -54,7 +54,7 @@ export function PaneHeader({
 }) {
   const { title, icon: Icon } = PANE_TABS[kind];
   return (
-    <header data-pane-header onPointerDown={onDragStart} className="flex h-10 shrink-0 cursor-default items-center gap-0.5 pr-1 pl-3 select-none">
+    <header data-pane-header onPointerDown={onDragStart} className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
       <PaneTitleSlot>
         <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
         <h2 className="truncate type-meta font-medium">{title}</h2>
@@ -110,7 +110,7 @@ export function PaneActionsSlot() {
 /** The slots alone, for a pane shown outside its card (in a split, popped out): what the pane put in its header still shows. */
 export function PaneSlotBar() {
   return (
-    <div className="flex h-10 shrink-0 items-center gap-0.5 pr-1 pl-3">
+    <div data-pane-header className="flex h-9 shrink-0 items-center gap-0.5 pr-1.5 pl-3">
       <PaneTitleSlot />
       <PaneActionsSlot />
     </div>
