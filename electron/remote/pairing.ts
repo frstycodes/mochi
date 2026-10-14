@@ -67,7 +67,7 @@ export async function secureAsMachine(raw: RawLink, origin: Origin, side: Machin
     // On the LAN nothing vouches that the device is yours; through the relay it is signed in to your account.
     if (origin === 'lan') return refuse(raw, 'Pair this device through your Mochi account first');
     const isAllowed = await side.approve({ name: pair.name, code: pairingCode(side.keys.publicKey, pair.publicKey) });
-    if (!isAllowed) return refuse(raw, 'Not allowed on this computer');
+    if (!isAllowed) return refuse(raw, 'That computer didn’t allow this one');
     if (!raw.isOpen()) return { refusal: 'The device left' };
     device = side.add({ id, name: pair.name, publicKey: sodium.to_base64(pair.publicKey, sodium.base64_variants.ORIGINAL) });
   }

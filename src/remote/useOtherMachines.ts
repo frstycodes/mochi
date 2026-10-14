@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { host } from '../host';
 import type { OtherMachine } from '../host/types/remote';
+import { ipcMessage } from '../settings/AgentSettings';
 
 /** Your account's other computers through the relay, and pairing with one. Loads only while signed in. */
 export function useOtherMachines(isSignedIn: boolean) {
@@ -11,7 +12,7 @@ export function useOtherMachines(isSignedIn: boolean) {
 
   const refresh = useCallback(() => {
     setError(null);
-    return host.remote.otherMachines().then(setMachines, (e: Error) => setError(e.message));
+    return host.remote.otherMachines().then(setMachines, (e: Error) => setError(ipcMessage(e)));
   }, []);
   useEffect(() => {
     if (isSignedIn) void refresh();
@@ -25,7 +26,7 @@ export function useOtherMachines(isSignedIn: boolean) {
       toast.success(`Paired with ${machine.name}`);
       void refresh();
     } catch (e) {
-      setPairing((current) => (current?.machine.id === machine.id ? { machine, error: (e as Error).message } : current));
+      setPairing((current) => (current?.machine.id === machine.id ? { machine, error: ipcMessage(e as Error) } : current));
     }
   };
   const forget = (machine: OtherMachine) => host.remote.forgetMachine(machine.id).then(refresh);

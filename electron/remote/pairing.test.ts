@@ -76,8 +76,8 @@ test('No on the machine refuses the device and trusts nothing', async () => {
   const machineKeys = keypair();
   const machine = machineSide(machineKeys, false);
   const { machineResult, deviceResult } = await pairOver('relay', machine, machineKeys, keypair());
-  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'Not allowed on this computer' });
-  assert.equal(deviceResult.status === 'rejected' && (deviceResult.reason as Error).message, 'Not allowed on this computer');
+  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'That computer didn’t allow this one' });
+  assert.equal(deviceResult.status === 'rejected' && (deviceResult.reason as Error).message, 'That computer didn’t allow this one');
   assert.deepEqual(machine.added, []);
 });
 
