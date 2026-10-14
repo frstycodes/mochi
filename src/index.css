@@ -460,14 +460,14 @@
 /* Pane headers stay compact so the pane's content gets the room: every icon button there, the shell's and what panes put in
    PaneActions, is a small plain rounded rectangle. Unlayered so it wins over the button sizes and the squircle rule above. */
 [data-pane-header] [data-slot='button'][data-size^='icon'] {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 5px;
   corner-shape: round;
 }
 /* A toggle group there is one joined segment at the same height; only its outer corners round. */
 [data-pane-header] [data-slot='toggle-group-item'] {
-  height: 20px;
+  height: 18px;
   min-width: 24px;
   padding-inline: 4px;
 }
@@ -480,8 +480,8 @@
 }
 [data-pane-header] [data-slot='toggle-group-item'] svg,
 [data-pane-header] [data-slot='button'][data-size^='icon'] svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 
 /* One diagonal band crosses every skeleton on screen in step: the gradient is pinned to the viewport. */
