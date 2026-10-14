@@ -19,13 +19,14 @@ import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors
 import { openFiles } from './files/viewer';
 import { RefHoverCard, RefIcon } from './chat/RefHoverCard';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
-import type { McpServer, Provider, PullRequest, Source, Step, Thread } from './model';
+import type { McpServer, Provider, PullRequest, Source, Thread } from './model';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
-import { GoalTimeline, StepLinkLine } from './GoalTimeline';
+import { GoalDetails } from './goals/GoalDetails';
+import { StepLine, StepLinkLine } from './goals/steps';
 import { openGoalEditor } from './goals/GoalEditor';
 import { CriteriaList } from './goals/CriteriaList';
 import { outcomeOf } from './goals/outcome';
@@ -34,7 +35,7 @@ import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
 import { isWorking } from './agentPhase';
-import { lineColor, OverflowIcon, ProgressRing, StepStatusIcon, TooltipIconButton } from './ui';
+import { lineColor, OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
@@ -629,12 +630,12 @@ function GoalSection({ thread }: { thread: Thread }) {
               <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
               <span className="truncate">{progressLabel(progress)}</span>
             </span>
-            {/* z-10 lifts it above the stretched open-timeline button. */}
+            {/* z-10 lifts it above the stretched open-goal button. */}
             <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => openGoalEditor(thread.id)}>
               <Edit />
             </Button>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon-xs" className="after:absolute after:inset-0 after:rounded-lg" aria-label={isOpen ? 'Close the full timeline' : 'Open the full timeline'}>
+              <Button variant="ghost" size="icon-xs" className="after:absolute after:inset-0 after:rounded-lg" aria-label={isOpen ? 'Close the goal' : 'Open the goal'}>
                 <Maximize />
               </Button>
             </PopoverTrigger>
@@ -666,29 +667,21 @@ function GoalSection({ thread }: { thread: Thread }) {
         collisionPadding={16}
         onEscapeKeyDown={() => setPinned(false)}
         onInteractOutside={(e) => isPinned && e.preventDefault()}
-        className="surface-float w-[min(780px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
+        className="surface-float w-[min(440px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
       >
-        <div className="mb-4 flex items-start gap-3">
-          <p className="min-w-0 flex-1 type-body text-muted-foreground text-pretty">{thread.goal}</p>
+        <div className="mb-3 flex items-center gap-2">
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 tabular type-meta text-muted-foreground">
+            <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+            <span className="truncate">{progressLabel(progress)}</span>
+          </span>
           <Button variant="ghost" size="sm" onClick={() => setPinned((p) => !p)} aria-pressed={isPinned}>
             {isPinned ? <PinOff data-icon="inline-start" /> : <Pin data-icon="inline-start" />}
             {isPinned ? 'Unpin' : 'Keep open'}
           </Button>
         </div>
-        <GoalTimeline thread={thread} />
+        <GoalDetails thread={thread} />
       </PopoverContent>
     </Popover>
-  );
-}
-
-function StepLine({ step }: { step: Step }) {
-  return (
-    <span className="flex min-w-0 items-center gap-2 type-meta">
-      <span className="flex w-4 justify-center">
-        <StepStatusIcon status={step.status} />
-      </span>
-      <span className="truncate">{step.title}</span>
-    </span>
   );
 }
 
