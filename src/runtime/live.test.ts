@@ -101,11 +101,14 @@ test("a project thread asks main for its worktree; once main reports it, restart
   assert.equal(start.method === 'start' && start.options.cwd, '/Users/me/dev/app');
   assert.deepEqual(start.method === 'start' && start.options.workspace, { mode: 'worktree', branch: thread.repo!.branch });
 
+  // As the store's event listener does: the path goes on record, the reducer moves the live run there.
+  setWorktreePath(thread.id, '/Users/me/.harness/worktrees/app/t1');
   s = applyAgentEvent(s, { threadId: thread.id, type: 'worktree', path: '/Users/me/.harness/worktrees/app/t1' });
   assert.equal(s.threads.at(-1)!.live?.cwd, '/Users/me/.harness/worktrees/app/t1');
   const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/.harness/worktrees/app/t1');
   assert.equal(restart.method === 'start' && restart.options.workspace, undefined, 'only the first start makes a worktree');
+  setWorktreePath(thread.id, null);
 });
 
 test('workspace per mode: a new worktree from a chosen base, an existing branch checked out, a project folder that never gets a worktree', () => {
@@ -126,10 +129,11 @@ test('workspace per mode: a new worktree from a chosen base, an existing branch 
   const folder = startOf({ mode: 'folder', branch: 'main' });
   assert.deepEqual(folder.options?.workspace, { mode: 'folder', branch: 'main' });
   assert.equal(folder.options?.cwd, project);
-  // Same thread id in each fresh state: a worktree path on record moves a worktree thread, never a project folder one.
+  // Same thread id in each fresh state: a worktree path on record is where the thread works, whatever mode it started in.
+  assert.equal(threadCwd(folder.thread, true), project);
   setWorktreePath(folder.thread.id, '/Users/me/.harness/worktrees/app/t1');
   assert.equal(threadCwd(fresh.thread, true), '/Users/me/.harness/worktrees/app/t1');
-  assert.equal(threadCwd(folder.thread, true), project);
+  assert.equal(threadCwd(folder.thread, true), '/Users/me/.harness/worktrees/app/t1');
   setWorktreePath(folder.thread.id, null);
 
   const switched = startOf({ mode: 'folder', branch: 'feat/y', isExisting: true });

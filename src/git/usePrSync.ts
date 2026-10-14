@@ -71,8 +71,8 @@ function repoWorktrees(threads: Thread[]): RepoWorktrees[] {
   const profiles = getProfiles();
   const repos = new Map<string, RepoWorktrees>();
   for (const t of threads) {
-    const worktree = t.live?.cwd ?? worktreePath(t.id);
-    if (!t.live || t.status === 'settled' || !t.repo?.path || t.repo.mode === 'folder' || !worktree) continue;
+    const worktree = worktreePath(t.id);
+    if (!t.live || t.status === 'settled' || !t.repo?.path || !worktree) continue;
     const githubUser = profiles.find((p) => p.id === t.spaceId)?.github || undefined;
     const groupKey = `${t.repo.path}\u0000${githubUser ?? ''}`;
     const repo = repos.get(groupKey) ?? { key: groupKey, githubUser, worktrees: new Map() };

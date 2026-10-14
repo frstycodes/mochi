@@ -207,6 +207,8 @@ export interface Repo {
   mode?: 'folder';
   base?: string;
   isExisting?: boolean;
+  /** The checkout is on a detached HEAD: `branch` holds its short commit, shown as such, never as a branch name. */
+  isDetached?: boolean;
 }
 
 export interface Thread {

@@ -6,6 +6,7 @@ import { similarity } from '../progress.ts';
 import type { Action, State } from '../store/index.tsx';
 import { completeStep, hasOpenWork, log, mapStep, mapThread, seePrs } from '../store/threads.ts';
 import { createdPr } from '../git/prs.ts';
+import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
 
@@ -28,7 +29,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       // A failed step waits on you like an approval does; Retry or Skip setup puts it back to running.
       return update((t) => ({ ...t, setup: event.setup, status: event.setup.status === 'failed' ? 'needs-you' : t.setup?.status === 'failed' && t.status === 'needs-you' ? 'running' : t.status }));
     case 'branch':
-      return update((t) => ({ ...t, repo: t.repo && { ...t.repo, branch: event.branch } }));
+      return update((t) => ({ ...t, repo: t.repo && withHead(t.repo, { branch: event.branch, isDetached: !!event.isDetached }, false) }));
     case 'session':
       return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId }, agent: {} }));
     case 'info':

@@ -27,7 +27,7 @@ export function toolEnv(getState: () => State, dispatch: (action: Action) => voi
     },
     pages: { get: getPage, update: updatePage },
     browser: host.browser,
-    cwdOf: (thread) => thread.live?.cwd ?? threadCwd(thread),
+    cwdOf: threadCwd,
     models: (provider, spaceId) => host.agent.models(provider, spaceId).catch(() => []),
     profiles: { list: getProfiles, update: updateProfile, remove: (id) => void removeProfile(id) },
     theme: storedTheme,

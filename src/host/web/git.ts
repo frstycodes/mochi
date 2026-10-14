@@ -187,6 +187,9 @@ export const git: GitHost = {
   async worktrees() {
     return [];
   },
+  async head() {
+    return { branch: 'main', isDetached: false };
+  },
   async removeWorktree() {},
   async diskUsage() {
     return 48_200_000;

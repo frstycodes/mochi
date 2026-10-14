@@ -6,7 +6,7 @@ import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, P
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
-import { assertFreeBranch, baseRef, branchNameError, listBranches, localName, switchBranch } from '../git/branches.ts';
+import { assertFreeBranch, baseRef, branchNameError, headOf, listBranches, localName, switchBranch } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
@@ -184,6 +184,10 @@ export const git = {
   async worktrees(_sender, root) {
     const top = await mainRepo(string(root, 'root'));
     return (await listWorktrees(top)).filter((w) => isUnderWorktreeRoot(w.path));
+  },
+
+  async head(_sender, cwd) {
+    return headOf(await topLevel(string(cwd, 'cwd')));
   },
 
   async removeWorktree(_sender, path) {

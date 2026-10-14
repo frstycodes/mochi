@@ -27,7 +27,7 @@ import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
-import { useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
+import { useCheckoutRecovery, useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
 import { useReplayRoute } from './replay/open';
 import { ReplayPage, ReplayView } from './replay/ReplayView';
@@ -97,6 +97,7 @@ function Shell() {
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
   useWorktreeManager();
+  useCheckoutRecovery();
   useWorktreeCleanup();
   const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
