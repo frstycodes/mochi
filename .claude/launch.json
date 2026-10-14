@@ -636,7 +636,9 @@
         "--port",
         "8787",
         "--var",
-        "CLERK_ISSUER:http://127.0.0.1:8799"
+        "CLERK_ISSUER:http://127.0.0.1:8799",
+        "--var",
+        "CLERK_CLIENT_ID:mochi_client"
       ],
       "port": 8787
     }

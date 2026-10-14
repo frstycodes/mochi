@@ -7,6 +7,8 @@ interface Env {
   ACCOUNTS: DurableObjectNamespace<AccountRelay>;
   /** The Clerk instance's Frontend API URL, the tokens' `iss`. */
   CLERK_ISSUER: string;
+  /** Mochi's OAuth client id, the tokens' `client_id`. */
+  CLERK_CLIENT_ID: string;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Env {
  */
 export default {
   async fetch(request, env): Promise<Response> {
-    const user = await userFromRequest(request, env.CLERK_ISSUER);
+    const user = await userFromRequest(request, env.CLERK_ISSUER, env.CLERK_CLIENT_ID);
     if (!user) return new Response('Sign in to Mochi first', { status: 401 });
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/v1/')) return new Response('Not found', { status: 404 });
