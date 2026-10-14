@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { Reorder } from 'motion/react';
 import { Add, X } from 'reicon-react';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,8 @@ import { isMod } from './keys';
 import { TAB_MENU } from './menus/menus';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 
-const LAYOUT_ANIMATION_MS = 220;
+// Long enough for the slowest of them: the 260ms drawer slide of the first pane in or the last one out.
+const LAYOUT_ANIMATION_MS = 260;
 const DRAG_THRESHOLD = 4;
 
 /**
@@ -32,20 +33,25 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const size = useSize(areaRef);
   const layout = useVisibleLayout(thread.id, pane);
   const chatMin = chat ? CHAT_MIN_W : 0;
-  const resolved = resolveLayout(layout, size.w, size.h, chatMin);
+  // The panes sit GAP below the window's top edge (the layout already leaves GAP at the bottom), so their cards never touch it.
+  const paneH = Math.max(0, size.h - GAP);
+  const resolved = belowTopGap(resolveLayout(layout, size.w, paneH, chatMin));
   const kinds = layout.columns.flat();
   const isAnimating = useLayoutAnimation(layout, pane.isOpen);
+  const leaving = useLeavingPanes(kinds, resolved.rects);
+  const entering = useEnteringPanes(kinds);
+  const isSliding = entering.isSlide || leaving.some((l) => l.isSlide);
   const [isResizing, setResizing] = useState(false);
   const move = usePaneMove(thread.id, pane, resolved, areaRef);
   const onKeyDown = usePaneKeys(thread.id, pane, layout);
   useEscapeExpand(thread.id, !!layout.expanded);
   const isEmpty = pane.isOpen && !kinds.length;
-  const placeholder = isEmpty ? resolveLayout({ columns: [['changes']], share: layout.share }, size.w, size.h, chatMin).rects.changes : undefined;
+  const placeholder = isEmpty ? belowTopGap(resolveLayout({ columns: [['changes']], share: layout.share }, size.w, paneH, chatMin)).rects.changes : undefined;
   const chatWidth = !chat ? 0 : placeholder ? placeholder.x : resolved.chatWidth;
   const showFocus = kinds.length > 1;
 
   return (
-    <div ref={areaRef} onKeyDown={onKeyDown} className={cn('relative h-full min-h-0 overflow-hidden', isAnimating && !isResizing && 'pane-layout-animating')}>
+    <div ref={areaRef} onKeyDown={onKeyDown} data-motion={isSliding ? 'slide' : undefined} className={cn('relative h-full min-h-0 overflow-hidden', isAnimating && !isResizing && 'pane-layout-animating')}>
       {!!chat && (
         <div className="pane-chat absolute inset-y-0 left-0 min-w-0" style={{ width: size.w ? chatWidth : '100%' }}>
           {chat}
@@ -63,14 +69,24 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
             showFocus={showFocus}
             isExpanded={layout.expanded === kind}
             isMoving={move.kind === kind}
+            entering={entering.kinds.includes(kind) ? (entering.isSlide ? 'slide' : 'fade') : undefined}
             onHeaderPointerDown={(e) => move.start(e, kind)}
           />
         ))}
+      {leaving.map(({ kind, rect, isSlide }) => (
+        <LeavingPane key={`leaving:${kind}`} kind={kind} rect={rect} isSlide={isSlide} />
+      ))}
       {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
       {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onResizing={setResizing} />}
       {!!move.indicator && <span aria-hidden className="pointer-events-none absolute z-30 rounded-full bg-foreground/50" style={move.indicator} />}
     </div>
   );
+}
+
+/** The layout moved down by GAP, so cards, dividers and drop targets share one frame; never a wrapper over the chat to do it. */
+function belowTopGap(resolved: ResolvedLayout): ResolvedLayout {
+  const rects = Object.fromEntries(Object.entries(resolved.rects).map(([kind, r]) => [kind, r && { ...r, y: r.y + GAP }])) as ResolvedLayout['rects'];
+  return { ...resolved, rects };
 }
 
 /** Tabs dragged out into their own split live there, not in a pane, until they're dropped back or their split closes. */
@@ -106,6 +122,57 @@ function useLayoutAnimation(layout: PaneLayout, isOpen: boolean) {
   return isAnimating;
 }
 
+/**
+ * Panes opened since the last render animate in: the first one in an empty column slides in from the right edge like the sidebar,
+ * one added beside others scales in. What was there when the panes mounted (a thread opened, a swipe landed) never animates.
+ */
+function useEnteringPanes(kinds: PaneTabKind[]) {
+  const last = useRef(kinds);
+  const [entering, setEntering] = useState<{ kinds: PaneTabKind[]; isSlide: boolean }>({ kinds: [], isSlide: false });
+  useLayoutEffect(() => {
+    const added = kinds.filter((k) => !last.current.includes(k));
+    const wasEmpty = last.current.length === 0;
+    last.current = kinds;
+    if (!added.length) return;
+    setEntering((e) => ({ kinds: [...new Set([...e.kinds, ...added])], isSlide: wasEmpty || e.isSlide }));
+    window.setTimeout(() => setEntering((e) => ({ kinds: e.kinds.filter((k) => !added.includes(k)), isSlide: false })), LAYOUT_ANIMATION_MS);
+  });
+  return entering;
+}
+
+/** A closing pane's card: its header so it doesn't read as a blank box, then the exit (a slide out when it was the last one). */
+function LeavingPane({ kind, rect, isSlide }: { kind: PaneTabKind; rect: PaneRect; isSlide: boolean }) {
+  const { title, icon: Icon } = PANE_TABS[kind];
+  return (
+    <div aria-hidden data-motion={isSlide ? 'slide' : 'fade'} className="pane-card pane-card-leaving pointer-events-none absolute flex flex-col overflow-hidden rounded-lg border border-border bg-card" style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}>
+      <div data-pane-header className="flex h-9 shrink-0 items-center gap-1.5 pl-3">
+        <Icon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate type-meta font-medium">{title}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A pane that closes leaves its card behind for one exit animation while the others slide into its room; the pane's own content
+ * is already gone (its tab left the state), so what fades is the empty card. A layout effect, so no frame shows the gap first.
+ */
+function useLeavingPanes(kinds: PaneTabKind[], rects: ResolvedLayout['rects']) {
+  const last = useRef({ kinds, rects });
+  const [leaving, setLeaving] = useState<{ kind: PaneTabKind; rect: PaneRect; isSlide: boolean }[]>([]);
+  useLayoutEffect(() => {
+    const before = last.current;
+    last.current = { kinds, rects };
+    const gone = before.kinds.filter((k) => !kinds.includes(k) && before.rects[k] && !before.rects[k]!.isHidden);
+    if (!gone.length) return;
+    // The last pane out (or the whole column hidden) slides off like the sidebar; one of several just fades.
+    const isSlide = kinds.length === 0;
+    setLeaving((l) => [...l.filter((x) => !gone.includes(x.kind)), ...gone.map((kind) => ({ kind, rect: before.rects[kind]!, isSlide }))]);
+    window.setTimeout(() => setLeaving((l) => l.filter((x) => !gone.includes(x.kind))), LAYOUT_ANIMATION_MS);
+  });
+  return leaving.filter((x) => !kinds.includes(x.kind));
+}
+
 function PaneCard({
   thread,
   pane,
@@ -115,6 +182,7 @@ function PaneCard({
   showFocus,
   isExpanded,
   isMoving,
+  entering,
   onHeaderPointerDown,
 }: {
   thread: Thread;
@@ -125,6 +193,7 @@ function PaneCard({
   showFocus: boolean;
   isExpanded: boolean;
   isMoving: boolean;
+  entering: 'slide' | 'fade' | undefined;
   onHeaderPointerDown: (e: ReactPointerEvent) => void;
 }) {
   const { dispatch } = useHarness();
@@ -138,13 +207,15 @@ function PaneCard({
       data-pane={kind}
       data-panes-of={thread.id}
       data-side-pane
+      data-motion={entering}
       tabIndex={-1}
       hidden={rect.isHidden}
       onPointerDownCapture={focus}
       onFocusCapture={focus}
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       className={cn(
-        'pane-card absolute flex flex-col overflow-hidden rounded-xl border bg-card outline-none',
+        'pane-card absolute flex flex-col overflow-hidden rounded-lg border bg-card outline-none',
+        !!entering && 'pane-card-entering',
         showFocus && isFocused ? 'border-foreground/20' : 'border-border',
         isExpanded && 'z-20',
         isMoving && 'opacity-60',
@@ -236,7 +307,7 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
 
 function EmptyPanes({ thread, rect }: { thread: Thread; rect: PaneRect }) {
   return (
-    <section aria-label="Panes" data-panes-of={thread.id} data-side-pane style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} className="pane-card absolute overflow-hidden rounded-xl border bg-card">
+    <section aria-label="Panes" data-panes-of={thread.id} data-side-pane style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }} className="pane-card absolute overflow-hidden rounded-lg border bg-card">
       <NoPanes thread={thread} />
     </section>
   );

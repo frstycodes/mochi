@@ -32,7 +32,7 @@ export function FileFinder({ root, files, selected, query, onQueryChange, focusK
   const [activeHit, setActiveHit] = useState(0);
   useEffect(() => setActiveHit(0), [query, options]);
   useEffect(() => {
-    if (focusKey) input.current?.focus();
+    if (focusKey) input.current?.select();
   }, [focusKey]);
   const activeKey = isContentSearch ? `hit:${activeHit}` : `path:${tree.active}`;
   useEffect(() => {

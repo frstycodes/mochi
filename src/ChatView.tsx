@@ -108,7 +108,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
         </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
-        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-6 left-1 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
+        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-6 left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
         {!isReadOnly && <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />}
       </Conversation>
       {!isReadOnly && (

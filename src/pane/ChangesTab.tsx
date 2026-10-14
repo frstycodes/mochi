@@ -21,18 +21,19 @@ import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { DiffStat } from '../WorkLog';
-import { PaneActions, PaneTitle } from './PaneHeader';
+import { PaneActions, PaneMenuItems, PaneTitle, usePaneMenu } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
-export function ChangesTab({ thread }: PaneTabProps) {
+export function ChangesTab({ thread, tab }: PaneTabProps) {
   const cwd = useWorktreePath(thread.id) ?? threadCwd(thread);
   if (!cwd) return <NoFolder />;
-  return <Changes key={cwd} thread={thread} cwd={cwd} />;
+  return <Changes key={cwd} thread={thread} cwd={cwd} tabId={tab.id} />;
 }
 
 const ALL_STEPS = 'all';
 
-function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
+function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: string }) {
+  usePaneMenu();
   const [scope, setScope] = useState<DiffScope>('branch');
   const [stepId, setStepId] = useState(ALL_STEPS);
   const { diffStyle } = usePrefs();
@@ -86,7 +87,7 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
           </span>
         )}
         <AskAboutHunk threadId={thread.id} files={files} />
-        <ToggleGroup type="single" size="sm" value={diffStyle} onValueChange={(v) => v && setPrefs({ diffStyle: v as DiffStyle })} aria-label="Diff layout">
+        <ToggleGroup type="single" size="sm" variant="outline" spacing={0} value={diffStyle} onValueChange={(v) => v && setPrefs({ diffStyle: v as DiffStyle })} aria-label="Diff layout">
           <ToggleGroupItem value="unified" aria-label="Unified diff">
             <RowVertical />
           </ToggleGroupItem>
@@ -94,7 +95,9 @@ function Changes({ thread, cwd }: { thread: Thread; cwd: string }) {
             <RowHorizontal />
           </ToggleGroupItem>
         </ToggleGroup>
-        <WorktreeMenu cwd={cwd} base={thread.repo?.base} diff={diff} run={run} confirm={confirm} />
+        <WorktreeMenu cwd={cwd} base={thread.repo?.base} diff={diff} run={run} confirm={confirm}>
+          <PaneMenuItems kind="changes" threadId={thread.id} tabId={tabId} />
+        </WorktreeMenu>
       </PaneActions>
       {!!diffQuery.error && !diff && <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />}
       {diffQuery.isLoading && <ChangesSkeleton />}

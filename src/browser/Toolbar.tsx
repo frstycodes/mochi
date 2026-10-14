@@ -33,7 +33,6 @@ import { deviceSize, isDemoUrl } from './PageSurface';
 import { AddressBar } from './AddressBar';
 import { reloadPage, updatePage, type Page } from './pages';
 import { displayUrl } from './url';
-import { PaneActions } from '../pane/PaneHeader';
 import { OverflowIcon } from '../ui';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 2];
@@ -66,17 +65,11 @@ export function BrowserToolbar({ thread, pageId, page }: { thread: Thread; pageI
         </IconAction>
       )}
       <AddressBar thread={thread} pageId={pageId} page={page} />
+      <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
+        <Cursor />
+      </IconAction>
+      <ScreenshotMenu pageId={pageId} page={page} />
       {page.console.length > 0 && <ConsoleButton thread={thread} pageId={pageId} page={page} />}
-      <PaneActions>
-        <IconAction label={canPick ? (page.isPicking ? 'Stop picking' : 'Pick an element to comment on') : DESKTOP_ONLY} pressed={page.isPicking} disabled={!canPick} onClick={() => togglePick(pageId, page, thread)}>
-          <Cursor />
-        </IconAction>
-        <IconAction label={page.device === RESPONSIVE ? 'Emulate a device' : 'Stop emulating'} pressed={page.device !== RESPONSIVE} onClick={() => updatePage(pageId, { device: page.device === RESPONSIVE ? DEVICES[1].id : RESPONSIVE })}>
-          <Mobile />
-        </IconAction>
-        <AutoReloadToggle thread={thread} pageId={pageId} page={page} />
-        <ScreenshotMenu pageId={pageId} page={page} />
-      </PaneActions>
       <MoreMenu thread={thread} pageId={pageId} page={page} onHardReload={() => command('hard-reload')} />
     </div>
   );
@@ -141,16 +134,6 @@ function ConsoleButton({ thread, pageId, page }: { thread: Thread; pageId: strin
   );
 }
 
-function AutoReloadToggle({ thread, pageId, page }: { thread: Thread; pageId: string; page: Page }) {
-  const hasFolder = !!threadCwd(thread);
-  const label = !page.hostId ? DESKTOP_ONLY : !hasFolder ? 'Auto-reload needs a project folder' : page.isAutoReloading ? 'Stop reloading on file changes' : 'Reload when files change';
-  return (
-    <IconAction label={label} pressed={page.isAutoReloading} disabled={!page.hostId || !hasFolder} onClick={() => toggleAutoReload(pageId, page, thread)}>
-      <RefreshCircle />
-    </IconAction>
-  );
-}
-
 function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
   const isNative = !!page.hostId;
   return (
@@ -175,7 +158,8 @@ function ScreenshotMenu({ pageId, page }: { pageId: string; page: Page }) {
 
 function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; pageId: string; page: Page; onHardReload: () => void }) {
   const isNative = !!page.hostId;
-  const canCompare = isNative && !!threadCwd(thread) && !page.compare;
+  const hasFolder = !!threadCwd(thread);
+  const canCompare = isNative && hasFolder && !page.compare;
   const zoomBy = (step: 1 | -1) => {
     const i = ZOOM_STEPS.findIndex((z) => z >= page.zoom - 1e-3);
     updatePage(pageId, { zoom: ZOOM_STEPS[Math.min(Math.max(i + step, 0), ZOOM_STEPS.length - 1)] });
@@ -197,7 +181,17 @@ function MoreMenu({ thread, pageId, page, onHardReload }: { thread: Thread; page
         </TooltipTrigger>
         <TooltipContent>More</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuCheckboxItem checked={page.device !== RESPONSIVE} onCheckedChange={(on) => updatePage(pageId, { device: on ? DEVICES[1].id : RESPONSIVE })}>
+          <Mobile />
+          Emulate a device
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem disabled={!isNative || !hasFolder} checked={page.isAutoReloading} onCheckedChange={() => toggleAutoReload(pageId, page, thread)}>
+          <RefreshCircle />
+          Reload when files change
+          {(!isNative || !hasFolder) && <DropdownMenuShortcut>{!isNative ? 'Desktop app' : 'Needs a folder'}</DropdownMenuShortcut>}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onHardReload}>
           Hard reload
         </DropdownMenuItem>
