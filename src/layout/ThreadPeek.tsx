@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
 import { PANE_TABS } from '../pane/tabs';
 import { useHarness } from '../store';
+import { PreviewContext } from './SplitContext';
 import { ProviderMark, ThreadStatusIcon } from '../ui';
 import { Shortcut } from '../Shortcut';
 import { ThreadMessageIcon } from '../chat/ThreadMessage';
@@ -38,7 +39,10 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
             <Shortcut keys={['mod', String(pinNumber)]} />
           )}
         </div>
-        <PreviewThumb thread={thread} />
+        {/* A preview never drives the live browser view, or the real pane loses it. */}
+        <PreviewContext.Provider value={true}>
+          <PreviewThumb thread={thread} />
+        </PreviewContext.Provider>
         {tail.length > 0 && (
           <ul className="flex flex-col gap-2">
             {tail.map((a) => (
