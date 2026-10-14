@@ -648,6 +648,24 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-serene-goldstine-e4f446/2d6dc8f7-a5a4-4750-9693-34032234bac6/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-relay",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "infra/relay",
+        "exec",
+        "wrangler",
+        "dev",
+        "--port",
+        "8787",
+        "--var",
+        "CLERK_ISSUER:http://127.0.0.1:8799",
+        "--var",
+        "CLERK_CLIENT_ID:mochi_client"
+      ],
+      "port": 8787
     }
   ]
 }

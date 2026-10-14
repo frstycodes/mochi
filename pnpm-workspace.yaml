@@ -1,3 +1,5 @@
+packages:
+  - infra/*
 onlyBuiltDependencies:
   - electron
   - node-pty

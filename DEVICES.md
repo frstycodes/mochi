@@ -91,9 +91,10 @@ Everything runs on the machine that owns the thread; a device sends the command 
   - Each device generates its own keypair (`safeStorage`) and registers the public key under the account; the two run the handshake on first connect.
   - After pairing, each connection proves the device key against a fresh challenge.
 - **Relay, only when signed in and "Reach this computer from anywhere" is on.**
-  - The machine opens one outbound WebSocket to the relay, authenticated with its Clerk access token in a header. Main is Node, so it can set headers.
-  - Devices connect to the relay with their device key. The relay pairs the sockets and forwards encrypted frames.
-  - The relay stores per account: the machine ids, the device public keys the machine registered, and the encrypted settings and pins copy. No thread content.
+  - Built (`infra/relay`): a Cloudflare Worker, one Durable Object per account (named by the Clerk user id), WebSockets on the hibernation API. Every route takes the account's Clerk access token in `Authorization`, never in the URL. `GET /v1/machines` lists the account's machines (id, name, public key, online), `DELETE /v1/machines/:id` forgets one, `GET /v1/connect` opens a socket as `role=machine` or `role=device` for one `machine`.
+  - The machine opens one outbound socket and registers its name and public key; each device socket becomes a numbered channel on it (binary frames carry a 4-byte channel prefix on the machine side, none on the device side). The relay forwards those bytes untouched; they are the e2e session's ciphertext.
+  - The relay stores per account only the machine registry (and later the encrypted settings and pins copy). Approved device keys stay on each machine, so a compromised relay can list machines and forward or drop frames but can't add a device. It could hand out a wrong machine key, which is why pairing shows the machine's key fingerprint on both screens to compare. No thread content.
+  - GAP: devices authenticate with the `Authorization` header, which Mochi's main process can set; a browser (the phone PWA) can't on a WebSocket and will need a short-lived ticket sent in the first frame.
 
 ## Platforms (proposed)
 
@@ -163,7 +164,7 @@ Each PR is its own worktree session, per SESSIONS.md, verified in both themes wh
 
 0. **`platforms`** ([#92](https://github.com/frstycodes/mochi/pull/92)): Windows (NSIS) and Linux (AppImage) builds, `node-pty` per platform, CI packaging on all three, shells / `.cmd` shims / process-tree kills through `electron/platform.ts`, tray keep-alive (agents and schedules keep running with no window), platform-neutral copy. Split out: the custom title bar off macOS, the Ports tab on Windows (no `lsof`), the Windows icon badge. Machine names move to `remote-server`, where they're first needed.
 1. **`account`**: Clerk sign-in in main (PKCE, system browser, `safeStorage`), `host.account`, Settings › Account; first verify redirect URIs and the revoke endpoint.
-2. **`relay`**: Worker and Durable Objects, Clerk JWT check, the account's machines and device public keys, device-key auth, frame forwarding, self-host relay URL; the machine's outbound connection behind "Reach this computer from anywhere".
+2. **`relay`**: built in `infra/relay` (Worker, Durable Objects, Clerk JWT check with jose, machine registry, channel forwarding, self-hostable). The machine's outbound connection and device-key auth land with pairing in `remote-server` follow-ups.
 3. **`remote-server`**: `electron/remote/`: WebSocket server, protocol, scopes, pairing through the account's device list, snapshot plus sequenced action stream from `recordAction`, command bridge to the renderer, hidden window keeping the renderer alive with windows closed, direct LAN/Tailscale route tried before the relay. Settings › Devices. Tests: sequencing and replay, first answer wins, scope refusal, duplicate command id.
 4. **`e2e`**: libsodium handshake and framing, device approval on the owning machine, tampered and replayed frames rejected (test).
 5. **`remote-commands`**: the full command set for `operate`, `manage`, `code` and `terminal`, each routed through the same code the machine's UI uses (ship flow still asks before push and PR).
