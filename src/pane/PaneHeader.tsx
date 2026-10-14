@@ -14,9 +14,11 @@ interface Slots {
   title: HTMLElement | null;
   actions: HTMLElement | null;
   hasTitle: boolean;
+  hasMenu: boolean;
   setTitle: (el: HTMLElement | null) => void;
   setActions: (el: HTMLElement | null) => void;
   claimTitle: (delta: 1 | -1) => void;
+  claimMenu: (delta: 1 | -1) => void;
 }
 
 const SlotsContext = createContext<Slots | null>(null);
@@ -26,7 +28,17 @@ export function PaneSlots({ children }: { children: ReactNode }) {
   const [title, setTitle] = useState<HTMLElement | null>(null);
   const [actions, setActions] = useState<HTMLElement | null>(null);
   const [titleClaims, setTitleClaims] = useState(0);
-  const value = { title, actions, hasTitle: titleClaims > 0, setTitle, setActions, claimTitle: (delta: 1 | -1) => setTitleClaims((n) => n + delta) };
+  const [menuClaims, setMenuClaims] = useState(0);
+  const value = {
+    title,
+    actions,
+    hasTitle: titleClaims > 0,
+    hasMenu: menuClaims > 0,
+    setTitle,
+    setActions,
+    claimTitle: (delta: 1 | -1) => setTitleClaims((n) => n + delta),
+    claimMenu: (delta: 1 | -1) => setMenuClaims((n) => n + delta),
+  };
   return <SlotsContext.Provider value={value}>{children}</SlotsContext.Provider>;
 }
 
@@ -53,6 +65,7 @@ export function PaneHeader({
   onDragStart: (e: PointerEvent) => void;
 }) {
   const { title, icon: Icon } = PANE_TABS[kind];
+  const hasOwnMenu = useContext(SlotsContext)?.hasMenu;
   return (
     <header data-pane-header onPointerDown={onDragStart} className="flex h-9 shrink-0 cursor-default items-center gap-0.5 pr-1.5 pl-3 select-none">
       <PaneTitleSlot>
@@ -60,7 +73,7 @@ export function PaneHeader({
         <h2 className="truncate type-meta font-medium">{title}</h2>
       </PaneTitleSlot>
       <PaneActionsSlot />
-      {!!tabId && (
+      {!!tabId && !hasOwnMenu && (
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -73,13 +86,7 @@ export function PaneHeader({
             <TooltipContent>More actions</TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end" className="w-60">
-            {kind === 'browser' && (
-              <>
-                <ActionItems target={{ threadId, tabId }} groups={BROWSER_PANE_MENU} menu="dropdown" />
-                <DropdownMenuSeparator />
-              </>
-            )}
-            <ActionItems target={{ threadId, tabId }} groups={PANE_MENU} menu="dropdown" />
+            <PaneMenuItems kind={kind} threadId={threadId} tabId={tabId} />
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -128,6 +135,32 @@ export function PaneTitle({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- claim's identity changes every render; the claim itself is once per mount
   }, []);
   return slots?.title ? createPortal(children, slots.title) : null;
+}
+
+/** The header's own ⋯ items, for a pane that has a ⋯ of its own (`usePaneMenu`) and puts them at the end of it. */
+export function PaneMenuItems({ kind, threadId, tabId }: { kind: PaneTabKind; threadId: string; tabId: string }) {
+  return (
+    <>
+      {kind === 'browser' && (
+        <>
+          <ActionItems target={{ threadId, tabId }} groups={BROWSER_PANE_MENU} menu="dropdown" />
+          <DropdownMenuSeparator />
+        </>
+      )}
+      <ActionItems target={{ threadId, tabId }} groups={PANE_MENU} menu="dropdown" />
+    </>
+  );
+}
+
+/** A pane with its own ⋯ in `PaneActions` takes over the header's, so there's only ever one; it ends with `PaneMenuItems`. */
+export function usePaneMenu() {
+  const claim = useContext(SlotsContext)?.claimMenu;
+  useLayoutEffect(() => {
+    if (!claim) return;
+    claim(1);
+    return () => claim(-1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- claim's identity changes every render; the claim itself is once per mount
+  }, []);
 }
 
 /** Its children sit in the pane header, left of ⋯, expand and close: the pane's own toolbar buttons. */

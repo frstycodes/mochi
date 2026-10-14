@@ -189,7 +189,7 @@ function FloatingSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }
     <div
       inert={!isOpen || undefined}
       className={cn(
-        'pointer-events-none absolute top-0 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
+        'pointer-events-none absolute top-11 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
         isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
       )}
     >

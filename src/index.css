@@ -465,6 +465,20 @@
   border-radius: 5px;
   corner-shape: round;
 }
+/* A toggle group there is one joined segment at the same height; only its outer corners round. */
+[data-pane-header] [data-slot='toggle-group-item'] {
+  height: 20px;
+  min-width: 24px;
+  padding-inline: 4px;
+  corner-shape: round;
+}
+[data-pane-header] [data-slot='toggle-group-item']:first-child {
+  border-radius: 5px 0 0 5px;
+}
+[data-pane-header] [data-slot='toggle-group-item']:last-child {
+  border-radius: 0 5px 5px 0;
+}
+[data-pane-header] [data-slot='toggle-group-item'] svg,
 [data-pane-header] [data-slot='button'][data-size^='icon'] svg {
   width: 13px;
   height: 13px;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ArrowDown, Broom, Copy } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -18,10 +18,12 @@ interface WorktreeMenuProps {
   diff: GitDiff | undefined;
   run: <T>(label: string, action: () => Promise<T>) => Promise<T | undefined>;
   confirm: (request: ConfirmRequest) => Promise<boolean>;
+  /** Items after the worktree's own: the pane's, when this is the pane header's one ⋯. */
+  children?: ReactNode;
 }
 
 /** The thread's worktree: where it is, its size, sync with base, and cleanup of settled threads' worktrees. */
-export function WorktreeMenu({ cwd, base: chosenBase, diff, run, confirm }: WorktreeMenuProps) {
+export function WorktreeMenu({ cwd, base: chosenBase, diff, run, confirm, children }: WorktreeMenuProps) {
   const bytes = useDiskUsage(cwd);
   const settled = useSettledWorktrees();
   const base = diff?.base ?? chosenBase ?? 'base';
@@ -62,7 +64,7 @@ export function WorktreeMenu({ cwd, base: chosenBase, diff, run, confirm }: Work
   return (
     <DropdownMenu onOpenChange={(open) => open && bytes.refresh()}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Worktree actions" className="text-muted-foreground">
+        <Button variant="ghost" size="icon-sm" aria-label="More Changes actions" className="text-muted-foreground">
           <OverflowIcon />
         </Button>
       </DropdownMenuTrigger>
@@ -90,6 +92,12 @@ export function WorktreeMenu({ cwd, base: chosenBase, diff, run, confirm }: Work
           <Broom />
           {settled.length ? `Clean up settled worktrees (${settled.length})` : 'No settled worktrees to clean up'}
         </DropdownMenuItem>
+        {!!children && (
+          <>
+            <DropdownMenuSeparator />
+            {children}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
