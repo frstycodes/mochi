@@ -1,6 +1,6 @@
 import { BrowserWindow, shell, systemPreferences } from 'electron';
 import type { ScreenAccess, WindowsHost } from '../../src/host/types/windows.ts';
-import { openRoute } from '../window.ts';
+import { openRoute, trafficLightsAt } from '../window.ts';
 import { captureAppWindow, listAppWindows } from '../windows/appWindows.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
@@ -16,6 +16,11 @@ export const windows = {
   },
   async isFullScreen(sender) {
     return BrowserWindow.fromWebContents(sender)?.isFullScreen() ?? false;
+  },
+  async zoomFactor(sender) {
+    const zoom = sender.getZoomFactor();
+    BrowserWindow.fromWebContents(sender)?.setWindowButtonPosition(trafficLightsAt(zoom));
+    return zoom;
   },
   async listApps() {
     // Asking while not-determined is what shows the macOS prompt; the answer only applies after a relaunch.
