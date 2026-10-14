@@ -12,7 +12,7 @@ test('parses /side with its question, keeping line breaks', () => {
 test('leaves plain text and commands Mochi does not own to the agent', () => {
   assert.equal(parseSlash('why /side?'), null);
   assert.equal(parseSlash('/sidebar open'), null);
-  assert.equal(parseSlash('/compact'), null);
+  assert.equal(parseSlash('/clear'), null);
   assert.equal(parseSlash('/'), null);
 });
 
@@ -30,7 +30,7 @@ const items = slashItems(
 test('lists Mochi commands first and leaves a shared name to Mochi', () => {
   assert.deepEqual(
     items.map((i) => `${i.source}:${i.name}`),
-    ['mochi:side', 'claude:fix-lint', 'claude:review', 'claude:frontend-design:audit'],
+    ['mochi:side', 'mochi:compact', 'claude:fix-lint', 'claude:review', 'claude:frontend-design:audit'],
   );
 });
 
@@ -39,7 +39,7 @@ test('menu filters while the name is typed: prefix, then substring, then in-orde
     const range = slashQueryAt(text);
     return range ? slashMatches(range.query, items).map((c) => c.name) : [];
   };
-  assert.deepEqual(names('/'), ['side', 'fix-lint', 'review', 'frontend-design:audit']);
+  assert.deepEqual(names('/'), ['side', 'compact', 'fix-lint', 'review', 'frontend-design:audit']);
   assert.deepEqual(names('/si'), ['side', 'frontend-design:audit']);
   assert.deepEqual(names('/fi'), ['fix-lint', 'frontend-design:audit']);
   assert.deepEqual(names('/lint'), ['fix-lint']);

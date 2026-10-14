@@ -45,6 +45,8 @@ import { MessageContextMenu } from './chat/MessageContextMenu';
 import { useThreadPins, type Pin } from './chat/pins';
 import { SelectionPin, usePinHighlights } from './chat/SelectionPin';
 import { LimitEntry, LimitHint } from './chat/LimitCard';
+import { CompactionRow } from './chat/CompactionRow';
+import { compactFocus, compactGate } from './chat/compact';
 import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
 import { SlashTokenText } from './chat/SlashToken';
@@ -148,6 +150,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   }
   if (row.kind === 'thread-message') return <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
+  if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
   if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
   const { entry } = row;
@@ -336,7 +339,10 @@ function Composer({
   const provider = thread.providers[0];
   const mention = useMentionMenu(thread, useThreadSkills(provider, thread.spaceId, thread.agent), useThreadServers(provider, thread.spaceId, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
-  const slash = useSlashMenu(slashItems);
+  const compact = compactGate(thread, isQueueing, decisions.length > 0);
+  const offReason = compact.kind === 'off' ? compact.reason : undefined;
+  const items = useMemo(() => slashItems.map((i) => (i.source === 'mochi' && i.name === 'compact' && offReason ? { ...i, disabledReason: offReason } : i)), [slashItems, offReason]);
+  const slash = useSlashMenu(items);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
   const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
   const draftKey = threadDraftKey(thread.id);
@@ -345,6 +351,17 @@ function Composer({
   useEffect(() => {
     mention.restore(getDraft<{ mentions: Mention[] }>(draftKey)?.extra?.mentions ?? []);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // `/compact` never goes to the agent as text: it runs now, waits in the queue as typed, or says why it can't.
+  const runCompact = (focus: string, hasFiles: boolean) => {
+    const problem = hasFiles || mention.mentions.length > 0 ? '/compact takes only a focus, no attachments or references' : offReason;
+    if (problem) {
+      toast.error(problem);
+      return false;
+    }
+    if (compact.kind === 'queue') dispatch({ type: 'queued-add', threadId: thread.id, message: queuedMessage(focus ? `/compact ${focus}` : '/compact', { mentions: [], isCommand: true, typedSkills: [] }) });
+    else dispatch({ type: 'compact', threadId: thread.id, focus });
+  };
 
   const edit = (message: QueuedMessage) => {
     dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id });
@@ -374,7 +391,7 @@ function Composer({
               provider={provider}
               isLocked={!!thread.live}
               onControlsChange={setControls}
-              slashItems={slashItems}
+              slashItems={items}
               onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
               submitLabel={isQueueing ? 'Queue message' : 'Send'}
               meter={<ContextRing provider={provider} spaceId={thread.spaceId} context={thread.context} usage={threadUsage(thread)} />}
@@ -388,6 +405,8 @@ function Composer({
                   return false;
                 }
                 if (command?.command.name === 'side') return askInSideChat(dispatch, thread.id, command.arg);
+                const focus = compactFocus(trimmed);
+                if (focus !== null) return runCompact(focus, files.length > 0);
                 const images = await sentImages(files);
                 const message = queuedMessage(trimmed, { ...(images.length > 0 && { images }), mentions: mention.mentions, isCommand: !!resolveToken(trimmed, slashItems), typedSkills: typedSkills(trimmed, slashItems) });
                 if (!isQueueing) return drift.submit(message);

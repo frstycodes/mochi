@@ -6,7 +6,7 @@ import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentA
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, claudeRunOptions, hasClaudeSession, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, claudeRunOptions, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
@@ -93,6 +93,18 @@ export const agent = {
     markBusy(threadId as string);
     if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier);
     return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier);
+  },
+  async compact(_sender, threadId, focus) {
+    string(threadId, 'threadId', 256);
+    string(focus, 'focus', 10_000);
+    await starts.wait(threadId as string);
+    if (!hasClaudeSession(threadId as string) && !codex.owns(threadId as string)) throw new Error(NO_AGENT_PROCESS);
+    markBusy(threadId as string);
+    if (hasClaudeSession(threadId as string)) return compactClaude(threadId as string, focus as string);
+    return codex.compact(threadId as string);
+  },
+  async compactInstructions(_sender, threadId, instructions) {
+    setClaudeCompactInstructions(string(threadId, 'threadId', 256), string(instructions, 'instructions', 20_000));
   },
   async interrupt(_sender, threadId) {
     string(threadId, 'threadId', 256);

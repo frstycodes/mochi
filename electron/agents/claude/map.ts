@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
@@ -138,6 +138,17 @@ export function createMapper(threadId: string, cwd: string) {
     return [subagent(id, 'end', { status, ...(message.summary && { result: message.summary }), ...(message.usage && { tokens: message.usage.total_tokens }) })];
   }
 
+  /** Claude Code's status turns `compacting`, then the boundary says how big the context was and is; the summary comes from the PostCompact hook. */
+  function compaction(message: SDKStatusMessage | SDKCompactBoundaryMessage): AgentEvent[] {
+    if (message.subtype === 'status') {
+      if (message.status === 'compacting') return [{ threadId, type: 'compaction', phase: 'start' }];
+      return message.compact_result === 'failed' ? [{ threadId, type: 'compaction', phase: 'end', error: message.compact_error || 'Compaction failed' }] : [];
+    }
+    const { trigger, pre_tokens, post_tokens } = message.compact_metadata;
+    if (post_tokens !== undefined) context = { ...context, used: post_tokens };
+    return [{ threadId, type: 'compaction', phase: 'end', trigger, preTokens: pre_tokens, ...(post_tokens !== undefined && { postTokens: post_tokens }) }];
+  }
+
   function usage(modelUsage: Record<string, { inputTokens: number; outputTokens: number; cacheReadInputTokens: number; cacheCreationInputTokens: number; contextWindow: number }>, costUsd: number): AgentEvent {
     // modelUsage and total_cost_usd are running totals per query(); the store adds what it gets, so send the change since the last result.
     const models = Object.values(modelUsage);
@@ -161,6 +172,7 @@ export function createMapper(threadId: string, cwd: string) {
           return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }, ...typedSkills()];
         }
         if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name), commands: commandsFrom(message.commands) } }];
+        if (message.subtype === 'status' || message.subtype === 'compact_boundary') return compaction(message);
         return [];
       case 'stream_event': {
         const event = message.event;

@@ -1,6 +1,8 @@
 import type { AgentDecision, AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
 import { noteCollisions } from './collisions.ts';
-import type { ActivityEntry, AgentInfo, Provider, QueueItem, Step, Thread } from '../model.ts';
+import type { ActivityEntry, AgentInfo, Compaction, Provider, QueueItem, Step, Thread } from '../model.ts';
+import { compactionEntry, keptContext, restoreNote } from '../chat/compact.ts';
+import { getThreadPins } from '../chat/pins.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -63,6 +65,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     }
     case 'resolved':
       return withdraw(state, thread, `q-${event.requestId}`);
+    case 'compaction':
+      return update((t) => applyCompaction(t, event, now));
     case 'usage':
       return update((t) => ({
         ...t,
@@ -79,11 +83,47 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'turn-end': {
       if (event.status === 'interrupted' && thread.live?.isReplacingTurn) return update((t) => log({ ...t, live: { ...t.live!, isReplacingTurn: undefined } }, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted for your queued message' }));
       // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
-      const ended = thread.live ? update((t) => ({ ...t, live: { ...t.live!, isWorking: false, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } })) : state;
+      const ended = thread.live ? update((t) => closeCompaction({ ...t, live: { ...t.live!, isWorking: false, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
       if (isLimitEnd(thread)) return ended;
       return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
     }
   }
+}
+
+/**
+ * A compaction opens one work-log entry (a `/compact` already opened it) and fills it in as the harness reports. Codex takes no
+ * instructions, so its end leaves what Mochi would have asked it to keep as a note for the agent's next message.
+ */
+function applyCompaction(t: Thread, event: Extract<AgentEvent, { type: 'compaction' }>, now: number): Thread {
+  const i = t.activity.findLastIndex((e) => e.compaction);
+  const open = i >= 0 && t.activity[i].compaction!.status === 'running' ? i : -1;
+  if (event.phase === 'start') return open >= 0 ? t : log(t, compactionEntry(t, now, event.trigger ?? 'auto'));
+  if (event.phase === 'summary') return i < 0 ? t : patchCompaction(t, i, { summary: event.summary });
+  const at = open >= 0 ? open : t.activity.length;
+  const opened = open >= 0 ? t : log(t, compactionEntry(t, now, event.trigger ?? 'auto'));
+  const before = opened.activity[at].compaction!;
+  const ended = patchCompaction(opened, at, {
+    status: event.error ? 'failed' : 'done',
+    ...(event.trigger && { trigger: event.trigger }),
+    ...(event.preTokens !== undefined && { preTokens: event.preTokens }),
+    ...(event.postTokens !== undefined && { postTokens: event.postTokens }),
+    ...(event.error && { error: event.error }),
+  });
+  const withContext = event.postTokens !== undefined ? { ...ended, context: { ...ended.context, used: event.postTokens } } : ended;
+  if (event.error || actor(t) !== 'codex' || !withContext.live) return withContext;
+  const note = restoreNote(keptContext(t, getThreadPins(t.id)), before.focus);
+  return note ? { ...withContext, live: { ...withContext.live, notes: [...(withContext.live.notes ?? []), note] } } : withContext;
+}
+
+function patchCompaction(t: Thread, index: number, patch: Partial<Compaction>): Thread {
+  return { ...t, activity: t.activity.map((e, j) => (j === index ? { ...e, text: patch.status === 'failed' ? 'Compaction failed' : patch.status === 'done' ? 'Compacted the conversation' : e.text, compaction: { ...e.compaction!, ...patch } } : e)) };
+}
+
+/** A turn that ends with its compaction still open never got its end (a failed `/compact`, an interrupt). */
+function closeCompaction(t: Thread, event: Extract<AgentEvent, { type: 'turn-end' }>): Thread {
+  const i = t.activity.findLastIndex((e) => e.compaction);
+  if (i < 0 || t.activity[i].compaction!.status !== 'running') return t;
+  return patchCompaction(t, i, event.status === 'done' ? { status: 'done' } : { status: 'failed', error: event.error ?? 'Interrupted' });
 }
 
 /** What a tool call's end adds to the entry its start logged. */

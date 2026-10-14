@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { hooksEnv } from '../../git/hooks.ts';
 import { PR_GUARD } from './prGuard.ts';
 import { EventEmitter, once } from 'node:events';
-import { query, type CanUseTool, type EffortLevel, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
@@ -40,6 +40,8 @@ interface Session {
 }
 
 const sessions = new Map<string, Session>();
+/** By thread, outliving its session: what Mochi's PreCompact hook asks Claude Code to keep (`compactInstructions`). */
+const keep = new Map<string, string>();
 const waiting: Session[] = [];
 const approvals = new Map<string, { threadId: string; toolName: string; input: Record<string, unknown>; resolve: (result: PermissionResult) => void }>();
 
@@ -76,6 +78,16 @@ export async function sendClaude(threadId: string, text: string, images?: AgentI
   session.isBusy = true;
   if (session.query) session.wake.emit('push');
   else if (!waiting.includes(session)) await schedule(session);
+}
+
+/** `/compact` is Claude Code's own command, taken as a message; the PreCompact hook adds Mochi's instructions to `focus`. */
+export function compactClaude(threadId: string, focus: string) {
+  return sendClaude(threadId, focus ? `/compact ${focus}` : '/compact');
+}
+
+export function setClaudeCompactInstructions(threadId: string, instructions: string) {
+  if (instructions) keep.set(threadId, instructions);
+  else keep.delete(threadId);
 }
 
 export async function interruptClaude(threadId: string) {
@@ -195,7 +207,7 @@ async function launch(session: Session) {
         abortController: abort,
         canUseTool: approve(threadId),
         mcpServers: { [SERVER]: claudeServer(threadId) },
-        hooks: PR_GUARD,
+        hooks: { ...PR_GUARD, ...compactHooks(threadId) },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },
     });
@@ -273,6 +285,26 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
       return;
     }
   }
+}
+
+/**
+ * Claude Code appends a callback hook's `systemMessage` to the compaction's custom instructions, for `/compact` and auto-compact
+ * alike (read in the 2.1.296 binary: PreCompact output → `newCustomInstructions`). PostCompact hands over the summary.
+ */
+function compactHooks(threadId: string): Partial<Record<HookEvent, HookCallbackMatcher[]>> {
+  return {
+    PreCompact: [{ hooks: [async () => ({ ...(keep.has(threadId) && { systemMessage: keep.get(threadId) }) })] }],
+    PostCompact: [
+      {
+        hooks: [
+          async (input) => {
+            if (input.hook_event_name === 'PostCompact') emit({ threadId, type: 'compaction', phase: 'summary', summary: input.compact_summary });
+            return {};
+          },
+        ],
+      },
+    ],
+  };
 }
 
 function approve(threadId: string): CanUseTool {
