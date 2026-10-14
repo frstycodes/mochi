@@ -18,8 +18,8 @@ const THUMB_SCALE = 1 / 3;
 const NESTED_PREVIEW = '[data-nested-preview]';
 const NESTED_PREVIEW_ACTIVE = `${NESTED_PREVIEW}:hover, ${NESTED_PREVIEW}:focus-within`;
 
-/** Hover a pinned thread: its transcript tail and preview without switching to it, plus the watch toggle. */
-export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread: Thread; pinNumber: number; isDisabled: boolean; children: ReactNode }) {
+/** Hover a thread in the sidebar: its transcript tail and preview without switching to it, plus the watch toggle; pinned ones show their ⌘ digit. */
+export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread: Thread; pinNumber?: number; isDisabled: boolean; children: ReactNode }) {
   const { state, dispatch } = useHarness();
   const isWatched = state.watched.includes(thread.id);
   const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
@@ -34,7 +34,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
         <div className="flex items-center gap-2">
           <ThreadStatusIcon status={thread.status} />
           <span className="min-w-0 flex-1 truncate type-title">{thread.title}</span>
-          {pinNumber <= 9 && (
+          {!!pinNumber && pinNumber <= 9 && (
             <Shortcut keys={['mod', String(pinNumber)]} />
           )}
         </div>

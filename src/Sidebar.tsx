@@ -294,9 +294,8 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
           </SidebarMenuItem>
         </ThreadRowMenu>
       );
-      if (!isPinned) return item;
       return (
-        <ThreadPeek key={t.id} thread={t} pinNumber={i + 1} isDisabled={!!drag.state}>
+        <ThreadPeek key={t.id} thread={t} pinNumber={isPinned ? i + 1 : undefined} isDisabled={!!drag.state}>
           {item}
         </ThreadPeek>
       );

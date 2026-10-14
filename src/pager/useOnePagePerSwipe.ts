@@ -34,7 +34,7 @@ export function useOnePagePerSwipe(ref: RefObject<HTMLElement | null>) {
     };
     // Holding the offset from the main thread while the compositor drives the swipe can leave Chromium's snap resting between pages; finish it.
     const onEnd = () => {
-      if (el.dataset.wheeling !== undefined || el.dataset.swiping !== undefined) return;
+      if (el.dataset.wheeling !== undefined) return;
       const width = pageSize(el, 'x');
       const left = Math.round(el.scrollLeft / width) * width;
       if (Math.abs(el.scrollLeft - left) > 1) el.scrollTo({ left, behavior: 'smooth' });
