@@ -34,7 +34,7 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const chatMin = chat ? CHAT_MIN_W : 0;
   // The panes sit GAP below the window's top edge (the layout already leaves GAP at the bottom), so their cards never touch it.
   const paneH = Math.max(0, size.h - GAP);
-  const resolved = resolveLayout(layout, size.w, paneH, chatMin);
+  const resolved = belowTopGap(resolveLayout(layout, size.w, paneH, chatMin));
   const kinds = layout.columns.flat();
   const isAnimating = useLayoutAnimation(layout, pane.isOpen);
   const [isResizing, setResizing] = useState(false);
@@ -42,7 +42,7 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const onKeyDown = usePaneKeys(thread.id, pane, layout);
   useEscapeExpand(thread.id, !!layout.expanded);
   const isEmpty = pane.isOpen && !kinds.length;
-  const placeholder = isEmpty ? resolveLayout({ columns: [['changes']], share: layout.share }, size.w, paneH, chatMin).rects.changes : undefined;
+  const placeholder = isEmpty ? belowTopGap(resolveLayout({ columns: [['changes']], share: layout.share }, size.w, paneH, chatMin)).rects.changes : undefined;
   const chatWidth = !chat ? 0 : placeholder ? placeholder.x : resolved.chatWidth;
   const showFocus = kinds.length > 1;
 
@@ -53,7 +53,6 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
           {chat}
         </div>
       )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 *:pointer-events-auto" style={{ top: GAP }}>
       {size.w > 0 &&
         kinds.map((kind) => (
           <PaneCard
@@ -72,9 +71,14 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
       {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
       {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onResizing={setResizing} />}
       {!!move.indicator && <span aria-hidden className="pointer-events-none absolute z-30 rounded-full bg-foreground/50" style={move.indicator} />}
-      </div>
     </div>
   );
+}
+
+/** The layout moved down by GAP, so cards, dividers and drop targets share one frame; never a wrapper over the chat to do it. */
+function belowTopGap(resolved: ResolvedLayout): ResolvedLayout {
+  const rects = Object.fromEntries(Object.entries(resolved.rects).map(([kind, r]) => [kind, r && { ...r, y: r.y + GAP }])) as ResolvedLayout['rects'];
+  return { ...resolved, rects };
 }
 
 /** Tabs dragged out into their own split live there, not in a pane, until they're dropped back or their split closes. */
@@ -331,7 +335,7 @@ function usePaneMove(threadId: string, pane: Pane, resolved: ResolvedLayout, are
       }
       moveDrag(ev.clientX, ev.clientY);
       const area = areaRef.current?.getBoundingClientRect();
-      current = area ? dropTarget(latest.current.resolved, ev.clientX - area.x, ev.clientY - area.y - GAP) : undefined;
+      current = area ? dropTarget(latest.current.resolved, ev.clientX - area.x, ev.clientY - area.y) : undefined;
       setTarget(current);
     };
     const finish = (isCancelled: boolean, ev?: PointerEvent) => {

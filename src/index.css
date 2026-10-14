@@ -470,13 +470,13 @@
   height: 20px;
   min-width: 24px;
   padding-inline: 4px;
-  corner-shape: round;
 }
+/* Squircle like the rest of the app (the corner scale keeps it as round as the fallback), sized for a 20px control. */
 [data-pane-header] [data-slot='toggle-group-item']:first-child {
-  border-radius: 5px 0 0 5px;
+  border-radius: calc(5px * var(--corner-scale)) 0 0 calc(5px * var(--corner-scale));
 }
 [data-pane-header] [data-slot='toggle-group-item']:last-child {
-  border-radius: 0 5px 5px 0;
+  border-radius: 0 calc(5px * var(--corner-scale)) calc(5px * var(--corner-scale)) 0;
 }
 [data-pane-header] [data-slot='toggle-group-item'] svg,
 [data-pane-header] [data-slot='button'][data-size^='icon'] svg {
