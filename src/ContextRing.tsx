@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Context, ContextContent, ContextContentBody, ContextContentHeader, ContextTrigger } from '@/components/ai-elements/context';
 import type { Provider } from './model';
@@ -35,6 +36,7 @@ export function ContextRing({
   };
   const share = context.max ? Math.min(1, context.used / context.max) : 0;
   const pct = Math.round(share * 100);
+  const tone = toneFor(share);
   // A plan window only takes the outer arc once it's worth a glance (warning tone and up).
   const top = hottest(limits?.windows ?? []);
   const plan = top && toneFor(top.usedPct / 100) !== 'normal' ? top : undefined;
@@ -48,10 +50,23 @@ export function ContextRing({
       </ContextTrigger>
       <ContextContent side="top" align="end" className="w-72">
         <ContextContentHeader>
-          <Section label="Context" aside={<span className="tabular type-caption text-muted-foreground">{pct}%</span>}>
+          <Section
+            label="Context"
+            aside={
+              <span className="tabular type-caption text-muted-foreground" style={{ color: tone === 'normal' ? undefined : TONE_COLORS[tone] }}>
+                {pct}%
+              </span>
+            }
+          >
             <p className="tabular type-caption text-muted-foreground">
               {TOKENS.format(context.used)} of {TOKENS.format(context.max)} tokens
             </p>
+            <Progress
+              value={pct}
+              className="bg-muted-foreground/20"
+              aria-label={`Context: ${pct}% used`}
+              style={{ '--progress-color': TONE_COLORS[tone] } as CSSProperties}
+            />
             <p className="type-caption text-subtle-foreground">{PROVIDER_NAMES[provider]} compacts the conversation automatically near the limit.</p>
           </Section>
         </ContextContentHeader>
