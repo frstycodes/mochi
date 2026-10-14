@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ClipboardText, Download, Edit2, Import, SearchNormal, TickCircle, Trash3 } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { host } from '../../host';
 import { themeTokens } from '../../themes/map';
-import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from '../../themes/model';
+import { groupThemes, type PackageGroup } from '../../themes/groups';
+import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeKind, type ThemeSlot } from '../../themes/model';
 import type { MarketplaceExtension } from '../../themes/openVsx';
 import { refreshThemes, setThemePreview, useColorTheme, useThemesState } from '../../themes/store';
-import { installExtension, useApplyTheme, useInspectedThemes, useMarketplaceSearch, useSeen } from '../../themes/useMarketplace';
+import { installExtension, removeCustomTheme, uninstallPackage, useApplyTheme, useInspectedThemes, useMarketplaceSearch, useSeen } from '../../themes/useMarketplace';
 import { usePrefs } from '../prefs';
 import { TooltipIconButton } from '../../ui';
 import { SettingsGroup, SettingsRow, settingControlId } from '../parts';
@@ -27,7 +28,7 @@ export function ThemesSection() {
         <SettingsRow id="lightTheme" label="Light" control={<SlotSelect slot="light" />} />
         <SettingsRow id="darkTheme" label="Dark" control={<SlotSelect slot="dark" />} />
       </SettingsGroup>
-      <InstalledGroup />
+      <InstalledGroups />
       <MarketplaceGroup />
     </div>
   );
@@ -64,29 +65,86 @@ export function SlotSelect({ slot }: { slot: ThemeSlot }) {
   );
 }
 
-function InstalledGroup() {
+function InstalledGroups() {
   const { installed, isLoaded } = useThemesState();
+  const { packages, custom } = useMemo(() => groupThemes(installed), [installed]);
+  return (
+    <div className="flex flex-col gap-3">
+      <BuiltInGroup />
+      {!isLoaded && (
+        <SettingsGroup>
+          <SkeletonRows count={2} />
+        </SettingsGroup>
+      )}
+      {packages.map((group) => (
+        <PackageThemes key={group.id} group={group} />
+      ))}
+      <CustomThemes themes={custom} isLoaded={isLoaded} />
+    </div>
+  );
+}
+
+const MOCHI_SLOTS = ['light', 'dark'] satisfies ThemeSlot[];
+
+function BuiltInGroup() {
+  return (
+    <SettingsGroup id="installedThemes" title="Installed">
+      <GroupHeader name="Mochi" publisher="Built in" meta={themeCount(MOCHI_SLOTS.length)} />
+      {MOCHI_SLOTS.map((slot) => (
+        <ThemeRow key={slot} theme={null} slot={slot} label={`Mochi ${KIND_LABELS[slot]}`} kind={slot} />
+      ))}
+    </SettingsGroup>
+  );
+}
+
+function PackageThemes({ group }: { group: PackageGroup }) {
+  const [isRemoving, setRemoving] = useState(false);
+  const consequence = `${group.displayName} · ${themeCount(group.themes.length)}`;
+  const remove = () => {
+    setRemoving(true);
+    uninstallPackage(group).then(
+      () => toast.success(`Removed ${consequence}`),
+      (error: Error) => {
+        setRemoving(false);
+        toast.error(`Could not remove ${group.displayName}`, { description: error.message });
+      },
+    );
+  };
+  return (
+    <SettingsGroup>
+      <GroupHeader
+        name={group.displayName}
+        publisher={group.publisher}
+        meta={`${themeCount(group.themes.length)} · v${group.version}`}
+        control={
+          <Button variant="outline" size="sm" className="max-w-full" onClick={remove} disabled={isRemoving}>
+            {isRemoving ? <Spinner data-icon="inline-start" /> : <Trash3 data-icon="inline-start" />}
+            <span className="truncate">Remove {consequence}</span>
+          </Button>
+        }
+      />
+      {group.themes.map((theme) => (
+        <ThemeRow key={theme.id} theme={theme} slot={slotOf(theme.kind)} label={theme.label} kind={theme.kind} />
+      ))}
+    </SettingsGroup>
+  );
+}
+
+function CustomThemes({ themes, isLoaded }: { themes: ColorTheme[]; isLoaded: boolean }) {
   const [draft, setDraft] = useState<{ file?: string; text: string } | null>(null);
   const importFile = () =>
     host.themes.importFile().then(
       (theme) => theme && void refreshThemes().then(() => toast.success(`Imported ${theme.label}`)),
       (error: Error) => toast.error('Could not import the theme', { description: error.message }),
     );
-  const isEmpty = isLoaded && installed.length === 0;
+  const isEmpty = isLoaded && themes.length === 0;
   return (
-    <SettingsGroup
-      id="installedThemes"
-      title="Installed"
-      footer="Custom themes are VS Code color theme files (.json or .jsonc). Includes resolve next to an imported file; Edit opens it in your JSON editor and changes show when you come back."
-    >
-      {!isLoaded && <SkeletonRows count={2} />}
-      {isEmpty && <SettingsRow label={<span className="text-muted-foreground">No themes yet. Install one from Open VSX below, or import your own.</span>} />}
-      {installed.map((theme) => (
-        <InstalledRow key={theme.id} theme={theme} onEdit={(file, text) => setDraft({ file, text })} />
-      ))}
-      <SettingsRow
+    <SettingsGroup footer="Custom themes are VS Code color theme files (.json or .jsonc). Includes resolve next to an imported file; Edit opens it in your JSON editor and changes show when you come back.">
+      <GroupHeader
         id="customTheme"
-        label="Custom theme"
+        name="Custom"
+        publisher="Your own files"
+        meta={isEmpty ? 'None yet. Import a theme file or paste its JSON.' : themeCount(themes.length)}
         control={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void importFile()}>
@@ -101,33 +159,46 @@ function InstalledGroup() {
         }
       >
         {!!draft && <ThemeJsonEditor key={draft.file ?? 'new'} draft={draft} onDone={() => setDraft(null)} />}
-      </SettingsRow>
+      </GroupHeader>
+      {themes.map((theme) => (
+        <ThemeRow key={theme.id} theme={theme} slot={slotOf(theme.kind)} label={theme.label} kind={theme.kind}>
+          {theme.source.kind === 'custom' && <CustomThemeActions theme={theme} file={theme.source.file} onEdit={(file, text) => setDraft({ file, text })} />}
+        </ThemeRow>
+      ))}
     </SettingsGroup>
   );
 }
 
-function InstalledRow({ theme, onEdit }: { theme: ColorTheme; onEdit: (file: string, text: string) => void }) {
-  const prefs = usePrefs();
+function GroupHeader({ id, name, publisher, meta, control, children }: { id?: string; name: string; publisher: string; meta: string; control?: ReactNode; children?: ReactNode }) {
+  return (
+    <SettingsRow
+      id={id}
+      label={
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="truncate font-medium">{name}</span>
+          <span className="shrink-0 truncate type-meta text-muted-foreground">{publisher}</span>
+        </span>
+      }
+      description={meta}
+      control={control}
+    >
+      {children}
+    </SettingsRow>
+  );
+}
+
+function ThemeRow({ theme, slot, label, kind, children }: { theme: ColorTheme | null; slot: ThemeSlot; label: string; kind: ThemeKind; children?: ReactNode }) {
   const apply = useApplyTheme();
-  const slot = slotOf(theme.kind);
-  const isUsed = (slot === 'light' ? prefs.lightTheme : prefs.darkTheme) === theme.id;
-  const { source } = theme;
-  const remove = () => {
-    if (isUsed) apply(null, slot);
-    const removing = source.kind === 'custom' ? host.themes.removeCustom(source.file) : source.kind === 'marketplace' ? host.themes.uninstall(source.namespace, source.name) : Promise.resolve();
-    void removing.then(refreshThemes).catch((error: Error) => toast.error('Could not remove the theme', { description: error.message }));
-  };
-  const edit = (file: string) =>
-    (host.isDesktop ? host.themes.openCustom(file) : host.themes.readCustom(file).then((text) => onEdit(file, text))).catch((error: Error) => toast.error('Could not open the theme', { description: error.message }));
+  const isUsed = useIsChosen(theme?.id ?? MOCHI_THEME_ID, slot);
   return (
     <SettingsRow
       label={
         <span className="flex min-w-0 items-center gap-2.5">
           <ThemeSwatch theme={theme} slot={slot} />
-          <span className="truncate">{theme.label}</span>
+          <span className="truncate">{label}</span>
         </span>
       }
-      description={<span className="block truncate pl-[2.625rem]">{[sourceLabel(theme), KIND_LABELS[theme.kind]].join(' · ')}</span>}
+      description={<span className="block truncate pl-[2.625rem]">{KIND_LABELS[kind]}</span>}
       onPointerEnter={() => setThemePreview(theme)}
       onPointerLeave={() => setThemePreview(null)}
       control={
@@ -138,37 +209,39 @@ function InstalledRow({ theme, onEdit }: { theme: ColorTheme; onEdit: (file: str
               In use
             </span>
           ) : (
-            <Button variant="outline" size="sm" onClick={() => apply(theme)}>
+            <Button variant="outline" size="sm" onClick={() => apply(theme, slot)}>
               Use
             </Button>
           )}
-          {source.kind === 'custom' && (
-            <TooltipIconButton label="Edit" hint={host.isDesktop ? 'Opens the theme file in your JSON editor' : 'Edit the theme JSON here'} onClick={() => void edit(source.file)}>
-              <Edit2 />
-            </TooltipIconButton>
-          )}
-          {source.kind !== 'mochi' && (
-            <TooltipIconButton
-              label={source.kind === 'custom' ? 'Delete' : 'Uninstall'}
-              hint={source.kind === 'custom' ? 'Deletes the theme file' : `Removes every ${source.displayName} theme`}
-              onClick={remove}
-            >
-              <Trash3 />
-            </TooltipIconButton>
-          )}
+          {children}
         </div>
       }
     />
   );
 }
 
-const KIND_LABELS = { light: 'Light', dark: 'Dark', 'hc-light': 'High contrast light', 'hc-dark': 'High contrast dark' } satisfies Record<ColorTheme['kind'], string>;
-
-function sourceLabel({ source }: ColorTheme) {
-  if (source.kind === 'marketplace') return `${source.displayName} by ${source.publisher}`;
-  if (source.kind === 'custom') return `Custom · ${source.file}`;
-  return 'Built in';
+function useIsChosen(id: string, slot: ThemeSlot) {
+  const prefs = usePrefs();
+  return (slot === 'light' ? prefs.lightTheme : prefs.darkTheme) === id;
 }
+
+function CustomThemeActions({ theme, file, onEdit }: { theme: ColorTheme; file: string; onEdit: (file: string, text: string) => void }) {
+  const edit = () =>
+    (host.isDesktop ? host.themes.openCustom(file) : host.themes.readCustom(file).then((text) => onEdit(file, text))).catch((error: Error) => toast.error('Could not open the theme', { description: error.message }));
+  const remove = () => removeCustomTheme(theme, file).catch((error: Error) => toast.error('Could not delete the theme', { description: error.message }));
+  return (
+    <>
+      <TooltipIconButton label="Edit" hint={host.isDesktop ? 'Opens the theme file in your JSON editor' : 'Edit the theme JSON here'} onClick={() => void edit()}>
+        <Edit2 />
+      </TooltipIconButton>
+      <TooltipIconButton label="Delete" hint={`Deletes ${file}`} onClick={() => void remove()}>
+        <Trash3 />
+      </TooltipIconButton>
+    </>
+  );
+}
+
+const KIND_LABELS = { light: 'Light', dark: 'Dark', 'hc-light': 'High contrast light', 'hc-dark': 'High contrast dark' } satisfies Record<ThemeKind, string>;
 
 /** Pasting a new theme, or editing a custom one in the web build (which has no files to open). */
 function ThemeJsonEditor({ draft, onDone }: { draft: { file?: string; text: string }; onDone: () => void }) {
@@ -316,9 +389,10 @@ function ExtensionRow({ extension }: { extension: MarketplaceExtension }) {
 const DOWNLOADS = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
 const THEME_COUNT = new Intl.PluralRules();
 
+const themeCount = (count: number) => (THEME_COUNT.select(count) === 'one' ? '1 theme' : `${count} themes`);
+
 function extensionMeta({ namespace, downloadCount, themes }: MarketplaceExtension) {
-  const count = THEME_COUNT.select(themes.length) === 'one' ? '1 theme' : `${themes.length} themes`;
-  return `${namespace} · ${DOWNLOADS.format(downloadCount)} downloads · ${count}`;
+  return `${namespace} · ${DOWNLOADS.format(downloadCount)} downloads · ${themeCount(themes.length)}`;
 }
 
 const MAX_SWATCHES = 4;

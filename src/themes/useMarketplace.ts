@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { host } from '../host';
+import { getPrefs } from '../settings/prefs';
+import { slotsUsing, type PackageGroup } from './groups';
 import { slotOf, type ColorTheme } from './model';
 import { PAGE_SIZE, type MarketplaceExtension } from './openVsx';
 import { chooseTheme, refreshThemes } from './store';
@@ -104,3 +106,19 @@ export async function installExtension(extension: MarketplaceExtension) {
   await refreshThemes();
   return themes;
 }
+
+/** Uninstalls a package with all its themes; a slot that was showing one of them goes back to Mochi. */
+export async function uninstallPackage(group: PackageGroup) {
+  releaseSlots(group.themes);
+  await host.themes.uninstall(group.namespace, group.name);
+  await refreshThemes();
+}
+
+/** Deletes one custom theme file, handing its slot back to Mochi if it was in use. */
+export async function removeCustomTheme(theme: ColorTheme, file: string) {
+  releaseSlots([theme]);
+  await host.themes.removeCustom(file);
+  await refreshThemes();
+}
+
+const releaseSlots = (themes: ColorTheme[]) => slotsUsing(themes, getPrefs()).forEach((slot) => chooseTheme(null, slot));
