@@ -109,15 +109,6 @@ export function showSession(key: string, id: string) {
   updateGroup(key, (g) => ({ ...g, visible: g.visible.includes(id) ? g.visible : replaceFocused(g, id), focused: id }));
 }
 
-/** Splits the focused terminal with a new shell, or unsplits back to the focused one. */
-export function toggleSplit(key: string) {
-  const group = groups.get(key);
-  if (!group) return;
-  if (group.visible.length > 1) return updateGroup(key, (g) => ({ ...g, visible: [g.focused] }));
-  const session = createSession(key, 'shell', shellTitle(group));
-  updateGroup(key, (g) => ({ ...g, sessions: [...g.sessions, session], visible: [g.focused, session.id], focused: session.id }));
-}
-
 export function closeSession(key: string, id: string) {
   const session = groups.get(key)?.sessions.find((s) => s.id === id);
   if (!session) return;
