@@ -6,7 +6,7 @@ import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequ
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { BoundShortcut } from './Shortcut';
 import {
   Questionnaire,
   QuestionnaireActions,
@@ -36,6 +36,7 @@ import { useSendCiLog } from './notify/useSendCiLog';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { remoteDecisions } from './remote/mirror';
 import { RemoteScope, useMachines } from './remote/useMachines';
+import { isCommand } from './keymap';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
@@ -66,11 +67,11 @@ export function QueueView() {
             <h1 className="type-heading">Queue</h1>
             <p className="type-meta text-muted-foreground">Decisions your agents are waiting on, most blocking first.</p>
           </div>
-          <KbdGroup className="hidden type-caption text-subtle-foreground md:flex">
-            <Kbd>J</Kbd>
-            <Kbd>K</Kbd>
+          <span className="hidden items-center gap-1 type-caption text-subtle-foreground md:flex">
+            <BoundShortcut command="list-next" />
+            <BoundShortcut command="list-previous" />
             move
-          </KbdGroup>
+          </span>
           {review.count > 0 && (
             <Button variant="outline" size="sm" onClick={review.open}>
               <TaskSquare data-icon="inline-start" />
@@ -122,9 +123,8 @@ export function QueueView() {
 function useListKeys(count: number, index: number, setSelected: (i: number) => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLElement && e.target.closest('input, textarea')) return;
-      if (e.key === 'j') setSelected(Math.min(count - 1, index + 1));
-      if (e.key === 'k') setSelected(Math.max(0, index - 1));
+      if (isCommand(e, 'list-next')) setSelected(Math.min(count - 1, index + 1));
+      if (isCommand(e, 'list-previous')) setSelected(Math.max(0, index - 1));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

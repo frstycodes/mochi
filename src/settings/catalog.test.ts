@@ -62,3 +62,12 @@ test('writes land where the setting lives, and a value outside the control is re
   assert.equal(write('profile.name', '  '), null);
   assert.equal(write('profile.claudeAccount', 'codex-default'), null, 'another harness’s account');
 });
+
+test("a shortcut row reads the chord now and writes it the widget's way: a clash loses its shortcut, a reserved chord is no value", () => {
+  const row = settingsCatalog().find((s) => s.key === 'keybinding.palette')!;
+  assert.equal(row.read(sources), 'mod+K');
+  assert.deepEqual(row.write('mod+P', sources), { to: 'prefs', patch: { keybindings: { palette: 'mod+P', 'files-go-to': '' } } });
+  assert.deepEqual(row.write('', sources), { to: 'prefs', patch: { keybindings: { palette: '' } } });
+  assert.equal(row.write('mod+C', sources), null);
+  assert.equal(row.write('cmd+K', sources), null);
+});

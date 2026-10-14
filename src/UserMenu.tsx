@@ -22,7 +22,7 @@ import { showsDemoData } from './demoData';
 import { host } from './host';
 import type { AppUpdate } from './host/types/updates';
 import { openSettings } from './settings/open';
-import { Shortcut } from './Shortcut';
+import { BoundShortcut } from './Shortcut';
 import { useHarness } from './store';
 import { IconSwap } from './ui';
 
@@ -51,7 +51,7 @@ export function UserMenu() {
         <DropdownMenuItem onSelect={() => openSettings()}>
           <Setting2 />
           Settings
-          <Shortcut keys={['mod', ',']} className="ml-auto" />
+          <BoundShortcut command="go-settings" className="ml-auto" />
         </DropdownMenuItem>
         <ThemeSubmenu />
         <DropdownMenuSeparator />

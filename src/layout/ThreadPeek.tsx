@@ -8,7 +8,8 @@ import { PANE_TABS } from '../pane/tabs';
 import { useHarness } from '../store';
 import { PreviewContext } from './SplitContext';
 import { ProviderMark, ThreadStatusIcon } from '../ui';
-import { Shortcut } from '../Shortcut';
+import { BoundShortcut } from '../Shortcut';
+import { isCommandId, pinnedCommand } from '../keymap';
 import { ThreadMessageIcon } from '../chat/ThreadMessage';
 
 const PEEK_OPEN_MS = 500;
@@ -35,9 +36,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
         <div className="flex items-center gap-2">
           <ThreadStatusIcon status={thread.status} />
           <span className="min-w-0 flex-1 truncate type-title">{thread.title}</span>
-          {!!pinNumber && pinNumber <= 9 && (
-            <Shortcut keys={['mod', String(pinNumber)]} />
-          )}
+          {!!pinNumber && isCommandId(pinnedCommand(pinNumber)) && <BoundShortcut command={pinnedCommand(pinNumber)} />}
         </div>
         {/* A preview never drives the live browser view, or the real pane loses it. */}
         <PreviewContext.Provider value={true}>

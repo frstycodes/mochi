@@ -33,19 +33,3 @@ export const PANE_TABS = {
 export function tabTitle(tab: PaneTab) {
   return tab.title ?? PANE_TABS[tab.kind].title;
 }
-
-/** The letter that, with mod Alt, toggles each pane: mnemonic, and clear of the browser's and macOS's own mod Alt keys. */
-export const PANE_SHORTCUTS = {
-  browser: 'P',
-  changes: 'D',
-  terminal: 'T',
-  files: 'F',
-  simulator: 'S',
-  ports: 'O',
-  sidechat: 'C',
-  agents: 'A',
-} satisfies Partial<Record<PaneTabKind, string>>;
-
-export function paneShortcut(kind: keyof typeof PANE_SHORTCUTS) {
-  return ['mod', 'alt', PANE_SHORTCUTS[kind]];
-}

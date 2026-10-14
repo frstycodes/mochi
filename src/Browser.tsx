@@ -18,7 +18,7 @@ import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { useHarness } from './store';
 import { isWorking } from './agentPhase';
-import { isMod } from './keys';
+import { isCommand } from './keymap';
 import { PreviewContext } from './layout/SplitContext';
 
 type Corner = 'tl' | 'tr' | 'bl' | 'br';
@@ -43,7 +43,7 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
     <div
       className="flex h-full min-h-0 flex-col"
       onKeyDown={(e) => {
-        if (!isMod(e) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') return;
+        if (!isCommand(e, 'find')) return;
         e.preventDefault();
         openFind(pageId);
       }}

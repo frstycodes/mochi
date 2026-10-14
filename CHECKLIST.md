@@ -89,6 +89,12 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 - [x] Conflict warning when the agent edits a file you have open with unsaved changes
 - [x] "Open in VS Code / Cursor / Zed" escape hatch
 
+### Keyboard (decided 2026-10-14)
+- [x] One keymap (`src/keymap.ts`): every app-level shortcut a named command with a default chord; handlers look the binding up (`isCommand` / `commandOf`, `e.code`), field-local keys stay fixed and are listed
+- [x] Settings › Keyboard records chords (Esc cancels, Backspace clears), catches clashes (swap or replace), refuses reserved OS chords with the reason, resets per row and all; persisted in prefs, applied live in the palette, menus, tooltips and sidebar
+- [x] Mochi tools: `get_keybindings`, `set_keybinding` (settings widget with current → proposed, same validation)
+- GAP: Electron's own menu has no accelerators, so nothing in the native menu bar shows Mochi's chords
+
 ## 2. Drag to pin threads
 
 - [x] Pinned list exists in the sidebar; `reorder` action takes `pinned` / `unpinned` (`src/reorder.ts`)

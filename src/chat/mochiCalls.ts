@@ -60,6 +60,8 @@ export const MOCHI_CALLS = {
   notify_user: ['Notifying you', 'Notified you'],
   get_settings: ['Reading your settings', 'Read your settings'],
   update_settings: ['Suggesting setting changes', 'Suggested setting changes'],
+  get_keybindings: ['Reading your shortcuts', 'Read your shortcuts'],
+  set_keybinding: ['Suggesting a shortcut', 'Suggested a shortcut'],
   list_profiles: ['Looking at your profiles', 'Looked at your profiles'],
   add_mcp_server: ['Suggesting an MCP server', 'Suggested an MCP server'],
   remove_mcp_server: ['Asking to remove an MCP server', 'Asked to remove an MCP server'],

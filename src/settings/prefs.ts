@@ -63,6 +63,8 @@ export interface Prefs {
   recordReplays: boolean;
   /** The rewind mode you last ran, offered first next time. */
   rewindMode: 'chat' | 'files';
+  /** Rebound shortcuts only, command id → chord text (`src/keymap.ts`); '' leaves a command without one. */
+  keybindings: Record<string, string>;
 }
 
 export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
@@ -114,6 +116,7 @@ export const DEFAULT_PREFS: Prefs = {
   threadModels: 'cheaper',
   recordReplays: true,
   rewindMode: 'files',
+  keybindings: {},
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';
@@ -172,6 +175,7 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
   if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
+  if (!isStringRecord(saved.keybindings)) delete saved.keybindings;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];
@@ -188,6 +192,11 @@ function load(): Prefs {
   } catch {
     return DEFAULT_PREFS;
   }
+}
+
+// A declaration, not a const: `load()` runs at the top of this module, before a const below it would exist.
+function isStringRecord(value: unknown) {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.values(value).every((v) => typeof v === 'string');
 }
 
 if (typeof window !== 'undefined') window.addEventListener('storage', (e) => e.key === PREFS_KEY && reloadPrefs());

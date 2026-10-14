@@ -17,6 +17,7 @@ import { useSize } from './browser/PageSurface';
 import { useHarness } from './store';
 import { layoutOf, shownTab } from './store/panes';
 import { isMod } from './keys';
+import { commandOf } from './keymap';
 import { TAB_MENU } from './menus/menus';
 import { TargetContextMenu } from './menus/TargetContextMenu';
 
@@ -429,7 +430,7 @@ function usePaneMove(threadId: string, pane: Pane, resolved: ResolvedLayout, are
   return { kind, start, indicator: target?.line };
 }
 
-/** Ctrl Tab / Ctrl Shift Tab move between panes, mod 1–9 pick a tab of a multi-tab pane, mod W closes its tab (or the pane). */
+/** Next / previous pane and Close tab are commands (`src/keymap.ts`); mod 1–9 picks a tab of a multi-tab pane and stays fixed. */
 function usePaneKeys(threadId: string, pane: Pane, layout: PaneLayout) {
   const { dispatch } = useHarness();
   return (e: KeyboardEvent) => {
@@ -438,14 +439,15 @@ function usePaneKeys(threadId: string, pane: Pane, layout: PaneLayout) {
     if (!focused) return;
     const tabs = pane.tabs.filter((t) => t.kind === focused && !t.isPopped);
     const shown = shownTab(pane, focused);
-    if (e.ctrlKey && e.key === 'Tab') {
-      const next = kinds.at((kinds.indexOf(focused) + (e.shiftKey ? -1 : 1)) % kinds.length)!;
+    const command = commandOf(e, ['pane-next', 'pane-previous', 'tab-close']);
+    if (command === 'pane-next' || command === 'pane-previous') {
+      const next = kinds.at((kinds.indexOf(focused) + (command === 'pane-previous' ? -1 : 1)) % kinds.length)!;
       dispatch({ type: 'pane-focus-kind', threadId, kind: next });
       e.currentTarget.querySelector<HTMLElement>(`[data-pane="${next}"]`)?.focus();
     } else if (isMod(e) && /^[1-9]$/.test(e.key) && isMultiTab(focused)) {
       const tab = e.key === '9' ? tabs.at(-1) : tabs[Number(e.key) - 1];
       if (tab) dispatch({ type: 'pane-select-tab', threadId, tabId: tab.id });
-    } else if (isMod(e) && e.key.toLowerCase() === 'w') {
+    } else if (command === 'tab-close') {
       if (isMultiTab(focused) && shown) dispatch({ type: 'pane-close-tab', threadId, tabId: shown.id });
       else dispatch({ type: 'pane-close-kind', threadId, kind: focused });
     } else return;

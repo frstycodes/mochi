@@ -20,6 +20,9 @@ import { ModelSelect, StarredModelsRow } from './sections/harnesses';
 import { SimulatorSelect } from './sections/browser';
 import { SlotSelect } from './sections/themes';
 import { useRemoteStatus } from '../remote/useRemoteStatus';
+import { parseChord } from '../keymap';
+import { Shortcut } from '../Shortcut';
+import { ShortcutRecorder } from './ShortcutRecorder';
 import { useThemesState } from '../themes/store';
 
 /** An agent's value for a row: shown under it with Use, until the setting holds it. */
@@ -67,6 +70,7 @@ function rowIdOf(setting: Setting, profile?: Space) {
   if (setting.key.startsWith('profile.') && profile) return `${profile.id}-${setting.key.slice('profile.'.length)}`;
   if (setting.key.startsWith('alert.')) return `alert-${setting.key.slice('alert.'.length)}`;
   if (setting.key.startsWith('utility.')) return `utility-${setting.key.slice('utility.'.length)}`;
+  if (setting.key.startsWith('keybinding.')) return `shortcut-${setting.key.slice('keybinding.'.length)}`;
   return setting.key.replace(/\.(\w)/g, (_, c: string) => c.toUpperCase());
 }
 
@@ -151,6 +155,8 @@ function SettingControl({ setting, value, rowId, onChange }: { setting: Setting;
       return <GitHubAccountSelect id={rowId} value={value} onChange={onChange} />;
     case 'account':
       return <AccountSelect id={rowId} provider={control.provider} value={value} onChange={onChange} />;
+    case 'shortcut':
+      return <ShortcutRecorder id={id} command={control.command} />;
     default:
       return null;
   }
@@ -180,7 +186,7 @@ function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Settin
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 type-meta text-muted-foreground">
       <span className="min-w-0 [overflow-wrap:anywhere]">
-        {who} suggests <span className="font-medium text-foreground">{valueLabel(setting, suggestion.value)}</span>
+        {who} suggests <span className="font-medium text-foreground">{setting.control.type === 'shortcut' && suggestion.value ? <Shortcut keys={parseChord(suggestion.value) ?? []} /> : valueLabel(setting, suggestion.value)}</span>
       </span>
       <Button variant="outline" size="xs" onClick={onUse} disabled={value === undefined}>
         Use

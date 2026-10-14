@@ -57,3 +57,13 @@ test('agent control: the old Reversible default becomes Everything (deletes and 
   assert.equal(parsePrefs(JSON.stringify({ agentControl: 'read' })).agentControl, 'read');
   assert.equal(parsePrefs(JSON.stringify({ agentControl: 'changes' })).agentControl, 'changes');
 });
+
+test('prefs saved before launch load at startup, rebound shortcuts included; a malformed shortcut map falls back', async () => {
+  storage.set(PREFS_KEY, JSON.stringify({ diffStyle: 'split', keybindings: { palette: 'mod+P' } }));
+  // A query gives a fresh module instance, so its startup load reads the storage seeded above.
+  const launched = (await import(`./prefs.ts?${'launch'}`)) as typeof import('./prefs.ts');
+  assert.equal(launched.getPrefs().diffStyle, 'split');
+  assert.deepEqual(launched.getPrefs().keybindings, { palette: 'mod+P' });
+  assert.deepEqual(parsePrefs(JSON.stringify({ keybindings: { palette: 3 } })).keybindings, {});
+  assert.deepEqual(parsePrefs(JSON.stringify({ keybindings: ['mod+P'] })).keybindings, {});
+});

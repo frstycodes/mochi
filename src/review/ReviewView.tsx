@@ -20,6 +20,7 @@ import { DiffStat } from '../WorkLog';
 import { reviewThreads, stepIndex } from './order';
 import { useReviewMode } from './useReviewMode';
 import { isMod } from '../keys';
+import { isCommand } from '../keymap';
 import { ThreadPrHoverCard } from '../chat/RefHoverCard';
 
 /** Walks every thread waiting on review, one at a time: goal and summary beside its diff and preview. */
@@ -262,10 +263,11 @@ function NothingToReview({ onClose }: { onClose: () => void }) {
 function useReviewKeys(step: (by: 1 | -1) => void, close: () => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.defaultPrevented) return;
+      if (isCommand(e, 'list-next')) return step(1);
+      if (isCommand(e, 'list-previous')) return step(-1);
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable], [role=dialog], [role=alertdialog]')) return;
-      if (e.key === 'j') step(1);
-      if (e.key === 'k') step(-1);
       if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);

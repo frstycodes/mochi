@@ -289,6 +289,23 @@ export const TOOL_TABLE = {
       reason,
     },
   },
+  get_keybindings: {
+    tier: 'read',
+    description:
+      "Read Mochi's keyboard shortcuts: each command's id, title, group, where it listens (global, pane, list), its chord now and its default (\"\" = none), the keys that can't be rebound, and this platform's reserved chords. Chords read like \"mod+shift+K\": mod is ⌘ on macOS and Ctrl elsewhere, nav is ⌃ on macOS and Alt elsewhere, then alt, shift and one key.",
+    shape: {},
+  },
+  set_keybinding: {
+    tier: 'setting',
+    description:
+      'Suggest a new shortcut for one command: a settings widget in your thread shows its current → proposed chord with your reason, and the user applies it there. Ids and chords from get_keybindings; keys "" suggests removing the shortcut. Reserved chords (⌘Q, ⌘Tab, ⌃←/→ on macOS, Alt+Tab elsewhere, Copy and Paste) are refused. A chord another command uses is refused unless onConflict says what happens to it: swap (it gets this command\'s old chord) or replace (it loses its shortcut); both rows show on the widget.',
+    shape: {
+      command: z.string().describe('A command id from get_keybindings'),
+      keys: z.string().describe('Like "mod+shift+K", "nav+1" or "J"; "" for no shortcut'),
+      onConflict: z.enum(['swap', 'replace']).optional(),
+      reason,
+    },
+  },
   list_profiles: {
     tier: 'read',
     description:

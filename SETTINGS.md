@@ -44,7 +44,19 @@ Hovering or focusing any theme repaints the app until the pointer leaves; pickin
 | Muted threads | list with Unmute | — | now | src/notify/slice.ts:21 |
 
 ### Keyboard
-Read-only table of every shortcut from `src/palette/actions.ts`, grouped, rendered with `<Shortcut>`, searchable. Rebinding: later.
+One keymap (`src/keymap.ts`): every app-level shortcut is a named command with a default chord and where it listens (global, inside a side pane, Queue and Review's lists); handlers ask `isCommand` / `commandOf` instead of matching keys, on `e.code` so any layout works. Rebound chords live in prefs (`keybindings`, only the changed ones, `''` = none) and apply live everywhere a chord shows (`<BoundShortcut>` / `useBinding`: palette, menus, tooltips, sidebar, Files, split menu, thread peek). Done.
+
+| Part | Behaviour |
+|---|---|
+| Rows | Each command in its group (General, Threads, Splits, Side pane, Profiles, Lists) with its chord as caps, from the settings catalog (`keybinding.<id>`), so the agent's widget shows the same control |
+| Record | Click the chord: the next chord pressed is taken (captured on `window` before every app shortcut); Esc cancels, Backspace removes the shortcut |
+| Clash | Same chord where both listen (same scope, or one global): "⌘P is already used by Go to file" with Cancel, Replace (the other loses its shortcut) and Swap (it gets this one's old chord); nothing is saved until you choose |
+| Reserved | Refused with the reason: ⌘Q, ⌘H, ⌥⌘H, ⌘M, ⌘Tab, ⌘`, ⌘Space, ⌃Space, ⌃←/→/↑/↓ (Mission Control), ⇧⌘3/4/5, ⌃⌘Q/Space/F on macOS; Alt Tab, Alt F4, Alt Space, Ctrl Alt Delete and the Windows key elsewhere; Copy, Paste, Cut, Select all, Undo, Redo everywhere; a chord without ⌘/⌃/⌥ (Ctrl/Alt) unless it ends in a letter, digit or F-key. Plain-letter chords never fire while typing |
+| Reset | Per row (↺, asks again if another command took the default meanwhile) and Reset all (with Undo) |
+| Fixed | Listed, not rebindable: composer Enter / Shift Enter, hold mod to queue or steer, ↑ to edit, hold Alt for Orbit, Esc, mod 1–9 inside a pane with tabs, Alt ↑/↓ on a pinned row, annotate undo/redo, viewer arrows, drift card 1–3, mod Enter in review notes, text editing, terminal and simulator keys |
+| Agents | `get_keybindings` (read) and `set_keybinding(command, keys, onConflict?, reason)` (setting tier): the settings widget shows current → proposed (and the other command's row on a swap or replace), same reserved and clash checks; `update_settings` refuses `keybinding.*` keys |
+
+Default on macOS for focusing a split by direction is ⌥⌘ + arrow (⌃ arrows belong to Mission Control); Alt + arrow elsewhere.
 
 ## Agents
 
