@@ -109,3 +109,9 @@ test("a failed check is summed up by its error line, not Node's trailing version
   assert.equal(failureLine('exit 2\nsomething odd'), 'something odd');
   assert.equal(failureLine(undefined), undefined);
 });
+
+test("a question from an earlier turn's report is answered: once you replied and the agent went idle again, it no longer reads Needs you", () => {
+  const report = { by: 'claude' as const, decisions: [], left: [], question: 'Commit it as fix(sum)?', at: 862 };
+  assert.deepEqual(pick(idleVerdict(thread({ report, idle: { at: 862, accepted: [] } }), [])), ['needs-you', 'Question', 'Commit it as fix(sum)?'], 'asked this turn');
+  assert.deepEqual(pick(idleVerdict(thread({ report, idle: { at: 864, accepted: [], audit: { unverified: [] } } }), [])), ['done', 'Done', 'Open pull request']);
+});

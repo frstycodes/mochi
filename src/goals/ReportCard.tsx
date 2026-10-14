@@ -17,7 +17,7 @@ import { useHarness } from '../store';
 import { CallList, Expand } from '../WorkLog';
 import { nextStep, showsVerdictCard, type NextStep } from './report';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
-import { verdictHeading, verdictTiles, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
+import { turnReport, verdictHeading, verdictTiles, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
 
 /**
  * The end of a turn of work, read in seconds: Mochi's verdict on why the agent stopped, the evidence behind it, the gaps with one
@@ -29,7 +29,7 @@ export function ReportCard({ thread, onJump }: { thread: Thread; onJump?: (quote
   if (!verdict || !showsVerdictCard(thread)) return null;
   const states = prs.map((p) => p.state);
   const heading = verdictHeading(verdict, thread);
-  const report = thread.report && thread.report.at >= (thread.idle?.at ?? 0) - TURN_SLACK ? thread.report : undefined;
+  const report = turnReport(thread);
   const changes = openTurn(thread.activity);
   const hasNotes = !!report && report.decisions.length + report.left.length > 0;
   const isAsked = verdict.kind === 'needs-you';
@@ -56,9 +56,6 @@ export function ReportCard({ thread, onJump }: { thread: Thread; onJump?: (quote
     </Card>
   );
 }
-
-// The agent reports just before its turn ends, so its report lands a moment before Mochi's idle record.
-const TURN_SLACK = 1;
 
 const ICON_CLASS = { success: 'text-success', warning: 'text-warning', destructive: 'text-destructive', muted: 'text-muted-foreground' } satisfies Record<Verdict['tone'], string>;
 

@@ -104,9 +104,18 @@ function asked(thread: Thread) {
     return { chip: blocked ? 'Approval' : 'Question', text: blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer' };
   }
   if (thread.proposal?.state === 'waiting') return { chip: 'Goal to accept', text: thread.proposal.goal };
-  const question = thread.idle?.audit?.question ?? thread.report?.question;
+  const question = thread.idle?.audit?.question ?? turnReport(thread)?.question;
   return question ? { chip: 'Question', text: question } : null;
 }
+
+/** The agent's report_turn from the turn that just ended; an older one describes a turn your later message already answered. */
+export function turnReport(thread: Thread) {
+  const { report, idle } = thread;
+  return report && report.at >= (idle?.at ?? 0) - TURN_SLACK ? report : undefined;
+}
+
+// The agent reports just before its turn ends, so its report lands a moment before Mochi's idle record.
+const TURN_SLACK = 1;
 
 function limitReason(limit: NonNullable<NonNullable<Thread['live']>['limit']>) {
   const window = limit.label ? `${limit.label} limit` : 'Usage limit';
