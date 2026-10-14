@@ -608,6 +608,27 @@
 .pane-card-entering {
   animation: pane-enter 220ms cubic-bezier(0.23, 1, 0.32, 1);
 }
+/* The first pane in and the last one out move like the sidebar: a drawer slide from the right edge, the chat resizing with it. */
+.pane-card-entering[data-motion='slide'] {
+  animation: pane-slide-in 260ms var(--ease-drawer);
+}
+.pane-card-leaving[data-motion='slide'] {
+  animation: pane-slide-out 260ms var(--ease-drawer) forwards;
+}
+@keyframes pane-slide-in {
+  from {
+    translate: calc(100% + 8px) 0;
+  }
+}
+@keyframes pane-slide-out {
+  to {
+    translate: calc(100% + 8px) 0;
+  }
+}
+.pane-layout-animating[data-motion='slide'] :is(.pane-card, .pane-chat) {
+  transition-duration: 260ms;
+  transition-timing-function: var(--ease-drawer);
+}
 @keyframes pane-enter {
   from {
     opacity: 0;
