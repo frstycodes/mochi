@@ -10,7 +10,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { host } from '../host';
-import { TooltipIconButton } from '../ui';
+import { IconSwap, TooltipIconButton } from '../ui';
 import type { InstallState } from './AgentSettings';
 
 /**
@@ -115,7 +115,7 @@ export function CommandLine({ command }: { command: string }) {
         {command}
       </code>
       <TooltipIconButton label={isCopied ? 'Copied' : 'Copy command'} hint="Paste it into a terminal" onClick={copy}>
-        {isCopied ? <Check /> : <Copy3 />}
+        <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <Copy3 />}</IconSwap>
       </TooltipIconButton>
     </div>
   );

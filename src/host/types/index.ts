@@ -13,6 +13,7 @@ import { scheduleMethods, type ScheduleHost } from './schedule.ts';
 import { settingsMethods, type SettingsHost } from './settings.ts';
 import { simMethods, type SimHost } from './sim.ts';
 import { themesMethods, type ThemesHost } from './themes.ts';
+import { updatesMethods, type UpdatesHost } from './updates.ts';
 import { windowsMethods, type WindowsHost } from './windows.ts';
 
 export interface HostBridge {
@@ -31,6 +32,7 @@ export interface HostBridge {
   themes: ThemesHost;
   remote: RemoteHost;
   account: AccountHost;
+  updates: UpdatesHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -52,4 +54,5 @@ export const manifest = {
   themes: themesMethods,
   remote: remoteMethods,
   account: accountMethods,
+  updates: updatesMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

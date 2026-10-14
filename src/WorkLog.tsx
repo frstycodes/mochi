@@ -28,6 +28,7 @@ import { outputLines } from './chat/output';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
 import { isSendCall } from './chat/threadMessages';
 import { ThreadMessageBody, ThreadMessageIcon, ThreadMessageLine } from './chat/ThreadMessage';
+import { ICON_SWAP } from './ui';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
@@ -306,8 +307,6 @@ function useImageUrl(files: ThreadFiles, path: string) {
   return url;
 }
 
-const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' } };
-
 /** After the title, so it sits flush with the prose like Claude's: the chevron, or the needs-you dot while paused on you (the chevron on hover, so it still reads as openable). Working needs no icon: Mochi under the chat and the shimmering title say it. */
 export function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {
   const chevron = <ChevronRight className={cn('size-3 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />;
@@ -315,12 +314,12 @@ export function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: b
     <span className="grid size-3 shrink-0 place-items-center *:col-start-1 *:row-start-1">
       <AnimatePresence initial={false}>
         {isWaiting ? (
-          <motion.span key="waiting" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center *:col-start-1 *:row-start-1">
+          <motion.span key="waiting" {...ICON_SWAP} className="grid place-items-center *:col-start-1 *:row-start-1">
             <span aria-hidden className="size-1.5 rounded-full bg-warning group-hover/log:opacity-0" />
             <span className="opacity-0 group-hover/log:opacity-100">{chevron}</span>
           </motion.span>
         ) : (
-          <motion.span key="chevron" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center">
+          <motion.span key="chevron" {...ICON_SWAP} className="grid place-items-center">
             {chevron}
           </motion.span>
         )}

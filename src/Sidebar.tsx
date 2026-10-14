@@ -2,10 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotionConfig, type MotionProps } from 'motion/react';
-import { useTheme } from 'next-themes';
-import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
-import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Archive, ChatRound, ChevronRight, Edit, Eye, Hierarchy, Inbox, Route, Search, TaskSquare, Undo } from 'reicon-react';
 import { Kbd } from '@/components/ui/kbd';
 import {
   Sidebar,
@@ -41,12 +38,10 @@ import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
-import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, goalProgress } from './progress';
-import { openSettings } from './settings/open';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
-import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
+import { ProgressRing, SpaceIcon } from './ui';
 import { isWorking, workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
 import { Shortcut } from './Shortcut';
@@ -56,6 +51,7 @@ import { openRemoteThread, useRemoteThreadRoute } from './remote/open';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';
+import { UserMenu } from './UserMenu';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
@@ -661,7 +657,9 @@ function SpaceFooter() {
   const profiles = useProfiles();
   return (
     <SidebarFooter className="flex-row items-center gap-1 px-2 py-2">
-      <div role="radiogroup" aria-label="Space" className="flex items-center gap-0.5">
+      <UserMenu />
+      <span className="flex-1" />
+      <div role="radiogroup" aria-label="Profile" className="flex items-center gap-0.5">
         {profiles.map((s, i) => {
           const isCurrent = s.id === state.spaceId;
           return (
@@ -671,7 +669,7 @@ function SpaceFooter() {
                   type="button"
                   role="radio"
                   aria-checked={isCurrent}
-                  aria-label={`${s.name} space`}
+                  aria-label={`${s.name} profile`}
                   onClick={() => dispatch({ type: 'space', id: s.id })}
                   className={cn('flex size-7 cursor-default items-center justify-center rounded-md text-subtle-foreground hover:bg-sidebar-accent/60 hover:text-foreground', isCurrent && 'bg-sidebar-accent text-foreground')}
                 >
@@ -685,60 +683,6 @@ function SpaceFooter() {
           );
         })}
       </div>
-      <span className="flex-1" />
-      <ThemeButton />
-      <DemoMenu paused={state.paused} />
     </SidebarFooter>
-  );
-}
-
-function DemoMenu({ paused }: { paused: boolean }) {
-  const { dispatch } = useHarness();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Settings and prototype controls" className="text-muted-foreground">
-          <OverflowIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="end" className="w-56">
-        <DropdownMenuItem onSelect={() => openSettings()}>
-          <Setting2 />
-          Settings
-          <Shortcut keys={['mod', ',']} className="ml-auto" />
-        </DropdownMenuItem>
-        {showsDemoData() && (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Prototype</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
-              {paused ? <Play /> : <Pause />}
-              {paused ? 'Resume simulation' : 'Pause simulation'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'trigger-overlap' })}>
-              <Flash />
-              Trigger an overlap
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
-              <Refresh />
-              Reset demo
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        )}
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="font-normal text-subtle-foreground">Hold Option, or long-press, for Orbit</DropdownMenuLabel>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function ThemeButton() {
-  const { theme = 'system', setTheme } = useTheme();
-  const next = { system: 'light', light: 'dark', dark: 'system' }[theme] ?? 'system';
-  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
-  return (
-    <Button variant="ghost" size="icon-sm" onClick={() => setTheme(next)} aria-label={`Theme: ${theme}. Switch to ${next}`} title={`Theme: ${theme}`} className="text-muted-foreground">
-      <Icon />
-    </Button>
   );
 }

@@ -23,6 +23,7 @@ import { usePrefs } from '@/settings/prefs';
 import { useSimStream } from '@/sim/useSimStream';
 import { toast } from 'sonner';
 import type { PaneTabProps } from './tabs';
+import { IconSwap } from '../ui';
 
 export function SimulatorTab({ thread }: PaneTabProps) {
   const { simulators, error, refresh } = useSimulators();
@@ -59,7 +60,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
       </PaneTitle>
       <PaneActions>
         <IconAction label={settings.appearance === 'dark' ? 'Switch to light appearance' : 'Switch to dark appearance'} disabled={!isBooted} onClick={() => settings.setAppearance(settings.appearance === 'dark' ? 'light' : 'dark')}>
-          {settings.appearance === 'dark' ? <Moon /> : <Sun />}
+          <IconSwap id={settings.appearance === 'dark' ? 'dark' : 'light'}>{settings.appearance === 'dark' ? <Moon /> : <Sun />}</IconSwap>
         </IconAction>
         <ContentSizeMenu value={settings.contentSize} disabled={!isBooted} onChange={settings.setContentSize} />
         <DeepLinkPopover udid={device.udid} disabled={!isBooted} />
@@ -83,7 +84,7 @@ export function SimulatorTab({ thread }: PaneTabProps) {
           <Camera />
         </IconAction>
         <IconAction label={capture.isRecording ? 'Stop recording and post it' : 'Record the screen'} pressed={capture.isRecording} disabled={!isBooted} onClick={capture.toggleRecording}>
-          {capture.isRecording ? <StopCircle className="text-destructive" /> : <Record />}
+          <IconSwap id={capture.isRecording ? 'stop' : 'record'}>{capture.isRecording ? <StopCircle className="text-destructive" /> : <Record />}</IconSwap>
         </IconAction>
         <Tooltip>
           <TooltipTrigger asChild>
