@@ -1,0 +1,10 @@
+{
+  // Deployed to the account owner's own Cloudflare account; self-hosters deploy this same Worker to theirs.
+  "name": "mochi-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "durable_objects": { "bindings": [{ "name": "ACCOUNTS", "class_name": "AccountRelay" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AccountRelay"] }],
+  // TODO(owner: Sandesh): the Clerk instance's Frontend API URL once it exists, and a `routes` entry for the relay's domain.
+  "vars": { "CLERK_ISSUER": "" }
+}
