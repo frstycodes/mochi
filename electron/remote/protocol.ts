@@ -10,12 +10,10 @@ export const COMMAND_SCOPES = {
   interrupt: 'operate',
 } satisfies Record<RemoteCommand['type'], Scope>;
 
-/** The first frame on a socket. `resume` is where the device left off; without it, or past the log, it gets a snapshot. */
+/** The first frame once paired (`pairing.ts`). `resume` is where the device left off; without it, or past the log, it gets a snapshot. */
 export interface HelloFrame {
   type: 'hello';
   version: number;
-  /** Opaque to the server; `authenticateDevice` reads it. */
-  auth: unknown;
   resume?: { epoch: string; seq: number };
 }
 
@@ -42,9 +40,9 @@ export function parseHello(raw: string): HelloFrame | string {
   if (frame?.type !== 'hello') return 'The first frame must be hello';
   if (frame.version !== PROTOCOL_VERSION) return `This machine speaks protocol ${PROTOCOL_VERSION}; update Mochi on both sides`;
   const resume = frame.resume as Record<string, unknown> | undefined;
-  if (resume === undefined) return { type: 'hello', version: PROTOCOL_VERSION, auth: frame.auth };
+  if (resume === undefined) return { type: 'hello', version: PROTOCOL_VERSION };
   if (!isString(resume?.epoch, MAX_ID) || !resume.epoch || !Number.isSafeInteger(resume.seq) || (resume.seq as number) < 0) return 'resume must be { epoch, seq }';
-  return { type: 'hello', version: PROTOCOL_VERSION, auth: frame.auth, resume: { epoch: resume.epoch, seq: resume.seq as number } };
+  return { type: 'hello', version: PROTOCOL_VERSION, resume: { epoch: resume.epoch, seq: resume.seq as number } };
 }
 
 export function parseCommand(raw: string): CommandFrame | string {

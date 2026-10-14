@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import type { MochiAccount, MochiUser } from '../../src/host/types/account.ts';
 import { openWindows } from '../agents/events.ts';
-import { authorizeUrl, codeExchange, codeFromCallback, ENDPOINTS, newPkce, tokensFrom, userFrom } from './oauth.ts';
+import { authorizeUrl, codeExchange, codeFromCallback, ENDPOINTS, newPkce, refreshExchange, tokensFrom, userFrom, type Tokens } from './oauth.ts';
 
 /**
  * The Clerk instance's Frontend API URL and its OAuth application's client id: public values, not secrets (a public PKCE
@@ -28,6 +28,10 @@ type Session = { user: MochiUser; refreshToken?: string } | null;
 // Read on first use, not at import: main sets userData (MOCHI_USER_DATA) and `safeStorage` is ready only after that.
 let loaded: Session | undefined;
 const session = () => (loaded ??= load());
+/** In memory only; a fresh one comes from the refresh token when it's missing or about to expire. */
+let access: Tokens | undefined;
+let refreshing: Promise<string> | undefined;
+const EXPIRY_MARGIN_MS = 60_000;
 let pending: { cancel: () => void } | null = null;
 
 export function current(): MochiAccount {
@@ -65,7 +69,8 @@ export async function signIn(): Promise<MochiAccount> {
       broadcast();
       void shell.openExternal(authorizeUrl(ISSUER, CLIENT_ID, redirectUri, pkce));
     });
-    const tokens = tokensFrom(await post(ENDPOINTS.token, codeExchange(CLIENT_ID, code, pkce.verifier, redirectUri)));
+    const tokens = tokensFrom(await post(ENDPOINTS.token, codeExchange(CLIENT_ID, code, pkce.verifier, redirectUri)), Date.now());
+    access = tokens;
     const user = userFrom(await getJson(ENDPOINTS.userinfo, tokens.accessToken));
     loaded = { user, refreshToken: tokens.refreshToken };
     save(loaded);
@@ -85,11 +90,37 @@ export async function cancelSignIn() {
 export async function signOut(): Promise<MochiAccount> {
   const refreshToken = session()?.refreshToken;
   loaded = null;
+  access = undefined;
   rmSync(storeFile(), { force: true });
   broadcast();
   // GAP: Clerk documents the endpoint but not its parameters; these are RFC 7009's. Not run against a real instance yet.
   if (refreshToken) void post(ENDPOINTS.revoke, new URLSearchParams({ token: refreshToken, token_type_hint: 'refresh_token', client_id: CLIENT_ID })).catch(() => {});
   return current();
+}
+
+/**
+ * An access token for Mochi's own services (the relay), refreshed when it's within a minute of expiring. Stays in main:
+ * callers put it in a request header, never a URL, and it never reaches the renderer.
+ */
+export function accessToken(now = Date.now()): Promise<string> {
+  if (access && access.expiresAt - now > EXPIRY_MARGIN_MS) return Promise.resolve(access.accessToken);
+  return (refreshing ??= refresh(now).finally(() => (refreshing = undefined)));
+}
+
+async function refresh(now: number): Promise<string> {
+  const signedIn = session();
+  if (!signedIn?.refreshToken) throw new Error('Sign in to your Mochi account first');
+  const response = await fetch(new URL(ENDPOINTS.token, ISSUER), { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: refreshExchange(CLIENT_ID, signedIn.refreshToken) });
+  // Revoked at Clerk (signed out elsewhere, user deleted): this session is over here too.
+  if (response.status === 400 || response.status === 401) {
+    await signOut();
+    throw new Error('Your Mochi session ended; sign in again');
+  }
+  if (!response.ok) throw new Error(`Couldn't reach your Mochi account: Clerk answered ${response.status}`);
+  access = tokensFrom(await response.json(), now);
+  // Whether Clerk rotates refresh tokens isn't documented: keep whichever one it hands back.
+  if (access.refreshToken && access.refreshToken !== signedIn.refreshToken) save((loaded = { ...signedIn, refreshToken: access.refreshToken }));
+  return access.accessToken;
 }
 
 function listen() {
@@ -115,8 +146,17 @@ async function getJson(path: string, accessToken: string) {
   return response.json();
 }
 
+const changeListeners = new Set<(account: MochiAccount) => void>();
+
+/** For main's own services that follow the account (the relay connection). */
+export function onAccountChange(listener: (account: MochiAccount) => void) {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
+}
+
 const broadcast = () => {
   const account = current();
+  for (const listener of changeListeners) listener(account);
   for (const win of openWindows()) win.webContents.send('account:onChange', account);
 };
 

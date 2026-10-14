@@ -5,3 +5,4 @@ artifact
 dist-electron
 release
 build/native
+.wrangler

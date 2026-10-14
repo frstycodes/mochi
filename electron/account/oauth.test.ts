@@ -22,8 +22,8 @@ test('a callback is taken only with this sign-in’s state', () => {
 });
 
 test('token and userinfo responses are read defensively', () => {
-  assert.deepEqual(tokensFrom({ access_token: 'a', refresh_token: 'r' }), { accessToken: 'a', refreshToken: 'r' });
-  assert.throws(() => tokensFrom({ error: 'invalid_grant' }), /no access token/);
+  assert.deepEqual(tokensFrom({ access_token: 'a', refresh_token: 'r', expires_in: 60 }, 1000), { accessToken: 'a', refreshToken: 'r', expiresAt: 61_000 });
+  assert.throws(() => tokensFrom({ error: 'invalid_grant' }, 0), /no access token/);
   assert.deepEqual(userFrom({ sub: 'user_1', preferred_username: 'sp', email: 'a@b.c', picture: '' }), { id: 'user_1', name: 'sp', email: 'a@b.c', imageUrl: null });
   assert.throws(() => userFrom({}), /no id/);
 });

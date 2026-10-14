@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import { userFromRequest } from './auth.ts';
-import { isId } from './protocol.ts';
+import { HEARTBEAT, isId } from './protocol.ts';
 import { Relay, type Attachment, type MachineRecord, type Room } from './relay.ts';
 
 interface Env {
@@ -35,6 +35,12 @@ export default {
 
 export class AccountRelay extends DurableObject<Env> {
   private readonly relay = new Relay<WebSocket>(this.room());
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // Heartbeats answered by the runtime without waking the object: a client that hears no pong knows its socket is dead.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(HEARTBEAT.ping, HEARTBEAT.pong));
+  }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);

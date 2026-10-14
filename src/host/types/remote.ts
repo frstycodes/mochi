@@ -15,6 +15,37 @@ export interface RemoteSettings {
   allowsNetwork: boolean;
   /** Empty: the OS host name. */
   machineName: string;
+  /** Also reachable through Mochi's relay from anywhere; needs a signed-in Mochi account. */
+  reachesAnywhere: boolean;
+}
+
+export type RelayState = { status: 'off' } | { status: 'connecting' } | { status: 'connected' } | { status: 'error'; error: string };
+
+/** A device this computer approved; only its public key, kept here and nowhere else. */
+export interface PairedDeviceInfo {
+  id: string;
+  name: string;
+  scopes: Scope[];
+  pairedAt: number;
+}
+
+/** Another computer on your account, as the relay lists it. */
+export interface OtherMachine {
+  id: string;
+  name: string;
+  isOnline: boolean;
+  isPaired: boolean;
+  /** The six digits both screens show while pairing with it. */
+  pairingCode: string;
+}
+
+/** "Allow <name>?" on this computer's screen. */
+export interface ApprovalRequest {
+  id: string;
+  name: string;
+  pairingCode: string;
+  /** Epoch ms; unanswered by then counts as No. */
+  expiresAt: number;
 }
 
 export interface ConnectedDevice {
@@ -31,6 +62,8 @@ export interface RemoteStatus {
   /** `host:port` the server listens on; empty while it is off. */
   addresses: string[];
   devices: ConnectedDevice[];
+  pairedDevices: PairedDeviceInfo[];
+  relay: RelayState;
   /** Why the server isn't listening, when it should be (port taken, interface gone). */
   error?: string;
 }
@@ -65,6 +98,15 @@ export interface RemoteHost {
   onSnapshotRequest(listener: (requestId: string) => void): () => void;
   onCommand(listener: (request: RemoteCommandRequest) => void): () => void;
   commandResult(id: string, result: CommandResult): Promise<void>;
+  /** Forgets a paired device and ends its connections; it has to pair again. */
+  removeDevice(id: string): Promise<RemoteStatus>;
+  onApproval(listener: (request: ApprovalRequest) => void): () => void;
+  answerApproval(id: string, isAllowed: boolean): Promise<void>;
+  /** Your account's other computers, through the relay. */
+  otherMachines(): Promise<OtherMachine[]>;
+  /** Pairs with another computer of yours; resolves once it allowed this one, rejects with its reason otherwise. */
+  pair(machineId: string): Promise<void>;
+  forgetMachine(machineId: string): Promise<void>;
 }
 
 export const remoteMethods = {
@@ -76,4 +118,10 @@ export const remoteMethods = {
   onSnapshotRequest: 'event',
   onCommand: 'event',
   commandResult: 'invoke',
+  removeDevice: 'invoke',
+  onApproval: 'event',
+  answerApproval: 'invoke',
+  otherMachines: 'invoke',
+  pair: 'invoke',
+  forgetMachine: 'invoke',
 } satisfies Manifest<RemoteHost>;

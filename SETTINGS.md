@@ -79,6 +79,9 @@ One model per task, each a picker over both harnesses' models (`src/settings/sec
 | Off-goal work branches from | Current branch / Base branch | Current | now | src/goals/DriftGuard.tsx:114 |
 | New step size | S / M / L | M | now | src/runtime/apply.ts:73 |
 
+### Devices
+Let devices control this computer (the server, off by default), Allow devices on this network (LAN and Tailscale), Computer name, Reach this computer from anywhere (Mochi's relay; needs the account and the server on, shows the relay connection's state). Paired devices: each device this computer approved, connected or when it paired, its scopes, Remove (confirm; it pairs again with a new approval). Your other computers: your account's machines from the relay, online or not, Pair (a dialog with the code to compare, waiting for the other computer's approval, its refusal shown verbatim) or Forget. A device pairing through the relay shows "Allow <device>?" with the same code on this computer, wherever you are in the app (`DeviceApprovalLayer`). DEVICES.md › Pairing. Done.
+
 ## Workspace
 
 ### Profiles

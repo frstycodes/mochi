@@ -211,9 +211,11 @@ function colorTheme(slot: ThemeSlot): Setting {
   };
 }
 
+const REMOTE_KEYS = { isEnabled: 'remoteEnabled', allowsNetwork: 'remoteNetwork', reachesAnywhere: 'remoteAnywhere', machineName: 'machineName' } satisfies Record<keyof RemoteSettings, string>;
+
 function remoteSetting(key: keyof RemoteSettings, label: string, control: Control, extra: Partial<Setting> = {}): Setting {
   return {
-    key: key === 'machineName' ? key : key === 'isEnabled' ? 'remoteEnabled' : 'remoteNetwork',
+    key: REMOTE_KEYS[key],
     label,
     section: 'devices',
     control,
@@ -286,6 +288,7 @@ const APP_SETTINGS: Setting[] = [
   ),
   remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, { locked: REMOTE_REACH }),
   remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, { locked: REMOTE_REACH }),
+  remoteSetting('reachesAnywhere', 'Reach this computer from anywhere', SWITCH, { locked: REMOTE_REACH }),
   remoteSetting('machineName', 'Computer name', { type: 'text', placeholder: 'This computer’s host name' }, { description: 'How your devices list this computer; empty uses the host name' }),
   pref('agent', 'Agent', 'defaults', choice(AGENTS)),
   pref('permissions', 'Permissions', 'defaults', choice(SHARED_ACCESS.map((a) => ({ value: a, label: a, ...(a === 'Full access' && { tone: 'warning' as const }) }))), { locked: AGENT_REACH }),
