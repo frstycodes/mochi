@@ -8,6 +8,7 @@ import { useCheckpointFiles } from '../rewind/useCheckpointFiles.ts';
 import { useHarness } from '../store/index.tsx';
 import { setWorktreePath, worktreePath } from './worktrees.ts';
 import { dueForCleanup } from './cleanup.ts';
+import { recoverCheckouts } from './recovery.ts';
 import { usePrefs } from '../settings/prefs.ts';
 
 /**
@@ -33,6 +34,21 @@ export function useWorktreeManager() {
         .catch((error: Error) => toast.error(`Could not create a worktree for "${thread.title}"`, { description: error.message }));
     }
   }, [state.threads, state.forks]);
+}
+
+/** Once per launch: threads pick up the worktree and branch their checkout really has (`recoverCheckouts`). */
+export function useCheckoutRecovery() {
+  const { state, dispatch } = useHarness();
+  const threads = useRef(state.threads);
+  useEffect(() => {
+    if (!host.isDesktop) return;
+    void recoverCheckouts(threads.current, worktreePath, host.git).then((found) => {
+      for (const { threadId, head, worktree } of found) {
+        if (worktree) setWorktreePath(threadId, worktree);
+        dispatch({ type: 'repo-head', threadId, head, ...(worktree && { worktree }) });
+      }
+    });
+  }, [dispatch]);
 }
 
 function forkWorktree(threads: Thread[], thread: Thread, fork: Fork) {

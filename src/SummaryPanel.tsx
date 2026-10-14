@@ -41,6 +41,7 @@ import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { currentAction, PHASE_LABELS } from './agentPhase';
 import { openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
+import { BranchName } from './git/BranchLabel';
 
 const LIST_LIMIT = 3;
 
@@ -240,7 +241,7 @@ function PanelHeader({ thread }: { thread: Thread }) {
           <>
             {thread.repo.project}
             <span className="text-subtle-foreground"> · </span>
-            <span className="font-mono type-caption">{thread.repo.branch}</span>
+            <BranchName repo={thread.repo} className="font-mono type-caption" />
           </>
         ) : (
           'No project'

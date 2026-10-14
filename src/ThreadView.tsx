@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
-import { ChevronDown, Hierarchy2, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
+import { ChevronDown, Laptop, SidebarRight, TextalignLeft } from 'reicon-react';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,7 @@ import { hasGoal } from './drift';
 import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
+import { BranchIcon, BranchName } from './git/BranchLabel';
 
 const PANE_ANIMATION_MS = 260;
 const DEFAULT_PANE_PCT = 36;
@@ -266,9 +267,9 @@ function ThreadHeader({
         <ThreadMenu thread={thread} />
         <LimitChip thread={thread} />
         {!!thread.repo && (
-          <span className="hidden min-w-0 items-center gap-1 truncate type-caption text-subtle-foreground @2xl:flex">
-            <Hierarchy2 className="size-3.5 shrink-0" />
-            {thread.repo.branch}
+          <span className="hidden min-w-0 items-center gap-1 type-caption text-subtle-foreground @2xl:flex">
+            <BranchIcon repo={thread.repo} />
+            <BranchName repo={thread.repo} />
           </span>
         )}
         {thread.prs.map((pr) => (

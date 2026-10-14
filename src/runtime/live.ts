@@ -126,7 +126,7 @@ export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */
 function runFolder(thread: Thread) {
-  const cwd = thread.live?.cwd ?? threadCwd(thread);
+  const cwd = threadCwd(thread);
   if (thread.repo && !cwd) return undefined;
   return cwd ?? null;
 }

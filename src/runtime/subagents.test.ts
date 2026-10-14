@@ -7,6 +7,7 @@ import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
 import { oneLine } from './subagents.ts';
+import { setWorktreePath } from '../git/worktrees.ts';
 import { DEFAULT_PREFS } from '../settings/prefs.ts';
 import { runTool, type ToolEnv } from './tools.ts';
 
@@ -35,6 +36,8 @@ function setup() {
     isLive: true,
   });
   const id = state.threads[0].id;
+  // As the store's event listener does: the path goes on record beside the reducer's live run.
+  setWorktreePath(id, '/wt/main');
   dispatch({
     type: 'agent',
     event: { threadId: id, type: 'worktree', path: '/wt/main' },

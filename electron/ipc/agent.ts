@@ -22,8 +22,8 @@ import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
-import { switchBranch } from '../git/branches.ts';
-import { runGit, topLevel } from '../git/run.ts';
+import { headOf, switchBranch } from '../git/branches.ts';
+import { topLevel } from '../git/run.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -390,9 +390,9 @@ async function workspaceFolder(threadId: string, root: string, workspace: StartW
     const top = await topLevel(root).catch(() => null);
     if (!top) return { cwd: root };
     if (workspace.isExisting) await switchBranch(top, workspace.branch, { changes: 'refuse' });
-    // On a detached HEAD the thread shows the commit, as git does, never the name it was created with: that branch doesn't exist.
-    const branch = (await runGit(top, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] })).trim() || (await runGit(top, ['rev-parse', '--short', 'HEAD'], { okCodes: [128] })).trim();
-    if (branch) broadcast({ threadId, type: 'branch', branch });
+    // The thread shows what the checkout really has, never the name it was created with: on a detached HEAD that branch doesn't exist.
+    const head = await headOf(top).catch(() => null);
+    if (head) broadcast({ threadId, type: 'branch', ...head });
     return { cwd: root };
   }
   const isRepo = await topLevel(root).then(

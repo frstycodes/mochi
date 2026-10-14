@@ -73,6 +73,12 @@ export interface Worktree {
   head: string;
 }
 
+/** A checkout's HEAD: `branch` is the short commit when `isDetached`, never to be shown as a branch name. */
+export interface Head {
+  branch: string;
+  isDetached: boolean;
+}
+
 export interface Branch {
   /** Local `feat/x`, or remote `origin/feat/x`. */
   name: string;
@@ -162,6 +168,8 @@ export interface GitHost {
   /** Switches the project checkout to `branch` now; refuses a branch checked out elsewhere, naming where. */
   switchBranch(root: string, branch: string, options: SwitchOptions): Promise<void>;
   worktrees(root: string): Promise<Worktree[]>;
+  /** What the checkout at `cwd` (a worktree or the project folder) has checked out now. */
+  head(cwd: string): Promise<Head>;
   removeWorktree(path: string): Promise<void>;
   diskUsage(path: string): Promise<number>;
   /** Snapshots the worktree's files (untracked included) under `refs/harness/checkpoints/<threadId>/<n>` without touching HEAD, index or files; resolves to the commit. */
@@ -219,6 +227,7 @@ export const gitMethods = {
   branchNameError: 'invoke',
   switchBranch: 'invoke',
   worktrees: 'invoke',
+  head: 'invoke',
   removeWorktree: 'invoke',
   diskUsage: 'invoke',
   checkpoint: 'invoke',

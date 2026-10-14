@@ -1,4 +1,5 @@
 import type { StartWorkspace } from '../host/types/agent.ts';
+import type { Head } from '../host/types/git.ts';
 import type { Repo, Thread } from '../model.ts';
 
 export type WorkspaceMode = 'worktree' | 'folder';
@@ -12,6 +13,17 @@ export const workspaceMode = (repo: Repo): WorkspaceMode => repo.mode ?? 'worktr
 export function startWorkspace(repo: Repo | null): StartWorkspace | undefined {
   if (!repo) return;
   return { mode: workspaceMode(repo), branch: repo.branch, ...(repo.base && { base: repo.base }), ...(repo.isExisting && { isExisting: true }) };
+}
+
+/** The repo as its checkout really is: the branch it has (or a detached HEAD's commit), in its own worktree when `isWorktree`. */
+export function withHead(repo: Repo, head: Head, isWorktree: boolean): Repo {
+  const { mode, isDetached: _, ...rest } = repo;
+  return { ...rest, branch: head.branch, ...(head.isDetached && { isDetached: true }), ...(!isWorktree && mode && { mode }) };
+}
+
+/** The branch, or "detached at <commit>": a commit is never passed off as a branch name. */
+export function branchText(repo: Repo) {
+  return repo.isDetached ? `detached at ${repo.branch}` : repo.branch;
 }
 
 /** The repo fields a draft sets: a folder thread never has a base, a checked-out branch never needs one. */
