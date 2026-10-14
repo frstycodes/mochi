@@ -718,7 +718,7 @@ function Recipes() {
           </div>
         </Block>
         {verdictFixtures(rl).map(({ label, thread }) => (
-          <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, five evidence tiles, gaps with one action each, one primary." wide>
+          <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, one line of evidence (goal ring, status icons, a badge only where it needs you, the PR chip), gaps as call rows, one primary." wide>
             <VizThreadProvider value={rl.id}>
               <ReportCard thread={thread} />
             </VizThreadProvider>

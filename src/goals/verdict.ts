@@ -135,6 +135,7 @@ function doneLine(prs: RefState[]): Pick<Verdict, 'chip' | 'reason'> {
 export type TileTone = 'success' | 'warning' | 'destructive' | 'info' | 'merged' | 'none';
 
 export interface Tile {
+  id: 'criteria' | 'checks' | 'git' | 'pr' | 'agent';
   name: string;
   /** One segment per thing counted, in status colours. */
   bars: TileTone[];
@@ -150,52 +151,59 @@ export function verdictTiles(thread: Thread, prs: RefState[], verdict: Verdict):
 
 function criteriaTile(thread: Thread): Tile {
   const criteria = thread.criteria ?? [];
-  if (!criteria.length) return { name: 'Criteria', bars: ['none'], value: 'none', tone: 'none' };
+  if (!criteria.length) return { id: 'criteria', name: 'Criteria', bars: ['none'], value: 'none', tone: 'none' };
   const bars = criteria.map((c): TileTone => (c.check?.status === 'failed' ? 'destructive' : isMet(c) ? 'success' : 'none'));
-  return { name: 'Criteria', bars, value: `${criteria.filter(isMet).length} of ${criteria.length}` };
+  return { id: 'criteria', name: 'Criteria', bars, value: `${criteria.filter(isMet).length} of ${criteria.length}` };
 }
 
 function checksTile(thread: Thread): Tile {
   const checked = (thread.criteria ?? []).filter((c) => c.command);
-  if (!checked.length) return { name: 'Checks', bars: ['none'], value: 'none', tone: 'none' };
+  if (!checked.length) return { id: 'checks', name: 'Checks', bars: ['none'], value: 'none', tone: 'none' };
   const status = checked.map((c) => c.check?.status);
   const bars = status.map((s): TileTone => (s === 'passed' ? 'success' : s === 'failed' ? 'destructive' : s === 'running' ? 'info' : 'none'));
   const failed = status.filter((s) => s === 'failed').length;
-  if (failed) return { name: 'Checks', bars, value: `${failed} failing`, tone: 'destructive' };
-  if (status.includes('running')) return { name: 'Checks', bars, value: 'running' };
-  if (status.every((s) => s === 'passed')) return { name: 'Checks', bars, value: 'all pass' };
-  return { name: 'Checks', bars, value: 'not run', tone: 'none' };
+  if (failed) return { id: 'checks', name: 'Checks', bars, value: `${failed} failing`, tone: 'destructive' };
+  if (status.includes('running')) return { id: 'checks', name: 'Checks', bars, value: 'running' };
+  if (status.every((s) => s === 'passed')) return { id: 'checks', name: 'Checks', bars, value: 'all pass' };
+  return { id: 'checks', name: 'Checks', bars, value: 'not run', tone: 'none' };
 }
 
 function gitTile(thread: Thread, prs: RefState[]): Tile {
   const uncommitted = thread.idle?.uncommitted;
-  if (uncommitted) return { name: 'Git', bars: ['warning'], value: `${uncommitted} uncommitted`, tone: 'warning' };
-  if (prs.some((p) => p.status === 'merged')) return { name: 'Git', bars: ['merged'], value: 'merged' };
-  if (prs.some((p) => p.status === 'open' || p.status === 'draft')) return { name: 'Git', bars: ['success'], value: 'pushed' };
-  if (uncommitted === 0) return { name: 'Git', bars: ['success'], value: 'committed' };
-  return { name: 'Git', bars: ['none'], value: thread.repo ? 'not read' : 'no folder', tone: 'none' };
+  if (uncommitted) return { id: 'git', name: 'Git', bars: ['warning'], value: `${uncommitted} uncommitted`, tone: 'warning' };
+  if (prs.some((p) => p.status === 'merged')) return { id: 'git', name: 'Git', bars: ['merged'], value: 'merged' };
+  if (prs.some((p) => p.status === 'open' || p.status === 'draft')) return { id: 'git', name: 'Git', bars: ['success'], value: 'pushed' };
+  if (uncommitted === 0) return { id: 'git', name: 'Git', bars: ['success'], value: 'committed' };
+  return { id: 'git', name: 'Git', bars: ['none'], value: thread.repo ? 'not read' : 'no folder', tone: 'none' };
 }
 
 function prTile(prs: RefState[]): Tile {
   const pr = prs.find((p) => p.status === 'open' || p.status === 'draft') ?? prs.find((p) => p.status === 'merged');
-  if (!pr) return { name: 'PR', bars: ['none'], value: 'none', tone: 'none' };
+  if (!pr) return { id: 'pr', name: 'PR', bars: ['none'], value: 'none', tone: 'none' };
   const n = prNumber(pr);
   const name = n ? `PR ${n}` : 'PR';
-  if (pr.status === 'merged') return { name, bars: ['merged'], value: 'merged' };
-  if (pr.hasConflicts) return { name, bars: ['destructive'], value: 'conflicts', tone: 'destructive' };
-  if (pr.checks === 'fail') return { name, bars: ['destructive'], value: 'CI failing', tone: 'destructive' };
-  if (pr.checks === 'pass') return { name, bars: ['success'], value: 'CI passed' };
-  return { name, bars: ['info'], value: pr.checks === 'pending' ? 'CI running' : pr.status };
+  if (pr.status === 'merged') return { id: 'pr', name, bars: ['merged'], value: 'merged' };
+  if (pr.hasConflicts) return { id: 'pr', name, bars: ['destructive'], value: 'conflicts', tone: 'destructive' };
+  if (pr.checks === 'fail') return { id: 'pr', name, bars: ['destructive'], value: 'CI failing', tone: 'destructive' };
+  if (pr.checks === 'pass') return { id: 'pr', name, bars: ['success'], value: 'CI passed' };
+  return { id: 'pr', name, bars: ['info'], value: pr.checks === 'pending' ? 'CI running' : pr.status };
 }
 
 function agentTile(thread: Thread, verdict: Verdict): Tile {
-  if (verdict.kind === 'stalled' && verdict.chip !== 'Stopped') return { name: 'Agent said', bars: ['none'], value: 'cut off', tone: 'none' };
-  if (verdict.kind === 'needs-you') return { name: 'Agent said', bars: ['warning'], value: 'asked you', tone: 'warning' };
+  if (verdict.kind === 'stalled' && verdict.chip !== 'Stopped') return { id: 'agent', name: 'Agent said', bars: ['none'], value: 'cut off', tone: 'none' };
+  if (verdict.kind === 'needs-you') return { id: 'agent', name: 'Agent said', bars: ['warning'], value: 'asked you', tone: 'warning' };
   const unverified = verdict.gaps.filter((g) => g.severity === 'unverified');
   const open = unverified.filter((g) => !g.isAccepted).length;
-  if (open) return { name: 'Agent said', bars: unverified.map((g) => (g.isAccepted ? 'success' : 'warning')), value: `${open} unverified`, tone: 'warning' };
-  if (!thread.idle?.audit) return { name: 'Agent said', bars: ['none'], value: 'not read', tone: 'none' };
-  return { name: 'Agent said', bars: ['success'], value: 'nothing open' };
+  if (open) return { id: 'agent', name: 'Agent said', bars: unverified.map((g) => (g.isAccepted ? 'success' : 'warning')), value: `${open} unverified`, tone: 'warning' };
+  if (!thread.idle?.audit) return { id: 'agent', name: 'Agent said', bars: ['none'], value: 'not read', tone: 'none' };
+  return { id: 'agent', name: 'Agent said', bars: ['success'], value: 'nothing open' };
+}
+
+/** Where the card's question came from; the question itself is the card's body, so the heading never repeats it. */
+function needsYouDetail(thread: Thread) {
+  if (thread.status === 'needs-you') return 'Answer it in the composer';
+  if (thread.proposal?.state === 'waiting') return 'Accept or keep the proposed goal';
+  return 'Asked in its reply';
 }
 
 /** The card's title and the line under it. */
@@ -209,7 +217,7 @@ export function verdictHeading(verdict: Verdict, thread: Thread): { title: strin
     case 'done':
       return { title: verdict.reason.startsWith('In review') ? 'Done · in review' : verdict.chip, detail: accepted ? `Every criterion met; you accepted ${accepted} ${accepted === 1 ? 'gap' : 'gaps'}` : 'Every criterion met, nothing left open' };
     case 'needs-you':
-      return { title: 'Needs you', detail: thread.idle?.audit?.question ? 'Asked in its reply' : verdict.reason };
+      return { title: 'Needs you', detail: needsYouDetail(thread) };
     case 'stalled':
       return { title: verdict.chip === 'Stopped' ? 'Stopped mid-plan' : verdict.chip === 'Limit' ? 'Stalled · usage limit' : 'Stalled · the agent exited', detail: verdict.reason };
     case 'checking':

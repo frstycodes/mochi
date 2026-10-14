@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import { ChevronDown } from 'reicon-react';
+import { ChevronRight, CloseCircle, Hierarchy2, MessageText, TickCircle, Warning } from 'reicon-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { GitMergeIcon, GitPullRequestIcon, REF_CHIP_CLASS, REF_TONE_CLASS } from '@/icons/github';
+import { TerminalIcon } from '@/icons/panes';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { REF_CHIP_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import { authorName, isMet, type Thread, type TurnReport } from '../model';
+import { ProgressRing } from '../ui';
 import { RefChip } from '../chat/ChatLink';
-import type { RefStatus } from '../chat/refs';
+import type { RefStatus, RefTone } from '../chat/refs';
 import { openTurn } from '../chat/turnChanges';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
-import { useThreadPrs } from '../git/useThreadPrs';
+import { useThreadPrs, type ThreadPr } from '../git/useThreadPrs';
 import { useHarness } from '../store';
-import { CriteriaList } from './CriteriaList';
+import { CallList, Expand } from '../WorkLog';
 import { nextStep, showsVerdictCard, type NextStep } from './report';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { verdictHeading, verdictTiles, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
@@ -29,32 +31,27 @@ export function ReportCard({ thread, onJump }: { thread: Thread; onJump?: (quote
   const heading = verdictHeading(verdict, thread);
   const report = thread.report && thread.report.at >= (thread.idle?.at ?? 0) - TURN_SLACK ? thread.report : undefined;
   const changes = openTurn(thread.activity);
-  const criteria = thread.criteria ?? [];
+  const hasNotes = !!report && report.decisions.length + report.left.length > 0;
+  const isAsked = verdict.kind === 'needs-you';
+  const hasBody = isAsked || verdict.gaps.length > 0 || !!changes || hasNotes;
   return (
-    <Card size="sm" role="group" aria-label="Verdict" className="@container/card">
-      <CardHeader className="flex items-center gap-2.5">
-        <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-md', REF_CHIP_CLASS[verdict.tone])}>
-          <VerdictIcon kind={verdict.kind} className="size-4" />
-        </span>
-        <span className="flex min-w-0 flex-col">
-          <CardTitle className={cn('truncate', VERDICT_TITLE_CLASS[verdict.tone])}>{heading.title}</CardTitle>
-          <CardDescription className="truncate type-meta">{heading.detail}</CardDescription>
-        </span>
+    <Card size="sm" role="group" aria-label="Verdict">
+      <CardHeader className="flex flex-col gap-1">
+        <CardTitle className="flex items-center gap-2">
+          <VerdictIcon kind={verdict.kind} className={cn('size-4 shrink-0', ICON_CLASS[verdict.tone])} />
+          <span className="truncate">{heading.title}</span>
+          {!!heading.detail && <span className="truncate type-meta font-normal text-muted-foreground">{heading.detail}</span>}
+        </CardTitle>
+        <Evidence thread={thread} tiles={verdictTiles(thread, states, verdict)} prs={prs} />
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <EvidenceTiles tiles={verdictTiles(thread, states, verdict)} isDim={verdict.kind === 'needs-you'} />
-        {verdict.kind === 'needs-you' && <AskedQuestion text={verdict.reason} />}
-        {verdict.gaps.length > 0 && <GapList thread={thread} gaps={verdict.gaps} onJump={onJump} />}
-        {criteria.length > 0 && <CriteriaDisclosure thread={thread} />}
-        {!!report && <ReportList label="Decided" items={report.decisions} />}
-        {!!report && <ReportList label="Left" items={report.left} />}
-        {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
-        {prs.length > 0 && (
-          <p className="flex flex-wrap gap-1.5">
-            {prs.map((p) => !!p.githubRef && <RefChip key={p.pr.number} githubRef={p.githubRef} />)}
-          </p>
-        )}
-      </CardContent>
+      {hasBody && (
+        <CardContent className="flex flex-col gap-3">
+          {isAsked && <AskedQuestion text={verdict.reason} />}
+          {verdict.gaps.length > 0 && <GapList thread={thread} gaps={verdict.gaps} onJump={onJump} />}
+          {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
+          {hasNotes && <AgentNotes thread={thread} report={report} />}
+        </CardContent>
+      )}
       <VerdictFooter thread={thread} verdict={verdict} prStates={states.map((s) => s.status)} />
     </Card>
   );
@@ -63,55 +60,72 @@ export function ReportCard({ thread, onJump }: { thread: Thread; onJump?: (quote
 // The agent reports just before its turn ends, so its report lands a moment before Mochi's idle record.
 const TURN_SLACK = 1;
 
-const VERDICT_TITLE_CLASS = {
-  success: 'text-success',
-  warning: 'text-[color-mix(in_oklab,var(--warning)_75%,var(--foreground))]',
-  destructive: 'text-[color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]',
-  muted: 'text-foreground',
-} satisfies Record<Verdict['tone'], string>;
+const ICON_CLASS = { success: 'text-success', warning: 'text-warning', destructive: 'text-destructive', muted: 'text-muted-foreground' } satisfies Record<Verdict['tone'], string>;
 
-const BAR_CLASS = { success: 'bg-success', warning: 'bg-warning', destructive: 'bg-destructive', info: 'bg-info', merged: 'bg-merged', none: 'bg-foreground/15' } satisfies Record<TileTone, string>;
 
-const VALUE_CLASS = { warning: 'text-[color-mix(in_oklab,var(--warning)_75%,var(--foreground))]', destructive: 'text-[color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]', none: 'text-muted-foreground' } satisfies Record<NonNullable<Tile['tone']>, string>;
-
-/** Five tiles, so the state scans without prose; dimmed while a question waits, since the answer comes first. */
-function EvidenceTiles({ tiles, isDim }: { tiles: Tile[]; isDim: boolean }) {
+/** What Mochi read, one fact each: an icon in its status colour and plain text; a fact asking for you becomes a toned badge, and a PR is its own chip. */
+function Evidence({ thread, tiles, prs }: { thread: Thread; tiles: Tile[]; prs: ThreadPr[] }) {
+  const chips = prs.filter((p) => !!p.githubRef);
   return (
-    <ul aria-label="Evidence" className={cn('grid grid-cols-5 gap-1.5 @max-sm/card:grid-cols-3', isDim && 'opacity-60')}>
-      {tiles.map((t) => (
-        <li key={t.name} className="flex min-w-0 flex-col gap-1 rounded-md bg-muted px-2 py-1.5">
-          <span className="truncate type-caption text-muted-foreground">{t.name}</span>
-          <span aria-hidden className="flex gap-0.5">
-            {t.bars.map((bar, i) => (
-              <i key={i} className={cn('h-1 flex-1 rounded-full', BAR_CLASS[bar])} />
+    <ul aria-label="Evidence" className="flex flex-wrap items-center gap-x-3.5 gap-y-1 type-meta text-subtle-foreground">
+      {tiles.map((t) =>
+        t.id === 'pr' && chips.length > 0 ? (
+          <li key={t.id} className="flex items-center gap-1.5">
+            {chips.map((p) => (
+              <RefChip key={p.pr.number} githubRef={p.githubRef!} />
             ))}
-          </span>
-          <span className={cn('truncate type-meta', t.tone ? VALUE_CLASS[t.tone] : 'text-foreground')}>{t.value}</span>
+          </li>
+        ) : (
+        <li key={t.id} className={cn('flex h-5 items-center gap-1.5 whitespace-nowrap', !!t.tone && t.tone !== 'none' && cn('rounded-sm px-1.5', REF_CHIP_CLASS[t.tone]))}>
+          <FactIcon thread={thread} tile={t} />
+          <span className={cn(t.tone && t.tone !== 'none' && 'opacity-75')}>{t.name}</span>
+          <span className={t.tone === 'none' ? 'text-muted-foreground' : t.tone ? 'font-medium' : 'text-foreground'}>{t.value}</span>
         </li>
-      ))}
+        ),
+      )}
     </ul>
   );
 }
 
+function FactIcon({ thread, tile }: { thread: Thread; tile: Tile }) {
+  const criteria = thread.criteria ?? [];
+  if (tile.id === 'criteria' && criteria.length > 0) return <ProgressRing met={criteria.filter(isMet).length} total={criteria.length} slot={thread.line} size={14} />;
+  const className = cn('size-3.5 shrink-0', REF_TONE_CLASS[factTone(tile.bars)]);
+  if (tile.id === 'pr') return tile.bars.includes('merged') ? <GitMergeIcon aria-hidden className={className} /> : <GitPullRequestIcon aria-hidden className={className} />;
+  const Icon = FACT_ICONS[tile.id];
+  return <Icon aria-hidden className={className} />;
+}
+
+const FACT_ICONS = { criteria: TickCircle, checks: TerminalIcon, git: Hierarchy2, agent: MessageText } satisfies Record<Exclude<Tile['id'], 'pr'>, unknown>;
+
+function factTone(bars: TileTone[]): RefTone {
+  if (bars.includes('destructive')) return 'destructive';
+  if (bars.includes('warning')) return 'warning';
+  if (bars.every((b) => b === 'none')) return 'muted';
+  if (bars.includes('info')) return 'info';
+  return bars.includes('merged') ? 'merged' : 'success';
+}
+
+
 /** A question the agent asked in its reply, lifted out so it isn't lost in the prose; you answer in the composer. */
 function AskedQuestion({ text }: { text: string }) {
-  return <p className="rounded-lg bg-warning/8 px-2.5 py-2 type-body text-pretty">{text}</p>;
+  return <p className="type-body text-pretty">{text}</p>;
 }
 
 const SHOWN_GAPS = 5;
 
-/** Critical first (the verdict lists them so); past five, the rest wait behind Show more. */
+/** Critical first (the verdict lists them so); past five, the rest wait behind Show more. Rows match the work log's call list. */
 function GapList({ thread, gaps, onJump }: { thread: Thread; gaps: Gap[]; onJump?: (quote: string) => void }) {
   const [isAll, setIsAll] = useState(false);
   const shown = isAll ? gaps : gaps.slice(0, SHOWN_GAPS);
   const hidden = gaps.length - shown.length;
   return (
     <div className="flex flex-col items-start gap-1">
-      <ul aria-label="Gaps" className="flex w-full flex-col gap-0.5">
+      <CallList aria-label="Gaps" className="w-full">
         {shown.map((g) => (
           <GapRow key={g.id} thread={thread} gap={g} onJump={onJump} />
         ))}
-      </ul>
+      </CallList>
       {hidden > 0 && (
         <Button size="sm" variant="ghost" onClick={() => setIsAll(true)}>
           {`Show ${hidden} more`}
@@ -121,46 +135,54 @@ function GapList({ thread, gaps, onJump }: { thread: Thread; gaps: Gap[]; onJump
   );
 }
 
+/** One gap: its status icon says how bad, the row opens to the failing output or the agent's own words. */
 function GapRow({ thread, gap, onJump }: { thread: Thread; gap: Gap; onJump?: (quote: string) => void }) {
-  const [isOutputOpen, setIsOutputOpen] = useState(false);
+  const [isOpen, setOpen] = useState(false);
   const criterion = gap.criterionId ? thread.criteria?.find((c) => c.id === gap.criterionId) : undefined;
-  const output = criterion?.check?.output;
-  const tag = gap.isAccepted ? 'Accepted' : gap.severity === 'critical' ? 'Critical' : 'Unverified';
+  const output = criterion?.check?.output?.trim();
+  const hasDetail = !!output || !!gap.quote;
+  const severity = gap.isAccepted ? 'Accepted' : gap.severity === 'critical' ? 'Critical' : 'Unverified';
   return (
-    <li className={cn('flex flex-col gap-2 rounded-lg px-2.5 py-2', gap.severity === 'critical' && !gap.isAccepted && 'bg-destructive/6', gap.isAccepted && 'opacity-60')}>
-      <div className="flex items-start gap-2.5">
-        <span className={cn('mt-px w-[4.75rem] shrink-0 rounded-sm px-1.5 text-center type-caption font-semibold', REF_CHIP_CLASS[gap.isAccepted ? 'muted' : gap.severity === 'critical' ? 'destructive' : 'warning'], 'pointer-events-none')}>{tag}</span>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className={cn('text-pretty', gap.isAccepted && 'line-through')}>{gap.text}</span>
-          <GapSource gap={gap} command={criterion?.command} onJump={onJump} />
+    <li className="flex flex-col">
+      <div className={cn('relative isolate flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta', hasDetail && 'hover:bg-accent/60', gap.isAccepted && 'text-muted-foreground')}>
+        {hasDetail && <button type="button" aria-expanded={isOpen} aria-label={`${severity}: ${gap.text}`} onClick={() => setOpen((o) => !o)} className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2" />}
+        <GapIcon gap={gap} />
+        <span className={cn('min-w-0 flex-1 truncate', !gap.isAccepted && 'text-foreground', gap.isAccepted && 'line-through')}>
+          <span className="sr-only">{`${severity}: `}</span>
+          {gap.text}
         </span>
-        {!!output && (
-          <Button size="sm" variant="secondary" aria-expanded={isOutputOpen} onClick={() => setIsOutputOpen((open) => !open)}>
-            {isOutputOpen ? 'Hide output' : 'Show output'}
-          </Button>
-        )}
+        {!!criterion?.command && <code className="max-w-[40%] shrink-0 truncate font-mono type-caption text-muted-foreground">{criterion.command}</code>}
         {gap.severity === 'unverified' && <AcceptGap thread={thread} gap={gap} />}
+        {hasDetail ? <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} /> : <span aria-hidden className="size-3.5 shrink-0" />}
       </div>
-      {isOutputOpen && <pre className="max-h-48 overflow-auto rounded-md bg-muted p-2 font-mono type-caption whitespace-pre-wrap text-muted-foreground">{output}</pre>}
+      {hasDetail && (
+        <Expand isOpen={isOpen}>
+          <div className="px-3 pb-3">{output ? <pre className="max-h-48 overflow-auto rounded-md bg-muted p-2 font-mono type-caption whitespace-pre-wrap text-muted-foreground">{output}</pre> : <GapQuote quote={gap.quote!} onJump={onJump} />}</div>
+        </Expand>
+      )}
     </li>
   );
 }
 
-function GapSource({ gap, command, onJump }: { gap: Gap; command?: string; onJump?: (quote: string) => void }) {
-  if (command) return <span className="truncate font-mono type-caption text-muted-foreground">{command}</span>;
-  if (!gap.quote) return null;
+function GapIcon({ gap }: { gap: Gap }) {
+  if (gap.isAccepted) return <TickCircle aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
+  if (gap.severity === 'critical') return <CloseCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />;
+  return <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />;
+}
+
+function GapQuote({ quote, onJump }: { quote: string; onJump?: (quote: string) => void }) {
   return (
-    <span className="type-caption text-pretty text-muted-foreground">
-      {`Agent: “${gap.quote}”`}
+    <p className="type-meta text-pretty text-muted-foreground">
+      {`“${quote}”`}
       {!!onJump && (
         <>
-          {' · '}
-          <button type="button" className="cursor-pointer text-foreground underline-offset-2 hover:underline focus-visible:underline" onClick={() => onJump(gap.quote!)}>
+          {' '}
+          <button type="button" className="cursor-pointer text-foreground underline-offset-2 hover:underline focus-visible:underline" onClick={() => onJump(quote)}>
             Jump to message
           </button>
         </>
       )}
-    </span>
+    </p>
   );
 }
 
@@ -169,23 +191,24 @@ function AcceptGap({ thread, gap }: { thread: Thread; gap: Gap }) {
   const accepted = thread.idle?.accepted ?? [];
   const toggle = () => dispatch({ type: 'idle-update', threadId: thread.id, patch: { accepted: gap.isAccepted ? accepted.filter((id) => id !== gap.id) : [...accepted, gap.id] } });
   return (
-    <Button size="sm" variant="secondary" onClick={toggle}>
-      {gap.isAccepted ? 'Undo' : 'Accept gap'}
+    <Button size="xs" variant="ghost" className="relative z-10" onClick={toggle}>
+      {gap.isAccepted ? 'Undo' : 'Accept'}
     </Button>
   );
 }
 
-/** Criteria live in the goal card; here they fold away under a count. */
-function CriteriaDisclosure({ thread }: { thread: Thread }) {
-  const criteria = thread.criteria ?? [];
+/** The agent's own decisions and what it left, folded: the verdict above is Mochi's reading, this is the agent's word. */
+function AgentNotes({ thread, report }: { thread: Thread; report: TurnReport }) {
+  const agent = authorName(thread.session?.provider ?? thread.providers[0]);
   return (
     <Collapsible>
-      <CollapsibleTrigger className="group/criteria flex items-center gap-1 type-caption text-muted-foreground hover:text-foreground">
-        {`${criteria.filter(isMet).length} of ${criteria.length} criteria met`}
-        <ChevronDown aria-hidden className="size-3 transition-transform group-data-[state=open]/criteria:rotate-180" />
+      <CollapsibleTrigger className="group/notes flex items-center gap-1 type-meta text-muted-foreground hover:text-foreground">
+        {`${agent}'s notes`}
+        <ChevronRight aria-hidden className="size-3 transition-transform group-data-[state=open]/notes:rotate-90" />
       </CollapsibleTrigger>
-      <CollapsibleContent className="pt-2">
-        <CriteriaList thread={thread} />
+      <CollapsibleContent className="flex flex-col gap-2 pt-2">
+        <ReportList label="Decided" items={report.decisions} />
+        <ReportList label="Left" items={report.left} />
       </CollapsibleContent>
     </Collapsible>
   );

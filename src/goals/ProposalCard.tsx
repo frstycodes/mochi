@@ -1,12 +1,11 @@
 import { Eye, Undo } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
-import { REF_CHIP_CLASS } from '@/icons/github';
 import { TerminalIcon } from '@/icons/panes';
-import { cn } from '@/lib/utils';
 import { authorName, type GoalProposal, type Thread } from '../model';
 import { useHarness } from '../store';
 import { ProviderMark } from '../ui';
+import { CallList } from '../WorkLog';
 import { openGoalEditor } from './GoalEditor';
 
 /**
@@ -33,8 +32,8 @@ function WaitingProposal({ thread, proposal }: { thread: Thread; proposal: GoalP
       <CardHeader className="flex items-center gap-2">
         <ProviderMark provider={proposal.by} size={16} />
         <span className="min-w-0 flex-1 truncate type-meta font-medium">{`${agent} proposes a goal`}</span>
-        <span className={cn('pointer-events-none flex h-[1.125rem] shrink-0 items-center gap-1 rounded-sm px-1.5 type-meta font-medium', REF_CHIP_CLASS.warning)}>
-          <span aria-hidden className="size-1.5 rounded-full bg-current" />
+        <span className="flex shrink-0 items-center gap-1.5 type-meta text-muted-foreground">
+          <span aria-hidden className="size-1.5 rounded-full bg-warning" />
           Waiting on you
         </span>
       </CardHeader>
@@ -64,15 +63,15 @@ function WaitingProposal({ thread, proposal }: { thread: Thread; proposal: GoalP
 
 function ProposedCriteria({ criteria }: { criteria: GoalProposal['criteria'] }) {
   return (
-    <ul aria-label="Done when" className="flex flex-col gap-1">
+    <CallList aria-label="Done when">
       {criteria.map((c) => (
-        <li key={c.text} className="flex items-center gap-2.5 rounded-md bg-muted px-2.5 py-1.5 type-body">
+        <li key={c.text} className="flex min-h-9 items-center gap-2.5 px-3 py-2 type-meta">
           {c.command ? <TerminalIcon aria-label="Mochi runs a command" className="size-3.5 shrink-0 text-muted-foreground" /> : <Eye aria-label="You check" className="size-3.5 shrink-0 text-muted-foreground" />}
           <span className="min-w-0 flex-1 text-pretty">{c.text}</span>
-          {c.command ? <code className="max-w-[40%] shrink-0 truncate">{c.command}</code> : <span className="shrink-0 type-caption text-[color-mix(in_oklab,var(--warning)_75%,var(--foreground))]">you check</span>}
+          {c.command ? <code className="max-w-[40%] shrink-0 truncate font-mono type-caption text-muted-foreground">{c.command}</code> : <span className="shrink-0 type-caption text-muted-foreground">you check</span>}
         </li>
       ))}
-    </ul>
+    </CallList>
   );
 }
 
