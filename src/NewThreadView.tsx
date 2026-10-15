@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Folder, Link, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
-import { getPrefs, setPrefs } from './settings/prefs';
+import { getPrefs, setPrefs, usePrefs } from './settings/prefs';
 import { useHarness, useSpace, useSpaceThreads } from './store';
 import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
 import { resolveToken, typedSkills } from './chat/slash';
@@ -68,6 +68,8 @@ function NewThread() {
   const [saved] = useState(() => getDraft<NewThreadPicks>(draftKey)?.extra);
   const [provider, setProvider] = useState<Provider>(() => saved?.provider ?? getPrefs().agent);
   const defaults = useDefaultModels();
+  // Subscribed so the defaults below follow Make default in the pickers; `initialControls` reads them once.
+  usePrefs();
   // The Settings default model until you pick one here.
   const [picked, setPicked] = useState<ThreadControls | null>(saved?.picked ?? null);
   const controls = picked ?? initialControls(provider, defaults?.[provider] ?? '');
