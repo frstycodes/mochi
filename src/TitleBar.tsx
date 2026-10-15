@@ -1,15 +1,15 @@
 import type { ComponentProps } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { TOGGLE_RESERVE, useToggleSlot } from './SidebarToggle';
+import { LIGHTS_RESERVE, useToggleSlot } from './SidebarToggle';
 
-/** The 44px bar every page starts with: drags the window on desktop, clears the traffic lights and the fixed sidebar toggle while the sidebar is collapsed, and carries the phone's sidebar trigger. `isFirst`: only the leftmost split sits under the toggle. */
-export function TitleBar({ isFirst = true, className, children, ...props }: ComponentProps<'header'> & { isFirst?: boolean }) {
-  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
+/** The 44px bar every page starts with: drags the window on desktop, and while the sidebar is hidden clears the traffic lights and carries its trigger. `isFirst`: only the leftmost split sits under the lights; `isMulti`: several splits, so no trigger. */
+export function TitleBar({ isFirst = true, isMulti = false, className, children, ...props }: ComponentProps<'header'> & { isFirst?: boolean; isMulti?: boolean }) {
+  const { hasTrigger, clearsLights } = useToggleSlot(isFirst, isMulti);
   return (
     // The reserve goes last: tailwind-merge would let a caller's `px-*` drop it.
-    <header className={cn(TITLE_BAR, className, reservesToggle && TOGGLE_RESERVE)} {...props}>
-      {hasTrigger && <SidebarTrigger className="-ml-1 text-muted-foreground" />}
+    <header className={cn(TITLE_BAR, className, clearsLights && LIGHTS_RESERVE)} {...props}>
+      {hasTrigger && <SidebarTrigger className="text-muted-foreground" />}
       {children}
     </header>
   );

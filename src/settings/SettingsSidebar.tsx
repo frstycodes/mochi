@@ -14,6 +14,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Shortcut } from '../Shortcut';
@@ -34,8 +35,9 @@ export function SettingsSidebar({ width, onResize }: { width: number; onResize: 
 
   return (
     <Sidebar>
-      {/* Empty on desktop: it keeps the fixed sidebar toggle and the traffic lights clear, like the app sidebar's header. */}
-      <SidebarHeader className="app-drag h-11 max-md:hidden" />
+      <SidebarHeader className="app-drag h-11 flex-row items-center py-0 pl-2 max-md:hidden md:in-data-traffic-lights:pl-[calc(var(--lights-end)+5px)]">
+        <SidebarTrigger className="ml-1 text-muted-foreground" />
+      </SidebarHeader>
       <div className="px-2 pb-2 max-md:pt-2">
         <div className="relative">
           <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
