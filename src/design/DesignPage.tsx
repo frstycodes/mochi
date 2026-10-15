@@ -60,6 +60,8 @@ import { DataSection } from './sections/data';
 import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
+import { ImagesSection } from './sections/images';
+import { PhotoViewer } from '../photo/PhotoViewer';
 import { StateMatrix, previewState } from './state-matrix';
 import { Shortcut } from '../Shortcut';
 import { SetupRow } from '../chat/SetupRow';
@@ -75,6 +77,7 @@ const SECTIONS = [
   ['feedback', 'Feedback'],
   ['overlays', 'Overlays'],
   ['conversation', 'Conversation'],
+  ['images', 'Images'],
   ['recipes', 'Recipes'],
   ['rules', 'Do and don’t'],
 ] as const;
@@ -97,6 +100,7 @@ export function DesignPage() {
               <Feedback />
               <OverlaysSection />
               <Conversation />
+              <ImagesSection />
               <Recipes />
               <Rules />
             </main>
@@ -104,6 +108,7 @@ export function DesignPage() {
         </ReviewModeProvider>
       </MachinesProvider>
       <Orbit />
+      <PhotoViewer />
       <Toaster position="bottom-right" />
     </HarnessProvider>
   );
