@@ -4,7 +4,7 @@ import { compactFocus, useCompactInstructions } from '../chat/compact.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
-import { NO_AGENT_PROCESS, type AgentEvent } from '../host/types/agent.ts';
+import { NO_AGENT_PROCESS, type AgentEvent, type AttachedAgent, type SeqAgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
@@ -107,14 +107,30 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     }, TICK_MS);
     return () => clearInterval(id);
   }, [state.paused]);
-  useEffect(
-    () =>
-      host.agent.onEvent((event) => {
-        if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
-        apply({ type: 'agent', event, ms: Date.now() });
-      }),
-    [apply],
-  );
+  useEffect(() => {
+    const onEvent = (event: SeqAgentEvent) => {
+      if (event.type === 'worktree') setWorktreePath(event.threadId, event.path);
+      apply({ type: 'agent', event, ms: Date.now() });
+    };
+    // After a window reload, agents still running in main replay what they sent meanwhile; live events wait behind that replay.
+    let held: SeqAgentEvent[] | null = [];
+    const off = host.agent.onEvent((event) => (held ? held.push(event) : onEvent(event)));
+    const attached = latest.current.threads.filter((t) => t.live && !t.live.isDetached).map((t) => ({ threadId: t.id, after: t.live!.eventSeq ?? 0 }));
+    void (attached.length ? host.agent.attached(attached) : Promise.resolve([]))
+      .catch((error: unknown): AttachedAgent[] => (console.error('Replaying agent events after reload failed', error), []))
+      .then((agents) => {
+        const seen = new Set<number>();
+        [...agents.flatMap((a) => a.events), ...held!]
+          .sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0))
+          .forEach((event) => {
+            if (event.seq !== undefined && seen.has(event.seq)) return;
+            if (event.seq !== undefined) seen.add(event.seq);
+            onEvent(event);
+          });
+        held = null;
+      });
+    return off;
+  }, [apply]);
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
       if (event.type === 'agent') return apply({ type: 'agent', event: event.event });

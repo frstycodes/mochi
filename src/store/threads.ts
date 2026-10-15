@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
+import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
@@ -45,7 +45,7 @@ export interface ThreadsState {
 export type ThreadsAction =
   | { type: 'tick' }
   /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
-  | { type: 'agent'; event: AgentEvent; ms?: number }
+  | { type: 'agent'; event: SeqAgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
@@ -148,7 +148,7 @@ function reduce(state: State, action: Action): State {
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
-      return stampNew(state, applyAgentEvent(state, action.event), action.event.threadId, action.ms);
+      return stampNew(state, withEventSeq(applyAgentEvent(state, action.event), action.event), action.event.threadId, action.ms);
     case 'agent-starting':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'trigger-overlap':
@@ -314,6 +314,11 @@ export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thre
 
 export function mapStep(thread: Thread, id: string, fn: (s: Step) => Step): Thread {
   return { ...thread, steps: thread.steps.map((s) => (s.id === id ? fn(s) : s)) };
+}
+
+function withEventSeq(state: State, event: SeqAgentEvent): State {
+  if (event.seq === undefined) return state;
+  return { ...state, threads: mapThread(state.threads, event.threadId, (t) => (t.live ? { ...t, live: { ...t.live, eventSeq: event.seq } } : t)) };
 }
 
 function stampNew(before: State, after: State, threadId: string, ms?: number): State {

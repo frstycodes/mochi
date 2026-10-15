@@ -18,7 +18,7 @@ import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
 import { codexUrl, resolveToolCall } from '../mcp/server.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
-import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
+import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
@@ -125,10 +125,18 @@ export const agent = {
   async stop(_sender, threadId) {
     string(threadId, 'threadId', 256);
     markIdle(threadId as string);
+    forgetEvents(threadId as string);
     starts.abort(threadId as string);
     if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
     if (codex.owns(threadId as string)) return codex.stop(threadId as string);
     // Stopping a thread with no agent process is a no-op, so settling twice or settling then deleting never errors.
+  },
+  async attached(_sender, threads) {
+    if (!Array.isArray(threads)) throw new TypeError('threads must be an array');
+    return threads
+      .map((t, i) => ({ threadId: string(t?.threadId, `threads[${i}].threadId`, 256), after: typeof t?.after === 'number' ? t.after : undefined }))
+      .filter((t) => hasClaudeSession(t.threadId) || codex.owns(t.threadId))
+      .map(({ threadId, after }) => ({ threadId, isWorking: isBusy(threadId), events: after === undefined ? [] : eventsSince(threadId, after) }));
   },
   async stopSubagent(_sender, threadId, subagentId) {
     string(threadId, 'threadId', 256);

@@ -46,3 +46,17 @@ test('a save that is missing, corrupt or from another version restores nothing',
   assert.equal(parseSaved('{'), null);
   assert.equal(parseSaved('{"version":2,"threads":[],"queue":[]}'), null);
 });
+
+test('after a window reload, a thread whose agent still runs in main stays attached and working, its queue not paused', () => {
+  let s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'agent', event: { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-1', seq: 41 } });
+  s = run(s, { type: 'agent', event: { threadId: id, type: 'approval', requestId: 'req-1', kind: 'command', title: 'Run ls', detail: '', seq: 42 } });
+  const before = s.threads.find((t) => t.id === id)!;
+  assert.equal(before.live?.eventSeq, 42, 'the last event applied is saved, so a reload asks main for the ones after it');
+  const back = parseSaved(JSON.stringify(toSaved(s)), new Map([[id, true]]))!;
+  const thread = back.threads[0];
+  assert.deepEqual([thread.live?.isWorking, thread.live?.isDetached], [true, false]);
+  assert.equal(thread.activity.length, before.activity.length, 'no "Stopped when Mochi quit" line');
+  assert.ok(back.queue.some((q) => q.requestId === 'req-1'), 'main still waits on the approval');
+});

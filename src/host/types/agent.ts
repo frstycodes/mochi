@@ -29,6 +29,14 @@ export interface AgentStartOptions {
   useApiKey?: boolean;
 }
 
+export type SeqAgentEvent = AgentEvent & { seq?: number };
+
+export interface AttachedAgent {
+  threadId: string;
+  isWorking: boolean;
+  events: SeqAgentEvent[];
+}
+
 export type AgentEvent =
   /** Main made the thread's worktree and runs the agent there. */
   | { threadId: string; type: 'worktree'; path: string }
@@ -296,7 +304,13 @@ export interface AgentHost {
   setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
-  onEvent(listener: (event: AgentEvent) => void): () => void;
+  /**
+   * Of `threads`, those whose agent is still running in main, e.g. across a window reload: `isWorking` while a turn is in flight, and
+   * with `after` (the last `seq` the window applied), the events sent since, which the reload missed.
+   */
+  attached(threads: { threadId: string; after?: number }[]): Promise<AttachedAgent[]>;
+  /** `seq`: rises with every event this run of main sends, so a reloaded window asks `attached` for what came after its last. */
+  onEvent(listener: (event: SeqAgentEvent) => void): () => void;
   /** Streams the answer from `model` on the profile's account as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
   ask(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel): Promise<{ id: string }>;
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
@@ -333,6 +347,7 @@ export const agentMethods = {
   setupChoice: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
+  attached: 'invoke',
   onEvent: 'event',
   ask: 'invoke',
   onAskEvent: 'event',

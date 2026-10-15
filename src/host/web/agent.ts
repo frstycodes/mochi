@@ -53,6 +53,9 @@ export const agent: AgentHost = {
     return null;
   },
   async stopSubagent() {},
+  async attached() {
+    return [];
+  },
   // No agents in the web build, so no tool calls.
   onToolCall: () => () => {},
   async toolResult() {},
