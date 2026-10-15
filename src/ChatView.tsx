@@ -98,7 +98,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
       {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
       <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
-          <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
+          <ConversationContent scrollClassName="[scroll-timeline:--chat_y]" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-[calc(var(--chat-top,0px)+1.5rem)] pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
               {hasGoal(thread) && <GoalCard thread={thread} />}
               {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
@@ -113,7 +113,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
         </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
-        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-6 left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
+        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
         {!isReadOnly && <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />}
       </Conversation>
       {!isReadOnly && (
