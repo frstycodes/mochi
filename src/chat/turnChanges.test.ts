@@ -72,3 +72,8 @@ test('undo state is the latest undo or redo logged for that turn', () => {
   assert.equal(isTurnUndone([...activity, undo(0, false)], 0), false);
   assert.equal(isTurnUndone(activity, 3), false);
 });
+
+test('a turn that only ran commands is kept, with no files, so its git diff can show what the commands changed', () => {
+  const turns = turnChanges([you('format'), e('tool', 'claude', 'Run pnpm fmt'), you('thanks'), e('message', 'claude', 'ok')]);
+  assert.deepEqual(turns.map((t) => [t.start, t.files.length, t.ranCommands]), [[0, 0, true]]);
+});

@@ -18,19 +18,22 @@ export interface TurnChanges {
   files: TurnFile[];
   added: number;
   removed: number;
+  /** Ran a shell command, which may have changed files the log can't see: the turn's git diff says. */
+  ranCommands: boolean;
 }
 
-/** Every turn (your message up to your next one) that edited files, read from the edits the work log recorded. */
+/** Every turn (your message up to your next one) that edited files or ran commands, its files read from the edits the work log recorded. */
 export function turnChanges(activity: ActivityEntry[]): TurnChanges[] {
   const turns: TurnChanges[] = [];
   let turn = emptyTurn(-1);
-  const close = (end: number) => turn.files.length > 0 && turns.push({ ...turn, end });
+  const close = (end: number) => (turn.files.length > 0 || turn.ranCommands) && turns.push({ ...turn, end });
   activity.forEach((entry, i) => {
     if (isYourMessage(entry)) {
       close(i - 1);
       turn = emptyTurn(i);
       return;
     }
+    if (isCommand(entry)) turn.ranCommands = true;
     for (const edit of fileEdits(entry)) {
       let file = turn.files.find((f) => f.path === edit.path);
       if (!file) turn.files.push((file = { path: edit.path, added: 0, removed: 0, patches: [] }));
@@ -70,8 +73,10 @@ export function patchSections(patch: string) {
 const isYourMessage = (e: ActivityEntry) => e.who === 'you' && e.kind === 'message';
 
 function emptyTurn(start: number): TurnChanges {
-  return { start, end: start, files: [], added: 0, removed: 0 };
+  return { start, end: start, files: [], added: 0, removed: 0, ranCommands: false };
 }
+
+const isCommand = (e: ActivityEntry) => e.kind === 'tool' && !e.skill && !e.mcp && toolCall(e).verb === 'Run';
 
 /** One edit call as per-file changes: a patch spanning several files (Codex's file changes) splits at its `diff --git` headers. */
 function fileEdits(entry: ActivityEntry) {
