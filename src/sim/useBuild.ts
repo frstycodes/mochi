@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { Thread } from '../model';
 import { useHarness } from '../store';

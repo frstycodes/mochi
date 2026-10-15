@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowUp, ArrowUpRight, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { PrStateIcon } from '@/icons/github';

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight, Global } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Message, MessageContent } from '@/components/ai-elements/message';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Block, Grid, Section } from '../layout';
 import { BROKEN_PHOTO, DEMO_PHOTOS } from '../imageFixtures';
 import { ImageGenCard } from '../../chat/ImageGenCard';

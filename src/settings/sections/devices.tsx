@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { useMochiAccount } from '../../account/useMochiAccount';
 import { useConfirm } from '../../git/useConfirm';
 import { host } from '../../host';

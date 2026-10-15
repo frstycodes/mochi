@@ -115,14 +115,14 @@ function PresetSubmenu() {
   );
 }
 
-/** Header for splits that aren't threads (Queue, Board, New thread, a dropped tab). A lone split shows it only to carry or clear the sidebar toggle; otherwise just its drag strip. */
+/** Header for splits that aren't threads (Queue, Board, New thread, a dropped tab). A lone split shows it only to carry the sidebar trigger; otherwise just its drag strip. */
 export function LeafBar({ children }: { children: ReactNode }) {
   const { isMulti, isFirst, leafId } = useSplit();
-  const { hasTrigger, reservesToggle } = useToggleSlot(isFirst);
-  if (!isMulti && !hasTrigger && !reservesToggle) return <DragStrip />;
+  const { hasTrigger } = useToggleSlot(isFirst, isMulti);
+  if (!isMulti && !hasTrigger) return <DragStrip />;
   return (
     <TargetContextMenu target={{ leafId }} groups={SPLIT_MENU}>
-      <TitleBar isFirst={isFirst}>
+      <TitleBar isFirst={isFirst} isMulti={isMulti}>
         <span className="flex min-w-0 flex-1 items-center gap-2 type-meta font-medium">{children}</span>
         <SplitControls />
       </TitleBar>

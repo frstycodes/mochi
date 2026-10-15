@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { ArrowLeft, Bolt, ChevronDown, ChevronRight, Search, Star } from 'reicon-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

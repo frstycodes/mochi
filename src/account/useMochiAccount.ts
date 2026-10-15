@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { MochiAccount } from '../host/types/account';
 

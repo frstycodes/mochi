@@ -16,6 +16,7 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -28,6 +29,7 @@ import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
+import { useIsMultiSplit } from './SidebarToggle';
 import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
 import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
@@ -42,7 +44,8 @@ import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type Vie
 import { duration, goalProgress } from './progress';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { ProgressRing, SpaceIcon } from './ui';
-import { isWorking, workingLabel } from './agentPhase';
+import { agentPhase, isWorking, PHASE_LABELS, workingLabel } from './agentPhase';
+import { AgentLoader } from './AgentLoader';
 import { runningBackground } from './runtime/subagents';
 import { BoundShortcut } from './Shortcut';
 import { spaceCommand } from './keymap';
@@ -80,11 +83,14 @@ export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearc
 }
 
 const PEEK_CLOSE_DELAY = 240;
+// Outlasts the 160ms morph and the chat's 260ms slide; the docked sidebar underneath is identical, so lingering costs nothing.
+const DOCK_MS = 300;
 
-/** Arc-style: with the sidebar collapsed, resting on the left edge slides it back in as a floating panel. */
+/** Arc-style: with the sidebar collapsed, resting on the left edge slides it back in as a floating panel. Its own toggle docks it in place: the panel grows to the window edge and loses its corners while the chat makes room behind it, then the docked sidebar takes over underneath. */
 export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpen: setSidebarOpen } = useSidebar();
   const [isOpen, setOpen] = useState(false);
+  const [isDocking, setDocking] = useState(false);
   const closeTimer = useRef(0);
   const isCollapsed = state === 'collapsed' && !isMobile;
 
@@ -92,7 +98,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
     if (!isCollapsed) setOpen(false);
   }, [isCollapsed]);
 
-  if (!isCollapsed) return null;
+  if (!isCollapsed && !isDocking) return null;
   const open = () => {
     window.clearTimeout(closeTimer.current);
     setOpen(true);
@@ -101,17 +107,29 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
     window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => setOpen(false), PEEK_CLOSE_DELAY);
   };
+  const dock = (e: ReactMouseEvent) => {
+    if (!(e.target as Element).closest('[data-sidebar="trigger"]')) return;
+    e.stopPropagation();
+    window.clearTimeout(closeTimer.current);
+    setDocking(true);
+    setSidebarOpen(true);
+    window.setTimeout(() => setDocking(false), DOCK_MS);
+  };
 
   return (
     <>
-      <div aria-hidden onPointerEnter={open} onPointerLeave={close} className="fixed inset-y-0 left-0 z-40 w-2" />
+      {!isDocking && <div aria-hidden onPointerEnter={open} onPointerLeave={close} className="fixed inset-y-0 left-0 z-40 w-2" />}
       <div
         onPointerEnter={open}
         onPointerLeave={close}
-        inert={!isOpen || undefined}
+        onClickCapture={dock}
+        inert={(!isOpen && !isDocking) || undefined}
         className={cn(
-          'fixed inset-y-2 left-2 z-40 w-(--sidebar-width) overflow-hidden rounded-xl bg-sidebar shadow-float transition-[translate,opacity] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
-          isOpen ? 'translate-x-0 opacity-100 duration-[240ms]' : 'pointer-events-none -translate-x-[calc(100%+1rem)] opacity-0 duration-200',
+          'fixed z-40 w-(--sidebar-width) overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
+          isDocking
+            ? 'inset-y-0 left-0 rounded-none border-sidebar-border shadow-none transition-[top,bottom,left,border-radius,border-color,box-shadow] duration-[160ms]'
+            : 'inset-y-2 left-2 rounded-xl border-transparent shadow-float transition-[translate,opacity]',
+          !isDocking && (isOpen ? 'translate-x-0 opacity-100 duration-[240ms]' : 'pointer-events-none -translate-x-[calc(100%+1rem)] opacity-0 duration-200'),
         )}
       >
         <AppSidebar onSearch={onSearch} collapsible="none" />
@@ -122,8 +140,11 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
 
 function SpaceHeader() {
   const space = useSpace();
+  const { isMobile } = useSidebar();
+  const isMulti = useIsMultiSplit();
   return (
-    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-10 md:in-data-traffic-lights:pl-[calc(var(--lights-end)+37px)]">
+    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:in-data-traffic-lights:pl-[calc(var(--lights-end)+5px)]">
+      {!isMobile && !isMulti && <SidebarTrigger className="ml-1 text-muted-foreground" />}
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex min-w-0 items-center gap-2 px-1">
@@ -593,16 +614,11 @@ export function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread:
         <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing met={row.progress.met} total={row.progress.total} slot={thread.line} size={12} isWorking={row.isWorking} />
           {!!row.progress.total && <span className="shrink-0 tabular">{`${row.progress.met}/${row.progress.total}`}</span>}
-          {row.isWorking ? (
-            <span className="flex min-w-0 flex-1" title={row.detail}>
-              <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
-            </span>
-          ) : (
-            <>
-              {hasChip && <VerdictChip verdict={shown} />}
-              <span className="min-w-0 flex-1 truncate">{shown?.reason ?? row.detail}</span>
-            </>
-          )}
+          {!row.isWorking && hasChip && <VerdictChip verdict={shown} />}
+          <span className="flex min-w-0 flex-1 items-center gap-1" title={shown?.reason ?? row.detail}>
+            <AgentLoader phase={row.phase} className="size-3.5" />
+            {row.isWorking ? <Shimmer as="span" className="min-w-0 truncate">{PHASE_LABELS[row.phase]}</Shimmer> : !hasChip && <span className="min-w-0 truncate">{PHASE_LABELS[row.phase]}</span>}
+          </span>
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           <PrStack thread={thread} />
           <AgentsBadge thread={thread} />
@@ -644,7 +660,7 @@ function useThreadRow(thread: Thread) {
   const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { progress, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { progress, detail, phase: agentPhase(thread), ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {

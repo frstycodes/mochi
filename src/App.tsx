@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/toast/Toaster';
+import { queueToast, useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
@@ -14,7 +15,6 @@ import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
-import { SidebarToggle } from './SidebarToggle';
 import { PinnedPager } from './pager/PinnedPager';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
@@ -70,7 +70,7 @@ export function App() {
               <ScheduleLayer />
               <GoalEditorLayer />
               <DeviceApprovalLayer />
-              <Toaster position="bottom-right" />
+              <Toaster />
               <AppZoomChip />
             </HarnessProvider>
           )}
@@ -113,6 +113,7 @@ function Shell() {
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
+  useResolvedQueueToasts();
   useWorktreeManager();
   useCheckoutRecovery();
   useWorktreeCleanup();
@@ -132,30 +133,26 @@ function Shell() {
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
-      <SidebarInset className="min-h-0 overflow-hidden">
+      {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
+      <SidebarInset className="isolate min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
           {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
-      {/* Last on purpose: Electron applies app-region in document order, so the headers' drag regions after it would swallow its clicks. */}
-      <SidebarToggle />
     </SidebarProvider>
   );
 }
 
 function useOverlapToasts() {
-  const { state, dispatch } = useHarness();
+  const { state } = useHarness();
   const seen = useRef(new Set(state.queue.map((q) => q.id)));
   useEffect(() => {
     for (const q of state.queue) {
       if (seen.current.has(q.id)) continue;
       seen.current.add(q.id);
       if (q.kind !== 'overlap') continue;
-      toast('Overlap caught before any duplicate work', {
-        description: q.title,
-        action: { label: 'Decide', onClick: () => dispatch({ type: 'go', view: { kind: 'queue' } }) },
-      });
+      toast('Overlap caught before any duplicate work', { description: q.title, ...queueToast(q.id) });
     }
-  }, [state.queue, dispatch]);
+  }, [state.queue]);
 }

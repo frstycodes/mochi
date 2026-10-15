@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { getPage, openPage, updatePage } from '../browser/pages.ts';
 import { normalizeUrl } from '../browser/url.ts';
 import { setWorktreePath, worktreePath } from '../git/worktrees.ts';
@@ -9,7 +9,7 @@ import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import type { ToolEnv } from './tools.ts';
 
-/** The app side of a Mochi tool run: sonner toasts, OS notifications, the browser pages and host. */
+/** the app side of a Mochi tool run: toasts, OS notifications, the browser pages and host. */
 export function toolEnv(getState: () => State, dispatch: (action: Action) => void): ToolEnv {
   return {
     getState,

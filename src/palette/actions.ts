@@ -1,7 +1,7 @@
 import type { Dispatch } from 'react';
 import { Archive, ArrowUpRightSquare, Flag, Link, SearchNormal, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { getPage, openFind, pageKey, reloadPage } from '../browser/pages';
 import { openExternally, openInLabel } from '../browser/systemBrowser';
 import { threadCwd } from '../host/cwd';

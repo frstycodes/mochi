@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
-import { toast } from 'sonner';
+import { useContainingToastId } from '@/toast/context';
+import { toast } from '@/toast/store';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -200,10 +201,12 @@ function ThreadLink({ thread, onOpen }: { thread: Thread; onOpen: () => void }) 
 
 export function useUndoable() {
   const { state, dispatch } = useHarness();
+  // Decided inside a toast's widget: the outcome replaces that toast, so the card morphs into it instead of a second toast.
+  const toastId = useContainingToastId() ?? undefined;
   return (message: string, run: () => void) => {
     const before = snapshot(state);
     run();
-    toast(message, { action: { label: 'Undo', onClick: () => dispatch({ type: 'restore', snapshot: before }) } });
+    toast(message, { id: toastId, action: { label: 'Undo', onClick: () => dispatch({ type: 'restore', snapshot: before }) } });
   };
 }
 
