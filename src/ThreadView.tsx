@@ -90,8 +90,17 @@ export function ThreadView({ thread }: { thread: Thread }) {
   );
   // The header belongs to the chat column, so the panes run to the top of the window beside it, like Claude's.
   const chat = (
-    <div className="relative flex h-full min-w-0 flex-col">
-      {header}
+    <div className="relative flex h-full min-w-0 flex-col [--chat-top:2.75rem] [timeline-scope:--chat]">
+      {/* The transcript scrolls under the header, so the header floats over it. */}
+      <div className="absolute inset-x-0 top-0 z-20">
+        <div aria-hidden className="header-edge absolute inset-x-0 top-0 -z-10 h-[calc(100%+2.5rem)]">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+        {header}
+      </div>
       <div
         className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
         style={{ gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}` }}
@@ -179,10 +188,11 @@ function useSummaryState(isPaneOpen: boolean, isWide: boolean) {
 /** The summary column grows from the right edge while the card itself rises out of the header toggle above it. */
 function DockedSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) {
   return (
-    <div className="min-w-0 overflow-hidden" inert={!isOpen || undefined}>
+    // Above the header's blur edge, which is for the scrolling chat only; the header's own controls stay clickable past it.
+    <div className="pointer-events-none relative z-30 min-w-0 overflow-hidden pt-(--chat-top)" inert={!isOpen || undefined}>
       <div
         className={cn(
-          'h-full w-[300px] origin-top-right pr-3 pb-3 transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
+          'pointer-events-auto h-full w-[300px] origin-top-right pr-3 pb-3 transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
           isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
         )}
       >
