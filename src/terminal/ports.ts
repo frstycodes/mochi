@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 import { host } from '../host';
 import type { ListeningPort } from '../host/types/ports';
+import { recordListeningPorts } from './devServer';
 
 const POLL_MS = 3000;
 
@@ -49,6 +50,7 @@ async function poll(threadId: string, cwd: string) {
     // The first poll is the baseline: servers already running when the app opened don't toast.
     if (watcher.seen) for (const { port } of ports.filter((p) => !watcher.seen!.has(p.port))) announce(watcher, port);
     watcher.seen = new Set(ports.map((p) => p.port));
+    recordListeningPorts(threadId, ports);
     watchers.set(threadId, { ...watcher, ports, error: undefined });
   } catch (error) {
     watchers.set(threadId, { ...watcher, error: (error as Error).message });
