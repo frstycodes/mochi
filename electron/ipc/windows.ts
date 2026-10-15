@@ -22,6 +22,9 @@ export const windows = {
     BrowserWindow.fromWebContents(sender)?.setWindowButtonPosition(trafficLightsAt(zoom));
     return zoom;
   },
+  async resetZoom(sender) {
+    sender.setZoomLevel(0);
+  },
   async listApps() {
     // Asking while not-determined is what shows the macOS prompt; the answer only applies after a relaunch.
     if (!isAllowed(screenAccess())) return { access: screenAccess(), windows: [] };

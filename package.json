@@ -9,7 +9,7 @@
     "dev": "vp dev",
     "build": "tsc -b && vp build",
     "typecheck": "tsc -b && tsc -p electron && tsc -p infra/relay",
-    "test": "node --test \"src/**/*.test.ts\" \"electron/**/*.test.ts\" \"infra/**/src/**/*.test.ts\"",
+    "test": "node --import ./scripts/test-env.ts --test \"src/**/*.test.ts\" \"electron/**/*.test.ts\" \"infra/**/src/**/*.test.ts\"",
     "artifact": "pnpm build && node scripts/artifact.mjs",
     "electron:dev": "vp dev --mode electron",
     "electron:build": "tsc -b && tsc -p electron && vp build --mode electron && node scripts/build-native.mjs && electron-builder --dir"

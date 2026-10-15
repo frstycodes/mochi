@@ -4,7 +4,7 @@ import { firstPrompt } from '../model.ts';
 import { initialQueue } from '../store/queue.ts';
 import type { State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { applyDraft, draftFrom, revisionDiff } from './edit.ts';
+import { addedStepsNote, applyDraft, draftFrom, revisionDiff, type DraftStep } from './edit.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 
@@ -89,4 +89,14 @@ test('a gated step pauses the thread and queues an approval instead of starting'
   assert.equal(adm.status, 'needs-you');
   assert.equal(adm.steps.find((x) => x.id === 'ad3')!.status, 'blocked');
   assert.ok(s.queue.some((q) => q.id === 'q-gate-ad3' && q.kind === 'approval'));
+});
+
+test('steps you add become one note for the agent, with their acceptance; removed, blank and existing steps say nothing', () => {
+  const step = (d: Partial<DraftStep>): DraftStep => ({ title: '', size: 1, gate: false, isRemoved: false, isLocked: false, ...d });
+  const draft = (steps: DraftStep[]) => ({ goal: 'g', criteria: [], steps });
+  assert.equal(addedStepsNote(draft([step({ id: 's1', title: 'Old' }), step({ title: 'Gone', isRemoved: true }), step({ title: '  ' })])), null);
+  assert.equal(
+    addedStepsNote(draft([step({ id: 's1', title: 'Old' }), step({ title: 'Add Redis client' }), step({ title: 'Cache plans', acceptance: { text: 'hits logged', command: 'pnpm test cache' } })])),
+    "I added to the goal's plan while you worked:\n- Add Redis client\n- Cache plans (done when hits logged: `pnpm test cache`)\nFit it into your plan; get_goal has the step ids.",
+  );
 });

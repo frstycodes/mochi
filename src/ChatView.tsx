@@ -34,7 +34,8 @@ import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
 import { ReportCard } from './goals/ReportCard';
-import { currentReport } from './goals/report';
+import { showsVerdictCard } from './goals/report';
+import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import { ReceivedMessageRow } from './chat/ThreadMessage';
 import { turnChanges } from './chat/turnChanges';
@@ -102,7 +103,8 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
               <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
                 {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
               </Transcript>
-              <ReportCard thread={thread} />
+              <ProposalCard thread={thread} />
+              <ReportCard thread={thread} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
           </ConversationContent>
@@ -239,7 +241,7 @@ function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; 
 
 /** Finished turns' file changes: the turn still running gets its card once it ends, and a turn with a report lists its files there instead. */
 function shownTurnChanges(thread: Thread, isRunning: boolean) {
-  const isOpenTurnHidden = isRunning || !!currentReport(thread);
+  const isOpenTurnHidden = isRunning || showsVerdictCard(thread);
   return turnChanges(thread.activity).filter((t) => t.end < thread.activity.length - 1 || !isOpenTurnHidden);
 }
 
@@ -509,4 +511,10 @@ function useOpeningResize() {
     return () => window.clearTimeout(t);
   }, []);
   return isOpening ? 'instant' : 'smooth';
+}
+
+/** Scrolls to the agent's last message holding `quote`: a verdict gap's source. */
+function jumpToQuote(transcript: TranscriptHandle | null, rows: ChatRow[], quote: string) {
+  const i = rows.findLastIndex((r) => r.kind === 'message' && r.entry.text.includes(quote));
+  if (i >= 0) transcript?.scrollToIndex(i, { align: 'center' });
 }

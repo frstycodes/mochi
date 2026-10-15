@@ -29,8 +29,8 @@ export type PanesAction =
   | { type: 'pane-drive'; threadId: string; tabId: string | undefined }
   | { type: 'pane-reorder'; threadId: string; order: string[] }
   | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> }
-  /** The thread's Agents pane, open, with this agent expanded. */
-  | { type: 'pane-show-agent'; threadId: string; subagentId: string };
+  /** The thread's Agents pane, open on this agent's transcript, or on the list when `subagentId` is unset. */
+  | { type: 'pane-show-agent'; threadId: string; subagentId?: string };
 
 const STORAGE_KEY = 'harness.panes.v1';
 
@@ -112,7 +112,7 @@ export function panesReducer(state: State, action: Action): State {
       return { ...state, panes: state.panes.filter((p) => !action.threadIds.includes(p.threadId)) };
     case 'pane-show-agent': {
       const shown = panesReducer(state, { type: 'pane-show-tab', threadId: action.threadId, kind: 'agents' });
-      return { ...shown, panes: mapPane(shown.panes, action.threadId, (p) => ({ ...p, tabs: p.tabs.map((t) => (t.kind === 'agents' ? { ...t, isPopped: false, agentId: action.subagentId } : t)) })) };
+      return { ...shown, panes: mapPane(shown.panes, action.threadId, (p) => ({ ...p, reveals: (p.reveals ?? 0) + 1, tabs: p.tabs.map((t) => (t.kind === 'agents' ? { ...t, isPopped: false, agentId: action.subagentId } : t)) })) };
     }
     case 'agent':
     case 'bg-start': {

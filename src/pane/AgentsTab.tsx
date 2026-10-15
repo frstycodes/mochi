@@ -1,13 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, Hierarchy, Send2, Stop } from 'reicon-react';
+import { ArrowLeft, ChevronRight, Hierarchy, Send2, Stop } from 'reicon-react';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
-import { SubagentAvatar, SubagentLine, SubagentMeta, subagentPersona } from '../agents/parts';
+import { formatElapsed, SubagentAvatar, SubagentLine, SubagentMeta, SubagentModel, subagentPersona, TOKENS, useElapsed } from '../agents/parts';
 import { useThreadFiles } from '../files/viewer';
 import { reportOf } from '../runtime/subagents';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from '../viz/FenceVisual';
@@ -20,111 +19,184 @@ import { useHarness } from '../store';
 import { TooltipIconButton } from '../ui';
 import { VizThreadProvider } from '../viz/WidgetVisual';
 import { CallList, CallRow, DiffStat, DiffView, Expand } from '../WorkLog';
-import { PaneActions } from './PaneHeader';
+import { PaneActions, PaneTitle } from './PaneHeader';
 import type { PaneTabProps } from './tabs';
 
-/** Every agent this thread's agent started, running first, each with its live log, a stop button and what it changed. */
+/** Every agent this thread's agent started as a card, running first; a card opens that agent's transcript in place of the list. */
 export function AgentsTab({ thread, tab }: PaneTabProps) {
   const agents = ordered(thread.subagents ?? []);
-  const running = agents.filter((s) => s.status === 'running').length;
+  const shown = agents.find((s) => s.id === tab.agentId);
   if (!agents.length) return <NoAgents />;
   return (
     // The log's file rows open in the thread's file viewer.
-    <VizThreadProvider value={thread.id}>
-      <div className="flex h-full min-h-0 flex-col">
-        <PaneActions>
-          <span className="flex gap-2 px-1.5 type-meta text-muted-foreground">
-            <span className="tabular">{running} running</span>
-            <span className="tabular text-subtle-foreground">{agents.length - running} finished</span>
-          </span>
-        </PaneActions>
-        <ScrollArea type="scroll" className="min-h-0 flex-1">
-          <ol className="flex flex-col gap-2 px-2 pb-3">
-            {agents.map((s) => (
-              <AgentCard key={`${s.id}-${s.id === tab.agentId}`} thread={thread} subagent={s} isFocused={s.id === tab.agentId} />
-            ))}
-          </ol>
-        </ScrollArea>
-      </div>
-    </VizThreadProvider>
+    <VizThreadProvider value={thread.id}>{shown ? <AgentTranscript key={shown.id} thread={thread} subagent={shown} /> : <AgentList thread={thread} agents={agents} />}</VizThreadProvider>
   );
 }
 
-function AgentCard({ thread, subagent, isFocused }: { thread: Thread; subagent: Subagent; isFocused: boolean }) {
-  const { dispatch } = useHarness();
-  const [isOpen, setOpen] = useState(isFocused || subagent.status === 'running');
-  const isRunning = subagent.status === 'running';
-  const { flavor, name } = subagentPersona(thread, subagent);
-  const report = subagent.result ?? subagent.error;
-  const ref = useRevealOnFocus(isFocused);
+function AgentList({ thread, agents }: { thread: Thread; agents: Subagent[] }) {
+  const running = agents.filter((s) => s.status === 'running');
+  const finished = agents.filter((s) => s.status !== 'running');
+  const [isFinishedOpen, setFinishedOpen] = useState(!running.length);
   return (
-    <li ref={ref} data-file-scope className={cn('flex flex-col rounded-xl border bg-card', isFocused && 'border-foreground/20')}>
-      <div className="flex h-9 items-center gap-1 pr-1.5 pl-1">
-        <button type="button" aria-expanded={isOpen} onClick={() => setOpen((o) => !o)} className="flex h-7 min-w-0 flex-1 cursor-default items-center gap-2 rounded-lg px-1.5 text-left type-meta text-muted-foreground hover:bg-accent/60">
-          <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />
-          <SubagentAvatar flavor={flavor} subagent={subagent} />
-          <span className="shrink-0 text-foreground">{name}</span>
-          <span className="max-w-[40%] shrink-0 truncate text-subtle-foreground">{subagent.name}</span>
-          <SubagentLine subagent={subagent} />
-        </button>
-        {isRunning && (
-          <TooltipIconButton
-            label="Stop agent"
-            hint={`Stops ${name}; its work so far stays`}
-            size="icon-sm"
-            variant="ghost"
-            onClick={() =>
-              dispatch({
-                type: 'bg-stop',
-                threadId: thread.id,
-                subagentId: subagent.id,
-              })
-            }
-          >
-            <Stop weight="Filled" className="size-3.5" />
-          </TooltipIconButton>
+    <ScrollArea type="scroll" className="h-full min-h-0">
+      <div className="flex flex-col gap-3 px-2 pb-3">
+        {running.length > 0 && (
+          <section aria-label="Running" className="flex flex-col gap-1.5">
+            <h3 className="flex h-6 items-center px-1 type-meta text-subtle-foreground">Running</h3>
+            <AgentCards thread={thread} agents={running} />
+          </section>
+        )}
+        {finished.length > 0 && (
+          <section aria-label="Finished" className="flex flex-col gap-1.5">
+            <button type="button" aria-expanded={isFinishedOpen} onClick={() => setFinishedOpen((o) => !o)} className="flex h-6 w-fit cursor-default items-center gap-1 rounded-md px-1 type-meta text-subtle-foreground hover:text-muted-foreground">
+              Finished <span className="tabular">{finished.length}</span>
+              <ChevronRight aria-hidden className={cn('size-3 transition-transform duration-150', isFinishedOpen && 'rotate-90')} />
+            </button>
+            <Expand isOpen={isFinishedOpen}>
+              <AgentCards thread={thread} agents={finished} />
+            </Expand>
+          </section>
         )}
       </div>
-      <div className="flex items-center gap-2 px-3 pb-2 type-caption text-subtle-foreground">
-        <SubagentMeta subagent={subagent} />
-        {!!subagent.model && <span className="min-w-0 truncate">{subagent.model}</span>}
-        <span className="ml-auto shrink-0">{subagent.origin === 'mochi' ? (subagent.hasOwnWorktree ? 'Own worktree' : 'Shared worktree') : subagent.isBackground ? 'Background' : 'Subagent'}</span>
+    </ScrollArea>
+  );
+}
+
+function AgentCards({ thread, agents }: { thread: Thread; agents: Subagent[] }) {
+  return (
+    <ol className="flex flex-col gap-1.5">
+      {agents.map((s) => (
+        <AgentCard key={s.id} thread={thread} subagent={s} />
+      ))}
+    </ol>
+  );
+}
+
+/** The whole card opens the transcript (a stretched button); Stop sits above it. */
+function AgentCard({ thread, subagent }: { thread: Thread; subagent: Subagent }) {
+  const { dispatch } = useHarness();
+  const { flavor, name } = subagentPersona(thread, subagent);
+  const elapsed = useElapsed(subagent.startedAt, subagent.endedAt);
+  return (
+    <li className="relative isolate flex flex-col gap-1 rounded-lg border bg-card px-3 py-2.5 transition-colors has-[>button:first-child:hover]:bg-accent/40">
+      <button
+        type="button"
+        onClick={() => dispatch({ type: 'pane-show-agent', threadId: thread.id, subagentId: subagent.id })}
+        aria-label={`${name}, ${subagent.name}: open transcript`}
+        className="absolute inset-0 cursor-default rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+      <div className="flex min-w-0 items-start gap-2">
+        <span className="min-w-0 flex-1 truncate type-body text-foreground">{subagent.name}</span>
+        {subagent.status === 'running' && <StopAgent thread={thread} subagent={subagent} name={name} className="relative z-10 -my-1 -mr-1.5" />}
       </div>
-      <Expand isOpen={isOpen}>
-        <div className="flex flex-col gap-3 px-1 pb-3">
-          {!!subagent.prompt && <p className="line-clamp-4 px-2 type-meta whitespace-pre-wrap text-muted-foreground">{subagent.prompt}</p>}
-          <Section title="Log">
-            <SubagentSteps subagent={subagent} />
-          </Section>
-          {!isRunning && !!report && (
-            <Section title={subagent.error ? 'Error' : 'Report'}>
-              <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} className="px-2 type-meta text-muted-foreground">
-                {report}
-              </MessageResponse>
-              <div className="px-2 pt-2">
-                <Button size="sm" variant="secondary" className="rounded-full" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: reportOf(subagent), reason: 'A subagent report you sent on' })}>
-                  <Send2 data-icon="inline-start" />
-                  Send to thread
-                </Button>
-              </div>
-            </Section>
-          )}
-          <AgentChanges thread={thread} subagent={subagent} />
-        </div>
-      </Expand>
+      <div className="flex min-w-0 items-center gap-2 type-meta">
+        <SubagentAvatar flavor={flavor} subagent={subagent} className="size-5" />
+        <span className="text-muted-foreground">{name}</span>
+        <span className="text-subtle-foreground">{kindOf(subagent)}</span>
+        <span className="tabular text-subtle-foreground">{formatElapsed(elapsed)}</span>
+      </div>
+      <div className="flex min-w-0 items-center gap-2.5 type-meta text-subtle-foreground">
+        {!!subagent.model && <SubagentModel provider={subagent.provider} model={subagent.model} />}
+        {subagent.tokens > 0 && <Count value={TOKENS.format(subagent.tokens)} unit="tokens" />}
+        {subagent.steps.length > 0 && <Count value={String(subagent.steps.length)} unit={subagent.steps.length === 1 ? 'tool use' : 'tool uses'} />}
+        <SubagentLine subagent={subagent} />
+      </div>
     </li>
   );
 }
 
-/** "Open" from the chat lands on this card: scrolled into view inside the tab's own scroller only. */
-function useRevealOnFocus(isFocused: boolean) {
-  const ref = useRef<HTMLLIElement>(null);
-  useEffect(() => {
+function Count({ value, unit }: { value: string; unit: string }) {
+  return (
+    <span className="shrink-0">
+      <span className="tabular text-muted-foreground">{value}</span> {unit}
+    </span>
+  );
+}
+
+function StopAgent({ thread, subagent, name, className }: { thread: Thread; subagent: Subagent; name: string; className?: string }) {
+  const { dispatch } = useHarness();
+  return (
+    <TooltipIconButton label="Stop agent" hint={`Stops ${name}; its work so far stays`} size="icon-sm" variant="ghost" className={className} onClick={() => dispatch({ type: 'bg-stop', threadId: thread.id, subagentId: subagent.id })}>
+      <Stop weight="Filled" className="size-3.5" />
+    </TooltipIconButton>
+  );
+}
+
+function kindOf(s: Subagent) {
+  if (s.origin === 'mochi') return s.hasOwnWorktree ? 'Own worktree' : 'Shared worktree';
+  return s.isBackground ? 'Background' : 'Agent';
+}
+
+/** One agent's page: its prompt, log, report and changes, flat in the pane; back returns to the list. */
+function AgentTranscript({ thread, subagent }: { thread: Thread; subagent: Subagent }) {
+  const { dispatch } = useHarness();
+  const { flavor, name } = subagentPersona(thread, subagent);
+  const isRunning = subagent.status === 'running';
+  const report = subagent.result ?? subagent.error;
+  return (
+    <div data-file-scope className="flex h-full min-h-0 flex-col">
+      <PaneTitle>
+        <TooltipIconButton label="All agents" hint="Back to this thread's agents" size="icon-sm" variant="ghost" className="-ml-1.5 shrink-0" onClick={() => dispatch({ type: 'pane-show-agent', threadId: thread.id })}>
+          <ArrowLeft />
+        </TooltipIconButton>
+        <SubagentAvatar flavor={flavor} subagent={subagent} className="size-5" />
+        <span className="shrink-0 type-meta text-foreground">{name}</span>
+        <span className="min-w-0 truncate type-meta text-subtle-foreground">{subagent.name}</span>
+      </PaneTitle>
+      {isRunning && (
+        <PaneActions>
+          <StopAgent thread={thread} subagent={subagent} name={name} />
+        </PaneActions>
+      )}
+      <ScrollArea type="scroll" className="min-h-0 flex-1">
+        <div className="flex flex-col gap-4 px-3 pt-1 pb-4">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 type-meta text-subtle-foreground">
+              {!!subagent.model && <SubagentModel provider={subagent.provider} model={subagent.model} />}
+              <SubagentMeta subagent={subagent} className="ml-auto" />
+            </div>
+            {!!subagent.prompt && <AgentPrompt prompt={subagent.prompt} />}
+          </div>
+          <SubagentSteps subagent={subagent} />
+          {!isRunning && !!report && (
+            <div className="flex flex-col gap-3">
+              <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} className={cn('type-prose', subagent.error && 'text-destructive')}>
+                {report}
+              </MessageResponse>
+              <Button size="sm" variant="secondary" className="w-fit rounded-full" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: reportOf(subagent), reason: 'A subagent report you sent on' })}>
+                <Send2 data-icon="inline-start" />
+                Send to thread
+              </Button>
+            </div>
+          )}
+          <AgentChanges thread={thread} subagent={subagent} />
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+/** The task it was given, clamped with Show more once it runs past six lines. */
+function AgentPrompt({ prompt }: { prompt: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [isOpen, setOpen] = useState(false);
+  const [isClamped, setClamped] = useState(false);
+  useLayoutEffect(() => {
     const el = ref.current;
-    const scroller = el?.closest<HTMLElement>('[data-slot=scroll-area-viewport]');
-    if (isFocused && el && scroller) revealIn(scroller, el, { align: 'start' });
-  }, [isFocused]);
-  return ref;
+    if (el && !isOpen) setClamped(el.scrollHeight > el.clientHeight);
+  }, [prompt, isOpen]);
+  return (
+    <div className="flex flex-col gap-1 rounded-xl bg-muted/60 px-3 py-2.5">
+      <p ref={ref} className={cn('type-meta whitespace-pre-wrap text-muted-foreground', !isOpen && 'line-clamp-6')}>
+        {prompt}
+      </p>
+      {(isClamped || isOpen) && (
+        <button type="button" onClick={() => setOpen((o) => !o)} className="w-fit cursor-default type-meta text-foreground hover:underline">
+          {isOpen ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** Its own tool calls, as the same call list an open work group shows. */

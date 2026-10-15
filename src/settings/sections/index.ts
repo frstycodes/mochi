@@ -4,6 +4,7 @@ import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
+import { IDLE_ALERTS } from '../settingOptions';
 import { AccountSection } from './account';
 import { BackgroundSection } from './background';
 import { BrowserSection } from './browser';
@@ -173,7 +174,7 @@ export const SETTINGS_SECTIONS = [
     title: 'Background tasks',
     icon: Sparkles,
     component: BackgroundSection,
-    settings: UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr goal steps handoff summary' })),
+    settings: UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr goal steps handoff summary audit transcript verdict' })),
   },
   {
     id: 'tools',
@@ -192,6 +193,10 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
+      { id: 'proposedGoals', label: 'Agent-proposed goals', keywords: 'propose goal accept apply undo agent writes criteria' },
+      { id: 'idleChecks', label: 'Run criterion checks', keywords: 'idle verdict check test turn end' },
+      { id: 'prGaps', label: 'Gaps when opening a pull request', keywords: 'open_pr gate block critical warn open anyway' },
+      ...IDLE_ALERTS.map(({ value, label }) => ({ id: `idleAlert.${value}`, label: `Notify when idle with ${label.toLowerCase()}`, keywords: 'idle verdict notification alert gaps stalled done' })),
     ],
   },
   {

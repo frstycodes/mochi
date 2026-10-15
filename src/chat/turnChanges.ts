@@ -54,6 +54,12 @@ export function openTurn(activity: ActivityEntry[]) {
   return last?.end === activity.length - 1 ? last : undefined;
 }
 
+/** Whether the open turn could have changed files: an Edit or Write, or any shell command (`sed -i`, `git commit`) the work log can't diff. */
+export function mayHaveEdited(activity: ActivityEntry[]) {
+  const start = activity.findLastIndex(isYourMessage);
+  return activity.slice(start + 1).some((e) => isNativeCall(e, ['Edit', 'Write', 'Run']));
+}
+
 /** Files of `turn` a later turn edited again: undoing `turn` puts them back to before it, so those later edits go too. */
 export function editedLater(turns: TurnChanges[], turn: TurnChanges) {
   const later = new Set(turns.filter((t) => t.start > turn.start).flatMap((t) => t.files.map((f) => f.path)));
@@ -76,7 +82,10 @@ function emptyTurn(start: number): TurnChanges {
   return { start, end: start, files: [], added: 0, removed: 0, ranCommands: false };
 }
 
-const isCommand = (e: ActivityEntry) => e.kind === 'tool' && !e.skill && !e.mcp && toolCall(e).verb === 'Run';
+const isCommand = (e: ActivityEntry) => isNativeCall(e, ['Run']);
+
+/** One of the agent's own tool calls (not a skill or an MCP tool) whose verb is among `verbs`. */
+const isNativeCall = (e: ActivityEntry, verbs: string[]) => e.kind === 'tool' && !e.skill && !e.mcp && verbs.includes(toolCall(e).verb);
 
 /** One edit call as per-file changes: a patch spanning several files (Codex's file changes) splits at its `diff --git` headers. */
 function fileEdits(entry: ActivityEntry) {
