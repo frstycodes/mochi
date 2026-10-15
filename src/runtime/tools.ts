@@ -39,7 +39,7 @@ export interface ToolEnv {
   /** Removes a thread's worktree from disk after a delete; resolves when done. */
   removeWorktree: (threadId: string) => Promise<void>;
   /** The browser tabs' pages (`src/browser/pages.ts`) and main's native views behind them. */
-  pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void };
+  pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void; open: (key: string, url: string, spaceId: string) => void };
   browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor'>;
   /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
   cwdOf: (thread: Thread) => string | null | undefined;

@@ -45,6 +45,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const removed: string[] = [];
   const evals: string[] = [];
   const pushes: string[] = [];
+  const opened: string[] = [];
   const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
@@ -57,7 +58,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
     removeWorktree: async (id) => void removed.push(id),
-    pages: { get: (k) => pages.get(k), update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }) },
+    pages: { get: (k) => pages.get(k), update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }), open: (k) => void opened.push(k) },
     browser: {
       navigate: async (_id, to) => void pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, url: to }),
       command: async (_id, c) => void commands.push(c),
@@ -110,7 +111,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages, pushes, prs };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages, pushes, prs, opened };
   return t;
 }
 
@@ -569,10 +570,12 @@ test('browser_open navigates the active tab; a non-local origin is logged and to
   assert.match(t.toasts.at(-1)!.text, /opened example.com/);
 });
 
-test('browser tools fail with a fix when the thread is off screen', async () => {
+test('browser tools drive an off-screen thread without moving the user', async () => {
   const t = setup();
   t.env.dispatch({ type: 'go', view: { kind: 'thread', id: 'adm' } });
-  assert.match(await t.err('browser_snapshot'), /focus_thread/);
+  await t.ok('browser_snapshot');
+  assert.deepEqual(t.opened, ['rl/tab-1']);
+  assert.deepEqual(t.state().views.latitude, { kind: 'thread', id: 'adm' });
 });
 
 test('browser_snapshot returns the tree with refs', async () => {
