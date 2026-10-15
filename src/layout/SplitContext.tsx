@@ -6,7 +6,7 @@ export interface SplitInfo {
   /** More than one split on screen (zoomed counts): split chrome shows. */
   isMulti: boolean;
   isZoomed: boolean;
-  /** Top-left split: the only one that carries the sidebar toggle, so it never jumps between headers. */
+  /** Top-left split: the only one under the traffic lights and the one that carries the sidebar trigger while it's hidden. */
   isFirst: boolean;
   /** Wide enough to dock the summary column and the side pane; narrower splits fold them into a sheet and a tab. */
   isWide: boolean;

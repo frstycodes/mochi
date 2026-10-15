@@ -225,14 +225,14 @@ function ThreadHeader({
   openKinds: PaneTabKind[];
   onToggleKind: (kind: PaneTabKind) => void;
 }) {
-  const { isFirst, leafId } = useSplit();
+  const { isFirst, isMulti, leafId } = useSplit();
   const progress = goalProgress(thread);
   const header = useRef<HTMLElement>(null);
   const pinDrop = usePinDrop(header);
 
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
-      <TitleBar ref={header} isFirst={isFirst} data-pin-drop className={cn('@container transition-colors duration-150', pinDrop.isOver && 'bg-accent/40')}>
+      <TitleBar ref={header} isFirst={isFirst} isMulti={isMulti} data-pin-drop className={cn('@container transition-colors duration-150', pinDrop.isOver && 'bg-accent/40')}>
         <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
         <DeviceIndicator />
         <ThreadMenu thread={thread} />

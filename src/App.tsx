@@ -14,7 +14,6 @@ import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
-import { SidebarToggle } from './SidebarToggle';
 import { PinnedPager } from './pager/PinnedPager';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
@@ -132,14 +131,13 @@ function Shell() {
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
-      <SidebarInset className="min-h-0 overflow-hidden">
+      {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
+      <SidebarInset className="isolate min-h-0 overflow-hidden">
         <div className="min-h-0 flex-1">
           {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
         </div>
       </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
-      {/* Last on purpose: Electron applies app-region in document order, so the headers' drag regions after it would swallow its clicks. */}
-      <SidebarToggle />
     </SidebarProvider>
   );
 }
