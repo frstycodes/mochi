@@ -27,8 +27,9 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     // falls through
     case 'drift-new-thread':
     case 'sidechat-promote': {
-      const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
-      const images = action.type === 'create' && action.images?.length ? { images: action.images.map(agentImage) } : {};
+      const first = action.type === 'create' ? { prompt: action.prompt, skills: action.skills?.length ? action.skills : undefined } : {};
+      const sent = action.type === 'create' ? [...(action.referenceImages ?? []), ...(action.images ?? []).map(agentImage)] : [];
+      const images = sent.length > 0 ? { images: sent } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
         .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }), ...images }));

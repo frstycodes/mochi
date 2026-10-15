@@ -347,6 +347,28 @@ export function skillMeta(skillMd: string, folderName: string): { name: string; 
   return { name: field('name') || folderName, description: field('description'), ...(argumentHint && { argumentHint }) };
 }
 
+/** A custom command's `<name>.md`: named by its file, described by its front matter or else its first line. */
+export function commandMeta(commandMd: string, fileName: string): { name: string; description: string; argumentHint?: string } {
+  const { description, argumentHint } = skillMeta(commandMd, fileName);
+  const body = commandMd.replace(/^---\r?\n[\s\S]*?\r?\n---/, '');
+  const firstLine = body.split('\n').find((l) => l.trim())?.trim().replace(/^#+\s*/, '') ?? '';
+  return { name: fileName, description: description || firstLine, ...(argumentHint && { argumentHint }) };
+}
+
+/**
+ * The install folders of the user-scope plugins `settings.json` turns on (`enabledPlugins: { "<name>@<marketplace>": true }`),
+ * from `plugins/installed_plugins.json` (version 2: each id maps to its installs). Claude names their skills and commands `<name>:<skill>`.
+ */
+export function claudePluginRoots(installedJson: string, settingsJson: string): { name: string; root: string }[] {
+  const enabled = parseJsonObject(settingsJson, 'settings.json').enabledPlugins;
+  const { plugins } = parseJsonObject(installedJson, 'installed_plugins.json');
+  if (!isObject(enabled) || !isObject(plugins)) return [];
+  return Object.entries(plugins).flatMap(([id, installs]) => {
+    const install = Array.isArray(installs) ? installs.find((i) => isObject(i) && i.scope === 'user' && typeof i.installPath === 'string') : undefined;
+    return enabled[id] === true && install ? [{ name: id.split('@')[0], root: install.installPath as string }] : [];
+  });
+}
+
 // {HELPERS}
 
 function parseJsonObject(text: string, file: string): Record<string, unknown> {

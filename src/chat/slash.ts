@@ -1,3 +1,4 @@
+import type { ProviderConfig } from '../host/types/settings.ts';
 import type { AgentCommand, Provider } from '../model.ts';
 
 /** Commands Mochi runs itself from the thread composer. Anything else starting with `/` goes to the agent as typed. */
@@ -18,6 +19,17 @@ export function slashItems(commands: AgentCommand[], provider: Provider, skills?
   const taken = new Set<string>(own.map((c) => c.name));
   const isSkill = (name: string) => !skills || skills.includes(name);
   return [...own, ...commands.filter((c) => !taken.has(c.name)).map((c) => ({ ...c, source: provider, isSkill: isSkill(c.name) }))];
+}
+
+/**
+ * What the agent will offer, read from disk before it starts and reports its own list: the account's enabled skills, then
+ * the project's, plugins' and custom ones, the first of a name kept. In the agent's shape, `skills` naming the skills among `commands`.
+ */
+export function configuredCommands({ skills, commands }: Pick<ProviderConfig, 'skills' | 'commands'>) {
+  const own = skills.filter((s) => s.enabled).map(({ name, description, argumentHint }) => ({ name, description, ...(argumentHint && { argumentHint }), isSkill: true }));
+  const seen = new Set<string>();
+  const unique = [...own, ...commands].filter((c) => !seen.has(c.name) && !!seen.add(c.name));
+  return { commands: unique.map(({ isSkill: _, ...c }): AgentCommand => c), skills: unique.flatMap((c) => (c.isSkill ? [c.name] : [])) };
 }
 
 /** `/side why redis?` → `{ command, arg: 'why redis?' }`; plain text or a command Mochi doesn't own → null. */
