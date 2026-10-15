@@ -211,7 +211,7 @@ test("a background agent's approval waits on the thread's queue, and settling th
   assert.deepEqual([card.threadId, card.title], [id, 'Migrator: Run a command']);
   calls.length = 0;
   dispatch({ type: 'settle', threadId: id });
-  assert.ok(calls.some((c) => c.method === 'stop' && c.threadId === `${id}--bg1`));
+  assert.deepEqual(calls, [{ method: 'settle', threadId: id }], 'main stops the background agents with the thread (electron/agents/settle.ts)');
 });
 
 test('native subagents: start logs one row where it began, progress fills its log, the first end wins, and stop goes to the harness', () => {

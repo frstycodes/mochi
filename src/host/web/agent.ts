@@ -23,6 +23,7 @@ export const agent: AgentHost = {
   async compactInstructions() {},
   interrupt: endTurn,
   stop: endTurn,
+  settle: endTurn,
   async resolve() {},
   async setupChoice() {},
   onEvent(listener) {

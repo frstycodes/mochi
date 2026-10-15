@@ -293,6 +293,8 @@ export interface AgentHost {
   setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
+  /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
+  settle(threadId: string): Promise<void>;
   onEvent(listener: (event: AgentEvent) => void): () => void;
   /** Streams the answer from `model` on the profile's account as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
   ask(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel): Promise<{ id: string }>;
@@ -330,6 +332,7 @@ export const agentMethods = {
   setupChoice: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
+  settle: 'invoke',
   onEvent: 'event',
   ask: 'invoke',
   onAskEvent: 'event',

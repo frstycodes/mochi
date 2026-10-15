@@ -3,11 +3,11 @@ import { spawn, type IPty } from 'node-pty';
 import type { PtyData, PtyExit, PtySpawnOptions } from '../../src/host/types/pty.ts';
 import { ensureSpawnHelper, shellLaunch } from './shell.ts';
 
-const sessions = new Map<string, { pty: IPty; owner: WebContents }>();
+const sessions = new Map<string, { pty: IPty; owner: WebContents; threadId: string }>();
 const watched = new WeakSet<WebContents>();
 let nextId = 0;
 
-export function spawnSession(owner: WebContents, { cwd, cols, rows, command, port }: PtySpawnOptions) {
+export function spawnSession(owner: WebContents, { cwd, cols, rows, command, port, threadId }: PtySpawnOptions) {
   ensureSpawnHelper();
   const { file, args, env } = shellLaunch();
   const hasZshHooks = 'ZDOTDIR' in env;
@@ -19,7 +19,7 @@ export function spawnSession(owner: WebContents, { cwd, cols, rows, command, por
     env: { ...process.env, ...env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Mochi', ...(port && { PORT: String(port) }), ...(command && hasZshHooks && { HARNESS_COMMAND: command }) },
   });
   const id = `pty-${++nextId}`;
-  sessions.set(id, { pty, owner });
+  sessions.set(id, { pty, owner, threadId });
   watchOwner(owner);
   pty.onData((data) => !owner.isDestroyed() && owner.send('pty:onData', { id, data } satisfies PtyData));
   pty.onExit(({ exitCode }) => {
@@ -36,6 +36,11 @@ export function ownedSession(owner: WebContents, id: string) {
   const session = sessions.get(id);
   if (!session || session.owner !== owner) throw new Error(`unknown pty ${id}`);
   return session.pty;
+}
+
+/** A settled thread's terminals, and the dev servers running in them; the renderer hears each exit like any other. */
+export function killThreadSessions(threadId: string) {
+  for (const session of sessions.values()) if (session.threadId === threadId) session.pty.kill();
 }
 
 function killOwnedBy(owner: WebContents) {
