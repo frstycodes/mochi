@@ -25,8 +25,8 @@ export function CardEntry({ entry, card }: { entry: ActivityEntry; card: NonNull
   const item = card.isOpen ? state.queue.find((q) => q.id === card.id) : undefined;
   if (item?.settings) return <SettingsWidget item={item} settings={item.settings} />;
   if (item) return <MochiWidget item={item} />;
-  // Open with no card behind it: Mochi reloaded while it waited, and main told the agent nothing was done.
-  return <EventLine text={card.isOpen ? `Not answered before Mochi reloaded: ${entry.text}` : entry.text} at={entry.at} />;
+  // Open with no card behind it: Mochi quit while it waited, and the call ended with it.
+  return <EventLine text={card.isOpen ? `Not answered before Mochi quit: ${entry.text}` : entry.text} at={entry.at} />;
 }
 
 export function EventLine({ text, detail, at }: { text: string; detail?: string; at: number }) {
