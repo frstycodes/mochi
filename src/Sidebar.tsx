@@ -42,7 +42,8 @@ import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type Vie
 import { duration, goalProgress } from './progress';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { ProgressRing, SpaceIcon } from './ui';
-import { isWorking, workingLabel } from './agentPhase';
+import { agentPhase, isWorking, PHASE_LABELS, workingLabel } from './agentPhase';
+import { AgentLoader } from './AgentLoader';
 import { runningBackground } from './runtime/subagents';
 import { BoundShortcut } from './Shortcut';
 import { spaceCommand } from './keymap';
@@ -593,16 +594,11 @@ export function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread:
         <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing met={row.progress.met} total={row.progress.total} slot={thread.line} size={12} isWorking={row.isWorking} />
           {!!row.progress.total && <span className="shrink-0 tabular">{`${row.progress.met}/${row.progress.total}`}</span>}
-          {row.isWorking ? (
-            <span className="flex min-w-0 flex-1" title={row.detail}>
-              <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
-            </span>
-          ) : (
-            <>
-              {hasChip && <VerdictChip verdict={shown} />}
-              <span className="min-w-0 flex-1 truncate">{shown?.reason ?? row.detail}</span>
-            </>
-          )}
+          {!row.isWorking && hasChip && <VerdictChip verdict={shown} />}
+          <span className="flex min-w-0 flex-1 items-center gap-1" title={shown?.reason ?? row.detail}>
+            <AgentLoader phase={row.phase} className="size-3.5" />
+            {row.isWorking ? <Shimmer as="span" className="min-w-0 truncate">{PHASE_LABELS[row.phase]}</Shimmer> : !hasChip && <span className="min-w-0 truncate">{PHASE_LABELS[row.phase]}</span>}
+          </span>
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           <PrStack thread={thread} />
           <AgentsBadge thread={thread} />
@@ -644,7 +640,7 @@ function useThreadRow(thread: Thread) {
   const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { progress, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { progress, detail, phase: agentPhase(thread), ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {
