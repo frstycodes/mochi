@@ -142,6 +142,12 @@ export async function ensureView(key: string, spaceId: string) {
 }
 const creating = new Set<string>();
 
+/** The page and its native view without a mounted surface, so an agent can drive a tab while its thread is off screen. */
+export function openPage(key: string, url: string, spaceId: string) {
+  if (!pages.has(key)) seed(key, url);
+  return ensureView(key, spaceId);
+}
+
 export function destroyPage(key: string) {
   const page = pages.get(key);
   const id = page?.hostId;

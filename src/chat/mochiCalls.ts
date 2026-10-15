@@ -52,7 +52,6 @@ export const MOCHI_CALLS = {
   browser_reload: ['Reloading the page', 'Reloaded the page'],
   browser_set_device: ['Changing the device size', 'Changed the device size'],
   open_pane_tab: ['Opening a side pane tab', 'Opened a side pane tab'],
-  focus_thread: ['Switching to a thread', 'Switched to a thread'],
   split_with: ['Opening a split', 'Opened a split'],
   close_pane: ['Closing the side pane', 'Closed the side pane'],
   show_file: ['Showing you a file', 'Showed you a file'],

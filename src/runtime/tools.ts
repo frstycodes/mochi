@@ -39,7 +39,7 @@ export interface ToolEnv {
   /** Removes a thread's worktree from disk after a delete; resolves when done. */
   removeWorktree: (threadId: string) => Promise<void>;
   /** The browser tabs' pages (`src/browser/pages.ts`) and main's native views behind them. */
-  pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void };
+  pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void; open: (key: string, url: string, spaceId: string) => void };
   browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor'>;
   /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
   cwdOf: (thread: Thread) => string | null | undefined;
@@ -528,13 +528,6 @@ const LAYOUT_SPECS = {
       if (kind === 'sidechat') dispatch({ type: 'sidechat-open', threadId: thread.id });
       else dispatch({ type: 'pane-open-tab', threadId: thread.id, kind });
       return { changed: `opened ${args.kind} in "${thread.title}"'s side pane`, result: paneOf(state(), thread.id) };
-    },
-  },
-  focus_thread: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
-      return { changed: `brought you to "${thread.title}"`, result: { focused: thread.id } };
     },
   },
   split_with: {

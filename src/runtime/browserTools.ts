@@ -2,7 +2,6 @@ import type { Page } from '../browser/pages.ts';
 import { DEVICES, RESPONSIVE } from '../browser/devices.ts';
 import { displayUrl, normalizeUrl } from '../browser/url.ts';
 import type { BrowserAct, BrowserSnapshot } from '../host/types/browser.ts';
-import { leaves } from '../layout/tree.ts';
 import { authorName, type PaneTab } from '../model.ts';
 import type { ToolContext, ToolSpec } from './tools.ts';
 import type { ToolName } from './toolTable.ts';
@@ -208,13 +207,11 @@ function tabFor(ctx: Ctx) {
   return tab;
 }
 
-/** Marks the tab as driven, so it floats unless it's already in front, and waits for its native view. Needs the thread on screen: the floating window is what renders it. */
+/** Marks the tab as driven, so it floats unless it's already in front, and waits for its native view. Off screen, the view is opened hidden: CDP drives and captures it without a window. */
 async function live(ctx: Ctx, tab: PaneTab) {
   const { state, caller, dispatch, env } = ctx;
   const key = pageKey(caller.id, tab.id);
-  const layout = state().layouts[caller.spaceId];
-  const isShown = state().spaceId === caller.spaceId && !!layout && leaves(layout.root).some((l) => (l.view.kind === 'thread' && l.view.id === caller.id) || (l.view.kind === 'tab' && l.view.threadId === caller.id && l.view.tabId === tab.id));
-  if (!isShown) throw new Error(`Your thread isn't on screen, so its browser can't render. Call focus_thread with threadId "${caller.id}" first.`);
+  env.pages.open(key, tab.url ?? '', caller.spaceId);
   if (state().panes.find((p) => p.threadId === caller.id)?.drivenTab !== tab.id) dispatch({ type: 'pane-drive', threadId: caller.id, tabId: tab.id });
   const page = await until(() => env.pages.get(key)?.hostId && env.pages.get(key), VIEW_TIMEOUT_MS);
   if (!page) throw new Error(env.isDesktop ? 'The browser tab did not start in time; try again' : 'Driving the browser needs the Mochi desktop app');
