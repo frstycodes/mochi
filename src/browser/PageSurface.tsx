@@ -23,6 +23,8 @@ const OVERLAYS = [
   '[data-slot=alert-dialog-overlay]',
   '[data-slot=sheet-overlay]',
   '[data-slot=drawer-overlay]',
+  // Streamdown's "Open external link?" modal: a plain div, no dialog role.
+  '[data-streamdown=link-safety-modal]',
 ].join(', ');
 // How often the stand-in snapshot refreshes while an overlay stays open, so a playing video or a loading page still moves.
 const PEEK_MS = 400;
