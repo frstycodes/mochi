@@ -257,6 +257,12 @@ export const git = {
     return { branch, base, files: parseDiff(await runGit(top, ['diff', from, commit, ...DIFF_FLAGS]), false) };
   },
 
+  async turnDiff(_sender, cwd, from, to) {
+    const top = await topLevel(string(cwd, 'cwd'));
+    const end = to === undefined ? await snapshotCommit(top, 'harness turn diff') : commitHash(to, 'to');
+    return parseDiff(await runGit(top, ['diff', commitHash(from, 'from'), end, ...DIFF_FLAGS]), false);
+  },
+
   async runCheck(_sender, cwd, command) {
     const top = await topLevel(string(cwd, 'cwd'));
     return runCheck(top, string(command, 'command', 2000));
@@ -364,6 +370,12 @@ function parseChecks(json: string): PrCheck[] {
     state: (BUCKETS as string[]).includes(c.bucket) ? (c.bucket as CheckState) : 'pending',
     link: c.link || undefined,
   }));
+}
+
+function commitHash(value: unknown, name: string) {
+  const sha = string(value, name, 64);
+  if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha)) throw new TypeError(`${name} must be a commit hash`);
+  return sha;
 }
 
 function oneOf<T extends string>(value: unknown, options: readonly T[], name: string): T {
