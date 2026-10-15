@@ -258,7 +258,6 @@ export const TOOL_TABLE = {
     description: "Open a tab in a thread's side pane: preview (browser), changes, terminal, files or sidechat.",
     shape: { kind: z.enum(['preview', 'changes', 'terminal', 'files', 'sidechat']), threadId },
   },
-  focus_thread: { tier: 'change', description: 'Show a thread in the focused split, moving the user there. Undoable.', shape: { threadId: otherThread } },
   split_with: { tier: 'change', description: 'Open a thread in a new split beside the focused one.', shape: { threadId: otherThread } },
   close_pane: { tier: 'change', quiet: true, description: "Close a thread's side pane (its tabs are kept).", shape: { threadId } },
   show_file: {

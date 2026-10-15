@@ -530,13 +530,6 @@ const LAYOUT_SPECS = {
       return { changed: `opened ${args.kind} in "${thread.title}"'s side pane`, result: paneOf(state(), thread.id) };
     },
   },
-  focus_thread: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
-      return { changed: `brought you to "${thread.title}"`, result: { focused: thread.id } };
-    },
-  },
   split_with: {
     run: ({ state, caller, args, dispatch }) => {
       const thread = target(state(), caller, args.threadId);

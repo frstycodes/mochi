@@ -500,12 +500,6 @@ test('open_pane_tab opens the kind asked for', async () => {
   assert.ok(t.state().panes.find((p) => p.threadId === 'rl')!.tabs.some((x) => x.kind === 'terminal'));
 });
 
-test('focus_thread moves you to the thread', async () => {
-  const t = setup();
-  await t.ok('focus_thread', { threadId: 'adm' });
-  assert.deepEqual(t.state().views.latitude, { kind: 'thread', id: 'adm' });
-});
-
 test('split_with opens a split', async () => {
   const t = setup();
   await t.ok('split_with', { threadId: 'adm' });
