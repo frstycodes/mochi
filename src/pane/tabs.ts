@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react';
-import { Chart, Folder, Global, Hierarchy, MessageAdd, Mobile, Plug, type IconComponent } from 'reicon-react';
+import { Chart, Folder, Layers, Global, Hierarchy, MessageAdd, Mobile, Plug, type IconComponent } from 'reicon-react';
 import type { Pane, PaneTab, PaneTabKind, Thread } from '../model';
 import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { AgentsTab } from './AgentsTab';
+import { ArtifactsTab } from './ArtifactsTab';
 import { BrowserTab } from './BrowserTab';
 import { ChangesTab } from './ChangesTab';
 import { FilesTab } from './FilesTab';
@@ -28,6 +29,7 @@ export const PANE_TABS = {
   sidechat: { title: 'Side chat', icon: MessageAdd, component: SideChatTab },
   agents: { title: 'Agents', icon: Hierarchy, component: AgentsTab },
   visual: { title: 'Visual', icon: Chart, component: VisualTab },
+  artifacts: { title: 'Artifacts', icon: Layers, component: ArtifactsTab },
 } satisfies Record<PaneTabKind, { title: string; icon: IconComponent; component: ComponentType<PaneTabProps> }>;
 
 export function tabTitle(tab: PaneTab) {

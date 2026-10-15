@@ -103,6 +103,20 @@ test('a popped-out open adds a floating tab without opening the pane or changing
   assert.deepEqual(p.tabs.at(-1), { id: p.tabs.at(-1)!.id, kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true, url: undefined, file: undefined });
 });
 
+test('opening the same visual again reuses its tab: docked selects it, popped out pops it, a different visual adds one', () => {
+  const visual = { language: 'svg', code: '<svg></svg>' } as const;
+  const open = (p: Pane | undefined, isPopped = false) => run(p, { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Logo', visual, isPopped });
+  const docked = open(pane());
+  const id = docked.activeTab;
+  const again = open(run(docked, { type: 'pane-select-tab', threadId: 't', tabId: 'a' }));
+  assert.deepEqual([again.tabs.length, again.activeTab], [docked.tabs.length, id]);
+  const popped = open(docked, true);
+  assert.deepEqual([popped.tabs.length, popped.tabs.find((t) => t.id === id)?.isPopped], [docked.tabs.length, true]);
+  assert.equal(open(popped, true).tabs.length, docked.tabs.length);
+  const other = run(docked, { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Other', visual: { language: 'svg', code: '<svg><g/></svg>' } });
+  assert.equal(other.tabs.length, docked.tabs.length + 1);
+});
+
 test('a background tab leaves the layout and your pane in front, and a thread with no pane gets a closed one', () => {
   const fresh = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:3000', isBackground: true });
   assert.equal(fresh.isOpen, false);
