@@ -23,6 +23,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Block, Grid, Section } from '../layout';
 import { OverflowIcon } from '../../ui';
+import { ModelDefaultsBlock } from './model-defaults';
 
 export function OverlaysSection() {
   return (
@@ -62,6 +63,7 @@ export function OverlaysSection() {
             </HoverCard>
           </div>
         </Block>
+        <ModelDefaultsBlock />
         <Block title="Dropdown and context menu" use="Overflow actions on a button; the same actions on right-click.">
           <div className="flex flex-wrap items-center gap-3">
             <DropdownMenu>
