@@ -50,6 +50,7 @@ export const MOCHI_CALLS = {
   browser_back: ['Going back', 'Went back'],
   browser_forward: ['Going forward', 'Went forward'],
   browser_reload: ['Reloading the page', 'Reloaded the page'],
+  browser_dialog: ['Answering a page dialog', 'Answered a page dialog'],
   browser_set_device: ['Changing the device size', 'Changed the device size'],
   open_pane_tab: ['Opening a side pane tab', 'Opened a side pane tab'],
   split_with: ['Opening a split', 'Opened a split'],

@@ -1,10 +1,12 @@
+import { existsSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 import { app, net, shell } from 'electron';
 import type { BrowserAct, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserHost, BrowserMenuCommand } from '../../src/host/types/browser.ts';
+import { AGENT_REF } from '../browser/ariaRefs.ts';
 import { startCompare, stopCompare } from '../browser/compare.ts';
 import { browserLabel, parseSuggestions, SUGGEST_URLS, type SuggestEngine } from '../browser/external.ts';
 import { resolveCwd } from '../pty/cwd.ts';
-import { actOnView, findInView, menuCommandInView, peekView, stopFindInView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
+import { actOnView, answerDialogInView, findInView, menuCommandInView, peekView, stopFindInView, scrollView, setAutoReload, evalInView, waitForView, cancelPick, captureView, clearSpaceData, createView, destroyView, emulateView, navigateView, pickElement, runCommand, setDevtools, setViewBounds, setViewMirror, setViewZoom, snapshotView, viewLogs } from '../browser/views.ts';
 import { isAllowedUrl } from '../browser/navigation.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
@@ -75,6 +77,9 @@ export const browser = {
     const optional = (v: unknown, name: string) => (v === undefined ? undefined : string(v, name, 2048));
     return waitForView(sender, viewId(id), { text: optional(u.text, 'text'), selector: optional(u.selector, 'selector'), url: optional(u.url, 'url'), timeoutMs: number(u.timeoutMs, 'timeoutMs', 0, MAX_WAIT_MS) });
   },
+  async answerDialog(sender, id, answer) {
+    await answerDialogInView(sender, viewId(id), bool(record(answer, 'answer').accept, 'accept'));
+  },
   async autoReload(sender, id, root) {
     setAutoReload(sender, viewId(id), root === null ? null : resolveCwd(root));
   },
@@ -109,6 +114,12 @@ export const browser = {
     if (!/^https?:/i.test(target)) throw new TypeError('url must be http(s)');
     await shell.openExternal(target);
   },
+  async showDownload(_sender, path) {
+    const target = string(path, 'path', 4096);
+    if (!isAbsolute(target)) throw new TypeError('path must be absolute');
+    if (!existsSync(target)) throw new Error('The file is no longer there');
+    shell.showItemInFolder(target);
+  },
   async defaultBrowser() {
     return browserLabel(app.getApplicationNameForProtocol('https://'), app.getName());
   },
@@ -129,8 +140,8 @@ function threadKey(value: unknown) {
 function actOf(value: unknown): BrowserAct {
   const a = record(value, 'act');
   const ref = (v: unknown) => {
-    const s = string(v, 'ref', 16);
-    if (!/^e\d+$/.test(s)) throw new TypeError('ref must look like e12');
+    const s = string(v, 'ref', 32);
+    if (!AGENT_REF.test(s)) throw new TypeError('ref must look like g3-e12');
     return s;
   };
   if (a.kind === 'click') return { kind: 'click', ref: ref(a.ref) };

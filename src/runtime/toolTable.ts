@@ -18,7 +18,7 @@ const otherThread = z.string().describe('A thread in this profile; ids come from
 const threadIds = z.array(z.string()).min(1).describe('Threads in this profile; ids come from list_threads');
 const stepId = z.string().describe('A step id from get_goal');
 const tabId = z.string().optional().describe("One of your thread's browser tabs from browser_tabs; defaults to the active one");
-const ref = z.string().describe('An element ref like "e12" from the latest browser_snapshot');
+const ref = z.string().describe('An element ref like "g3-e12" from the latest browser_snapshot');
 const profileId = z.string().optional().describe('A profile id from list_profiles; defaults to your own');
 const configProvider = z.enum(['claude', 'codex']).optional().describe("Which harness's config; defaults to your own");
 const reason = z.string().min(1).max(240).describe('Why, in a sentence the user reads on the widget');
@@ -245,6 +245,12 @@ export const TOOL_TABLE = {
   browser_back: { tier: 'change', quiet: true, description: 'Go back in the tab.', shape: { tabId } },
   browser_forward: { tier: 'change', quiet: true, description: 'Go forward in the tab.', shape: { tabId } },
   browser_reload: { tier: 'change', quiet: true, description: 'Reload the tab.', shape: { tabId } },
+  browser_dialog: {
+    tier: 'change',
+    quiet: true,
+    description: "Answer the alert or confirm the page is showing: accept true is OK, false is Cancel. While one is open, the other browser tools on that tab fail with its message.",
+    shape: { tabId, accept: z.boolean() },
+  },
   browser_set_device: {
     tier: 'change',
     quiet: true,

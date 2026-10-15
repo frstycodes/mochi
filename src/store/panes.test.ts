@@ -119,3 +119,8 @@ test('showing an agent opens the Agents pane with that agent picked', () => {
   const again = run(p, { type: 'pane-show-agent', threadId: 't', subagentId: 's1' });
   assert.equal(again.reveals, (p.reveals ?? 0) + 1, 'showing the same agent again still asks a narrow window to swap to the pane');
 });
+
+test('a tab opened with a tabId keeps it, so two popups in one render get two tabs', () => {
+  const p = run(pane(), { type: 'pane-open-tab', threadId: 't', kind: 'browser', tabId: 'popup_view-1' }, { type: 'pane-open-tab', threadId: 't', kind: 'browser', tabId: 'popup_view-2' });
+  assert.deepEqual(p.tabs.slice(-2).map((t) => t.id), ['popup_view-1', 'popup_view-2']);
+});

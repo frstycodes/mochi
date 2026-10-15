@@ -54,7 +54,7 @@ export function PageMenu({ thread, pageId, page, menu, at }: { thread: Thread; p
               Open image in new tab
             </Item>
             <Item icon={<DocumentDownload />} onSelect={() => run('save-image', menu.srcUrl)}>
-              Save image as…
+              Save image
             </Item>
             <Item icon={<Copy />} onSelect={() => run('copy-image')}>
               Copy image

@@ -11,8 +11,8 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  /** Opens the kind's pane with a tab: multi-tab kinds always get a new one, the others reuse theirs (a Files pane switches to `file`). `isPopped` adds it as a floating window, `isBackground` without touching the layout; both leave the selection as it is (a thread with no pane gets a closed one). */
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean; isBackground?: boolean }
+  /** Opens the kind's pane with a tab: multi-tab kinds always get a new one, the others reuse theirs (a Files pane switches to `file`). `isPopped` adds it as a floating window, `isBackground` without touching the layout; both leave the selection as it is (a thread with no pane gets a closed one). `tabId` names the new tab up front, for a caller that keys state by it before the reducer runs. */
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean; isBackground?: boolean; tabId?: string }
   /** Shows the tab in its pane, opening and focusing the pane. */
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   /** The thread's pane of this kind, open and focused; a new tab when there is none. */
@@ -59,7 +59,7 @@ export function panesReducer(state: State, action: Action): State {
         return { ...state, panes: upsert(state.panes, pane) };
       }
       const tab: PaneTab = {
-        id: nextTabId(existing.tabs),
+        id: action.tabId ?? nextTabId(existing.tabs),
         kind: action.kind,
         url: action.url ?? (action.kind === 'browser' ? defaultBrowserUrl(listeningPorts(action.threadId)) : undefined),
         file: action.file,

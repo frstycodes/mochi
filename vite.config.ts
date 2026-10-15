@@ -23,9 +23,10 @@ export default defineConfig(({ mode }) => ({
     mode === 'electron' &&
       electron({
         // node-pty is a native addon: bundling it breaks its `.node` and spawn-helper lookups.
+        // playwright-core resolves its own package.json and reads files beside it at runtime.
         main: {
           entry: 'electron/main.ts',
-          vite: { build: { rolldownOptions: { external: ['node-pty'] } } },
+          vite: { build: { rolldownOptions: { external: ['node-pty', /^playwright-core(\/|$)/] } } },
         },
         // A sandboxed preload must be CommonJS; `.cjs` keeps it CJS under the package's `"type": "module"`.
         preload: {
