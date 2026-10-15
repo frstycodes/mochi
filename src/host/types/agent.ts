@@ -281,8 +281,11 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  /** `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it. */
-  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string): Promise<void>;
+  /**
+   * `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it.
+   * `steer`: the turn in flight takes the message at its next step instead of a new turn starting after it (Claude `priority: 'next'`, Codex `turn/steer`).
+   */
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean): Promise<void>;
   /** Compacts the live session now with the harness's own compaction; `focus` is what you typed after `/compact` (Claude only). */
   compact(threadId: string, focus: string): Promise<void>;
   /** What Mochi asks the harness to keep on every compaction of the thread, manual or auto: '' clears it. Claude only (PreCompact hook); Codex takes none. */

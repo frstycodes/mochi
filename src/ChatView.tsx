@@ -375,7 +375,7 @@ function Composer({
           <MentionMenu menu={mention} />
           <ComposerCard className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, interrupts: true })} />
+            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, steers: true })} />
             <MentionChips menu={mention} />
             <ComposerInput
               ref={textarea}

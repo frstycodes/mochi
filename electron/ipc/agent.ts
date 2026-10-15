@@ -78,12 +78,13 @@ export const agent = {
   async start(_sender, threadId, options) {
     return startAgent(threadId, options);
   },
-  async send(_sender, threadId, text, pictures, skills, speed) {
+  async send(_sender, threadId, text, pictures, skills, speed, steer) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
     images(pictures);
     skillNames(skills);
     if (speed !== undefined) string(speed, 'speed', 256);
+    if (steer !== undefined && typeof steer !== 'boolean') throw new TypeError('steer must be a boolean');
     // Sent while the worktree is being set up: it goes to the agent once that start is through.
     await starts.wait(threadId as string);
     const run = claudeRunOptions(threadId as string) ?? codex.runOptions(threadId as string);
@@ -91,8 +92,8 @@ export const agent = {
     // '' is standard; a tier the running model doesn't list runs standard too.
     const tier = speed === undefined ? undefined : ((await offered(run.provider, run.spaceId, run.model, undefined, speed as string)).speed ?? '');
     markBusy(threadId as string);
-    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier);
-    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier);
+    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier, steer === true);
+    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier, steer === true);
   },
   async compact(_sender, threadId, focus) {
     string(threadId, 'threadId', 256);
