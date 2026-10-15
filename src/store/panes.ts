@@ -51,6 +51,9 @@ export function panesReducer(state: State, action: Action): State {
     case 'pane-open-tab': {
       const current = state.panes.find((p) => p.threadId === action.threadId);
       const existing = current ?? emptyPane(action.threadId);
+      const sameVisual = action.visual && existing.tabs.find((t) => t.visual?.language === action.visual!.language && t.visual.code === action.visual!.code);
+      // The same chat visual opened again goes to its tab (docked, or popped out to match) instead of a duplicate.
+      if (sameVisual) return !!sameVisual.isPopped && !!action.isPopped ? state : panesReducer(state, { type: 'pane-pop', threadId: action.threadId, tabId: sameVisual.id, isPopped: !!action.isPopped });
       const reused = !isMultiTab(action.kind) && !action.isPopped ? existing.tabs.find((t) => t.kind === action.kind && !t.isPopped) : undefined;
       if (reused) {
         const patched = action.file ? { ...reused, file: action.file, title: action.title ?? action.file.path.split('/').pop() } : reused;
