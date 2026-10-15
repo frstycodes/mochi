@@ -98,7 +98,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
       {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
       <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
-          <ConversationContent scrollClassName="[scroll-timeline:--chat_y]" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-[calc(var(--chat-top,0px)+1.5rem)] pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
+          <ConversationContent scrollClassName="[scroll-timeline:--chat_y]" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-[calc(var(--chat-top,0px)+1.5rem)] pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
               {hasGoal(thread) && <GoalCard thread={thread} />}
               {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
@@ -114,10 +114,10 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
         <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
-        {!isReadOnly && <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />}
+        {!isReadOnly && <ScrollIntent onScrollUp={() => (composer.hold(), tray.collapse())} onReachBottom={() => (tray.expand(), !decisions.length && composer.release())} />}
       </Conversation>
       {!isReadOnly && (
-        <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
+        <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
           <PromptInputProvider key={thread.id}>
             <ImageDropTarget>
               <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
@@ -130,18 +130,37 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   );
 }
 
-// Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
+/**
+ * Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
+ * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
+ * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
+ */
 function useComposerHeightVar() {
   const ref = useRef<HTMLDivElement>(null);
+  const held = useRef(0);
+  const release = () => {
+    held.current = 0;
+    ref.current?.parentElement?.style.removeProperty('--composer-hold');
+  };
+  const hold = () => {
+    const el = ref.current;
+    if (!el?.parentElement || held.current) return;
+    held.current = el.offsetHeight;
+    el.parentElement.style.setProperty('--composer-hold', `${held.current}px`);
+  };
   useEffect(() => {
     const el = ref.current;
     const parent = el?.parentElement;
     if (!el || !parent) return;
-    const ro = new ResizeObserver(([e]) => parent.style.setProperty('--composer-h', `${e.borderBoxSize[0].blockSize}px`));
+    const ro = new ResizeObserver(([e]) => {
+      const height = e.borderBoxSize[0].blockSize;
+      parent.style.setProperty('--composer-h', `${height}px`);
+      if (height >= held.current) release();
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return ref;
+  return { ref, hold, release };
 }
 
 // isLive: the newest row of a running thread, the one still being written. Memoized: a scroll re-renders the virtualized list, and only rows that just mounted should render.
