@@ -24,7 +24,7 @@ import { pruneDrafts } from '../chat/drafts.ts';
 import type { ThreadsAction, ThreadsState } from './threads.ts';
 import type { UiAction, UiState } from './ui.ts';
 import type { ReviewAction } from '../secondOpinion/slice.ts';
-import type { NotificationsAction, NotificationsState } from '../notify/slice.ts';
+import { actedOn, type NotificationsAction, type NotificationsState } from '../notify/slice.ts';
 import { scheduleCalls, triggerInput } from '../schedule/calls.ts';
 import type { ScheduleAction } from '../schedule/slice.ts';
 import type { ScheduleEvent } from '../host/types/schedule.ts';
@@ -95,6 +95,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     // After the action: a new thread only exists once it has applied.
     for (const call of calls) if (call.method === 'start') applyNow({ type: 'agent-starting', threadId: call.threadId, provider: call.options.provider });
     if (action.type === 'workspace') void retarget(next().threads.find((t) => t.id === action.threadId));
+    const acted = actedOn(action, before.queue);
+    if (acted) host.notify.addressed({ threadId: acted, isActedOn: true }).catch(() => undefined);
   }, [apply]);
   // The tick is the app's clock, one per minute of `now`: the demo runs it 60× fast, real threads at wall-clock speed.
   // Real agents report through host.agent whether or not the demo is paused.
