@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore, type Dispatch } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { Thread } from '../model';
 import { getPrefs } from '../settings/prefs';

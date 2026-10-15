@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { Editor } from '@/host/types/fs';
 import { IS_MAC, IS_WINDOWS } from '../keys';

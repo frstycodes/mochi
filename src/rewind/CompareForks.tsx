@@ -1,5 +1,5 @@
 import { FileIcon } from '@react-symbols/icons/utils';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';

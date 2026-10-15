@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host/index.ts';
 import { threadCwd } from '../host/cwd.ts';
 import type { AgentReviewEvent } from '../host/types/agent.ts';

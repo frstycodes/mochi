@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';

@@ -56,7 +56,7 @@ import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
 import { MessageImages } from './chat/MessageImages';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';

@@ -1,5 +1,5 @@
 import { Trash3 } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
 import { useSimulators } from '../../sim/useSimulators';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { Simulator } from '@/host/types/sim';
 import { useHarness } from '@/store';

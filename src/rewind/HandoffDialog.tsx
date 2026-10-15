@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldLabel } from '@/components/ui/field';

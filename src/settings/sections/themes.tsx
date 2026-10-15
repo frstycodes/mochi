@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ClipboardText, Download, Edit2, Import, SearchNormal, Star, TickCircle, Trash3 } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';

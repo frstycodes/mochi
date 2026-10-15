@@ -1,5 +1,5 @@
 import { Edit, Pause, Play, PlayCircle, Trash3 } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '../../toast/store.ts';
 import { host } from '../../host';
 import type { ScheduleRun, Trigger } from '../../host/types/schedule';
 import { shortRunTime } from '../../schedule/cron';

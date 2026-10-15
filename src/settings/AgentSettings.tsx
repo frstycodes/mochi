@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { AccountId, AccountsState, AgentInstall, AgentSettings, AgentSettingsPatch, ApiKeyState } from '../host/types/settings';
 import type { Provider } from '../model';

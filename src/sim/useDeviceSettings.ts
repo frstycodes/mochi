@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { SimAppearance, SimContentSize } from '@/host/types/sim';
 import { message } from './useSimulators';

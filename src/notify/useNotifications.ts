@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
+import { queueToast } from '../QueueToast';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { WatchConfig } from '../host/types/notify';
@@ -53,7 +54,7 @@ export function useNotifications() {
     if (!watchedToasts) return;
     for (const n of alerts) {
       if (n.kind === 'idle' || !state.watched.includes(n.threadId)) continue;
-      toast(n.title, { description: n.body, action: { label: 'Open', onClick: () => latest.current.jump(n) } });
+      toast(n.title, { description: n.body, ...(n.queueId && queueToast(n.queueId)), action: { label: 'Open', onClick: () => latest.current.jump(n) } });
     }
   }, [items, quiet, state.watched, alertKinds, watchedToasts, idleAlerts, viewedId]);
 

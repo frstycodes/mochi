@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Trash3 } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { PINS_STORAGE_KEY, replaceAllPins, useAllPins } from '../../chat/pins';
 import { useConfirm } from '../../git/useConfirm';

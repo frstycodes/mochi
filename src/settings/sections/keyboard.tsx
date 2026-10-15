@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { COMMAND_GROUPS, COMMAND_IDS, COMMANDS, FIXED_KEYS, type CommandId } from '../../keymap';
 import { useProfiles } from '../../profiles';

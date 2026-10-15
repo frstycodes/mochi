@@ -1,5 +1,5 @@
 import { Copy, Download, Expand, FolderOpen, ImageSparkle, Warning } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { useRef, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';

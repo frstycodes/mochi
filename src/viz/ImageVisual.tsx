@@ -1,5 +1,5 @@
 import { useState, type ComponentProps, type DragEvent, type ReactNode } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import type { ExtraProps } from 'streamdown';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { cn } from '@/lib/utils';
