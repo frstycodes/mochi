@@ -82,7 +82,6 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'limit-cleared':
       return update((t) => clearLimit(t, now));
     case 'turn-end': {
-      if (event.status === 'interrupted' && thread.live?.isReplacingTurn) return update((t) => log({ ...t, live: { ...t.live!, isReplacingTurn: undefined } }, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted for your queued message' }));
       // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
       const ended = thread.live ? update((t) => closeCompaction({ ...t, live: { ...t.live!, isWorking: false, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
       if (isLimitEnd(thread)) return ended;

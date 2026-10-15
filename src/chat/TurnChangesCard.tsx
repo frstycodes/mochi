@@ -20,11 +20,17 @@ import { CallList, DiffStat, DiffView, Expand } from '../WorkLog';
 import { countLabel, DisabledTooltip, FileList } from '../rewind/RewindLayer';
 import { useTurnUndo, type UndoConflicts } from '../rewind/useTurnUndo';
 import { patchSections, type TurnChanges, type TurnFile } from './turnChanges';
+import { useTurnDiff } from './useTurnDiff';
 
 const ROWS_SHOWN = 3;
 
 /** The files one finished turn changed, like Claude's: totals and Undo (none in a replay) up top, a row per file that opens to its diff, the first three then "Show N more". */
-export function TurnChangesCard({ thread, turn, isReadOnly, className }: { thread: Thread; turn: TurnChanges; isReadOnly?: boolean; className?: string }) {
+export function TurnChangesCard({ thread, turn, ...props }: { thread: Thread; turn: TurnChanges; isReadOnly?: boolean; className?: string }) {
+  const changes = useTurnDiff(thread, turn);
+  return changes.files.length > 0 && <ChangesCard thread={thread} turn={changes} {...props} />;
+}
+
+function ChangesCard({ thread, turn, isReadOnly, className }: { thread: Thread; turn: TurnChanges; isReadOnly?: boolean; className?: string }) {
   const [isOpen, setOpen] = useState(true);
   const [isShowingAll, setShowingAll] = useState(false);
   const undo = useTurnUndo(thread, turn);

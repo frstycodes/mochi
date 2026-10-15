@@ -1,9 +1,11 @@
 import type { PrCheck, PrInfo } from '../host/types/git.ts';
+import type { AlertKind } from './model.ts';
 
 /** One OS notification main shows for a watched thread. `requestId`: a pending approval the notification can answer. */
 export interface OsNotice {
   threadId: string;
-  kind: string;
+  /** `summary`: several threads folded into one, which no single thread addresses. */
+  kind: AlertKind | 'summary';
   title: string;
   body: string;
   requestId?: string;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { argumentSlots, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
+import { argumentSlots, configuredCommands, insertToken, parseSlash, resolveToken, slashItems, slashMatches, slashQueryAt, slashTokens, slotPlaceholder, typedSkills } from './slash.ts';
 
 test('parses /side with its question, keeping line breaks', () => {
   assert.deepEqual(parseSlash('/side why Redis?')?.arg, 'why Redis?');
@@ -116,4 +116,28 @@ test('slots disappear one by one as each argument is started', () => {
   assert.equal(slotPlaceholder(' a.ts --fix extra', hint), '');
   assert.equal(slotPlaceholder(' a.ts\n', hint), '');
   assert.equal(slotPlaceholder(' ', undefined), '');
+});
+
+test('before the agent starts, lists enabled account skills then project, plugin and custom ones, first of a name kept', () => {
+  const listed = configuredCommands({
+    skills: [
+      { name: 'run', description: 'Launch the app', dir: '~/.claude/skills/run', enabled: true },
+      { name: 'deploy', description: 'Off', dir: '~/.claude/skills/deploy', enabled: false },
+    ],
+    commands: [
+      { name: 'run', description: 'Project copy of run', isSkill: true },
+      { name: 'repo-skill', description: 'From .claude/skills', isSkill: true },
+      { name: 'release-notes', description: 'A custom command', argumentHint: '[since]', isSkill: false },
+      { name: 'ponytail:ponytail', description: 'A plugin skill', isSkill: true },
+    ],
+  });
+  assert.deepEqual(
+    listed.commands.map((c) => c.name),
+    ['run', 'repo-skill', 'release-notes', 'ponytail:ponytail'],
+  );
+  assert.equal(listed.commands[0].description, 'Launch the app');
+  assert.deepEqual(listed.skills, ['run', 'repo-skill', 'ponytail:ponytail']);
+  const listedItems = slashItems(listed.commands, 'claude', listed.skills);
+  assert.equal(listedItems.find((i) => i.name === 'release-notes')?.isSkill, false);
+  assert.equal(listedItems.find((i) => i.name === 'repo-skill')?.isSkill, true);
 });

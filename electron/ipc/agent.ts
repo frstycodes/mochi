@@ -16,9 +16,9 @@ import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
-import { codexUrl, resolveToolCall } from '../mcp/server.ts';
+import { codexUrl, resolveToolCall, undeliveredToolCalls } from '../mcp/server.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
-import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
+import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
@@ -81,12 +81,13 @@ export const agent = {
   async start(_sender, threadId, options) {
     return startAgent(threadId, options);
   },
-  async send(_sender, threadId, text, pictures, skills, speed) {
+  async send(_sender, threadId, text, pictures, skills, speed, steer) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
     images(pictures);
     skillNames(skills);
     if (speed !== undefined) string(speed, 'speed', 256);
+    if (steer !== undefined && typeof steer !== 'boolean') throw new TypeError('steer must be a boolean');
     // Sent while the worktree is being set up: it goes to the agent once that start is through.
     await starts.wait(threadId as string);
     const run = claudeRunOptions(threadId as string) ?? codex.runOptions(threadId as string);
@@ -94,8 +95,8 @@ export const agent = {
     // '' is standard; a tier the running model doesn't list runs standard too.
     const tier = speed === undefined ? undefined : ((await offered(run.provider, run.spaceId, run.model, undefined, speed as string)).speed ?? '');
     markBusy(threadId as string);
-    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier);
-    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier);
+    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier, steer === true);
+    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier, steer === true);
   },
   async compact(_sender, threadId, focus) {
     string(threadId, 'threadId', 256);
@@ -131,6 +132,13 @@ export const agent = {
     const id = string(threadId, 'threadId', 256);
     killThreadSessions(id);
     await Promise.all([...threadSessions(id, [...claudeSessionIds(), ...codex.threadIds(), ...starts.ids()]).map(stopSession), stopCompare(id)]);
+  },
+  async attached(_sender, threads) {
+    if (!Array.isArray(threads)) throw new TypeError('threads must be an array');
+    return threads
+      .map((t, i) => ({ threadId: string(t?.threadId, `threads[${i}].threadId`, 256), after: typeof t?.after === 'number' ? t.after : undefined }))
+      .filter((t) => hasClaudeSession(t.threadId) || codex.owns(t.threadId))
+      .map(({ threadId, after }) => ({ threadId, isWorking: isBusy(threadId), events: after === undefined ? [] : eventsSince(threadId, after) }));
   },
   async stopSubagent(_sender, threadId, subagentId) {
     string(threadId, 'threadId', 256);
@@ -211,6 +219,9 @@ export const agent = {
     })();
     return { id };
   },
+  async pendingToolCalls(sender) {
+    return undeliveredToolCalls(sender);
+  },
   async toolResult(_sender, id, result) {
     string(id, 'id', 256);
     const r = record(result, 'result');
@@ -249,6 +260,7 @@ export const agent = {
 /** Stopping a session with no agent process is a no-op, so settling twice or settling then deleting never errors. */
 async function stopSession(threadId: string) {
   markIdle(threadId);
+  forgetEvents(threadId);
   starts.abort(threadId);
   if (hasClaudeSession(threadId)) return stopClaude(threadId);
   return codex.stop(threadId);

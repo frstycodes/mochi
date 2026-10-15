@@ -13,7 +13,7 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
-  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string }
+  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string; steer?: boolean }
   | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop' | 'settle'; threadId: string }
   | { method: 'stopSubagent'; threadId: string; subagentId: string };
@@ -27,8 +27,9 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     // falls through
     case 'drift-new-thread':
     case 'sidechat-promote': {
-      const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
-      const images = action.type === 'create' && action.images?.length ? { images: action.images.map(agentImage) } : {};
+      const first = action.type === 'create' ? { prompt: action.prompt, skills: action.skills?.length ? action.skills : undefined } : {};
+      const sent = action.type === 'create' ? [...(action.referenceImages ?? []), ...(action.images ?? []).map(agentImage)] : [];
+      const images = sent.length > 0 ? { images: sent } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
         .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }), ...images }));
@@ -42,8 +43,8 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       // Every message carries the thread's speed, so a change in the composer applies from the next one.
       const speed = thread.controls ? { speed: controlsOf(thread).speed } : {};
       if (thread.live.isDetached) return reattach(thread, text, undefined, images.images, skills.skills);
-      const interrupt = action.interrupts && thread.live.isWorking ? [{ method: 'interrupt' as const, threadId: thread.id }] : [];
-      return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed }];
+      const steer = action.steers && thread.live.isWorking ? { steer: true } : {};
+      return [{ method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed, ...steer }];
     }
     case 'compact':
       return hasAgent(state, action.threadId) ? [{ method: 'compact', threadId: action.threadId, focus: action.focus }] : [];

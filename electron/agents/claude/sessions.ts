@@ -25,7 +25,7 @@ import { FORK_MISSING_NOTICE, FORK_REFUSED_NOTICE, forkPoint, MISSING_FORK_POINT
 interface Session {
   threadId: string;
   options: AgentRunOptions;
-  inbox: { text: string; images?: AgentImage[] }[];
+  inbox: { text: string; images?: AgentImage[]; priority?: 'next' }[];
   /** Every message handed to Claude Code, with the uuid `rewindFiles` takes and the chain entry before it (`rewindPoint`). */
   sent: { uuid: string; text: string; images?: AgentImage[]; after: string | null }[];
   /** The newest entry of the main conversation chain; undefined while a resumed session hasn't shown one yet. */
@@ -69,14 +69,15 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
 }
 
 /** `speed`: '' standard, 'fast' fast mode, unset keeps it; a live process switches before reading the message. */
-export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string) {
+/** `steer`: the turn in flight folds the message in at its next step instead of answering it after (the queue's Send now). */
+export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string, steer?: boolean) {
   const session = sessions.get(threadId);
   if (!session) throw new Error('No Claude session for this thread in this run of Harness; start it again with resume');
   if (speed !== undefined && speed !== (session.options.speed ?? '')) {
     session.options = { ...session.options, speed: speed || undefined };
     await session.query?.applyFlagSettings({ fastMode: !!speed });
   }
-  session.inbox.push({ text, images });
+  session.inbox.push({ text, images, ...(steer && { priority: 'next' as const }) });
   session.isBusy = true;
   if (session.query) session.wake.emit('push');
   else if (!waiting.includes(session)) await schedule(session);
@@ -280,7 +281,8 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
       session.sent.push({ uuid, text: next.text, images: next.images, after: session.lastUuid ?? null });
       session.lastUuid = uuid;
       session.mapper.sent(next.text).forEach(emit);
-      yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid };
+      // `priority: 'next'` is read from the 0.3.296 binary: 'next' folds into the running turn, 'now' cuts it, 'later' waits for it to end.
+      yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid, ...(next.priority && { priority: next.priority }) };
       continue;
     }
     try {

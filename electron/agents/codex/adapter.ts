@@ -133,12 +133,29 @@ export class CodexAdapter {
     await this.start(threadId, { ...options, permissionMode: 'review' });
   }
 
-  /** `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. */
-  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string) {
+  /**
+   * `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. `steer`: the turn in
+   * flight takes the message (`turn/steer`); when it already ended, the message starts a turn of its own.
+   */
+  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean) {
     const live = this.threads.get(threadId);
     if (!live) throw new Error('No live Codex session for this thread; resume it first');
     if (speed !== undefined) live.options = { ...live.options, speed: speed || undefined };
+    if (steer && (await this.steer(threadId, text, images, skills))) return;
     await this.report(threadId, (aborted) => this.turn(threadId, text, images, skills, aborted));
+  }
+
+  /** False when there's no turn to steer, or it ended before the steer reached it (the turn id no longer matches). */
+  private async steer(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = []) {
+    const live = this.threads.get(threadId)!;
+    const rpc = live.server.rpc;
+    if (!live.turnId || !rpc || live.gen !== live.server.gen) return false;
+    try {
+      await rpc.request('turn/steer', { threadId: live.codexId, input: (await this.input(rpc, live, text, images, skills)).input, expectedTurnId: live.turnId });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** `thread/compact/start` runs as a turn of its own; it takes no instructions (0.155.1 schema), so the renderer re-sends what to keep after. */
@@ -326,9 +343,7 @@ export class CodexAdapter {
       await until(this.open(live.server, rpc, threadId, live.options), aborted);
       live = this.threads.get(threadId)!;
     }
-    const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await until(rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null), aborted)) : [];
-    const attached = skillInputs(text, skills, listed);
-    const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
+    const { input, attached } = await until(this.input(rpc, live, text, images, skills), aborted);
     const starting = rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
     aborted.addEventListener('abort', () => void stopLateTurn(rpc, live.codexId, starting), { once: true });
     const result = await until(starting, aborted);
@@ -337,6 +352,13 @@ export class CodexAdapter {
     if (typeof turnId === 'string') live.turns.push({ id: turnId, text });
     // Codex reports no skill load of its own: an attached skill is loaded with the turn.
     for (const event of skillEvents(threadId, typeof turnId === 'string' ? turnId : String(Date.now()), attached)) this.emit(event);
+  }
+
+  /** A message as Codex input: images, the text, and the skills it names or you attached. */
+  private async input(rpc: RpcClient, live: Live, text: string, images: AgentImage[], skills: string[]) {
+    const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
+    const attached = skillInputs(text, skills, listed);
+    return { input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached], attached };
   }
 
   /** Runs a start, send or compact that `interrupt` (or `signal`) can abort; failures arrive as a failed turn, an abort as an interrupted one. */

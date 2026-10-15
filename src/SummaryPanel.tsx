@@ -12,6 +12,8 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { threadCwd } from '@/host/cwd';
+import { useGitDiff } from './git/useGit';
+import { DiffIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
@@ -174,19 +176,33 @@ function NeedsYou({ thread }: { thread: Thread }) {
 }
 
 function ChangesRow({ thread, summary, open }: SectionProps) {
-  if (!thread.repo && summary.files.length === 0) return null;
+  if (!thread.repo) return summary.files.length > 0 && <ChangesSummaryRow thread={thread} files={summary.files} />;
+  return <BranchChangesRow thread={thread} onClick={open.changes} />;
+}
+
+/** The branch against its base, as the Changes pane shows it by default: edits made through shell commands count too. */
+function BranchChangesRow({ thread, onClick }: { thread: Thread; onClick: () => void }) {
+  const diffQuery = useGitDiff(threadCwd(thread) ?? '.', 'branch', thread.repo?.base);
+  return <ChangesSummaryRow thread={thread} files={diffQuery.data?.files} onClick={onClick} />;
+}
+
+function ChangesSummaryRow({ thread, files, onClick }: { thread: Thread; files?: { added: number; removed: number }[]; onClick?: () => void }) {
+  const added = files?.reduce((n, f) => n + f.added, 0) ?? 0;
+  const removed = files?.reduce((n, f) => n + f.removed, 0) ?? 0;
   return (
-    <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
-      <span className="tabular type-caption text-subtle-foreground">
-        {summary.files.length === 0 ? (
-          (thread.status === 'settled' ? 'None' : 'None yet')
-        ) : (
-          <>
-            <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
-            {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
-          </>
-        )}
-      </span>
+    <SummaryRow icon={DiffIcon} label="Changes" onClick={onClick}>
+      {!!files && (
+        <span className="tabular type-caption text-subtle-foreground">
+          {files.length === 0 ? (
+            (thread.status === 'settled' ? 'None' : 'None yet')
+          ) : (
+            <>
+              <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span> · {files.length}{' '}
+              {PLURAL.select(files.length) === 'one' ? 'file' : 'files'}
+            </>
+          )}
+        </span>
+      )}
     </SummaryRow>
   );
 }

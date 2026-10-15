@@ -185,6 +185,8 @@ export interface GitHost {
   rewindPreview(cwd: string, threadId: string, n: number): Promise<RewindPreview>;
   /** What checkpoint `n` held against the branch's base: the thread's changes as they stood then. Throws when its files weren't saved. */
   checkpointDiff(cwd: string, threadId: string, n: number): Promise<GitDiff>;
+  /** Files changed between checkpoint commit `from` and `to`, or the worktree now without `to`: one turn's changes, however they were made. */
+  turnDiff(cwd: string, from: string, to?: string): Promise<DiffFile[]>;
   /** New worktree for `threadId` on `branch`, starting from `from`'s checkpoint, or from `cwd`'s HEAD without one. */
   forkWorktree(cwd: string, threadId: string, branch: string, from?: { threadId: string; n: number }): Promise<string>;
   /** Runs a goal criterion's check command in the worktree with your shell's PATH; never throws for a failing command. */
@@ -235,6 +237,7 @@ export const gitMethods = {
   restoreFiles: 'invoke',
   rewindPreview: 'invoke',
   checkpointDiff: 'invoke',
+  turnDiff: 'invoke',
   forkWorktree: 'invoke',
   runCheck: 'invoke',
 } satisfies Manifest<GitHost>;

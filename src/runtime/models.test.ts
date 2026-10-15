@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AgentModel } from '../host/types/agent.ts';
-import { claudeFast, effortId, optionFor, resolveRun, searchModels, type ModelOption } from './models.ts';
+import { claudeFast, effortId, isNewThreadModel, optionFor, resolveRun, searchModels, type ModelOption } from './models.ts';
 
 const CODEX: AgentModel[] = [
   { id: 'gpt-6-astra', name: 'GPT-6-Astra', description: '', efforts: ['low', 'medium', 'high', 'ultra'], defaultEffort: 'low', speeds: [], isDefault: true },
@@ -59,4 +59,14 @@ test('model search matches every typed word as a substring, across harnesses', (
   assert.deepEqual(ids('  OPUS   claude '), ['claude-opus-5-5'], 'words in any order, any case');
   assert.equal(ids('').length, 4);
   assert.deepEqual(ids('opus luna'), []);
+});
+
+test('the Default badge marks the default harness\'s model, its account default when Settings leaves it unset', () => {
+  const catalog = { codex: CODEX };
+  const astra: ModelOption = { ...CODEX[0], harness: 'codex' };
+  const luna: ModelOption = { ...CODEX[1], harness: 'codex' };
+  assert.equal(isNewThreadModel(astra, catalog, { claude: '', codex: '' }, 'codex'), true);
+  assert.equal(isNewThreadModel(luna, catalog, { claude: '', codex: 'gpt-6-luna' }, 'codex'), true);
+  assert.equal(isNewThreadModel(astra, catalog, { claude: '', codex: 'gpt-6-luna' }, 'codex'), false);
+  assert.equal(isNewThreadModel(luna, catalog, { claude: '', codex: 'gpt-6-luna' }, 'claude'), false, "another harness's default isn't the new-thread default");
 });

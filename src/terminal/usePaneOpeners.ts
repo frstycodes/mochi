@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useHarness } from '../store';
 import { fileLink } from './links';
+import { portUrl } from './devServer';
 import type { TerminalLinks } from './sessions';
 
 export function usePaneOpeners(threadId: string) {
@@ -15,5 +16,3 @@ export function usePaneOpeners(threadId: string) {
     [dispatch, threadId],
   );
 }
-
-export const portUrl = (port: number) => `http://localhost:${port}`;
