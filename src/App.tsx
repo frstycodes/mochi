@@ -125,6 +125,13 @@ function Shell() {
 
   return (
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
+      {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
+      <SidebarInset className="isolate order-last min-h-0 overflow-hidden">
+        <div className="min-h-0 flex-1">
+          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
+        </div>
+      </SidebarInset>
+      {/* After the page in the DOM, back on the left through `order-last` above: Electron applies app-region in document order, so the page's drag headers would otherwise swallow the sidebar's toggle. */}
       {isSettingsOpen ? (
         <SettingsSidebar width={sidebarWidth} onResize={setSidebarWidth} />
       ) : (
@@ -133,12 +140,6 @@ function Shell() {
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
-      {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
-      <SidebarInset className="isolate min-h-0 overflow-hidden">
-        <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
-        </div>
-      </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
     </SidebarProvider>
   );
