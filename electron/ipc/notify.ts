@@ -1,11 +1,13 @@
 import { BrowserWindow, Notification } from 'electron';
 import { playHaptic } from '../haptics/haptics.ts';
-import { watch } from '../notify/watch.ts';
+import { closeAddressed, watch } from '../notify/watch.ts';
 import type { NotifyHost, WatchConfig } from '../../src/host/types/notify.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 
 // macOS drops click handlers for notifications that get garbage-collected, so live ones are held until clicked or closed.
 const live = new Set<Notification>();
+/** The renderer's notice id → its notification, for `close`. */
+const byId = new Map<string, Notification>();
 
 export const notify = {
   async show(sender, notice) {
@@ -13,9 +15,14 @@ export const notify = {
     const n = new Notification({ title: string(title, 'title', 200), body: body === undefined ? undefined : string(body, 'body', 2000) });
     const clickId = id === undefined ? undefined : string(id, 'id', 200);
     live.add(n);
-    n.on('close', () => live.delete(n));
-    n.on('click', () => {
+    if (clickId) byId.set(clickId, n);
+    const forget = () => {
       live.delete(n);
+      if (clickId && byId.get(clickId) === n) byId.delete(clickId);
+    };
+    n.on('close', forget);
+    n.on('click', () => {
+      forget();
       const win = BrowserWindow.fromWebContents(sender);
       if (!win || sender.isDestroyed()) return;
       if (win.isMinimized()) win.restore();
@@ -24,6 +31,19 @@ export const notify = {
       if (clickId) sender.send('notify:onClick', clickId);
     });
     n.show();
+  },
+  async close(_sender, value) {
+    for (const id of list(value, 'ids')) {
+      const n = byId.get(string(id, 'id', 200));
+      if (!n) continue;
+      n.close();
+      live.delete(n);
+      byId.delete(id as string);
+    }
+  },
+  async addressed(_sender, value) {
+    const s = record(value, 'signal');
+    closeAddressed({ threadId: string(s.threadId, 'threadId', 256), isViewed: s.isViewed === true, isActedOn: s.isActedOn === true });
   },
   async watch(_sender, value) {
     watch.set(watchConfig(value));

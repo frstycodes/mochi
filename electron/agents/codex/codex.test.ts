@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -209,6 +209,43 @@ test('images go to turn/start as data-URL image inputs ahead of the text, on the
     codex.dispose();
   }
 });
+
+test('an interrupt while Codex has not answered turn/start ends the start at once as interrupted, and stops the turn if it starts after all', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = fakeCodex(home, STUCK_CODEX);
+  const log = path.join(home, 'stuck.log');
+  const events: AgentEvent[] = [];
+  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STUCK_LOG: log } }));
+  const logged = () => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : []);
+  try {
+    const starting = codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi' });
+    for (let i = 0; i < 100 && !logged().includes('turn/start'); i++) await new Promise((r) => setTimeout(r, 20));
+    const startedAt = performance.now();
+    await codex.interrupt('t');
+    await starting;
+    assert.ok(performance.now() - startedAt < 1000, 'neither call waits out an RPC timeout');
+    assert.deepEqual(events.filter((e) => e.type === 'turn-end'), [{ threadId: 't', type: 'turn-end', status: 'interrupted' }]);
+    // The fake answers turn/start only once interrupted: that late turn is stopped.
+    for (let i = 0; i < 100 && !logged().includes('turn/interrupt late-1'); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(logged(), ['turn/start', 'turn/interrupt late-1']);
+  } finally {
+    codex.dispose();
+  }
+});
+
+/** Answers turn/start 300 ms late, after the client has given up on it; logs turn/start and turn/interrupt to $STUCK_LOG. */
+const STUCK_CODEX = `#!/usr/bin/env node
+const fs = require('node:fs');
+let buf = '';
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+  if (m.method === 'turn/start') { fs.appendFileSync(process.env.STUCK_LOG, 'turn/start\\n'); setTimeout(() => send({ id: m.id, result: { turn: { id: 'late-1' } } }), 300); }
+  else if (m.method === 'turn/interrupt') { fs.appendFileSync(process.env.STUCK_LOG, 'turn/interrupt ' + m.params.turnId + '\\n'); send({ id: m.id, result: {} }); }
+  else if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
+  else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c1' } } });
+  else if (m.id !== undefined) send({ id: m.id, result: {} });
+} });
+`;
 
 /** Logs the `serviceTier` of every thread/start and turn/start to $TIER_LOG (and turn/start's input to $INPUT_LOG); each turn completes shortly after its reply. */
 const TIER_CODEX = `#!/usr/bin/env node

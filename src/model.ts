@@ -402,14 +402,14 @@ export interface LiveRun {
   limit?: { resetsAt?: string; label?: string; isTurnHeld?: boolean; autoResume?: boolean };
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
+  /** `seq` of the last agent event applied: after a window reload, main replays the ones after it. */
+  eventSeq?: number;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
   /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
   restart?: { forkAt: string } | { seed: string };
-  /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
-  isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */

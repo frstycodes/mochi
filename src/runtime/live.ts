@@ -13,9 +13,9 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
-  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string }
+  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string; steer?: boolean }
   | { method: 'compact'; threadId: string; focus: string }
-  | { method: 'interrupt' | 'stop'; threadId: string }
+  | { method: 'interrupt' | 'stop' | 'settle'; threadId: string }
   | { method: 'stopSubagent'; threadId: string; subagentId: string };
 
 /** The `host.agent` calls an action makes for live threads; demo threads make none. `next` is the state after the action. */
@@ -27,8 +27,9 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     // falls through
     case 'drift-new-thread':
     case 'sidechat-promote': {
-      const first = action.type === 'create' && action.skills?.length ? { prompt: action.prompt, skills: action.skills } : {};
-      const images = action.type === 'create' && action.images?.length ? { images: action.images.map(agentImage) } : {};
+      const first = action.type === 'create' ? { prompt: action.prompt, skills: action.skills?.length ? action.skills : undefined } : {};
+      const sent = action.type === 'create' ? [...(action.referenceImages ?? []), ...(action.images ?? []).map(agentImage)] : [];
+      const images = sent.length > 0 ? { images: sent } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
         .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }), ...images }));
@@ -42,8 +43,8 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       // Every message carries the thread's speed, so a change in the composer applies from the next one.
       const speed = thread.controls ? { speed: controlsOf(thread).speed } : {};
       if (thread.live.isDetached) return reattach(thread, text, undefined, images.images, skills.skills);
-      const interrupt = action.interrupts && thread.live.isWorking ? [{ method: 'interrupt' as const, threadId: thread.id }] : [];
-      return [...interrupt, { method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed }];
+      const steer = action.steers && thread.live.isWorking ? { steer: true } : {};
+      return [{ method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed, ...steer }];
     }
     case 'compact':
       return hasAgent(state, action.threadId) ? [{ method: 'compact', threadId: action.threadId, focus: action.focus }] : [];
@@ -69,10 +70,13 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const threadId = action.type === 'rewind-undo' ? state.rewindUndo?.threadId : action.threadId;
       return threadId && hasAgent(state, threadId) ? [{ method: 'stop', threadId }] : [];
     }
-    case 'settle':
-      return [...(hasAgent(state, action.threadId) ? [{ method: 'stop' as const, threadId: action.threadId }] : []), ...stopBackground(state, [action.threadId])];
+    // Main shuts down everything the thread started (its agents, terminals, dev servers), running or not.
+    case 'settle': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      return thread?.live && thread.status !== 'settled' ? [{ method: 'settle', threadId: thread.id }] : [];
+    }
     case 'delete':
-      return [...action.threadIds.filter((id) => hasAgent(state, id)).map((threadId) => ({ method: 'stop' as const, threadId })), ...stopBackground(state, action.threadIds)];
+      return action.threadIds.filter((id) => isLive(state, id)).map((threadId) => ({ method: 'settle' as const, threadId }));
     case 'bg-start': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
@@ -155,14 +159,14 @@ function isCleanedUp(thread: Thread) {
   return !!root && thread.live.cwd !== root && !worktreePath(thread.id);
 }
 
-/** Mochi background agents of these threads that are still running. */
-function stopBackground(state: State, threadIds: string[]): AgentCall[] {
-  return state.threads.filter((t) => threadIds.includes(t.id)).flatMap((t) => (t.subagents ?? []).flatMap((s) => (s.sessionId && isRunning(s) ? [{ method: 'stop' as const, threadId: s.sessionId }] : [])));
-}
-
 /** The project folder itself, where a worktree of a new branch is made; a folderless chat has none. */
 function threadCwdRoot(thread: Thread) {
   return thread.repo ? (projectRoot(thread.repo) ?? undefined) : undefined;
+}
+
+/** A real thread, not a demo one; its agent may or may not run in this launch. */
+function isLive(state: State, threadId: string) {
+  return !!state.threads.find((t) => t.id === threadId)?.live;
 }
 
 /** A live thread whose agent runs in this launch of Mochi. */

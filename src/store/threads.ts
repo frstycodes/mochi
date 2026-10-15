@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
+import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
 import { NOW0, seedThreads, type ActivityEntry, type Author, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
@@ -45,7 +45,7 @@ export interface ThreadsState {
 export type ThreadsAction =
   | { type: 'tick' }
   /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
-  | { type: 'agent'; event: AgentEvent; ms?: number }
+  | { type: 'agent'; event: SeqAgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
@@ -56,7 +56,7 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[] }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[] }
   /** What the thread's checkout really has (`useWorktreeRecovery`); `worktree`: its own worktree, found on disk. */
   | { type: 'repo-head'; threadId: string; head: Head; worktree?: string }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
@@ -68,9 +68,9 @@ export type ThreadsAction =
   | { type: 'limit-auto-resume'; threadId: string; isOn: boolean }
   /**
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
-   * `queuedId`: the queued message this sends, which leaves the queue. `interrupts`: ends the turn in flight first (the queue's Send now).
+   * `queuedId`: the queued message this sends, which leaves the queue. `steers`: joins the turn in flight instead of waiting for it to end (the queue's Send now).
    */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; interrupts?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef }
   /** `/compact`: the harness compacts the live session now. `queuedId`: it waited in the queue as typed. */
   | { type: 'compact'; threadId: string; focus: string; queuedId?: string }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
@@ -154,7 +154,7 @@ function reduce(state: State, action: Action): State {
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
-      return stampNew(state, applyAgentEvent(state, action.event), action.event.threadId, action.ms);
+      return stampNew(state, withEventSeq(applyAgentEvent(state, action.event), action.event), action.event.threadId, action.ms);
     case 'agent-starting':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'trigger-overlap':
@@ -328,6 +328,11 @@ export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thre
 
 export function mapStep(thread: Thread, id: string, fn: (s: Step) => Step): Thread {
   return { ...thread, steps: thread.steps.map((s) => (s.id === id ? fn(s) : s)) };
+}
+
+function withEventSeq(state: State, event: SeqAgentEvent): State {
+  if (event.seq === undefined) return state;
+  return { ...state, threads: mapThread(state.threads, event.threadId, (t) => (t.live ? { ...t, live: { ...t.live, eventSeq: event.seq } } : t)) };
 }
 
 function stampNew(before: State, after: State, threadId: string, ms?: number): State {
@@ -569,7 +574,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     threads: mapThread(threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
-      const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
+      const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
       const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.thumbs?.length && { images: action.thumbs }), ...(from && { from }) });
       return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;

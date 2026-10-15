@@ -14,6 +14,7 @@ import { ChangesTab } from '../pane/ChangesTab';
 import { useUndoable } from '../QueueView';
 import { useHarness } from '../store';
 import { summarize } from '../summary';
+import { defaultBrowserUrl, listeningPorts } from '../terminal/devServer';
 import { TitleBar } from '../TitleBar';
 import { ProviderMarks, lineColor } from '../ui';
 import { DiffStat } from '../WorkLog';
@@ -238,7 +239,7 @@ function ReviewSurface({ thread }: { thread: Thread }) {
 }
 
 function reviewPreviewTab(thread: Thread): PaneTab {
-  return { id: 'review-preview', kind: 'browser', url: `localhost:3000/${thread.repo?.branch.split('/')[1] ?? ''}` };
+  return { id: 'review-preview', kind: 'browser', url: defaultBrowserUrl(listeningPorts(thread.id)) };
 }
 
 function NothingToReview({ onClose }: { onClose: () => void }) {

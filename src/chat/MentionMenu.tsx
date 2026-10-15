@@ -6,7 +6,7 @@ import { usePromptInputController } from '@/components/ai-elements/prompt-input'
 import { host } from '../host';
 import type { AgentImage } from '../host/types/agent';
 import type { AppWindow, ScreenAccess } from '../host/types/windows';
-import type { AgentCommand, McpServer, Thread } from '../model';
+import type { AgentCommand, McpServer } from '../model';
 import { openPhotos } from '../photo/photos';
 import { useHarness } from '../store';
 import { mentionFor, mentionGroups, mentionOptions, mentionQuery, optionId, withoutQuery, type Mention, type MentionOption } from './mentions';
@@ -139,7 +139,7 @@ function ChipIcon({ kind }: { kind: Exclude<Mention['kind'], 'window'> }) {
  * The menu's state, the picked references and the textarea props that drive them: arrows move, Enter or Tab picks, Esc
  * closes until the text changes, Backspace in an empty input drops the last reference. Needs the composer's `PromptInputProvider`.
  */
-export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: McpServer[]) {
+export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: McpServer[]) {
   const listId = useId();
   const { state } = useHarness();
   const { textInput } = usePromptInputController();
@@ -151,7 +151,7 @@ export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: 
   const screen = useAppWindows(isQuerying);
 
   const picked = new Set(mentions.map((m) => m.id));
-  const options = mentionOptions(query ?? '', state.threads, screen.windows, thread.id, skills, servers).filter((o) => !picked.has(optionId(o)));
+  const options = mentionOptions(query ?? '', state.threads, screen.windows, selfId, skills, servers).filter((o) => !picked.has(optionId(o)));
   const items: MenuItem[] = isBlocked(screen.access) ? [...options, { kind: 'permission' }] : options;
   const isOpen = isQuerying && items.length > 0;
   const current = items[Math.min(active, items.length - 1)];

@@ -8,7 +8,8 @@ import type { AgentCommand, AgentInfo, McpServer, Provider } from '../model';
 import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { ProviderMark } from '../ui';
-import { insertToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
+import { isAbsolutePath } from '../projects';
+import { configuredCommands, insertToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
 
 /** Above the composer while the caret ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
 export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
@@ -130,59 +131,69 @@ export function useSlashMenu(items: SlashItem[]) {
 }
 
 /**
- * What `/` offers for a thread on `provider`: the live agent's own list once it reported one, else the enabled skills in the
- * profile account's config, so the menu works before the agent starts.
+ * What `/` offers for a thread on `provider`: the live agent's own list once it reported one, else what the profile's account,
+ * the project at `projectRoot` and enabled plugins carry on disk, so the menu works before the agent starts.
  */
-export function useSlashItems(provider: Provider, spaceId: string, agent?: AgentInfo) {
-  const configured = useConfiguredSkills(provider, spaceId, !agent?.commands);
-  return agent?.commands ? slashItems(agent.commands, provider, agent.skills) : slashItems(configured, provider);
+export function useSlashItems(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo) {
+  const { commands, skills } = useAgentCommands(provider, spaceId, projectRoot, agent);
+  return slashItems(commands, provider, skills);
 }
 
-/** The thread's harness skills for `@`: the live agent's (its skill names picked out of its commands) or the profile's enabled ones. */
-export function useThreadSkills(provider: Provider, spaceId: string, agent?: AgentInfo): AgentCommand[] {
-  const configured = useConfiguredSkills(provider, spaceId, !agent?.commands);
-  if (!agent?.commands) return configured;
-  const names = agent.skills && new Set(agent.skills);
-  return names ? agent.commands.filter((c) => names.has(c.name)) : agent.commands;
+/** The thread's harness skills for `@`: the live agent's (its skill names picked out of its commands) or those on disk. */
+export function useThreadSkills(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): AgentCommand[] {
+  const { commands, skills } = useAgentCommands(provider, spaceId, projectRoot, agent);
+  const names = skills && new Set(skills);
+  return names ? commands.filter((c) => names.has(c.name)) : commands;
 }
 
 /**
- * The profile's enabled MCP servers on `provider`, with the live agent's tool count where it reported one. Before the profile
- * config is read (or in a build without one) the live agent's own list stands in. Mochi's own server is never offered.
+ * The profile's enabled MCP servers on `provider` (and the project's `.mcp.json`), with the live agent's tool count where it
+ * reported one. Before the profile config is read (or in a build without one) the live agent's own list stands in. Mochi's
+ * own server is never offered.
  */
-export function useThreadServers(provider: Provider, spaceId: string, agent?: AgentInfo): McpServer[] {
-  const config = useProfileConfig(spaceId);
+export function useThreadServers(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): McpServer[] {
+  const config = useProfileConfig(spaceId, projectRoot);
   const live = new Map((agent?.mcpServers ?? []).map((s) => [s.name, s]));
   const servers = config ? config[provider].mcpServers.filter((m) => m.enabled).map(({ def }) => live.get(def.name) ?? { name: def.name, status: 'pending' as const }) : [...live.values()];
   return servers.filter((s) => s.name !== MOCHI_SERVER && s.status !== 'disabled');
 }
 
-// GAP: the config fallback lists skills only; custom and plugin commands appear once the agent reports its own list.
-function useConfiguredSkills(provider: Provider, spaceId: string, isNeeded: boolean) {
-  const config = useProfileConfig(isNeeded ? spaceId : undefined);
-  // Stable per config read: the menu reveals its current row when that row changes.
-  return useMemo(() => config?.[provider].skills.filter((s) => s.enabled).map(({ name, description, argumentHint }) => ({ name, description, ...(argumentHint && { argumentHint }) })) ?? [], [config, provider]);
+function useAgentCommands(provider: Provider, spaceId: string, projectRoot: string | null, agent?: AgentInfo): { commands: AgentCommand[]; skills?: string[] } {
+  const configured = useConfiguredCommands(provider, spaceId, projectRoot, !agent?.commands);
+  return agent?.commands ? { commands: agent.commands, skills: agent.skills } : configured;
 }
 
-function useProfileConfig(spaceId?: string) {
-  const [config, setConfig] = useState<{ spaceId: string; value?: ProfileConfig }>();
+function useConfiguredCommands(provider: Provider, spaceId: string, projectRoot: string | null, isNeeded: boolean) {
+  const config = useProfileConfig(isNeeded ? spaceId : undefined, projectRoot);
+  // Stable per config read: the menu reveals its current row when that row changes.
+  return useMemo(() => (config ? configuredCommands(config[provider]) : { commands: [], skills: [] }), [config, provider]);
+}
+
+function useProfileConfig(spaceId: string | undefined, projectRoot: string | null) {
+  const key = spaceId && configKey(spaceId, projectRoot);
+  const [config, setConfig] = useState<{ key: string; value?: ProfileConfig }>();
   useEffect(() => {
-    if (!spaceId) return;
+    if (!spaceId || !key) return;
     let isCurrent = true;
-    configFor(spaceId).then(
-      (value) => isCurrent && setConfig({ spaceId, value }),
-      () => isCurrent && setConfig({ spaceId }),
+    configFor(spaceId, projectRoot).then(
+      (value) => isCurrent && setConfig({ key, value }),
+      () => isCurrent && setConfig({ key }),
     );
     return () => {
       isCurrent = false;
     };
-  }, [spaceId]);
-  return config && config.spaceId === spaceId ? config.value : undefined;
+  }, [spaceId, projectRoot, key]);
+  return config && config.key === key ? config.value : undefined;
 }
 
-// GAP: one read per profile per launch; a skill added while Mochi runs shows once the agent reports it, or after a restart.
+// GAP: one read per profile and project per launch; a skill added while Mochi runs shows once the agent reports it, or after a restart.
 const configs = new Map<string, ReturnType<typeof host.settings.agentConfig>>();
-function configFor(spaceId: string) {
-  if (!configs.has(spaceId)) configs.set(spaceId, host.settings.agentConfig(spaceId).catch((error) => (configs.delete(spaceId), Promise.reject(error))));
-  return configs.get(spaceId)!;
+function configFor(spaceId: string, projectRoot: string | null) {
+  const key = configKey(spaceId, projectRoot);
+  // The web build's fixture projects are bare names, not folders to read.
+  const root = projectRoot && isAbsolutePath(projectRoot) ? projectRoot : undefined;
+  if (!configs.has(key)) configs.set(key, host.settings.agentConfig(spaceId, root).catch((error) => (configs.delete(key), Promise.reject(error))));
+  return configs.get(key)!;
 }
+
+const configKey = (spaceId: string, projectRoot: string | null) => `${spaceId}\n${projectRoot ?? ''}`;

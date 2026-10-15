@@ -205,7 +205,7 @@ function startShell(key: string, session: TerminalSession, command?: string) {
   term.onResize(({ cols, rows }) => session.ptyId && void host.pty.resize(session.ptyId, cols, rows));
   const { cwd, threadId } = contexts.get(key)!;
   void portFor(threadId)
-    .then((port) => host.pty.spawn({ cwd, cols: term.cols, rows: term.rows, command, port }))
+    .then((port) => host.pty.spawn({ cwd, cols: term.cols, rows: term.rows, command, port, threadId }))
     .then(({ id }) => {
       session.ptyId = id;
       byPty.set(id, session);

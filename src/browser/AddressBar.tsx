@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { Global, Monitor, SearchNormal } from 'reicon-react';
+import { ArrowUpRight, Global, Monitor, SearchNormal } from 'reicon-react';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -10,7 +10,9 @@ import { usePrefs } from '../settings/prefs';
 import { useHarness } from '../store';
 import { usePorts } from '../terminal/ports';
 import { usePaneOpeners } from '../terminal/usePaneOpeners';
+import { TooltipIconButton } from '../ui';
 import { historyTitle, pageKey, updatePage, useAddressHistory, type Page } from './pages';
+import { openExternally, openInLabel } from './systemBrowser';
 import { bare, inlineCompletion, rankSuggestions, type Candidate } from './suggest';
 import { displayUrl, normalizeUrl, SEARCH_ENGINES } from './url';
 
@@ -80,7 +82,7 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
     <Popover open={isOpen} onOpenChange={(next) => !next && finish()}>
       <Command shouldFilter={false} loop vimBindings={false} value={selected} onValueChange={setSelected} className="mx-1 size-auto min-w-0 flex-1 overflow-visible rounded-none! bg-transparent p-0">
         <PopoverAnchor asChild>
-          <form ref={anchorRef} onSubmit={(e) => e.preventDefault()}>
+          <form ref={anchorRef} onSubmit={(e) => e.preventDefault()} className="group/address relative">
             <Input
               ref={inputRef}
               aria-label="Address"
@@ -100,6 +102,7 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
               onKeyDown={onKeyDown}
               className="h-7 truncate rounded-full border-transparent bg-muted px-3 type-caption text-muted-foreground focus-visible:text-foreground dark:bg-muted"
             />
+            {typed === null && /^https?:/i.test(page.url) && <OpenExternalButton url={page.url} />}
           </form>
         </PopoverAnchor>
         <PopoverContent
@@ -175,6 +178,21 @@ function useRows(query: string, completion: string, candidates: Candidate[], rem
       .map((s): Row => ({ value: `search:${s}`, url: engine.url + encodeURIComponent(s), label: s, detail: '', icon: 'search' }));
     return [...typedRow, ...pages, ...searches];
   }, [query, completion, candidates, remote, searchEngine]);
+}
+
+/** Sits over the field's right end, shown while the bar is hovered or the button has keyboard focus. */
+function OpenExternalButton({ url }: { url: string }) {
+  return (
+    <TooltipIconButton
+      label={openInLabel()}
+      // Keeps the click from focusing the field, which would select the URL and open the suggestions.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => openExternally(url)}
+      className="absolute inset-y-0.5 right-0.5 h-auto rounded-full bg-muted text-muted-foreground opacity-0 transition-[opacity,color] group-hover/address:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 dark:hover:bg-muted"
+    >
+      <ArrowUpRight aria-hidden className="size-3.5" />
+    </TooltipIconButton>
+  );
 }
 
 function RowIcon({ row }: { row: Row }) {

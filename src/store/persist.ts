@@ -2,7 +2,7 @@ import { pauseQueue } from '../chat/outbox.ts';
 import { migrateReceived } from '../chat/threadMessages.ts';
 import { LIMIT_DEMO_IDS } from '../usage/limitDemo.ts';
 import { host } from '../host/index.ts';
-import type { WorktreeSetup } from '../host/types/agent.ts';
+import type { AttachedAgent, WorktreeSetup } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
@@ -36,18 +36,40 @@ export function toSaved(state: State): Saved {
   };
 }
 
-/** A save as it comes back on launch: every agent stopped when Mochi quit, so threads are idle and detached, and approvals or questions they were waiting on are gone. */
-export function parseSaved(json: string | null): Saved | null {
+/** Each thread whose agent outlived the window (a reload, not a quit), and whether it's mid-turn. */
+export type Attached = Map<string, boolean>;
+
+/**
+ * A save as it comes back on launch: every agent stopped when Mochi quit, so threads are idle and detached, and approvals or questions
+ * they were waiting on are gone. After a window reload the agents in `attached` are still running in main and stay attached.
+ */
+export function parseSaved(json: string | null, attached: Attached = new Map()): Saved | null {
+  const saved = readSaved(json);
+  return saved && restoreSavedThreads(saved, attached);
+}
+
+function readSaved(json: string | null): Saved | null {
   if (!json) return null;
   try {
     const saved = JSON.parse(json) as Saved;
     if (saved?.version !== 1 || !Array.isArray(saved.threads) || !Array.isArray(saved.queue)) return null;
-    const threads = migrateReceived(saved.threads.filter((t) => typeof t?.id === 'string' && t.live).map((t) => restoreThread(t, saved.now)));
-    // Agent requests and Mochi tool cards wait on a live call, which a restart ended.
-    return { ...saved, threads, queue: saved.queue.filter((q) => !q.requestId && !q.tool) };
+    return { ...saved, threads: saved.threads.filter((t) => typeof t?.id === 'string' && t.live) };
   } catch {
     return null;
   }
+}
+
+function restoreSavedThreads(saved: Saved, attached: Attached): Saved {
+  // A Mochi tool card waits on the old page's run of the call; after a reload the new page runs it again and asks anew.
+  const reasked = new Set(saved.queue.filter((q) => q.tool && attached.has(q.threadId)).map((q) => q.id));
+  const threads = migrateReceived(saved.threads.map((t) => (attached.has(t.id) ? reattachThread(t, attached.get(t.id)!, reasked) : restoreThread(t, saved.now))));
+  // Agent requests wait on a live call, which a restart ended; a reload didn't, so an attached agent's still wait on you.
+  return { ...saved, threads, queue: saved.queue.filter((q) => (!q.requestId || attached.has(q.threadId)) && !q.tool) };
+}
+
+function reattachThread(thread: Thread, isWorking: boolean, reasked: Set<string>): Thread {
+  const activity = thread.activity.filter((e) => !(e.card?.isOpen && reasked.has(e.card.id)));
+  return { ...thread, activity, live: { ...thread.live!, isWorking, isDetached: false } };
 }
 
 function restoreThread(thread: Thread, now: number): Thread {
@@ -75,9 +97,13 @@ let restored: Saved | null = null;
 let isSaveBlocked = false;
 
 /** Called once with the saved file before the store is created (`src/main.tsx`). */
-export function restoreSaved(json: string | null) {
-  restored = parseSaved(json);
-  if (json && !restored) restoreFailed(new Error('threads.json is not a save this version can read'));
+export async function restoreSaved(json: string | null) {
+  const saved = readSaved(json);
+  if (json && !saved) return restoreFailed(new Error('threads.json is not a save this version can read'));
+  if (!saved) return;
+  // The events they sent meanwhile are replayed once the store mounts (`src/store/index.tsx`).
+  const live = await host.agent.attached(saved.threads.map((t) => ({ threadId: t.id }))).catch((): AttachedAgent[] => []);
+  restored = restoreSavedThreads(saved, new Map(live.map((a) => [a.threadId, a.isWorking])));
 }
 
 /** Saving stays off for this run, so a file that failed to load is never overwritten with an empty list. */

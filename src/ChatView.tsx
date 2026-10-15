@@ -61,6 +61,7 @@ import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import type { Mention } from './chat/mentions';
+import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
@@ -88,7 +89,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   const pins = useThreadPins(thread.id);
   usePinHighlights(messages, pins);
   const handoff = useComposerHandoff(useSplit().leafId);
-  const slashItems = useSlashItems(thread.providers[0], thread.spaceId, thread.agent);
+  const slashItems = useSlashItems(thread.providers[0], thread.spaceId, projectRef(thread.repo), thread.agent);
   const transcript = useRef<TranscriptHandle | null>(null);
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
 
@@ -315,7 +316,8 @@ function Composer({
   const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
-  const mention = useMentionMenu(thread, useThreadSkills(provider, thread.spaceId, thread.agent), useThreadServers(provider, thread.spaceId, thread.agent));
+  const root = projectRef(thread.repo);
+  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, isQueueing, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
@@ -359,7 +361,7 @@ function Composer({
           <MentionMenu menu={mention} />
           <ComposerCard className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, interrupts: true })} />
+            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, steers: true })} />
             <MentionChips menu={mention} />
             <ComposerInput
               ref={textarea}

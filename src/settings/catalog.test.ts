@@ -12,6 +12,7 @@ const providerConfig = (provider: Provider): ProviderConfig => ({
   instructions: { path: `/x/${provider}.md`, text: 'Be brief.\n' },
   mcpServers: [{ def: { name: 'github', type: 'stdio', command: 'npx' }, enabled: true, scope: 'user', needs: [] }],
   skills: [{ name: 'review', description: '', dir: '/x/review', enabled: false }],
+  commands: [],
   plugins: [],
   projectInstructions: null,
 });
