@@ -192,8 +192,9 @@ export async function emulateView(owner: WebContents, id: string, e: BrowserEmul
 
 async function applyEmulation(entry: Entry, e: BrowserEmulation) {
   const dbg = await debuggerFor(entry.view.webContents);
+  // dontSetVisibleSize: otherwise Chromium grows the view to width × height and draws the scaled page in its top-left corner.
   if (e.width || e.dpr || e.mobile)
-    await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: e.width, height: e.height, scale: e.scale, deviceScaleFactor: e.dpr, mobile: e.mobile });
+    await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: e.width, height: e.height, scale: e.scale, deviceScaleFactor: e.dpr, mobile: e.mobile, dontSetVisibleSize: true });
   else await dbg.sendCommand('Emulation.clearDeviceMetricsOverride');
   await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: e.touch, maxTouchPoints: 5 });
   await dbg.sendCommand('Emulation.setEmitTouchEventsForMouse', { enabled: e.touch, configuration: e.mobile ? 'mobile' : 'desktop' });
