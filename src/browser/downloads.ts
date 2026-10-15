@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { host } from '@/host';
 import type { BrowserEvent } from '@/host/types/browser';
 import { IS_MAC } from '@/keys';
