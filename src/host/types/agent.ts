@@ -304,6 +304,8 @@ export interface AgentHost {
   setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
+  /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
+  settle(threadId: string): Promise<void>;
   /**
    * Of `threads`, those whose agent is still running in main, e.g. across a window reload: `isWorking` while a turn is in flight, and
    * with `after` (the last `seq` the window applied), the events sent since, which the reload missed.
@@ -349,6 +351,7 @@ export const agentMethods = {
   setupChoice: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
+  settle: 'invoke',
   attached: 'invoke',
   onEvent: 'event',
   ask: 'invoke',

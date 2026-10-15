@@ -8,6 +8,8 @@ export interface PtySpawnOptions {
   command?: string;
   /** Exported as `PORT` so parallel worktrees don't fight over one dev-server port. */
   port?: number;
+  /** The thread whose pane opened it; settling that thread kills it. */
+  threadId: string;
 }
 
 export interface PtyData {

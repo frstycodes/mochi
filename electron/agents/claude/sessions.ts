@@ -51,6 +51,7 @@ const DEFAULT_CAP = 6;
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
+export const claudeSessionIds = () => [...sessions.keys()];
 
 /** What a live session runs on, with the speed its latest message set. */
 export const claudeRunOptions = (threadId: string) => sessions.get(threadId)?.options;

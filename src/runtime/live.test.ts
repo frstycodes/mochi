@@ -169,10 +169,10 @@ test('settling stops the agent once; after reactivating, the next message restar
   const id = s.threads.at(-1)!.id;
   s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-1' });
 
-  assert.deepEqual(calls(s, { type: 'settle', threadId: id }).filter((c) => c.threadId === id), [{ method: 'stop', threadId: id }]);
+  assert.deepEqual(calls(s, { type: 'settle', threadId: id }), [{ method: 'settle', threadId: id }]);
   s = run(s, { type: 'settle', threadId: id });
   assert.equal(s.threads.find((t) => t.id === id)!.live?.isDetached, true);
-  assert.deepEqual(calls(s, { type: 'settle', threadId: id }), [], 'settling again never stops a process that is already gone');
+  assert.deepEqual(calls(s, { type: 'settle', threadId: id }), [], 'settling again asks main for nothing');
 
   s = run(s, { type: 'unsettle', threadId: id });
   const [restart] = calls(s, { type: 'send', threadId: id, text: 'and add a test', drift: 'on-goal', reason: '' });

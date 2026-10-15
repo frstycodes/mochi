@@ -18,6 +18,9 @@ export interface RpcHandlers {
 const MAX_LINE = 32 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** The app-server never answered; unlike an error response, it says nothing about whether the request took effect. */
+export class RpcTimeoutError extends Error {}
+
 export class RpcClient {
   private nextId = 1;
   private buffer = '';
@@ -38,7 +41,7 @@ export class RpcClient {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`codex ${method} timed out after ${timeoutMs / 1000}s`));
+        reject(new RpcTimeoutError(`codex ${method} timed out after ${timeoutMs / 1000}s`));
       }, timeoutMs);
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
       this.write({ id, method, params });

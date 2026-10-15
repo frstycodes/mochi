@@ -6,7 +6,7 @@ import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentA
 import { classifyWithModel } from '../../src/drift.ts';
 import type { Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, claudeRunOptions, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, claudeRunOptions, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
@@ -22,6 +22,9 @@ import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle }
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
+import { threadSessions } from '../agents/settle.ts';
+import { killThreadSessions } from '../pty/sessions.ts';
+import { stopCompare } from '../browser/compare.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
 import { topLevel } from '../git/run.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
@@ -123,13 +126,12 @@ export const agent = {
     return resolveRequest(requestId, decision);
   },
   async stop(_sender, threadId) {
-    string(threadId, 'threadId', 256);
-    markIdle(threadId as string);
-    forgetEvents(threadId as string);
-    starts.abort(threadId as string);
-    if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
-    if (codex.owns(threadId as string)) return codex.stop(threadId as string);
-    // Stopping a thread with no agent process is a no-op, so settling twice or settling then deleting never errors.
+    return stopSession(string(threadId, 'threadId', 256));
+  },
+  async settle(_sender, threadId) {
+    const id = string(threadId, 'threadId', 256);
+    killThreadSessions(id);
+    await Promise.all([...threadSessions(id, [...claudeSessionIds(), ...codex.threadIds(), ...starts.ids()]).map(stopSession), stopCompare(id)]);
   },
   async attached(_sender, threads) {
     if (!Array.isArray(threads)) throw new TypeError('threads must be an array');
@@ -255,6 +257,15 @@ export const agent = {
   },
 } satisfies Handlers<AgentHost>;
 
+/** Stopping a session with no agent process is a no-op, so settling twice or settling then deleting never errors. */
+async function stopSession(threadId: string) {
+  markIdle(threadId);
+  forgetEvents(threadId);
+  starts.abort(threadId);
+  if (hasClaudeSession(threadId)) return stopClaude(threadId);
+  return codex.stop(threadId);
+}
+
 /** Answers a pending approval or question, from the renderer or a notification's buttons. */
 export async function resolveRequest(requestId: unknown, decision: unknown) {
   string(requestId, 'requestId', 256);
@@ -284,17 +295,16 @@ export async function startAgent(threadId: unknown, options: unknown) {
   const launch = async (cwd: string) => {
     const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined, speed as string | undefined)) } as unknown as AgentRunOptions;
     if (o.provider === 'claude') return startClaude(id, run);
-    return codex.start(id, run);
+    return codex.start(id, run, start.signal);
   };
-  let isSettingUp = false;
+  let isLaunching = false;
   try {
     const folder = await agentFolder(id, o.cwd);
     const { cwd, setup } = await workspaceFolder(id, folder, startWorkspace(workspace, worktree), start);
-    if (!setup) return await launch(cwd);
-    // The renderer runs agent calls one after another, so a start that waited out the setup would hold back the Stop (and
-    // every other thread's calls) behind it. It returns here; the setup and the launch report through events.
-    isSettingUp = true;
-    void setup
+    // The renderer runs agent calls one after another, so a start that waited out the setup, or an app-server slow to answer,
+    // would hold back the Stop (and every other thread's calls) behind it. It returns here; setup and launch report through events.
+    isLaunching = true;
+    void (setup ?? Promise.resolve())
       .then(() => {
         if (!start.signal.aborted) return launch(cwd);
         markIdle(id);
@@ -309,7 +319,7 @@ export async function startAgent(threadId: unknown, options: unknown) {
     markIdle(id);
     throw error;
   } finally {
-    if (!isSettingUp) start.end();
+    if (!isLaunching) start.end();
   }
 }
 
