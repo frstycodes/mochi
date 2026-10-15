@@ -22,7 +22,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
-import { effortFor, effortName, FAST, isNewThreadModel, optionFor, searchModels, speedFor, type ModelOption } from './runtime/models';
+import { effortFor, effortName, FAST, isNewThreadModel, listedHarnesses, optionFor, searchModels, speedFor, type ModelOption } from './runtime/models';
 import { setPrefs, toggleStar, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
 import { host } from './host';
@@ -33,21 +33,19 @@ import { useSpace } from './store';
 import { ProviderMark } from './ui';
 
 /**
- * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. `unavailable` greys out
- * a harness's models with the reason (not installed, signed out) and keeps them off the dock. The lists are the profile's
- * accounts' own (`useModels`); a stored model the account no longer offers shows as Unavailable.
+ * `isLocked` keeps the list to `provider`: a live thread changes provider only through a handoff. Only harnesses that are
+ * set up and listed their models show (`useListedModels`); a stored model the account no longer offers shows as Unavailable.
  */
-export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, onChange, defaults }: { id?: string; value: string; provider: Provider; isLocked?: boolean; unavailable?: Unavailable; onChange: (model: ModelOption) => void; defaults?: Defaults<ModelOption> }) {
+export function ModelPicker({ id, value, provider, isLocked, onChange, defaults }: { id?: string; value: string; provider: Provider; isLocked?: boolean; onChange: (model: ModelOption) => void; defaults?: Defaults<ModelOption> }) {
   const space = useSpace();
-  const catalog = useModels(space.id);
+  const { catalog, harnesses } = useListedModels(space.id, HARNESS_IDS.filter((h) => !isLocked || h === provider));
   const harnessDefaults = useDefaultModels();
   const favorites = usePrefs().starredModels;
   const [isOpen, setOpen] = useState(false);
-  const harnesses = HARNESS_IDS.filter((h) => !isLocked || h === provider);
   const listed = harnesses.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
   const model = optionFor(catalog[provider], value, provider);
   const models = listed.some((m) => m.harness === model.harness && m.id === model.id) ? listed : [...listed, model];
-  const docked = models.filter((m) => m === model || (m.harness === model.harness && m.id === model.id) || (!unavailable[m.harness] && !m.isUnavailable && (favorites.includes(m.id) || harnessDefaults?.[m.harness] === m.id)));
+  const docked = models.filter((m) => m === model || (m.harness === model.harness && m.id === model.id) || (!m.isUnavailable && (favorites.includes(m.id) || harnessDefaults?.[m.harness] === m.id)));
 
   return (
     // Controlled: the dock keeps mouse presses from the trigger so a drag can't open the menu, and opens it on a plain click.
@@ -76,7 +74,6 @@ export function ModelPicker({ id, value, provider, isLocked, unavailable = {}, o
         onPick={onChange}
         starred={favorites}
         onToggleStar={(m) => setPrefs({ starredModels: toggleStar(favorites, m.id) })}
-        unavailable={unavailable}
         defaults={defaults}
       >
         <p className="px-1.5 pt-1 pb-0.5 type-caption text-subtle-foreground">Starred models show up when you scroll over the model button.</p>
@@ -98,7 +95,6 @@ export function ModelMenu({
   onPick,
   starred,
   onToggleStar,
-  unavailable = {},
   keepsOpen,
   align = 'start',
   defaults,
@@ -111,7 +107,6 @@ export function ModelMenu({
   onPick: (model: ModelOption) => void;
   starred?: string[];
   onToggleStar?: (model: ModelOption) => void;
-  unavailable?: Unavailable;
   keepsOpen?: boolean;
   align?: 'start' | 'end';
   /** Offers "Make default" per model and badges the one new threads start on. */
@@ -129,7 +124,7 @@ export function ModelMenu({
   const drilled = isSingle ? harnesses[0] : isNarrow ? page : null;
   const found = search ? searchModels(models, search) : [];
   const starredModels = onToggleStar && !drilled ? models.filter((m) => starred?.includes(m.id)) : [];
-  const isLoading = pending.length === harnesses.length;
+  const isLoading = !!pending.length && pending.length === harnesses.length;
   const ofHarness = (h: Provider) => models.filter((m) => m.harness === h);
   const items = (list: ModelOption[], hasMark?: boolean) =>
     list.map((m) => (
@@ -137,7 +132,7 @@ export function ModelMenu({
         key={`${m.harness}:${m.id}`}
         model={m}
         isChecked={isChecked(m)}
-        isDisabled={!!unavailable[m.harness] || !!m.isUnavailable}
+        isDisabled={!!m.isUnavailable}
         onPick={onPick}
         keepsOpen={keepsOpen}
         isStarred={!!starred?.includes(m.id)}
@@ -235,7 +230,7 @@ export function ModelMenu({
             <DropdownMenuGroup>
               {starredModels.length > 0 && <DropdownMenuLabel>Harnesses</DropdownMenuLabel>}
               {harnesses.map((h) => {
-                const row = <HarnessRow harness={h} summary={[harnessSummary(ofHarness(h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')} plan={unavailable[h] ?? space.plans[h]} />;
+                const row = <HarnessRow harness={h} summary={[harnessSummary(ofHarness(h), isChecked, pending.includes(h)), notes[h]].filter(Boolean).join(' · ')} plan={space.plans[h]} />;
                 if (isNarrow)
                   return (
                     <DropdownMenuItem
@@ -350,11 +345,18 @@ function harnessSummary(models: ModelOption[], isChecked: (model: ModelOption) =
   return `${models.length} ${MODEL_COUNT.select(models.length) === 'one' ? 'model' : 'models'}`;
 }
 
+/** Each harness's models, and which of `harnesses` the pickers list: set up, and its list read (`listedHarnesses`). */
+export function useListedModels(spaceId: string, harnesses: Provider[] = HARNESS_IDS) {
+  const catalog = useModels(spaceId);
+  const unavailable = useUnavailableHarnesses(spaceId);
+  return { catalog, harnesses: listedHarnesses(harnesses, catalog, unavailable) };
+}
+
 /** Per harness, why its models can't be picked right now. */
-export type Unavailable = Partial<Record<Provider, string>>;
+type Unavailable = Partial<Record<Provider, string>>;
 
 /** Harnesses the profile can't run: not installed, or its linked account signed out. Empty in the web build, which answers with a mock. */
-export function useUnavailableHarnesses(spaceId: string) {
+function useUnavailableHarnesses(spaceId: string) {
   const [unavailable, setUnavailable] = useState<Unavailable>({});
   useEffect(() => {
     if (!host.isDesktop) return;

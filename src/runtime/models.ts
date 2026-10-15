@@ -4,8 +4,8 @@ import { HARNESSES } from '../settings/harnesses.ts';
 
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-/** Claude's list when `supportedModels()` fails (Claude Code missing, a slow start): the current family, Opus as default. No speeds: nothing reported fast mode. */
-export const CLAUDE_FALLBACK_MODELS: AgentModel[] = [
+/** Demo data for the web build and tests, never a real account's list: the current family, Opus as default. No speeds. */
+export const CLAUDE_DEMO_MODELS: AgentModel[] = [
   { id: 'claude-opus-5-5', name: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: CLAUDE_EFFORTS, speeds: [], isDefault: true },
   { id: 'claude-sonnet-5-5', name: 'Sonnet 5.5', description: 'Efficient for routine tasks', efforts: CLAUDE_EFFORTS, speeds: [], isDefault: false },
   { id: 'claude-haiku-5-5', name: 'Haiku 5.5', description: 'Fastest for quick answers', efforts: CLAUDE_EFFORTS, speeds: [], isDefault: false },
@@ -96,6 +96,14 @@ export function optionFor(models: AgentModel[] | undefined, id: string, harness:
   if (listed) return { ...listed, harness };
   if (!models) return { id, harness, name: id || 'Default model', description: '', efforts: [], speeds: [], isDefault: false };
   return { id, harness, name: id, description: fallback ? `Unavailable, runs ${fallback.name}` : 'Unavailable', efforts: fallback?.efforts ?? [], defaultEffort: fallback?.defaultEffort, speeds: fallback?.speeds ?? [], isDefault: false, isUnavailable: true };
+}
+
+/**
+ * Harnesses the picker lists: set up (no `unavailable` reason) and answered with a non-empty model list. A harness whose
+ * list hasn't arrived stays, so its row can say it's loading; one whose query failed (`[]`) is dropped.
+ */
+export function listedHarnesses(harnesses: Provider[], catalog: Partial<Record<Provider, AgentModel[]>>, unavailable: Partial<Record<Provider, string>>) {
+  return harnesses.filter((h) => !unavailable[h] && catalog[h]?.length !== 0);
 }
 
 /** Models whose harness, name or id contains every typed word as written; cmdk's fuzzy default found "luna" in "cLaUde soNnet". */

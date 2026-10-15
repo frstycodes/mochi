@@ -1,7 +1,7 @@
 import { localClassifier } from '../../drift.ts';
 import { demoReviewer } from '../../secondOpinion/demo.ts';
 import { chunks, mockAnswer } from '../../sidechat/mockAnswer.ts';
-import { CLAUDE_FALLBACK_MODELS, claudeFast } from '../../runtime/models.ts';
+import { CLAUDE_DEMO_MODELS, claudeFast } from '../../runtime/models.ts';
 import { demoLimits } from '../../usage/demoLimits.ts';
 import type { AgentAskEvent, AgentEvent, AgentHost, AgentModel } from '../types/agent.ts';
 
@@ -81,4 +81,4 @@ const DEMO_CODEX_MODELS: AgentModel[] = [
   { id: 'gpt-6-luna', name: 'GPT-6-Luna', description: 'Fast and affordable model for easier tasks.', efforts: CODEX_EFFORTS, defaultEffort: 'medium', speeds: [], isDefault: false },
 ];
 // GAP: demo data; on desktop fast mode shows only where the account's `supportedModels()` reports it.
-const DEMO_CLAUDE_MODELS = CLAUDE_FALLBACK_MODELS.map((m) => (m.id === 'claude-opus-5-5' ? { ...m, speeds: [claudeFast(m.id)] } : m));
+const DEMO_CLAUDE_MODELS = CLAUDE_DEMO_MODELS.map((m) => (m.id === 'claude-opus-5-5' ? { ...m, speeds: [claudeFast(m.id)] } : m));

@@ -15,7 +15,7 @@ import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { sidechatReducer } from '../store/sidechat.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { CLAUDE_FALLBACK_MODELS } from './models.ts';
+import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
@@ -72,7 +72,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       waitFor: async (_id, until) => ({ isMet: until.text === 'Hello', waitedMs: 120 }),
     },
     cwdOf: () => '/repo/rl',
-    models: async () => CLAUDE_FALLBACK_MODELS,
+    models: async () => CLAUDE_DEMO_MODELS,
     profiles: {
       list: () => profiles,
       update: (id, patch) => void (profiles = profiles.map((p) => (p.id === id ? { ...p, ...patch } : p))),
