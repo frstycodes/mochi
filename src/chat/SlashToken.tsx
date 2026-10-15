@@ -2,6 +2,8 @@ import { Fragment, useLayoutEffect, useRef, type ComponentProps } from 'react';
 import { useComposedRefs } from 'radix-ui/internal';
 import { PromptInputTextarea, usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { cn } from '@/lib/utils';
+import { isMod } from '@/keys';
+import { continueList } from './lists';
 import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
 
 /**
@@ -10,7 +12,7 @@ import { slashTokens, slotPlaceholder, type SlashItem } from './slash';
  * can't colour runs, so while a token resolves its own text goes transparent and a mirror on top (no pointer events) draws
  * it: the textarea keeps caret, selection, IME and undo; the mirror copies its box metrics and scroll offset.
  */
-export function TokenTextarea({ items, className, onScroll, ref, ...props }: ComponentProps<typeof PromptInputTextarea> & { items: SlashItem[] }) {
+export function TokenTextarea({ items, className, onScroll, onKeyDown, ref, ...props }: ComponentProps<typeof PromptInputTextarea> & { items: SlashItem[] }) {
   const { textInput } = usePromptInputController();
   const textarea = useRef<HTMLTextAreaElement>(null);
   const textareaRef = useComposedRefs(textarea, ref);
@@ -35,6 +37,10 @@ export function TokenTextarea({ items, className, onScroll, ref, ...props }: Com
           if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop;
           onScroll?.(e);
         }}
+        onKeyDown={(e) => {
+          onKeyDown?.(e);
+          if (!e.defaultPrevented && e.key === 'Enter' && isMod(e) && !e.shiftKey && !e.altKey && continueListAtCaret(e.currentTarget)) e.preventDefault();
+        }}
         {...props}
       />
       {!!last && (
@@ -47,6 +53,17 @@ export function TokenTextarea({ items, className, onScroll, ref, ...props }: Com
       )}
     </div>
   );
+}
+
+/** `execCommand` rather than setting the value, so the edit lands on the undo stack and fires `input` for the controlled value. */
+function continueListAtCaret(textarea: HTMLTextAreaElement) {
+  const { value, selectionStart, selectionEnd } = textarea;
+  if (selectionStart !== selectionEnd) return false;
+  const next = continueList(value, selectionStart);
+  if (!next) return false;
+  if ('insert' in next) return document.execCommand('insertText', false, next.insert);
+  textarea.setSelectionRange(next.clearFrom, selectionStart);
+  return document.execCommand('delete');
 }
 
 const MIRRORED = ['boxSizing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderStyle', 'borderColor', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontFeatureSettings', 'fontVariationSettings', 'lineHeight', 'letterSpacing', 'wordSpacing', 'tabSize', 'textIndent', 'textTransform'] as const;
