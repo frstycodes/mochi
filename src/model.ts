@@ -147,8 +147,10 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
-  /** Your messages: thumbnails (data URLs) of the images sent with it. */
+  /** Your messages: thumbnails (data URLs) of the images sent with it. Tool entries: images the call returned, as absolute paths. */
   images?: string[];
+  /** Tool entries: the image this call made, shown as its own card in the transcript. */
+  generated?: GeneratedImage;
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
   turnUndo?: { start: number; isUndone: boolean };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
@@ -179,6 +181,16 @@ export interface Compaction {
 export interface ThreadRef {
   threadId?: string;
   title: string;
+}
+
+/** An image an agent generated. `src` is a file path or a data URL; `aspect` (width / height) is the size it asked for, square when unknown. */
+export interface GeneratedImage {
+  status: 'running' | 'done' | 'failed';
+  prompt?: string;
+  src?: string;
+  aspect?: number;
+  /** Why it failed, as the harness said it. */
+  error?: string;
 }
 
 export interface McpCall {
@@ -390,14 +402,14 @@ export interface LiveRun {
   limit?: { resetsAt?: string; label?: string; isTurnHeld?: boolean; autoResume?: boolean };
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
+  /** `seq` of the last agent event applied: after a window reload, main replays the ones after it. */
+  eventSeq?: number;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
   /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
   restart?: { forkAt: string } | { seed: string };
-  /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
-  isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */

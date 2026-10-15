@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, McpCall, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
+import type { AgentInfo, GeneratedImage, McpCall, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
@@ -29,6 +29,14 @@ export interface AgentStartOptions {
   useApiKey?: boolean;
 }
 
+export type SeqAgentEvent = AgentEvent & { seq?: number };
+
+export interface AttachedAgent {
+  threadId: string;
+  isWorking: boolean;
+  events: SeqAgentEvent[];
+}
+
 export type AgentEvent =
   /** Main made the thread's worktree and runs the agent there. */
   | { threadId: string; type: 'worktree'; path: string }
@@ -47,7 +55,7 @@ export type AgentEvent =
    * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string } }
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
@@ -281,8 +289,11 @@ export interface AgentToolResult {
 
 export interface AgentHost {
   start(threadId: string, options: AgentStartOptions): Promise<void>;
-  /** `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it. */
-  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string): Promise<void>;
+  /**
+   * `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it.
+   * `steer`: the turn in flight takes the message at its next step instead of a new turn starting after it (Claude `priority: 'next'`, Codex `turn/steer`).
+   */
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean): Promise<void>;
   /** Compacts the live session now with the harness's own compaction; `focus` is what you typed after `/compact` (Claude only). */
   compact(threadId: string, focus: string): Promise<void>;
   /** What Mochi asks the harness to keep on every compaction of the thread, manual or auto: '' clears it. Claude only (PreCompact hook); Codex takes none. */
@@ -293,7 +304,15 @@ export interface AgentHost {
   setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
-  onEvent(listener: (event: AgentEvent) => void): () => void;
+  /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
+  settle(threadId: string): Promise<void>;
+  /**
+   * Of `threads`, those whose agent is still running in main, e.g. across a window reload: `isWorking` while a turn is in flight, and
+   * with `after` (the last `seq` the window applied), the events sent since, which the reload missed.
+   */
+  attached(threads: { threadId: string; after?: number }[]): Promise<AttachedAgent[]>;
+  /** `seq`: rises with every event this run of main sends, so a reloaded window asks `attached` for what came after its last. */
+  onEvent(listener: (event: SeqAgentEvent) => void): () => void;
   /** Streams the answer from `model` on the profile's account as `text` events on `onAskEvent` under the returned id, then one `done` (or `error`). */
   ask(context: AgentAskContext, messages: AgentAskMessage[], model: AgentAskModel): Promise<{ id: string }>;
   onAskEvent(listener: (event: AgentAskEvent) => void): () => void;
@@ -318,6 +337,8 @@ export interface AgentHost {
   limits(provider: Provider, spaceId: string, refresh?: boolean): Promise<AccountLimits>;
   onLimits(listener: (limits: AccountLimits) => void): () => void;
   onToolCall(listener: (call: AgentToolCall) => void): () => void;
+  /** After a window reload: the tool calls the old page was running, still waiting in main, each returned once. */
+  pendingToolCalls(): Promise<AgentToolCall[]>;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
 }
 
@@ -330,6 +351,8 @@ export const agentMethods = {
   setupChoice: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
+  settle: 'invoke',
+  attached: 'invoke',
   onEvent: 'event',
   ask: 'invoke',
   onAskEvent: 'event',
@@ -345,6 +368,7 @@ export const agentMethods = {
   limits: 'invoke',
   onLimits: 'event',
   onToolCall: 'event',
+  pendingToolCalls: 'invoke',
   toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;
 

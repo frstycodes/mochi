@@ -40,6 +40,11 @@ export function checkpointPhrase(checkpoint: Pick<Checkpoint, 'label'>) {
   return checkpoint.label[0].toLowerCase() + checkpoint.label.slice(1);
 }
 
+/** The checkpoint saved just before the message at activity index `start` (the thread's start for work before your first message), never a later one. */
+export function turnCheckpoint(list: Checkpoint[], start: number) {
+  return start < 0 ? list[0] : list.findLast((c) => c.before === start);
+}
+
 /** Latest checkpoint at or before `t`, else the first one. */
 export function checkpointAt(list: Checkpoint[], t: number) {
   return list.findLast((c) => c.at <= t) ?? list[0];

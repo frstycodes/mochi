@@ -8,6 +8,8 @@ export type NoticeKind = 'needs-you' | 'limit' | 'step-done' | 'review' | 'ci' |
 /** Only main alerts these, as OS notifications for watched threads (`electron/notify/watch.ts`); they never land in the center. */
 type WatchKind = 'done' | 'failed';
 
+export type AlertKind = NoticeKind | WatchKind;
+
 export interface Notice {
   id: string;
   kind: NoticeKind;
@@ -53,7 +55,44 @@ export const ALERT_KINDS = {
 
 export const isAlertKind = (kind: NoticeKind): kind is NoticeKind & keyof typeof ALERT_KINDS => kind in ALERT_KINDS;
 
-export const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
+/**
+ * What you did in a notice's thread, and where it stands now. `thread`/`queue` are absent in main, which only hears view and act
+ * signals, so the rules that read them don't fire there.
+ */
+export interface Addressing {
+  /** The thread is on screen in a focused window. */
+  isViewed?: boolean;
+  /** You sent, answered, rewound, resumed, stopped or settled in the thread since the notice arrived. */
+  isActedOn?: boolean;
+  thread?: Thread;
+  queue?: QueueItem[];
+}
+
+type Addressable = { kind: AlertKind; queueId?: string; prNumber?: number; verdict?: VerdictKind };
+
+/** Per kind, when a notice has been dealt with inside its thread and leaves the center (and the OS notification closes). */
+const ADDRESSED = {
+  // Looking doesn't answer a question; answering it, or anything else you send, does.
+  'needs-you': (_, a) => !!a.isActedOn || (!!a.thread && a.thread.status !== 'needs-you'),
+  review: (_, a) => !!a.isViewed || !!a.isActedOn || (!!a.thread && a.thread.status !== 'review'),
+  done: (_, a) => !!a.isViewed || !!a.isActedOn,
+  failed: (_, a) => !!a.isActedOn,
+  limit: (_, a) => !!a.isViewed || !!a.isActedOn,
+  'step-done': (_, a) => !!a.isViewed || !!a.isActedOn,
+  'race-lost': (_, a) => !!a.isViewed || !!a.isActedOn,
+  idle: (n, a) => !!a.isActedOn || (!!a.isViewed && (n.verdict === 'done' || n.verdict === 'gaps')),
+  ci: (n, a) => !!a.isActedOn || isSettled(n, a),
+  run: (n, a) => !!a.isViewed || !!a.isActedOn || isSettled(n, a),
+  // Only the Queue resolves an overlap; nothing in either thread does.
+  overlap: (n, a) => isSettled(n, a),
+  'pr-review': (n, a) => !!a.isViewed || (!!a.thread && !a.thread.prs.some((pr) => pr.number === n.prNumber && pr.state === 'open')),
+} satisfies Record<AlertKind, (n: Addressable, a: Addressing) => boolean>;
+
+export const isAddressed = (n: Addressable, a: Addressing) => ADDRESSED[n.kind](n, a);
+
+const isSettled = (n: Addressable, a: Addressing) => !!a.queue && !!n.queueId && !a.queue.some((q) => q.id === n.queueId);
+
+export const hourLabel =(h: number) => `${String(h).padStart(2, '0')}:00`;
 
 const BURST_MINUTES = 3;
 

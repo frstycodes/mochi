@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { QueueItem, Step, Thread } from '../model.ts';
-import { diffNotices, groupBursts, isQuiet, type Notice } from './model.ts';
+import { diffNotices, groupBursts, isAddressed, isQuiet, type Notice } from './model.ts';
 
 const step = (rest: Partial<Step> = {}): Step => ({ id: 's1', title: 'Wire gateway', size: 1, status: 'running', progress: 0.5, footprint: [], addedAt: 0, addedBy: 'you', revision: 1, ...rest });
 const thread = (rest: Partial<Thread> = {}): Thread =>
@@ -89,4 +89,22 @@ test('one idle notice per turn, once Mochi has gathered its evidence; a failed t
   const failed = { ...goal, status: 'needs-you' as const, queuePause: 'failed' as const };
   assert.deepEqual(diff(thread({ ...failed, idle: { at: 1, accepted: [], isGathering: true } }), thread({ ...failed, idle: { at: 1, accepted: [] } })), ['idle']);
   assert.deepEqual(diff(thread(goal), thread({ ...failed })), [], 'the turn-end itself waits for the verdict');
+});
+
+test('a notice is addressed by what its kind waits for: looking, acting, or the thing it reported being over', () => {
+  const viewed = { isViewed: true };
+  const acted = { isActedOn: true };
+  assert.equal(isAddressed({ kind: 'needs-you' }, viewed), false, 'looking does not answer the question');
+  assert.equal(isAddressed({ kind: 'needs-you' }, acted), true);
+  assert.equal(isAddressed({ kind: 'needs-you' }, { thread: thread({ status: 'running' }) }), true, 'answered from the OS notification');
+  assert.equal(isAddressed({ kind: 'needs-you' }, { thread: thread({ status: 'needs-you' }) }), false);
+  assert.equal(isAddressed({ kind: 'review' }, viewed), true);
+  assert.equal(isAddressed({ kind: 'done' }, viewed), true);
+  assert.equal(isAddressed({ kind: 'failed' }, viewed), false, 'an error waits for you to act');
+  assert.equal(isAddressed({ kind: 'idle', verdict: 'stalled' }, viewed), false);
+  assert.equal(isAddressed({ kind: 'idle', verdict: 'done' }, viewed), true);
+  assert.equal(isAddressed({ kind: 'overlap', queueId: 'q1' }, { ...viewed, ...acted, queue: [item({ kind: 'overlap' })] }), false, 'only the Queue settles an overlap');
+  assert.equal(isAddressed({ kind: 'ci', queueId: 'q1' }, { queue: [] }), true, 'settled in the Queue');
+  assert.equal(isAddressed({ kind: 'pr-review', prNumber: 4 }, { thread: thread({ prs: [{ number: 4, state: 'merged', title: 'x' }] }) }), true);
+  assert.equal(isAddressed({ kind: 'step-done' }, {}), false, 'no signal, no change');
 });

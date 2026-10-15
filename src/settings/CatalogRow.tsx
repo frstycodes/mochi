@@ -5,7 +5,7 @@ import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { ModelPicker, useUnavailableHarnesses } from '../ModelControls';
+import { ModelPicker } from '../ModelControls';
 import { host } from '../host';
 import { authorName, type Author, type Provider, type Space } from '../model';
 import { updateProfile } from '../profiles';
@@ -169,9 +169,8 @@ function CommitTextarea({ value, onCommit, ...props }: { value: string; onCommit
 
 /** `provider:model`, the way the side chat stores its default. */
 function SideChatModelPicker({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
-  const unavailable = useUnavailableHarnesses(useHarness().state.spaceId);
   const [provider, ...model] = value.split(':');
-  return <ModelPicker id={id} value={model.join(':')} provider={provider as Provider} unavailable={unavailable} onChange={(m) => onChange(`${m.harness}:${m.id}`)} />;
+  return <ModelPicker id={id} value={model.join(':')} provider={provider as Provider} onChange={(m) => onChange(`${m.harness}:${m.id}`)} />;
 }
 
 function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Setting; value: string | undefined; suggestion: RowSuggestion; onUse: () => void }) {

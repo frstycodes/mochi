@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { host } from './host';
+import { followZoom } from './appZoom';
 import { restoreFailed, restoreSaved } from './store/persist';
 import { loadDrafts } from './chat/drafts';
 import './index.css';
@@ -28,16 +29,4 @@ function showTrafficLights() {
   void host.windows.isFullScreen().then(set);
   host.windows.onFullScreenChange(set);
   followZoom();
-}
-
-/** The lights stay native size under ⌘+ / ⌘−, so the headers' inset for them is `--lights-end` in CSS px; zooming changes `devicePixelRatio`. */
-function followZoom() {
-  let ratio = 0;
-  const sync = () => {
-    if (window.devicePixelRatio === ratio) return;
-    ratio = window.devicePixelRatio;
-    void host.windows.zoomFactor().then((zoom) => document.documentElement.style.setProperty('--app-zoom', String(zoom)));
-  };
-  sync();
-  window.addEventListener('resize', sync);
 }

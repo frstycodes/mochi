@@ -54,12 +54,14 @@ import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkil
 import { SlashTokenText } from './chat/SlashToken';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
+import { ImageGenCard } from './chat/ImageGenCard';
+import { MessageImages } from './chat/MessageImages';
 import { toast } from '@/toast/store';
-import { openPhotos } from './photo/photos';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import type { Mention } from './chat/mentions';
+import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
@@ -87,7 +89,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
   const pins = useThreadPins(thread.id);
   usePinHighlights(messages, pins);
   const handoff = useComposerHandoff(useSplit().leafId);
-  const slashItems = useSlashItems(thread.providers[0], thread.spaceId, thread.agent);
+  const slashItems = useSlashItems(thread.providers[0], thread.spaceId, projectRef(thread.repo), thread.agent);
   const transcript = useRef<TranscriptHandle | null>(null);
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
 
@@ -151,6 +153,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
     return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
   }
+  if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
   if (row.kind === 'thread-message') return <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
@@ -167,7 +170,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
           Queued
         </span>
       )}
-      {isYou && !!entry.images?.length && <SentImages thumbs={entry.images} />}
+      {isYou && !!entry.images?.length && <MessageImages photos={entry.images.map((src, i) => ({ src, name: `Image ${i + 1}` }))} className="justify-end" />}
       <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
         <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
           {isAgent && row.showAuthor && (
@@ -198,26 +201,6 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     </MessageContextMenu>
   );
 });
-
-/** The images you sent with a message, as the small copies the transcript keeps; click opens them larger. */
-function SentImages({ thumbs }: { thumbs: string[] }) {
-  const photos = thumbs.map((src, i) => ({ src, name: `Image ${i + 1}` }));
-  return (
-    <div className="flex flex-wrap justify-end gap-2">
-      {photos.map((photo, i) => (
-        <button
-          key={i}
-          type="button"
-          aria-label={`View ${photo.name}`}
-          onClick={() => openPhotos({ photos, index: i })}
-          className="relative size-16 cursor-zoom-in overflow-hidden rounded-lg bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
-        >
-          <img src={photo.src} alt="" className="size-full object-cover" />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /** An agent's reply, or its simplified version: it shimmers while that is made, then crossfades to it. */
 function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {
@@ -333,7 +316,8 @@ function Composer({
   const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
-  const mention = useMentionMenu(thread, useThreadSkills(provider, thread.spaceId, thread.agent), useThreadServers(provider, thread.spaceId, thread.agent));
+  const root = projectRef(thread.repo);
+  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, isQueueing, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
@@ -377,7 +361,7 @@ function Composer({
           <MentionMenu menu={mention} />
           <ComposerCard className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, interrupts: true })} />
+            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, steers: true })} />
             <MentionChips menu={mention} />
             <ComposerInput
               ref={textarea}

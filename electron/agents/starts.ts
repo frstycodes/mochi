@@ -40,6 +40,10 @@ export class Starts {
     return this.pending.has(threadId);
   }
 
+  ids() {
+    return [...this.pending.keys()];
+  }
+
   /** Stops the thread's setup; false when nothing was starting. */
   abort(threadId: string) {
     const entry = this.pending.get(threadId);

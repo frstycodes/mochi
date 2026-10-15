@@ -23,11 +23,14 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Block, Grid, Section } from '../layout';
 import { OverflowIcon } from '../../ui';
+import { ModelDefaultsBlock } from './model-defaults';
+import { ZoomChipBlock } from './zoom-chip';
 
 export function OverlaysSection() {
   return (
     <Section id="overlays" title="Overlays" intro="Each opens from a real trigger. Popover level for menus and small things, float level for windows. Confirm dialogs only for what can't be undone.">
       <Grid>
+        <ZoomChipBlock />
         <Block title="Tooltip, popover, hover card" use="Names for icon buttons; small details on click; previews on hover.">
           <div className="flex flex-wrap items-center gap-3">
             <Tooltip>
@@ -62,6 +65,7 @@ export function OverlaysSection() {
             </HoverCard>
           </div>
         </Block>
+        <ModelDefaultsBlock />
         <Block title="Dropdown and context menu" use="Overflow actions on a button; the same actions on right-click.">
           <div className="flex flex-wrap items-center gap-3">
             <DropdownMenu>

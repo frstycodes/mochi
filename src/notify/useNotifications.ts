@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { toast } from '../toast/store.ts';
 import { queueToast } from '../QueueToast';
 import { host } from '../host';
@@ -7,7 +7,7 @@ import type { WatchConfig } from '../host/types/notify';
 import { getProfiles } from '../profiles';
 import { usePrefs } from '../settings/prefs';
 import { useHarness, type State } from '../store';
-import { isAlertKind, isQuiet, type Notice, type NoticeKind } from './model';
+import { isAddressed, isAlertKind, isQuiet, type Notice, type NoticeKind } from './model';
 import { saveNotifySettings } from './slice';
 
 /** For watched threads main shows these itself (`electron/notify/watch.ts`), so the renderer doesn't alert them twice. */
@@ -31,6 +31,10 @@ export function useNotifications() {
 
   useEffect(() => {
     const before = new Set(shown.current.map((n) => n.id));
+    const ids = new Set(items.map((n) => n.id));
+    // Addressed, cleared or deleted in the center: its OS notification is no news either.
+    const gone = shown.current.filter((n) => !ids.has(n.id)).map((n) => n.id);
+    if (gone.length) host.notify.close(gone).catch(() => undefined);
     shown.current = items;
     const isFocused = document.hasFocus();
     // Idle verdicts alert for a thread you aren't looking at: any while Mochi is in the background, others' while it's in front.
@@ -54,6 +58,8 @@ export function useNotifications() {
     }
   }, [items, quiet, state.watched, alertKinds, watchedToasts, idleAlerts, viewedId]);
 
+  useAddressedOnView(viewedId);
+
   useEffect(() => {
     host.notify.watch(JSON.parse(config) as WatchConfig).catch((error: unknown) => console.error('Syncing watched threads failed', error));
   }, [config]);
@@ -75,6 +81,30 @@ export function useNotifications() {
   }, []);
 
   useEffect(() => saveNotifySettings({ muted, quiet }), [muted, quiet]);
+}
+
+/** Looking at a thread in a focused window settles the notices that only asked you to look, here and in main. */
+function useAddressedOnView(threadId: string | undefined) {
+  const { state, dispatch } = useHarness();
+  const isFocused = useSyncExternalStore(subscribeFocus, () => document.hasFocus());
+  const isViewed = isFocused && !!threadId;
+  const hasAddressed = isViewed && state.notifications.items.some((n) => n.threadId === threadId && isAddressed(n, { isViewed: true }));
+  useEffect(() => {
+    if (!isViewed || !threadId) return;
+    host.notify.addressed({ threadId, isViewed: true }).catch(() => undefined);
+  }, [isViewed, threadId]);
+  useEffect(() => {
+    if (hasAddressed && threadId) dispatch({ type: 'notify-viewed', threadId });
+  }, [hasAddressed, threadId, dispatch]);
+}
+
+function subscribeFocus(onChange: () => void) {
+  window.addEventListener('focus', onChange);
+  window.addEventListener('blur', onChange);
+  return () => {
+    window.removeEventListener('focus', onChange);
+    window.removeEventListener('blur', onChange);
+  };
 }
 
 function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: string[]; dockBadge: boolean }): WatchConfig {

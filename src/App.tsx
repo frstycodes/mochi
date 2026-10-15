@@ -8,6 +8,9 @@ import { queueToast, useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
+import { useAppZoom } from './appZoom';
+import { ZoomChip } from './ZoomChip';
+import { host } from './host';
 import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
@@ -69,12 +72,19 @@ export function App() {
               <GoalEditorLayer />
               <DeviceApprovalLayer />
               <Toaster />
+              <AppZoomChip />
             </HarnessProvider>
           )}
         </TooltipProvider>
       </ReducedMotion>
     </ThemeProvider>
   );
+}
+
+/** Rendered after the headers: Electron applies `app-region` in document order, so an earlier no-drag control under a drag header can't be clicked. */
+function AppZoomChip() {
+  const zoom = useAppZoom();
+  return <ZoomChip zoom={zoom} onReset={() => void host.windows.resetZoom()} className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag" />;
 }
 
 /** Settings › General's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */

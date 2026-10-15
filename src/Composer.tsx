@@ -27,7 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel
 import { cn } from '@/lib/utils';
 import { MetaChip } from './MetaChip';
 import type { Provider, Repo } from './model';
-import { EffortPicker, ModelPicker, SpeedPicker, useModels } from './ModelControls';
+import { EffortPicker, ModelPicker, SpeedPicker, useModels, useNewThreadDefaults } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
@@ -98,7 +98,9 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
 };
 
 export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', isTextOnly, meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
-  const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
+  const catalog = useModels(useSpace().id);
+  const model = optionFor(catalog[provider], controls.model, provider);
+  const defaults = useNewThreadDefaults(catalog, model);
   const draft = useComposerDraft(draftKey, draftExtra);
   const send = async (message: PromptInputMessage) => {
     const result = await onSend(message);
@@ -124,9 +126,9 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
                   <PromptInputActionAddScreenshot />
                 </PromptInputActionMenuContent>
               </PromptInputActionMenu>
-              <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
-              <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
-              <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} />
+              <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} defaults={defaults.model} />
+              <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />
+              <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />
             </>
           )}
         </PromptInputTools>

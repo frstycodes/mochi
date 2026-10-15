@@ -81,15 +81,15 @@ test('a failed or interrupted turn and a usage limit pause the queue; Resume or 
   }
 });
 
-test('Send now interrupts the turn and sends that message; the interrupt neither pauses the queue nor idles the agent', () => {
+test('Send now steers the turn in flight with that message instead of interrupting it; the queue neither pauses nor jumps ahead', () => {
   let { s, id } = working();
   const second = thread(s, id).queued![1];
-  const send: Action = { type: 'send', threadId: id, text: 'second', reason: '', queuedId: second.id, interrupts: true };
-  assert.deepEqual(agentCalls(s, send, () => run(s, send)), [{ method: 'interrupt', threadId: id }, { method: 'send', threadId: id, text: 'second' }]);
-  s = event(run(s, send), { threadId: id, type: 'turn-end', status: 'interrupted' });
+  const send: Action = { type: 'send', threadId: id, text: 'second', reason: '', queuedId: second.id, steers: true };
+  assert.deepEqual(agentCalls(s, send, () => run(s, send)), [{ method: 'send', threadId: id, text: 'second', steer: true }]);
+  s = run(s, send);
   assert.deepEqual(drafts(s, id), ['first', 'third']);
   assert.equal(thread(s, id).queuePause, undefined);
-  assert.equal(thread(s, id).live?.isWorking, true, 'still on the sent message');
+  assert.equal(thread(s, id).live?.isWorking, true, 'the turn goes on');
   assert.deepEqual(dueQueued(s), []);
   s = runQueue(event(s, { threadId: id, type: 'turn-end', status: 'done' }));
   assert.equal(thread(s, id).activity.at(-1)!.text, 'first');

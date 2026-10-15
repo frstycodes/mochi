@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { installHooks } from './git/hooks.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
+import { setImageDir } from './agents/images.ts';
 import { registerIpc } from './ipc/index.ts';
 import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
@@ -11,6 +12,7 @@ import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
 if (!app.isPackaged && process.env.MOCHI_USER_DATA) app.setPath('userData', process.env.MOCHI_USER_DATA);
+setImageDir(path.join(app.getPath('userData'), 'images'));
 
 const hasTray = process.platform !== 'darwin';
 // One Mochi per profile on Windows and Linux: a second launch opens a window in the running one (`startTray`).

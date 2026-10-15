@@ -1,11 +1,12 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
+import { saveImage } from '../images.ts';
 import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
-import { RpcClient, type RpcId } from './rpc.ts';
+import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
 import { CODEX_BROWSER_FEATURES_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
 import { killTree, spawnable } from '../../platform.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -70,6 +71,9 @@ const ASK_THREAD = {
 const MOCHI_APPROVALS = { 'mcp_servers.mochi.default_tools_approval_mode': 'approve', 'mcp_servers.mochi.tool_timeout_sec': MOCHI_TIMEOUT_MS / 1000 };
 const NOT_FOUND = 'Codex is not installed or not on your PATH. Install it (`npm i -g @openai/codex`) or set its path in Settings.';
 const THREAD_TIMEOUT_MS = 120_000;
+// turn/interrupt answers once the turn has aborted, well under a second on 0.155.1; past this the turn is ended here instead.
+const INTERRUPT_TIMEOUT_MS = 5_000;
+const PROBE_TIMEOUT_MS = 3_000;
 const CRASH_WINDOW_MS = 60_000;
 const MAX_BACKOFF_MS = 30_000;
 
@@ -81,6 +85,8 @@ export class CodexAdapter {
   private servers = new Map<string, CodexServer>();
   private threads = new Map<string, Live>();
   private requests = new Map<string, Pending>();
+  /** A start, send or compact still waiting on the app-server; an interrupt aborts it. */
+  private inflight = new Map<string, AbortController>();
   /** Review threads answer every turn in this JSON schema. */
   private schemas = new Map<string, unknown>();
   private emit: (event: AgentEvent) => void;
@@ -102,19 +108,24 @@ export class CodexAdapter {
     return this.threads.has(threadId);
   }
 
+  /** Every thread with a session open or still starting. */
+  threadIds() {
+    return [...new Set([...this.threads.keys(), ...this.inflight.keys()])];
+  }
+
   ownsRequest(requestId: string) {
     return requestId.startsWith('codex:');
   }
 
   /** Starts a thread on its profile's account, or resumes the one in `options.resume`, and sends the first prompt. Failures arrive as a failed turn, not a rejection. */
-  async start(threadId: string, options: AgentRunOptions) {
-    await this.report(threadId, async () => {
-      const server = this.threads.get(threadId)?.server ?? this.server(await this.accountFor(options.spaceId, 'codex'));
-      const rpc = await server.client();
-      await server.requireLogin(rpc);
-      await this.open(server, rpc, threadId, options);
-      await this.turn(threadId, options.prompt, options.images, options.skills);
-    });
+  async start(threadId: string, options: AgentRunOptions, signal?: AbortSignal) {
+    await this.report(threadId, async (aborted) => {
+      const server = this.threads.get(threadId)?.server ?? this.server(await until(this.accountFor(options.spaceId, 'codex'), aborted));
+      const rpc = await until(server.client(), aborted);
+      await until(server.requireLogin(rpc), aborted);
+      await until(this.open(server, rpc, threadId, options, aborted), aborted);
+      await this.turn(threadId, options.prompt, options.images, options.skills, aborted);
+    }, signal);
   }
 
   /** A read-only review on its own Codex thread; its events go out under `threadId` like any thread's. Stop it when done. */
@@ -123,22 +134,39 @@ export class CodexAdapter {
     await this.start(threadId, { ...options, permissionMode: 'review' });
   }
 
-  /** `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. */
-  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string) {
+  /**
+   * `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. `steer`: the turn in
+   * flight takes the message (`turn/steer`); when it already ended, the message starts a turn of its own.
+   */
+  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean) {
     const live = this.threads.get(threadId);
     if (!live) throw new Error('No live Codex session for this thread; resume it first');
     if (speed !== undefined) live.options = { ...live.options, speed: speed || undefined };
-    await this.report(threadId, () => this.turn(threadId, text, images, skills));
+    if (steer && (await this.steer(threadId, text, images, skills))) return;
+    await this.report(threadId, (aborted) => this.turn(threadId, text, images, skills, aborted));
+  }
+
+  /** False when there's no turn to steer, or it ended before the steer reached it (the turn id no longer matches). */
+  private async steer(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = []) {
+    const live = this.threads.get(threadId)!;
+    const rpc = live.server.rpc;
+    if (!live.turnId || !rpc || live.gen !== live.server.gen) return false;
+    try {
+      await rpc.request('turn/steer', { threadId: live.codexId, input: (await this.input(rpc, live, text, images, skills)).input, expectedTurnId: live.turnId });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** `thread/compact/start` runs as a turn of its own; it takes no instructions (0.155.1 schema), so the renderer re-sends what to keep after. */
   async compact(threadId: string) {
     const live = this.threads.get(threadId);
     if (!live) throw new Error('No live Codex session for this thread; resume it first');
-    await this.report(threadId, async () => {
-      const rpc = await live.server.client();
-      if (live.gen !== live.server.gen) await this.open(live.server, rpc, threadId, live.options);
-      await rpc.request('thread/compact/start', { threadId: this.threads.get(threadId)!.codexId });
+    await this.report(threadId, async (aborted) => {
+      const rpc = await until(live.server.client(), aborted);
+      if (live.gen !== live.server.gen) await until(this.open(live.server, rpc, threadId, live.options), aborted);
+      await until(rpc.request('thread/compact/start', { threadId: this.threads.get(threadId)!.codexId }), aborted);
     });
   }
 
@@ -154,11 +182,29 @@ export class CodexAdapter {
     return index > 0 ? turns[index - 1].id : null;
   }
 
+  /** Ends the thread's turn, or the start still waiting on the app-server; resolves within seconds even when Codex never answers. */
   async interrupt(threadId: string) {
+    this.inflight.get(threadId)?.abort();
     const live = this.threads.get(threadId);
     const rpc = live?.server.rpc;
     if (!live?.turnId || !rpc || live.gen !== live.server.gen) return;
-    await rpc.request('turn/interrupt', { threadId: live.codexId, turnId: live.turnId });
+    try {
+      await rpc.request('turn/interrupt', { threadId: live.codexId, turnId: live.turnId }, INTERRUPT_TIMEOUT_MS);
+    } catch (error) {
+      await this.abandonTurn(threadId, live, rpc, error);
+    }
+  }
+
+  /** The turn didn't confirm it stopped: it ends here, and an app-server that no longer answers anything is restarted. */
+  private async abandonTurn(threadId: string, live: Live, rpc: RpcClient, error: unknown) {
+    live.turnId = undefined;
+    this.emit({ threadId, type: 'turn-end', status: 'interrupted' });
+    if (!(error instanceof RpcTimeoutError)) return;
+    const isAnswering = await rpc.request('account/read', {}, PROBE_TIMEOUT_MS).then(
+      () => true,
+      () => false,
+    );
+    if (!isAnswering && live.server.rpc === rpc) live.server.restart('stopped answering');
   }
 
   /** Interrupts a spawned agent's turn; it then reports `stopped`. */
@@ -179,6 +225,7 @@ export class CodexAdapter {
 
   async stop(threadId: string) {
     this.schemas.delete(threadId);
+    this.inflight.get(threadId)?.abort();
     const live = this.threads.get(threadId);
     if (!live) return;
     await this.interrupt(threadId).catch(() => {});
@@ -255,7 +302,8 @@ export class CodexAdapter {
     return server;
   }
 
-  private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions) {
+  /** An open `aborted` before Codex answers registers nothing: the thread was interrupted or stopped meanwhile. */
+  private async open(server: CodexServer, rpc: RpcClient, threadId: string, options: AgentRunOptions, aborted?: AbortSignal) {
     // A reopen after a server crash keeps the turns it knew; a fork starts a new Codex thread whose turns it doesn't.
     const prior = this.threads.get(threadId);
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
@@ -269,7 +317,8 @@ export class CodexAdapter {
         : await rpc.request('thread/start', params, THREAD_TIMEOUT_MS);
     const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
     if (typeof codexId !== 'string') throw new Error(`codex ${options.resume ? 'thread/resume' : 'thread/start'} returned no thread id`);
-    const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits });
+    if (aborted?.aborted) return;
+    const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits, saveImage });
     const live: Live = { codexId, server, state, gen: server.gen, turns, options: { ...options, resume: codexId, forkAt: undefined } };
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
@@ -288,29 +337,46 @@ export class CodexAdapter {
     if (this.threads.get(threadId)?.codexId === codexId) this.emit({ threadId, type: 'info', info: infoFromLists(mcp, skills, plugins) });
   }
 
-  private async turn(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = []) {
+  private async turn(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = [], aborted: AbortSignal) {
     let live = this.threads.get(threadId)!;
-    const rpc = await live.server.client();
+    const rpc = await until(live.server.client(), aborted);
     if (live.gen !== live.server.gen) {
-      await this.open(live.server, rpc, threadId, live.options);
+      await until(this.open(live.server, rpc, threadId, live.options), aborted);
       live = this.threads.get(threadId)!;
     }
-    const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
-    const attached = skillInputs(text, skills, listed);
-    const input = [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached];
-    const result = await rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
-    const turnId = (result as { turn?: { id?: unknown } })?.turn?.id;
+    const { input, attached } = await until(this.input(rpc, live, text, images, skills), aborted);
+    const starting = rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
+    aborted.addEventListener('abort', () => void stopLateTurn(rpc, live.codexId, starting), { once: true });
+    const result = await until(starting, aborted);
+    const turnId = turnIdOf(result);
     if (typeof turnId === 'string') live.turnId = turnId;
     if (typeof turnId === 'string') live.turns.push({ id: turnId, text });
     // Codex reports no skill load of its own: an attached skill is loaded with the turn.
     for (const event of skillEvents(threadId, typeof turnId === 'string' ? turnId : String(Date.now()), attached)) this.emit(event);
   }
 
-  private async report(threadId: string, run: () => Promise<void>) {
+  /** A message as Codex input: images, the text, and the skills it names or you attached. */
+  private async input(rpc: RpcClient, live: Live, text: string, images: AgentImage[], skills: string[]) {
+    const listed = text.startsWith('/') || skills.length ? commandsFromSkills(await rpc.request('skills/list', { cwds: [live.options.cwd] }).catch(() => null)) : [];
+    const attached = skillInputs(text, skills, listed);
+    return { input: [...images.map((i) => ({ type: 'image', url: `data:${i.mediaType};base64,${i.data}` })), { type: 'text', text, text_elements: [] }, ...attached], attached };
+  }
+
+  /** Runs a start, send or compact that `interrupt` (or `signal`) can abort; failures arrive as a failed turn, an abort as an interrupted one. */
+  private async report(threadId: string, run: (aborted: AbortSignal) => Promise<void>, signal?: AbortSignal) {
+    const abort = new AbortController();
+    this.inflight.set(threadId, abort);
+    const forward = () => abort.abort();
+    signal?.addEventListener('abort', forward, { once: true });
     try {
-      await run();
+      if (signal?.aborted) abort.abort();
+      await run(abort.signal);
     } catch (error) {
-      this.emit({ threadId, type: 'turn-end', status: 'failed', error: error instanceof Error ? error.message : String(error) });
+      if (abort.signal.aborted) this.emit({ threadId, type: 'turn-end', status: 'interrupted' });
+      else this.emit({ threadId, type: 'turn-end', status: 'failed', error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      signal?.removeEventListener('abort', forward);
+      if (this.inflight.get(threadId) === abort) this.inflight.delete(threadId);
     }
   }
 
@@ -424,6 +490,13 @@ class CodexServer {
     if (this.child) killTree(this.child);
   }
 
+  /** Fails what runs on this server now, as a crash would, and kills the child; the next call boots a fresh one. */
+  restart(reason: string) {
+    const child = this.child;
+    this.exited(this.gen, reason);
+    if (child) killTree(child);
+  }
+
   private async boot(): Promise<RpcClient> {
     const now = Date.now();
     this.crashes = this.crashes.filter((at) => now - at < CRASH_WINDOW_MS);
@@ -447,7 +520,13 @@ class CodexServer {
     child.on('error', (error) => rpc.close(`codex app-server failed: ${error.message}`));
     child.on('exit', (code, signal) => this.exited(gen, code ?? signal));
 
-    await rpc.request('initialize', { clientInfo: { name: 'harness', title: 'Harness', version: '0.0.0' }, capabilities: null });
+    try {
+      await rpc.request('initialize', { clientInfo: { name: 'harness', title: 'Harness', version: '0.0.0' }, capabilities: null });
+    } catch (error) {
+      // An app-server that never answered initialize would otherwise live on beside the next boot's.
+      killTree(child);
+      throw error;
+    }
     rpc.notify('initialized');
     return rpc;
   }
@@ -501,6 +580,24 @@ class Inbox {
       else await Promise.race([new Promise<void>((resolve) => (this.wake = resolve)), aborted]);
     }
   }
+}
+
+const turnIdOf = (result: unknown) => (result as { turn?: { id?: unknown } } | null)?.turn?.id;
+
+/** Interrupted before Codex answered turn/start: a turn it starts after all is stopped as soon as its id arrives. */
+async function stopLateTurn(rpc: RpcClient, threadId: string, starting: Promise<unknown>) {
+  const turnId = turnIdOf(await starting.catch(() => null));
+  if (typeof turnId === 'string') await rpc.request('turn/interrupt', { threadId, turnId }, INTERRUPT_TIMEOUT_MS).catch(() => {});
+}
+
+/** Settles as `work` does, or rejects once `signal` aborts; the work itself carries on unwatched. */
+export function until<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error('interrupted'));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('interrupted'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }
 
 /** The JSON-RPC result for a server request, from the queue card's answer. */

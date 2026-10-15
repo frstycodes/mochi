@@ -3,6 +3,7 @@ import { closeKind, EMPTY_LAYOUT, moveKind, openKind, type PaneLayout } from '..
 import type { Action, State } from './index.tsx';
 import { showsDemoData } from '../demoData.ts';
 import { runningBackground } from '../runtime/subagents.ts';
+import { defaultBrowserUrl, listeningPorts } from '../terminal/devServer.ts';
 
 export interface PanesState {
   panes: Pane[];
@@ -48,7 +49,6 @@ export function panesReducer(state: State, action: Action): State {
       return { ...state, panes: [...state.panes, { ...emptyPane(action.threadId), isOpen: true }] };
     }
     case 'pane-open-tab': {
-      const thread = state.threads.find((t) => t.id === action.threadId);
       const current = state.panes.find((p) => p.threadId === action.threadId);
       const existing = current ?? emptyPane(action.threadId);
       const reused = !isMultiTab(action.kind) && !action.isPopped ? existing.tabs.find((t) => t.kind === action.kind && !t.isPopped) : undefined;
@@ -61,7 +61,7 @@ export function panesReducer(state: State, action: Action): State {
       const tab: PaneTab = {
         id: nextTabId(existing.tabs),
         kind: action.kind,
-        url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined),
+        url: action.url ?? (action.kind === 'browser' ? defaultBrowserUrl(listeningPorts(action.threadId)) : undefined),
         file: action.file,
         title: action.title ?? action.file?.path.split('/').pop(),
         ...(action.visual && { visual: action.visual }),

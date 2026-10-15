@@ -53,7 +53,7 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
-  /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/main.tsx` sets the zoom. */
+  /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/appZoom.ts` sets the zoom. */
   --lights-end: calc(75px / var(--app-zoom, 1));
 
   --background: oklch(0.975 0.003 285);
@@ -496,6 +496,47 @@
 [data-pane-header] button[data-size^='icon'] svg {
   width: 13px;
   height: 13px;
+}
+
+/* A caption lying on a frame: eased stops, so the fade has no visible edge. Over an image the scrim is fixed black, so white text holds in both themes. */
+.caption-fade {
+  background: linear-gradient(to top, var(--color-muted) 0%, var(--color-muted) 28%, color-mix(in oklab, var(--color-muted) 72%, transparent) 52%, color-mix(in oklab, var(--color-muted) 30%, transparent) 76%, transparent);
+}
+.caption-scrim {
+  background: linear-gradient(to top, rgb(0 0 0 / 0.62) 0%, rgb(0 0 0 / 0.45) 30%, rgb(0 0 0 / 0.2) 62%, rgb(0 0 0 / 0.06) 84%, transparent);
+}
+
+/* A generated image arriving: it opens out from where the light last pooled (--land-x/y) as its blur clears. Reduced motion keeps a fade. */
+@property --land-r {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 150%;
+}
+@keyframes image-land {
+  from {
+    --land-r: 0%;
+    filter: blur(14px);
+    transform: scale(1.03);
+  }
+}
+@keyframes image-land-fade {
+  from {
+    opacity: 0;
+  }
+}
+.animate-image-land {
+  mask-image: radial-gradient(circle at var(--land-x, 50%) var(--land-y, 50%), black var(--land-r), transparent calc(var(--land-r) + 25%));
+  animation: image-land 900ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='off']) .animate-image-land {
+    mask-image: none;
+    animation: image-land-fade 300ms ease-out;
+  }
+}
+:root[data-reduce-motion='on'] .animate-image-land {
+  mask-image: none;
+  animation: image-land-fade 300ms ease-out;
 }
 
 /* One diagonal band crosses every skeleton on screen in step: the gradient is pinned to the viewport. */
