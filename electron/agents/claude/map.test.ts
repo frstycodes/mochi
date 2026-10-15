@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerStatus, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, planFromTodos, userContent, withPlanTools } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
@@ -321,4 +321,36 @@ test('a compaction reports its start, then the sizes from the boundary, and the 
   ]);
   assert.deepEqual(map(status({ status: null, compact_result: 'success' })), []);
   assert.deepEqual(map(status({ status: null, compact_result: 'failed', compact_error: 'Not enough messages' })), [{ threadId: 't1', type: 'compaction', phase: 'end', error: 'Not enough messages' }]);
+});
+
+test('an MCP tool that declares a ui:// view carries it, with its input and text + structured result, once its server is read', () => {
+  const mapper = createMapper('t1', CWD);
+  const call = (id: string, name: string) => mapper.map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input: { query: 'onboarding' } }] } } as unknown as SDKMessage);
+  const result = (id: string, isError = false) =>
+    ({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, is_error: isError, content: [{ type: 'image', source: { type: 'base64', media_type: 'image/webp', data: 'AAAA' } }, { type: 'text', text: 'Wispr Flow' }] }] }, tool_use_result: { content: [], structuredContent: { screens: [{ app_name: 'Wispr Flow' }] } } }) as unknown as SDKMessage;
+  const status = [
+    { name: 'claude.ai mobbin', status: 'connected', tools: [{ name: 'search_screens', _meta: { ui: { resourceUri: 'ui://mobbin/search-screens.html' } } }, { name: 'plain' }] },
+    { name: 'claude.ai Slack', status: 'pending' },
+  ] as unknown as McpServerStatus[];
+
+  call('m1', 'mcp__claude_ai_mobbin__search_screens');
+  assert.equal(mapper.needsWidgets(result('m1')), true, 'server not read yet');
+  mapper.learnWidgets(status);
+  assert.equal(mapper.needsWidgets(result('m1')), false);
+  const end = mapper.map(result('m1')).find((e) => e.type === 'tool' && e.phase === 'end');
+  assert.deepEqual(end?.type === 'tool' && end.widget, {
+    server: 'claude.ai mobbin',
+    uri: 'ui://mobbin/search-screens.html',
+    input: { query: 'onboarding' },
+    result: { content: [{ type: 'text', text: 'Wispr Flow' }], structuredContent: { screens: [{ app_name: 'Wispr Flow' }] } },
+  });
+
+  call('m2', 'mcp__claude_ai_mobbin__plain');
+  assert.equal(mapper.map(result('m2')).some((e) => e.type === 'tool' && !!e.widget), false, 'no view declared');
+  call('m3', 'mcp__claude_ai_mobbin__search_screens');
+  assert.equal(mapper.map(result('m3', true)).some((e) => e.type === 'tool' && !!e.widget), false, 'a failed call shows no view');
+  call('s1', 'mcp__claude_ai_Slack__read_channel');
+  assert.equal(mapper.needsWidgets(result('s1')), true, 'a server still connecting is read again');
+  call('b1', 'Bash');
+  assert.equal(mapper.needsWidgets(result('b1')), false, 'not an MCP call');
 });

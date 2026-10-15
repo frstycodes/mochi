@@ -6,6 +6,7 @@ import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { McpWidgetResource } from '../../../src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
@@ -230,6 +231,8 @@ async function launch(session: Session) {
       // Auto mode depends on the plan, the model and fast mode; where Claude Code can't run it, edits fall back to acceptEdits rather than asking every time.
       if (message.type === 'system' && message.subtype === 'init' && mode === 'auto' && message.permissionMode !== 'auto') void session.query.setPermissionMode('acceptEdits').catch(() => {});
       if (message.type === 'rate_limit_event') void recordLimits(session.account.id, 'claude', [claudeEventWindow(message.rate_limit_info)].filter((w) => !!w));
+      // A server's tools load on its first call (deferred behind tool search), so which ones declare a view is read then.
+      if (session.mapper.needsWidgets(message)) session.mapper.learnWidgets(await session.query.mcpServerStatus().catch(() => []));
       session.mapper.map(message).forEach(emit);
       if (message.type !== 'result') continue;
       void session.query.mcpServerStatus().then((list) => emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } }), () => {});
@@ -252,6 +255,21 @@ async function resumeWhole(session: Session, sentBefore: number) {
   session.isBusy = true;
   emit({ threadId: session.threadId, type: 'notice', text: FORK_REFUSED_NOTICE });
   await schedule(session);
+}
+
+/**
+ * A tool's MCP App view, read through the Claude Code process that dialed `server`: the thread's own, or another live one on
+ * the same account (its connectors are the account's). Throws when none is live.
+ */
+export async function readClaudeWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource> {
+  const account = sessions.get(threadId)?.account.id;
+  const live = sessions.get(threadId)?.query ?? [...sessions.values()].find((s) => s.query && s.account.id === account)?.query;
+  if (!live) throw new Error('No Claude session is running to read this view from.');
+  const { contents } = await live.readMcpResource(server, uri);
+  const item = contents.find((c) => c.uri === uri) ?? contents[0];
+  const html = item?.text ?? (item?.blob && Buffer.from(item.blob, 'base64').toString('utf8'));
+  if (!html) throw new Error(`${server} returned no HTML for ${uri}.`);
+  return { html, ...(item._meta && { meta: item._meta }) };
 }
 
 /** Ends a session's process and hands its slot to the next waiting thread. The record stays for `send` unless stopped. */

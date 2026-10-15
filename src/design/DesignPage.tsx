@@ -63,6 +63,8 @@ import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
 import { ImagesSection } from './sections/images';
+import { McpAppFrame } from '../chat/McpAppCard';
+import { MOBBIN_RESOURCE, MOBBIN_WIDGET } from './mcpAppFixtures';
 import { PhotoViewer } from '../photo/PhotoViewer';
 import { StateMatrix, previewState } from './state-matrix';
 import { Shortcut } from '../Shortcut';
@@ -627,6 +629,9 @@ function Conversation() {
         </SplitContext.Provider>
       </div>
       <Grid>
+        <Block title="MCP App view" use="A tool that declares a ui:// view (MCP Apps) gets it after its call's group: the server's own HTML in a sandboxed frame, sized by the view. Here Mobbin's search_screens on a recorded result.">
+          <McpAppFrame widget={MOBBIN_WIDGET} resource={MOBBIN_RESOURCE} />
+        </Block>
         <Block title="Questionnaire" use="How agents ask you things: one choice, number keys, then send.">
           <Questionnaire
             items={[{ name: 'stripe', required: true, choices: [{ value: 'stub' }, { value: 'record' }] }]}

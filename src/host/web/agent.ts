@@ -53,6 +53,9 @@ export const agent: AgentHost = {
   async rewindPoint() {
     return null;
   },
+  async readWidget() {
+    throw new Error('MCP App views need the desktop app.');
+  },
   async stopSubagent() {},
   async attached() {
     return [];

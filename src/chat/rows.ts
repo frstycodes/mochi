@@ -9,6 +9,8 @@ export type ChatRow =
   | { kind: 'review'; key: string; review: Review }
   /** An image a tool call made (`entry.generated`): its own card, never folded into a work group. */
   | { kind: 'image'; key: string; entry: ActivityEntry }
+  /** The MCP App view a tool call declared (`entry.widget`), right after the call's group. */
+  | { kind: 'widget'; key: string; entry: ActivityEntry }
   /** A subagent where it was started (`entry.subagentId`). */
   | { kind: 'subagent'; key: string; entry: ActivityEntry }
   /** A message another thread's agent sent (`entry.from`): a line in the log, not a bubble. It still starts a turn like yours. */
@@ -40,9 +42,12 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
     }
     if (entry.kind === 'tool' || entry.kind === 'reasoning') {
       isMidWork = true;
-      if (turn) return turn.entries.push(entry);
-      turn = { kind: 'work', key, who: entry.who, entries: [entry] };
-      return rows.push(turn);
+      if (turn) turn.entries.push(entry);
+      else rows.push((turn = { kind: 'work', key, who: entry.who, entries: [entry] }));
+      if (!entry.widget) return;
+      // The call stays in its group; its view stays in view after it, and the turn goes on in a new group.
+      turn = undefined;
+      return rows.push({ kind: 'widget', key: `${key}-widget`, entry });
     }
     // A subagent's row stays in view like a Mochi widget: the turn goes on in a new accordion after it.
     if (entry.kind === 'subagent') {

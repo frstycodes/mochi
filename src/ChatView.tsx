@@ -55,6 +55,7 @@ import { SlashTokenText } from './chat/SlashToken';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
+import { McpAppCard } from './chat/McpAppCard';
 import { MessageImages } from './chat/MessageImages';
 import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
@@ -154,6 +155,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
   }
   if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
+  if (row.kind === 'widget') return <McpAppCard threadId={thread.id} widget={row.entry.widget!} />;
   if (row.kind === 'thread-message') return <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
