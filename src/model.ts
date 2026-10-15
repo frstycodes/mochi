@@ -151,6 +151,8 @@ export interface ActivityEntry {
   images?: string[];
   /** Tool entries: the image this call made, shown as its own card in the transcript. */
   generated?: GeneratedImage;
+  /** Tool entries: the MCP App view this call declared, shown as its own card after the call's group. */
+  widget?: McpWidget;
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
   turnUndo?: { start: number; isUndone: boolean };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
@@ -196,6 +198,30 @@ export interface GeneratedImage {
 export interface McpCall {
   server: string;
   tool: string;
+}
+
+/**
+ * An MCP Apps (SEP-1865) view a tool call declared: its `ui://` resource on `server`, with the call's input and result to
+ * hand it. `server` is the name the harness reports, for reading the resource back.
+ */
+export interface McpWidget {
+  server: string;
+  uri: string;
+  input: Record<string, unknown>;
+  result: McpWidgetResult;
+}
+
+/** GAP: image blocks are left out (they're saved as the call's `images`); a view that draws from them gets text only. */
+// A type, not an interface: it's handed to `AppBridge.sendToolResult`, whose param has an index signature an interface can't meet.
+export type McpWidgetResult = {
+  content: { type: 'text'; text: string }[];
+  structuredContent?: Record<string, unknown>;
+};
+
+/** A `ui://` resource as read: the view's HTML and the sandbox it asks for (`_meta.ui.csp`, `_meta.ui.permissions`). */
+export interface McpWidgetResource {
+  html: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface WebLink {

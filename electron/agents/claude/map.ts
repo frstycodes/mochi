@@ -2,7 +2,8 @@ import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
-import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
+import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
+import type { AgentCommand, AgentInfo, McpCall, McpServer, McpWidgetResult, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
@@ -30,6 +31,9 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
   /** Skill names from init; until it arrives, skills sent messages open with wait in `typed`. */
   let skills: string[] | undefined;
   const typed: string[] = [];
+  /** `mcp__<server>__<tool>` → the MCP App view it declares, from `mcpServerStatus()`; `read`: tool-name prefixes of servers already read while connected. */
+  const widgets = new Map<string, { server: string; uri: string }>();
+  const read = new Set<string>();
 
   // A message opening with `/skill` loads it with no event of its own in the stream (2.1.296), so the load is reported here.
   function typedSkills(): AgentEvent[] {
@@ -76,6 +80,8 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     // A Read of an image returns it too, but the file is already on disk: the work log shows it from its path.
     const images = saveImage && tool.name !== 'Read' ? imageBlocks(block).map((i) => saveImage(i.media_type, i.data)) : [];
     if (images.length) end.images = images;
+    const widget = widgets.get(tool.name);
+    if (widget && !block.is_error) end.widget = { ...widget, input: tool.input, result: widgetResult(block, result) };
     const task = (result as { task?: { id?: unknown } } | undefined)?.task;
     if (tool.name !== 'TaskCreate' || typeof task?.id !== 'string') return [end];
     tasks.push({ id: task.id, title: String(tool.input.subject ?? ''), status: 'pending' });
@@ -239,6 +245,8 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     return cleared;
   }
 
+  const isUnread = (name?: string) => !!name?.startsWith('mcp__') && ![...read].some((p) => name.startsWith(p));
+
   return {
     map,
     /** A message handed to Claude Code: a leading `/skill` is a skill load, reported once init has listed the skills. */
@@ -249,6 +257,23 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     },
     /** The task id `query.stopTask` takes for a subagent, once Claude Code has registered it. */
     taskOf: (subagentId: string) => agents.get(subagentId)?.taskId,
+    /** `message` ends a call to an MCP server whose tools haven't been read yet: `learnWidgets` must run before it's mapped. */
+    needsWidgets(message: SDKMessage) {
+      if (message.type !== 'user' || typeof message.message.content === 'string') return false;
+      return message.message.content.some((b) => b.type === 'tool_result' && isUnread(tools.get(b.tool_use_id)?.name));
+    },
+    /** Records which tools declare an MCP App view. Servers still connecting are read again on their next call. */
+    learnWidgets(list: McpServerStatus[]) {
+      for (const s of list) {
+        if (s.status !== 'connected') continue;
+        const prefix = `mcp__${mcpToolPrefix(s.name)}__`;
+        read.add(prefix);
+        for (const t of s.tools ?? []) {
+          const uri = getToolUiResourceUri({ _meta: t._meta });
+          if (uri) widgets.set(prefix + t.name, { server: s.name, uri });
+        }
+      }
+    },
     markInterrupting() {
       isInterrupting = true;
     },
@@ -311,6 +336,13 @@ const mcpStatus = (status: string) => (MCP_STATUSES.has(status) ? status : 'fail
 const mcpToolPrefix = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, '_');
 
 type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: boolean; content?: string | { type: string; text?: string; source?: { type: string; media_type?: string; data?: string } }[] };
+
+/** What an MCP App view gets of a call's result: its text blocks, and `structuredContent` from `tool_use_result` (an MCP tool's raw result in 2.1.296). */
+function widgetResult(block: ToolResultBlock, result: unknown): McpWidgetResult {
+  const content = typeof block.content === 'string' ? [{ type: 'text' as const, text: block.content }] : (block.content ?? []).flatMap((c) => (c.type === 'text' && typeof c.text === 'string' ? [{ type: 'text' as const, text: c.text }] : []));
+  const structured = (result as { structuredContent?: unknown } | undefined)?.structuredContent;
+  return structured && typeof structured === 'object' ? { content, structuredContent: structured as Record<string, unknown> } : { content };
+}
 
 /** The base64 image blocks in a tool's result (a screenshot); URL-sourced ones aren't Claude Code's to return. */
 function imageBlocks(block: ToolResultBlock) {

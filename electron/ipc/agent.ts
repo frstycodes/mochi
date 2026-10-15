@@ -1,12 +1,13 @@
-import { mkdir, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { app } from 'electron';
 import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
-import type { Provider, Thread } from '../../src/model.ts';
+import type { McpWidgetResource, Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, claudeRunOptions, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, claudeRunOptions, readClaudeWidget, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
@@ -58,6 +59,21 @@ function skillNames(value: unknown) {
 }
 
 const broadcast = emitAgentEvent;
+
+/** The live read, kept on disk so a view still opens once no Claude session runs (after a restart). The view's own scripts load from the network either way. */
+async function readWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource> {
+  const file = join(app.getPath('userData'), 'mcp-apps', `${createHash('sha256').update(`${server}\n${uri}`).digest('hex')}.json`);
+  try {
+    const resource = await readClaudeWidget(threadId, server, uri);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(resource));
+    return resource;
+  } catch (error) {
+    const kept = await readFile(file, 'utf8').then((text) => JSON.parse(text) as McpWidgetResource, () => null);
+    if (kept) return kept;
+    throw error;
+  }
+}
 // Codex review threads report like any thread; their events go to the review that owns them, never to the store.
 const reviewers = new Map<string, (event: AgentEvent) => void>();
 const codex = new CodexAdapter(
@@ -170,6 +186,13 @@ export const agent = {
     string(text, 'text', 100_000);
     if (hasClaudeSession(threadId as string)) return claudeRewindPoint(threadId as string, text as string);
     return codex.rewindPoint(threadId as string, text as string);
+  },
+  async readWidget(_sender, threadId, server, uri) {
+    string(threadId, 'threadId', 256);
+    string(server, 'server', 256);
+    string(uri, 'uri', 2048);
+    if (!(uri as string).startsWith('ui://')) throw new TypeError('uri must be a ui:// resource');
+    return readWidget(threadId as string, server as string, uri as string);
   },
   async ask(sender, context, messages, model) {
     const m = record(model, 'model');

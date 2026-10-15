@@ -128,8 +128,8 @@ function closeCompaction(t: Thread, event: Extract<AgentEvent, { type: 'turn-end
 
 /** What a tool call's end adds to the entry its start logged. */
 function toolEnd(event: Extract<AgentEvent, { type: 'tool' }>): Partial<ActivityEntry> {
-  const { text, links, output, exitCode, patch, images, generated } = event;
-  return { ...(links && { text, links }), ...(output !== undefined && { output }), ...(exitCode !== undefined && { exitCode }), ...(patch && { patch }), ...(images?.length && { images }), ...(generated && { generated }) };
+  const { text, links, output, exitCode, patch, images, generated, widget } = event;
+  return { ...(links && { text, links }), ...(output !== undefined && { output }), ...(exitCode !== undefined && { exitCode }), ...(patch && { patch }), ...(images?.length && { images }), ...(generated && { generated }), ...(widget && { widget }) };
 }
 
 /** A `gh pr create` the agent ran puts its PR on the thread right away; one already recorded keeps the state gh gave it. */

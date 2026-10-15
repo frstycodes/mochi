@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, GeneratedImage, McpCall, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
+import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
@@ -55,7 +55,7 @@ export type AgentEvent =
    * call ran this tool of this MCP server. `description`: the agent's own plain-language line for the call (Claude's Bash).
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
-  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage }
+  | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage; /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget }
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
@@ -327,6 +327,8 @@ export interface AgentHost {
   rewindFiles(threadId: string, text: string): Promise<void>;
   /** Where the thread's live session stood just before `text` was sent, for `forkAt`: Claude's last chain entry, Codex's previous turn. Null when this run doesn't know (restarted, or it was the session's first message). */
   rewindPoint(threadId: string, text: string): Promise<string | null>;
+  /** A tool's MCP App view (`ui://`), read through a live Claude session's own connection to `server`; the last read is kept on disk for when none is live. */
+  readWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource>;
   /** Stops one of a thread's native subagents (Claude task, Codex spawned agent); it ends with status `stopped`. */
   stopSubagent(threadId: string, subagentId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
@@ -362,6 +364,7 @@ export const agentMethods = {
   utility: 'invoke',
   rewindFiles: 'invoke',
   rewindPoint: 'invoke',
+  readWidget: 'invoke',
   stopSubagent: 'invoke',
   warm: 'invoke',
   models: 'invoke',
