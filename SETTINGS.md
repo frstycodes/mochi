@@ -11,7 +11,7 @@ Status: **now** = a value exists in code today (hardcoded or local state) and on
 ## App
 
 ### Account
-Your Mochi account (Clerk), for linking computers (DEVICES.md); not a Claude or Codex login. Signed out: Sign in, which opens your browser (OAuth code + PKCE, loopback redirect, `electron/account/`). Signing in: Cancel. Signed in: avatar, name, email, Sign out (revokes the refresh token, best effort). The refresh token lives only in main, encrypted with `safeStorage`; the renderer gets `{ status, user, isPersistent }`. Linux without a secret service keeps the session for this run only and says so. Builds without a Clerk app say sign-in isn't set up (`MOCHI_CLERK_ISSUER`, `MOCHI_CLERK_CLIENT_ID`). Done.
+Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.tsx`). Your Mochi account (Clerk), for linking computers (DEVICES.md); not a Claude or Codex login. Signed out: Sign in, which opens your browser (OAuth code + PKCE, loopback redirect, `electron/account/`). Signing in: Cancel sign-in. Signed in: avatar, name, email, Manage account (Clerk's hosted Account Portal `/user` in your browser: profile, email, password, connected accounts, delete), Sign out (revokes the refresh token, best effort). The refresh token lives only in main, encrypted with `safeStorage`; the renderer gets `{ status, user, isPersistent }`. Linux without a secret service keeps the session for this run only and says so. Builds without a Clerk app (and the web build) show no account items. Done.
 
 ### General
 | Setting | Control | Default | Status | Today |

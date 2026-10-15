@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { authorizeUrl, codeFromCallback, newPkce, tokensFrom, userFrom } from './oauth.ts';
+import { accountPortalUrl, authorizeUrl, codeFromCallback, newPkce, tokensFrom, userFrom } from './oauth.ts';
 
 test('the authorize URL carries an S256 challenge of the verifier, never the verifier itself', () => {
   const pkce = newPkce();
@@ -26,4 +26,9 @@ test('token and userinfo responses are read defensively', () => {
   assert.throws(() => tokensFrom({ error: 'invalid_grant' }, 0), /no access token/);
   assert.deepEqual(userFrom({ sub: 'user_1', preferred_username: 'sp', email: 'a@b.c', picture: '' }), { id: 'user_1', name: 'sp', email: 'a@b.c', imageUrl: null });
   assert.throws(() => userFrom({}), /no id/);
+});
+
+test('the Account Portal sits beside the Frontend API on dev and production instances', () => {
+  assert.equal(accountPortalUrl('https://amazed-hyena-4980.clerk.accounts.dev'), 'https://amazed-hyena-4980.accounts.dev/user');
+  assert.equal(accountPortalUrl('https://clerk.mochi.app'), 'https://accounts.mochi.app/user');
 });

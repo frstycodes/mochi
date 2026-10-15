@@ -13,7 +13,6 @@ import { PairingCode } from '../../remote/PairingCode';
 import { useOtherMachines } from '../../remote/useOtherMachines';
 import { useRemoteStatus } from '../../remote/useRemoteStatus';
 import { ipcMessage } from '../AgentSettings';
-import { openSettings } from '../open';
 import { CommitInput, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 
 /** Turning on remote access, how far it reaches, what this computer is called, who is paired, and your other computers. */
@@ -146,11 +145,12 @@ function pairedDescription(device: PairedDeviceInfo, status: RemoteStatus) {
 
 function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
   const { machines, error, refresh, pairing, pair, forget, closePairing } = useOtherMachines(isSignedIn);
+  const { signIn } = useMochiAccount();
   const footer = 'Pair with another computer of yours to follow and steer its threads from here. Both screens show the same code; check they match before allowing.';
   if (!isSignedIn)
     return (
       <SettingsGroup id="otherComputers" title="Your other computers" footer={footer}>
-        <SettingsRow label="Sign in to see your other computers" control={<Button size="sm" variant="outline" onClick={() => openSettings('account')}>Open Account</Button>} />
+        <SettingsRow label="Sign in to see your other computers" control={<Button size="sm" variant="outline" onClick={() => void signIn()}>Sign in</Button>} />
       </SettingsGroup>
     );
   return (

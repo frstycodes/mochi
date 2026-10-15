@@ -29,6 +29,17 @@ export function authorizeUrl(issuer: string, clientId: string, redirectUri: stri
   return url.href;
 }
 
+/**
+ * Clerk's hosted Account Portal profile page (profile, email, password, connected accounts, delete account), derived from the
+ * Frontend API host: dev `<slug>.clerk.accounts.dev` → `<slug>.accounts.dev`, production `clerk.<domain>` → `accounts.<domain>`.
+ */
+export function accountPortalUrl(issuer: string) {
+  const url = new URL(issuer);
+  url.hostname = url.hostname.endsWith('.clerk.accounts.dev') ? url.hostname.replace('.clerk.accounts.dev', '.accounts.dev') : url.hostname.replace(/^clerk\./, 'accounts.');
+  url.pathname = '/user';
+  return url.href;
+}
+
 /** The code from the browser's redirect, refusing one whose `state` isn't this sign-in's (a forged or stale redirect). */
 export function codeFromCallback(url: URL, state: string): string {
   const error = url.searchParams.get('error');
