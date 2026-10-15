@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { ListeningPort } from '../host/types/ports';
 

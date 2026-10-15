@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { pinnedThreads, togglePin } from '../reorder';
 import { useHarness, type State } from '../store';
 import { ARROW_SIDE, findLeaf, neighbourInDirection, type Rect } from './tree';

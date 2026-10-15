@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { toast } from 'sonner';
+import { toast } from './toast/store.ts';
 import type { Thread } from './model';
 import { useHarness, type Action } from './store';
 

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/toast/Toaster';
+import { queueToast, useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
@@ -67,7 +68,7 @@ export function App() {
               <ScheduleLayer />
               <GoalEditorLayer />
               <DeviceApprovalLayer />
-              <Toaster position="bottom-right" />
+              <Toaster />
             </HarnessProvider>
           )}
         </TooltipProvider>
@@ -103,6 +104,7 @@ function Shell() {
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
+  useResolvedQueueToasts();
   useWorktreeManager();
   useCheckoutRecovery();
   useWorktreeCleanup();
@@ -135,17 +137,14 @@ function Shell() {
 }
 
 function useOverlapToasts() {
-  const { state, dispatch } = useHarness();
+  const { state } = useHarness();
   const seen = useRef(new Set(state.queue.map((q) => q.id)));
   useEffect(() => {
     for (const q of state.queue) {
       if (seen.current.has(q.id)) continue;
       seen.current.add(q.id);
       if (q.kind !== 'overlap') continue;
-      toast('Overlap caught before any duplicate work', {
-        description: q.title,
-        action: { label: 'Decide', onClick: () => dispatch({ type: 'go', view: { kind: 'queue' } }) },
-      });
+      toast('Overlap caught before any duplicate work', { description: q.title, ...queueToast(q.id) });
     }
-  }, [state.queue, dispatch]);
+  }, [state.queue]);
 }

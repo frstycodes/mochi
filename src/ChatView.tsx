@@ -54,7 +54,7 @@ import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkil
 import { SlashTokenText } from './chat/SlashToken';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { openPhotos } from './photo/photos';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';

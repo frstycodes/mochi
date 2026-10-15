@@ -24,7 +24,7 @@ import { initialControls, type ThreadControls } from './runtime/controls';
 import { contextMax } from './runtime/models';
 import { ContextRing } from './ContextRing';
 import type { Provider } from './model';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { imageProblem, sentImages } from './chat/images';
 import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from './git/WorkspacePicker';
 import type { WorkspaceDraft } from './git/workspace';

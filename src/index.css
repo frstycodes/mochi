@@ -683,3 +683,10 @@
 :root[data-reduce-motion='on'] .pane-layout-animating :is(.pane-card, .pane-chat) {
   transition: none;
 }
+
+/* The toast countdown runs on an invisible element: `animationend` dismisses it, so pausing the animation pauses the timer. */
+@keyframes toast-countdown {
+  to {
+    opacity: 1;
+  }
+}

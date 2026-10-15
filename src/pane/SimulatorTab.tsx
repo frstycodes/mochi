@@ -21,7 +21,7 @@ import { useDeviceSettings } from '@/sim/useDeviceSettings';
 import { message, useSimulators } from '@/sim/useSimulators';
 import { usePrefs } from '@/settings/prefs';
 import { useSimStream } from '@/sim/useSimStream';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import type { PaneTabProps } from './tabs';
 import { IconSwap } from '../ui';
 

@@ -15,6 +15,16 @@ test('status transitions become needs-you and review notices', () => {
   assert.deepEqual(diff(thread({ status: 'needs-you' }), thread({ status: 'needs-you', title: 'renamed' })), []);
 });
 
+test("a needs-you notice carries the thread's newest question or approval, so its toast opens into it", () => {
+  const ask = (rest: Partial<QueueItem>) => item({ kind: 'question', title: 'Stub or record?', ...rest });
+  const notice = (queue: QueueItem[]) => diffNotices({ threads: [thread()], queue: [] }, { threads: [thread({ status: 'needs-you' })], queue }, 10)[0];
+  const newest = notice([ask({ id: 'old', createdAt: 1 }), ask({ id: 'new', kind: 'approval', title: 'Run the backfill', createdAt: 5 }), ask({ id: 'other', threadId: 'u', createdAt: 9 })]);
+  assert.equal(newest.queueId, 'new');
+  assert.equal(newest.body, 'Run the backfill');
+  assert.equal(notice([ask({ id: 'mochi', tool: { callId: 'c' } }), item({ id: 'ci' })]).queueId, undefined, 'Mochi cards and CI are not asks');
+  assert.equal(notice([]).body, 'Waiting on your answer');
+});
+
 test('step done and race lost come from step transitions', () => {
   assert.deepEqual(diff(thread(), thread({ steps: [step({ status: 'done' })] })), ['step-done']);
   assert.deepEqual(diff(thread(), thread({ steps: [step({ status: 'dropped', link: { mode: 'race', threadId: 'o', stepId: 'o1' } })] })), ['race-lost']);

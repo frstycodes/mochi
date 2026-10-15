@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { Copy3, PinTack, RotateLeft, Stars, type IconProps } from 'reicon-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';

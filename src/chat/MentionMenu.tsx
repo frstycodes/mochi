@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import { ChatRound, Note, Server, ShieldAlert, Window, X, type IconComponent } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { host } from '../host';

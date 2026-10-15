@@ -1,4 +1,4 @@
-import type { LiveRun, Provider, QueueItem, Thread } from '../model.ts';
+import { isMochiCard, type LiveRun, type Provider, type QueueItem, type Thread } from '../model.ts';
 import { resetLabel } from '../usage/limits.ts';
 import { bareState } from '../chat/refs.ts';
 import { idleVerdict, type Verdict, type VerdictKind } from '../goals/verdict.ts';
@@ -57,6 +57,15 @@ export const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
 const BURST_MINUTES = 3;
 
+/**
+ * The question or approval a thread is waiting on, newest first, so its needs-you toast opens straight into it.
+ * GAP: one that lands in the queue after the status change, in a later action, leaves the notice without it.
+ */
+function pendingAsk(queue: QueueItem[], threadId: string) {
+  const asks = queue.filter((q) => q.threadId === threadId && (q.kind === 'question' || q.kind === 'approval') && !isMochiCard(q));
+  return asks.reduce<QueueItem | undefined>((newest, q) => (!newest || q.createdAt > newest.createdAt ? q : newest), undefined);
+}
+
 /** Notices for what changed between two store snapshots. Pure: the notifications slice runs it after every action that touches threads or queue. */
 export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, next: { threads: Thread[]; queue: QueueItem[] }, now: number): Notice[] {
   const notices: Notice[] = [];
@@ -74,7 +83,8 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
     // A failed turn also lands on needs-you; its idle verdict (Stalled) says why instead.
     if (p.status !== 'needs-you' && t.status === 'needs-you' && !limit && t.queuePause !== 'failed') {
       const blocked = t.steps.find((s) => s.status === 'blocked');
-      add({ id: `needs-you-${t.id}`, kind: 'needs-you', threadId: t.id, title: `${t.title} needs you`, body: blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer' });
+      const ask = pendingAsk(next.queue, t.id);
+      add({ id: `needs-you-${t.id}`, kind: 'needs-you', threadId: t.id, queueId: ask?.id, title: `${t.title} needs you`, body: ask?.title ?? (blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer') });
     }
     const verdict = p.idle?.isGathering && t.idle && !t.idle.isGathering ? idleVerdict(t, t.prs.map((pr) => bareState('pr', pr.state, pr.title, pr.url ?? ''))) : null;
     if (verdict && isIdleNotice(t, verdict)) add({ id: `idle-${t.id}`, kind: 'idle', verdict: verdict.kind, threadId: t.id, title: idleTitle(t.title, verdict), body: verdict.reason });

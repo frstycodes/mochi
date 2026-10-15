@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ArrowUp, CheckCircle, InfoCircle, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -26,7 +26,8 @@ import { Kbd } from '@/components/ui/kbd';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/toast/Toaster';
+import { Slider } from '@/components/ui/slider';
 import { Spinner } from '@/components/ui/spinner';
 import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -35,7 +36,8 @@ import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
 import { MachinesProvider } from '../remote/useMachines';
 import { BoardView } from '../BoardView';
-import { seedQueue, type LineSlot, type Thread } from '../model';
+import { seedQueue, type LineSlot, type QueueItem, type Thread } from '../model';
+import { queueToast, useResolvedQueueToasts } from '../QueueToast';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
 import { ReportCard } from '../goals/ReportCard';
@@ -104,7 +106,7 @@ export function DesignPage() {
         </ReviewModeProvider>
       </MachinesProvider>
       <Orbit />
-      <Toaster position="bottom-right" />
+      <Toaster />
     </HarnessProvider>
   );
 }
@@ -572,21 +574,8 @@ function Feedback() {
             </Alert>
           </div>
         </Block>
-        <Block title="Toast" use="Every reversible action gets an undo.">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                toast('Thread settled', { description: 'Idle terminals closed, PR watches stopped.', action: { label: 'Undo', onClick: () => undefined } })
-              }
-            >
-              Settle a thread
-            </Button>
-            <Button variant="outline" onClick={() => toast.success('Merged #482')}>
-              <CheckCircle data-icon="inline-start" />
-              Merge
-            </Button>
-          </div>
+        <Block title="Toast" use="Top center. Every reversible action gets an undo. Each click shows the next style.">
+          <ToastDemo />
         </Block>
         <Block title="Loading" use="Spinner inside controls, skeletons shaped like the content.">
           <div className="flex items-center gap-3 type-meta text-muted-foreground">
@@ -1015,3 +1004,71 @@ const SETUP_SAMPLES: WorktreeSetup[] = [
     steps: [COPY, { ...INSTALL, status: 'done', endedAt: AGO - 2_000 }, { ...SCRIPT, status: 'done', startedAt: AGO - 2_000, endedAt: AGO }],
   },
 ];
+
+/** Each click shows the next toast style, so the stack, repeats and the loading update can be seen side by side. */
+function ToastDemo() {
+  const { state, dispatch } = useHarness();
+  useResolvedQueueToasts();
+  const [next, setNext] = useState(0);
+  const question = state.queue.find((q) => q.kind === 'question');
+  const show = () => {
+    TOAST_STYLES[next % TOAST_STYLES.length].show(question);
+    setNext((n) => n + 1);
+  };
+  // TODO(toasts): drop "Show a question" and "Slow motion" once the expand animation is settled. The question is a fresh copy of
+  // the seed each click, so it can be answered over and over; slow motion stretches every toast duration up to 40x.
+  const [slowdown, setSlowdown] = useState(1);
+  const changeSlowdown = ([value]: number[]) => {
+    setSlowdown(value);
+    document.documentElement.style.setProperty('--toast-slowmo', String(value));
+  };
+  const showQuestion = () => {
+    const seed = seedQueue().find((q) => q.kind === 'question')!;
+    const item = { ...seed, id: `${seed.id}-${Date.now()}`, createdAt: state.now };
+    dispatch({ type: 'queue-add', item });
+    toast('Claude has a question', { description: item.title, ...queueToast(item.id) });
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <Button variant="outline" onClick={show}>
+        Show a toast
+      </Button>
+      <Button variant="outline" onClick={showQuestion}>
+        Show a question
+      </Button>
+      <div className="flex items-center gap-2 type-meta text-muted-foreground">
+        <label htmlFor="toast-slowmo">Slow motion</label>
+        <Slider id="toast-slowmo" className="w-32" min={1} max={40} step={1} value={[slowdown]} onValueChange={changeSlowdown} />
+        <span className="w-8 tabular">{slowdown}x</span>
+      </div>
+      <span className="type-meta text-muted-foreground">Next: {TOAST_STYLES[next % TOAST_STYLES.length].label}</span>
+    </div>
+  );
+}
+
+const PUSH_REJECTED = 'Updates were rejected because the remote contains work that you do not have locally.';
+
+const TOAST_STYLES = [
+  {
+    label: 'with undo',
+    show: () => toast('Thread settled', { description: 'Idle terminals closed, PR watches stopped.', action: { label: 'Undo', onClick: () => undefined } }),
+  },
+  { label: 'success', show: () => toast.success('Merged #482') },
+  { label: 'info', show: () => toast.info('localhost:5173 is up', { action: { label: 'Open preview', onClick: () => undefined } }) },
+  { label: 'warning', show: () => toast.warning('Weekly limit at 90%', { description: 'Claude resumes Tue 3:34 PM once it runs out.' }) },
+  { label: 'error', show: () => toast.error('Push rejected', { description: PUSH_REJECTED }) },
+  { label: 'the same error again', show: () => toast.error('Push rejected', { description: PUSH_REJECTED }) },
+  {
+    label: 'a queue question, click it to answer',
+    show: (question?: QueueItem) => question && toast('Claude has a question', { description: question.title, ...queueToast(question.id) }),
+  },
+  {
+    label: 'loading, then success',
+    show: () =>
+      void toast.promise(new Promise((resolve) => setTimeout(resolve, 1500)), {
+        loading: 'Pushing feat/admin-usage',
+        success: 'Pushed feat/admin-usage',
+        error: 'Push failed',
+      }),
+  },
+] as const;

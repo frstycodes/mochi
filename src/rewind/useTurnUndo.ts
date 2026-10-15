@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { gitError } from '../git/useGit.ts';
 import { useWorktreePath } from '../git/worktrees.ts';
 import { host } from '../host/index.ts';

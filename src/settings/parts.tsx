@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { host } from '../host';
 import { IconSwap, TooltipIconButton } from '../ui';

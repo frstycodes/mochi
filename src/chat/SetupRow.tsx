@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Box, Check, ChevronRight, DocumentCopy, TerminalSquare } from 'reicon-react';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
