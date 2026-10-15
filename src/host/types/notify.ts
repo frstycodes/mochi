@@ -28,10 +28,20 @@ export interface WatchConfig {
   dockBadge: boolean;
 }
 
+/** You looked at or acted in a thread: main closes the watched-thread notifications that settles (`isAddressed`). */
+export interface ThreadAddressed {
+  threadId: string;
+  isViewed?: boolean;
+  isActedOn?: boolean;
+}
+
 export type NotifyPermission = 'granted' | 'denied' | 'default';
 
 export interface NotifyHost {
   show(notice: Notice): Promise<void>;
+  /** Takes down notifications `show` put up, by their `id`; ones already gone are skipped. */
+  close(ids: string[]): Promise<void>;
+  addressed(signal: ThreadAddressed): Promise<void>;
   /** Main owns watched-thread OS notifications, CI polling and the dock badge, so they keep working with every window closed. */
   watch(config: WatchConfig): Promise<void>;
   /** The thread a notification click asked for before this window was ready to hear it; returns it once. */
@@ -49,6 +59,8 @@ export interface NotifyHost {
 
 export const notifyMethods = {
   show: 'invoke',
+  close: 'invoke',
+  addressed: 'invoke',
   watch: 'invoke',
   pendingOpen: 'invoke',
   permission: 'invoke',
