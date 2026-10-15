@@ -9,11 +9,11 @@ import { ComparePane } from './browser/Compare';
 import { RESPONSIVE } from './browser/devices';
 import { deviceSize, PageSurface, useSize } from './browser/PageSurface';
 import { FindBar } from './browser/FindBar';
-import { destroyPage, ensureView, getPage, onOpenTab, openFind, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
+import { adoptView, destroyPage, ensureView, getPage, onTabRequest, openFind, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
 import { BrowserToolbar, DeviceBar, DriveBar } from './browser/Toolbar';
 import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
-import { isTabOnScreen } from './store/panes';
+import { isTabOnScreen, nextTabId } from './store/panes';
 import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { useHarness } from './store';
@@ -79,16 +79,21 @@ function useTabSync(threadId: string, tab: PaneTab, page: Page) {
   }, [dispatch, threadId, tab.id, tab.url, tab.title, page.url, title]);
 }
 
-/** Closed tabs free their native view; links that open a new window land in a new browser tab instead. */
+/** Closed tabs free their native view; a page's popup lands in a new browser tab, which closes when the popup does. */
 function useBrowserHousekeeping() {
   const { state, dispatch } = useHarness();
   useEffect(
     () =>
-      onOpenTab((pageId, url) => {
-        const [threadId] = pageId.split('/');
-        dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url });
+      onTabRequest((request) => {
+        const [threadId, tabId] = tabPageKey(request.key).split('/');
+        if (request.type === 'close') return dispatch({ type: 'pane-close-tab', threadId, tabId });
+        // The reducer gives the new tab this same id, as PortsTab relies on.
+        // GAP: two popups opened before a re-render get the same id, and the second adopts over the first.
+        const popupTabId = nextTabId(state.panes.find((p) => p.threadId === threadId)?.tabs ?? []);
+        adoptView(pageKey(threadId, popupTabId), request.hostId, request.url);
+        dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url: request.url });
       }),
-    [dispatch],
+    [dispatch, state.panes],
   );
   useEffect(() => {
     const live = new Set(state.panes.flatMap((p) => p.tabs.map((t) => pageKey(p.threadId, t.id))));

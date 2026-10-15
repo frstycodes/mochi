@@ -44,6 +44,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const commands: string[] = [];
   const removed: string[] = [];
   const evals: string[] = [];
+  const answers: boolean[] = [];
   const pushes: string[] = [];
   const opened: string[] = [];
   const prs: { title: string; body: string }[] = [];
@@ -71,6 +72,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       logs: async () => [{ level: 'error', message: 'boom', source: 'http://localhost:5173/main.js', line: 3 }],
       eval: async (_id, script) => (evals.push(script), script.includes('throw') ? Promise.reject(new Error('Error: nope\n    at <anonymous>:1:7')) : { value: '42', isTruncated: false }),
       waitFor: async (_id, until) => ({ isMet: until.text === 'Hello', waitedMs: 120 }),
+      answerDialog: async (_id, { accept }) => void (answers.push(accept), pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, dialog: null })),
     },
     cwdOf: () => '/repo/rl',
     models: async () => CLAUDE_DEMO_MODELS,
@@ -111,7 +113,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages, pushes, prs, opened };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened };
   return t;
 }
 
@@ -654,6 +656,18 @@ test('browser_hover, browser_select and browser_drag act on snapshot refs', asyn
   await t.ok('browser_drag', { from: 'e1', to: 'e2' });
   assert.deepEqual(t.acts, [{ kind: 'hover', ref: 'e1' }, { kind: 'select', ref: 'e2', value: 'Pro' }, { kind: 'drag', from: 'e1', to: 'e2' }]);
   assert.match(await t.err('browser_drag', { from: 'e1', to: 'e9' }), /browser_snapshot first/);
+});
+
+test('browser_dialog answers the open dialog; until then the other browser tools fail with its message', async () => {
+  const t = setup();
+  assert.match(await t.err('browser_dialog', { accept: true }), /No dialog is open/);
+  t.pages.set('rl/tab-1', { ...t.pages.get('rl/tab-1')!, dialog: { kind: 'confirm', message: 'Delete it?' } });
+  for (const [name, args] of [['browser_snapshot', {}], ['browser_press', { key: 'Enter' }], ['browser_reload', {}], ['browser_open', { url: 'localhost:5173/x' }]] as const)
+    assert.equal(await t.err(name, args), 'A confirm dialog is open: "Delete it?"; answer it with browser_dialog', name);
+  assert.deepEqual([t.acts, t.commands], [[], []]);
+  await t.ok('browser_dialog', { accept: false });
+  assert.deepEqual(t.answers, [false]);
+  await t.ok('browser_snapshot');
 });
 
 test('browser_wait_for reports whether the condition was met', async () => {

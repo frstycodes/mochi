@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Browser smoke</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 16px; }
+  #drag-source, #drag-target { display: inline-block; width: 120px; height: 60px; border: 2px dashed #888; margin: 8px; text-align: center; line-height: 60px; user-select: none; }
+  #drag-source { background: #def; cursor: grab; }
+  #tall { height: 3000px; background: linear-gradient(#fff, #ccc); }
+</style>
+</head>
+<body>
+<h1>Browser smoke</h1>
+
+<section>
+  <button id="counter" type="button">Count</button>
+  <output id="count">0</output>
+  <span id="hovered">not hovered</span>
+</section>
+
+<form id="form">
+  <label>Name <input id="name" name="name" type="text"></label>
+  <label>Password <input id="password" name="password" type="password"></label>
+  <label>Fruit
+    <select id="fruit" name="fruit">
+      <option value="apple">Apple</option>
+      <option value="banana">Banana</option>
+      <option value="cherry">Cherry</option>
+    </select>
+  </label>
+  <label>Upload <input id="file" name="file" type="file"></label>
+  <button id="submit" type="submit">Sign in</button>
+  <output id="form-result"></output>
+</form>
+
+<section>
+  <div id="drag-source">Drag me</div>
+  <div id="drag-target">Drop here</div>
+  <output id="drop-result"></output>
+</section>
+
+<section>
+  <a id="download" href="/download">Download file</a>
+  <button id="open-popup" type="button">Open popup</button>
+  <button id="open-js" type="button">Open javascript popup</button>
+  <button id="open-file" type="button">Open file popup</button>
+  <output id="popup-result"></output>
+</section>
+
+<section>
+  <button id="alert" type="button">Alert</button>
+  <button id="confirm" type="button">Confirm</button>
+  <button id="prompt" type="button">Prompt</button>
+  <output id="dialog-result"></output>
+</section>
+
+<section id="late-slot"></section>
+<div id="tall">Tall area</div>
+<div id="bottom">Bottom</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let count = 0;
+  $('counter').addEventListener('click', () => { $('count').textContent = String(++count); });
+  $('counter').addEventListener('mouseenter', () => { $('hovered').textContent = 'hovered'; });
+
+  $('form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const file = $('file').files[0];
+    $('form-result').textContent = `submitted name=${$('name').value} fruit=${$('fruit').value} file=${file ? file.name : ''}`;
+  });
+
+  let dragging = false;
+  $('drag-source').addEventListener('mousedown', () => { dragging = true; });
+  document.addEventListener('mouseup', (event) => {
+    if (!dragging) return;
+    dragging = false;
+    const target = document.elementFromPoint(event.clientX, event.clientY);
+    if (target && target.closest('#drag-target')) $('drop-result').textContent = 'dropped';
+  });
+
+  $('open-popup').addEventListener('click', () => {
+    window.open('/popup.html', 'smoke-popup', 'width=400,height=300');
+  });
+  $('open-js').addEventListener('click', () => { window.open('javascript:void 0', 'smoke-js'); });
+  $('open-file').addEventListener('click', () => { window.open('file:///etc/hosts', 'smoke-file'); });
+  window.addEventListener('message', (event) => {
+    if (typeof event.data === 'string') $('popup-result').textContent = `opener got ${event.data}`;
+  });
+
+  $('alert').addEventListener('click', () => { alert('alert message'); $('dialog-result').textContent = 'alert done'; });
+  $('confirm').addEventListener('click', () => { $('dialog-result').textContent = `confirm=${confirm('confirm message')}`; });
+  $('prompt').addEventListener('click', () => { $('dialog-result').textContent = `prompt=${prompt('prompt message', 'default')}`; });
+
+  setTimeout(() => {
+    const late = document.createElement('p');
+    late.id = 'late';
+    late.textContent = 'Late arrival';
+    $('late-slot').append(late);
+  }, 1000);
+</script>
+</body>
+</html>

@@ -40,6 +40,9 @@ export const browser: BrowserHost = {
   async waitFor() {
     throw new Error('Driving the browser needs the desktop app');
   },
+  async answerDialog() {
+    throw new Error('Driving the browser needs the desktop app');
+  },
   async autoReload() {},
   async scroll() {
     return { x: 0, y: 0 };
@@ -56,6 +59,9 @@ export const browser: BrowserHost = {
   },
   async openExternal(url) {
     window.open(url, '_blank', 'noopener');
+  },
+  async showDownload() {
+    throw new Error('The web build saves no downloads');
   },
   async defaultBrowser() {
     return '';

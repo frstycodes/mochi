@@ -40,7 +40,7 @@ export interface ToolEnv {
   removeWorktree: (threadId: string) => Promise<void>;
   /** The browser tabs' pages (`src/browser/pages.ts`) and main's native views behind them. */
   pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void; open: (key: string, url: string, spaceId: string) => void };
-  browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor'>;
+  browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor' | 'answerDialog'>;
   /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
   cwdOf: (thread: Thread) => string | null | undefined;
   /** The models `provider` offers the profile's account; empty when they couldn't be read. */
