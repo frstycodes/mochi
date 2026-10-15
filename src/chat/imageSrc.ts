@@ -51,7 +51,7 @@ async function readImage(path: string) {
 }
 
 // The file host reads paths relative to a root, so a file is read from its own folder.
-function splitPath(path: string) {
+export function splitPath(path: string) {
   const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
   return { dir: cut < 0 ? '' : path.slice(0, cut) || '/', name: path.slice(cut + 1) };
 }

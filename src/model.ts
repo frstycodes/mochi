@@ -478,7 +478,7 @@ export function answerText(answers: string[][]) {
   return answers.filter((a) => a.length).map((a) => a.join(', ')).join(' · ');
 }
 
-export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual'] as const;
+export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual', 'artifacts'] as const;
 export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
 export interface PaneTab {

@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useHarness } from '../store';
 import { ChartVisual } from './ChartVisual';
 import { withThemeVars } from './exportVisual';
-import { parseFence, VIZ_LANGUAGES, type VizLanguage, type VizSpecs } from './fence';
+import { metaTitle, parseFence, VIZ_LANGUAGES, type VizLanguage, type VizSpecs } from './fence';
 import { DiffVisual, MetroVisual } from './HarnessVisuals';
 import { ImageVisual } from './ImageVisual';
 import { SortableTable } from './SortableTable';
@@ -131,10 +131,6 @@ function BrokenVisual({ language, code, message }: { language: VizLanguage; code
 
 function Placeholder({ children }: { children: ReactNode }) {
   return <div className="my-3 flex flex-col gap-2 rounded-xl bg-card p-3 ring-1 ring-border">{children}</div>;
-}
-
-function metaTitle(meta?: string) {
-  return meta?.match(/title="([^"]+)"/)?.[1];
 }
 
 function capitalize(text: string) {
