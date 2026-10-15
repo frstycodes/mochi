@@ -46,7 +46,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
     case 'reasoning':
       return update((t) => log(t, { at: now, who, kind: 'reasoning', text: event.text }));
     case 'tool':
-      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }), ...(event.sent && { sent: event.sent }) }));
+      if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }), ...(event.sent && { sent: event.sent }), ...(event.generated && { generated: event.generated }) }));
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       state = recordCreatedPr(state, thread, event);
       if (!event.files?.length) return state;
@@ -128,8 +128,8 @@ function closeCompaction(t: Thread, event: Extract<AgentEvent, { type: 'turn-end
 
 /** What a tool call's end adds to the entry its start logged. */
 function toolEnd(event: Extract<AgentEvent, { type: 'tool' }>): Partial<ActivityEntry> {
-  const { text, links, output, exitCode, patch } = event;
-  return { ...(links && { text, links }), ...(output !== undefined && { output }), ...(exitCode !== undefined && { exitCode }), ...(patch && { patch }) };
+  const { text, links, output, exitCode, patch, images, generated } = event;
+  return { ...(links && { text, links }), ...(output !== undefined && { output }), ...(exitCode !== undefined && { exitCode }), ...(patch && { patch }), ...(images?.length && { images }), ...(generated && { generated }) };
 }
 
 /** A `gh pr create` the agent ran puts its PR on the thread right away; one already recorded keeps the state gh gave it. */

@@ -7,9 +7,13 @@ import { describeApproval } from '../../../src/summary.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
+import type { SaveImage } from '../images.ts';
 
-/** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
-export function createMapper(threadId: string, cwd: string) {
+/**
+ * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across
+ * messages. `saveImage` keeps images a tool returns as files; without it they're dropped.
+ */
+export function createMapper(threadId: string, cwd: string, saveImage?: SaveImage) {
   const tools = new Map<string, { name: string; input: Record<string, unknown> }>();
   const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
@@ -69,6 +73,9 @@ export function createMapper(threadId: string, cwd: string) {
     const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block, result) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
     if (links) end.links = links;
+    // A Read of an image returns it too, but the file is already on disk: the work log shows it from its path.
+    const images = saveImage && tool.name !== 'Read' ? imageBlocks(block).map((i) => saveImage(i.media_type, i.data)) : [];
+    if (images.length) end.images = images;
     const task = (result as { task?: { id?: unknown } } | undefined)?.task;
     if (tool.name !== 'TaskCreate' || typeof task?.id !== 'string') return [end];
     tasks.push({ id: task.id, title: String(tool.input.subject ?? ''), status: 'pending' });
@@ -303,7 +310,13 @@ const mcpStatus = (status: string) => (MCP_STATUSES.has(status) ? status : 'fail
 // Claude Code names an MCP tool `mcp__<server>__<tool>`, with characters outside [A-Za-z0-9_-] in the server name replaced by `_`.
 const mcpToolPrefix = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: boolean; content?: string | { type: string; text?: string }[] };
+type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: boolean; content?: string | { type: string; text?: string; source?: { type: string; media_type?: string; data?: string } }[] };
+
+/** The base64 image blocks in a tool's result (a screenshot); URL-sourced ones aren't Claude Code's to return. */
+function imageBlocks(block: ToolResultBlock) {
+  if (typeof block.content === 'string') return [];
+  return (block.content ?? []).flatMap((c) => (c.type === 'image' && c.source?.type === 'base64' && c.source.media_type && c.source.data ? [{ media_type: c.source.media_type, data: c.source.data }] : []));
+}
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 // `Task` is the Agent tool's name in Claude Code before 2.1.

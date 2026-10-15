@@ -82,8 +82,10 @@ function restoreThread(thread: Thread, now: number): Thread {
   const setup = thread.setup && (thread.setup.status === 'running' || thread.setup.status === 'failed') ? stoppedSetup(thread.setup) : thread.setup;
   // Sending the queue on launch would spend usage unasked.
   const restored = pauseQueue({ ...thread, live, ...(criteria && { criteria }), ...(idle && { idle }), ...(reviews && { reviews }), ...(subagents && { subagents }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
-  if (!thread.live!.isWorking) return restored;
-  return { ...restored, activity: [...thread.activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
+  // An image still being made when Mochi quit never lands; its card says so instead of generating forever.
+  const activity = restored.activity.map((e) => (e.generated?.status === 'running' ? { ...e, generated: { ...e.generated, status: 'failed' as const, error: 'Stopped when Mochi quit' } } : e));
+  if (!thread.live!.isWorking) return { ...restored, activity };
+  return { ...restored, activity: [...activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
 }
 
 /** A setup Mochi quit during: the next message starts the agent in the worktree as it is. */

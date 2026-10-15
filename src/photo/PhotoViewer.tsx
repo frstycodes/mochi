@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { ChevronLeft, ChevronRight, Copy, Download, Maximize, SearchZoomIn, SearchZoomOut, X } from 'reicon-react';
+import { ChevronLeft, ChevronRight, Copy, Download, FolderOpen, Maximize, SearchZoomIn, SearchZoomOut, X } from 'reicon-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { REVEAL_LABEL } from '../chat/ImageGenCard';
 import { Shortcut } from '../Shortcut';
 import { TooltipIconButton } from '../ui';
 import { copyImage, openPhotos, saveImage, usePhotoRequest, type Photo } from './photos';
@@ -23,7 +24,7 @@ export function PhotoViewer() {
   return (
     <DialogPrimitive.Root open={!!photo} onOpenChange={(open) => !open && openPhotos(null)}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/90 backdrop-blur-xl data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/50 backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           onKeyDown={(e) => {
@@ -46,6 +47,7 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
   const img = useRef<HTMLImageElement>(null);
   const [view, setView] = useState<View>(FIT);
   const drag = useRef<{ x: number; y: number; view: View } | null>(null);
+  const press = useRef({ x: 0, y: 0 });
 
   const measure = () => {
     const a = area.current!.getBoundingClientRect();
@@ -74,6 +76,7 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
     setView(clampPan({ ...view, x: view.x - e.deltaX, y: view.y - e.deltaY }, fitted, viewport));
   };
   const onPointerDown = (e: ReactPointerEvent) => {
+    press.current = { x: e.clientX, y: e.clientY };
     if (view.scale === 1 || e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = { x: e.clientX, y: e.clientY, view };
@@ -108,6 +111,11 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
         <TooltipIconButton label="Download" onClick={() => saveImage(photo)}>
           <Download />
         </TooltipIconButton>
+        {!!photo.reveal && (
+          <TooltipIconButton label={REVEAL_LABEL} onClick={photo.reveal}>
+            <FolderOpen />
+          </TooltipIconButton>
+        )}
         <DialogPrimitive.Close asChild>
           <Button variant="ghost" size="icon-sm" aria-label="Close">
             <X />
@@ -120,8 +128,10 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={() => (drag.current = null)}
-        onDoubleClick={(e) => (isZoomed ? setView(FIT) : zoom(2.5, e.clientX, e.clientY))}
-        className={cn('relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden px-16 pb-4 select-none', isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in')}
+        // Around the image closes; a click that ended a pan doesn't.
+        onClick={(e) => e.target === e.currentTarget && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) < 4 && openPhotos(null)}
+        onDoubleClick={(e) => e.target === img.current && (isZoomed ? setView(FIT) : zoom(2.5, e.clientX, e.clientY))}
+        className={cn('relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden px-16 pb-4 select-none', isZoomed && 'cursor-grab active:cursor-grabbing')}
       >
         <img
           ref={img}
@@ -129,7 +139,7 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
           alt={photo.name}
           draggable={false}
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
-          className="max-h-full max-w-full rounded-lg object-contain shadow-float"
+          className={cn('max-h-full max-w-full rounded-lg object-contain shadow-float', !isZoomed && 'cursor-zoom-in')}
         />
         {!!onStep && (
           <>
@@ -174,7 +184,7 @@ function StepButton({ side, onClick }: { side: 'left' | 'right'; onClick: () => 
 
 function Filmstrip({ photos, index, onSelect }: { photos: Photo[]; index: number; onSelect: (i: number) => void }) {
   return (
-    <nav aria-label="Images" className="flex shrink-0 justify-center gap-2 overflow-x-auto px-4 pt-1 pb-4">
+    <nav aria-label="Images" onClick={(e) => e.target === e.currentTarget && openPhotos(null)} className="flex shrink-0 justify-center gap-2 overflow-x-auto px-4 pt-1 pb-4">
       {photos.map((p, i) => (
         <button
           key={`${p.src}:${i}`}

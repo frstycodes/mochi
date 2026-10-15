@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
+import { saveImage } from '../images.ts';
 import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
@@ -317,7 +318,7 @@ export class CodexAdapter {
     const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
     if (typeof codexId !== 'string') throw new Error(`codex ${options.resume ? 'thread/resume' : 'thread/start'} returned no thread id`);
     if (aborted?.aborted) return;
-    const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits });
+    const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits, saveImage });
     const live: Live = { codexId, server, state, gen: server.gen, turns, options: { ...options, resume: codexId, forkAt: undefined } };
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);

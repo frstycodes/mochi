@@ -147,8 +147,10 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
-  /** Your messages: thumbnails (data URLs) of the images sent with it. */
+  /** Your messages: thumbnails (data URLs) of the images sent with it. Tool entries: images the call returned, as absolute paths. */
   images?: string[];
+  /** Tool entries: the image this call made, shown as its own card in the transcript. */
+  generated?: GeneratedImage;
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
   turnUndo?: { start: number; isUndone: boolean };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
@@ -179,6 +181,16 @@ export interface Compaction {
 export interface ThreadRef {
   threadId?: string;
   title: string;
+}
+
+/** An image an agent generated. `src` is a file path or a data URL; `aspect` (width / height) is the size it asked for, square when unknown. */
+export interface GeneratedImage {
+  status: 'running' | 'done' | 'failed';
+  prompt?: string;
+  src?: string;
+  aspect?: number;
+  /** Why it failed, as the harness said it. */
+  error?: string;
 }
 
 export interface McpCall {
