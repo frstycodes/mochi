@@ -1,8 +1,9 @@
 import path from 'node:path';
 import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, LimitWindow } from '../../../src/host/types/agent.ts';
-import type { AgentCommand, AgentInfo, McpServer, WebLink } from '../../../src/model.ts';
+import type { AgentCommand, AgentInfo, GeneratedImage, McpServer, WebLink } from '../../../src/model.ts';
 import { codexWindows, hottest, mergeWindows } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
+import type { SaveImage } from '../images.ts';
 
 /** What the mapper remembers about one Codex thread between notifications. */
 export interface ThreadState {
@@ -18,6 +19,8 @@ export interface ThreadState {
   account: string;
   /** Shared by every thread on the account: rate limits are account-wide and arrive without a thread id. */
   limits: AccountLimits;
+  /** Keeps a generated image Codex returned only as base64 (no `savedPath`); without it such an image reads as failed. */
+  saveImage?: SaveImage;
 }
 
 type Totals = { input: number; output: number; cached: number };
@@ -27,8 +30,8 @@ export interface AccountLimits {
   windows?: LimitWindow[];
 }
 
-export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits } = {}): ThreadState {
-  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits };
+export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits, saveImage }: { isResumed?: boolean; account?: string; limits?: AccountLimits; saveImage?: SaveImage } = {}): ThreadState {
+  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits, saveImage };
 }
 
 /** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
@@ -246,6 +249,10 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       const { text, links } = webSearch(item);
       return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && links.length > 0 && { links }) }];
     }
+    case 'imageView':
+      return typeof item.path === 'string' ? [{ threadId, type: 'tool', id, phase, text: `Read ${relative(s.cwd, item.path)}` }] : [];
+    case 'imageGeneration':
+      return [{ threadId, type: 'tool', id, phase, text: 'Generate image', generated: generatedImage(item, phase, s) }];
     case 'contextCompaction':
       return [{ threadId, type: 'compaction', phase }];
     case 'subAgentActivity':
@@ -254,6 +261,26 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       return phase === 'end' ? collabCall(item, threadId) : [];
   }
   return [];
+}
+
+/**
+ * Codex's `imageGeneration` item (0.155.1: `status`, `revisedPrompt`, `result`, `savedPath`, `failure`). Not verified against a
+ * live run: `result` is taken as base64 PNG, and the image as done whenever its end carries a file or bytes and no failure.
+ */
+function generatedImage(item: Record<string, unknown>, phase: 'start' | 'end', s: ThreadState): GeneratedImage {
+  const prompt = typeof item.revisedPrompt === 'string' && item.revisedPrompt ? { prompt: item.revisedPrompt } : {};
+  const failure = obj(item.failure);
+  if (failure || item.status === 'failed') return { status: 'failed', ...prompt, error: failureText(failure) };
+  if (phase === 'start') return { status: 'running', ...prompt };
+  const src = typeof item.savedPath === 'string' ? item.savedPath : typeof item.result === 'string' && item.result && s.saveImage ? s.saveImage('image/png', item.result) : undefined;
+  return src ? { status: 'done', ...prompt, src } : { status: 'failed', ...prompt, error: 'Codex finished without returning the image.' };
+}
+
+// `resetsAt` in unix seconds, like Codex's rate-limit windows.
+function failureText(failure: Record<string, unknown> | undefined) {
+  if (failure?.type !== 'usageLimitExceeded') return 'Codex couldn’t generate the image.';
+  const at = typeof failure.resetsAt === 'number' ? ` Resets at ${new Date(failure.resetsAt * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : '';
+  return `Image generation limit reached.${at}`;
 }
 
 /**

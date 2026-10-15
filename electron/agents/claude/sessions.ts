@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { hooksEnv } from '../../git/hooks.ts';
 import { PR_GUARD } from './prGuard.ts';
+import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
@@ -61,7 +62,7 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.speed && options.speed !== 'fast') throw new TypeError('speed must be fast');
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd, saveImage), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
   sessions.set(threadId, session);
   void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
