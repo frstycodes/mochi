@@ -3,7 +3,7 @@ import { ChevronDown, Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ModelMenu, useModels } from '../../ModelControls';
+import { ModelMenu, useListedModels, useModels } from '../../ModelControls';
 import { optionFor, type ModelOption } from '../../runtime/models';
 import { useSpace } from '../../store';
 import type { Provider } from '../../model';
@@ -44,8 +44,8 @@ function ModelsGroup() {
 
 /** The model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
 export function StarredModelsRow({ rowId, value: starredModels, onChange, children }: { rowId: string; value: string[]; onChange: (ids: string[]) => void; children?: ReactNode }) {
-  const catalog = useModels(useSpace().id);
-  const models = HARNESS_IDS.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
+  const { catalog, harnesses } = useListedModels(useSpace().id);
+  const models = harnesses.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
   const starred = models.filter((m) => starredModels.includes(m.id));
   return (
     <SettingsRow
@@ -62,8 +62,8 @@ export function StarredModelsRow({ rowId, value: starredModels, onChange, childr
           </DropdownMenuTrigger>
           <ModelMenu
             models={models}
-            pending={HARNESS_IDS.filter((h) => !catalog[h])}
-            harnesses={HARNESS_IDS}
+            pending={harnesses.filter((h) => !catalog[h])}
+            harnesses={harnesses}
             isChecked={(m) => starredModels.includes(m.id)}
             onPick={(m) => onChange(toggleStar(starredModels, m.id))}
             keepsOpen
