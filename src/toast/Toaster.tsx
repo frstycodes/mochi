@@ -314,7 +314,7 @@ function Face({ isActive, width, timing, children }: { isActive: boolean; width:
 function ToastWidget({ ref, onCollapse, children }: { ref: RefObject<HTMLDivElement | null>; onCollapse: () => void; children: ReactNode }) {
   // Grows to the viewport (52px top offset + 16px gutter) and scrolls only past that.
   return (
-    <div ref={ref} tabIndex={-1} className="max-h-[calc(100dvh-68px)] cursor-auto overflow-y-auto outline-none select-text">
+    <div ref={ref} tabIndex={-1} className="max-h-[calc(100dvh-68px)] cursor-auto overflow-y-auto p-1.5 outline-none select-text">
       <div className="sticky top-0 z-10 flex h-0 justify-end">
         <Button variant="ghost" size="icon-xs" aria-label="Collapse" className="mt-2 mr-2 text-muted-foreground" onClick={onCollapse}>
           <ArrowUp2 />
