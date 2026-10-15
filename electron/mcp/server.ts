@@ -42,6 +42,9 @@ let http: Promise<Server> | undefined;
 /** The renderer's answer to a call from `callMochi`. */
 export const resolveToolCall = calls.resolve;
 
+/** The calls a window reload took from `renderer`'s page, for the reloaded page to run again. */
+export const undeliveredToolCalls = calls.undelivered;
+
 async function callMochi(thread: string, name: ToolName, args: Record<string, unknown>): Promise<CallToolResult> {
   const win = mainWindow();
   if (!win) return { content: [{ type: 'text', text: 'Mochi has no window open' }], isError: true };

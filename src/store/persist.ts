@@ -60,14 +60,16 @@ function readSaved(json: string | null): Saved | null {
 }
 
 function restoreSavedThreads(saved: Saved, attached: Attached): Saved {
-  const threads = migrateReceived(saved.threads.map((t) => (attached.has(t.id) ? reattachThread(t, attached.get(t.id)!) : restoreThread(t, saved.now))));
+  // A Mochi tool card waits on the old page's run of the call; after a reload the new page runs it again and asks anew.
+  const reasked = new Set(saved.queue.filter((q) => q.tool && attached.has(q.threadId)).map((q) => q.id));
+  const threads = migrateReceived(saved.threads.map((t) => (attached.has(t.id) ? reattachThread(t, attached.get(t.id)!, reasked) : restoreThread(t, saved.now))));
   // Agent requests wait on a live call, which a restart ended; a reload didn't, so an attached agent's still wait on you.
-  // Mochi tool cards wait on the window's own call, which a reload fails too (`RELOADED` in electron/mcp/calls.ts).
   return { ...saved, threads, queue: saved.queue.filter((q) => (!q.requestId || attached.has(q.threadId)) && !q.tool) };
 }
 
-function reattachThread(thread: Thread, isWorking: boolean): Thread {
-  return { ...thread, live: { ...thread.live!, isWorking, isDetached: false } };
+function reattachThread(thread: Thread, isWorking: boolean, reasked: Set<string>): Thread {
+  const activity = thread.activity.filter((e) => !(e.card?.isOpen && reasked.has(e.card.id)));
+  return { ...thread, activity, live: { ...thread.live!, isWorking, isDetached: false } };
 }
 
 function restoreThread(thread: Thread, now: number): Thread {

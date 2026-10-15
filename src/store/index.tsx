@@ -4,7 +4,7 @@ import { compactFocus, useCompactInstructions } from '../chat/compact.ts';
 import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
-import { NO_AGENT_PROCESS, type AgentEvent, type AttachedAgent, type SeqAgentEvent } from '../host/types/agent.ts';
+import { NO_AGENT_PROCESS, type AgentEvent, type AgentToolCall, type AttachedAgent, type SeqAgentEvent } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
@@ -141,21 +141,23 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     void host.schedule.drain().then((events) => events.forEach(onSchedule), (error: unknown) => console.error('Reading scheduled runs failed', error));
     return off;
   }, [apply]);
-  useEffect(
-    () =>
-      host.agent.onToolCall((call) => {
-        const env = toolEnv(
-          () => latest.current,
-          (action) => {
-            dispatch(action);
-            // The next step of this call (or the next call) can run before React renders this one; it must see this change.
-            latest.current = reducer(latest.current, action);
-          },
-        );
-        void runTool(call, env).then((result) => host.agent.toolResult(call.id, result));
-      }),
-    [dispatch],
-  );
+  useEffect(() => {
+    const onToolCall = (call: AgentToolCall) => {
+      const env = toolEnv(
+        () => latest.current,
+        (action) => {
+          dispatch(action);
+          // The next step of this call (or the next call) can run before React renders this one; it must see this change.
+          latest.current = reducer(latest.current, action);
+        },
+      );
+      void runTool(call, env).then((result) => host.agent.toolResult(call.id, result));
+    };
+    const off = host.agent.onToolCall(onToolCall);
+    // Asked only once listening, so a call main sends meanwhile arrives once, by one route or the other.
+    void host.agent.pendingToolCalls().then((calls) => calls.forEach(onToolCall), (error: unknown) => console.error('Taking back tool calls after reload failed', error));
+    return off;
+  }, [dispatch]);
   useQueueRunner(state, dispatch);
   useCompactInstructions(state.threads);
   useRemoteBridge(state, dispatch);

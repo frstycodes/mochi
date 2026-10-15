@@ -16,7 +16,7 @@ import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
-import { codexUrl, resolveToolCall } from '../mcp/server.ts';
+import { codexUrl, resolveToolCall, undeliveredToolCalls } from '../mcp/server.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
@@ -216,6 +216,9 @@ export const agent = {
       }
     })();
     return { id };
+  },
+  async pendingToolCalls(sender) {
+    return undeliveredToolCalls(sender);
   },
   async toolResult(_sender, id, result) {
     string(id, 'id', 256);

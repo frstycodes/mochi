@@ -335,6 +335,8 @@ export interface AgentHost {
   limits(provider: Provider, spaceId: string, refresh?: boolean): Promise<AccountLimits>;
   onLimits(listener: (limits: AccountLimits) => void): () => void;
   onToolCall(listener: (call: AgentToolCall) => void): () => void;
+  /** After a window reload: the tool calls the old page was running, still waiting in main, each returned once. */
+  pendingToolCalls(): Promise<AgentToolCall[]>;
   toolResult(id: string, result: AgentToolResult): Promise<void>;
 }
 
@@ -363,6 +365,7 @@ export const agentMethods = {
   limits: 'invoke',
   onLimits: 'event',
   onToolCall: 'event',
+  pendingToolCalls: 'invoke',
   toolResult: 'invoke',
 } satisfies Manifest<AgentHost>;
 

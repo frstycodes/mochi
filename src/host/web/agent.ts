@@ -58,6 +58,9 @@ export const agent: AgentHost = {
   },
   // No agents in the web build, so no tool calls.
   onToolCall: () => () => {},
+  async pendingToolCalls() {
+    return [];
+  },
   async toolResult() {},
   async warm() {},
   async limits(provider) {
