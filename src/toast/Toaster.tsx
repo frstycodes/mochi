@@ -6,38 +6,35 @@ import {
   useSyncExternalStore,
   type KeyboardEvent,
   type MouseEvent,
-  type PointerEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
-import { ArrowDown2, ArrowUp2, CheckCircle, CloseCircle, InfoCircle, Loader, Warning, X } from 'reicon-react';
+import { ArrowDown2, ArrowUp2 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ToastIdContext } from './context';
-import { dismiss, getToasts, subscribe, type Toast, type ToastType } from './store';
+import { GAP, itemHeight, itemTransform, motionTiming, MORPH_MS, openSlots, slowmo, STACK_MS, stackSlots, VISIBLE, type Slot } from './stack';
+import { dismiss, getToasts, subscribe, type Toast } from './store';
+import { ToastRow, ToastSummary } from './ToastContent';
 
-const VISIBLE = 3;
-const GAP = 8;
-const PEEK = 10;
-const SWIPE_PX = 40;
 /** How far an opened toast grows past the stack on each side, never past a 16px gutter. */
 const GROWTH = 'clamp(0px, (100vw - 388px) / 2, 32px)';
 const OPEN_INSET = `calc(-1 * ${GROWTH})`;
 
-/** A toast duration, stretched by `--toast-slowmo` (unset = 1) so the motion can be studied frame by frame. */
-const slowmo = (ms: number) => `calc(${ms}ms * var(--toast-slowmo, 1))`;
 /** Widths of the card's two faces; `cqw` is the stack's own width. */
 const SUMMARY_WIDTH = '100cqw';
 const WIDGET_WIDTH = `calc(100cqw + 2 * ${GROWTH})`;
 
 /**
- * Top-center stack: collapsed it shows the newest with two peeking behind; hover or focus fans it out and pauses every countdown.
- * A toast with an `expand` widget opens in place into it, like the Dynamic Island, and the rest of the stack steps aside.
+ * Top-center stack that behaves like Sonner: collapsed it shows the newest with two peeking behind at its height; hover or focus
+ * fans it out and pauses every countdown, and it stays fanned out while a press that started in it is held. A toast with an
+ * `expand` widget opens in place into it, like the Dynamic Island, and the rest of the stack steps aside.
  */
 export function Toaster() {
   const toasts = useSyncExternalStore(subscribe, getToasts);
   const [heights, setHeights] = useState<Record<string, number>>({});
   const [isHovered, setHovered] = useState(false);
+  const [isInteracting, setInteracting] = useState(false);
   const [hasFocus, setHasFocus] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const isWindowActive = useIsWindowActive();
@@ -63,10 +60,13 @@ export function Toaster() {
   useCloseOnOutsidePointer(listRef, !!open, collapse);
   if (openId && !open) setOpenId(null);
 
-  const isExpanded = !open && !isHeldFolded && (isHovered || hasFocus);
+  const isExpanded = !open && !isHeldFolded && (isHovered || isInteracting || hasFocus);
   const slots = open ? openSlots(toasts, open.id) : stackSlots(toasts, heights);
-  const frontHeight = heights[(open ?? live[0])?.id] ?? 0;
-  const height = open ? frontHeight : isExpanded ? slots.total : frontHeight + Math.min(live.length - 1, VISIBLE - 1) * PEEK;
+  // As in Sonner, the front height is the newest one registered: a toast registers once it has mounted, so for its first frame the
+  // ones behind keep the old front's height, then animate to the new one instead of snapping to it.
+  const front = open ?? live.find((t) => t.id in heights);
+  const frontHeight = (front && heights[front.id]) ?? 0;
+  const height = open ? frontHeight : isExpanded ? slots.total : frontHeight + Math.min(live.length - 1, VISIBLE - 1) * GAP;
 
   const closeFromKeyboard = (id: string) => {
     dismiss(id);
@@ -84,7 +84,13 @@ export function Toaster() {
         style={{ height: Math.max(height, 0) }}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
-        onPointerMove={() => isHeldFolded && setHeldFolded(false)}
+        onPointerMove={() => {
+          setHovered(true);
+          if (isHeldFolded) setHeldFolded(false);
+        }}
+        onPointerDown={() => setInteracting(true)}
+        onPointerUp={() => setInteracting(false)}
+        onPointerCancel={() => setInteracting(false)}
         // Capture: Escape's own collapse runs after this in the toast and holds the stack again.
         onKeyDownCapture={() => isHeldFolded && setHeldFolded(false)}
         onFocus={(e) => {
@@ -103,7 +109,7 @@ export function Toaster() {
             isExpanded={isExpanded}
             isOpen={t === open}
             isPaused={isExpanded || !!open || !isWindowActive}
-            onHeight={(h) => setHeights((all) => (all[t.id] === h ? all : { ...all, [t.id]: h }))}
+            onHeight={(h) => setHeights((all) => withHeight(all, t.id, h))}
             onOpen={() => setOpenId(t.id)}
             onCollapse={collapse}
             onKeyboardClose={() => closeFromKeyboard(t.id)}
@@ -114,28 +120,6 @@ export function Toaster() {
   );
 }
 
-type Slot = { index: number; y: number };
-
-/** Leaving toasts hold their spot while they fade; the live ones close the gap behind them. */
-function stackSlots(toasts: Toast[], heights: Record<string, number>) {
-  const byId: Record<string, Slot> = {};
-  let index = 0;
-  let y = 0;
-  for (const t of toasts) {
-    byId[t.id] = { index, y };
-    if (t.isLeaving) continue;
-    index++;
-    y += (heights[t.id] ?? 0) + GAP;
-  }
-  return { byId, total: Math.max(y - GAP, 0) };
-}
-
-/** The opened toast takes the front; every other one counts as past the visible three, so it fades and its timer waits. */
-function openSlots(toasts: Toast[], openId: string) {
-  const byId = Object.fromEntries(toasts.map((t) => [t.id, t.id === openId ? { index: 0, y: 0 } : { index: VISIBLE, y: 0 }]));
-  return { byId, total: 0 };
-}
-
 type ToastItemProps = {
   toast: Toast;
   slot: Slot;
@@ -144,7 +128,8 @@ type ToastItemProps = {
   isExpanded: boolean;
   isOpen: boolean;
   isPaused: boolean;
-  onHeight: (height: number) => void;
+  /** The toast's measured height once it has mounted, and `null` when it unmounts. */
+  onHeight: (height: number | null) => void;
   onOpen: () => void;
   onCollapse: () => void;
   onKeyboardClose: () => void;
@@ -156,8 +141,7 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
   const openerRef = useRef<HTMLButtonElement>(null);
   const widgetRef = useRef<HTMLDivElement>(null);
   const [isMounted, setMounted] = useState(false);
-  const swipe = useSwipe(() => dismiss(toast.id), !isOpen);
-  useMeasure(contentRef, onHeight);
+  useMeasure(contentRef, onHeight, isMounted);
   useEffect(() => {
     const frame = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(frame);
@@ -166,6 +150,22 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
   // the card shrinks into the outcome, instead of vanishing on the first frame.
   const [widget, setWidget] = useState(toast.expand);
   if (toast.expand && toast.expand !== widget) setWidget(toast.expand);
+
+  // Collapsing keeps the morph timing until the card is back to its toast size. A timer, not `transitionend`: on a narrow window
+  // neither the width nor the corners change, so no transition would end.
+  const [isClosing, setClosing] = useState(false);
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
+    setClosing(!isOpen);
+  }
+  useEffect(() => {
+    if (!isClosing) return;
+    const slowdown = Number(getComputedStyle(document.documentElement).getPropertyValue('--toast-slowmo')) || 1;
+    const timer = window.setTimeout(() => setClosing(false), MORPH_MS * slowdown);
+    return () => window.clearTimeout(timer);
+  }, [isClosing]);
+  const isMorphing = isOpen || isClosing;
 
   const refocusOpener = useRef(false);
   const wasOpen = useRef(isOpen);
@@ -185,7 +185,7 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
   const isHidden = slot.index >= VISIBLE;
   const isCollapsedBehind = !isExpanded && !isFront;
   const isTimed = Number.isFinite(toast.duration);
-  const transform = itemTransform({ slot, isExpanded, isMounted, isLeaving: toast.isLeaving, offset: swipe.offset });
+  const transform = itemTransform({ slot, isExpanded, isMounted, isLeaving: toast.isLeaving });
 
   const collapse = () => {
     refocusOpener.current = true;
@@ -204,36 +204,18 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
   };
 
   const motionClass = cn(
-    'absolute inset-x-0 top-0 origin-top rounded-xl transition-[transform,opacity,filter,left,right,height,border-radius] motion-reduce:transition-opacity',
-    // Stack movement eases out; the card's size and corners keep the drawer curve both ways, so closing doesn't switch curves
-    // mid-morph. Same order as the property list above.
-    '[transition-timing-function:var(--ease-out),var(--ease-out),var(--ease-out),var(--ease-drawer),var(--ease-drawer),var(--ease-drawer),var(--ease-drawer)]',
-    swipe.isDragging && 'transition-none',
-    (!isMounted || toast.isLeaving || isHidden) && 'opacity-0 blur-[6px]',
+    // No transform-origin: Sonner scales the toasts behind about their centre, which sets both the peek and the path they take.
+    'absolute inset-x-0 top-0 rounded-xl transition-[transform,opacity,filter,left,right,height,border-radius] motion-reduce:transition-none',
+    (!isMounted || toast.isLeaving || isHidden) && 'opacity-0',
+    // Ours on top of Sonner's slide and fade: toasts blur in and out.
+    (!isMounted || toast.isLeaving) && 'blur-[6px]',
+    isHidden && 'pointer-events-none',
   );
-  // An explicit, transitioned height: the card morphs on open and whenever the widget inside changes size.
-  const size = { height: (isCollapsedBehind ? frontHeight : height) || undefined, ...(isOpen && { left: OPEN_INSET, right: OPEN_INSET }) };
-  const motionStyle = { transform, ...size, transitionDuration: slowmo(toast.isLeaving ? 200 : 300) };
+  const sizeState = { isFront, isExpanded, isMounted, isMorphing, canOpen: !!widget, height, frontHeight };
+  const size = { height: itemHeight(sizeState) || undefined, ...(isOpen && { left: OPEN_INSET, right: OPEN_INSET }) };
+  const motionStyle = { transform, ...size, ...motionTiming({ isLeaving: toast.isLeaving, isFront, isExpanded, isMorphing }) };
 
-  const summary = (
-    <>
-      <ToastIcon type={toast.type} />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
-        <div className="flex items-center gap-1.5">
-          <p className="min-w-0 type-body font-medium [overflow-wrap:anywhere]">{toast.title}</p>
-          {toast.count > 1 && <RepeatCount count={toast.count} />}
-        </div>
-        {!!toast.description && (
-          <div
-            data-selectable={!toast.expand || undefined}
-            className={cn('type-meta text-muted-foreground [overflow-wrap:anywhere]', !toast.expand && 'cursor-text select-text')}
-          >
-            {toast.description}
-          </div>
-        )}
-      </div>
-    </>
-  );
+  const summary = <ToastSummary toast={toast} />;
 
   return (
     <>
@@ -246,26 +228,27 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
         aria-hidden={isHidden || undefined}
         inert={isHidden || toast.isLeaving}
         onKeyDown={onKeyDown}
-        {...swipe.handlers}
         className={cn(
           motionClass,
-          // `overflow-clip`, not `hidden`: a hidden box is still scrollable, so a widget focusing a field below the card's
-          // animating height scrolled the content up, then back down as the card grew.
-          'touch-none overflow-clip bg-popover text-popover-foreground shadow-[0_0_0_1px_var(--border)] select-none',
+          'bg-popover text-popover-foreground shadow-[0_0_0_1px_var(--border)] select-none',
+          // Clipped only while it morphs, and with `overflow-clip`, not `hidden`: a hidden box is still scrollable, so a widget
+          // focusing a field below the card's animating height scrolled the content up, then back down as the card grew. Otherwise
+          // unclipped, as in Sonner: a toast shrinking behind the front one lets its content fade out past the edge.
+          isMorphing && 'overflow-clip',
           isOpen && 'rounded-2xl',
         )}
         style={{ ...motionStyle, zIndex: 1 + VISIBLE - slot.index }}
       >
-        <div ref={contentRef} style={{ transitionDuration: slowmo(200) }} className={cn('relative transition-opacity', isCollapsedBehind && 'opacity-0')}>
+        <div ref={contentRef} style={{ transitionDuration: slowmo(STACK_MS) }} className={cn('relative transition-opacity ease-[ease]', isCollapsedBehind && 'opacity-0')}>
           <Face isActive={!isOpen} width={SUMMARY_WIDTH} timing={SUMMARY_FADE}>
-            <div className="flex items-start gap-2.5 py-2.5 pr-2 pl-3">
+            <ToastRow toast={toast} onAction={runAction} onClose={(e) => (e.detail === 0 ? onKeyboardClose() : dismiss(toast.id))}>
               {toast.expand ? (
                 <button
                   ref={openerRef}
                   type="button"
                   aria-expanded={isOpen}
                   className="-my-1 -ml-1.5 flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 rounded-lg py-1 pl-1.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                  onClick={() => !swipe.wasDragged() && onOpen()}
+                  onClick={onOpen}
                 >
                   {summary}
                   <ArrowDown2 aria-hidden className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
@@ -273,23 +256,7 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
               ) : (
                 summary
               )}
-              {!!toast.action && (
-                <Button data-toast-control size="sm" variant="outline" onClick={runAction}>
-                  {toast.action.label}
-                </Button>
-              )}
-              <Button
-                data-toast-control
-                data-toast-close
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Dismiss"
-                className="mt-0.5 text-muted-foreground"
-                onClick={(e) => (e.detail === 0 ? onKeyboardClose() : dismiss(toast.id))}
-              >
-                <X />
-              </Button>
-            </div>
+            </ToastRow>
           </Face>
           {!!widget && (
             <Face isActive={isOpen} width={WIDGET_WIDTH} timing={WIDGET_FADE}>
@@ -307,7 +274,7 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
             className="invisible absolute"
             style={{
               animation: `toast-countdown ${toast.duration}ms linear forwards`,
-              animationPlayState: isPaused || isHidden || swipe.isDragging ? 'paused' : 'running',
+              animationPlayState: isPaused || isHidden ? 'paused' : 'running',
             }}
             onAnimationEnd={() => dismiss(toast.id)}
           />
@@ -324,8 +291,8 @@ type FadeTiming = { delay: number; duration: number };
  * widget is there from the start, revealed by the growing card. Collapsing, the toast text starts blurring in as the card starts
  * shrinking and resolves with it, while the widget, clipped by the card, holds a beat before fading.
  */
-const SUMMARY_FADE = { in: { delay: 0, duration: 300 }, out: { delay: 0, duration: 120 } } satisfies Record<'in' | 'out', FadeTiming>;
-const WIDGET_FADE = { in: { delay: 0, duration: 150 }, out: { delay: 100, duration: 200 } } satisfies Record<'in' | 'out', FadeTiming>;
+const SUMMARY_FADE = { in: { delay: 0, duration: 400 }, out: { delay: 0, duration: 160 } } satisfies Record<'in' | 'out', FadeTiming>;
+const WIDGET_FADE = { in: { delay: 0, duration: 200 }, out: { delay: 130, duration: 270 } } satisfies Record<'in' | 'out', FadeTiming>;
 
 /**
  * One face of the card, at its own fixed width and centred, so the card morphs around it without reflowing it, like the Dynamic
@@ -347,7 +314,7 @@ function Face({ isActive, width, timing, children }: { isActive: boolean; width:
 function ToastWidget({ ref, onCollapse, children }: { ref: RefObject<HTMLDivElement | null>; onCollapse: () => void; children: ReactNode }) {
   // Grows to the viewport (52px top offset + 16px gutter) and scrolls only past that.
   return (
-    <div ref={ref} tabIndex={-1} data-toast-control className="max-h-[calc(100dvh-68px)] cursor-auto overflow-y-auto outline-none select-text">
+    <div ref={ref} tabIndex={-1} className="max-h-[calc(100dvh-68px)] cursor-auto overflow-y-auto p-1.5 outline-none select-text">
       <div className="sticky top-0 z-10 flex h-0 justify-end">
         <Button variant="ghost" size="icon-xs" aria-label="Collapse" className="mt-2 mr-2 text-muted-foreground" onClick={onCollapse}>
           <ArrowUp2 />
@@ -358,109 +325,29 @@ function ToastWidget({ ref, onCollapse, children }: { ref: RefObject<HTMLDivElem
   );
 }
 
-function itemTransform({
-  slot,
-  isExpanded,
-  isMounted,
-  isLeaving,
-  offset,
-}: {
-  slot: Slot;
-  isExpanded: boolean;
-  isMounted: boolean;
-  isLeaving: boolean;
-  offset: { x: number; y: number };
-}) {
-  if (!isMounted) return 'translateY(-100%)';
-  const stackY = isExpanded ? slot.y : slot.index * PEEK;
-  const scale = isExpanded ? 1 : 1 - Math.min(slot.index, VISIBLE) * 0.05;
-  const isSwiped = offset.x !== 0 || offset.y !== 0;
-  if (isLeaving && isSwiped) return `translate(${offset.x * 2}px, ${stackY + Math.min(offset.y, 0) * 2}px) scale(${scale})`;
-  if (isLeaving) return `translateY(${stackY - 16}px) scale(${scale})`;
-  return `translate(${offset.x}px, ${stackY + offset.y}px) scale(${scale})`;
+function withHeight(heights: Record<string, number>, id: string, height: number | null) {
+  if (height === null) {
+    const { [id]: _, ...rest } = heights;
+    return rest;
+  }
+  return heights[id] === height ? heights : { ...heights, [id]: height };
 }
 
-const ICONS = {
-  default: null,
-  success: <CheckCircle className="size-4 text-success" />,
-  info: <InfoCircle className="size-4 text-info" />,
-  warning: <Warning className="size-4 text-warning" />,
-  error: <CloseCircle className="size-4 text-destructive" />,
-  loading: <Loader className="size-4 animate-spin text-muted-foreground motion-reduce:animate-[spin_2s_linear_infinite]" />,
-} satisfies Record<ToastType, unknown>;
-
-function ToastIcon({ type }: { type: ToastType }) {
-  const icon = ICONS[type];
-  return (
-    !!icon && (
-      <span aria-hidden className="mt-0.5 flex shrink-0">
-        {icon}
-      </span>
-    )
-  );
-}
-
-function RepeatCount({ count }: { count: number }) {
-  return (
-    <span aria-label={`Shown ${count} times`} className="shrink-0 rounded-full bg-muted px-1.5 type-caption font-medium text-muted-foreground tabular">
-      {count}
-    </span>
-  );
-}
-
-function useMeasure(ref: RefObject<HTMLElement | null>, onHeight: (height: number) => void) {
+function useMeasure(ref: RefObject<HTMLElement | null>, onHeight: (height: number | null) => void, isActive: boolean) {
   const latest = useRef(onHeight);
   latest.current = onHeight;
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !isActive) return;
     // offsetHeight, not the bounding rect: the stack scales items behind the front one.
     latest.current(el.offsetHeight);
     const observer = new ResizeObserver(() => latest.current(el.offsetHeight));
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [ref]);
-}
-
-/**
- * Drag sideways or up to dismiss; dragging down only gives a little. Controls and the selectable description don't start a drag.
- * The pointer is captured only once it moves: capturing on press would retarget the click away from the toast's own button.
- */
-function useSwipe(onSwipe: () => void, isEnabled: boolean) {
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const dragged = useRef(false);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setDragging] = useState(false);
-
-  const end = (e: PointerEvent) => {
-    if (!start.current) return;
-    start.current = null;
-    setDragging(false);
-    const isPastThreshold = Math.abs(offset.x) > SWIPE_PX || offset.y < -SWIPE_PX;
-    if (isPastThreshold && e.type === 'pointerup') return onSwipe();
-    setOffset({ x: 0, y: 0 });
-  };
-
-  const handlers = {
-    onPointerDown: (e: PointerEvent) => {
-      dragged.current = false;
-      if (!isEnabled || e.button !== 0 || (e.target as Element).closest('[data-toast-control], [data-selectable]')) return;
-      start.current = { x: e.clientX, y: e.clientY };
-    },
-    onPointerMove: (e: PointerEvent) => {
-      if (!start.current) return;
-      const dx = e.clientX - start.current.x;
-      const dy = e.clientY - start.current.y;
-      if (!dragged.current && Math.hypot(dx, dy) < 4) return;
-      if (!dragged.current) e.currentTarget.setPointerCapture(e.pointerId);
-      dragged.current = true;
-      setDragging(true);
-      setOffset(Math.abs(dx) > Math.abs(dy) ? { x: dx, y: 0 } : { x: 0, y: dy < 0 ? dy : dy * 0.2 });
-    },
-    onPointerUp: end,
-    onPointerCancel: end,
-  };
-  return { offset, isDragging, handlers, wasDragged: () => dragged.current };
+    return () => {
+      observer.disconnect();
+      latest.current(null);
+    };
+  }, [ref, isActive]);
 }
 
 /** Popovers a widget opens portal out of the stack, so a click in one isn't a click outside. */
