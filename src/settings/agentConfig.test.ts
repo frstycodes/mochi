@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  claudePluginRoots,
+  commandMeta,
   claudeDeniedServers,
   claudeServers,
   claudeSkillOff,
@@ -207,4 +209,24 @@ test('adding: JSON in three shapes, command lines with env and quotes, URLs', ()
 test('skills: name and description from front matter, folder name otherwise', () => {
   assert.deepEqual(skillMeta('---\nname: run\ndescription: "Launch the app"\n---\nBody', 'folder'), { name: 'run', description: 'Launch the app' });
   assert.deepEqual(skillMeta('# No front matter', 'folder'), { name: 'folder', description: '' });
+});
+
+test('reads a custom command from its file: front matter first, else its first line', () => {
+  assert.deepEqual(commandMeta('---\ndescription: Draft notes\nargument-hint: "[since]"\n---\nWrite them.', 'release-notes'), { name: 'release-notes', description: 'Draft notes', argumentHint: '[since]' });
+  assert.deepEqual(commandMeta('\n# Fix the lint errors\n\nThen explain.', 'fix'), { name: 'fix', description: 'Fix the lint errors' });
+});
+
+test('finds the install folders of user-scope plugins settings turn on', () => {
+  const installed = JSON.stringify({
+    version: 2,
+    plugins: {
+      'ponytail@ponytail': [{ scope: 'user', installPath: '/p/ponytail/4.7.0' }],
+      'figma@official': [{ scope: 'user', installPath: '/p/figma' }],
+      'local@market': [{ scope: 'project', installPath: '/p/local' }],
+      'unlisted@market': [{ scope: 'user', installPath: '/p/unlisted' }],
+    },
+  });
+  const settings = JSON.stringify({ enabledPlugins: { 'ponytail@ponytail': true, 'figma@official': false, 'local@market': true } });
+  assert.deepEqual(claudePluginRoots(installed, settings), [{ name: 'ponytail', root: '/p/ponytail/4.7.0' }]);
+  assert.deepEqual(claudePluginRoots('', settings), []);
 });

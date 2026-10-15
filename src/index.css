@@ -53,7 +53,7 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
-  /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/main.tsx` sets the zoom. */
+  /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/appZoom.ts` sets the zoom. */
   --lights-end: calc(75px / var(--app-zoom, 1));
 
   --background: oklch(0.975 0.003 285);

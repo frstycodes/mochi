@@ -140,6 +140,7 @@ function fakeSettings() {
     instructions: { path: `/acct/${provider}/${provider === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}`, text: config[provider].instructions },
     mcpServers: config[provider].servers,
     skills: config[provider].skills,
+    commands: [],
     plugins: [],
     projectInstructions: null,
   });

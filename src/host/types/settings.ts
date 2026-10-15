@@ -1,4 +1,4 @@
-import type { Provider } from '../../model.ts';
+import type { AgentCommand, Provider } from '../../model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../settings/harnesses.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../../settings/agentConfig.ts';
 import { CHEAP_MODELS, UTILITY_TASKS, type UtilityTask } from '../../utility/prompts.ts';
@@ -116,6 +116,8 @@ export interface ProviderConfig {
   instructions: { path: string; text: string };
   mcpServers: McpEntry[];
   skills: SkillEntry[];
+  /** What `/name` also runs, read-only: the project's skills and commands, the account's commands, enabled plugins' skills and commands. */
+  commands: (AgentCommand & { isSkill: boolean })[];
   plugins: string[];
   /** The project's own instructions file, when the project has one; the tool reads it next to the account's. */
   projectInstructions: string | null;

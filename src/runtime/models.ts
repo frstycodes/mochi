@@ -114,3 +114,9 @@ export function searchModels(models: ModelOption[], query: string) {
     return words.every((word) => text.includes(word));
   });
 }
+
+/** Whether `model` is the one a new thread starts on: the default harness's Settings model, or that account's own default when unset. */
+export function isNewThreadModel(model: ModelOption, catalog: Partial<Record<Provider, AgentModel[]>>, harnessModels: Record<Provider, string>, agent: Provider) {
+  const start = optionFor(catalog[agent], harnessModels[agent], agent);
+  return model.harness === start.harness && model.id === start.id;
+}

@@ -73,6 +73,11 @@ test('undo state is the latest undo or redo logged for that turn', () => {
   assert.equal(isTurnUndone(activity, 3), false);
 });
 
+test('a turn that only ran commands is kept, with no files, so its git diff can show what the commands changed', () => {
+  const turns = turnChanges([you('format'), e('tool', 'claude', 'Run pnpm fmt'), you('thanks'), e('message', 'claude', 'ok')]);
+  assert.deepEqual(turns.map((t) => [t.start, t.files.length, t.ranCommands]), [[0, 0, true]]);
+});
+
 test('a shell command in the open turn may have edited files; reads, Mochi calls and earlier turns may not', () => {
   assert.equal(mayHaveEdited([you('add a test'), e('tool', 'claude', "Run sed -i '' 's/a/b/' sum.test.mjs")]), true, 'sed -i leaves no Edit entry');
   assert.equal(mayHaveEdited([you('go'), edit('Edit a.ts  +1 −0')]), true);
