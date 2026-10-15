@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Folder, Link, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { getPrefs, setPrefs } from './settings/prefs';
 import { useHarness, useSpace, useSpaceThreads } from './store';
-import { SlashMenu, useSlashItems, useSlashMenu } from './chat/SlashMenu';
+import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
+import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { resolveToken, typedSkills } from './chat/slash';
-import { withReferences } from './chat/mentions';
+import { withReferences, type Mention } from './chat/mentions';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -45,6 +46,7 @@ interface NewThreadPicks {
   provider: Provider;
   picked: ThreadControls | null;
   project: string | null;
+  mentions: Mention[];
 }
 
 export function NewThreadView() {
@@ -59,7 +61,7 @@ export function NewThreadView() {
 }
 
 function NewThread() {
-  const { dispatch } = useHarness();
+  const { state, dispatch } = useHarness();
   const { leafId } = useSplit();
   const [layoutId] = useState(() => newComposerLayoutId(leafId));
   const { textInput, attachments } = usePromptInputController();
@@ -75,11 +77,18 @@ function NewThread() {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
-  // /side needs a thread to ask about.
-  const slashItems = useSlashItems(provider, spaceId).filter((i) => i.source !== 'mochi');
-  const slash = useSlashMenu(slashItems);
   const recentProjects = useRecentProjects();
   const [project, setProject] = useState<string | null>(saved ? saved.project : (recentProjects[0] ?? null));
+  // /side needs a thread to ask about.
+  const slashItems = useSlashItems(provider, spaceId, project).filter((i) => i.source !== 'mochi');
+  const slash = useSlashMenu(slashItems);
+  // No thread is this page's own, so none is left out.
+  const mention = useMentionMenu(layoutId, useThreadSkills(provider, spaceId, project), useThreadServers(provider, spaceId, project));
+  // Slash tracks the caret always; the open menu owns the listbox attributes.
+  const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
+  useEffect(() => {
+    mention.restore(saved?.mentions ?? []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
   const [dependOn, setDependOn] = useState<Match | null>(null);
   const machines = useMachines();
@@ -87,8 +96,8 @@ function NewThread() {
   const remote = machines.machines.find((m) => m.machine.id === runsOn)?.machine;
   const draft = textInput.value;
   // Picks only ride along with something typed or attached; on their own they aren't a draft.
-  const hasDraft = !!draft || attachments.files.length > 0;
-  const draftExtra = useMemo<NewThreadPicks | undefined>(() => (hasDraft ? { provider, picked, project } : undefined), [hasDraft, provider, picked, project]);
+  const hasDraft = !!draft || attachments.files.length > 0 || mention.mentions.length > 0;
+  const draftExtra = useMemo<NewThreadPicks | undefined>(() => (hasDraft ? { provider, picked, project, mentions: mention.mentions } : undefined), [hasDraft, provider, picked, project, mention.mentions]);
   const matches = useStepMatches(draft);
   const linked = dependOn && matches.some((m) => m.step.id === dependOn.step.id) ? dependOn : null;
   // The worktree checkbox remembers your last choice for the next new thread.
@@ -109,8 +118,8 @@ function NewThread() {
     if (!title) return;
     // GAP: another computer's thread starts folderless, with its defaults: its projects and models aren't listed here yet.
     if (remote) {
-      if (files.length > 0) {
-        toast.error(`Images can’t go to ${remote.name} yet`);
+      if (files.length > 0 || mention.mentions.length > 0) {
+        toast.error(`Images and references can’t go to ${remote.name} yet`);
         return false;
       }
       const result = await machines.run(remote.id, { type: 'create', title, provider, project: null });
@@ -123,9 +132,23 @@ function NewThread() {
       return false;
     }
     const images = await sentImages(files);
-    const { prompt, skills } = withReferences(title, [], [], { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
+    const references = withReferences(title, mention.mentions, state.threads, { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
     handOffComposer(leafId, layoutId);
-    return dispatch({ type: 'create', title, ...(skills.length > 0 && { prompt, skills }), ...(images.length > 0 && { images }), provider, project, workspace: project ? chosenWorkspace(workspace) : undefined, controls, isLive: host.isDesktop, dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined });
+    mention.clear();
+    return dispatch({
+      type: 'create',
+      title,
+      ...(references.prompt !== title && { prompt: references.prompt }),
+      ...(references.skills.length > 0 && { skills: references.skills }),
+      ...(images.length > 0 && { images }),
+      ...(references.images.length > 0 && { referenceImages: references.images }),
+      provider,
+      project,
+      workspace: project ? chosenWorkspace(workspace) : undefined,
+      controls,
+      isLive: host.isDesktop,
+      dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined,
+    });
   };
 
   return (
@@ -139,7 +162,9 @@ function NewThread() {
       <motion.div layoutId={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
         <div className="relative">
           <SlashMenu menu={slash} />
+          <MentionMenu menu={mention} />
           <ComposerCard>
+            <MentionChips menu={mention} />
             <ComposerInput
               autoFocus
               draftKey={draftKey}
@@ -148,7 +173,11 @@ function NewThread() {
               provider={provider}
               onControlsChange={setControls}
               slashItems={slashItems}
-              {...slash.textareaProps}
+              {...menuProps}
+              onKeyDown={(e) => {
+                mention.textareaProps.onKeyDown(e);
+                if (!e.isPropagationStopped()) slash.textareaProps.onKeyDown(e);
+              }}
               onSend={start}
               submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
               isTextOnly={!!remote}
