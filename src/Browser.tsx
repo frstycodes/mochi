@@ -13,7 +13,7 @@ import { adoptView, destroyPage, ensureView, getPage, onTabRequest, openFind, pa
 import { BrowserToolbar, DeviceBar, DriveBar } from './browser/Toolbar';
 import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
-import { isTabOnScreen, nextTabId } from './store/panes';
+import { isTabOnScreen } from './store/panes';
 import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { useHarness } from './store';
@@ -87,13 +87,12 @@ function useBrowserHousekeeping() {
       onTabRequest((request) => {
         const [threadId, tabId] = tabPageKey(request.key).split('/');
         if (request.type === 'close') return dispatch({ type: 'pane-close-tab', threadId, tabId });
-        // The reducer gives the new tab this same id, as PortsTab relies on.
-        // GAP: two popups opened before a re-render get the same id, and the second adopts over the first.
-        const popupTabId = nextTabId(state.panes.find((p) => p.threadId === threadId)?.tabs ?? []);
+        // Named here, not by the reducer: two popups opened before a re-render would both get the next free id.
+        const popupTabId = `popup_${request.hostId}`;
         adoptView(pageKey(threadId, popupTabId), request.hostId, request.url);
-        dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url: request.url });
+        dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url: request.url, tabId: popupTabId });
       }),
-    [dispatch, state.panes],
+    [dispatch],
   );
   useEffect(() => {
     const live = new Set(state.panes.flatMap((p) => p.tabs.map((t) => pageKey(p.threadId, t.id))));
