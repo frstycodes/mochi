@@ -10,6 +10,10 @@ import { IMAGE_OUTLINE, MessageImages } from '../../chat/MessageImages';
 import { CallList } from '../../WorkLog';
 import { openPhotos } from '../../photo/photos';
 import { cn } from '@/lib/utils';
+import { ChatView } from '../../ChatView';
+import { SplitContext } from '../../layout/SplitContext';
+import { NOW0, type ActivityEntry } from '../../model';
+import { useHarness } from '../../store';
 
 const { dunes, screenshot, fern, coast, mochi } = DEMO_PHOTOS;
 const reveal = () => toast('Would select mochi-sticker.png in Finder');
@@ -76,13 +80,13 @@ export function ImagesSection() {
         <Block wide title="Generated image: generating" use="A dot grid in the frame, at the target aspect; soft light drifts through it, the dots swelling and brightening where it pools. Off-screen frames stop drawing; reduced motion holds one still frame.">
           <div className="flex flex-wrap items-start gap-6 rounded-xl border p-4">
             <GenSample label="1:1">
-              <ImageGenCard image={{ status: 'running', prompt: 'A mochi mascot sticker, soft pastel, white outline', seconds: 12 }} />
+              <ImageGenCard image={{ status: 'running', prompt: 'A mochi mascot sticker, soft pastel, white outline' }} startedMs={SINCE_12S} />
             </GenSample>
             <GenSample label="3:2, no prompt yet">
               <ImageGenCard image={{ status: 'running', aspect: 3 / 2 }} />
             </GenSample>
             <GenSample label="2:3">
-              <ImageGenCard image={{ status: 'running', aspect: 2 / 3, prompt: 'Poster for a quiet jazz night', seconds: 41 }} />
+              <ImageGenCard image={{ status: 'running', aspect: 2 / 3, prompt: 'Poster for a quiet jazz night' }} startedMs={SINCE_41S} />
             </GenSample>
           </div>
         </Block>
@@ -91,12 +95,15 @@ export function ImagesSection() {
           <div className="flex flex-wrap items-start gap-6 rounded-xl border p-4">
             <LiveSample />
             <GenSample label="Done">
-              <ImageGenCard image={{ status: 'done', src: mochi.src, prompt: 'A mochi mascot sticker, soft pastel, white outline, on a mint background' }} onReveal={reveal} />
+              <ImageGenCard image={{ status: 'done', src: mochi.src, prompt: 'A mochi mascot sticker, soft pastel, white outline, on a mint background' }} />
             </GenSample>
             <GenSample label="Failed">
               <ImageGenCard image={{ status: 'failed', prompt: 'A mochi mascot sticker, soft pastel, white outline', error: 'Image generation limit reached. Resets at 4:30 PM.' }} />
             </GenSample>
           </div>
+        </Block>
+        <Block wide title="In the transcript" use="The real ChatView on a demo thread: your images, a tool that returned a screenshot (folded thumbs, open the group for the row), a markdown image, and Codex-style generations running and done.">
+          <TranscriptSample />
         </Block>
       </Grid>
     </Section>
@@ -149,6 +156,8 @@ function FoldedGroup() {
 }
 
 const LIVE_MS = 4000;
+const SINCE_12S = Date.now() - 12_000;
+const SINCE_41S = Date.now() - 41_000;
 
 function LiveSample() {
   const [run, setRun] = useState(0);
@@ -163,7 +172,6 @@ function LiveSample() {
       <ImageGenCard
         key={run}
         image={isDone ? { status: 'done', src: mochi.src, prompt: 'A mochi mascot sticker, soft pastel, white outline' } : { status: 'running', prompt: 'A mochi mascot sticker, soft pastel, white outline' }}
-        onReveal={reveal}
       />
       <Button variant="outline" size="sm" className="self-start" onClick={() => setRun((r) => r + 1)}>
         Replay
@@ -171,6 +179,29 @@ function LiveSample() {
     </GenSample>
   );
 }
+
+function TranscriptSample() {
+  const { state } = useHarness();
+  // A thread with nothing queued, so no question tray covers the sample.
+  const quiet = state.threads.find((t) => !state.queue.some((q) => q.threadId === t.id))!;
+  return (
+    <div className="flex h-[720px] flex-col overflow-hidden rounded-xl border">
+      <SplitContext.Provider value={{ leafId: 'design-images', isFocused: false, isMulti: false, isZoomed: false, isFirst: false, isWide: true }}>
+        <ChatView thread={{ ...quiet, activity: TRANSCRIPT }} />
+      </SplitContext.Provider>
+    </div>
+  );
+}
+
+const PROMPT = 'A mochi mascot sticker, soft pastel, white outline, on a mint background';
+const TRANSCRIPT: ActivityEntry[] = [
+  { at: NOW0, who: 'you', kind: 'message', text: 'Make the hero feel like these, then draw me a mascot', images: [dunes.src, fern.src, coast.src] },
+  { at: NOW0, who: 'claude', kind: 'tool', text: 'Mcp playwright: browser_take_screenshot', toolId: 'img-1', mcp: { server: 'playwright', tool: 'browser_take_screenshot' }, images: [screenshot.src] },
+  { at: NOW0, who: 'claude', kind: 'tool', text: 'Run pnpm build', toolId: 'img-2', exitCode: 0, output: 'built in 1.2s' },
+  { at: NOW0, who: 'claude', kind: 'message', text: `Here’s the hero as it renders now:\n\n![Current hero](${screenshot.src})\n\nGenerating the mascot next.` },
+  { at: NOW0, who: 'claude', kind: 'tool', text: 'Generate image', toolId: 'img-3', generated: { status: 'done', prompt: PROMPT, src: mochi.src } },
+  { at: NOW0, who: 'claude', kind: 'tool', text: 'Generate image', toolId: 'img-4', ms: Date.now() - 9_000, generated: { status: 'running', prompt: 'The same mascot waving, transparent background' } },
+];
 
 function GenSample({ label, children }: { label: string; children: ReactNode }) {
   return (

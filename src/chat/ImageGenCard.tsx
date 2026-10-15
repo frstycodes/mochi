@@ -3,36 +3,35 @@ import { toast } from 'sonner';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { useRef, type CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
+import { formatElapsed, useElapsed } from '../agents/parts';
 import { IS_MAC } from '../keys';
+import type { GeneratedImage } from '../model';
+import { isFilePath, revealFile, useImageUrls } from './imageSrc';
 import { GeneratingDots } from './GeneratingDots';
 import { copyImage, openPhotos, saveImage, type Photo } from '../photo/photos';
 import { TooltipIconButton } from '../ui';
-
-/** An image the agent generated. `aspect` is width / height, known before the image is (the size it asked for); square when unknown. */
-export interface GeneratedImage {
-  status: 'running' | 'done' | 'failed';
-  prompt?: string;
-  src?: string;
-  aspect?: number;
-  /** Why it failed, as the harness said it. */
-  error?: string;
-  seconds?: number;
-}
 
 export const REVEAL_LABEL = IS_MAC ? 'Show in Finder' : 'Show in folder';
 
 /**
  * One generated image: a frame at the target aspect where light drifts through a dot grid while it's made, then the image
- * opens out from where the light last pooled, its blur clearing, so the transcript never jumps. The prompt lies on the frame's bottom edge, shimmering until the image lands; open, copy, download and reveal sit on the image.
+ * opens out from where the light last pooled, its blur clearing, so the transcript never jumps. The prompt lies on the frame's
+ * bottom edge, shimmering until the image lands; open, copy, download and reveal (for a file on disk) sit on the image.
+ * `startedMs`: when generating began, for the elapsed time.
  */
-export function ImageGenCard({ image, onReveal, className }: { image: GeneratedImage; onReveal?: () => void; className?: string }) {
-  const { status, prompt, src } = image;
+export function ImageGenCard({ image, startedMs, className }: { image: GeneratedImage; startedMs?: number; className?: string }) {
+  const { prompt, src } = image;
+  const [url] = useImageUrls(src ? [src] : []);
+  // A finished image whose file is gone reads as failed, saying so, rather than an empty frame.
+  const status = image.status === 'done' && url === null ? 'failed' : image.status;
+  const error = url === null ? 'The image file was moved or deleted.' : image.error;
+  const onReveal = src && isFilePath(src) ? () => void revealFile(src) : undefined;
   // Only an image you watched being made lands with the reveal; one already done when the row mounts just shows.
   const hasWaited = useRef(false);
   if (status === 'running') hasWaited.current = true;
   const light = useRef({ x: 0.5, y: 0.5 });
   const landFrom = { '--land-x': `${light.current.x * 100}%`, '--land-y': `${light.current.y * 100}%` } as CSSProperties;
-  const photo: Photo | null = status === 'done' && src ? { src, name: prompt?.slice(0, 60) ?? 'Generated image', ...(onReveal && { reveal: onReveal }) } : null;
+  const photo: Photo | null = status === 'done' && url ? { src: url, name: prompt?.slice(0, 60) ?? 'Generated image', ...(onReveal && { reveal: onReveal }) } : null;
 
   return (
     <figure style={{ aspectRatio: image.aspect ?? 1 }} className={cn('group/gen relative w-full max-w-sm overflow-hidden rounded-xl border bg-muted', className)}>
@@ -42,7 +41,7 @@ export function ImageGenCard({ image, onReveal, className }: { image: GeneratedI
           <img src={photo.src} alt={prompt ?? ''} style={landFrom} className={cn('size-full object-cover', hasWaited.current && 'animate-image-land')} />
         </button>
       )}
-      {status === 'failed' && <FailedFrame error={image.error} />}
+      {status === 'failed' && <FailedFrame error={error} />}
       {/* Lies on the frame, never a strip under it: an eased fade into the frame's muted fill, or a dark scrim over the image. Clicks pass through to the image. */}
       <figcaption className={cn('pointer-events-none absolute inset-x-0 bottom-0 flex min-w-0 items-start gap-2 px-3 pt-14 pb-3', photo ? 'caption-scrim text-white' : 'caption-fade')}>
         <ImageSparkle aria-hidden className={cn('mt-0.5 size-3.5 shrink-0', photo ? 'text-white/80' : 'text-muted-foreground')} />
@@ -53,11 +52,16 @@ export function ImageGenCard({ image, onReveal, className }: { image: GeneratedI
         ) : (
           <span className={cn('line-clamp-2 min-w-0 flex-1 type-meta', photo ? 'text-white/90' : 'text-muted-foreground')}>{prompt ?? 'Generated image'}</span>
         )}
-        {status === 'running' && image.seconds !== undefined && <span className="shrink-0 type-caption leading-5 text-subtle-foreground tabular">{image.seconds}s</span>}
+        {status === 'running' && startedMs !== undefined && <Elapsed startedMs={startedMs} />}
       </figcaption>
       {!!photo && <ImageActions photo={photo} onReveal={onReveal} />}
     </figure>
   );
+}
+
+// Its own component, so the second's tick re-renders only the number.
+function Elapsed({ startedMs }: { startedMs: number }) {
+  return <span className="shrink-0 type-caption leading-5 text-subtle-foreground tabular">{formatElapsed(useElapsed(startedMs))}</span>;
 }
 
 function FailedFrame({ error }: { error?: string }) {

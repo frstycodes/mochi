@@ -54,8 +54,9 @@ import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkil
 import { SlashTokenText } from './chat/SlashToken';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
+import { ImageGenCard } from './chat/ImageGenCard';
+import { MessageImages } from './chat/MessageImages';
 import { toast } from 'sonner';
-import { openPhotos } from './photo/photos';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
@@ -151,6 +152,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
     return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
   }
+  if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
   if (row.kind === 'thread-message') return <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
@@ -167,7 +169,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
           Queued
         </span>
       )}
-      {isYou && !!entry.images?.length && <SentImages thumbs={entry.images} />}
+      {isYou && !!entry.images?.length && <MessageImages photos={entry.images.map((src, i) => ({ src, name: `Image ${i + 1}` }))} className="justify-end" />}
       <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
         <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
           {isAgent && row.showAuthor && (
@@ -198,26 +200,6 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     </MessageContextMenu>
   );
 });
-
-/** The images you sent with a message, as the small copies the transcript keeps; click opens them larger. */
-function SentImages({ thumbs }: { thumbs: string[] }) {
-  const photos = thumbs.map((src, i) => ({ src, name: `Image ${i + 1}` }));
-  return (
-    <div className="flex flex-wrap justify-end gap-2">
-      {photos.map((photo, i) => (
-        <button
-          key={i}
-          type="button"
-          aria-label={`View ${photo.name}`}
-          onClick={() => openPhotos({ photos, index: i })}
-          className="relative size-16 cursor-zoom-in overflow-hidden rounded-lg bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
-        >
-          <img src={photo.src} alt="" className="size-full object-cover" />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /** An agent's reply, or its simplified version: it shimmers while that is made, then crossfades to it. */
 function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {
