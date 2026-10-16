@@ -11,8 +11,6 @@ import type { ToolPolicies } from '../runtime/toolPolicy.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
-  /** Off: the sidebar stays solid instead of showing the window's vibrancy (macOS) or Mica (Windows 11). */
-  translucentSidebar: boolean;
   /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
   lightTheme: string;
   darkTheme: string;
@@ -93,7 +91,6 @@ export const toggleStar = (starred: string[], id: string) => (starred.includes(i
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
-  translucentSidebar: true,
   lightTheme: 'mochi',
   darkTheme: 'mochi',
   projectsFolder: '~/dev',

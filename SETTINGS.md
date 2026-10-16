@@ -27,7 +27,7 @@ Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.ts
 Runs on (This computer / a paired computer) is chosen in the new-thread composer (`src/remote/RunsOnMenu.tsx`).
 
 ### Appearance
-Mode: Theme (Light / Dark / System, with the user menu's sun, moon and monitor icons), Reduce motion (System / On / Off) and Translucent sidebar (macOS and Windows desktop only, on: vibrancy / Mica, electron/window.ts; off keeps the solid sidebar and its border).
+Mode: Theme (Light / Dark / System, with the user menu's sun, moon and monitor icons), Reduce motion (System / On / Off).
 
 VS Code color themes, one per appearance like VS Code's preferred light and dark themes, so System keeps switching (`lightTheme` / `darkTheme` prefs; `mochi` is the built-in). `src/settings/sections/appearance.tsx`, picker in `src/settings/ThemePicker.tsx`. Done.
 

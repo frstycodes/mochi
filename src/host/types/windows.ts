@@ -31,7 +31,7 @@ export interface WindowsHost {
   showAppMenu(x: number, y: number): Promise<void>;
   /** Back to 100%, like ⌘0. */
   resetZoom(): Promise<void>;
-  /** Settings' Light / Dark / System for native chrome (menus, the sidebar's material), which otherwise follows the OS. */
+  /** Settings' Light / Dark / System for native chrome (menus), which otherwise follows the OS. */
   setAppearance(appearance: Appearance): Promise<void>;
   /** Other apps' windows on every Space (macOS) or on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
   listApps(): Promise<{ access: ScreenAccess; windows: AppWindow[] }>;

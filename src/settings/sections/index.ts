@@ -65,7 +65,6 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
-      { id: 'translucentSidebar', label: 'Translucent sidebar', keywords: 'vibrancy acrylic mica transparency blur' },
       { id: 'lightTheme', label: 'Light theme', keywords: 'color theme vs code' },
       { id: 'darkTheme', label: 'Dark theme', keywords: 'color theme vs code' },
       { id: 'installedThemes', label: 'Installed themes', keywords: 'uninstall remove color theme' },
