@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
-import { Add, ArrowDown, ArrowUp, ClipboardTick, Pause, Sparkles, Trash3, Undo } from 'reicon-react';
+import { Plus, ArrowDown, ArrowUp, ClipboardCheck, Pause, Sparkles, Trash, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -96,13 +96,13 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
                 <Input value={c.text} onChange={(e) => setCriterion(i, { text: e.target.value })} aria-label={`Criterion ${i + 1}`} className="h-7 min-w-0 flex-1" />
                 <Input value={c.command ?? ''} onChange={(e) => setCriterion(i, { command: e.target.value })} placeholder="Check command" aria-label={`Criterion ${i + 1} check command`} className="h-7 w-40 font-mono type-caption" />
                 <TooltipIconButton label="Remove criterion" hint="Done no longer needs this" onClick={() => removeCriterion(i)}>
-                  <Trash3 />
+                  <Trash />
                 </TooltipIconButton>
               </li>
             ))}
           </ul>
           <Button variant="ghost" size="sm" className="self-start" onClick={addCriterion}>
-            <Add data-icon="inline-start" />
+            <Plus data-icon="inline-start" />
             Add criterion
           </Button>
         </section>
@@ -125,7 +125,7 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm">
-                    <Add data-icon="inline-start" />
+                    <Plus data-icon="inline-start" />
                     From template
                   </Button>
                 </DropdownMenuTrigger>
@@ -252,7 +252,7 @@ function StepEditRow({
           <Pause />
         </TooltipIconButton>
         <TooltipIconButton label="Acceptance criteria" hint="What has to be true for this step to count as done, and an optional command that checks it." disabled={step.isRemoved} aria-pressed={isCriteriaOpen} onClick={() => setCriteriaOpen((o) => !o)} className={cn(isCriteriaOpen && 'bg-accent text-foreground')}>
-          <ClipboardTick />
+          <ClipboardCheck />
         </TooltipIconButton>
         <TooltipIconButton label="Move up" disabled={isFirst} onClick={() => onMove(-1)}>
           <ArrowUp />
@@ -261,7 +261,7 @@ function StepEditRow({
           <ArrowDown />
         </TooltipIconButton>
         <TooltipIconButton label={step.isRemoved ? 'Keep this step' : 'Remove this step'} hint={step.isLocked ? "Done steps stay in the goal's history." : undefined} disabled={step.isLocked} onClick={() => onChange({ isRemoved: !step.isRemoved })}>
-          <IconSwap id={step.isRemoved ? 'undo' : 'remove'}>{step.isRemoved ? <Undo /> : <Trash3 />}</IconSwap>
+          <IconSwap id={step.isRemoved ? 'undo' : 'remove'}>{step.isRemoved ? <Undo /> : <Trash />}</IconSwap>
         </TooltipIconButton>
       </div>
       {isCriteriaOpen && !step.isRemoved && (

@@ -1,4 +1,4 @@
-import { Clock, Edit, Pause, Play, PlayCircle, Trash3 } from 'reicon-react';
+import { Clock, Edit, Pause, Play, PlayCircle, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { toast } from '../../toast/store.ts';
@@ -86,7 +86,7 @@ function TriggerRow({ trigger }: { trigger: Trigger }) {
             </TooltipIconButton>
           )}
           <TooltipIconButton label="Delete" hint="Removes the schedule; the thread stays" onClick={() => attempt('Deleting', () => host.schedule.remove(trigger.threadId))}>
-            <Trash3 />
+            <Trash />
           </TooltipIconButton>
         </div>
       }

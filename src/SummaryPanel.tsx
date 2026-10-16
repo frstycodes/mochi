@@ -1,6 +1,6 @@
 import { isValidElement, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
-import { Add, Code, Document, Edit, Global, GlobalSearch, Hourglass, Link, Maximize, Pin, PinOff, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
+import { Plus, Code, File, Edit, Globe, GlobeSearch, Hourglass, Link, Maximize, Pin, PinOff, SettingsGear, Warning, type IconComponent } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -47,7 +47,7 @@ import { BranchName } from './git/BranchLabel';
 
 const LIST_LIMIT = 3;
 
-const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global, Search: GlobalSearch, Fetch: Global } satisfies Record<CountedVerb, IconComponent>;
+const TOOL_ICONS = { Read: File, Edit: Edit, Write: Edit, Run: Code, Browser: Globe, Search: GlobeSearch, Fetch: Globe } satisfies Record<CountedVerb, IconComponent>;
 const TOOL_TONES = {
   Read: 'text-chart-1',
   Edit: 'text-chart-2',
@@ -244,7 +244,7 @@ function ToolRows({ thread, summary }: SectionProps) {
 
 function SourceIcon({ thread, source }: { thread: Thread; source: Source }) {
   if (source.kind === 'link') return <Link className="size-4 text-chart-1" />;
-  if (source.kind === 'file') return <Document className="size-4 text-chart-4" />;
+  if (source.kind === 'file') return <File className="size-4 text-chart-4" />;
   // An MCP source's label leads with its server ("Linear · LAT-198 Rate limits"); the model doesn't carry the server itself.
   const server = source.label.split(' · ')[0].toLowerCase();
   return <McpServerMark server={server} url={serverUrl(thread, server)} />;
@@ -296,7 +296,7 @@ function PanelHeader({ thread }: { thread: Thread }) {
           <DropdownMenuContent align="end" onCloseAutoFocus={(e) => isAdding && e.preventDefault()}>
             <DropdownMenuGroup>
               <DropdownMenuItem onSelect={() => setAdding(true)}>
-                <Add />
+                <Plus />
                 Add a source…
               </DropdownMenuItem>
               {repo && (
@@ -443,7 +443,7 @@ function Section({ label, action, empty, children }: { label: string; action?: R
   );
 }
 
-/** `icon`: a reicon drawn muted, or an element that brings its own colour (a PR's state icon). */
+/** `icon`: an icon drawn muted, or an element that brings its own colour (a PR's state icon). */
 function SummaryRow({ icon: Icon, label, onClick, children }: { icon: IconComponent | ReactElement; label: ReactNode; onClick?: () => void; children?: ReactNode }) {
   const content = (
     <>
@@ -517,7 +517,7 @@ function SessionDetails({ thread }: SectionProps) {
   const plugins = agent.plugins ?? [];
   const manage = (part: 'mcp' | 'skills') => (
     <TooltipIconButton label={part === 'mcp' ? 'Manage MCP servers' : 'Manage skills'} hint="Opens this profile's settings" className="size-6" onClick={() => openProfileConfig(spaceId, part, provider)}>
-      <Setting className="size-3.5" />
+      <SettingsGear className="size-3.5" />
     </TooltipIconButton>
   );
   return (
@@ -639,7 +639,7 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   const resets = tight.resetsAt ? `, resets in ${untilLabel(Date.parse(tight.resetsAt) - Date.now())}` : '';
   return (
     <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
-      <TriangleWarning className="size-4 shrink-0" aria-hidden />
+      <Warning className="size-4 shrink-0" aria-hidden />
       {tight.usedPct >= 100 ? `${name} reached; this agent stalls until it resets${resets}.` : `${name} at ${Math.round(tight.usedPct)}%${resets}.`}
     </p>
   );

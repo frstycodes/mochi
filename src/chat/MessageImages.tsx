@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GallerySlash } from 'reicon-react';
+import { ImageOff } from '@/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { openPhotos, type Photo } from '../photo/photos';
@@ -90,12 +90,12 @@ export function BrokenImage({ name, layout }: { name: string; layout: Layout }) 
         title={`${name} is not available`}
         className={cn('grid shrink-0 place-items-center rounded-lg bg-muted text-subtle-foreground', TILE[layout])}
       >
-        <GallerySlash aria-hidden className="size-4" />
+        <ImageOff aria-hidden className="size-4" />
       </span>
     );
   return (
     <span className="flex h-9 max-w-full items-center gap-2 rounded-lg bg-muted px-3 type-meta text-muted-foreground">
-      <GallerySlash aria-hidden className="size-4 shrink-0 text-subtle-foreground" />
+      <ImageOff aria-hidden className="size-4 shrink-0 text-subtle-foreground" />
       <span className="truncate">{name}</span>
       <span className="shrink-0 text-subtle-foreground">not available</span>
     </span>

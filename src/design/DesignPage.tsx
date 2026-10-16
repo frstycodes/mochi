@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUp, CheckCircle, InfoCircle, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { ArrowUp, CheckCircle, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from '@/toast/store';
@@ -162,7 +162,7 @@ function Overview() {
     <section className="flex flex-col gap-3">
       <h1 className="type-display">Mochi design system</h1>
       <p className="max-w-[62ch] type-prose text-muted-foreground">
-        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and reicon, themed from DESIGN.md. Dark first, cool neutrals,
+        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and Solar icons, themed from DESIGN.md. Dark first, cool neutrals,
         squircle corners, hairline separation.
       </p>
       <p className="flex flex-wrap items-center gap-1.5 type-caption text-subtle-foreground">
@@ -594,12 +594,12 @@ function Feedback() {
         <Block title="Alert" use="Inline explanations. Status colour always comes with an icon.">
           <div className="flex flex-col gap-2">
             <Alert>
-              <InfoCircle />
+              <Info />
               <AlertTitle>Overlap caught before any duplicate work</AlertTitle>
               <AlertDescription>Two threads want to add a Redis client. Decide in the Queue.</AlertDescription>
             </Alert>
             <Alert variant="destructive">
-              <Warning />
+              <WarningAlt />
               <AlertTitle>Setup script failed in feat/admin-usage</AlertTitle>
               <AlertDescription>pnpm install exited with code 1. The agent is paused until it passes.</AlertDescription>
             </Alert>
@@ -864,7 +864,7 @@ function Rules() {
         </Pair>
         <Pair rule="Status needs an icon or a word, not colour alone.">
           <span className="flex items-center gap-2 type-meta">
-            <Warning className="size-4 text-warning" />
+            <WarningAlt className="size-4 text-warning" />
             Needs you: answer the Stripe question
           </span>
           <span className="flex items-center gap-2 type-meta">

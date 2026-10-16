@@ -1,5 +1,5 @@
 import type { Dispatch, MouseEvent } from 'react';
-import { MessageQuestion } from 'reicon-react';
+import { MessageQuestion } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';

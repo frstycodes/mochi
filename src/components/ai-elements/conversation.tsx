@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { UIMessage } from "ai";
-import { ArrowDown as ArrowDownIcon, Download as DownloadIcon } from 'reicon-react';
+import { ArrowDown as ArrowDownIcon, Download as DownloadIcon } from '@/icons';
 import type { ComponentProps } from "react";
 import { useCallback } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";

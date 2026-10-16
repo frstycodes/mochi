@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowSwapHorizontal, ExitFullscreen, Export, Fullscreen, Grid, Layout, Rotation, X } from 'reicon-react';
+import { ArrowLeftRight, ExitFullscreen, Share, Fullscreen, Grid, Layout, Rotation, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { host } from '@/host';
 import {
@@ -62,7 +62,7 @@ export function SplitControls() {
               </DropdownMenuShortcut>
             </DropdownMenuItem>
             <DropdownMenuItem disabled={isZoomed} onSelect={() => run({ type: 'layout-swap', leafId })}>
-              <ArrowSwapHorizontal />
+              <ArrowLeftRight />
               Swap with next split
             </DropdownMenuItem>
             <DropdownMenuItem disabled={isZoomed} onSelect={() => run({ type: 'layout-rotate' })}>
@@ -72,7 +72,7 @@ export function SplitControls() {
             <PresetSubmenu />
             {!!tearOff && (
               <DropdownMenuItem onSelect={tearOff}>
-                <Export />
+                <Share />
                 Move to a new window
               </DropdownMenuItem>
             )}

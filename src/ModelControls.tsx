@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { toast } from '@/toast/store';
-import { ArrowLeft, Bolt, ChevronDown, ChevronRight, Search, Star } from 'reicon-react';
+import { ArrowLeft, Bolt, ChevronDown, ChevronRight, Search, Star } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -490,7 +490,7 @@ function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string;
       className="flex size-5 shrink-0 cursor-default items-center justify-center rounded-sm text-subtle-foreground hover:text-foreground"
     >
       {/* `!`: a focused menu item recolours every descendant. */}
-      <Star weight={isOn ? 'Filled' : undefined} className={cn('size-3.5', isOn && 'text-warning!')} />
+      <Star filled={isOn} className={cn('size-3.5', isOn && 'text-warning!')} />
     </button>
   );
 }
@@ -596,7 +596,7 @@ function SpeedIcon({ level }: { level: number }) {
   return (
     <span aria-hidden className="flex -space-x-1.5">
       {Array.from({ length: level }, (_, i) => (
-        <Bolt key={i} weight="Filled" className="size-4" />
+        <Bolt key={i} filled className="size-4" />
       ))}
     </span>
   );

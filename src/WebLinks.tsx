@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUpRight, Copy3, Global } from 'reicon-react';
+import { ArrowUpRight, CopyStack, Globe } from '@/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { hostname } from './agentPhase';
@@ -52,7 +52,7 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onSelect={() => openUrl(link.url)}>
-          <Global />
+          <Globe />
           Open in browser tab
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => window.open(link.url, '_blank', 'noopener')}>
@@ -61,7 +61,7 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => copyText(link.url, 'Link copied')}>
-          <Copy3 />
+          <CopyStack />
           Copy link
         </ContextMenuItem>
       </ContextMenuContent>
@@ -70,7 +70,7 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
 }
 
 /** The page's favicon over `fallback` (a globe) that shows until it loads, and stays when it never does; fixed size, so nothing shifts. */
-export function Favicon({ host, fallback = <Global className="size-3.5 text-subtle-foreground" /> }: { host: string; fallback?: ReactNode }) {
+export function Favicon({ host, fallback = <Globe className="size-3.5 text-subtle-foreground" /> }: { host: string; fallback?: ReactNode }) {
   const [state, setState] = useState<'loading' | 'shown' | 'failed'>('loading');
   return (
     <span aria-hidden className="relative flex size-4 shrink-0 items-center justify-center">

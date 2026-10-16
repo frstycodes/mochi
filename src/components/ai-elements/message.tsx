@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { UIMessage } from "ai";
-import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from 'reicon-react';
+import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '@/icons';
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import {
   createContext,

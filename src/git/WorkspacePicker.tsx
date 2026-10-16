@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react';
-import { ChevronDown, Hierarchy2, Warning } from 'reicon-react';
+import { ChevronDown, Hierarchy2, WarningAlt } from '@/icons';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -248,7 +248,7 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
     <ul role="status" className="flex flex-col gap-0.5 px-2 pt-2 pb-1 type-caption text-subtle-foreground">
       {notes.map((note) => (
         <li key={note} className="flex gap-1.5">
-          <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
+          <WarningAlt className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />
           {note}
         </li>
       ))}

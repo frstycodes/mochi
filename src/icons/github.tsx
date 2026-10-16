@@ -1,6 +1,6 @@
 /*
  * GitHub's own pull request and issue state icons, copied from Octicons 19.40.0 (16px set), and GitHub's mark from Simple
- * Icons 16.34 (CC0). Only for PR and issue state and naming GitHub; everything else uses reicon-react.
+ * Icons 16.34 (CC0). Only for PR and issue state and naming GitHub; everything else uses `@/icons` (Solar).
  *
  * MIT License
  *
@@ -37,7 +37,7 @@ function octicon(name: string, paths: string[]) {
   return Icon;
 }
 
-/** GitHub's mark, where a source or account is GitHub's (reicon has none). */
+/** GitHub's mark, where a source or account is GitHub's (Solar has none). */
 export function GithubMarkIcon({ className, ...props }: OcticonProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={cn('size-4 shrink-0', className)} {...props}>

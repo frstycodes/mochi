@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Warning } from 'reicon-react';
+import { WarningAlt } from '@/icons';
 import { AppBridge, buildAllowAttribute, PostMessageTransport, type McpUiHostContext, type McpUiResourceCsp, type McpUiResourcePermissions } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { withCsp } from './mcpApps';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -78,7 +78,7 @@ const hostContext = (theme: ThemeSlot): McpUiHostContext => ({ theme, displayMod
 function WidgetError({ server, error }: { server: string; error: string }) {
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
-      <Warning aria-hidden className="mt-px size-3.5 shrink-0" />
+      <WarningAlt aria-hidden className="mt-px size-3.5 shrink-0" />
       <p className="min-w-0">
         Couldn't open {server}'s view
         <span className="block text-subtle-foreground">{error}</span>

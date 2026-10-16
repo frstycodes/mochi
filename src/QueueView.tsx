@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardCheck, Clock, CopyStack, Hierarchy3, MessageQuestion, Send, Settings, ShieldCheck, TaskSquare, type IconComponent } from '@/icons';
 import { useContainingToastId } from '@/toast/context';
 import { toast } from '@/toast/store';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
@@ -45,12 +45,12 @@ import { isCommand } from './keymap';
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
   question: { icon: MessageQuestion, label: 'Question' },
-  review: { icon: ClipboardTick, label: 'Ready for review' },
+  review: { icon: ClipboardCheck, label: 'Ready for review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
   overlap: { icon: Hierarchy3, label: 'Overlap' },
-  collision: { icon: Copy3, label: 'Same files' },
+  collision: { icon: CopyStack, label: 'Same files' },
   run: { icon: Clock, label: 'Scheduled run' },
-  setting: { icon: Setting2, label: 'Setting' },
+  setting: { icon: Settings, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
 
 export function QueueView() {
@@ -332,7 +332,7 @@ function CiActions({ item }: { item: QueueItem }) {
     <>
       {!!item.ci?.check?.link && (
         <Button onClick={send} disabled={isSending}>
-          <Send2 data-icon="inline-start" />
+          <Send data-icon="inline-start" />
           {isSending ? 'Fetching log…' : 'Send failing log to agent'}
         </Button>
       )}

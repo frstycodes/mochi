@@ -1,7 +1,7 @@
 ---
 name: Mochi
 version: 0.1 (draft for sign-off)
-base: shadcn/ui (radix-nova), AI Elements for agent UI, reicon-react icons, Tailwind v4
+base: shadcn/ui (radix-nova), AI Elements for agent UI, Solar icons (`@solar-icons/react`), Tailwind v4
 references: Linear (density, restraint, crisp hairlines), Raycast (floating windows, glass only over content, keyboard first), Codex (summary panel, collapsed work log)
 themes: dark-first, light designed alongside
 colors:
@@ -130,7 +130,7 @@ Comfortably round, like Codex. Tiers: `sm` 8px (badges, kbd, checkboxes), `md` 1
 
 Corners are squircles. Where `corner-shape: squircle` is supported every radius token is multiplied by 1.84 (`--corner-scale`), which puts each corner's 45° point where the round fallback has it, so other browsers look equally round. Radii must come from the tokens: no `rounded-[Npx]`.
 
-Icons are reicon-react, outline weight, 16px in controls and 14px in dense rows. Real brand marks for Claude and Codex.
+Icons are Solar, Linear style (Bold for `filled`), 16px in controls and 14px in dense rows. Real brand marks for Claude and Codex. Components import icons from `@/icons` by our names, never from the library: `src/icons/solar.tsx` maps Solar onto them, so trying another library means writing one more mapper file. Glyphs Solar lacks (fork, the Terminal and Changes pane marks, Shift and Option keys) are `customIcon`s drawn on its 24px grid at 1.5 stroke.
 
 ## Components
 
@@ -176,6 +176,5 @@ Everything is composed from the shadcn primitives in `src/components/ui`. App co
 - Body text is 13px, meta 12px and captions 11px, matching Codex and T3 Code density; that is below the usual 14px floor for secondary text. Revisit if it reads small on non-Retina screens. Phones keep 16px in inputs so iOS doesn't zoom.
 - Light mode is designed but less exercised than dark.
 - Space icons are fixed per space until spaces get user-picked icons.
-- reicon has no git branch, merge or pull-request glyphs; `BranchUp` / `BranchDown` stand in for them.
 - Changes, PR and source rows in the summary panel open nothing yet; in the real app they open tabs in a side pane like Codex's (Changes, browser, Terminal, Files, Side chat, plugins).
 - Trackpad haptics for the model and effort dock need the desktop shell (`NSHapticFeedbackManager`); browsers have no API for it, so the web build only vibrates on phones.

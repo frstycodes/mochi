@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { Pin } from 'reicon-react';
+import { Pin } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { normalise, togglePin, type Pin as PinData } from './pins';

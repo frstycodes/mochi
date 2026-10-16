@@ -2,7 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode,
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
-import { Edit, Folder, Forbidden, Inbox, Route } from 'reicon-react';
+import { Edit, Folder, Ban, Inbox, Route } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -264,7 +264,7 @@ function RefusedZone({ reason }: { reason: string }) {
   return (
     <div role="status" className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/40 p-4">
       <span className="flex max-w-72 items-center gap-1.5 rounded-xl bg-popover px-3 py-2 type-caption text-foreground shadow-popover">
-        <Forbidden className="size-3.5 shrink-0 text-muted-foreground" />
+        <Ban className="size-3.5 shrink-0 text-muted-foreground" />
         {reason}
       </span>
     </div>

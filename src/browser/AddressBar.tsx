@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { ArrowUpRight, Global, Monitor, SearchNormal } from 'reicon-react';
+import { ArrowUpRight, Globe, Monitor, SearchAlt } from '@/icons';
 import { Command, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
@@ -196,8 +196,8 @@ function OpenExternalButton({ url }: { url: string }) {
 }
 
 function RowIcon({ row }: { row: Row }) {
-  if (row.icon === 'search') return <SearchNormal className="text-muted-foreground" />;
-  if (row.icon === 'go') return <Global className="text-muted-foreground" />;
+  if (row.icon === 'search') return <SearchAlt className="text-muted-foreground" />;
+  if (row.icon === 'go') return <Globe className="text-muted-foreground" />;
   if (row.icon === 'server' || isLocal(row.url)) return <Monitor className="text-muted-foreground" />;
   return <SiteIcon url={row.url} />;
 }
@@ -212,7 +212,7 @@ function SiteIcon({ url }: { url: string }) {
       return null;
     }
   }, [url]);
-  if (!origin || hasFailed) return <Global className="text-muted-foreground" />;
+  if (!origin || hasFailed) return <Globe className="text-muted-foreground" />;
   return <img src={`${origin}/favicon.ico`} alt="" aria-hidden referrerPolicy="no-referrer" onError={() => setFailed(true)} className="size-4 shrink-0 rounded-xs" />;
 }
 

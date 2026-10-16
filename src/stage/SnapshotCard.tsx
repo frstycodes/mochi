@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import { Globe } from 'reicon-react';
+import { GlobeAlt } from '@/icons';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { pageKey, usePage } from '../browser/pages';
@@ -57,7 +57,7 @@ function PreviewFrame({ threadId, tabId, url }: { threadId: string; tabId: strin
   return (
     <div className="mt-auto flex min-h-0 flex-col overflow-hidden rounded-md bg-sidebar ring-1 ring-border">
       <span className="flex items-center gap-1 px-1.5 py-0.5 font-mono type-caption text-subtle-foreground">
-        <Globe className="size-3 shrink-0" />
+        <GlobeAlt className="size-3 shrink-0" />
         <span className="truncate">{url}</span>
       </span>
       {!!frame && <img src={frame} alt="" className="min-h-0 w-full object-cover object-top" />}

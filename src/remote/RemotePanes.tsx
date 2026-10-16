@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
-import { ArrowUp, RowHorizontal, RowVertical, X } from 'reicon-react';
+import { ArrowUp, Columns, Rows, X } from '@/icons';
 import { ConversationContent, Conversation, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import {
   PromptInput,
@@ -189,10 +189,10 @@ function RemoteChanges({ machine, thread }: { machine: FollowedMachine; thread: 
           aria-label="Diff layout"
         >
           <ToggleGroupItem value="unified" aria-label="Unified diff">
-            <RowVertical />
+            <Rows />
           </ToggleGroupItem>
           <ToggleGroupItem value="split" aria-label="Split diff">
-            <RowHorizontal />
+            <Columns />
           </ToggleGroupItem>
         </ToggleGroup>
       </PaneActions>

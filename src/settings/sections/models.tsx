@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { ChevronDown } from 'reicon-react';
+import { ChevronDown } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ModelMenu, ModelPicker, useListedModels, useModels } from '../../ModelControls';

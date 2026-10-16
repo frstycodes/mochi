@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Brush, Clock, Compass, Cpu, Database, Devices, Global, Hierarchy2, InfoCircle, Keyboard, MagicStar, Notification, People, Setting2, ShieldCheck, Stars, TerminalSquare, type IconComponent } from 'reicon-react';
+import { Brush, Clock, Compass, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -44,7 +44,7 @@ export const SETTINGS_SECTIONS = [
     id: 'general',
     group: 'Mochi',
     title: 'General',
-    icon: Setting2,
+    icon: Settings,
     component: GeneralSection,
     settings: [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread default' },
@@ -101,7 +101,7 @@ export const SETTINGS_SECTIONS = [
     id: 'profiles',
     group: 'Mochi',
     title: 'Profiles',
-    icon: People,
+    icon: Users,
     component: ProfilesSection,
     // A getter: the rows follow the profiles, so search finds "Personal GitHub account" right after a rename.
     get settings() {
@@ -224,7 +224,7 @@ export const SETTINGS_SECTIONS = [
     id: 'terminal',
     group: 'Workspace',
     title: 'Terminal',
-    icon: TerminalSquare,
+    icon: Terminal,
     component: TerminalSection,
     settings: [
       { id: 'shell', label: 'Shell', keywords: 'zsh bash fish' },
@@ -237,7 +237,7 @@ export const SETTINGS_SECTIONS = [
     id: 'browser',
     group: 'Workspace',
     title: 'Browser and simulator',
-    icon: Global,
+    icon: Globe,
     component: BrowserSection,
     settings: [
       { id: 'searchEngine', label: 'Search engine', keywords: 'duckduckgo google bing kagi address bar' },
@@ -282,7 +282,7 @@ export const SETTINGS_SECTIONS = [
     id: 'about',
     group: 'System',
     title: 'About',
-    icon: InfoCircle,
+    icon: Info,
     component: AboutSection,
     settings: [{ id: 'about', label: 'About Mochi', keywords: 'version electron chromium docs' }],
   },

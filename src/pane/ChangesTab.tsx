@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { setPrefs, usePrefs } from '../settings/prefs';
-import { Danger, Document, Folder, RowHorizontal, RowVertical } from 'reicon-react';
+import { Danger, File, Folder, Columns, Rows } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -89,10 +89,10 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
         <AskAboutHunk threadId={thread.id} files={files} />
         <ToggleGroup type="single" size="sm" variant="outline" spacing={0} value={diffStyle} onValueChange={(v) => v && setPrefs({ diffStyle: v as DiffStyle })} aria-label="Diff layout">
           <ToggleGroupItem value="unified" aria-label="Unified diff">
-            <RowVertical />
+            <Rows />
           </ToggleGroupItem>
           <ToggleGroupItem value="split" aria-label="Split diff">
-            <RowHorizontal />
+            <Columns />
           </ToggleGroupItem>
         </ToggleGroup>
         <WorktreeMenu cwd={cwd} base={thread.repo?.base} diff={diff} run={run} confirm={confirm}>
@@ -209,7 +209,7 @@ export function NoChanges({ scope }: { scope: DiffScope }) {
     <Empty className="flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Document />
+          <File />
         </EmptyMedia>
         <EmptyTitle>No changes</EmptyTitle>
         <EmptyDescription>{scope === 'branch' ? 'This branch matches its base. Edits land here as the agent makes them.' : 'Everything is committed.'}</EmptyDescription>
@@ -223,7 +223,7 @@ function NoStepChanges() {
     <Empty className="flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Document />
+          <File />
         </EmptyMedia>
         <EmptyTitle>No changes for this step</EmptyTitle>
         <EmptyDescription>None of the changed files are in this step's footprint.</EmptyDescription>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown } from 'reicon-react';
+import { ChevronDown } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { AgentModel } from '../../host/types/agent';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, Reorder, useReducedMotionConfig } from 'motion/react';
-import { ChevronDown, ChevronUp, Edit, MentionCircle, Paperclip, Trash3 } from 'reicon-react';
+import { ChevronDown, ChevronUp, Edit, Mention, Paperclip, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -71,7 +71,7 @@ function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: Q
     >
       <span className={cn('min-w-0 flex-1 truncate type-meta', !message.draft && 'text-muted-foreground')}>{message.draft || 'No text'}</span>
       <ExtraCount icon={Paperclip} count={message.images?.length ?? 0} label="attached" />
-      <ExtraCount icon={MentionCircle} count={message.mentions.length} label="referenced" />
+      <ExtraCount icon={Mention} count={message.mentions.length} label="referenced" />
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 pointer-coarse:opacity-100">
         {/* A compaction can't cut into the turn: it waits for the end. */}
         {compactFocus(message.draft) === null && (
@@ -83,7 +83,7 @@ function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: Q
           <Edit className="size-3.5" />
         </TooltipIconButton>
         <TooltipIconButton label="Remove" hint="Takes it out of the queue" onClick={onRemove}>
-          <Trash3 className="size-3.5" />
+          <Trash className="size-3.5" />
         </TooltipIconButton>
       </span>
     </Reorder.Item>

@@ -1,4 +1,4 @@
-import { Clock } from 'reicon-react';
+import { Clock } from '@/icons';
 import { shortRunTime } from './cron';
 import { describeTrigger } from './describe';
 import { triggerNextRun, useTrigger } from './useSchedules';

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Add, Trash3 } from 'reicon-react';
+import { Plus, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -212,7 +212,7 @@ function RemoveProfileRow({ profile, isLast }: { profile: Space; isLast: boolean
       label={<span className="text-muted-foreground">{block ?? 'Removes it from the sidebar. Its agent accounts and browser data stay on disk.'}</span>}
       control={
         <Button variant="outline" size="sm" disabled={!!block} onClick={remove}>
-          <Trash3 data-icon="inline-start" className="text-destructive" />
+          <Trash data-icon="inline-start" className="text-destructive" />
           Remove profile
         </Button>
       }
@@ -237,7 +237,7 @@ function AddProfileGroup({ isFull, onAdded }: { isFull: boolean; onAdded: (id: s
         <SettingsRow
           label={
             <button type="button" disabled={isFull} onClick={() => setName('')} className="flex items-center gap-1.5 text-foreground enabled:hover:underline enabled:hover:underline-offset-4 disabled:text-muted-foreground">
-              <Add aria-hidden className="size-4" />
+              <Plus aria-hidden className="size-4" />
               Add profile…
             </button>
           }

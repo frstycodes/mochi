@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowLeft, ChevronRight, Folder, FolderAdd, Link, Lock } from 'reicon-react';
+import { ArrowLeft, ChevronRight, Folder, FolderPlus, Link, Lock } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@/components/ui/command';
@@ -53,7 +53,7 @@ function SourceList({ machine, onBack, onPick }: { machine?: FollowedMachine; on
           )}
           <SourceItem value="GitHub" icon={<GithubMarkIcon />} title="Clone from GitHub" detail={`One of your repositories, into ${where}`} onSelect={() => onPick('github')} />
           <SourceItem value="Git URL" icon={<Link />} title="Clone from a URL" detail="GitLab, Bitbucket or any git host" onSelect={() => onPick('url')} />
-          <SourceItem value="New project" icon={<FolderAdd />} title="New project" detail={`An empty repository in ${where}`} onSelect={() => onPick('new')} />
+          <SourceItem value="New project" icon={<FolderPlus />} title="New project" detail={`An empty repository in ${where}`} onSelect={() => onPick('new')} />
         </CommandGroup>
       </CommandList>
     </Command>
@@ -316,7 +316,7 @@ function FolderBrowser({ onBack, onChoose, error }: { onBack: () => void; onChoo
         {!!folder && (
           <CommandGroup>
             <CommandItem value={`open ${folder.path}`} onSelect={() => onChoose(folder.path)}>
-              <FolderAdd />
+              <FolderPlus />
               Open {projectName(folder.path)}
             </CommandItem>
           </CommandGroup>

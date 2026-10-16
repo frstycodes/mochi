@@ -1,4 +1,4 @@
-import { Copy, Download, Expand, FolderOpen, ImageSparkle, Warning } from 'reicon-react';
+import { Copy, Download, Expand, FolderOpen, ImageSparkle, WarningAlt } from '@/icons';
 import { toast } from '@/toast/store';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { useRef, type CSSProperties } from 'react';
@@ -67,7 +67,7 @@ function Elapsed({ startedMs }: { startedMs: number }) {
 function FailedFrame({ error }: { error?: string }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-muted px-6 text-center">
-      <Warning aria-hidden className="size-5 text-warning" />
+      <WarningAlt aria-hidden className="size-5 text-warning" />
       <span className="type-meta text-foreground">Couldn’t generate the image</span>
       {!!error && <span className="type-caption text-muted-foreground">{error}</span>}
     </div>

@@ -4,7 +4,7 @@ import { useDiffTheme } from './themes/highlight';
 import { DEFAULT_THEMES, getHighlighterIfLoaded, getHighlighterOptions, getSharedHighlighter } from '@pierre/diffs';
 import { File, PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Check, ChevronRight, Flag, Global, GlobalSearch, Note, TerminalSquare, X } from 'reicon-react';
+import { Check, ChevronRight, Flag, Globe, GlobeSearch, Note, Terminal, X } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type AgentPhase } from './AgentLoader';
@@ -201,7 +201,7 @@ function runOf(entry: ToolEntry): RunResult | undefined {
 function CallGlyph({ call, links = [] }: { call: ToolCall; links?: WebLink[] }) {
   if (call.verb === 'Search') {
     const hosts = [...new Set(links.map((l) => hostname(l.url)))].slice(0, 3);
-    if (!hosts.length) return <GlobalSearch className="size-4 shrink-0 text-muted-foreground" />;
+    if (!hosts.length) return <GlobeSearch className="size-4 shrink-0 text-muted-foreground" />;
     return (
       <span className="flex shrink-0 items-center">
         {hosts.map((host, i) => (
@@ -478,8 +478,8 @@ function SkillRow({ name, description }: { name: string; description?: string })
 }
 
 function ToolGlyph({ call }: { call: ToolCall }) {
-  if (call.verb === 'Run') return <TerminalSquare className="size-4 shrink-0 text-muted-foreground" />;
-  if (call.verb === 'Browser') return <Global className="size-4 shrink-0 text-muted-foreground" />;
+  if (call.verb === 'Run') return <Terminal className="size-4 shrink-0 text-muted-foreground" />;
+  if (call.verb === 'Browser') return <Globe className="size-4 shrink-0 text-muted-foreground" />;
   if (call.verb === 'Mcp') return <McpIcon target={call.target} className="size-4" />;
   return <FileIcon fileName={call.target.split('/').pop() ?? call.target} autoAssign aria-hidden className="size-4 shrink-0" />;
 }

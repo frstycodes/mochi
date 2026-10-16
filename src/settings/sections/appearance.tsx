@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown, ClipboardText, Download, Edit2, Import, SearchNormal, Star, TickCircle, Trash3 } from 'reicon-react';
+import { ChevronDown, ClipboardText, Download, Pencil, Import, SearchAlt, Star, CheckBadge, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -146,7 +146,7 @@ function Library() {
       {packages.length >= FILTER_FROM && (
         <InputGroup>
           <InputGroupAddon>
-            <SearchNormal />
+            <SearchAlt />
           </InputGroupAddon>
           <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter installed themes" aria-label="Filter installed themes" />
         </InputGroup>
@@ -208,7 +208,7 @@ function PackageRow({ group, themes, isOpen }: { group: PackageGroup; themes: Co
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem variant="destructive" onSelect={remove}>
-              <Trash3 />
+              <Trash />
               Remove {consequence}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -377,7 +377,7 @@ function ThemeRow({ theme, slot, label, kind, children }: { theme: ColorTheme | 
         <div className="flex items-center gap-1" onFocus={() => setThemePreview(theme)} onBlur={() => setThemePreview(null)}>
           {isUsed ? (
             <span className="flex h-6 items-center gap-1 px-2.5 type-meta text-muted-foreground">
-              <TickCircle aria-hidden className="size-3.5 text-success" />
+              <CheckBadge aria-hidden className="size-3.5 text-success" />
               In use
             </span>
           ) : (
@@ -405,7 +405,7 @@ function StarButton({ theme }: { theme: ColorTheme }) {
       onClick={() => setPrefs({ starredThemes: toggleStar(starredThemes, theme.id) })}
       className={isStarred ? 'text-warning! [&_*]:text-warning!' : 'text-muted-foreground'}
     >
-      <Star weight={isStarred ? 'Filled' : undefined} />
+      <Star filled={isStarred} />
     </TooltipIconButton>
   );
 }
@@ -422,10 +422,10 @@ function CustomThemeActions({ theme, file, onEdit }: { theme: ColorTheme; file: 
   return (
     <>
       <TooltipIconButton label="Edit" hint={host.isDesktop ? 'Opens the theme file in your JSON editor' : 'Edit the theme JSON here'} onClick={() => void edit()}>
-        <Edit2 />
+        <Pencil />
       </TooltipIconButton>
       <TooltipIconButton label="Delete" hint={`Deletes ${file}`} onClick={() => void remove()}>
-        <Trash3 />
+        <Trash />
       </TooltipIconButton>
     </>
   );
@@ -487,7 +487,7 @@ function Marketplace() {
     <>
       <InputGroup data-setting-id="themeMarketplace">
         <InputGroupAddon>
-          <SearchNormal />
+          <SearchAlt />
         </InputGroupAddon>
         <InputGroupInput id={settingControlId('themeSearch')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Open VSX themes" aria-label="Search Open VSX themes" />
       </InputGroup>
@@ -560,7 +560,7 @@ function ExtensionRow({ extension }: { extension: MarketplaceExtension }) {
           <Swatches extension={extension} inspected={inspected} isInstalled={isInstalled} onPreview={(t) => setThemePreview(t ?? rowPreview)} onUse={(t) => (isInstalled ? apply(installed.find((i) => i.id === t.id) ?? t) : install(t))} />
           {isInstalled ? (
             <span className="flex h-6 w-20 items-center justify-end gap-1 type-meta text-muted-foreground">
-              <TickCircle aria-hidden className="size-3.5 text-success" />
+              <CheckBadge aria-hidden className="size-3.5 text-success" />
               Installed
             </span>
           ) : (

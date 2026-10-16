@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { animate, motion, useDragControls, useMotionValue, type PanInfo } from 'motion/react';
-import { ChevronLeft, ChevronRight, ExitPip, X } from 'reicon-react';
+import { ChevronLeft, ChevronRight, ExitPip, X } from '@/icons';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { Annotator } from './browser/Annotate';
