@@ -813,15 +813,22 @@
 @utility animate-pop {
   &:not([data-state='closed'], [data-closed]) {
     animation:
-      pop-scale 420ms var(--ease-pop) both,
-      pop-focus 220ms var(--ease-out) both;
+      pop-scale var(--pop-duration, 300ms) var(--ease-pop) both,
+      pop-focus 180ms var(--ease-out) both;
   }
   &:is([data-state='closed'], [data-closed]) {
     animation: pop-out 150ms var(--ease-out) both;
   }
+  /* A tooltip shown while another was just open (Radix skip-delay) appears at once. */
+  &[data-state='instant-open'] {
+    animation: none;
+  }
   @variant motion-reduce {
     &:not([data-state='closed'], [data-closed]) {
       animation: pop-fade-in 150ms var(--ease-out) both;
+    }
+    &[data-state='instant-open'] {
+      animation: none;
     }
     &:is([data-state='closed'], [data-closed]) {
       animation: pop-fade-out 100ms var(--ease-out) both;

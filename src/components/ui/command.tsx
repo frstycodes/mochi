@@ -52,10 +52,12 @@ function CommandDialog({
       </DialogHeader>
       <DialogContent
         className={cn(
-          "top-1/3 translate-y-0 overflow-hidden rounded-xl! bg-(--glass-raised) p-0 surface-glass-raised shadow-glass",
+          "top-1/3 translate-y-0 overflow-hidden rounded-xl! bg-(--glass-raised) p-0 surface-glass-raised shadow-glass animate-none!",
           className
         )}
         showCloseButton={showCloseButton}
+        // Toggled from the keyboard many times a day, so it appears and goes instantly, like Raycast.
+        overlayClassName="animate-none!"
       >
         {children}
       </DialogContent>

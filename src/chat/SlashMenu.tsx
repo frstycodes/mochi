@@ -22,7 +22,7 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   if (!menu.isOpen) return null;
   const groups = [menu.matches.filter((m) => m.source === 'mochi'), menu.matches.filter((m) => m.source !== 'mochi')].filter((g) => g.length);
   return (
-    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto origin-bottom-left animate-pop rounded-xl surface-glass-raised p-1 shadow-glass">
+    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl surface-glass-raised p-1 shadow-glass">
       {groups.map((group) => (
         <div key={group[0].source} role="group" aria-label={groupName(group[0].source)} className="flex flex-col gap-0.5">
           <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">

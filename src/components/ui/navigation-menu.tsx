@@ -107,7 +107,7 @@ function NavigationMenuViewport({
       <NavigationMenuPrimitive.Viewport
         data-slot="navigation-menu-viewport"
         className={cn(
-          "origin-top-center relative mt-1.5 h-(--radix-navigation-menu-viewport-height) w-full overflow-hidden rounded-lg surface-glass-raised text-popover-foreground shadow-glass animate-pop md:w-(--radix-navigation-menu-viewport-width)",
+          "origin-top relative mt-1.5 h-(--radix-navigation-menu-viewport-height) w-full overflow-hidden rounded-lg surface-glass-raised text-popover-foreground shadow-glass animate-pop md:w-(--radix-navigation-menu-viewport-width)",
           className
         )}
         {...props}
