@@ -12,7 +12,7 @@ import {
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 
 /** Bumped on any frame change; a device on another version is refused rather than misread. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** Every command declares the scope it needs; the server refuses it on a device without that scope. */
 export const COMMAND_SCOPES = {
@@ -69,11 +69,8 @@ export type ServerFrame =
   | StreamFrame
   | ({ type: 'result'; id: string } & CommandResult);
 
-/**
- * A command's result over this is refused rather than sent: the relay closes the machine's socket on a frame over 1 MB
- * (`infra/relay/src/relay.ts`), and this leaves room for the encryption around it.
- */
-export const MAX_RESULT_BYTES = 768 * 1024;
+/** A command's result over this is refused rather than sent: past it a pane is better read on the machine itself. */
+export const MAX_RESULT_BYTES = 8 * 1024 * 1024;
 
 /** The result frame, or a refusal naming its size when it wouldn't fit. */
 export function resultFrame(id: string, result: CommandResult): ServerFrame {

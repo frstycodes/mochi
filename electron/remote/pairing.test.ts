@@ -149,3 +149,39 @@ test('a tampered frame after pairing ends the connection', async () => {
   deviceResult.send('hello');
   await closed;
 });
+
+test('a message bigger than one relay frame arrives whole, every frame on the wire under the relay’s 1 MB', async () => {
+  const machineKeys = keypair();
+  const device = keypair();
+  const machine = machineSide(machineKeys, true);
+  const sizes: number[] = [];
+  const ends = pipe((bytes) => (sizes.push(bytes.length), bytes));
+  const [secured, deviceLink] = await Promise.all([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop')]);
+  assert.ok('link' in secured);
+  // A snapshot-sized frame with multi-byte characters straddling piece boundaries.
+  const snapshot = JSON.stringify({ type: 'snapshot', saved: 'é—🍡'.repeat(400_000) });
+  const small = '{"type":"action"}';
+  const heard: string[] = [];
+  const done = new Promise<void>((resolve) => deviceLink.onMessage((text) => heard.push(text) === 2 && resolve()));
+  sizes.length = 0;
+  secured.link.send(snapshot);
+  secured.link.send(small);
+  await done;
+  assert.equal(heard[0], snapshot);
+  assert.equal(heard[1], small, 'the next message starts fresh');
+  assert.ok(sizes.length > 4, `split into ${sizes.length} frames`);
+  assert.ok(sizes.every((n) => n <= 1024 * 1024), `largest frame ${Math.max(...sizes)} bytes`);
+});
+
+test('a peer that keeps sending pieces past 64 MB is cut off', async () => {
+  const machineKeys = keypair();
+  const machine = machineSide(machineKeys, true);
+  const ends = pipe();
+  const [secured, deviceLink] = await Promise.all([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, keypair(), machineKeys.publicKey, 'Laptop')]);
+  assert.ok('link' in secured);
+  const closed = new Promise<void>((resolve) => secured.link.onClose(resolve));
+  secured.link.onMessage(() => assert.fail('nothing should arrive'));
+  deviceLink.send('x'.repeat(65 * 1024 * 1024));
+  await closed;
+  assert.equal(secured.link.isOpen(), false);
+});
