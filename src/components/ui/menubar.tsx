@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { usePopOrigin } from "@/components/ui/pointer-origin"
 import { cn } from "@/lib/utils"
 import { Menubar as MenubarPrimitive } from "radix-ui"
 import { Check as CheckIcon, ChevronRight as ChevronRightIcon } from 'reicon-react'
@@ -69,18 +68,16 @@ function MenubarContent({
   align = "start",
   alignOffset = -4,
   sideOffset = 8,
-  ref,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Content>) {
   return (
     <MenubarPortal>
       <MenubarPrimitive.Content
-        ref={usePopOrigin(ref)}
         data-slot="menubar-content"
         align={align}
         alignOffset={alignOffset}
         sideOffset={sideOffset}
-        className={cn("z-50 min-w-36 origin-[var(--pop-origin,var(--radix-menubar-content-transform-origin))] animate-pop overflow-hidden rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
+        className={cn("z-50 min-w-36 origin-(--radix-menubar-content-transform-origin) animate-pop overflow-hidden rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
         {...props}
       />
     </MenubarPortal>
@@ -251,14 +248,12 @@ function MenubarSubTrigger({
 
 function MenubarSubContent({
   className,
-  ref,
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.SubContent>) {
   return (
     <MenubarPrimitive.SubContent
-      ref={usePopOrigin(ref)}
       data-slot="menubar-sub-content"
-      className={cn("z-50 min-w-32 origin-[var(--pop-origin,var(--radix-menubar-content-transform-origin))] animate-pop overflow-hidden rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
+      className={cn("z-50 min-w-32 origin-(--radix-menubar-content-transform-origin) animate-pop overflow-hidden rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
       {...props}
     />
   )

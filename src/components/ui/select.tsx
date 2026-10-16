@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { usePopOrigin } from "@/components/ui/pointer-origin"
 import { cn } from "@/lib/utils"
 import { Select as SelectPrimitive } from "radix-ui"
 import { ChevronDown as ChevronDownIcon, Check as CheckIcon, ChevronUp as ChevronUpIcon } from 'reicon-react'
@@ -62,16 +61,14 @@ function SelectContent({
   children,
   position = "popper",
   align = "start",
-  ref,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
-        ref={usePopOrigin(ref)}
         data-slot="select-content"
         data-align-trigger={position === "item-aligned"}
-        className={cn("relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-[var(--pop-origin,var(--radix-select-content-transform-origin))] animate-pop overflow-x-hidden overflow-y-auto rounded-lg surface-glass-raised text-popover-foreground shadow-glass", position ==="popper"&&"data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1", className )}
+        className={cn("relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-(--radix-select-content-transform-origin) animate-pop overflow-x-hidden overflow-y-auto rounded-lg surface-glass-raised text-popover-foreground shadow-glass", position ==="popper"&&"data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1", className )}
         position={position}
         align={align}
         {...props}

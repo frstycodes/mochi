@@ -273,8 +273,8 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
-  /* Damped spring (bounce 0.5): peaks ~16% past its target, so `animate-pop`'s 0.85 → 1 lands ~2.5% over. */
-  --ease-pop: linear(0, 0.056, 0.196, 0.378, 0.572, 0.753, 0.906, 1.023, 1.102, 1.147, 1.163, 1.156, 1.135, 1.106, 1.075, 1.045, 1.019, 0.999, 0.985, 0.977, 0.974, 0.974, 0.977, 0.982, 0.987, 0.992, 0.996, 1, 1.002, 1.004, 1.004, 1.004, 1);
+  /* Spring, damping 0.6 / response 0.28s: over animate-pop's 0.96 → 1 it peaks ~0.4% past full size and settles by 300ms. */
+  --ease-pop: linear(0, 0.023, 0.083, 0.17, 0.273, 0.383, 0.494, 0.602, 0.701, 0.79, 0.868, 0.933, 0.985, 1.026, 1.056, 1.076, 1.089, 1.094, 1.094, 1.09, 1.083, 1.074, 1.064, 1.053, 1.043, 1.033, 1.024, 1.016, 1.009, 1.004, 1);
 }
 
 @theme {
@@ -809,7 +809,8 @@
   }
 }
 
-/* Menus, popovers, selects, autocompletes, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): scale out of the pointer (`usePopOrigin` sets --pop-origin) with a small overshoot while a blur clears. */
+/* Menus, popovers, selects, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): the glass materializes from its trigger,
+   scale and blur resolving together, and leaves along the same path. */
 @utility animate-pop {
   &:not([data-state='closed'], [data-closed]) {
     animation:
@@ -836,13 +837,13 @@
   }
 }
 @keyframes pop-scale {
-  from { transform: scale(0.85); }
+  from { transform: scale(0.96); }
 }
 @keyframes pop-focus {
-  from { opacity: 0; filter: blur(10px); }
+  from { opacity: 0; filter: blur(4px); }
 }
 @keyframes pop-out {
-  to { opacity: 0; filter: blur(4px); transform: scale(0.9); }
+  to { opacity: 0; filter: blur(4px); transform: scale(0.96); }
 }
 @keyframes pop-fade-in {
   from { opacity: 0; }

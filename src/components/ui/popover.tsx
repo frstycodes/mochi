@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { usePopOrigin } from "@/components/ui/pointer-origin"
 import { cn } from "@/lib/utils"
 import { Popover as PopoverPrimitive } from "radix-ui"
 
@@ -21,18 +20,16 @@ function PopoverContent({
   className,
   align = "center",
   sideOffset = 4,
-  ref,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
-        ref={usePopOrigin(ref)}
         data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "z-50 flex w-72 origin-[var(--pop-origin,var(--radix-popover-content-transform-origin))] animate-pop flex-col gap-2.5 rounded-xl surface-glass-raised p-2.5 text-sm text-popover-foreground shadow-glass outline-hidden",
+          "z-50 flex w-72 origin-(--radix-popover-content-transform-origin) animate-pop flex-col gap-2.5 rounded-xl surface-glass-raised p-2.5 text-sm text-popover-foreground shadow-glass outline-hidden",
           className
         )}
         {...props}

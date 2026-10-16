@@ -1,5 +1,4 @@
 import * as React from "react"
-import { usePopOrigin } from "@/components/ui/pointer-origin"
 import { cn } from "@/lib/utils"
 import { ContextMenu as ContextMenuPrimitive } from "radix-ui"
 import { ChevronRight as ChevronRightIcon, Check as CheckIcon } from 'reicon-react'
@@ -88,7 +87,6 @@ function ContextMenuRadioGroup({
 
 function ContextMenuContent({
   className,
-  ref,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
@@ -96,9 +94,8 @@ function ContextMenuContent({
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
-        ref={usePopOrigin(ref)}
         data-slot="context-menu-content"
-        className={cn("z-50 max-h-(--radix-context-menu-content-available-height) min-w-36 origin-[var(--pop-origin,var(--radix-context-menu-content-transform-origin))] animate-pop overflow-x-hidden overflow-y-auto rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
+        className={cn("z-50 max-h-(--radix-context-menu-content-available-height) min-w-36 origin-(--radix-context-menu-content-transform-origin) animate-pop overflow-x-hidden overflow-y-auto rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
         {...props}
       />
     </ContextMenuPrimitive.Portal>
@@ -154,14 +151,12 @@ function ContextMenuSubTrigger({
 
 function ContextMenuSubContent({
   className,
-  ref,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
   return (
     <ContextMenuPrimitive.SubContent
-      ref={usePopOrigin(ref)}
       data-slot="context-menu-sub-content"
-      className={cn("z-50 min-w-32 origin-[var(--pop-origin,var(--radix-context-menu-content-transform-origin))] animate-pop overflow-hidden rounded-lg  surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
+      className={cn("z-50 min-w-32 origin-(--radix-context-menu-content-transform-origin) animate-pop overflow-hidden rounded-lg  surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
       {...props}
     />
   )

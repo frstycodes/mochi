@@ -1,5 +1,4 @@
 import * as React from "react"
-import { usePopOrigin } from "@/components/ui/pointer-origin"
 import { cn } from "@/lib/utils"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 import { Check as CheckIcon, ChevronRight as ChevronRightIcon } from 'reicon-react'
@@ -33,17 +32,15 @@ function DropdownMenuContent({
   className,
   align = "start",
   sideOffset = 4,
-  ref,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
-        ref={usePopOrigin(ref)}
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         align={align}
-        className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-[var(--pop-origin,var(--radix-dropdown-menu-content-transform-origin))] animate-pop overflow-x-hidden overflow-y-auto rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass data-[state=closed]:overflow-hidden", className )}
+        className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) animate-pop overflow-x-hidden overflow-y-auto rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass data-[state=closed]:overflow-hidden", className )}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>
@@ -239,14 +236,12 @@ function DropdownMenuSubTrigger({
 
 function DropdownMenuSubContent({
   className,
-  ref,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
   return (
     <DropdownMenuPrimitive.SubContent
-      ref={usePopOrigin(ref)}
       data-slot="dropdown-menu-sub-content"
-      className={cn("z-50 min-w-[96px] origin-[var(--pop-origin,var(--radix-dropdown-menu-content-transform-origin))] animate-pop overflow-hidden rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
+      className={cn("z-50 min-w-[96px] origin-(--radix-dropdown-menu-content-transform-origin) animate-pop overflow-hidden rounded-lg surface-glass-raised p-1 text-popover-foreground shadow-glass", className )}
       {...props}
     />
   )
