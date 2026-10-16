@@ -48,6 +48,7 @@ export const SETTINGS_SECTIONS = [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
       { id: 'colorThemes', label: 'Color themes', keywords: 'vs code vscode theme marketplace open vsx colors' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
+      { id: 'translucentSidebar', label: 'Translucent sidebar', keywords: 'vibrancy acrylic mica transparency blur' },
       { id: 'projectsFolder', label: 'Projects folder', keywords: 'path open folder directory' },
       { id: 'restoreLayout', label: 'Restore layout on launch', keywords: 'splits views startup' },
     ],

@@ -30,6 +30,7 @@ export const windows: WindowsHost = {
     return 1;
   },
   async resetZoom() {},
+  async setAppearance() {},
   async listApps() {
     return { access: 'unsupported', windows: [] };
   },

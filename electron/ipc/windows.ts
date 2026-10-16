@@ -1,5 +1,5 @@
-import { BrowserWindow, shell, systemPreferences } from 'electron';
-import type { ScreenAccess, WindowsHost } from '../../src/host/types/windows.ts';
+import { BrowserWindow, nativeTheme, shell, systemPreferences } from 'electron';
+import { APPEARANCES, type Appearance, type ScreenAccess, type WindowsHost } from '../../src/host/types/windows.ts';
 import { openRoute, trafficLightsAt } from '../window.ts';
 import { captureAppWindow, listAppWindows } from '../windows/appWindows.ts';
 import { record, string, type Handlers } from './handlers.ts';
@@ -24,6 +24,10 @@ export const windows = {
   },
   async resetZoom(sender) {
     sender.setZoomLevel(0);
+  },
+  async setAppearance(_sender, appearance) {
+    if (!APPEARANCES.includes(appearance as Appearance)) throw new TypeError(`appearance must be one of ${APPEARANCES.join(', ')}`);
+    nativeTheme.themeSource = appearance as Appearance;
   },
   async listApps() {
     // Asking while not-determined is what shows the macOS prompt; the answer only applies after a relaunch.
