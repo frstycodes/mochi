@@ -809,13 +809,13 @@
   }
 }
 
-/* Menus, popovers, selects, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): the glass materializes from its trigger,
-   scale and blur resolving together, and leaves along the same path. */
+/* Menus, popovers, selects, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): scale and fade in from the trigger,
+   then leave with a slight blur. */
 @utility animate-pop {
   &:not([data-state='closed'], [data-closed]) {
     animation:
       pop-scale var(--pop-duration, 300ms) var(--ease-pop) both,
-      pop-focus 180ms var(--ease-out) both;
+      pop-fade-in 180ms var(--ease-out) both;
   }
   &:is([data-state='closed'], [data-closed]) {
     animation: pop-out 150ms var(--ease-out) both;
@@ -838,9 +838,6 @@
 }
 @keyframes pop-scale {
   from { transform: scale(0.96); }
-}
-@keyframes pop-focus {
-  from { opacity: 0; filter: blur(4px); }
 }
 @keyframes pop-out {
   to { opacity: 0; filter: blur(4px); transform: scale(0.96); }
