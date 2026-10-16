@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { EditorView } from '@codemirror/view';
 import { Compress, MessageQuestion } from 'reicon-react';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { revealIn } from '@/lib/revealIn';
@@ -9,6 +10,7 @@ import { MOCHI_SERVER } from '../runtime/toolTable';
 import { HARNESSES } from '../settings/harnesses';
 import { ProviderMark } from '../ui';
 import { isAbsolutePath } from '../projects';
+import type { Caret } from './ComposerEditor';
 import { configuredCommands, insertToken, slashItems, slashMatches, slashQueryAt, type SlashItem } from './slash';
 
 /** Above the composer while the caret ends a `/` and part of a name: Mochi's commands, then the harness's skills and commands. */
@@ -69,7 +71,7 @@ const groupName = (source: SlashItem['source']) => (source === 'mochi' ? 'Mochi'
 const optionId = (listId: string, item: SlashItem) => `${listId}-${item.source}-${item.name.replace(/\W/g, '_')}`;
 
 /**
- * The menu's state and the textarea props that drive it: arrows move, Enter or Tab picks, Esc closes until the text changes.
+ * The menu's state and the editor props that drive it: arrows move, Enter or Tab picks, Esc closes until the text changes.
  * Picking puts the name where it was typed, nothing else moves. Needs the composer's `PromptInputProvider`.
  */
 export function useSlashMenu(items: SlashItem[]) {
@@ -79,8 +81,8 @@ export function useSlashMenu(items: SlashItem[]) {
   const [active, setActive] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<string>();
   // The caret as of the text it was read with; a programmatic change (send, pick) puts it at the end.
-  const [caret, setCaret] = useState<{ text: string; at: number | null }>();
-  const textarea = useRef<HTMLTextAreaElement>(null);
+  const [caret, setCaret] = useState<Caret>();
+  const editor = useRef<EditorView>(null);
   const at = caret?.text === text ? caret.at : text.length;
   const range = at === null ? null : slashQueryAt(text, at);
   const matches = range ? slashMatches(range.query, items) : [];
@@ -90,25 +92,22 @@ export function useSlashMenu(items: SlashItem[]) {
   const choose = (item: SlashItem) => {
     if (!range || item.disabledReason) return;
     const next = insertToken(text, range, item);
-    textInput.setInput(next.text);
     setActive(0);
     // With text right after it, the caret ends the full name and would reopen the menu on it.
     setDismissedAt(next.text);
-    // After React writes the value, which puts the caret at the end: back to just after the name.
-    requestAnimationFrame(() => {
-      textarea.current?.setSelectionRange(next.caret, next.caret);
-      setCaret({ text: next.text, at: next.caret });
-    });
+    const view = editor.current;
+    if (!view) return textInput.setInput(next.text);
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next.text }, selection: { anchor: next.caret } });
+    view.focus();
   };
 
-  const track = (e: SyntheticEvent<HTMLTextAreaElement>) => {
-    const el = e.currentTarget;
-    textarea.current = el;
-    setCaret({ text: el.value, at: el.selectionStart === el.selectionEnd ? el.selectionStart : null });
+  const onCaret = (next: Caret, view: EditorView) => {
+    editor.current = view;
+    setCaret(next);
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    textarea.current = e.currentTarget;
+  const onKeyDown = (e: KeyboardEvent, view: EditorView) => {
+    editor.current = view;
     if (!isOpen) return;
     const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
     if (step) setActive((index + step + matches.length) % matches.length);
@@ -119,15 +118,12 @@ export function useSlashMenu(items: SlashItem[]) {
     e.stopPropagation();
   };
 
-  const textareaProps = {
+  const editorProps = {
     onKeyDown,
-    onChange: track,
-    onSelect: track,
-    'aria-autocomplete': 'list' as const,
-    'aria-controls': isOpen ? listId : undefined,
-    'aria-activedescendant': isOpen ? optionId(listId, matches[index]) : undefined,
+    onCaret,
+    attributes: { 'aria-autocomplete': 'list', 'aria-controls': isOpen ? listId : undefined, 'aria-activedescendant': isOpen ? optionId(listId, matches[index]) : undefined },
   };
-  return { listId, matches, active: index, isOpen, isMidText: !!range && range.start > 0, choose, textareaProps };
+  return { listId, matches, active: index, isOpen, isMidText: !!range && range.start > 0, choose, editorProps };
 }
 
 /**
