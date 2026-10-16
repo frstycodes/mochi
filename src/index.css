@@ -105,6 +105,10 @@
   --scrim: oklch(0.99 0.002 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.64);
   --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
+  --glass-raised: oklch(0.998 0.001 285 / 0.72);
+  /* Item highlight on glass: translucent, so it shifts L by ~0.06 whatever the blur shows through. */
+  --glass-accent: oklch(0.2 0.01 285 / 0.07);
+  --elev-glass: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.2 0.02 285 / 0.08), 0 4px 10px -2px oklch(0.2 0.02 285 / 0.08), 0 16px 40px -8px oklch(0.2 0.02 285 / 0.22);
   --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
   --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
@@ -150,6 +154,9 @@
     --scrim: oklch(0.12 0.006 285 / 0.72);
     --skeleton-highlight: oklch(1 0 285 / 0.04);
     --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+    --glass-raised: oklch(0.26 0.008 285 / 0.68);
+    --glass-accent: oklch(1 0 0 / 0.09);
+    --elev-glass: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
     --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
     --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
@@ -194,6 +201,9 @@
   --scrim: oklch(0.12 0.006 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.04);
   --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
+  --glass-raised: oklch(0.26 0.008 285 / 0.68);
+  --glass-accent: oklch(1 0 0 / 0.09);
+  --elev-glass: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
   --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
   --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
@@ -220,6 +230,7 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-subtle-foreground: var(--subtle-foreground);
   --color-accent: var(--accent);
+  --color-glass-accent: var(--glass-accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-success: var(--success);
@@ -253,6 +264,7 @@
   --radius-4xl: 9999px;
 
   --shadow-popover: var(--elev-popover);
+  --shadow-glass: var(--elev-glass);
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
@@ -261,6 +273,8 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Spring, damping 0.6 / response 0.28s: over animate-pop's 0.96 → 1 it peaks ~0.4% past full size and settles by 300ms. */
+  --ease-pop: linear(0, 0.023, 0.083, 0.17, 0.273, 0.383, 0.494, 0.602, 0.701, 0.79, 0.868, 0.933, 0.985, 1.026, 1.056, 1.076, 1.089, 1.094, 1.094, 1.09, 1.083, 1.074, 1.064, 1.053, 1.043, 1.033, 1.024, 1.016, 1.009, 1.004, 1);
 }
 
 @theme {
@@ -443,6 +457,23 @@
   backdrop-filter: blur(20px) saturate(1.6);
   @media (prefers-reduced-transparency: reduce) {
     background: var(--card);
+    backdrop-filter: none;
+  }
+}
+
+/* Menus, popovers and selects: glass a step above the page so they read as raised; pair with `shadow-glass`.
+   A container that inherits `bg-popover` overrides it with `bg-(--glass-raised)`, which the media query below also turns solid. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-raised: var(--popover);
+  }
+}
+@utility surface-glass-raised {
+  background: var(--glass-raised);
+  border-color: var(--glass-edge);
+  backdrop-filter: blur(20px) saturate(1.6);
+  @media (prefers-reduced-transparency: reduce) {
+    background: var(--popover);
     backdrop-filter: none;
   }
 }
@@ -794,4 +825,44 @@
   to {
     opacity: 1;
   }
+}
+
+/* Menus, popovers, selects, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): scale and fade in from the trigger,
+   then leave with a slight blur. */
+@utility animate-pop {
+  &:not([data-state='closed'], [data-closed]) {
+    animation:
+      pop-scale var(--pop-duration, 300ms) var(--ease-pop) both,
+      pop-fade-in 180ms var(--ease-out) both;
+  }
+  &:is([data-state='closed'], [data-closed]) {
+    animation: pop-out 150ms var(--ease-out) both;
+  }
+  /* A tooltip shown while another was just open (Radix skip-delay) appears at once. */
+  &[data-state='instant-open'] {
+    animation: none;
+  }
+  @variant motion-reduce {
+    &:not([data-state='closed'], [data-closed]) {
+      animation: pop-fade-in 150ms var(--ease-out) both;
+    }
+    &[data-state='instant-open'] {
+      animation: none;
+    }
+    &:is([data-state='closed'], [data-closed]) {
+      animation: pop-fade-out 100ms var(--ease-out) both;
+    }
+  }
+}
+@keyframes pop-scale {
+  from { transform: scale(0.96); }
+}
+@keyframes pop-out {
+  to { opacity: 0; filter: blur(4px); transform: scale(0.96); }
+}
+@keyframes pop-fade-in {
+  from { opacity: 0; }
+}
+@keyframes pop-fade-out {
+  to { opacity: 0; }
 }
