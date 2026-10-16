@@ -303,7 +303,7 @@ const THREAD_SPECS = {
       const pinned = [...lists.pinned, ...threads.map((t) => t.id)];
       if (pinned.length > PIN_SLOTS.length) throw new Error(`Only ${PIN_SLOTS.length} threads can be pinned and ${lists.pinned.length} already are; unpin one first`);
       if (threads.some((t) => t.status === 'settled')) throw new Error('Settled threads can’t be pinned; reactivate_thread first');
-      dispatch({ type: 'reorder', pinned, unpinned: lists.unpinned.filter((id) => !pinned.includes(id)) });
+      dispatch({ type: 'reorder', pinned, unpinned: lists.unpinned.filter((id) => !pinned.includes(id)), at: Date.now() });
       return { changed: `pinned ${count(threads)}`, result: { pinned: sidebar(state(), caller).pinned } };
     },
   },
@@ -312,7 +312,7 @@ const THREAD_SPECS = {
       const threads = targets(state(), caller, args.threadIds).filter(isPinned);
       const lists = sidebar(state(), caller);
       const ids = threads.map((t) => t.id);
-      dispatch({ type: 'reorder', pinned: lists.pinned.filter((id) => !ids.includes(id)), unpinned: [...ids, ...lists.unpinned] });
+      dispatch({ type: 'reorder', pinned: lists.pinned.filter((id) => !ids.includes(id)), unpinned: [...ids, ...lists.unpinned], at: Date.now() });
       return { changed: `unpinned ${count(threads)}`, result: { pinned: sidebar(state(), caller).pinned } };
     },
   },
@@ -321,7 +321,7 @@ const THREAD_SPECS = {
       const lists = sidebar(state(), caller);
       if (args.pinnedOrder) {
         const order = targets(state(), caller, args.pinnedOrder).map((t) => t.id);
-        dispatch({ type: 'reorder', pinned: order, unpinned: [...lists.pinned.filter((id) => !order.includes(id)), ...lists.unpinned.filter((id) => !order.includes(id))] });
+        dispatch({ type: 'reorder', pinned: order, unpinned: [...lists.pinned.filter((id) => !order.includes(id)), ...lists.unpinned.filter((id) => !order.includes(id))], at: Date.now() });
         return { changed: 'reordered the pinned threads', result: sidebar(state(), caller) };
       }
       const anchorId = args.before ?? args.after;
@@ -334,7 +334,7 @@ const THREAD_SPECS = {
       if (!list.includes(anchor.id)) throw new Error(`"${anchor.title}" isn't in the sidebar's active list`);
       const next = dropPin(lists.pinned, lists.unpinned, moving.id, toPinned, list.indexOf(anchor.id) + (args.after ? 1 : 0));
       if (!next) throw new Error(`Pinned is full (${PIN_SLOTS.length}); unpin one first`);
-      dispatch({ type: 'reorder', ...next });
+      dispatch({ type: 'reorder', ...next, at: Date.now() });
       return { changed: `moved "${moving.title}" ${args.after ? 'below' : 'above'} "${anchor.title}"`, result: sidebar(state(), caller) };
     },
   },

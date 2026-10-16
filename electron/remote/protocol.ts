@@ -1,4 +1,8 @@
+import { MAX_IMAGE_BYTES, MAX_IMAGES } from '../../src/chat/images.ts';
 import type { ChangeTarget } from '../../src/host/types/git.ts';
+import type { SentImage } from '../../src/model.ts';
+import { ACCESS } from '../../src/runtime/access.ts';
+import type { ThreadControls } from '../../src/runtime/controls.ts';
 import {
   DEVICE_KINDS,
   SCOPES,
@@ -17,6 +21,7 @@ export const PROTOCOL_VERSION = 2;
 /** Every command declares the scope it needs; the server refuses it on a device without that scope. */
 export const COMMAND_SCOPES = {
   catalog: 'read',
+  settings: 'read',
   send: 'operate',
   resolve: 'operate',
   interrupt: 'operate',
@@ -144,21 +149,22 @@ function parseRemoteCommand(value: unknown): RemoteCommand | string {
         : 'side-chat needs threadId and text';
     case 'catalog':
       return { type: 'catalog' };
-    case 'create':
-      if (
-        !isText(c.title, MAX_TEXT) ||
-        !isProvider(c.provider) ||
-        !(c.project === null || isString(c.project, MAX_PATH)) ||
-        !(c.model === undefined || isString(c.model, MAX_ID))
-      )
-        return 'create needs title, provider, project (or null) and an optional model';
-      return { type: 'create', title: c.title.trim(), provider: c.provider, project: c.project, ...(c.model !== undefined && { model: c.model }) };
+    case 'settings':
+      return { type: 'settings' };
+    case 'create': {
+      const controls = c.controls === undefined ? undefined : parseControls(c.controls);
+      const images = c.images === undefined ? undefined : parseImages(c.images);
+      if (!isText(c.title, MAX_TEXT) || !isProvider(c.provider) || !(c.project === null || isString(c.project, MAX_PATH)) || controls === null || images === null)
+        return 'create needs title, provider, project (or null), and optional controls and images';
+      return { type: 'create', title: c.title.trim(), provider: c.provider, project: c.project, ...(controls && { controls }), ...(images && { images }) };
+    }
     case 'rename':
       return isString(c.threadId, MAX_ID) && isText(c.title, MAX_TITLE) ? { type: 'rename', threadId: c.threadId, title: c.title.trim() } : 'rename needs threadId and title';
     case 'edit-goal':
       return isString(c.threadId, MAX_ID) && isText(c.goal, MAX_TEXT) ? { type: 'edit-goal', threadId: c.threadId, goal: c.goal.trim() } : 'edit-goal needs threadId and goal';
     case 'pin':
-      return isString(c.threadId, MAX_ID) && typeof c.isPinned === 'boolean' ? { type: 'pin', threadId: c.threadId, isPinned: c.isPinned } : 'pin needs threadId and isPinned';
+      if (!isString(c.threadId, MAX_ID) || typeof c.isPinned !== 'boolean' || !(c.order === undefined || Number.isFinite(c.order))) return 'pin needs threadId, isPinned and an optional order';
+      return { type: 'pin', threadId: c.threadId, isPinned: c.isPinned, ...(c.order !== undefined && { order: c.order as number }) };
     case 'settle':
       return isString(c.threadId, MAX_ID) && typeof c.isSettled === 'boolean' ? { type: 'settle', threadId: c.threadId, isSettled: c.isSettled } : 'settle needs threadId and isSettled';
     case 'schedule':
@@ -240,7 +246,9 @@ interface SavedShape {
  */
 export function visibleSnapshot<T extends SavedShape>(saved: T, scopes: readonly Scope[]): T {
   if (scopes.includes('code')) return saved;
-  return { ...saved, threads: saved.threads.map((t) => ({ ...t, activity: t.activity.map(({ patch: _patch, ...entry }) => entry) })), checkpoints: {} };
+  // Side chats quote diffs and files.
+  const { sidechats: _sidechats, ...rest } = saved as T & { sidechats?: unknown };
+  return { ...rest, threads: saved.threads.map((t) => ({ ...t, activity: t.activity.map(({ patch: _patch, ...entry }) => entry) })), checkpoints: {} } as T;
 }
 
 /**
@@ -250,6 +258,8 @@ export function visibleSnapshot<T extends SavedShape>(saved: T, scopes: readonly
 export function visibleAction(action: unknown, scopes: readonly Scope[]): unknown {
   if (scopes.includes('code')) return action;
   const a = action as { type?: string; event?: { type?: string; patch?: string } };
+  // Its number still arrives, so the device's sequence has no gap; no reducer knows this type.
+  if (a?.type?.startsWith('sidechat-')) return { type: 'hidden' };
   if (a?.type === 'agent' && a.event?.type === 'tool' && a.event.patch !== undefined) {
     const { patch: _patch, ...event } = a.event;
     return { ...a, event };
@@ -285,6 +295,24 @@ const isSize = (value: unknown): value is number => Number.isSafeInteger(value) 
  */
 export const isRelativePath = (value: unknown): value is string =>
   isText(value, MAX_PATH) && !value.includes('\\') && !value.includes('\0') && !/^([a-zA-Z]:|\/)/.test(value) && !value.split('/').includes('..');
+
+function parseControls(value: unknown): ThreadControls | null {
+  const c = value as Record<string, unknown> | null;
+  if (!isString(c?.model, MAX_ID) || !isString(c.effort, MAX_ID) || !isString(c.speed, MAX_ID) || !ACCESS.includes(c.access as never)) return null;
+  return { model: c.model, effort: c.effort, speed: c.speed, access: c.access as ThreadControls['access'] };
+}
+
+/** At most what the composer attaches: `MAX_IMAGES` of `MAX_IMAGE_BYTES` each, as base64, with a small thumbnail. */
+function parseImages(value: unknown): SentImage[] | null {
+  if (!Array.isArray(value) || value.length > MAX_IMAGES) return null;
+  const images = value.map((v: Record<string, unknown> | null) =>
+    IMAGE_TYPES.includes(v?.mediaType as never) && isString(v?.data, Math.ceil((MAX_IMAGE_BYTES * 4) / 3)) && isString(v?.thumb, MAX_THUMB) ? { mediaType: v.mediaType as SentImage['mediaType'], data: v.data, thumb: v.thumb } : null,
+  );
+  return images.every((i) => i !== null) ? images : null;
+}
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] satisfies SentImage['mediaType'][];
+const MAX_THUMB = 512 * 1024;
 
 function parsePoint(value: unknown): ThreadPoint | null {
   const p = value as Record<string, unknown> | null;

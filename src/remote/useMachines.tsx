@@ -174,16 +174,18 @@ export function useMachineCatalog(machine: FollowedMachine | undefined) {
  * The app's own components on another computer's thread: they read its mirrored store and their actions become commands to
  * it. What a device can't do yet says so instead of changing this computer's store.
  */
-export function RemoteScope({ machine, state, children }: { machine: FollowedMachine; state: State; children: ReactNode }) {
+export function RemoteScope({ machine, state, onOpenTab, children }: { machine: FollowedMachine; state: State; onOpenTab?: (action: Extract<Action, { type: 'pane-open-tab' }>) => void; children: ReactNode }) {
   const { run } = useMachines();
   const dispatch = useCallback(
     (action: Action) => {
+      // A link in its transcript: the thread view opens its own pane, reading from that computer.
+      if (action.type === 'pane-open-tab' && onOpenTab) return onOpenTab(action);
       const command = commandFor(action);
       if (!command) return void toast(`Do this on ${machine.name} itself for now`);
       if (command.type === 'open') return openRemoteThread({ machineId: machine.id, threadId: command.threadId });
       void run(machine.id, command);
     },
-    [machine.id, machine.name, run],
+    [machine.id, machine.name, run, onOpenTab],
   );
   const value = useMemo(() => ({ state, dispatch }), [state, dispatch]);
   return <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>;
@@ -191,6 +193,7 @@ export function RemoteScope({ machine, state, children }: { machine: FollowedMac
 
 const COMMAND_VERBS = {
   catalog: 'read its projects',
+  settings: 'read its settings',
   send: 'send the message',
   resolve: 'answer',
   interrupt: 'stop the agent',

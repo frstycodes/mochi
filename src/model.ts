@@ -334,6 +334,8 @@ export interface Thread {
   sources: Source[];
   context: { used: number; max: number };
   orbitSlot?: number;
+  /** Where its pin sorts among all your computers' pins (`pinOrderOf`); unset while unpinned. */
+  pinOrder?: number;
   settledAt?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };

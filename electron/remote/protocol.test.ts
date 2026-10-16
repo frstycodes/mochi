@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DEFAULT_SCOPES, SCOPES } from '../../src/host/types/remote.ts';
-import { hasScope, MAX_RESULT_BYTES, parseCommand, resultFrame } from './protocol.ts';
+import { hasScope, MAX_RESULT_BYTES, parseCommand, resultFrame, visibleAction, visibleSnapshot } from './protocol.ts';
 
 const parse = (command: object) => parseCommand(JSON.stringify({ type: 'command', id: 'c1', command }));
 
@@ -57,13 +57,8 @@ test('code, terminal, rewind, side chat, settings and delete commands parse stri
     point: { kind: 'message', index: 2 },
     mode: 'files',
   });
-  assert.deepEqual(ok({ type: 'create', title: 'x', provider: 'claude', project: 'ref', model: 'opus' }), {
-    type: 'create',
-    title: 'x',
-    provider: 'claude',
-    project: 'ref',
-    model: 'opus',
-  });
+  const controls = { model: 'opus', effort: 'high', speed: '', access: 'Manual' };
+  assert.deepEqual(ok({ type: 'create', title: 'x', provider: 'claude', project: 'ref', controls: { ...controls, extra: 1 } }), { type: 'create', title: 'x', provider: 'claude', project: 'ref', controls });
   assert.deepEqual(ok({ type: 'terminal-read', threadId: 't', terminalId: 'p', after: 0 }), {
     type: 'terminal-read',
     threadId: 't',
@@ -71,6 +66,7 @@ test('code, terminal, rewind, side chat, settings and delete commands parse stri
     after: 0,
   });
   assert.deepEqual(ok({ type: 'catalog', extra: 1 }), { type: 'catalog' });
+  assert.deepEqual(ok({ type: 'pin', threadId: 't', isPinned: true, order: 1.5 }), { type: 'pin', threadId: 't', isPinned: true, order: 1.5 });
 
   for (const bad of [
     { type: 'read-file', threadId: 't', path: '/etc/passwd' },
@@ -89,8 +85,12 @@ test('code, terminal, rewind, side chat, settings and delete commands parse stri
     { type: 'rewind', threadId: 't', point: { kind: 'message', index: 1 }, mode: 'everything' },
     { type: 'side-chat', threadId: 't', text: '  ' },
     { type: 'setting', key: '', value: 'x' },
-    { type: 'create', title: 'x', provider: 'claude', project: null, model: 7 },
+    { type: 'create', title: 'x', provider: 'claude', project: null, controls: { model: 'opus', effort: 'high', speed: '', access: 'Root' } },
+    { type: 'create', title: 'x', provider: 'claude', project: null, images: [{ mediaType: 'image/svg+xml', data: 'x', thumb: 'x' }] },
+    { type: 'create', title: 'x', provider: 'claude', project: null, images: Array.from({ length: 9 }, () => ({ mediaType: 'image/png', data: 'x', thumb: 'x' })) },
     { type: 'delete' },
+    { type: 'pin', threadId: 't', isPinned: true, order: 'first' },
+    { type: 'pin', threadId: 't', isPinned: true, order: null },
   ])
     assert.equal(typeof parse(bad), 'string', JSON.stringify(bad));
 });
@@ -102,6 +102,7 @@ test('each new command needs its own scope; terminal is never implied by code', 
     return SCOPES.filter((s) => hasScope([s], frame.command));
   };
   assert.deepEqual(scopeOf({ type: 'catalog' }), ['read']);
+  assert.deepEqual(scopeOf({ type: 'settings' }), ['read']);
   assert.deepEqual(scopeOf({ type: 'diff', threadId: 't', scope: 'branch' }), ['code']);
   assert.deepEqual(scopeOf({ type: 'read-file', threadId: 't', path: 'a' }), ['code']);
   assert.deepEqual(scopeOf({ type: 'comment', threadId: 't', path: 'a', side: 'additions', line: 1, text: 'x' }), ['code']);
@@ -118,4 +119,13 @@ test('a result too large for the relay is refused with its size instead of sent'
   const big = resultFrame('c1', { isOk: true, data: { text: 'x'.repeat(MAX_RESULT_BYTES) } });
   assert.equal(big.type === 'result' && big.isOk, false);
   assert.match(big.type === 'result' && !big.isOk ? big.error : '', /^Too large to send here \(8\.0 MB\)/);
+});
+
+test('side chats reach only devices with code: they quote diffs and files', () => {
+  const saved = { threads: [], checkpoints: {}, sidechats: { t: { tab: { messages: [] } } } };
+  assert.ok('sidechats' in visibleSnapshot(saved, ['read', 'code']));
+  assert.equal('sidechats' in visibleSnapshot(saved, ['read']), false);
+  const ask = { type: 'sidechat-ask', threadId: 't', tabId: 'remote', id: 'q', text: 'why?' };
+  assert.equal(visibleAction(ask, ['read', 'code']), ask);
+  assert.deepEqual(visibleAction(ask, ['read']), { type: 'hidden' });
 });

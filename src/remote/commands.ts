@@ -10,14 +10,14 @@ import { reviewNote } from '../git/files.ts';
 import { getProfiles } from '../profiles.ts';
 import { projectName, projectRef, savedProjects } from '../projects.ts';
 import { rewindThread } from '../rewind/run.ts';
-import { initialControls, sideChatChoice } from '../runtime/controls.ts';
-import { findSetting, settingsCatalog, type SettingSources } from '../settings/catalog.ts';
+import { sideChatChoice } from '../runtime/controls.ts';
+import { findSetting, settingsCatalog, type SettingSources, type SettingWrite } from '../settings/catalog.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { askSideChat } from '../sidechat/ask.ts';
 import { chatFor } from '../store/sidechat.ts';
 import { closeShell, openShell, readShell, shellOf } from './terminals.ts';
-import { pinnedThreads, togglePin } from '../reorder.ts';
+import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
 import { handoffSummary } from '../rewind/handoff.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -42,6 +42,7 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
   const { state, dispatch } = env;
   if (command.type === 'resolve') return resolve(command, env);
   if (command.type === 'catalog') return { isOk: true, data: await catalog(state) };
+  if (command.type === 'settings') return { isOk: true, data: writableValues(await machineSources(state)) };
   if (command.type === 'create') return create(command, env);
   if (command.type === 'setting') return setting(command, env);
   const thread = state.threads.find((t) => t.id === command.threadId);
@@ -67,7 +68,7 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
       dispatch({ type: 'edit-goal', threadId: thread.id, draft: { ...draftFrom(thread), goal: command.goal } });
       return ok;
     case 'pin':
-      return pin(thread, command.isPinned, env);
+      return pin(thread, command, env);
     case 'settle':
       if ((thread.status === 'settled') !== command.isSettled) dispatch({ type: command.isSettled ? 'settle' : 'unsettle', threadId: thread.id });
       return ok;
@@ -167,17 +168,40 @@ function machineProjects(state: State) {
 /** The new-thread page's start, in the background. A project has to be one `catalog` listed: a device never names a folder. */
 function create(command: Extract<RemoteCommand, { type: 'create' }>, { state, dispatch }: CommandEnv): CommandResult {
   if (command.project !== null && !machineProjects(state).includes(command.project)) return fail('That project isn’t on this machine');
-  const controls = command.model === undefined ? undefined : initialControls(command.provider, command.model);
   dispatch({
     type: 'create',
     title: command.title,
     provider: command.provider,
     project: command.project,
-    ...(controls && { controls }),
+    ...(command.controls && { controls: command.controls }),
+    ...(command.images && { images: command.images }),
     isLive: host.isDesktop,
     isBackground: true,
   });
   return ok;
+}
+
+/**
+ * What a device may change: prefs, quiet hours and main's settings. Devices, accounts, profiles and the theme change on this
+ * computer only, and the demo switch reloads the app.
+ */
+const isRemoteWrite = (write: SettingWrite): write is Extract<SettingWrite, { to: 'prefs' | 'quiet' | 'host' }> =>
+  (write.to === 'prefs' && !('demoData' in write.patch)) || write.to === 'quiet' || write.to === 'host';
+
+/** Each row a device may change, with its value here: a row's value written back shows where it would land. */
+function writableValues(sources: SettingSources) {
+  return Object.fromEntries(
+    settingsCatalog().flatMap((row) => {
+      const value = row.read(sources);
+      const write = value === undefined ? null : row.write(value, sources);
+      return value !== undefined && write && isRemoteWrite(write) ? [[row.key, value]] : [];
+    }),
+  );
+}
+
+/** What this machine's settings read from, as far as a device can change them. */
+async function machineSources(state: State): Promise<SettingSources> {
+  return { prefs: getPrefs(), theme: '', quiet: state.notifications.quiet, host: await host.settings.get() };
 }
 
 /** Side chats a device asks live in their own tab here, beside the thread's own. */
@@ -191,20 +215,16 @@ async function sideChat(thread: Thread, text: string, { state, dispatch }: Comma
   return ok;
 }
 
-/**
- * A Settings row's value, written where Settings writes it. Only what stays on this machine: Devices, accounts, profiles and
- * the theme are changed here only, and the demo switch reloads the app.
- */
+/** A Settings row's value, written where Settings writes it, when it's one a device may change (`isRemoteWrite`). */
 async function setting({ key, value }: Extract<RemoteCommand, { type: 'setting' }>, { state, dispatch }: CommandEnv): Promise<CommandResult> {
   const row = findSetting(settingsCatalog(), key);
   if (!row) return fail(`No setting ${key}`);
-  const sources: SettingSources = { prefs: getPrefs(), theme: '', quiet: state.notifications.quiet, host: await host.settings.get() };
+  const sources = await machineSources(state);
   const write = row.write(value, sources);
   if (!write) return fail(`“${value}” isn’t a value of ${row.label}`);
-  const refused = fail(`${row.label} can only be changed on that computer`);
+  if (!isRemoteWrite(write)) return fail(`${row.label} can only be changed on that computer`);
   switch (write.to) {
     case 'prefs':
-      if ('demoData' in write.patch) return refused;
       setPrefs(write.patch);
       return ok;
     case 'quiet':
@@ -213,8 +233,6 @@ async function setting({ key, value }: Extract<RemoteCommand, { type: 'setting' 
     case 'host':
       await host.settings.set(write.patch);
       return ok;
-    default:
-      return refused;
   }
 }
 
@@ -241,12 +259,17 @@ function send(thread: Thread, text: string, { state, dispatch, whileWorking }: C
 }
 
 /** The sidebar's pin toggle (mod Shift P), only when it changes something. */
-function pin(thread: Thread, isPinned: boolean, { state, dispatch }: CommandEnv): CommandResult {
+function pin(thread: Thread, { isPinned, order }: Extract<RemoteCommand, { type: 'pin' }>, { state, dispatch }: CommandEnv): CommandResult {
+  if (isPinned && order !== undefined) {
+    if (!pinAt(state.threads, thread.spaceId, thread.id, order)) return fail('Pinned is full; unpin a thread first');
+    dispatch({ type: 'pin-at', threadId: thread.id, order });
+    return ok;
+  }
   const isPinnedNow = pinnedThreads(state.threads, thread.spaceId).some((t) => t.id === thread.id);
   if (isPinnedNow === isPinned) return ok;
   const lists = togglePin(state.threads, thread.spaceId, thread.id);
   if (!lists) return fail('Pinned is full; unpin a thread first');
-  dispatch({ type: 'reorder', ...lists });
+  dispatch({ type: 'reorder', ...lists, at: Date.now() });
   return ok;
 }
 

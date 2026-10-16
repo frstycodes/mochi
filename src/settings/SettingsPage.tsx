@@ -1,5 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { MachineSettings, SettingsComputerPicker } from '../remote/MachineSettings';
+import { SharedSettingsNotice } from '../remote/SharedSettingsNotice';
+import { useMachines } from '../remote/useMachines';
 import { TitleBar } from '../TitleBar';
 import { AgentSettingsProvider } from './AgentSettings';
 import { closeSettings, useSettingsRoute, type SettingsRoute } from './open';
@@ -11,6 +14,8 @@ export function SettingsPage() {
   const route = useSettingsRoute();
   const section = SETTINGS_SECTIONS.find((s) => s.id === route?.section) ?? SETTINGS_SECTIONS[0];
   const Section = section.component;
+  const [machineId, setMachineId] = useState<string | null>(null);
+  const machine = useMachines().machines.find((m) => m.machine.id === machineId)?.machine;
   useEscapeBack();
   useFlashSetting(route);
 
@@ -18,11 +23,21 @@ export function SettingsPage() {
     <AgentSettingsProvider>
       {/* Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track. */}
       <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-        <TitleBar className="px-4" />
+        <TitleBar className="px-4">
+          <span className="flex-1" />
+          <SettingsComputerPicker value={machine ? machineId : null} onChange={setMachineId} />
+        </TitleBar>
         <ScrollArea type="scroll" className="min-h-0">
           <div className="mx-auto flex w-full max-w-180 flex-col gap-8 px-4 pt-6 pb-16 md:px-8">
             <h1 className="px-1 type-display">{section.title}</h1>
-            <Section />
+            {machine ? (
+              <MachineSettings key={machine.id} machine={machine} section={section.id} />
+            ) : (
+              <>
+                <SharedSettingsNotice />
+                <Section />
+              </>
+            )}
           </div>
         </ScrollArea>
       </div>

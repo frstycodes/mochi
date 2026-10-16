@@ -8,6 +8,7 @@ test('the shared UI’s actions become the commands that do the same on the mach
   assert.deepEqual(commandFor({ type: 'unsettle', threadId: 't' }), { type: 'settle', threadId: 't', isSettled: false });
   assert.deepEqual(commandFor({ type: 'go', view: { kind: 'thread', id: 't' } }), { type: 'open', threadId: 't' });
   assert.deepEqual(commandFor({ type: 'delete', threadIds: ['t'] }), { type: 'delete', threadId: 't' });
+  assert.deepEqual(commandFor({ type: 'pin-at', threadId: 't', order: 42 }), { type: 'pin', threadId: 't', isPinned: true, order: 42 });
   assert.deepEqual(commandFor({ type: 'rewind-message', threadId: 't', index: 3, mode: 'chat' }), {
     type: 'rewind',
     threadId: 't',

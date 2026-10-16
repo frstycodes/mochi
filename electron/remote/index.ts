@@ -20,8 +20,8 @@ import { Registry } from './registry.ts';
 import { connectMachine, listMachines, openDeviceChannel, type MachineConnection } from './relayClient.ts';
 import { startRemoteServer, type RemoteServer, type RendererBridge } from './server.ts';
 
-// ponytail: one fixed port; a setting if it collides with something users run.
-export const REMOTE_PORT = 47373;
+// One fixed port; a setting if it collides with something users run. `MOCHI_REMOTE_PORT` lets a dev run sit beside an installed Mochi.
+export const REMOTE_PORT = Number(process.env.MOCHI_REMOTE_PORT) || 47373;
 const SNAPSHOT_TIMEOUT_MS = 15_000;
 const COMMAND_TIMEOUT_MS = 30_000;
 const DEFAULTS: RemoteSettings = { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false };
