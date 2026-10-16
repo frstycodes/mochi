@@ -31,6 +31,7 @@ import { MachinePresence } from './MachinePresence';
 import { REMOTE_PANES, RemotePane, type RemotePaneKind } from './RemotePanes';
 import { machineStatus } from './status';
 import { RemoteScope, useMachines } from './useMachines';
+import { Seen } from '../notify/useSeen';
 import { RemoteFilesContext } from '../files/useWorktreeFiles';
 import type { FileTarget } from '../files/FileFinder';
 import type { Action, State } from '../store';
@@ -64,6 +65,7 @@ function RemoteThread({ machine, state, thread }: { machine: FollowedMachine; st
   };
   return (
     <RemoteScope machine={machine} state={state} onOpenTab={openTab}>
+      <Seen threadId={thread.id} when="open-and-leave" />
       <RemoteFilesContext.Provider value={files}>
         <div className="flex h-full min-h-0">
           <div className="@container flex min-h-0 min-w-[420px] flex-1 flex-col">

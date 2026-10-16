@@ -297,3 +297,15 @@ test('a pin with an order lands where the device put it among all computers’ p
   const full = { ...state, threads: [...state.threads, ...[1, 2, 3, 5, 7].map((slot, i) => ({ ...state.threads[0], id: `p${i}`, orbitSlot: slot }))] };
   assert.deepEqual(await runRemoteCommand({ type: 'pin', threadId, isPinned: true, order: 1 }, device(full, 'Laptop', [])), { isOk: false, error: 'Pinned is full; unpin a thread first' });
 });
+
+test('seen marks the thread and its asks read on the machine, and refuses a thread it doesn’t have', async () => {
+  const { state, threadId } = machine();
+  const dispatched: Action[] = [];
+  assert.deepEqual(await runRemoteCommand({ type: 'seen', threadId }, device(state, 'Laptop', dispatched)), { isOk: true });
+  assert.deepEqual(dispatched, [{ type: 'seen', threadId, queueIds: undefined }]);
+  const after = threadsReducer(state, dispatched[0]);
+  assert.equal(after.threads.find((t) => t.id === threadId)?.seenActivity, after.threads.find((t) => t.id === threadId)?.activity.length);
+  assert.deepEqual(after.queue.map((q) => q.isSeen), [true, true]);
+  assert.equal(threadsReducer(after, dispatched[0]), after, 'nothing left unread: no store change');
+  assert.deepEqual(await runRemoteCommand({ type: 'seen', threadId: 'nope' }, device(state, 'Laptop', [])), { isOk: false, error: 'No such thread on this machine' });
+});

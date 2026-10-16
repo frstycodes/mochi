@@ -178,7 +178,7 @@ export function useMachineCatalog(machine: FollowedMachine | undefined) {
  * it. What a device can't do yet says so instead of changing this computer's store.
  */
 export function RemoteScope({ machine, state, onOpenTab, children }: { machine: FollowedMachine; state: State; onOpenTab?: (action: Extract<Action, { type: 'pane-open-tab' }>) => void; children: ReactNode }) {
-  const { run } = useMachines();
+  const { run, ask } = useMachines();
   const dispatch = useCallback(
     (action: Action) => {
       // A link in its transcript: the thread view opens its own pane, reading from that computer.
@@ -186,9 +186,11 @@ export function RemoteScope({ machine, state, onOpenTab, children }: { machine: 
       const command = commandFor(action);
       if (!command) return void toast(`Do this on ${machine.name} itself for now`);
       if (command.type === 'open') return openRemoteThread({ machineId: machine.id, threadId: command.threadId });
+      // Read state is no reason to toast: offline, or without operate, it just stays unread there.
+      if (command.type === 'seen') return void ask(machine.id, command).catch(() => undefined);
       void run(machine.id, command);
     },
-    [machine.id, machine.name, run, onOpenTab],
+    [machine.id, machine.name, run, ask, onOpenTab],
   );
   const value = useMemo(() => ({ state, dispatch }), [state, dispatch]);
   return <HarnessContext.Provider value={value}>{children}</HarnessContext.Provider>;
@@ -216,6 +218,7 @@ const COMMAND_VERBS = {
   'open-pr': 'open the pull request',
   rewind: 'rewind the thread',
   'side-chat': 'ask the side chat',
+  seen: 'mark it read',
   delete: 'delete the thread',
   setting: 'change the setting',
   diff: 'read the changes',

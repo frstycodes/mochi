@@ -83,7 +83,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => clearLimit(t, now));
     case 'turn-end': {
       // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
-      const ended = thread.live ? update((t) => closeCompaction({ ...t, live: { ...t.live!, isWorking: false, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
+      const ended = thread.live ? update((t) => closeCompaction({ ...t, live: { ...t.live!, isWorking: false, turnEnd: event.status, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
       if (isLimitEnd(thread)) return ended;
       return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
     }

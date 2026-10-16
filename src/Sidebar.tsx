@@ -44,7 +44,8 @@ import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type Sta
 import type { FollowedMachine } from './host/types/remote';
 import { duration, goalProgress } from './progress';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
-import { ProgressRing, SpaceIcon, TooltipIconButton } from './ui';
+import { ProgressRing, SpaceIcon, TooltipIconButton, UnreadDot } from './ui';
+import { isUnread } from './store/seen';
 import { agentPhase, isWorking, PHASE_LABELS, workingLabel } from './agentPhase';
 import { AgentLoader } from './AgentLoader';
 import { runningBackground } from './runtime/subagents';
@@ -651,7 +652,10 @@ export function ThreadItem({ thread, machine, isActive, isSelected, onSelect }: 
           {/* While the Settle / Reactivate chip covers this slot, it widens to the chip's width so the branch truncates before the chip instead of under it. */}
           <span className={cn('ml-auto shrink-0 tabular group-focus-within/menu-item:opacity-0 group-hover/menu-item:opacity-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')}>{row.ago}</span>
         </span>
-        <span className={cn('min-w-0 truncate', isActive && 'text-foreground')}>{thread.title}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={cn('min-w-0 truncate', (isActive || row.isUnread) && 'text-foreground')}>{thread.title}</span>
+          {row.isUnread && !isActive && <UnreadDot className="ml-auto" />}
+        </span>
         {/* overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line. */}
         <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing met={row.progress.met} total={row.progress.total} slot={thread.line} size={12} isWorking={row.isWorking} />
@@ -698,7 +702,7 @@ function useThreadRow(thread: Thread) {
   const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { progress, detail, phase: agentPhase(thread), ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { progress, detail, phase: agentPhase(thread), ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isUnread: isUnread(thread), isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {

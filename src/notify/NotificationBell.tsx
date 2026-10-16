@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { UnreadDot } from '../ui';
 import { host } from '../host';
 import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
@@ -121,7 +122,7 @@ function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
       </ItemContent>
       <ItemActions className="relative z-10 gap-1 self-center">
         <span className="tabular type-caption text-subtle-foreground group-hover/notice:hidden">{state.now - head.at < 1 ? 'now' : duration(state.now - head.at)}</span>
-        {isUnread && <span aria-label="Unread" className="size-1.5 rounded-full bg-foreground group-hover/notice:hidden" />}
+        {isUnread && <UnreadDot className="group-hover/notice:hidden" />}
         <Button
           variant="ghost"
           size="icon-xs"

@@ -11,6 +11,8 @@ export function commandFor(action: Action): RemoteCommand | { type: 'open'; thre
       return { type: 'resolve', queueId: action.queueId, ...(action.answers && { answers: action.answers }) };
     case 'interrupt':
       return { type: 'interrupt', threadId: action.threadId };
+    case 'seen':
+      return { type: 'seen', ...(action.threadId && { threadId: action.threadId }), ...(action.queueIds && { queueIds: action.queueIds }) };
     case 'rename':
       return { type: 'rename', threadId: action.threadId, title: action.title };
     case 'settle':

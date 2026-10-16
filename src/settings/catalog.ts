@@ -255,7 +255,7 @@ function colorTheme(slot: ThemeSlot): Setting {
   };
 }
 
-const REMOTE_KEYS = { isEnabled: 'remoteEnabled', allowsNetwork: 'remoteNetwork', reachesAnywhere: 'remoteAnywhere', machineName: 'machineName' } satisfies Record<keyof RemoteSettings, string>;
+const REMOTE_KEYS = { isEnabled: 'remoteEnabled', allowsNetwork: 'remoteNetwork', reachesAnywhere: 'remoteAnywhere', machineName: 'machineName', keepsAwake: 'keepAwake' } satisfies Record<keyof RemoteSettings, string>;
 
 function remoteSetting(key: keyof RemoteSettings, label: string, control: Control, extra: Partial<Setting> = {}): Setting {
   return {
@@ -368,6 +368,7 @@ const APP_SETTINGS: Setting[] = [
   remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, { locked: REMOTE_REACH, description: 'Your other devices can follow and steer threads running here' }),
   remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, { locked: REMOTE_REACH, description: 'Devices on your local network or Tailscale can connect' }),
   remoteSetting('reachesAnywhere', 'Reach this computer from anywhere', SWITCH, { locked: REMOTE_REACH, description: 'Through Mochi’s encrypted relay, off this network' }),
+  remoteSetting('keepsAwake', 'Keep this computer awake', SWITCH, { description: 'While a thread works or a device is connected' }),
   remoteSetting('machineName', 'Computer name', { type: 'text', placeholder: 'This computer’s host name' }, { description: 'How your devices list this computer; empty uses the host name' }),
   pref('agent', 'Agent', 'general', choice(AGENTS), { group: 'New threads', description: 'The harness a new thread starts on' }),
   pref('permissions', 'Permissions', 'general', choice(SHARED_ACCESS.map((a) => ({ value: a, label: a, ...(a === 'Full access' && { tone: 'warning' as const }) }))), { locked: AGENT_REACH, group: 'New threads', description: 'What a new thread’s agent may do without asking' }),

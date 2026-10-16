@@ -48,6 +48,7 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
   if (command.type === 'add-project' || command.type === 'clone-project') return addProject(command, state);
   if (command.type === 'create') return create(command, env);
   if (command.type === 'setting') return setting(command, env);
+  if (command.type === 'seen') return seen(command, env);
   const thread = state.threads.find((t) => t.id === command.threadId);
   if (!thread) return fail('No such thread on this machine');
   switch (command.type) {
@@ -314,4 +315,11 @@ async function ship(thread: Thread, command: Extract<RemoteCommand, { type: 'com
   const opened = openedPr(url, command.title);
   if (opened) dispatch({ type: 'prs-seen', threadId: thread.id, prs: [opened] });
   return { isOk: true, detail: url };
+}
+
+/** Queue cards answered meanwhile are skipped, not refused: the device looked at them all the same. */
+function seen(command: Extract<RemoteCommand, { type: 'seen' }>, { state, dispatch }: CommandEnv): CommandResult {
+  if (command.threadId && !state.threads.some((t) => t.id === command.threadId)) return fail('No such thread on this machine');
+  dispatch({ type: 'seen', threadId: command.threadId, queueIds: command.queueIds });
+  return ok;
 }

@@ -37,6 +37,9 @@ import { useSendCiLog } from './notify/useSendCiLog';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { remoteDecisions } from './remote/mirror';
 import { RemoteScope, useMachines } from './remote/useMachines';
+import { Seen, useSeen } from './notify/useSeen';
+import { isQueueUnread } from './store/seen';
+import { UnreadDot } from './ui';
 import { isCommand } from './keymap';
 
 const KIND = {
@@ -57,6 +60,7 @@ export function QueueView() {
   const { state } = useHarness();
   const review = useReviewEntry(state.spaceId);
   const [selected, setSelected] = useState(0);
+  useSeen({ queueIds: items.map((q) => q.id) }, 'leave');
   const index = Math.min(selected, Math.max(0, items.length - 1));
   useListKeys(items.length, index, setSelected);
 
@@ -106,6 +110,7 @@ export function QueueView() {
               On {machine.name}
             </h2>
             <RemoteScope machine={machine} state={state}>
+              <Seen queueIds={waiting.map((q) => q.id)} when="leave" />
               <ol className="flex flex-col gap-3">
                 {waiting.map((item) => (
                   <li key={item.id}>
@@ -155,7 +160,10 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
           )}
         </CardDescription>
         <CardTitle>{item.title}</CardTitle>
-        <CardAction className="tabular type-caption text-subtle-foreground">{age < 1 ? 'just now' : `${duration(age)} ago`}</CardAction>
+        <CardAction className="flex items-center gap-1.5 tabular type-caption text-subtle-foreground">
+          {isQueueUnread(item) && <UnreadDot />}
+          {age < 1 ? 'just now' : `${duration(age)} ago`}
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}

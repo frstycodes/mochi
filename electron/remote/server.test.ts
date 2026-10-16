@@ -96,6 +96,17 @@ test('a device without the scope a command needs is refused, and the renderer ne
   await server.close();
 });
 
+test('a viewer’s seen is refused before it reaches the renderer', async () => {
+  const { server, runs } = await serve();
+  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
+  viewer.command('c1', { type: 'seen', threadId: 't1' });
+  const [result] = await viewer.until('result');
+  assert.deepEqual(result, { type: 'result', id: 'c1', isOk: false, error: 'This device can’t seen: it needs the operate scope' });
+  assert.equal(runs.length, 0);
+  await viewer.close();
+  await server.close();
+});
+
 test('a new device can read code but not open a terminal; a viewer can do neither', async () => {
   const { server, runs } = await serve();
   const laptop = await connect(server.addresses[0], { auth: 'laptop' });
