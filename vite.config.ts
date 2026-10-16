@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { defineConfig, lazyPlugins } from 'vite-plus';
-import react from '@vitejs/plugin-react';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import electron from 'vite-plugin-electron/simple';
@@ -18,6 +19,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: lazyPlugins(() => [
     react(),
+    babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
     viteSingleFile(),
     mode === 'electron' &&
