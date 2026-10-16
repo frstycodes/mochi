@@ -4,11 +4,12 @@ import { useHarness } from '../../store';
 import { CatalogRow } from '../CatalogRow';
 import { SettingsGroup, SettingsRow } from '../parts';
 import { IDLE_ALERTS } from '../settingOptions';
+import { setPrefs, usePrefs } from '../prefs';
 
 export function NotificationsSection() {
   return (
     <div className="flex flex-col gap-10">
-      <SettingsGroup id="alertKinds" title="System alerts" footer="An OS notification while Mochi is in the background. Watched threads also alert when their turn finishes, fails or hits the usage limit. Every notice still lands in the notification list.">
+      <SettingsGroup id="alertKinds" title="System alerts" action={<AllAlertsButton />} footer="An OS notification while Mochi is in the background. Watched threads also alert when their turn finishes, fails or hits the usage limit. Every notice still lands in the notification list.">
         {Object.keys(ALERT_KINDS).map((kind) => (
           <CatalogRow key={kind} settingKey={`alert.${kind}`} />
         ))}
@@ -43,12 +44,23 @@ function QuietHoursGroup() {
   );
 }
 
+/** Every system alert on or off at once: off while any is on, so the first click quiets everything. */
+function AllAlertsButton() {
+  const { alertKinds } = usePrefs();
+  const isAnyOn = alertKinds.length > 0;
+  return (
+    <Button variant="ghost" size="sm" onClick={() => setPrefs({ alertKinds: isAnyOn ? [] : Object.keys(ALERT_KINDS) })}>
+      {isAnyOn ? 'Turn all off' : 'Turn all on'}
+    </Button>
+  );
+}
+
 function MutedThreadsGroup() {
   const { state, dispatch } = useHarness();
   const muted = state.notifications.muted.map((id) => ({ id, title: state.threads.find((t) => t.id === id)?.title ?? 'Deleted thread' }));
+  if (!muted.length) return <NoMutedThreads />;
   return (
     <SettingsGroup id="mutedThreads" title="Muted threads" footer="Mute a thread from its row in the notification list.">
-      {muted.length === 0 && <SettingsRow label={<span className="text-muted-foreground">No muted threads</span>} />}
       {muted.map((t) => (
         <SettingsRow
           key={t.id}
@@ -61,5 +73,14 @@ function MutedThreadsGroup() {
         />
       ))}
     </SettingsGroup>
+  );
+}
+
+/** Nothing to unmute: one line where the list would be, still the target of a search for muted threads. */
+function NoMutedThreads() {
+  return (
+    <p data-setting-id="mutedThreads" className="rounded-xl px-1 type-meta text-muted-foreground transition-colors duration-700 data-flash:bg-accent/60">
+      No muted threads. Mute one from its row in the notification list.
+    </p>
   );
 }

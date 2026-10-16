@@ -192,6 +192,24 @@ export function bindingOf(id: CommandId, overrides: Overrides = getPrefs().keybi
 
 export const isCustom = (id: CommandId, overrides: Overrides) => Object.hasOwn(overrides, id) && overrides[id] !== chordText(defaultKeys(id));
 
+/** What Settings › Keyboard's filter narrows to. `chord` is a pressed shortcut to look up; `isChangedOnly` keeps your rebinds. */
+export interface ShortcutFilter {
+  query: string;
+  chord: Key[] | null;
+  isChangedOnly: boolean;
+}
+
+/** The commands a filter shows: words match the title or group, a chord matches what a command is bound to now. */
+export function filterCommands(ids: CommandId[], { query, chord, isChangedOnly }: ShortcutFilter, overrides: Overrides = getPrefs().keybindings, isMac = IS_MAC) {
+  const q = query.trim().toLowerCase();
+  const pressed = chord && chordText(chord);
+  return ids.filter((id) => {
+    if (isChangedOnly && !isCustom(id, overrides)) return false;
+    if (pressed && chordText(bindingOf(id, overrides, isMac)) !== pressed) return false;
+    return !q || `${COMMANDS[id].title} ${COMMANDS[id].group}`.toLowerCase().includes(q);
+  });
+}
+
 /** `mod+shift+K` as stored and as agents write it: modifiers in a fixed order, then one key. */
 export function chordText(keys: Key[] | null) {
   if (!keys) return '';

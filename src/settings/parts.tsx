@@ -33,7 +33,7 @@ export function SettingsSection({ id, title, action, footer, children }: { id?: 
 }
 
 /** A section whose rows sit on one card surface, split by inset hairlines. */
-export function SettingsGroup({ children, ...section }: Omit<React.ComponentProps<typeof SettingsSection>, 'action'>) {
+export function SettingsGroup({ children, ...section }: React.ComponentProps<typeof SettingsSection>) {
   return (
     <SettingsSection {...section}>
       <SettingsCard>{children}</SettingsCard>

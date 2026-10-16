@@ -60,17 +60,19 @@ function HarnessSettings({ provider }: { provider: Provider }) {
           <Refresh />
         </TooltipIconButton>
       </header>
-      {isMissing && (
-        <SettingsGroup footer={`If it's installed somewhere unusual, set its path below.`}>
+      {isMissing ? (
+        <SettingsGroup title="Not installed" footer="Installed somewhere unusual? Set its path here instead.">
           <SettingsRow label={`Install ${harness.name}`} description={<a href={harness.docs} target="_blank" rel="noreferrer" className="underline underline-offset-4">Setup guide</a>}>
             <CommandLine command={harness.install} />
           </SettingsRow>
+          {!!settings && <CatalogRow settingKey={`${provider}.path`} />}
         </SettingsGroup>
-      )}
-      {!!settings && (
-        <SettingsGroup>
-          <CatalogRow settingKey={`${provider}.path`} />
-        </SettingsGroup>
+      ) : (
+        !!settings && (
+          <SettingsGroup title="Install">
+            <CatalogRow settingKey={`${provider}.path`} />
+          </SettingsGroup>
+        )
       )}
       {!isMissing && <AccountsGroup provider={provider} />}
       <ProfilesGroup provider={provider} />

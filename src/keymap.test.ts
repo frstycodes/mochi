@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bindingOf, checkBinding, chordOf, chordText, COMMAND_IDS, conflictOf, defaultKeys, isCommand, parseChord, rebind, reservedReason, resetBinding } from './keymap.ts';
+import { bindingOf, checkBinding, chordOf, chordText, COMMAND_IDS, COMMANDS, conflictOf, defaultKeys, filterCommands, isCommand, parseChord, rebind, reservedReason, resetBinding } from './keymap.ts';
 
 const key = (code: string, mods: Partial<{ metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) => ({ code, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods });
 
@@ -78,4 +78,16 @@ test('reset puts one command back, stores nothing for a default, and asks again 
   const taken = { palette: 'mod+shift+K', 'go-settings': 'mod+K' };
   assert.throws(() => resetBinding(taken, 'palette', undefined, true), /already used by Settings/);
   assert.deepEqual(resetBinding(taken, 'palette', 'swap', true), { 'go-settings': 'mod+shift+K' });
+});
+
+test('the shortcut filter matches words in the title or group, the chord a command has now, and your rebinds', () => {
+  const none = { query: '', chord: null, isChangedOnly: false };
+  assert.deepEqual(filterCommands(COMMAND_IDS, none, {}, true), COMMAND_IDS, 'no filter shows everything');
+  const palette = filterCommands(COMMAND_IDS, { ...none, query: COMMANDS.palette.title.toUpperCase() }, {}, true);
+  assert.ok(palette.includes('palette'), 'words, any case');
+  assert.deepEqual(filterCommands(COMMAND_IDS, { ...none, chord: defaultKeys('palette', true) }, {}, true), ['palette'], 'the pressed chord finds who holds it');
+  const moved = { palette: 'mod+P', 'files-go-to': '' };
+  assert.deepEqual(filterCommands(COMMAND_IDS, { ...none, chord: ['mod', 'P'] }, moved, true), ['palette'], 'a rebind moves the match');
+  assert.deepEqual(filterCommands(COMMAND_IDS, { ...none, isChangedOnly: true }, moved, true), ['palette', 'files-go-to'].filter((id) => COMMAND_IDS.includes(id as never)), 'changed keeps rebinds only');
+  assert.deepEqual(filterCommands(COMMAND_IDS, { ...none, isChangedOnly: true }, {}, true), []);
 });

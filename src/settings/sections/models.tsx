@@ -1,13 +1,18 @@
 import type { ReactNode } from 'react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { ChevronDown } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ModelMenu, useListedModels, useModels } from '../../ModelControls';
+import { ModelMenu, ModelPicker, useListedModels, useModels } from '../../ModelControls';
+import type { ModelChoice } from '../../host/types/settings';
 import { optionFor, type ModelOption } from '../../runtime/models';
 import { useSpace } from '../../store';
 import type { Provider } from '../../model';
 import { ProviderMark } from '../../ui';
-import { UTILITY_TASKS } from '../../utility/prompts';
+import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
+import { useAgentSettings } from '../AgentSettings';
+import { useLinkedTab } from '../open';
 import { CatalogRow } from '../CatalogRow';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
@@ -31,11 +36,7 @@ export function ModelsSection() {
       <SettingsGroup title="Side chats">
         <CatalogRow settingKey="sideChatModel" />
       </SettingsGroup>
-      <SettingsGroup title="Background tasks" footer="Each runs through this profile's account, falling back to Haiku 5.5, then GPT-6-Luna, on whichever is signed in. Generated titles never replace one you renamed, and drafts are yours to edit before anything is sent.">
-        {UTILITY_TASKS.map((task) => (
-          <CatalogRow key={task} settingKey={`utility.${task}`} />
-        ))}
-      </SettingsGroup>
+      <BackgroundModels />
     </div>
   );
 }
@@ -48,6 +49,45 @@ function HarnessTitle({ provider }: { provider: Provider }) {
     </span>
   );
 }
+
+/**
+ * One model for every background task, which is how they're nearly always set; each task's own picker sits behind
+ * "Choose per task", open while they differ or when a deep link names one.
+ */
+function BackgroundModels() {
+  const { settings, update } = useAgentSettings();
+  const [disclosure, setDisclosure] = useLinkedTab((settingId) => (settingId.startsWith('utility-') ? 'open' : undefined), 'closed');
+  const models = settings?.utilityModels;
+  const first = models?.[UTILITY_TASKS[0]];
+  const differing = models && first ? UTILITY_TASKS.filter((task) => models[task].provider !== first.provider || models[task].model !== first.model) : [];
+  const isOpen = disclosure === 'open' || differing.length > 0;
+  const setAll = (choice: ModelChoice) => void update({ utilityModels: Object.fromEntries(UTILITY_TASKS.map((task) => [task, choice])) });
+  return (
+    <SettingsGroup title="Background tasks" footer="Each runs through this profile's account, falling back to Haiku 5.5, then GPT-6-Luna, on whichever is signed in. Generated titles never replace one you renamed, and drafts are yours to edit before anything is sent.">
+      <SettingsRow
+        id="backgroundModel"
+        label="Model for every task"
+        description={differing.length ? `Tasks differ: ${LIST.format(differing.map((task) => UTILITY_TASK_LABELS[task]))} use their own` : `Used by all ${UTILITY_TASKS.length} background tasks`}
+        control={first ? <ModelPicker id={settingControlId('backgroundModel')} value={first.model} provider={first.provider} onChange={(m) => setAll({ provider: m.harness, model: m.id })} /> : <span className="type-meta text-muted-foreground">Needs the desktop app</span>}
+      />
+      <Collapsible open={isOpen} onOpenChange={(open) => setDisclosure(open ? 'open' : 'closed')} className="relative before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border">
+        <CollapsibleTrigger asChild>
+          <button type="button" disabled={differing.length > 0} className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground disabled:hover:text-muted-foreground">
+            <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-200', !isOpen && '-rotate-90')} />
+            Choose per task
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {UTILITY_TASKS.map((task) => (
+            <CatalogRow key={task} settingKey={`utility.${task}`} />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    </SettingsGroup>
+  );
+}
+
+const LIST = new Intl.ListFormat('en', { type: 'conjunction' });
 
 /** The model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
 export function StarredModelsRow({ rowId, value: starredModels, onChange, children }: { rowId: string; value: string[]; onChange: (ids: string[]) => void; children?: ReactNode }) {
