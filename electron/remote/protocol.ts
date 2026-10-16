@@ -1,4 +1,6 @@
 import { MAX_IMAGE_BYTES, MAX_IMAGES } from '../../src/chat/images.ts';
+import { isCloneUrl } from '../../src/git/origin.ts';
+import type { CloneSource } from '../../src/host/types/projects.ts';
 import type { ChangeTarget } from '../../src/host/types/git.ts';
 import type { SentImage } from '../../src/model.ts';
 import { ACCESS } from '../../src/runtime/access.ts';
@@ -16,12 +18,13 @@ import {
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 
 /** Bumped on any frame change; a device on another version is refused rather than misread. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Every command declares the scope it needs; the server refuses it on a device without that scope. */
 export const COMMAND_SCOPES = {
   catalog: 'read',
   settings: 'read',
+  projects: 'read',
   send: 'operate',
   resolve: 'operate',
   interrupt: 'operate',
@@ -40,6 +43,8 @@ export const COMMAND_SCOPES = {
   'open-pr': 'manage',
   delete: 'manage',
   setting: 'manage',
+  'add-project': 'manage',
+  'clone-project': 'manage',
   diff: 'code',
   'checkpoint-diff': 'code',
   change: 'code',
@@ -151,10 +156,20 @@ function parseRemoteCommand(value: unknown): RemoteCommand | string {
       return { type: 'catalog' };
     case 'settings':
       return { type: 'settings' };
+    case 'projects':
+      return { type: 'projects' };
+    case 'add-project':
+      if (!isString(c.name, MAX_TITLE) || !PROJECT_NAME.test(c.name) || !(c.publish === undefined || VISIBILITIES.includes(c.publish as never)))
+        return 'add-project needs a name (letters, digits, “.”, “-”, “_”) and an optional publish: private or public';
+      return { type: 'add-project', name: c.name, ...(c.publish !== undefined && { publish: c.publish as (typeof VISIBILITIES)[number] }) };
+    case 'clone-project': {
+      const source = parseCloneSource(c.source);
+      return source ? { type: 'clone-project', source } : 'clone-project needs a source: { url } with a git URL, or { github: owner/repo }';
+    }
     case 'create': {
       const controls = c.controls === undefined ? undefined : parseControls(c.controls);
       const images = c.images === undefined ? undefined : parseImages(c.images);
-      if (!isText(c.title, MAX_TEXT) || !isProvider(c.provider) || !(c.project === null || isString(c.project, MAX_PATH)) || controls === null || images === null)
+      if (!isText(c.title, MAX_TEXT) || !isProvider(c.provider) || !(c.project === null || isString(c.project, MAX_ID)) || controls === null || images === null)
         return 'create needs title, provider, project (or null), and optional controls and images';
       return { type: 'create', title: c.title.trim(), provider: c.provider, project: c.project, ...(controls && { controls }), ...(images && { images }) };
     }
@@ -334,6 +349,17 @@ function parseTarget(value: unknown): ChangeTarget | null {
   };
 }
 const MAX_TITLE = 256;
+const VISIBILITIES = ['private', 'public'] as const;
+const PROJECT_NAME = /^(?!\.\.?$)[\w.-]+$/;
+const OWNER_REPO = /^[\w.-]+\/(?!\.\.?$)[\w.-]+$/;
+
+/** A device names what to clone, never where: the machine picks the folder. */
+function parseCloneSource(value: unknown): CloneSource | null {
+  const s = value as Record<string, unknown> | null;
+  if (isString(s?.url, MAX_PATH) && isCloneUrl(s.url) && s.github === undefined) return { url: s.url };
+  if (isString(s?.github, MAX_TITLE) && OWNER_REPO.test(s.github) && s.url === undefined) return { github: s.github };
+  return null;
+}
 const MAX_PATH = 4096;
 
 const isAnswers = (value: unknown): value is string[][] =>

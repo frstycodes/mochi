@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { host } from '../host/index.ts';
+import type { MachineCatalog } from '../host/types/remote.ts';
 import type { QueueItem } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { initialNotifications } from '../notify/slice.ts';
@@ -219,7 +220,7 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
   });
 });
 
-test('a new thread starts only in a project the machine listed, with the controls and images sent', async (t) => {
+test('a new thread starts only in a project the machine listed, by its id, with the controls and images sent', async (t) => {
   const { state } = machine();
   const withProject = {
     ...state,
@@ -228,23 +229,39 @@ test('a new thread starts only in a project the machine listed, with the control
   t.mock.method(host.settings, 'get', async () => ({ harnesses: { claude: { model: 'opus' }, codex: { model: '' } } }));
   t.mock.method(host.agent, 'models', async () => []);
   const listed = await runRemoteCommand({ type: 'catalog' }, device(withProject, 'Laptop', []));
-  assert.ok(listed.isOk && listed.data && 'projects' in listed.data);
-  assert.deepEqual(listed.data.projects, [{ ref: '/src/api', name: 'api' }]);
-  assert.deepEqual(listed.data.defaults, { claude: 'opus', codex: '' });
+  assert.ok(listed.isOk);
+  const catalog = listed.data as MachineCatalog;
+  const [api] = catalog.projects;
+  assert.equal(api.name, 'api', 'the thread’s folder was taken into the registry');
+  assert.notEqual(api.ref, '/src/api', 'a device gets an id, never the path');
+  assert.deepEqual(catalog.defaults, { claude: 'opus', codex: '' });
 
   const dispatched: Action[] = [];
-  assert.deepEqual(await runRemoteCommand({ type: 'create', title: 'x', provider: 'claude', project: '/etc' }, device(withProject, 'Laptop', dispatched)), {
-    isOk: false,
-    error: 'That project isn’t on this machine',
-  });
+  for (const project of ['/etc', '/src/api'])
+    assert.deepEqual(await runRemoteCommand({ type: 'create', title: 'x', provider: 'claude', project }, device(withProject, 'Laptop', dispatched)), {
+      isOk: false,
+      error: 'That project isn’t on this machine',
+    });
   const controls = { model: 'gpt-6', effort: 'high', speed: '', access: 'Auto' } as const;
   const images = [{ mediaType: 'image/png' as const, data: 'iVBOR', thumb: 'data:image/png;base64,iVBOR' }];
-  const sent = await runRemoteCommand({ type: 'create', title: 'Fix it', provider: 'codex', project: '/src/api', controls, images }, device(withProject, 'Laptop', dispatched));
+  const sent = await runRemoteCommand({ type: 'create', title: 'Fix it', provider: 'codex', project: api.ref, controls, images }, device(withProject, 'Laptop', dispatched));
   assert.deepEqual(sent, { isOk: true });
   const create = dispatched[0] as Extract<Action, { type: 'create' }>;
-  assert.equal(create.project, '/src/api');
+  assert.equal(create.project, '/src/api', 'the machine resolves the id to its own folder');
   assert.deepEqual(create.controls, controls, 'model, effort, speed and permissions as picked on the device');
   assert.deepEqual(create.images, images);
+});
+
+test('a device’s clone lands in this machine’s projects folder, and its failure comes back as git said it', async (t) => {
+  const { state } = machine();
+  const clone = t.mock.method(host.projects, 'clone', async (_space: string, source: { url: string }) => {
+    if (source.url.includes('missing')) throw new Error('fatal: repository not found');
+    return { id: 'p1', name: 'repo', path: '/home/me/dev/repo', origin: 'gitlab.com/me/repo', addedAt: 1, isMissing: false };
+  });
+  const added = await runRemoteCommand({ type: 'clone-project', source: { url: 'https://gitlab.com/me/repo.git' } }, device(state, 'Laptop', []));
+  assert.deepEqual(added, { isOk: true, data: { ref: 'p1', name: 'repo' } });
+  assert.equal(clone.mock.calls[0].arguments[2]?.parentDir, '~/dev', 'Settings › Projects folder, picked here');
+  assert.deepEqual(await runRemoteCommand({ type: 'clone-project', source: { url: 'https://gitlab.com/me/missing.git' } }, device(state, 'Laptop', [])), { isOk: false, error: 'fatal: repository not found' });
 });
 
 test('settings a device writes stay on the machine; Devices and the demo switch can’t be changed from one', async (t) => {

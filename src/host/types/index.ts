@@ -7,6 +7,7 @@ import { gitMethods, type GitHost } from './git.ts';
 import type { Manifest } from './manifest.ts';
 import { notifyMethods, type NotifyHost } from './notify.ts';
 import { portsMethods, type PortsHost } from './ports.ts';
+import { projectsMethods, type ProjectsHost } from './projects.ts';
 import { ptyMethods, type PtyHost } from './pty.ts';
 import { remoteMethods, type RemoteHost } from './remote.ts';
 import { scheduleMethods, type ScheduleHost } from './schedule.ts';
@@ -33,6 +34,7 @@ export interface HostBridge {
   remote: RemoteHost;
   account: AccountHost;
   updates: UpdatesHost;
+  projects: ProjectsHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -55,4 +57,5 @@ export const manifest = {
   remote: remoteMethods,
   account: accountMethods,
   updates: updatesMethods,
+  projects: projectsMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };

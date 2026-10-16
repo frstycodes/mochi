@@ -129,3 +129,27 @@ test('side chats reach only devices with code: they quote diffs and files', () =
   assert.equal(visibleAction(ask, ['read', 'code']), ask);
   assert.deepEqual(visibleAction(ask, ['read']), { type: 'hidden' });
 });
+
+test('project commands parse strictly: a device names a URL, owner/repo or a name, never a folder', () => {
+  assert.deepEqual(parse({ type: 'projects', extra: 1 }), { type: 'command', id: 'c1', command: { type: 'projects' } });
+  assert.deepEqual(parse({ type: 'add-project', name: 'fresh', publish: 'private', path: '/tmp' }), { type: 'command', id: 'c1', command: { type: 'add-project', name: 'fresh', publish: 'private' } });
+  assert.deepEqual(parse({ type: 'clone-project', source: { url: 'git@gitlab.com:me/repo.git' } }), { type: 'command', id: 'c1', command: { type: 'clone-project', source: { url: 'git@gitlab.com:me/repo.git' } } });
+  assert.deepEqual(parse({ type: 'clone-project', source: { github: 'frstycodes/mochi', dest: '/etc' } }), { type: 'command', id: 'c1', command: { type: 'clone-project', source: { github: 'frstycodes/mochi' } } });
+  for (const name of ['../up', '..', 'a/b', '', 'with space']) assert.equal(typeof parse({ type: 'add-project', name }), 'string', name);
+  assert.equal(typeof parse({ type: 'add-project', name: 'x', publish: 'internal' }), 'string');
+  for (const source of [{ url: '/Users/me/repo' }, { url: '--upload-pack=x' }, { url: 'ext::sh -c x' }, { github: 'owner/..' }, { github: 'owner' }, { url: 'https://a.com/b/c', github: 'b/c' }, 'https://github.com/a/b'])
+    assert.equal(typeof parse({ type: 'clone-project', source }), 'string', JSON.stringify(source));
+  assert.equal(typeof parse({ type: 'create', title: 'x', provider: 'claude', project: 'p'.repeat(129) }), 'string', 'a project is an id, not a long path');
+});
+
+test('reading projects needs read; adding or cloning one needs manage', () => {
+  const scopes = (command: object) => {
+    const frame = parse(command);
+    assert.ok(typeof frame !== 'string');
+    return SCOPES.filter((s) => hasScope([s], frame.command));
+  };
+  assert.deepEqual(scopes({ type: 'projects' }), ['read']);
+  assert.deepEqual(scopes({ type: 'add-project', name: 'x' }), ['manage']);
+  assert.deepEqual(scopes({ type: 'clone-project', source: { github: 'a/b' } }), ['manage']);
+  assert.equal(hasScope(['read', 'operate', 'code'], { type: 'clone-project', source: { github: 'a/b' } }), false);
+});

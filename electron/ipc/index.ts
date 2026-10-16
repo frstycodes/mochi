@@ -9,6 +9,7 @@ import { fs } from './fs.ts';
 import { git } from './git.ts';
 import { notify } from './notify.ts';
 import { ports } from './ports.ts';
+import { projects } from './projects.ts';
 import { pty } from './pty.ts';
 import { remote } from './remote.ts';
 import { schedule } from './schedule.ts';
@@ -18,7 +19,7 @@ import { themes } from './themes.ts';
 import { updates } from './updates.ts';
 import { windows } from './windows.ts';
 
-const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, remote, account, updates } satisfies {
+const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, remote, account, updates, projects } satisfies {
   [K in Namespace]: Handlers<HostBridge[K]>;
 };
 

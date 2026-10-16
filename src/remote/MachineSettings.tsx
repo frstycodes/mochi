@@ -44,7 +44,7 @@ const THIS_COMPUTER = 'this';
  */
 export function MachineSettings({ machine, section }: { machine: FollowedMachine; section: string }) {
   const { ask } = useMachines();
-  const catalog = useMachineCatalog(machine);
+  const { catalog } = useMachineCatalog(machine);
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(

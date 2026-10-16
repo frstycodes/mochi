@@ -27,6 +27,32 @@ export async function runGh(cwd: string, args: string[], account: GithubAccountR
   return asAccount(account, (token) => run('gh', cwd, args, { ...options, env: { [tokenVariable(account.host)]: token } }));
 }
 
+/** `gh <args>` as the account outside any repository (listing or creating repositories), on the account's host. */
+export function runGhOn(account: GithubAccountRef | undefined, args: string[], cwd = homedir()) {
+  if (!account) return run('gh', cwd, args);
+  return asAccount(account, (token) => run('gh', cwd, args, { env: { [tokenVariable(account.host)]: token, GH_HOST: account.host } }));
+}
+
+/**
+ * `git -c … <args>` with the account's token supplied over HTTPS by a credential helper reading it from the environment.
+ * `exec` runs git another way (streaming a clone's progress) with the args and environment it's given.
+ */
+export function runGitAs(account: GithubAccountRef, cwd: string, args: string[], exec: (args: string[], env: Record<string, string>) => Promise<unknown> = (a, env) => runGit(cwd, a, { env })) {
+  return asAccount(account, (token) =>
+    exec(
+      [
+        // The empty entry drops helpers from the user's config (osxkeychain would otherwise offer, or store, its own login).
+        '-c',
+        'credential.helper=',
+        '-c',
+        'credential.helper=!f() { test "$1" = get && echo username=x-access-token && echo "password=$MOCHI_GIT_TOKEN"; }; f',
+        ...args,
+      ],
+      { MOCHI_GIT_TOKEN: token },
+    ),
+  );
+}
+
 /**
  * `git push -u origin HEAD` as the profile's account: over HTTPS to origin's repository (whatever protocol origin uses),
  * with the token supplied by a credential helper that reads it from the environment. Upstream still tracks `origin`.
@@ -34,25 +60,7 @@ export async function runGh(cwd: string, args: string[], account: GithubAccountR
 export async function pushAs(top: string, account: GithubAccountRef | undefined) {
   if (!account) return void (await runGit(top, ['push', '-u', 'origin', 'HEAD']));
   const { path } = await originOn(top, account);
-  await asAccount(account, (token) =>
-    runGit(
-      top,
-      [
-        '-c',
-        `remote.origin.pushurl=https://${account.host}/${path}.git`,
-        // The empty entry drops helpers from the user's config (osxkeychain would otherwise offer, or store, its own login).
-        '-c',
-        'credential.helper=',
-        '-c',
-        'credential.helper=!f() { test "$1" = get && echo username=x-access-token && echo "password=$MOCHI_GIT_TOKEN"; }; f',
-        'push',
-        '-u',
-        'origin',
-        'HEAD',
-      ],
-      { env: { MOCHI_GIT_TOKEN: token } },
-    ),
-  );
+  await runGitAs(account, top, ['-c', `remote.origin.pushurl=https://${account.host}/${path}.git`, 'push', '-u', 'origin', 'HEAD']);
 }
 
 /** origin's host and path; refuses when origin lives on another host than the account. */
