@@ -109,11 +109,12 @@
       "dist-electron/**",
       "!node_modules/**",
       "node_modules/node-pty/package.json",
-      "node_modules/node-pty/lib/*.js",
+      "node_modules/node-pty/lib/**/*.js",
       "node_modules/node-pty/prebuilds/${platform}-${arch}/**",
       "node_modules/playwright-core/**"
     ],
     "afterPack": "scripts/after-pack.mjs",
+    "npmRebuild": false,
     "asarUnpack": [
       "node_modules/node-pty/prebuilds/**"
     ],
