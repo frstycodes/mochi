@@ -92,13 +92,13 @@ function frameAt(visible: ArrayLike<number>, t: number, weights = visible): Fram
 }
 
 function useFrameRefs() {
-  return {
-    shadow: useRef<SVGEllipseElement>(null),
-    body: useRef<SVGGElement>(null),
-    eye: useRef<SVGEllipseElement>(null),
-    glint: useRef<SVGCircleElement>(null),
-    props: useRef<(SVGGElement | null)[]>([]),
-  };
+  // Hooks as statements: React Compiler 1.0 memoizes an object literal of `useRef` calls, so they only run on the first render.
+  const shadow = useRef<SVGEllipseElement>(null);
+  const body = useRef<SVGGElement>(null);
+  const eye = useRef<SVGEllipseElement>(null);
+  const glint = useRef<SVGCircleElement>(null);
+  const props = useRef<(SVGGElement | null)[]>([]);
+  return { shadow, body, eye, glint, props };
 }
 
 function paint(refs: ReturnType<typeof useFrameRefs>, weights: ArrayLike<number>, frame: Frame) {
