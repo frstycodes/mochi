@@ -32,7 +32,11 @@ const DRAG_THRESHOLD = 4;
 export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; chat?: ReactNode }) {
   const areaRef = useRef<HTMLDivElement>(null);
   const size = useSize(areaRef);
-  const layout = useVisibleLayout(thread.id, pane);
+  const { dispatch } = useHarness();
+  // A divider drag stays local until release: through the store, every move re-rendered the app and rewrote the saved panes.
+  const [draft, setDraft] = useState<ResizePatch>();
+  const visible = useVisibleLayout(thread.id, pane);
+  const layout = draft ? { ...visible, ...draft } : visible;
   const chatMin = chat ? CHAT_MIN_W : 0;
   // The panes sit GAP below the window's top edge (the layout already leaves GAP at the bottom), so their cards never touch it.
   const paneH = Math.max(0, size.h - GAP);
@@ -43,6 +47,12 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
   const entering = useEnteringPanes(kinds);
   const isSliding = entering.isSlide || leaving.some((l) => l.isSlide);
   const [isResizing, setResizing] = useState(false);
+  const onResizing = (isOn: boolean) => {
+    setResizing(isOn);
+    if (isOn || !draft) return;
+    dispatch({ type: 'pane-resize', threadId: thread.id, patch: draft });
+    setDraft(undefined);
+  };
   const move = usePaneMove(thread.id, pane, resolved, areaRef);
   const onKeyDown = usePaneKeys(thread.id, pane, layout);
   useEscapeExpand(thread.id, !!layout.expanded);
@@ -78,7 +88,7 @@ export function SidePane({ thread, pane, chat }: { thread: Thread; pane: Pane; c
         <LeavingPane key={`leaving:${kind}`} kind={kind} rect={rect} isSlide={isSlide} />
       ))}
       {!!placeholder && <EmptyPanes thread={thread} rect={placeholder} />}
-      {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onResizing={setResizing} />}
+      {!layout.expanded && <Dividers threadId={thread.id} layout={layout} resolved={resolved} width={size.w} hasChat={!!chat} onPreview={(patch) => setDraft((d) => ({ ...d, ...patch }))} onResizing={onResizing} />}
       {!!move.indicator && <span aria-hidden className="pointer-events-none absolute z-30 rounded-full bg-foreground/50" style={move.indicator} />}
     </div>
   );
@@ -314,13 +324,15 @@ function EmptyPanes({ thread, rect }: { thread: Thread; rect: PaneRect }) {
   );
 }
 
+type ResizePatch = Pick<PaneLayout, 'weights' | 'share' | 'columnWeights'>;
+
 /**
- * Invisible until hovered: chat | columns, between columns, and between two open panes of a column. Each drag writes the
- * layout's share or weights; double-click resets them.
+ * Invisible until hovered: chat | columns, between columns, and between two open panes of a column. Each drag previews the
+ * layout's share or weights, committed by `onResizing(false)`; double-click resets them.
  */
-function Dividers({ threadId, layout, resolved, width, hasChat, onResizing }: { threadId: string; layout: PaneLayout; resolved: ResolvedLayout; width: number; hasChat: boolean; onResizing: (isResizing: boolean) => void }) {
+function Dividers({ threadId, layout, resolved, width, hasChat, onPreview, onResizing }: { threadId: string; layout: PaneLayout; resolved: ResolvedLayout; width: number; hasChat: boolean; onPreview: (patch: ResizePatch) => void; onResizing: (isResizing: boolean) => void }) {
   const { dispatch } = useHarness();
-  const resize = (patch: Pick<PaneLayout, 'weights' | 'share' | 'columnWeights'>) => dispatch({ type: 'pane-resize', threadId, patch });
+  const reset = (patch: ResizePatch) => dispatch({ type: 'pane-resize', threadId, patch });
   const { columns, rects } = resolved;
   if (!columns.length) return null;
   const rows = columns.flatMap((c) =>
@@ -334,13 +346,13 @@ function Dividers({ threadId, layout, resolved, width, hasChat, onResizing }: { 
   return (
     <>
       {hasChat && (
-        <Divider axis="x" style={{ left: columns[0].x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(x) => resize({ share: shareAt(width, x + GAP / 2) })} onReset={() => resize({ share: undefined })} />
+        <Divider axis="x" style={{ left: columns[0].x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(x) => onPreview({ share: shareAt(width, x + GAP / 2) })} onReset={() => reset({ share: undefined })} />
       )}
       {columns.slice(1).map((c, i) => (
-        <Divider key={c.kinds[0]} axis="x" style={{ left: c.x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the columns" onResizing={onResizing} onMove={(x) => resize(resizeColumns(layout, columns, i, x - columns[i].x))} onReset={() => resize({ columnWeights: undefined })} />
+        <Divider key={c.kinds[0]} axis="x" style={{ left: c.x - GAP, top: 0, bottom: 0, width: GAP }} label="Resize the columns" onResizing={onResizing} onMove={(x) => onPreview(resizeColumns(layout, columns, i, x - columns[i].x))} onReset={() => reset({ columnWeights: undefined })} />
       ))}
       {rows.map((r) => (
-        <Divider key={r.key} axis="y" style={{ left: r.x, width: r.w, top: r.y, height: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(_, y) => resize(resizeRows(layout, r.upper, r.lower, y - r.top))} onReset={() => resize({ weights: { ...layout.weights, [r.upper.kind]: 1, [r.lower.kind]: 1 } })} />
+        <Divider key={r.key} axis="y" style={{ left: r.x, width: r.w, top: r.y, height: GAP }} label="Resize the panes" onResizing={onResizing} onMove={(_, y) => onPreview(resizeRows(layout, r.upper, r.lower, y - r.top))} onReset={() => reset({ weights: { ...layout.weights, [r.upper.kind]: 1, [r.lower.kind]: 1 } })} />
       ))}
     </>
   );
