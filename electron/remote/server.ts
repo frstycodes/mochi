@@ -35,6 +35,10 @@ export interface RemoteServerOptions {
   log: ActionLog;
   machineName: () => string;
   onDevicesChange?: () => void;
+  /** This computer's membership records, sent in each welcome. */
+  members?: () => unknown;
+  /** A device's records, from its hello. */
+  onMembers?: (members: unknown) => void;
 }
 
 export interface RemoteServer {
@@ -45,6 +49,8 @@ export interface RemoteServer {
   attach(raw: RawLink): void;
   /** Ends a device's connections, after it was removed. */
   disconnect(deviceId: string): void;
+  /** Membership records changed: every welcomed device hears them. */
+  publishMembers(members: unknown): void;
   /** One renderer action: logged, then sent to every device that is caught up and may read. */
   publish(epoch: string, seq: number, action: unknown): void;
   close(): Promise<void>;
@@ -98,6 +104,7 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
     if (!hello) return;
     if (typeof hello === 'string') return refuse(socket, hello);
     if (!socket.isOpen()) return;
+    if (hello.members !== undefined) options.onMembers?.(hello.members);
     connection = { socket, device, connectedAt: Date.now(), isLive: false };
     connections.add(connection);
     options.onDevicesChange?.();
@@ -106,7 +113,7 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
       connections.delete(live);
       options.onDevicesChange?.();
     });
-    send(socket, { type: 'welcome', version: PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), machineKind: THIS_KIND, scopes: device.scopes, addresses: reachable });
+    send(socket, { type: 'welcome', version: PROTOCOL_VERSION, deviceId: device.deviceId, machineName: options.machineName(), machineKind: THIS_KIND, scopes: device.scopes, addresses: reachable, ...(options.members && { members: options.members() }) });
     connection.isAccepting = true;
     for (const data of held) void onCommand(connection, data);
     if (!device.scopes.includes('read')) return;
@@ -161,6 +168,9 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
     attach: (raw) => void accept(raw, 'relay'),
     disconnect(deviceId) {
       for (const { socket, device } of connections) if (device.deviceId === deviceId) socket.close(4401, 'Removed or changed on this computer');
+    },
+    publishMembers(members) {
+      for (const connection of connections) if (connection.isAccepting) send(connection.socket, { type: 'members', members });
     },
     publish(epoch, seq, action) {
       const isNewEpoch = epoch !== log.epoch;

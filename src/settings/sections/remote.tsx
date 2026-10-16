@@ -7,7 +7,7 @@ import { toast } from '@/toast/store';
 import { useMochiAccount } from '../../account/useMochiAccount';
 import { useConfirm } from '../../git/useConfirm';
 import { host } from '../../host';
-import { SCOPES, type DeviceKind, type OtherMachine, type PairedDeviceInfo, type RemoteStatus, type Scope } from '../../host/types/remote';
+import { SCOPES, type DeviceKind, type MemberInfo, type OtherMachine, type RemoteStatus, type Scope } from '../../host/types/remote';
 import { DeviceIcon } from '../../remote/DeviceIcon';
 import { PairingCode } from '../../remote/PairingCode';
 import { useOtherMachines } from '../../remote/useOtherMachines';
@@ -15,7 +15,7 @@ import { useRemoteStatus } from '../../remote/useRemoteStatus';
 import { ipcMessage } from '../AgentSettings';
 import { CommitInput, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 
-/** Turning on remote access, how far it reaches, what this computer is called, who is paired, and your other computers. */
+/** Turning on remote access, how far it reaches, what this computer is called, your computers, and joining them. */
 export function RemoteSection() {
   return (
     <DesktopOnly what="Other devices connect to Mochi running on a computer.">
@@ -53,7 +53,7 @@ function RemoteAccess() {
         />
         <SettingsRow id="machineName" label="Computer name" description="How your devices list this computer" control={<CommitInput id={settingControlId('machineName')} value={settings.machineName} placeholder={status.hostName} maxLength={64} onCommit={(machineName) => void update({ machineName })} />} />
       </SettingsGroup>
-      <PairedDevices status={status} />
+      <Members status={status} />
       <OtherComputers isSignedIn={isSignedIn} />
     </div>
   );
@@ -75,34 +75,35 @@ function RelayState({ status }: { status: RemoteStatus }) {
   return 'Off';
 }
 
-function PairedDevices({ status }: { status: RemoteStatus }) {
+function Members({ status }: { status: RemoteStatus }) {
   const { confirm, dialog } = useConfirm();
-  const remove = async (device: PairedDeviceInfo) => {
+  const remove = async (member: MemberInfo) => {
     const isConfirmed = await confirm({
-      title: `Remove “${device.name}”?`,
-      description: 'It disconnects now and has to pair again, with your approval here, to reach this computer.',
-      confirm: 'Remove device',
-      cancel: 'Keep device',
+      title: `Remove “${member.name}” from your computers?`,
+      description: 'It disconnects from every computer of yours, and has to join again, with an approval on one of them.',
+      confirm: 'Remove computer',
+      cancel: 'Keep computer',
       isDestructive: true,
     });
-    if (isConfirmed) await host.remote.removeDevice(device.id);
+    if (isConfirmed) await host.remote.removeMember(member.id).catch((e: Error) => toast.error('Couldn’t remove it', { description: ipcMessage(e) }));
   };
   return (
-    <SettingsGroup id="pairedDevices" title="Paired devices" footer={PAIRED_FOOTER}>
+    <SettingsGroup id="members" title="Your computers" footer={MEMBERS_FOOTER}>
       {dialog}
-      {status.pairedDevices.length === 0 && <SettingsRow label={<span className="text-muted-foreground">No paired devices</span>} />}
-      {status.pairedDevices.map((device) => (
+      {status.isRemoved && <SettingsRow label={<span className="text-warning">Another of your computers removed this one</span>} description="Join again below to reach your computers." />}
+      {!status.isRemoved && status.members.length === 0 && <SettingsRow label={<span className="text-muted-foreground">Only this computer so far</span>} description="Join one of your other computers below; the rest follow on their own." />}
+      {status.members.map((member) => (
         <SettingsRow
-          key={device.id}
-          label={<DeviceName kind={device.kind} name={device.name} />}
-          description={pairedDescription(device, status)}
+          key={member.id}
+          label={<DeviceName kind={member.kind} name={member.name} />}
+          description={memberDescription(member, status)}
           control={
-            <Button size="sm" variant="outline" onClick={() => void remove(device)}>
+            <Button size="sm" variant="outline" onClick={() => void remove(member)}>
               Remove
             </Button>
           }
         >
-          <ScopeToggles device={device} />
+          <ScopeToggles member={member} />
         </SettingsRow>
       ))}
     </SettingsGroup>
@@ -111,20 +112,20 @@ function PairedDevices({ status }: { status: RemoteStatus }) {
 
 const SCOPE_LABELS = { read: 'Read', operate: 'Operate', manage: 'Manage', code: 'Code', terminal: 'Terminal' } satisfies Record<Scope, string>;
 
-const PAIRED_FOOTER =
-  'Read follows threads and the Queue. Operate answers, sends, stops, forks and hands off. Manage starts, renames, pins and settles threads, edits goals and schedules, and commits, pushes and opens PRs. Code reads files and diffs. Terminal is a shell on this computer. A change reconnects the device. A new device pairs from its own Settings › Remote access, and you approve it here.';
+const MEMBERS_FOOTER =
+  'Each reaches the others with no more approvals. What each may do here: Read follows threads and the Queue. Operate answers, sends, stops, forks and hands off. Manage starts, renames, pins and settles threads, edits goals and schedules, and commits, pushes and opens PRs. Code reads files and diffs. Terminal is a shell on this computer. A change reconnects that computer. Removing one removes it everywhere.';
 
-/** What the device may do here; terminal starts off, as a shell on this computer. */
-function ScopeToggles({ device }: { device: PairedDeviceInfo }) {
+/** What the member may do here; terminal starts off, as a shell on this computer. */
+function ScopeToggles({ member }: { member: MemberInfo }) {
   return (
     <ToggleGroup
       type="multiple"
       size="sm"
       variant="outline"
       spacing={1}
-      value={device.scopes}
-      aria-label={`What ${device.name} may do`}
-      onValueChange={(next) => void host.remote.setDeviceScopes(device.id, SCOPES.filter((s) => next.includes(s))).catch((e: Error) => toast.error('Couldn’t change what it may do', { description: ipcMessage(e) }))}
+      value={member.scopes}
+      aria-label={`What ${member.name} may do here`}
+      onValueChange={(next) => void host.remote.setDeviceScopes(member.id, SCOPES.filter((s) => next.includes(s))).catch((e: Error) => toast.error('Couldn’t change what it may do', { description: ipcMessage(e) }))}
     >
       {SCOPES.map((scope) => (
         <ToggleGroupItem key={scope} value={scope}>
@@ -135,79 +136,67 @@ function ScopeToggles({ device }: { device: PairedDeviceInfo }) {
   );
 }
 
-function pairedDescription(device: PairedDeviceInfo, status: RemoteStatus) {
-  const isConnected = status.devices.some((d) => d.id === device.id);
-  return isConnected ? 'Connected' : `Paired ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(device.pairedAt)}`;
+function memberDescription(member: MemberInfo, status: RemoteStatus) {
+  if (status.devices.some((d) => d.id === member.id) || member.machineStatus === 'online') return 'Connected';
+  return `Joined ${new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(member.addedAt)}`;
 }
 
 function OtherComputers({ isSignedIn }: { isSignedIn: boolean }) {
-  const { machines, error, refresh, pairing, pair, forget, closePairing } = useOtherMachines(isSignedIn);
+  const { machines, error, refresh, joining, join, closeJoining } = useOtherMachines(isSignedIn);
   const { signIn } = useMochiAccount();
-  const footer = 'Pair with another computer of yours to follow and steer its threads from here. Both screens show the same code; check they match before allowing.';
+  const footer = 'Join through any one of your computers and you reach all of them. Both screens show the same code; check they match before allowing.';
   if (!isSignedIn)
     return (
-      <SettingsGroup id="otherComputers" title="Your other computers" footer={footer}>
+      <SettingsGroup id="otherComputers" title="Join your computers" footer={footer}>
         <SettingsRow label="Sign in to see your other computers" control={<Button size="sm" variant="outline" onClick={() => void signIn()}>Sign in</Button>} />
       </SettingsGroup>
     );
   return (
-    <SettingsGroup id="otherComputers" title="Your other computers" footer={footer}>
+    <SettingsGroup id="otherComputers" title="Join your computers" footer={footer}>
       {!!error && <SettingsRow label={<span className="text-warning">{error}</span>} control={<Button size="sm" variant="outline" onClick={() => void refresh()}>Try again</Button>} />}
       {!error && !machines && <SettingsRow label={<span className="text-muted-foreground">Loading…</span>} />}
-      {machines?.length === 0 && <SettingsRow label={<span className="text-muted-foreground">No other computers yet</span>} description="Sign in on another computer and turn on “Reach this computer from anywhere” there." />}
+      {machines?.length === 0 && <SettingsRow label={<span className="text-muted-foreground">No other computers to join</span>} description="Sign in on another computer and turn on “Reach this computer from anywhere” there." />}
       {machines?.map((machine) => (
         <SettingsRow
           key={machine.id}
-          label={<DeviceName kind={machine.kind} name={machine.name} />}
-          description={machineDescription(machine)}
-          control={<MachineAction machine={machine} onPair={() => void pair(machine)} onForget={() => void forget(machine)} />}
+          label={<DeviceName kind={undefined} name={machine.name} />}
+          description={machine.isOnline ? 'Online' : 'Offline'}
+          control={
+            <Button size="sm" disabled={!machine.isOnline} onClick={() => void join(machine)}>
+              Join
+            </Button>
+          }
         />
       ))}
-      <PairingDialog pairing={pairing} onClose={closePairing} />
+      <JoiningDialog joining={joining} onClose={closeJoining} />
     </SettingsGroup>
   );
 }
 
-const machineDescription = (machine: OtherMachine) => [machine.isPaired ? 'Paired' : 'Not paired', machine.isOnline ? 'Online' : 'Offline'].join(' · ');
-
-function MachineAction({ machine, onPair, onForget }: { machine: OtherMachine; onPair: () => void; onForget: () => void }) {
-  if (machine.isPaired)
-    return (
-      <Button size="sm" variant="outline" onClick={onForget}>
-        Forget
-      </Button>
-    );
+/** While joining: the code to compare with the other computer's screen, until it answers. */
+function JoiningDialog({ joining, onClose }: { joining: { machine: OtherMachine; error?: string } | null; onClose: () => void }) {
   return (
-    <Button size="sm" disabled={!machine.isOnline} onClick={onPair}>
-      Pair
-    </Button>
-  );
-}
-
-/** While pairing: the code to compare with the other computer's screen, until it answers. */
-function PairingDialog({ pairing, onClose }: { pairing: { machine: OtherMachine; error?: string } | null; onClose: () => void }) {
-  return (
-    <Dialog open={!!pairing} onOpenChange={(open) => !open && onClose()}>
-      {!!pairing && (
+    <Dialog open={!!joining} onOpenChange={(open) => !open && onClose()}>
+      {!!joining && (
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Pairing with {pairing.machine.name}</DialogTitle>
-            <DialogDescription>On {pairing.machine.name}, allow this computer if it shows this code:</DialogDescription>
+            <DialogTitle>Joining through {joining.machine.name}</DialogTitle>
+            <DialogDescription>On {joining.machine.name}, let this computer join if it shows this code:</DialogDescription>
           </DialogHeader>
-          <PairingCode code={pairing.machine.pairingCode} />
-          {pairing.error ? (
+          <PairingCode code={joining.machine.pairingCode} />
+          {joining.error ? (
             <p role="alert" className="type-caption text-destructive">
-              {pairing.error}
+              {joining.error}
             </p>
           ) : (
             <p role="status" className="flex items-center gap-2 type-meta text-muted-foreground">
               <Spinner className="size-3.5" />
-              Waiting for {pairing.machine.name}…
+              Waiting for {joining.machine.name}…
             </p>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={onClose}>
-              {pairing.error ? 'Close' : 'Cancel'}
+              {joining.error ? 'Close' : 'Cancel'}
             </Button>
           </DialogFooter>
         </DialogContent>

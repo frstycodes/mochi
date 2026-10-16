@@ -1,4 +1,4 @@
-import { CLOSE, MAX_FRAME_BYTES, parseMachineFrame, splitChannel, withChannel, type RelayToMachine } from './protocol.ts';
+import { CLOSE, MAX_FRAME_BYTES, MAX_RECORDS, parseMachineFrame, parseRecords, splitChannel, storedKey, withChannel, type RelayToMachine, type StoredRecord } from './protocol.ts';
 
 /** What a socket is, kept on the socket itself so it survives the Durable Object hibernating. */
 export type Attachment = { role: 'machine'; machineId: string } | { role: 'device'; machineId: string; deviceId: string; channel: number };
@@ -19,11 +19,15 @@ export interface Room<S> {
   close(socket: S, code: number, reason: string): void;
   machines(): Promise<Record<string, MachineRecord>>;
   saveMachines(machines: Record<string, MachineRecord>): Promise<void>;
+  /** Signed membership records by `storedKey`. */
+  records(): Promise<Record<string, StoredRecord>>;
+  saveRecords(records: Record<string, StoredRecord>): Promise<void>;
 }
 
 export type Admission = { tags: string[]; attachment: Attachment } | { refusal: string; code: number };
 
 const machineTag = (machineId: string) => `machine:${machineId}`;
+const MACHINES_TAG = 'machines';
 const channelTag = (channel: number) => `channel:${channel}`;
 const devicesOfTag = (machineId: string) => `devices-of:${machineId}`;
 
@@ -48,7 +52,7 @@ export class Relay<S> {
   admit(role: 'machine' | 'device', machineId: string, deviceId?: string): Admission {
     if (role === 'machine') {
       for (const old of this.room.byTag(machineTag(machineId))) this.room.close(old, CLOSE.replaced, 'Replaced by a newer connection of this machine');
-      return { tags: [machineTag(machineId)], attachment: { role: 'machine', machineId } };
+      return { tags: [machineTag(machineId), MACHINES_TAG], attachment: { role: 'machine', machineId } };
     }
     if (!this.machineSocket(machineId)) return { refusal: 'That machine is offline', code: CLOSE.machineOffline };
     let channel = this.randomChannel();
@@ -105,6 +109,30 @@ export class Relay<S> {
     const { [machineId]: _, ...rest } = await this.room.machines();
     await this.room.saveMachines(rest);
     for (const socket of this.room.byTag(machineTag(machineId))) this.room.close(socket, CLOSE.machineOffline, 'Removed from the account');
+  }
+
+  /** The account's membership records, as the computers signed them. */
+  async members() {
+    return Object.values(await this.room.records()).map((r) => r.record);
+  }
+
+  /**
+   * Keeps the newest record per kind, subject and signer, and tells every online machine when anything changed. Signatures
+   * are the computers' to check: storing a forged record adds nobody, since no computer accepts it.
+   */
+  async addMembers(body: unknown) {
+    const held = await this.room.records();
+    let changed = false;
+    for (const record of parseRecords(body)) {
+      const key = storedKey(record);
+      if ((held[key]?.at ?? -1) >= record.at) continue;
+      if (!held[key] && Object.keys(held).length >= MAX_RECORDS) break;
+      held[key] = record;
+      changed = true;
+    }
+    if (!changed) return;
+    await this.room.saveRecords(held);
+    for (const machine of this.room.byTag(MACHINES_TAG)) this.control(machine, { type: 'members' });
   }
 
   private async onControl(socket: S, machineId: string, raw: string) {

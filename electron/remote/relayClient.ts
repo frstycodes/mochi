@@ -30,6 +30,8 @@ export function connectMachine(options: {
   token: () => Promise<string>;
   onChannel: (raw: RawLink) => void;
   onState: (state: RelayState) => void;
+  /** Connected, or the account's membership records changed: time to fetch them. */
+  onMembers: () => void;
 }): MachineConnection {
   let socket: WebSocket | undefined;
   let isClosed = false;
@@ -59,6 +61,7 @@ export function connectMachine(options: {
       attempt = 0;
       ws.send(JSON.stringify({ type: 'register', name: options.name(), publicKey: options.publicKey }));
       options.onState({ status: 'connected' });
+      options.onMembers();
     });
     ws.on('message', (data, isBinary) => {
       isAwaitingPong = false;
@@ -95,6 +98,7 @@ export function connectMachine(options: {
       options.onChannel(channel.link);
     }
     if (frame.type === 'close') channels.get(frame.channel)?.end(1000, 'The device left');
+    if (frame.type === 'members') options.onMembers();
   }
 
   function onData(framed: Uint8Array) {
@@ -136,6 +140,23 @@ export async function listMachines(token: string): Promise<RelayMachine[]> {
   const response = await fetch(url('/v1/machines'), { headers: { authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error(`The relay answered ${response.status}`);
   return (await response.json()) as RelayMachine[];
+}
+
+/** The account's signed membership records; `members.ts` decides which to believe. */
+export async function listMembers(token: string): Promise<unknown> {
+  const response = await fetch(url('/v1/members'), { headers: { authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error(`The relay answered ${response.status}`);
+  return response.json();
+}
+
+export async function publishMembers(token: string, records: unknown[]) {
+  const response = await fetch(url('/v1/members'), { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(records) });
+  if (!response.ok) throw new Error(`The relay answered ${response.status}`);
+}
+
+export async function forgetMachineAtRelay(token: string, machineId: string) {
+  const response = await fetch(url(`/v1/machines/${encodeURIComponent(machineId)}`), { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error(`The relay answered ${response.status}`);
 }
 
 /** One device's channel on the machine's socket, as a `RawLink`. */

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CLOSE, splitChannel, withChannel } from './protocol.ts';
+import { CLOSE, splitChannel, withChannel, type StoredRecord } from './protocol.ts';
 import { Relay, type Attachment, type MachineRecord, type Room } from './relay.ts';
 
 interface FakeSocket {
@@ -15,6 +15,7 @@ interface FakeSocket {
 function room() {
   const sockets: FakeSocket[] = [];
   let machines: Record<string, MachineRecord> = {};
+  let records: Record<string, StoredRecord> = {};
   const fake: Room<FakeSocket> = {
     byTag: (tag) => sockets.filter((s) => !s.closed && s.tags.includes(tag)),
     attachment: (s) => s.attachment,
@@ -22,6 +23,8 @@ function room() {
     close: (s, code, reason) => void (s.closed = { code, reason }),
     machines: async () => machines,
     saveMachines: async (next) => void (machines = next),
+    records: async () => records,
+    saveRecords: async (next) => void (records = next),
   };
   const relay = new Relay(fake, () => 1000, (() => { let n = 7; return () => n++; })());
   const accept = (name: string, admission: ReturnType<typeof relay.admit>) => {
@@ -120,4 +123,21 @@ test('devices may only send binary, and oversized frames are refused', async () 
   const tablet = accept('tablet', relay.admit('device', 'mac', 'tablet'));
   await relay.message(tablet, new ArrayBuffer(1024 * 1024 + 5));
   assert.equal(tablet.closed?.code, CLOSE.tooBig);
+});
+
+test('membership records are kept newest per signer and subject, and online machines hear of a change', async () => {
+  const { relay, accept } = room();
+  const mac = accept('mac', relay.admit('machine', 'mac'));
+  const member = (addedAt: number) => ({ type: 'member', deviceId: 'pc', publicKey: KEY, name: 'PC', addedBy: 'mac', addedAt, signature: 'sig' });
+  await relay.addMembers([member(2), { type: 'member', deviceId: '../bad' }, 'junk']);
+  assert.deepEqual(await relay.members(), [member(2)]);
+  assert.deepEqual(JSON.parse(mac.sent.at(-1) as string), { type: 'members' });
+
+  const heard = mac.sent.length;
+  await relay.addMembers([member(1)]);
+  assert.deepEqual(await relay.members(), [member(2)], 'an older record doesn’t replace a newer one');
+  assert.equal(mac.sent.length, heard, 'nothing changed, nobody is told');
+
+  await relay.addMembers([{ type: 'removal', deviceId: 'pc', removedBy: 'mac', removedAt: 3, signature: 'sig' }]);
+  assert.equal((await relay.members()).length, 2);
 });

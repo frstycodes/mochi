@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { userFromRequest } from './auth.ts';
 import { HEARTBEAT, isId } from './protocol.ts';
+import type { StoredRecord } from './protocol.ts';
 import { Relay, type Attachment, type MachineRecord, type Room } from './relay.ts';
 
 interface Env {
@@ -17,6 +18,8 @@ interface Env {
  *
  * GET    /v1/machines          the account's machines: id, name, public key, online
  * DELETE /v1/machines/:id      forget a machine
+ * GET    /v1/members           the account's signed membership records
+ * POST   /v1/members           add records (JSON array); online machines hear `{ type: 'members' }`
  * GET    /v1/connect           WebSocket. `role=machine&machine=<id>`, or `role=device&machine=<id>&device=<id>`
  */
 export default {
@@ -49,6 +52,13 @@ export class AccountRelay extends DurableObject<Env> {
     if (machinePath && request.method === 'DELETE') {
       if (!isId(machinePath[1])) return new Response('Bad machine id', { status: 400 });
       await this.relay.remove(machinePath[1]);
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname === '/v1/members' && request.method === 'GET') return Response.json(await this.relay.members());
+    if (url.pathname === '/v1/members' && request.method === 'POST') {
+      const body = await request.json().catch(() => null);
+      if (!Array.isArray(body)) return new Response('Expected an array of records', { status: 400 });
+      await this.relay.addMembers(body);
       return new Response(null, { status: 204 });
     }
     if (url.pathname === '/v1/connect') return this.upgrade(request, url.searchParams);
@@ -92,6 +102,8 @@ export class AccountRelay extends DurableObject<Env> {
       close: (socket, code, reason) => socket.close(code, reason),
       machines: async () => (await storage.get<Record<string, MachineRecord>>('machines')) ?? {},
       saveMachines: (machines) => storage.put('machines', machines),
+      records: async () => (await storage.get<Record<string, StoredRecord>>('members')) ?? {},
+      saveRecords: (records) => storage.put('members', records),
     };
   }
 }

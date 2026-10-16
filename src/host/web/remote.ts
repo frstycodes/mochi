@@ -1,6 +1,6 @@
 import type { RemoteHost } from '../types/remote.ts';
 
-const OFF = { settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false }, hostName: 'This browser', addresses: [], devices: [], pairedDevices: [], relay: { status: 'off' as const } };
+const OFF = { settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false }, hostName: 'This browser', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' as const } };
 
 // Devices control the desktop app; the web build has no server to reach.
 export const remote: RemoteHost = {
@@ -16,7 +16,7 @@ export const remote: RemoteHost = {
   onSnapshotRequest: () => () => {},
   onCommand: () => () => {},
   async commandResult() {},
-  async removeDevice() {
+  async removeMember() {
     return OFF;
   },
   async setDeviceScopes() {
@@ -27,10 +27,9 @@ export const remote: RemoteHost = {
   async otherMachines() {
     return [];
   },
-  async pair() {
-    throw new Error('Pairing needs the desktop app');
+  async join() {
+    throw new Error('Joining needs the desktop app');
   },
-  async forgetMachine() {},
   async machines() {
     return [];
   },

@@ -22,6 +22,10 @@ export interface FollowOptions {
   onFrame: (frame: StreamFrame) => void;
   /** What it said about itself, to remember for the next launch. */
   onWelcome: (welcome: { addresses: string[]; kind?: DeviceKind }) => void;
+  /** This computer's membership records, sent in each hello. */
+  members?: () => unknown;
+  /** The machine's records, from its welcome or a later `members` frame. */
+  onMembers?: (members: unknown) => void;
 }
 
 export interface MachineFollower {
@@ -80,7 +84,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
       if (run !== generation || state.status === 'refused') return;
       offline(state.error ?? 'The connection dropped', state.status === 'online' ? Date.now() : state.lastSeenAt);
     });
-    opened.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...(resume && { resume }) }));
+    opened.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...(resume && { resume }), ...(options.members && { members: options.members() }) }));
   }
 
   function onFrame(text: string, route: Route['kind']) {
@@ -90,7 +94,10 @@ export function followMachine(options: FollowOptions): MachineFollower {
         attempt = 0;
         const kind = asKind(frame.machineKind) ?? state.kind;
         options.onWelcome({ addresses: Array.isArray(frame.addresses) ? frame.addresses.filter((a) => typeof a === 'string') : [], kind });
+        if (frame.members !== undefined) options.onMembers?.(frame.members);
         return set({ status: 'online', route, name: frame.machineName, kind, scopes: frame.scopes, error: undefined, lastSeenAt: Date.now() });
+      case 'members':
+        return options.onMembers?.(frame.members);
       case 'refused':
         // The machine couldn't serve the stream this time (it says to reconnect); the close that follows retries.
         return set({ error: frame.reason });
