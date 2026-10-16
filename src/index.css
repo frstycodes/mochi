@@ -327,9 +327,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Desktop title bar: `hiddenInset` leaves no native one, so the 44px headers drag the window. Gated on `data-traffic-lights`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them or after a `DragStrip`, and overlays that can sit over them, opt back out. */
+/* Desktop title bar: `hiddenInset` (macOS) and `titleBarOverlay` (Windows) leave no native one, so the 44px headers drag the window. Gated on `data-window-drag`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them or after a `DragStrip`, and overlays that can sit over them, opt back out. */
 @utility app-drag {
-  :root[data-traffic-lights] & {
+  :root[data-window-drag] & {
     -webkit-app-region: drag;
     app-region: drag;
   }
@@ -358,10 +358,15 @@
     margin: 0;
     overflow: hidden;
   }
-  :root[data-traffic-lights] :is(.app-drag, [data-drag-strip] ~ *) :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
-  :root[data-traffic-lights] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
+  :root[data-window-drag] :is(.app-drag, [data-drag-strip] ~ *) :is(button, a, input, textarea, select, [role='button'], [role='tab'], [role='tablist'], [role='separator'], [contenteditable]),
+  :root[data-window-drag] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
     @apply app-no-drag;
   }
+}
+
+/* Windows' caption buttons (`useCaptionInset`) cover the top-right corner; unlayered so it beats the header's own `px-*`. The env() pair is the strip left of them; the fallback is three 46px buttons. */
+:root[data-captions] [data-under-captions] {
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px / var(--app-zoom, 1))) + 0.5rem);
 }
 
 /* The shell window's native material (vibrancy / Mica, electron/window.ts) shows through the docked sidebar only, unless Settings › Appearance › Translucent sidebar is off; the page beside it stays opaque. */

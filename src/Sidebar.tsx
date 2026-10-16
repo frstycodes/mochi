@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotionConfig, type MotionProps } from 'motion/react';
-import { Archive, ChatRound, ChevronRight, Edit, Eye, Hierarchy, Inbox, Route, Search, TaskSquare, Undo } from 'reicon-react';
+import { Archive, ChatRound, ChevronRight, Edit, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from 'reicon-react';
 import {
   Sidebar,
   SidebarContent,
@@ -43,7 +43,7 @@ import { haptic } from './haptic';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, goalProgress } from './progress';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
-import { ProgressRing, SpaceIcon } from './ui';
+import { ProgressRing, SpaceIcon, TooltipIconButton } from './ui';
 import { agentPhase, isWorking, PHASE_LABELS, workingLabel } from './agentPhase';
 import { AgentLoader } from './AgentLoader';
 import { runningBackground } from './runtime/subagents';
@@ -56,6 +56,8 @@ import { DeviceIcon } from './remote/DeviceIcon';
 import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';
 import { UserMenu } from './UserMenu';
+import { HAS_CAPTIONS } from './windowCaptions';
+import { host } from './host';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
@@ -144,6 +146,7 @@ function SpaceHeader() {
   const isMulti = useIsMultiSplit();
   return (
     <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:in-data-traffic-lights:pl-[calc(var(--lights-end)+5px)]">
+      {HAS_CAPTIONS && <AppMenuButton />}
       {!isMobile && !isMulti && <SidebarTrigger className="ml-1 text-muted-foreground" />}
       <Tooltip>
         <TooltipTrigger asChild>
@@ -157,6 +160,19 @@ function SpaceHeader() {
         </TooltipContent>
       </Tooltip>
     </SidebarHeader>
+  );
+}
+
+/** Windows has no menu bar: File, Edit, View and Window open from here, under the button. */
+function AppMenuButton() {
+  const open = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    const { left, bottom } = e.currentTarget.getBoundingClientRect();
+    void host.windows.showAppMenu(Math.round(left), Math.round(bottom + 4));
+  };
+  return (
+    <TooltipIconButton label="Menu" hint="File, Edit, View, Window" onClick={open} className="text-muted-foreground">
+      <Menu />
+    </TooltipIconButton>
   );
 }
 
