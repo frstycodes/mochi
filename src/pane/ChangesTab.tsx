@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ChangeList, type ChangeActions, type DiffStyle, type LineNote } from '../git/ChangeList';
-import { fileKey, filesForStep } from '../git/files';
+import { fileKey, filesForStep, reviewNote } from '../git/files';
 import { ShipBar } from '../git/ShipBar';
 import { useConfirm } from '../git/useConfirm';
 import { useGitAction, useGitDiff } from '../git/useGit';
@@ -141,8 +141,7 @@ function useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm }: Ch
   };
 
   const sendNote = (note: LineNote, text: string) => {
-    const where = note.side === 'deletions' ? `${note.path}, removed line ${note.line}` : `${note.path}:${note.line}`;
-    dispatch({ type: 'say', threadId: thread.id, entry: { who: 'you', kind: 'message', text: `Review note on \`${where}\`\n\n${text}` } });
+    dispatch({ type: 'say', threadId: thread.id, entry: { who: 'you', kind: 'message', text: reviewNote(note.path, note.side, note.line, text) } });
     setNotes((all) => all.map((n) => (n.id === note.id ? { ...n, id: `${n.id}:${Date.now()}`, text, isSent: true } : n)));
   };
 
@@ -160,7 +159,7 @@ function useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm }: Ch
   };
 }
 
-function revertRequest(target: ChangeTarget) {
+export function revertRequest(target: ChangeTarget) {
   const name = target.path.slice(target.path.lastIndexOf('/') + 1);
   if (target.untracked && !target.patch)
     return { title: `Delete ${name}?`, description: `${target.path} was never committed, so it can't be recovered.`, confirm: 'Delete file', cancel: 'Keep file', isDestructive: true };
@@ -177,7 +176,7 @@ function sum(files: DiffFile[], key: 'added' | 'removed') {
   return files.reduce((n, f) => n + f[key], 0);
 }
 
-function ChangesSkeleton() {
+export function ChangesSkeleton() {
   return (
     <div className="flex flex-col gap-0.5 px-2" aria-busy aria-label="Loading changes">
       {[52, 38, 64, 44].map((w) => (
@@ -205,7 +204,7 @@ function NoFolder() {
   );
 }
 
-function NoChanges({ scope }: { scope: DiffScope }) {
+export function NoChanges({ scope }: { scope: DiffScope }) {
   return (
     <Empty className="flex-1">
       <EmptyHeader>
@@ -233,7 +232,7 @@ function NoStepChanges() {
   );
 }
 
-function DiffError({ message, onRetry }: { message: string; onRetry: () => void }) {
+export function DiffError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <Empty className="flex-1">
       <EmptyHeader>

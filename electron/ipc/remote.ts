@@ -27,7 +27,9 @@ export const remote = {
   },
   async commandResult(sender, id, result) {
     const r = record(result, 'result');
-    const checked: CommandResult = r.isOk === true ? { isOk: true, ...(r.detail !== undefined && { detail: string(r.detail, 'detail') }) } : { isOk: false, error: string(r.error, 'error') };
+    // `data` is a pane's payload (a diff, a file, terminal output); its size is capped when it's sent (`resultFrame`).
+    const data = r.data as Extract<CommandResult, { isOk: true }>['data'];
+    const checked: CommandResult = r.isOk === true ? { isOk: true, ...(r.detail !== undefined && { detail: string(r.detail, 'detail') }), ...(data !== undefined && { data }) } : { isOk: false, error: string(r.error, 'error') };
     answerCommand(sender, string(id, 'id', 128), checked);
   },
   async removeDevice(_sender, id) {

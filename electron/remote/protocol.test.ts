@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hasScope, parseCommand } from './protocol.ts';
+import { DEFAULT_SCOPES, SCOPES } from '../../src/host/types/remote.ts';
+import { hasScope, MAX_RESULT_BYTES, parseCommand, resultFrame } from './protocol.ts';
 
 const parse = (command: object) => parseCommand(JSON.stringify({ type: 'command', id: 'c1', command }));
 
@@ -36,4 +37,85 @@ test('steering needs operate; changing and shipping need manage', () => {
   assert.equal(hasScope(['read', 'operate'], command('push')), false);
   assert.equal(hasScope(['read', 'operate'], command('rename')), false);
   assert.equal(hasScope(['manage'], command('push')), true);
+});
+
+test('code, terminal, rewind, side chat, settings and delete commands parse strictly', () => {
+  const ok = (command: object) => {
+    const frame = parse(command);
+    assert.ok(typeof frame !== 'string', `${JSON.stringify(command)}: ${frame as string}`);
+    return frame.command;
+  };
+  assert.deepEqual(ok({ type: 'change', threadId: 't', action: 'revert', target: { path: 'src/a.ts', staged: false, patch: '@@', extra: 1 } }), {
+    type: 'change',
+    threadId: 't',
+    action: 'revert',
+    target: { path: 'src/a.ts', staged: false, patch: '@@' },
+  });
+  assert.deepEqual(ok({ type: 'rewind', threadId: 't', point: { kind: 'message', index: 2 }, mode: 'files' }), {
+    type: 'rewind',
+    threadId: 't',
+    point: { kind: 'message', index: 2 },
+    mode: 'files',
+  });
+  assert.deepEqual(ok({ type: 'create', title: 'x', provider: 'claude', project: 'ref', model: 'opus' }), {
+    type: 'create',
+    title: 'x',
+    provider: 'claude',
+    project: 'ref',
+    model: 'opus',
+  });
+  assert.deepEqual(ok({ type: 'terminal-read', threadId: 't', terminalId: 'p', after: 0 }), {
+    type: 'terminal-read',
+    threadId: 't',
+    terminalId: 'p',
+    after: 0,
+  });
+  assert.deepEqual(ok({ type: 'catalog', extra: 1 }), { type: 'catalog' });
+
+  for (const bad of [
+    { type: 'read-file', threadId: 't', path: '/etc/passwd' },
+    { type: 'read-file', threadId: 't', path: 'C:/Windows/win.ini' },
+    { type: 'read-file', threadId: 't', path: 'src\\..\\..\\secret' },
+    { type: 'read-file', threadId: 't', path: 'src/../../secret' },
+    { type: 'read-file', threadId: 't', path: '' },
+    { type: 'change', threadId: 't', action: 'delete', target: { path: 'a', staged: false } },
+    { type: 'change', threadId: 't', action: 'stage', target: { path: 'a' } },
+    { type: 'comment', threadId: 't', path: 'a', side: 'left', line: 1, text: 'x' },
+    { type: 'diff', threadId: 't', scope: 'all' },
+    { type: 'checkpoint-diff', threadId: 't', n: -1 },
+    { type: 'terminal-open', threadId: 't', cols: 0, rows: 24 },
+    { type: 'terminal-open', threadId: 't', cols: 80, rows: 1e6 },
+    { type: 'terminal-write', threadId: 't', terminalId: 'p', data: '' },
+    { type: 'rewind', threadId: 't', point: { kind: 'message', index: 1 }, mode: 'everything' },
+    { type: 'side-chat', threadId: 't', text: '  ' },
+    { type: 'setting', key: '', value: 'x' },
+    { type: 'create', title: 'x', provider: 'claude', project: null, model: 7 },
+    { type: 'delete' },
+  ])
+    assert.equal(typeof parse(bad), 'string', JSON.stringify(bad));
+});
+
+test('each new command needs its own scope; terminal is never implied by code', () => {
+  const scopeOf = (command: object) => {
+    const frame = parse(command);
+    assert.ok(typeof frame !== 'string');
+    return SCOPES.filter((s) => hasScope([s], frame.command));
+  };
+  assert.deepEqual(scopeOf({ type: 'catalog' }), ['read']);
+  assert.deepEqual(scopeOf({ type: 'diff', threadId: 't', scope: 'branch' }), ['code']);
+  assert.deepEqual(scopeOf({ type: 'read-file', threadId: 't', path: 'a' }), ['code']);
+  assert.deepEqual(scopeOf({ type: 'comment', threadId: 't', path: 'a', side: 'additions', line: 1, text: 'x' }), ['code']);
+  assert.deepEqual(scopeOf({ type: 'terminal-open', threadId: 't', cols: 80, rows: 24 }), ['terminal']);
+  assert.deepEqual(scopeOf({ type: 'rewind', threadId: 't', point: { kind: 'checkpoint', n: 1 }, mode: 'chat' }), ['operate']);
+  assert.deepEqual(scopeOf({ type: 'side-chat', threadId: 't', text: 'why?' }), ['operate']);
+  assert.deepEqual(scopeOf({ type: 'delete', threadId: 't' }), ['manage']);
+  assert.deepEqual(scopeOf({ type: 'setting', key: 'shell', value: 'zsh' }), ['manage']);
+  assert.ok(!hasScope(DEFAULT_SCOPES, { type: 'terminal-open', threadId: 't', cols: 80, rows: 24 }), 'a new device has no terminal');
+});
+
+test('a result too large for the relay is refused with its size instead of sent', () => {
+  assert.deepEqual(resultFrame('c1', { isOk: true, data: { text: 'hi' } }), { type: 'result', id: 'c1', isOk: true, data: { text: 'hi' } });
+  const big = resultFrame('c1', { isOk: true, data: { text: 'x'.repeat(MAX_RESULT_BYTES) } });
+  assert.equal(big.type === 'result' && big.isOk, false);
+  assert.match(big.type === 'result' && !big.isOk ? big.error : '', /^Too large to send here \(0\.8 MB\)/);
 });
