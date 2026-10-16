@@ -85,7 +85,7 @@ function resolve(command: Extract<RemoteCommand, { type: 'resolve' }>, { state, 
   return ok;
 }
 
-/** The composer's path: queued behind a working agent per Settings › While the agent is working, otherwise sent now. */
+/** The composer's path: queued behind a working agent per Settings › General › While the agent is working, otherwise sent now. */
 function send(thread: Thread, text: string, { state, dispatch, whileWorking }: CommandEnv): CommandResult {
   const message = queuedMessage(text, { mentions: [], isCommand: false, typedSkills: [] });
   if (shouldQueue(thread, whileWorking, false)) dispatch({ type: 'queued-add', threadId: thread.id, message });

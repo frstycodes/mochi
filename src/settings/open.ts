@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { Provider } from '../model';
 import type { SectionId } from './sections';
 
@@ -40,6 +40,18 @@ export function closeSettings() {
 
 export function useSettingsRoute() {
   return useSyncExternalStore(subscribe, () => route);
+}
+
+/** A tab that follows deep links: `tabFor` names the tab a setting id lives on, or undefined when the id doesn't say. */
+export function useLinkedTab<T extends string>(tabFor: (settingId: string) => T | undefined, fallback: T) {
+  const route = useSettingsRoute();
+  const linked = () => (route?.settingId ? tabFor(route.settingId) : undefined);
+  const [tab, setTab] = useState<T>(() => linked() ?? fallback);
+  useEffect(() => {
+    const next = linked();
+    if (next) setTab(next);
+  }, [route?.nonce, route?.settingId]);
+  return [tab, setTab] as const;
 }
 
 function set(next: SettingsRoute | null) {

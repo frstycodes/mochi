@@ -98,7 +98,7 @@ export type ThreadsAction =
   | { type: 'criterion-claim'; threadId: string; criterionId: string; evidence: string; by: Provider }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
   /** The agent went idle: a fresh record replaces the last turn's, accepted gaps and Open anyway included. */
-  /** The agent's `propose_goal`; `isApplied` when Settings › Goals applies proposals with an undo instead of asking. */
+  /** The agent's `propose_goal`; `isApplied` when Settings › Goals and checks applies proposals with an undo instead of asking. */
   | { type: 'goal-propose'; threadId: string; goal: string; criteria: { text: string; command?: string }[]; basis?: string; by: Provider; isApplied: boolean }
   | { type: 'goal-proposal'; threadId: string; decision: 'accept' | 'keep' | 'undo' }
   | { type: 'idle-start'; threadId: string }

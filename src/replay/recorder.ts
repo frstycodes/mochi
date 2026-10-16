@@ -12,7 +12,7 @@ const capped = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 /**
- * Called with the store just before each action (Settings › Data › Record threads for replay). Lines collect for a second,
+ * Called with the store just before each action (Settings › Data and storage › Record threads for replay). Lines collect for a second,
  * then go to main as one compacted append. Turning recording off forgets which threads have a base, so turning it back
  * on writes a fresh one and the replay jumps over the gap instead of replaying a store it never saw.
  */

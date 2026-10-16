@@ -3,7 +3,7 @@ import type { ModelChoice } from '../host/types/settings.ts';
 import type { Provider, Similar, TurnAudit } from '../model.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 
-/** Background generations that run on a model of their own (Settings › Agents › Background tasks). */
+/** Background generations that run on a model of their own (Settings › Models › Background tasks). */
 export const UTILITY_TASKS = ['title', 'outcome', 'simplify', 'commit', 'pr', 'goal', 'handoff', 'audit'] as const;
 
 export type UtilityTask = (typeof UTILITY_TASKS)[number];

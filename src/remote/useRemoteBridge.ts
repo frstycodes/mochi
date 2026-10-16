@@ -30,7 +30,7 @@ export function useRemoteBridge(state: State, dispatch: Dispatch<Action>) {
       setStreaming(status.settings.isEnabled, status.settings.machineName || status.hostName);
       answerSnapshots();
     };
-    void host.remote.status().then(apply, (error: unknown) => console.error('Reading Settings › Devices failed', error));
+    void host.remote.status().then(apply, (error: unknown) => console.error('Reading Settings › Remote access failed', error));
     const offStatus = host.remote.onStatus(apply);
     const offSnapshot = host.remote.onSnapshotRequest((id) => {
       waiting.current.push(id);

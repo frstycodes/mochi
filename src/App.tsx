@@ -87,7 +87,7 @@ function AppZoomChip() {
   return <ZoomChip zoom={zoom} onReset={() => void host.windows.resetZoom()} className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag" />;
 }
 
-/** Settings › General's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
+/** Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
 function ReducedMotion({ children }: { children: React.ReactNode }) {
   const { reduceMotion } = usePrefs();
   useEffect(() => {
@@ -98,7 +98,7 @@ function ReducedMotion({ children }: { children: React.ReactNode }) {
 
 const MOTION_CONFIG = { system: 'user', on: 'always', off: 'never' } as const;
 
-/** Settings › General's Translucent sidebar off: `data-solid-sidebar` turns off the material rules in index.css. */
+/** Settings › Appearance's Translucent sidebar off: `data-solid-sidebar` turns off the material rules in index.css. */
 function useSolidSidebar() {
   const { translucentSidebar } = usePrefs();
   useEffect(() => {

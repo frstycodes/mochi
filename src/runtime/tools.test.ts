@@ -295,6 +295,36 @@ test('read only blocks every write, settings included, and shows agent control i
   assert.ok((await t.ok('list_threads')).length > 0, 'reads still work');
 });
 
+test('a tool set to Off refuses, Ask waits on a widget showing the call, and your choice beats the level', async () => {
+  const t = setup({ control: 'read' });
+  t.env.prefs.set({ toolPolicies: { settle_thread: 'allow', rename_thread: 'ask', list_threads: 'off' } });
+  await t.ok('settle_thread', { threadIds: ['adm'] });
+  assert.equal(t.thread('adm').status, 'settled', 'Allow runs it under Read only');
+  assert.match(await t.err('list_threads'), /turned list_threads off for agents in Settings › Mochi access/);
+  assert.equal(t.state().queue.some((q) => q.kind === 'setting'), false, 'Off is yours: no agent-control widget');
+  const { result, card } = await t.asking('rename_thread', { title: 'Renamed' });
+  assert.equal(t.thread('rl').title === 'Renamed', false, 'nothing happens while it waits');
+  assert.match(card.title, /wants to rename thread/);
+  assert.match(card.code!, /"title": "Renamed"/);
+  decideTool(card.tool!.callId, { isApproved: true });
+  assert.ok(!(await result).isError);
+  assert.equal(t.thread('rl').title, 'Renamed');
+  const denied = await t.asking('rename_thread', { title: 'Again' });
+  decideTool(denied.card.tool!.callId, { isApproved: false });
+  assert.match((await denied.result).text, /denied/);
+  assert.equal(t.thread('rl').title, 'Renamed');
+});
+
+test("deletes can't be set to run on their own: a saved Allow is ignored and they still ask", async () => {
+  const t = setup();
+  t.env.prefs.set({ toolPolicies: { delete_thread: 'allow' } as never });
+  const { result, card } = await t.asking('delete_thread', { threadIds: ['e2e'] });
+  assert.equal(card.tool!.isDestructive, true);
+  decideTool(card.tool!.callId, { isApproved: false });
+  assert.match((await result).text, /denied/);
+  assert.ok(t.thread('e2e'));
+});
+
 test('changes runs everything that doesn’t ask, and blocks deletes and settings without showing their widget', async () => {
   const t = setup({ control: 'changes' });
   await t.ok('create_thread', { prompt: 'x' });
@@ -744,7 +774,7 @@ test('widget ids carry a per-launch part, so a reload never reuses a saved entry
 
 const SECRETS = ['sk-live-abcdefghijklmnop', 'ghp_abcdefghijklmnopqrstuvwxyz', 'ghp_ZYXWVUTSRQPONMLKJIHGFEDCBA'];
 
-type SettingView = { key: string; value: string | null; allowed?: string[]; locked?: string; server?: Record<string, unknown> };
+type SettingView = { key: string; value: string | null; allowed?: string[]; locked?: string; section?: string; group?: string; server?: Record<string, unknown> };
 const byKey = (r: { settings: SettingView[] }, key: string) => r.settings.find((s) => s.key === key)!;
 const widget = (t: ReturnType<typeof setup>) => t.state().queue.find((q) => q.settings)!;
 
@@ -757,6 +787,8 @@ test('get_settings reads every app setting and your profile’s, with values, al
   assert.equal(byKey(r, 'concurrency').value, '6', 'host settings come from main');
   assert.equal(byKey(r, 'alert.needs-you').value, 'true');
   assert.equal(byKey(r, 'quietFrom').value, '22');
+  assert.deepEqual([byKey(r, 'permissions').section, byKey(r, 'permissions').group], ['general', 'New threads'], 'the page and its titled section');
+  assert.deepEqual([byKey(r, 'idleAlert.gaps').section, byKey(r, 'idleAlert.gaps').group], ['notifications', 'Idle threads']);
   for (const key of ['agentControl', 'permissions', 'threadModels', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
   assert.equal(byKey(r, 'profile.name').value, 'Latitude');
   assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');

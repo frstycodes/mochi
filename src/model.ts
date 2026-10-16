@@ -68,7 +68,7 @@ export interface TurnReport {
 }
 
 /** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
-/** A goal the agent wrote after its first look: waiting for your Accept, or applied with an Undo (Settings › Goals). */
+/** A goal the agent wrote after its first look: waiting for your Accept, or applied with an Undo (Settings › Goals and checks). */
 export interface GoalProposal {
   goal: string;
   criteria: { text: string; command?: string }[];

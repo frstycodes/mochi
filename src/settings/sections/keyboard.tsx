@@ -12,7 +12,7 @@ export function KeyboardSection() {
   const shown = shownCommands(useProfiles().length);
   const { keybindings } = usePrefs();
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
       <div className="flex items-center justify-between gap-3 px-3">
         <p className="type-meta text-muted-foreground">Click a shortcut to record a new one. Changes apply right away.</p>
         <Button variant="outline" size="sm" disabled={!Object.keys(keybindings).length} onClick={resetAll}>

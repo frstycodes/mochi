@@ -1,126 +1,191 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ClipboardText, Download, Edit2, Import, SearchNormal, Star, TickCircle, Trash3 } from 'reicon-react';
+import { ChevronDown, ClipboardText, Download, Edit2, Import, SearchNormal, Star, TickCircle, Trash3 } from 'reicon-react';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { host } from '../../host';
-import { themeTokens } from '../../themes/map';
-import { groupThemes, splitStarred, type PackageGroup } from '../../themes/groups';
+import { IS_MAC, IS_WINDOWS } from '../../keys';
+import { filterPackages, groupThemes, type PackageGroup } from '../../themes/groups';
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeKind, type ThemeSlot } from '../../themes/model';
 import type { MarketplaceExtension } from '../../themes/openVsx';
 import { refreshThemes, setThemePreview, useColorTheme, useThemesState } from '../../themes/store';
 import { installExtension, removeCustomTheme, uninstallPackage, useApplyTheme, useInspectedThemes, useMarketplaceSearch, useSeen } from '../../themes/useMarketplace';
+import { OverflowIcon, TooltipIconButton } from '../../ui';
+import { CatalogRow } from '../CatalogRow';
+import { useLinkedTab } from '../open';
+import { SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
-import { TooltipIconButton } from '../../ui';
-import { SettingsGroup, SettingsRow, settingControlId } from '../parts';
+import { ThemePicker, ThemeSwatch, useChosenTheme, useThemeColors } from '../ThemePicker';
 
-export function ThemesSection() {
-  // Leaving the section mid-hover must not leave a preview painted.
+export function AppearanceSection() {
+  // Leaving the page mid-hover must not leave a preview painted.
   useEffect(() => () => setThemePreview(null), []);
   return (
-    <div className="flex flex-col gap-8">
-      <SettingsGroup id="colorTheme" footer="System switches between these with your system's appearance. Hover a theme to preview it; nothing changes until you pick one.">
-        <SettingsRow id="lightTheme" label="Light" control={<SlotSelect slot="light" />} />
-        <SettingsRow id="darkTheme" label="Dark" control={<SlotSelect slot="dark" />} />
+    <div className="flex flex-col gap-10">
+      <SettingsGroup title="Mode">
+        <CatalogRow settingKey="theme" />
+        <CatalogRow settingKey="reduceMotion" />
+        {HAS_MATERIAL && <CatalogRow settingKey="translucentSidebar" />}
       </SettingsGroup>
-      <InstalledGroups />
-      <MarketplaceGroup />
+      <SettingsSection id="colorTheme" title="Color theme" footer="Arrow through or hover a theme to preview it; nothing changes until you pick one.">
+        <div className="@container">
+          <div className="grid gap-3 @md:grid-cols-2">
+            <SlotCard slot="light" />
+            <SlotCard slot="dark" />
+          </div>
+        </div>
+      </SettingsSection>
+      <ThemesTabs />
     </div>
   );
 }
 
-const MOCHI_VALUE = MOCHI_THEME_ID;
+// Linux has no window material (electron/window.ts), so the switch would do nothing there.
+const HAS_MATERIAL = host.isDesktop && (IS_MAC || IS_WINDOWS);
 
-export function SlotSelect({ slot }: { slot: ThemeSlot }) {
-  const prefs = usePrefs();
-  const { installed } = useThemesState();
-  const apply = useApplyTheme();
-  const options = installed.filter((t) => slotOf(t.kind) === slot);
-  const { starred, rest } = splitStarred(options, prefs.starredThemes);
-  const chosen = slot === 'light' ? prefs.lightTheme : prefs.darkTheme;
-  const value = options.some((t) => t.id === chosen) ? chosen : MOCHI_VALUE;
-  const choose = (id: string) => apply(options.find((t) => t.id === id) ?? null, slot);
+/** One appearance's theme as a small painted app; the whole card opens the picker. */
+function SlotCard({ slot }: { slot: ThemeSlot }) {
+  const chosen = useChosenTheme(slot);
+  const colorTheme = useColorTheme();
+  const isOnScreen = colorTheme.mode === slot;
   return (
-    <Select value={value} onValueChange={choose} onOpenChange={(isOpen) => !isOpen && setThemePreview(null)}>
-      <SelectTrigger id={settingControlId(`${slot}Theme`)} size="sm" className="w-56">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent align="end">
-        {starred.length > 0 && (
-          <>
-            <SelectGroup>
-              <SelectLabel>Starred</SelectLabel>
-              {starred.map((theme) => (
-                <ThemeOption key={theme.id} theme={theme} slot={slot} />
-              ))}
-            </SelectGroup>
-            <SelectSeparator />
-          </>
-        )}
-        <SelectGroup>
-          {starred.length > 0 && <SelectLabel>All themes</SelectLabel>}
-          <SelectItem value={MOCHI_VALUE} onFocus={() => setThemePreview(null)}>
-            <ThemeSwatch theme={null} slot={slot} />
-            Mochi
-          </SelectItem>
-          {rest.map((theme) => (
-            <ThemeOption key={theme.id} theme={theme} slot={slot} />
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    <ThemePicker slot={slot}>
+      <button
+        type="button"
+        id={settingControlId(`${slot}Theme`)}
+        data-setting-id={`${slot}Theme`}
+        className="flex flex-col gap-3 rounded-xl border bg-card p-3 text-left outline-none transition-colors duration-700 hover:bg-accent/40 hover:duration-150 focus-visible:ring-3 focus-visible:ring-ring/50 data-flash:bg-accent data-[state=open]:border-foreground/20"
+      >
+        <ThemeMock theme={colorTheme[slot]} slot={slot} />
+        <span className="flex items-center gap-2 px-1">
+          <span className="min-w-0 flex-1">
+            <span className="block type-body font-medium">{slot === 'light' ? 'Light' : 'Dark'}</span>
+            <span className="block truncate type-meta text-muted-foreground">{chosen?.label ?? 'Mochi'}</span>
+          </span>
+          {isOnScreen && <span className="shrink-0 type-caption text-muted-foreground">On screen</span>}
+          <ChevronDown aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        </span>
+      </button>
+    </ThemePicker>
   );
 }
 
-function ThemeOption({ theme, slot }: { theme: ColorTheme; slot: ThemeSlot }) {
+/** A theme painted as a tiny Mochi window: sidebar, a message, a line of prose, a line of code and the send button. */
+function ThemeMock({ theme, slot }: { theme: ColorTheme | null; slot: ThemeSlot }) {
+  const c = useThemeColors(theme, slot);
   return (
-    <SelectItem value={theme.id} onFocus={() => setThemePreview(theme)}>
-      <ThemeSwatch theme={theme} slot={slot} />
-      <span className="truncate">{theme.label}</span>
-    </SelectItem>
+    <span aria-hidden className="flex h-24 overflow-hidden rounded-lg shadow-[inset_0_0_0_1px_var(--border)]" style={{ background: c.background }}>
+      <span className="flex w-1/4 flex-col gap-1.5 p-2.5" style={{ background: c.sidebar }}>
+        {['70%', '50%', '60%'].map((width) => (
+          <span key={width} className="h-1.5 rounded-full opacity-30" style={{ width, background: c.foreground }} />
+        ))}
+      </span>
+      <span className="flex flex-1 flex-col gap-2 p-2.5">
+        <span className="ml-auto h-3.5 w-2/5 rounded-md" style={{ background: c.muted }} />
+        <span className="h-1.5 w-4/5 rounded-full opacity-60" style={{ background: c.foreground }} />
+        <span className="flex gap-1">
+          <span className="h-1.5 w-1/6 rounded-full" style={{ background: c.keyword }} />
+          <span className="h-1.5 w-1/3 rounded-full" style={{ background: c.string }} />
+          <span className="h-1.5 w-1/6 rounded-full opacity-40" style={{ background: c.foreground }} />
+        </span>
+        <span className="mt-auto ml-auto size-4 rounded-full" style={{ background: c.primary }} />
+      </span>
+    </span>
   );
 }
 
-function InstalledGroups() {
+type ThemesTab = 'library' | 'marketplace';
+
+const TAB_OF_ROW: Record<string, ThemesTab> = { installedThemes: 'library', customTheme: 'library', themeMarketplace: 'marketplace' };
+
+/** What you have and what you could get, as two tabs; a deep link to either opens its tab. */
+function ThemesTabs() {
+  const [tab, setTab] = useLinkedTab((settingId) => TAB_OF_ROW[settingId], 'library');
+  return (
+    <Tabs value={tab} onValueChange={(v) => setTab(v as ThemesTab)} className="gap-0">
+      <SettingsSection
+        id="installedThemes"
+        title="Themes"
+        action={
+          <TabsList>
+            <TabsTrigger value="library">Library</TabsTrigger>
+            <TabsTrigger value="marketplace">Marketplace</TabsTrigger>
+          </TabsList>
+        }
+      >
+        <TabsContent value="library" className="flex flex-col gap-2.5">
+          <Library />
+        </TabsContent>
+        <TabsContent value="marketplace" className="flex flex-col gap-2.5">
+          <Marketplace />
+        </TabsContent>
+      </SettingsSection>
+    </Tabs>
+  );
+}
+
+// Past this many packages, the library gets a filter.
+const FILTER_FROM = 5;
+
+/** Installed themes, one row per package that opens to its themes; Mochi first, your own files last. */
+function Library() {
   const { installed, isLoaded } = useThemesState();
+  const [query, setQuery] = useState('');
   const { packages, custom } = useMemo(() => groupThemes(installed), [installed]);
+  const q = query.trim().toLowerCase();
+  const matches = (text: string) => text.toLowerCase().includes(q);
+  const shownPackages = filterPackages(packages, query);
+  const shownCustom = q ? custom.filter((t) => matches(t.label)) : custom;
+  const isMochiShown = !q || matches('mochi');
+  const isEmpty = !!q && !isMochiShown && !shownPackages.length && !shownCustom.length;
   return (
-    <div className="flex flex-col gap-3">
-      <BuiltInGroup />
-      {!isLoaded && (
-        <SettingsGroup>
-          <SkeletonRows count={2} />
-        </SettingsGroup>
+    <>
+      {packages.length >= FILTER_FROM && (
+        <InputGroup>
+          <InputGroupAddon>
+            <SearchNormal />
+          </InputGroupAddon>
+          <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter installed themes" aria-label="Filter installed themes" />
+        </InputGroup>
       )}
-      {packages.map((group) => (
-        <PackageThemes key={group.id} group={group} />
-      ))}
-      <CustomThemes themes={custom} isLoaded={isLoaded} />
-    </div>
+      <SettingsCard>
+        {isMochiShown && <MochiPackage />}
+        {!isLoaded && <SkeletonRows count={2} />}
+        {shownPackages.map(({ group, themes }) => (
+          <PackageRow key={group.id} group={group} themes={themes} isOpen={!!q || undefined} />
+        ))}
+        {(!q || shownCustom.length > 0) && <CustomPackage themes={shownCustom} isLoaded={isLoaded} isFiltered={!!q} />}
+        {isEmpty && <SettingsRow label={<span className="text-muted-foreground">No installed theme matches “{query.trim()}”</span>} />}
+      </SettingsCard>
+    </>
   );
 }
 
 const MOCHI_SLOTS = ['light', 'dark'] satisfies ThemeSlot[];
 
-function BuiltInGroup() {
+function MochiPackage() {
   return (
-    <SettingsGroup id="installedThemes" title="Installed">
-      <GroupHeader name="Mochi" publisher="Built in" meta={themeCount(MOCHI_SLOTS.length)} />
+    <PackageShell name="Mochi" publisher="Built in" meta={themeCount(MOCHI_SLOTS.length)} swatches={MOCHI_SLOTS.map((slot) => ({ theme: null, slot }))} usedCount={useUsedCount(null)}>
       {MOCHI_SLOTS.map((slot) => (
         <ThemeRow key={slot} theme={null} slot={slot} label={`Mochi ${KIND_LABELS[slot]}`} kind={slot} />
       ))}
-    </SettingsGroup>
+    </PackageShell>
   );
 }
 
-function PackageThemes({ group }: { group: PackageGroup }) {
+/** `themes` are the ones a filter shows; removing always takes the whole package. */
+function PackageRow({ group, themes, isOpen }: { group: PackageGroup; themes: ColorTheme[]; isOpen?: boolean }) {
+  const total = group.themes.length;
   const [isRemoving, setRemoving] = useState(false);
-  const consequence = `${group.displayName} · ${themeCount(group.themes.length)}`;
+  const consequence = `${group.displayName} · ${themeCount(total)}`;
   const remove = () => {
     setRemoving(true);
     uninstallPackage(group).then(
@@ -132,26 +197,37 @@ function PackageThemes({ group }: { group: PackageGroup }) {
     );
   };
   return (
-    <SettingsGroup>
-      <GroupHeader
-        name={group.displayName}
-        publisher={group.publisher}
-        meta={`${themeCount(group.themes.length)} · v${group.version}`}
-        control={
-          <Button variant="outline" size="sm" className="max-w-full" onClick={remove} disabled={isRemoving}>
-            {isRemoving ? <Spinner data-icon="inline-start" /> : <Trash3 data-icon="inline-start" />}
-            <span className="truncate">Remove {consequence}</span>
-          </Button>
-        }
-      />
-      {group.themes.map((theme) => (
+    <PackageShell
+      name={group.displayName}
+      publisher={group.publisher}
+      meta={`${themes.length < total ? `${themes.length} of ${themeCount(total)}` : themeCount(total)} · v${group.version}`}
+      swatches={themes.map((theme) => ({ theme, slot: slotOf(theme.kind) }))}
+      usedCount={useUsedCount(group.themes)}
+      isOpen={isOpen}
+      menu={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label={`More for ${group.displayName}`} disabled={isRemoving}>
+              {isRemoving ? <Spinner /> : <OverflowIcon />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem variant="destructive" onSelect={remove}>
+              <Trash3 />
+              Remove {consequence}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+    >
+      {themes.map((theme) => (
         <ThemeRow key={theme.id} theme={theme} slot={slotOf(theme.kind)} label={theme.label} kind={theme.kind} />
       ))}
-    </SettingsGroup>
+    </PackageShell>
   );
 }
 
-function CustomThemes({ themes, isLoaded }: { themes: ColorTheme[]; isLoaded: boolean }) {
+function CustomPackage({ themes, isLoaded, isFiltered }: { themes: ColorTheme[]; isLoaded: boolean; isFiltered: boolean }) {
   const [draft, setDraft] = useState<{ file?: string; text: string } | null>(null);
   const importFile = () =>
     host.themes.importFile().then(
@@ -160,52 +236,132 @@ function CustomThemes({ themes, isLoaded }: { themes: ColorTheme[]; isLoaded: bo
     );
   const isEmpty = isLoaded && themes.length === 0;
   return (
-    <SettingsGroup footer="Custom themes are VS Code color theme files (.json or .jsonc). Includes resolve next to an imported file; Edit opens it in your JSON editor and changes show when you come back.">
-      <GroupHeader
-        id="customTheme"
-        name="Custom"
-        publisher="Your own files"
-        meta={isEmpty ? 'None yet. Import a theme file or paste its JSON.' : themeCount(themes.length)}
-        control={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => void importFile()}>
-              <Import data-icon="inline-start" />
+    <PackageShell
+      id="customTheme"
+      name="Custom"
+      publisher="Your own files"
+      meta={isEmpty ? 'VS Code color theme files (.json or .jsonc)' : themeCount(themes.length)}
+      swatches={themes.map((theme) => ({ theme, slot: slotOf(theme.kind) }))}
+      usedCount={useUsedCount(themes)}
+      isOpen={isFiltered || !!draft || undefined}
+      menu={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              Add theme
+              <ChevronDown data-icon="inline-end" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => void importFile()}>
+              <Import />
               Import file
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setDraft({ text: '' })} aria-expanded={!!draft && !draft.file}>
-              <ClipboardText data-icon="inline-start" />
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setDraft({ text: '' })}>
+              <ClipboardText />
               Paste JSON
-            </Button>
-          </div>
-        }
-      >
-        {!!draft && <ThemeJsonEditor key={draft.file ?? 'new'} draft={draft} onDone={() => setDraft(null)} />}
-      </GroupHeader>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+      isExpandable={themes.length > 0}
+    >
+      {!!draft && (
+        <div className="px-4 py-3">
+          <ThemeJsonEditor key={draft.file ?? 'new'} draft={draft} onDone={() => setDraft(null)} />
+        </div>
+      )}
       {themes.map((theme) => (
         <ThemeRow key={theme.id} theme={theme} slot={slotOf(theme.kind)} label={theme.label} kind={theme.kind}>
           {theme.source.kind === 'custom' && <CustomThemeActions theme={theme} file={theme.source.file} onEdit={(file, text) => setDraft({ file, text })} />}
         </ThemeRow>
       ))}
-    </SettingsGroup>
+    </PackageShell>
   );
 }
 
-function GroupHeader({ id, name, publisher, meta, control, children }: { id?: string; name: string; publisher: string; meta: string; control?: ReactNode; children?: ReactNode }) {
+/**
+ * A package's row: its first theme's swatch, name, publisher and what's in use; the chevron opens its themes inside the
+ * same card. `isOpen` forces it open (a filter or an editor is showing), otherwise it's yours to toggle.
+ */
+function PackageShell({
+  id,
+  name,
+  publisher,
+  meta,
+  swatches,
+  usedCount,
+  menu,
+  isOpen,
+  isExpandable = true,
+  children,
+}: {
+  id?: string;
+  name: string;
+  publisher: string;
+  meta: string;
+  swatches: { theme: ColorTheme | null; slot: ThemeSlot }[];
+  usedCount: number;
+  menu?: ReactNode;
+  isOpen?: boolean;
+  isExpandable?: boolean;
+  children: ReactNode;
+}) {
+  const [isOpenByYou, setOpen] = useState(false);
+  const isExpanded = isOpen ?? isOpenByYou;
   return (
-    <SettingsRow
-      id={id}
-      label={
-        <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate font-medium">{name}</span>
-          <span className="shrink-0 truncate type-meta text-muted-foreground">{publisher}</span>
-        </span>
-      }
-      description={meta}
-      control={control}
-    >
-      {children}
-    </SettingsRow>
+    <Collapsible open={isExpanded} onOpenChange={setOpen} className="relative not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border">
+      <SettingsRow
+        id={id}
+        label={
+          <span className="flex min-w-0 items-center gap-3">
+            <PackageSwatch swatch={swatches[0]} />
+            <span className="flex min-w-0 flex-col">
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                <span className="truncate font-medium">{name}</span>
+                <span className="shrink-0 truncate type-meta text-muted-foreground">{publisher}</span>
+              </span>
+              <span className="truncate type-meta text-muted-foreground">
+                {meta}
+                {usedCount > 0 && ` · ${usedCount === 1 ? 'In use' : 'Both in use'}`}
+              </span>
+            </span>
+          </span>
+        }
+        control={
+          <div className="flex items-center gap-1">
+            {menu}
+            {isExpandable && (
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={isExpanded ? `Hide ${name} themes` : `Show ${name} themes`}>
+                  <ChevronDown className={cn('transition-transform duration-200', isExpanded && 'rotate-180')} />
+                </Button>
+              </CollapsibleTrigger>
+            )}
+          </div>
+        }
+      />
+      <CollapsibleContent className="border-t bg-muted/30">{children}</CollapsibleContent>
+    </Collapsible>
   );
+}
+
+/** A package's first theme, or a dashed slot while it has none. */
+function PackageSwatch({ swatch }: { swatch?: { theme: ColorTheme | null; slot: ThemeSlot } }) {
+  if (!swatch) return <span aria-hidden className="h-5 w-8 shrink-0 rounded-sm border border-dashed" />;
+  return <ThemeSwatch theme={swatch.theme} slot={swatch.slot} />;
+}
+
+/** How many appearances use one of `themes` now; null counts Mochi. */
+function useUsedCount(themes: ColorTheme[] | null) {
+  const { lightTheme, darkTheme } = usePrefs();
+  const { installed } = useThemesState();
+  const isMochi = (id: string, slot: ThemeSlot) => id === MOCHI_THEME_ID || !installed.some((t) => t.id === id && slotOf(t.kind) === slot);
+  const chosen = [
+    { id: lightTheme, slot: 'light' as const },
+    { id: darkTheme, slot: 'dark' as const },
+  ];
+  return chosen.filter(({ id, slot }) => (themes ? themes.some((t) => t.id === id) : isMochi(id, slot))).length;
 }
 
 function ThemeRow({ theme, slot, label, kind, children }: { theme: ColorTheme | null; slot: ThemeSlot; label: string; kind: ThemeKind; children?: ReactNode }) {
@@ -328,22 +484,19 @@ function ThemeJsonEditor({ draft, onDone }: { draft: { file?: string; text: stri
   );
 }
 
-function MarketplaceGroup() {
+function Marketplace() {
   const [query, setQuery] = useState('');
   const { state, more, hasMore, retry } = useMarketplaceSearch(query);
   const isEmpty = state.status === 'done' && state.extensions.length === 0;
   return (
-    <SettingsGroup id="themeMarketplace" title="Open VSX" footer="Color themes from open-vsx.org, most downloaded first. Installing reads only each package's theme files; nothing in it runs.">
-      <SettingsRow
-        label={
-          <InputGroup className="h-7">
-            <InputGroupAddon>
-              <SearchNormal />
-            </InputGroupAddon>
-            <InputGroupInput id={settingControlId('themeSearch')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search themes" aria-label="Search Open VSX themes" />
-          </InputGroup>
-        }
-      />
+    <>
+      <InputGroup data-setting-id="themeMarketplace">
+        <InputGroupAddon>
+          <SearchNormal />
+        </InputGroupAddon>
+        <InputGroupInput id={settingControlId('themeSearch')} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Open VSX themes" aria-label="Search Open VSX themes" />
+      </InputGroup>
+      <SettingsCard>
       {state.status === 'loading' && <SkeletonRows count={4} />}
       {state.status === 'error' && (
         <SettingsRow
@@ -368,7 +521,9 @@ function MarketplaceGroup() {
           }
         />
       )}
-    </SettingsGroup>
+      </SettingsCard>
+      <p className="px-1 type-caption text-muted-foreground">Color themes from open-vsx.org, most downloaded first. Installing reads only each package's theme files; nothing in it runs.</p>
+    </>
   );
 }
 
@@ -477,39 +632,6 @@ function Swatches({
       ))}
       {hidden > 0 && <span className="type-caption text-muted-foreground tabular-nums">+{hidden}</span>}
     </div>
-  );
-}
-
-const swatchColors = new WeakMap<ColorTheme, Record<string, string>>();
-
-// Mochi's own values from index.css, which the swatch can't read while another theme overrides the tokens on <html>.
-const MOCHI_SWATCH = {
-  light: { '--background': 'oklch(0.975 0.003 285)', '--foreground': 'oklch(0.2 0.01 285)', '--primary': 'oklch(0.22 0.01 285)', '--syntax-keyword': '#cf222e', '--syntax-string': '#0a3069' },
-  dark: { '--background': 'oklch(0.145 0.006 285)', '--foreground': 'oklch(0.965 0.003 285)', '--primary': 'oklch(0.965 0.003 285)', '--syntax-keyword': '#ff7b72', '--syntax-string': '#a5d6ff' },
-} satisfies Record<ThemeSlot, Record<string, string>>;
-
-/** A theme in 32×20: its editor background, an "Aa" in its foreground, and a stripe of its primary, keyword and string colors. */
-function ThemeSwatch({ theme, slot }: { theme: ColorTheme | null; slot: ThemeSlot }) {
-  const tokens = useMemo<Record<string, string>>(() => {
-    if (!theme) return MOCHI_SWATCH[slot];
-    let cached = swatchColors.get(theme);
-    if (!cached) swatchColors.set(theme, (cached = themeTokens(theme.theme, theme.kind)));
-    return cached;
-  }, [theme, slot]);
-  const color = (token: string, fallback: string) => tokens[token] ?? fallback;
-  return (
-    <span
-      aria-hidden
-      className="relative flex h-5 w-8 shrink-0 items-center overflow-hidden rounded-sm pl-1 text-[9px]/none font-semibold shadow-[inset_0_0_0_1px_var(--border)]"
-      style={{ background: color('--background', 'var(--background)'), color: color('--foreground', 'var(--foreground)') }}
-    >
-      Aa
-      <span className="absolute inset-x-0 bottom-0 flex h-1">
-        <span className="flex-1" style={{ background: color('--primary', 'var(--primary)') }} />
-        <span className="flex-1" style={{ background: color('--syntax-keyword', 'var(--chart-5)') }} />
-        <span className="flex-1" style={{ background: color('--syntax-string', 'var(--chart-3)') }} />
-      </span>
-    </span>
   );
 }
 

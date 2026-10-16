@@ -64,7 +64,7 @@ export function useAllPins() {
   return useSyncExternalStore(subscribe, () => pins);
 }
 
-/** Every thread's pins at once (Settings › Data clears them); returns what was there, for an undo. */
+/** Every thread's pins at once (Settings › Data and storage clears them); returns what was there, for an undo. */
 export function replaceAllPins(next: Pins) {
   const previous = pins;
   write(next);

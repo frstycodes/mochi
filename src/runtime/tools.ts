@@ -23,7 +23,8 @@ import { BROWSER_TOOLS } from './browserTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { defaultModelOf, effortRank, modelTier } from './models.ts';
-import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type Tier, type ToolName } from './toolTable.ts';
+import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
+import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
 
 /** What the store and the app give a tool run. The renderer wires the real ones (`store/index.tsx`); tests pass stubs. */
@@ -54,7 +55,7 @@ export interface ToolEnv {
    * in or stores a credential, and nothing that sets a setting: only the user does that, on the widget.
    */
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
-  /** Installed color themes and Settings › Devices, read for `get_settings`. */
+  /** Installed color themes and Settings › Remote access, read for `get_settings`. */
   themes: Pick<ThemesHost, 'list'>;
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
@@ -113,9 +114,6 @@ export interface ToolSpec<K extends ToolName> {
 
 type Specs = { [K in ToolName]: ToolSpec<K> };
 
-/** The least agent-control level each tier runs under; asking tiers (and browser escalations) still wait on their widget. */
-const LEVEL = { read: 'read', change: 'changes', destructive: 'everything', setting: 'everything' } satisfies Record<Tier, AgentControl>;
-
 const levelLabel = (control: AgentControl) => AGENT_CONTROL.options.find((o) => o.value === control)!.label;
 
 /**
@@ -132,9 +130,11 @@ export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentT
   const ctx = context(env, caller, parsed.data, name);
   const spec = SPECS[name] as ToolSpec<ToolName>;
   const tier = tierOf(name);
+  const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);
   try {
-    gate(ctx, name, LEVEL[tier]);
-    const approval = spec.ask?.(ctx);
+    if (isChosen && policy === 'off') throw new Error(`The user turned ${name} off for agents in Settings › Mochi access. Don't call it again unless they turn it back on.`);
+    if (!isChosen) gate(ctx, name, LEVEL[tier]);
+    const approval = spec.ask?.(ctx) ?? (policy === 'ask' ? approvalFor(ctx, name) : undefined);
     // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.
     const options = approval ? await ask(ctx, approval instanceof Promise ? await approval : approval) : [];
     const before = env.getState();
@@ -167,9 +167,19 @@ function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): Tool
   return ctx;
 }
 
-/** Throws when the setting is below `needs`, after putting that setting in the thread as a widget (once while it's open). */
+/** A tool you set to ask first: the widget names the call and shows exactly what it was given. */
+function approvalFor(ctx: ToolContext<unknown>, name: ToolName): Approval {
+  const verb = name.replaceAll('_', ' ');
+  return { title: `${authorName(ctx.caller.providers[0])} wants to ${verb}`, detail: 'You asked to approve this tool each time in Settings › Mochi access.', code: JSON.stringify(ctx.args, null, 2), denied: `Didn't ${verb}` };
+}
+
+/**
+ * Throws when the setting is below `needs`, after putting that setting in the thread as a widget (once while it's open).
+ * A tool you chose Allow or Ask for passes whatever the level, and so may ask mid-run (a browser escalation).
+ */
 function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
   const control = ctx.env.prefs.get().agentControl;
+  if (toolPolicy(name, control, ctx.env.prefs.get().toolPolicies).isChosen) return;
   if (AGENT_CONTROLS.indexOf(control) >= AGENT_CONTROLS.indexOf(needs)) return;
   const verb = name.replaceAll('_', ' ');
   const shown = ctx.state().queue.find((q) => q.threadId === ctx.caller.id && q.settings?.changes.some((c) => c.key === 'agentControl'));
@@ -672,12 +682,12 @@ async function newWorktree(env: ToolEnv, project: string, prompt: string) {
   return { mode: 'worktree' as const, branch: uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken) };
 }
 
-/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Tools allows them. */
+/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Mochi access allows them. */
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
   const inherited = provider === caller.providers[0] ? caller.controls : undefined;
   if (!picked.model && !picked.effort) return inherited;
   const rule = env.prefs.get().threadModels;
-  const setting = `"${THREAD_MODELS.label}" is "${THREAD_MODELS.options.find((o) => o.value === rule)!.label}" in Settings › Tools`;
+  const setting = `"${THREAD_MODELS.label}" is "${THREAD_MODELS.options.find((o) => o.value === rule)!.label}" in Settings › Mochi access`;
   if (rule === 'default') throw new Error(`${setting}: call again without model and effort, or ask the user to change that setting`);
   const models = await env.models(provider, caller.spaceId);
   if (picked.model && models.length && !models.some((m) => m.id === picked.model)) throw new Error(`${picked.model} isn't offered; use one of ${models.map((m) => m.id).join(', ')}`);

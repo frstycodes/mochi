@@ -10,7 +10,7 @@ const ACTIVE_KEY = 'mochi.themes.active.v1';
 interface State {
   installed: ColorTheme[];
   isLoaded: boolean;
-  /** The theme the pointer rests on in Settings › Themes, shown until it leaves. */
+  /** The theme the pointer rests on in Settings › Appearance, shown until it leaves. */
   preview: ColorTheme | null;
   active: Partial<Record<ThemeSlot, ColorTheme>>;
 }

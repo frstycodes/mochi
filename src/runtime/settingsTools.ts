@@ -214,6 +214,7 @@ async function settingView(ctx: ToolContext<unknown>, setting: Setting, sources:
     key: setting.key,
     label: setting.label,
     section: setting.section,
+    ...(setting.group && { group: setting.group }),
     type: control.type,
     value: value === undefined ? null : control.type === 'instructions' ? redactSecrets(value) : value,
     ...((control.type === 'choice' || control.type === 'select') && { allowed: control.options.map((o) => o.value) }),

@@ -1,50 +1,32 @@
-import { host } from '@/host';
-import { IS_MAC, IS_WINDOWS } from '../../keys';
+import { Shortcut } from '../../Shortcut';
 import { CatalogRow } from '../CatalogRow';
-import { Button } from '@/components/ui/button';
-import { useColorTheme } from '../../themes/store';
-import { openSettings } from '../open';
 import { SettingsGroup, SettingsRow } from '../parts';
 
 export function GeneralSection() {
   return (
-    <div className="flex flex-col gap-8">
-      <SettingsGroup footer="System follows your OS appearance and its Reduce motion setting.">
-        <CatalogRow settingKey="theme" />
-        <ColorThemesRow />
-        <CatalogRow settingKey="reduceMotion" />
+    <div className="flex flex-col gap-10">
+      <SettingsGroup
+        title="New threads"
+        footer={
+          <span className="inline-flex flex-wrap items-center gap-1">
+            The composer can still change each thread. Hold <Shortcut keys={['mod']} /> while sending to do the other for that one message.
+          </span>
+        }
+      >
+        <CatalogRow settingKey="agent" />
+        <CatalogRow settingKey="permissions" />
+        <CatalogRow settingKey="whileWorking" />
       </SettingsGroup>
-      {HAS_MATERIAL && (
-        <SettingsGroup footer={`The sidebar shows your desktop through ${IS_MAC ? 'macOS vibrancy' : 'Mica (Windows 11)'}.`}>
-          <CatalogRow settingKey="translucentSidebar" />
-        </SettingsGroup>
-      )}
-      <SettingsGroup footer="Open folder in the new thread's project picker starts here.">
+      <SettingsGroup title="Running agents">
+        <CatalogRow settingKey="concurrency" />
+        <SettingsRow id="usageLimit" label="When a usage limit hits" description="Continuing on an API key or another harness is your call, per thread" control={<span className="type-body text-muted-foreground">Pause until reset</span>} />
+      </SettingsGroup>
+      <SettingsGroup title="Folders">
         <CatalogRow settingKey="projectsFolder" />
       </SettingsGroup>
-      <SettingsGroup footer="Off: every launch opens each space on its default view.">
+      <SettingsGroup title="Startup">
         <CatalogRow settingKey="restoreLayout" />
       </SettingsGroup>
     </div>
-  );
-}
-
-// Linux has no window material (electron/window.ts), so the switch would do nothing there.
-const HAS_MATERIAL = host.isDesktop && (IS_MAC || IS_WINDOWS);
-
-/** Which color theme each appearance uses; the browser and the custom themes live in Settings › Themes. */
-function ColorThemesRow() {
-  const { light, dark } = useColorTheme();
-  return (
-    <SettingsRow
-      id="colorThemes"
-      label="Color themes"
-      description={`Light: ${light?.label ?? 'Mochi'} · Dark: ${dark?.label ?? 'Mochi'}`}
-      control={
-        <Button variant="outline" size="sm" onClick={() => openSettings('themes')}>
-          Browse themes
-        </Button>
-      }
-    />
   );
 }

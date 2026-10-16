@@ -27,7 +27,7 @@
     @slot;
   }
 }
-/* Settings › General › Reduce motion: `data-reduce-motion` on <html> overrides the OS setting either way. */
+/* Settings › Appearance › Reduce motion: `data-reduce-motion` on <html> overrides the OS setting either way. */
 @custom-variant motion-reduce {
   @media (prefers-reduced-motion: reduce) {
     &:where(:root:not([data-reduce-motion='off']) *) {
@@ -364,7 +364,7 @@
   }
 }
 
-/* The shell window's native material (vibrancy / Mica, electron/window.ts) shows through the docked sidebar only, unless Settings › Translucent sidebar is off; the page beside it stays opaque. */
+/* The shell window's native material (vibrancy / Mica, electron/window.ts) shows through the docked sidebar only, unless Settings › Appearance › Translucent sidebar is off; the page beside it stays opaque. */
 :root[data-material]:not([data-solid-sidebar]) body {
   background: transparent;
 }

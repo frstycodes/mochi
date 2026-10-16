@@ -3,6 +3,7 @@ import type { SearchEngine } from '../host/types/browser.ts';
 import type { PaneTabKind } from '../model.ts';
 import { accessOf, type SharedAccess } from '../runtime/access.ts';
 import { effortId, modelId } from '../runtime/models.ts';
+import type { ToolPolicies } from '../runtime/toolPolicy.ts';
 
 /**
  * Renderer-only preferences (SETTINGS.md): one localStorage entry, read synchronously so reducers and module code can use
@@ -67,6 +68,8 @@ export interface Prefs {
   demoData: boolean;
   /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): deletes and settings always ask first. */
   agentControl: AgentControl;
+  /** Per-tool choices over the level (`src/runtime/toolPolicy.ts`); a choice a tool's tier doesn't offer is ignored when read. */
+  toolPolicies: ToolPolicies;
   /** What model and effort `create_thread` may give a new thread (RUNTIME.md › Mochi tools). */
   threadModels: ThreadModels;
   /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
@@ -128,6 +131,7 @@ export const DEFAULT_PREFS: Prefs = {
   simulator: '',
   demoData: false,
   agentControl: 'everything',
+  toolPolicies: {},
   threadModels: 'cheaper',
   recordReplays: true,
   rewindMode: 'files',
@@ -159,7 +163,7 @@ export function setPrefs(patch: Partial<Prefs>) {
   listeners.forEach((l) => l());
 }
 
-/** Settings › General's Reduce motion, falling back to the OS setting; for code outside React (scroll behaviour). */
+/** Settings › Appearance's Reduce motion, falling back to the OS setting; for code outside React (scroll behaviour). */
 export function prefersReducedMotion() {
   const { reduceMotion } = prefs;
   return reduceMotion === 'system' ? matchMedia('(prefers-reduced-motion: reduce)').matches : reduceMotion === 'on';
@@ -191,6 +195,7 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
   if (!isStringRecord(saved.keybindings)) delete saved.keybindings;
+  if (!isStringRecord(saved.toolPolicies)) delete saved.toolPolicies;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];

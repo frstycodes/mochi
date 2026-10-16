@@ -35,7 +35,7 @@ export function controlsOf(thread: Thread): ThreadControls {
   return { ...controls, model: modelId(controls.model), effort: effortId(controls.effort), speed: controls.speed ?? '', access: accessOf(controls.access) };
 }
 
-/** A new thread's controls: effort, speed and permissions from Settings › Harnesses and › Defaults, the model from the harness's Settings default ('' = the account's). */
+/** A new thread's controls: effort, speed and permissions from Settings › Models and › General, the model from the harness's Settings default ('' = the account's). */
 export function initialControls(provider: Provider, defaultModel: string): ThreadControls {
   const { effort, speed, permissions } = getPrefs();
   return { ...DEFAULT_CONTROLS[provider], model: modelId(defaultModel), effort: effortId(effort), speed, access: permissions };

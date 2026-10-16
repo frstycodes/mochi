@@ -1,39 +1,43 @@
 # Settings
 
-A dedicated page, not a dialog, styled like Apple's System Settings. Opening it (⌘, / Ctrl+,, the profile menu, the palette) swaps the app sidebar for a settings sidebar in the same spot and width; the content column shows one section. "Back to app" at the bottom of the settings sidebar (and Esc) returns to the exact layout you left. The sidebar toggle stays where it is.
+A dedicated page, not a dialog, Opening it (⌘, / Ctrl+,, the profile menu, the palette) swaps the app sidebar for a settings sidebar in the same spot and width; the content column shows one page under a large title. "Back to app" at the bottom of the settings sidebar (and Esc) returns to the exact layout you left. The sidebar toggle stays where it is.
 
 Every setting lives once in `src/settings/catalog.ts` (label, control, where its value lives, read and write); sections lay rows out in groups with their footers and render each row with `CatalogRow`, which the settings widget agents open in a thread renders too (RUNTIME.md › Mochi tools).
 
-Sidebar: a search field (filters sections and individual settings by label), the sections below in three groups, "Back to app" at the bottom. Content: inset grouped lists (`SettingsGroup` / `SettingsRow` in `src/settings/parts.tsx`): rows on one card surface split by inset hairlines, label (and a short secondary line) left, control right, the explanation as a footnote under the group. A section scrolls on its own; deep links (`openSettings('git', 'branchPrefix')`) scroll to and flash the row.
+Sidebar: a search field (filters pages and individual settings by label), the pages below in four groups (Mochi, Agents, Workspace, System), "Back to app" at the bottom. Content: a page title, then titled sections (`SettingsGroup` / `SettingsRow` in `src/settings/parts.tsx`): a heading over rows on one card surface split by inset hairlines, label and a one-line description left, control right, a footnote under the card only for caveats. Each catalog setting names its page (`section`) and its section heading (`group`); `get_settings` returns both. A page scrolls on its own; deep links (`openSettings('git', 'branchPrefix')`) scroll to and flash the row.
 
 Status: **now** = a value exists in code today (hardcoded or local state) and only needs wiring; **R1** = built by the runtime sessions; **later** = depends on unbuilt features, show nothing until then.
 
-## App
+## Mochi
 
 ### Account
 Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.tsx`). Your Mochi account (Clerk), for linking computers (DEVICES.md); not a Claude or Codex login. Signed out: Sign in, which opens your browser (OAuth code + PKCE, loopback redirect, `electron/account/`). Signing in: Cancel sign-in. Signed in: avatar, name, email, Manage account (Clerk's hosted Account Portal `/user` in your browser: profile, email, password, connected accounts, delete), Sign out (revokes the refresh token, best effort). The refresh token lives only in main, encrypted with `safeStorage`; the renderer gets `{ status, user, isPersistent }`. Linux without a secret service keeps the session for this run only and says so. Builds without a Clerk app (and the web build) show no account items. Done.
 
 ### General
-| Setting | Control | Default | Status | Today |
-|---|---|---|---|---|
-| Theme | Light / Dark / System | System | now | src/App.tsx:27, cycled from the sidebar |
-| Color themes | the theme per appearance + Browse themes (opens Themes) | Mochi / Mochi | done | src/settings/sections/general.tsx |
-| Reduce motion | System / On / Off | System | now | only per browser page (src/browser/Toolbar.tsx:263) |
-| Translucent sidebar | switch (macOS and Windows desktop only) | on | done | vibrancy / Mica, electron/window.ts; off keeps the solid sidebar and its border |
-| Projects folder | path + Browse | `~/dev` | now | src/ProjectPicker.tsx:96 |
-| Open files in | Harness / VS Code / Cursor / Zed (only installed ones) | Harness | now | electron/fs/editors.ts:8 |
-| Restore layout on launch | switch | on | now | src/store/layout.ts:61 |
+| Section | Setting | Control | Default |
+|---|---|---|---|
+| New threads | Agent | Claude Code / Codex, each with its mark | Claude Code |
+| New threads | Permissions | Manual / Auto / Full access (Plan too in Claude threads; per-harness meaning in `src/runtime/access.ts`) | Auto |
+| New threads | While the agent is working, new messages | Queue / Steer | Queue |
+| Running agents | Agents running at once | stepper 1–16 | 6 |
+| Running agents | When a usage limit hits | Fixed: each harness's own behaviour; resume at reset, API key and handoff are per-thread choices on the limit card | — |
+| Folders | Projects folder | path + Browse | `~/dev` |
+| Startup | Restore layout on launch | switch | on |
 
-### Themes
-VS Code color themes, one per appearance like VS Code's preferred light and dark themes, so System keeps switching (`lightTheme` / `darkTheme` prefs; `mochi` is the built-in). `src/settings/sections/themes.tsx`. Done.
+Runs on (This computer / a paired computer) is chosen in the new-thread composer (`src/remote/RunsOnMenu.tsx`).
 
-| Group | Rows |
+### Appearance
+Mode: Theme (Light / Dark / System, with the user menu's sun, moon and monitor icons), Reduce motion (System / On / Off) and Translucent sidebar (macOS and Windows desktop only, on: vibrancy / Mica, electron/window.ts; off keeps the solid sidebar and its border).
+
+VS Code color themes, one per appearance like VS Code's preferred light and dark themes, so System keeps switching (`lightTheme` / `darkTheme` prefs; `mochi` is the built-in). `src/settings/sections/appearance.tsx`, picker in `src/settings/ThemePicker.tsx`. Done.
+
+| Section | What it holds |
 |---|---|
-| Color theme | Light, Dark: a select of Mochi plus the installed themes of that kind; the highlighted item previews live |
-| Installed | every marketplace and custom theme: swatch, name, source and kind, Use / In use, Edit (custom), Uninstall or Delete (falls back to Mochi when in use); Custom theme: Import file (.json/.jsonc, `include` resolved next to it, inlined on import), Paste JSON (validated inline) |
-| Open VSX | search over the Themes category, most downloaded first, only extensions whose package.json contributes color themes; icon, name, namespace, downloads, theme count, live swatches (each downloads the .vsix once it scrolls into view); hovering a row or swatch previews it, a swatch click installs and uses that theme, Install installs them all |
+| Color theme | Two cards, Light and Dark, each a tiny Mochi window painted in that appearance's theme ("On screen" on the one showing). A card opens the picker: search, then Starred, Built in, one group per installed package, Custom; only themes of that kind (high contrast included); the highlighted theme previews live and the list opens on the one in use. The settings widget in a thread uses the same picker |
+| Themes › Library | One row per package (first theme's swatch, name, publisher, theme count, version, In use), opening to its themes (Use / In use, star, Edit and Delete for custom files); Mochi first, Custom last with Add theme (Import file: .json/.jsonc, `include` resolved next to it; Paste JSON, validated inline). ⋯ › Remove takes the whole package, falling back to Mochi where in use. From 5 packages, a filter narrows by package name or theme label (`filterPackages` in `src/themes/groups.ts`) |
+| Themes › Marketplace | Open VSX search over the Themes category, most downloaded first, only extensions whose package.json contributes color themes; icon, name, namespace, downloads, theme count, live swatches (each downloads the .vsix once it scrolls into view); hovering a row or swatch previews it, a swatch click installs and uses that theme, Install installs them all |
 
-Hovering or focusing any theme repaints the app until the pointer leaves; picking is instant, persisted, no reload. Applying a light theme while Dark is forced switches to Light (and the reverse); under System it waits for the OS. Storage: desktop `userData/themes/<namespace>.<name>.json` (the themes already read out of the .vsix) and `userData/themes/custom/*.json` (Edit opens it in the OS's JSON editor, changes show on window focus); web build in localStorage. GAP: a theme whose `tokenColors` is a `.tmTheme` plist only recolours the UI, not code.
+Deep links open the right tab (`themeMarketplace` → Marketplace). Hovering or highlighting any theme repaints the app until the pointer leaves or the picker closes; picking is instant, persisted, no reload. Applying a light theme while Dark is forced switches to Light (and the reverse); under System it waits for the OS. Storage: desktop `userData/themes/<namespace>.<name>.json` (the themes already read out of the .vsix) and `userData/themes/custom/*.json` (Edit opens it in the OS's JSON editor, changes show on window focus); web build in localStorage. GAP: a theme whose `tokenColors` is a `.tmTheme` plist only recolours the UI, not code.
 
 ### Notifications
 | Setting | Control | Default | Status | Today |
@@ -42,9 +46,10 @@ Hovering or focusing any theme repaints the app until the pointer leaves; pickin
 | Toasts for watched threads | switch | on | now | src/notify/useNotifications.ts:31 |
 | Dock badge counts | Needs you / Off | Needs you | now | src/notify/useNotifications.ts |
 | Quiet hours | switch + from/to | off, 22:00–08:00 | now | moved from NotificationBell.tsx:146 |
+| Idle threads: notify when a thread you aren't looking at goes idle with gaps / a question / stalled / done | one switch each | gaps, question | now | src/notify/model.ts |
 | Muted threads | list with Unmute | — | now | src/notify/slice.ts:21 |
 
-### Keyboard
+### Keyboard shortcuts
 One keymap (`src/keymap.ts`): every app-level shortcut is a named command with a default chord and where it listens (global, inside a side pane, Queue and Review's lists); handlers ask `isCommand` / `commandOf` instead of matching keys, on `e.code` so any layout works. Rebound chords live in prefs (`keybindings`, only the changed ones, `''` = none) and apply live everywhere a chord shows (`<BoundShortcut>` / `useBinding`: palette, menus, tooltips, sidebar, Files, split menu, thread peek). Done.
 
 | Part | Behaviour |
@@ -59,53 +64,57 @@ One keymap (`src/keymap.ts`): every app-level shortcut is a named command with a
 
 Default on macOS for focusing a split by direction is ⌥⌘ + arrow (⌃ arrows belong to Mission Control); Alt + arrow elsewhere.
 
+### Profiles
+One tab per profile (its icon and name), opening on the profile you're in, or the one a deep link names (`<profileId>-<row>`); adding a profile switches to it. Per profile: name, icon, GitHub account, linked Claude and Codex accounts, its own browser session (Clear browsing data). Add (up to 9, one per ⌥ digit) / remove (only an empty profile; undo toast). Profiles live in `src/profiles.ts` (localStorage, seeded from `DEFAULT_SPACES`). Done. The GitHub account picks one of gh's own logins on any host (`gh auth status`; stored as `login`, or `host/login` off github.com). Push, PR creation and PR status run as that login: gh gets its token in `GH_TOKEN` (github.com, `*.ghe.com`) or `GH_ENTERPRISE_TOKEN` (Enterprise Server); push goes over HTTPS to origin's repo with the token from a credential helper reading the environment. Tokens come from gh's store in the main process, never in arguments or the renderer. Empty = gh's active account and your own git credentials. A repo on another host than the account is refused.
+
+Per profile, Instructions / MCP servers / Skills / Import rows (`src/settings/ProfileAgentConfig.tsx`) read and write the linked accounts' own files, so the tools load them natively: Claude `CLAUDE.md`, `.claude.json` `mcpServers` (`~/.claude.json` for the default account), `settings.json` `deniedMcpServers` / `skillOverrides`; Codex `AGENTS.md`, `config.toml` `[mcp_servers.*]` `enabled` and `[[skills.config]]` (formats in `src/settings/agentConfig.ts`). Every write is a diff to review, backed up to `~/.harness/backups/<time>/` and refused if the file changed since. Import copies from the other harness or another profile; secret-looking env, header, arg and URL values become `${VAR}` and the row shows "Needs VAR". An account shared by several profiles shares its config. GAP: project `.mcp.json` servers are listed read-only, Codex project config isn't read.
+
 ## Agents
 
 ### Harnesses
-One section for every agent harness, rendered from the registry in `src/settings/harnesses.ts` (Claude Code and Codex today); a new harness is one registry entry plus its login check in `electron/settings/detect.ts`, never a new section. Per harness:
+One tab per agent harness (its mark and name), rendered from the registry in `src/settings/harnesses.ts` (Claude Code and Codex today); deep links (`claudePath`) open their harness's tab; a new harness is one registry entry plus its login check in `electron/settings/detect.ts`, never a new section. Per harness:
 
 | Group | Rows | Status |
 |---|---|---|
 | Header | name, detected version and path, Check again; install command when missing | R1 (done) |
-| — | Custom path, Default model (opus-5.5 / harness default) | R1 (done); model picker from src/ModelControls.tsx later |
+| — | Custom path | R1 (done) |
 | Accounts | each login in its own config folder (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`): name, folder, profiles using it, login state + plan, the sign-in command; add, rename, remove (not the default, not while a profile uses it). Harness never signs in | R1 (done) |
 | Profiles | each profile's account for this harness; one account can serve several profiles | R1 (done) |
 | API key | only for harnesses with one (`ANTHROPIC_API_KEY`), keychain, last 4 shown | R1 (done) |
-| — | Starred models (the scroll dock), Default effort, Default speed (Standard / Fast: new threads run Fast on models that report a faster tier, standard elsewhere; agents can read it, never propose it) | now (src/ModelControls.tsx:32-33) |
 
-### Defaults for new threads
-| Setting | Control | Default | Status | Today |
-|---|---|---|---|---|
-| Agent | Claude Code / Codex | Claude Code | now | src/NewThreadView.tsx:37 |
-| Permissions | Manual / Auto / Full access (Plan too in Claude threads; per-harness meaning in `src/runtime/access.ts`) | Auto | now | src/Composer.tsx |
-| Runs on | This computer / each paired computer (shown once you've paired one; another computer's thread starts folderless there) | This computer | now | src/remote/RunsOnMenu.tsx |
-| Agents running at once | stepper 1–16 | 6 | R1 | RUNTIME.md:91 |
-| When a usage limit hits | Fixed: each harness's own behaviour (Claude Code waits and continues; Codex stops). Resume at reset, API key and handoff are per-thread choices on the limit card | — | done | RUNTIME.md › Usage limits |
+### Models
+Every model choice in one place (`src/settings/sections/models.tsx`).
 
-### Background tasks
-One model per task, each a picker over both harnesses' models (`src/settings/sections/background.tsx`): Thread titles, Commit messages, Pull requests, Goal steps, Handoff summaries. Default Haiku 5.5; a task falls back to Haiku 5.5, then GPT-6-Luna, then Mochi's own text (RUNTIME.md › Background tasks). Stored in agent settings (`utilityModels`), since main runs the calls. Done.
+| Section | Rows |
+|---|---|
+| Composer | Starred models (the scroll dock), Default effort, Default speed (Standard / Fast: new threads run Fast on models that report a faster tier; agents can read it, never propose it) |
+| Claude Code, Codex (one per harness, headed by its mark) | Default model, Second opinion model |
+| Side chats | Side chat model |
+| Background tasks | One model per task, each a picker over both harnesses' models: Thread titles, Commit messages, Pull requests, Goal steps, Handoff summaries. Default Haiku 5.5; a task falls back to Haiku 5.5, then GPT-6-Luna, then Mochi's own text (RUNTIME.md › Background tasks). Stored in agent settings (`utilityModels`), since main runs the calls. Done. |
 
-### Goals and drift
+### Goals and checks
+Sections: Drift (Drift guard, Off-goal work branches from), Writing goals (Agent-proposed goals), When a thread goes idle (Run criterion checks), Before a pull request (Gaps when opening a pull request). The idle alerts live in Notifications.
+
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Drift sensitivity for new threads | slider 5–40% | 15% | now | src/drift.ts:14 |
 | Off-goal work branches from | Current branch / Base branch | Current | now | src/goals/DriftGuard.tsx:114 |
 | New step size | S / M / L | M | now | src/runtime/apply.ts:73 |
 
-### Devices
-Let devices control this computer (the server, off by default), Allow devices on this network (LAN and Tailscale), Computer name, Reach this computer from anywhere (Mochi's relay; needs the account and the server on, shows the relay connection's state). Paired devices: each device this computer approved, connected or when it paired, its scopes as toggles (Read, Operate, Manage, Code, Terminal; a change ends its connections so the next runs under them), Remove (confirm; it pairs again with a new approval). Your other computers: your account's machines from the relay, online or not, Pair (a dialog with the code to compare, waiting for the other computer's approval, its refusal shown verbatim) or Forget. A device pairing through the relay shows "Allow <device>?" with the same code on this computer, wherever you are in the app (`DeviceApprovalLayer`). DEVICES.md › Pairing. Done.
+### Simplify
+Style (Length, Put what needs you first, Your rules) and Automatic (Simplify long replies automatically, Long means more than). The model is Models › Background tasks.
 
-## Workspace
-
-### Profiles
-One group per profile: name, icon, GitHub account, linked Claude and Codex accounts, its own browser session (Clear browsing data). Add (up to 9, one per ⌥ digit) / remove (only an empty profile; undo toast). Profiles live in `src/profiles.ts` (localStorage, seeded from `DEFAULT_SPACES`). Done. The GitHub account picks one of gh's own logins on any host (`gh auth status`; stored as `login`, or `host/login` off github.com). Push, PR creation and PR status run as that login: gh gets its token in `GH_TOKEN` (github.com, `*.ghe.com`) or `GH_ENTERPRISE_TOKEN` (Enterprise Server); push goes over HTTPS to origin's repo with the token from a credential helper reading the environment. Tokens come from gh's store in the main process, never in arguments or the renderer. Empty = gh's active account and your own git credentials. A repo on another host than the account is refused.
-
-Per profile, Instructions / MCP servers / Skills / Import rows (`src/settings/ProfileAgentConfig.tsx`) read and write the linked accounts' own files, so the tools load them natively: Claude `CLAUDE.md`, `.claude.json` `mcpServers` (`~/.claude.json` for the default account), `settings.json` `deniedMcpServers` / `skillOverrides`; Codex `AGENTS.md`, `config.toml` `[mcp_servers.*]` `enabled` and `[[skills.config]]` (formats in `src/settings/agentConfig.ts`). Every write is a diff to review, backed up to `~/.harness/backups/<time>/` and refused if the file changed since. Import copies from the other harness or another profile; secret-looking env, header, arg and URL values become `${VAR}` and the row shows "Needs VAR". An account shared by several profiles shares its config. GAP: project `.mcp.json` servers are listed read-only, Codex project config isn't read.
+### Mochi access
+Agents: Agents can change Mochi (Read only / Changes / Everything) and Models for threads agents start, both the user's alone. Tools: a filter, then every tool in its group (Threads, Goals and progress, Background agents, Reading the browser, Using the browser, Your screen, Reaching you, Settings and profiles), each with a plain name, its id, what it lets an agent do (`src/settings/toolGuide.ts`), and its own choice: Default (what the level gives it), Allow, Ask first or Off. Deletes offer only Ask first or Off, settings only Suggest or Off. Each group shows how many tools differ from the level and has Set all (Allow / Ask first / Off, skipping what a tool doesn't offer, or Follow the level). Enforcement: RUNTIME.md › Mochi tools. `src/settings/sections/access.tsx`. Done.
 
 ### Schedules
 Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name, when it runs and the next run, the last run's outcome; Run now, Pause / Resume, Edit (the schedule dialog), Delete. Triggers live in main (`schedules.json` in userData, `electron/schedule/scheduler.ts`), so they fire with every window closed while Mochi runs. Done. Notifications for finished runs are the "Scheduled run finished" alert in Notifications.
 
-### Git
+## Workspace
+
+### Git and worktrees
+Sections: Worktrees (New threads work in, Worktrees folder, Remove settled worktrees), Worktree setup (Prepare worktrees, Ignored files to copy), Setup commands, Branches and pull requests (Branch prefix, Open as drafts), Changes (Diffs).
+
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Worktrees folder | path + Browse | `~/.harness/worktrees` | now | electron/git/run.ts:6 |
@@ -118,6 +127,8 @@ Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name
 | Remove settled worktrees | Never / After 1, 7, 30 days | After 7 days | done | src/git/useWorktreeManager.ts |
 
 ### Terminal
+Sections: Shell (Shell, Restore terminals on launch) and Display (Font size, Scrollback lines).
+
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Shell | path | `$SHELL` | now | electron/pty/shell.ts:28 |
@@ -125,16 +136,23 @@ Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name
 | Scrollback lines | stepper | 5000 | now | src/terminal/sessions.ts:152 |
 | Restore terminals on launch | switch | on | now | src/terminal/sessions.ts:61 |
 
-### Browser and devices
+### Browser and simulator
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Search engine | DuckDuckGo / Google / Bing / Kagi | DuckDuckGo | now | src/browser/url.ts:11 |
 | Clear address history | button | — | now | src/browser/pages.ts:39 |
 | Default simulator | device picker | first booted | now | src/pane/SimulatorTab.tsx:28 |
 
-### Data
-Show demo data (desktop only, off by default; the web build and the artifact always show it): the fixture threads, queue and profiles next to your own, unsaved, applied with a reload. Storage used, Clear pins / side chats / terminal history / everything (each with an undo toast where possible, a confirm only for "everything"). About: version, Electron/Chromium, links to RUNTIME and docs. now.
-Replay: Record threads for replay (on by default; `recordReplays` in prefs) and Recordings, the threads recorded and their size on disk, cleared behind a confirm. now.
+## System
+
+### Remote access
+This computer: Let devices control this computer (the server, off by default), Allow devices on this network (LAN and Tailscale), Computer name, Reach this computer from anywhere (Mochi's relay; needs the account and the server on, shows the relay connection's state). Paired devices: each device this computer approved, connected or when it paired, its scopes as toggles (Read, Operate, Manage, Code, Terminal; a change ends its connections so the next runs under them), Remove (confirm; it pairs again with a new approval). Your other computers: your account's machines from the relay, online or not, Pair (a dialog with the code to compare, waiting for the other computer's approval, its refusal shown verbatim) or Forget. A device pairing through the relay shows "Allow <device>?" with the same code on this computer, wherever you are in the app (`DeviceApprovalLayer`). DEVICES.md › Pairing. Done.
+
+### Data and storage
+Stored on this computer: Storage used, Clear pins / side chats / terminal history / everything (each with an undo toast where possible, a confirm only for "everything"). Developer: Show demo data (desktop only, off by default; the web build and the artifact always show it: the fixture threads, queue and profiles next to your own, unsaved, applied with a reload), Record threads for replay (on by default; `recordReplays` in prefs) and Replay recordings, the threads recorded and their size on disk, cleared behind a confirm. now.
+
+### About
+Versions (Mochi, Electron, Chromium) and links to the README, RUNTIME and SETTINGS docs (`src/settings/sections/about.tsx`).
 
 ## Not settings
 Internal caps and timings (patch size, poll intervals, animation durations, drift cut-offs, pin slots) stay constants. Usage budgets and prices come from the providers, not the user.
