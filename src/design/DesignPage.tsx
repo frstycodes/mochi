@@ -33,6 +33,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
+import { CoinIcon, McpServerIcon, PluginIcon, SkillIcon } from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
 import { BoardView } from '../BoardView';
 import { seedQueue, type LineSlot, type Thread } from '../model';
@@ -443,6 +444,12 @@ function Actions() {
 }
 
 const DEVICE_SPECIMENS = ['mac', 'windows', 'linux', 'phone', undefined] satisfies (DeviceKind | undefined)[];
+const OBJECT_ICONS = [
+  ['Skill', SkillIcon],
+  ['Plugin', PluginIcon],
+  ['MCP server', McpServerIcon],
+  ['Spend', CoinIcon],
+] as const;
 
 function Display() {
   return (
@@ -485,6 +492,23 @@ function Display() {
                 <span key={kind ?? 'unknown'} className="flex items-center gap-1.5">
                   <DeviceIcon kind={kind} />
                   {kind ?? 'unknown'}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Block>
+        <Block title="Object icons" use="Mochi's own concepts (skills, plugins, MCP servers, spend), lit like Mochi; the same in both themes.">
+          <div data-design="object-icons" className="flex flex-col gap-4">
+            <div className="flex items-end gap-6">
+              {OBJECT_ICONS.map(([label, Icon]) => (
+                <Icon key={label} className="size-12" />
+              ))}
+            </div>
+            <div className="flex items-center gap-6 type-meta text-muted-foreground">
+              {OBJECT_ICONS.map(([label, Icon]) => (
+                <span key={label} className="flex items-center gap-1.5">
+                  <Icon />
+                  {label}
                 </span>
               ))}
             </div>

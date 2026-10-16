@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { IS_MAC, IS_WINDOWS } from '../keys';
+import { squircle } from '../icons/squircle';
 
 /**
  * A device as a small object, lit like Mochi: a body lit from the top-left in its own subtle colour, a dark glass screen with
@@ -92,21 +93,4 @@ function Phone({ material, paint }: PartProps) {
       <path d={squircle(7.3, 2.9, 9.4, 17.2, 2.3)} fill={paint('sheen')} />
     </>
   );
-}
-
-/**
- * A rectangle with continuous-curvature corners: each corner is one cubic that starts 1.9 × `r` from it with its handles
- * close in, so the curve eases into the straight edge instead of meeting it with a circular arc's jump.
- */
-function squircle(x: number, y: number, w: number, h: number, r: number) {
-  const k = Math.min(r * 1.9, w / 2, h / 2);
-  const c = k * 0.08;
-  const [right, bottom] = [x + w, y + h];
-  const n = (value: number) => +value.toFixed(2);
-  return [
-    `M${n(x + k)} ${n(y)}H${n(right - k)}C${n(right - c)} ${n(y)} ${n(right)} ${n(y + c)} ${n(right)} ${n(y + k)}`,
-    `V${n(bottom - k)}C${n(right)} ${n(bottom - c)} ${n(right - c)} ${n(bottom)} ${n(right - k)} ${n(bottom)}`,
-    `H${n(x + k)}C${n(x + c)} ${n(bottom)} ${n(x)} ${n(bottom - c)} ${n(x)} ${n(bottom - k)}`,
-    `V${n(y + k)}C${n(x)} ${n(y + c)} ${n(x + c)} ${n(y)} ${n(x + k)} ${n(y)}Z`,
-  ].join('');
 }
