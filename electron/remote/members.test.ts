@@ -30,6 +30,15 @@ test('a record signed by an unknown key, or tampered with, is refused', () => {
   assert.deepEqual(trusts([{ ...genuine, signature: genuine.signature.replace(/^./, (c) => (c === 'A' ? 'B' : 'A')) }], a), [idOf(a)]);
 });
 
+test('a record naming someone’s id with another key, or a broken key, changes nothing, whatever order it arrives in', () => {
+  const [a, b, c, stranger] = [keypair(), keypair(), keypair(), keypair()];
+  const genuine = [signMember(a, as(b, 'B'), 1), signMember(b, as(c, 'C'), 2)];
+  const poison = { ...(signMember(stranger, as(stranger, 'B'), 0) as Extract<MemberRecord, { type: 'member' }>), deviceId: idOf(b) };
+  const broken = { ...poison, publicKey: 'not base64!' };
+  assert.deepEqual(trusts([poison, broken, ...genuine], a), [idOf(a), idOf(b), idOf(c)].sort());
+  assert.deepEqual(trusts([...genuine, broken, poison], a), [idOf(a), idOf(b), idOf(c)].sort());
+});
+
 test('a chain A→B→C is accepted by A, and by C back to A once C vouched for B', () => {
   const [a, b, c] = [keypair(), keypair(), keypair()];
   const records = [signMember(a, as(b, 'B'), 1), signMember(b, as(c, 'C'), 2)];

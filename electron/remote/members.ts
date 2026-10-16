@@ -87,7 +87,10 @@ const timeOf = (record: MemberRecord) => (record.type === 'member' ? record.adde
 export function resolveMembers(records: MemberRecord[], self: DeviceKeys): Membership {
   const selfId = deviceId(self.publicKey);
   const keys = new Map<string, Uint8Array>([[selfId, self.publicKey]]);
-  for (const r of records) if (r.type === 'member' && !keys.has(r.deviceId)) keys.set(r.deviceId, sodium.from_base64(r.publicKey, sodium.base64_variants.ORIGINAL));
+  for (const r of records) {
+    const key = r.type === 'member' && memberKey(r);
+    if (key) keys.set(r.deviceId, key);
+  }
   const valid = records.filter((r) => isGenuine(r, keys));
 
   const reachable = closure(valid, selfId, new Set());
@@ -135,11 +138,24 @@ function profile(valid: MemberRecord[], id: string, publicKey: Uint8Array, trust
   };
 }
 
+/**
+ * A member record's key, only when it is a real Ed25519 key whose derived id is the record's: a record naming someone
+ * else's id with another key must not stand in for theirs, whatever order records arrive in.
+ */
+function memberKey(record: Extract<MemberRecord, { type: 'member' }>): Uint8Array | null {
+  try {
+    const key = sodium.from_base64(record.publicKey, sodium.base64_variants.ORIGINAL);
+    return key.length === sodium.crypto_sign_PUBLICKEYBYTES && deviceId(key) === record.deviceId ? key : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The signature checks against the signer's key, and a member's id is the one its key derives. */
 function isGenuine(record: MemberRecord, keys: Map<string, Uint8Array>) {
   const signer = keys.get(signerOf(record));
   if (!signer) return false;
-  if (record.type === 'member' && deviceId(sodium.from_base64(record.publicKey, sodium.base64_variants.ORIGINAL)) !== record.deviceId) return false;
+  if (record.type === 'member' && !memberKey(record)) return false;
   const { signature, ...signed } = record;
   try {
     return sodium.crypto_sign_verify_detached(sodium.from_base64(signature, sodium.base64_variants.ORIGINAL), signedBytes(signed), signer);
