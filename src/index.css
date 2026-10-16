@@ -105,10 +105,7 @@
   --scrim: oklch(0.99 0.002 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.64);
   --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
-  --glass-raised: oklch(0.998 0.001 285 / 0.72);
-  /* Item highlight on glass: translucent, so it shifts L by ~0.06 whatever the blur shows through. */
-  --glass-accent: oklch(0.2 0.01 285 / 0.07);
-  --elev-glass: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.2 0.02 285 / 0.08), 0 4px 10px -2px oklch(0.2 0.02 285 / 0.08), 0 16px 40px -8px oklch(0.2 0.02 285 / 0.22);
+  --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.2 0.02 285 / 0.08), 0 4px 10px -2px oklch(0.2 0.02 285 / 0.08), 0 16px 40px -8px oklch(0.2 0.02 285 / 0.22);
   --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
   --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
@@ -154,9 +151,7 @@
     --scrim: oklch(0.12 0.006 285 / 0.72);
     --skeleton-highlight: oklch(1 0 285 / 0.04);
     --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
-    --glass-raised: oklch(0.26 0.008 285 / 0.68);
-    --glass-accent: oklch(1 0 0 / 0.09);
-    --elev-glass: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
+    --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
     --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
     --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
@@ -201,9 +196,7 @@
   --scrim: oklch(0.12 0.006 285 / 0.72);
   --skeleton-highlight: oklch(1 0 285 / 0.04);
   --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
-  --glass-raised: oklch(0.26 0.008 285 / 0.68);
-  --glass-accent: oklch(1 0 0 / 0.09);
-  --elev-glass: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
+  --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
   --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
   --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
@@ -230,7 +223,6 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-subtle-foreground: var(--subtle-foreground);
   --color-accent: var(--accent);
-  --color-glass-accent: var(--glass-accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-success: var(--success);
@@ -264,7 +256,7 @@
   --radius-4xl: 9999px;
 
   --shadow-popover: var(--elev-popover);
-  --shadow-glass: var(--elev-glass);
+  --shadow-overlay: var(--elev-overlay);
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
@@ -457,23 +449,6 @@
   backdrop-filter: blur(20px) saturate(1.6);
   @media (prefers-reduced-transparency: reduce) {
     background: var(--card);
-    backdrop-filter: none;
-  }
-}
-
-/* Menus, popovers and selects: glass a step above the page so they read as raised; pair with `shadow-glass`.
-   A container that inherits `bg-popover` overrides it with `bg-(--glass-raised)`, which the media query below also turns solid. */
-@media (prefers-reduced-transparency: reduce) {
-  :root {
-    --glass-raised: var(--popover);
-  }
-}
-@utility surface-glass-raised {
-  background: var(--glass-raised);
-  border-color: var(--glass-edge);
-  backdrop-filter: blur(20px) saturate(1.6);
-  @media (prefers-reduced-transparency: reduce) {
-    background: var(--popover);
     backdrop-filter: none;
   }
 }

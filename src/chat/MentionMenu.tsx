@@ -18,7 +18,7 @@ export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> 
   if (!menu.isOpen) return null;
   const groups = mentionGroups(menu.items);
   return (
-    <div id={menu.listId} role="listbox" aria-label="Reference a thread, window, skill or MCP server" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl surface-glass-raised p-1 shadow-glass">
+    <div id={menu.listId} role="listbox" aria-label="Reference a thread, window, skill or MCP server" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-overlay">
       {groups.map((group) => (
         <div key={group.kind} role="group" aria-label={group.label} className="flex flex-col gap-0.5">
           {groups.length > 1 && (
@@ -36,7 +36,7 @@ export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> 
                 aria-selected={i === menu.active}
                 onPointerDown={(e) => e.preventDefault()}
                 onClick={() => menu.choose(item)}
-                className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-glass-accent/50 aria-selected:bg-glass-accent"
+                className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent"
               >
                 <MentionItem item={item} />
               </div>
