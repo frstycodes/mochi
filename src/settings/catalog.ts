@@ -314,7 +314,6 @@ const APP_SETTINGS: Setting[] = [
   colorTheme('light'),
   colorTheme('dark'),
   pref('reduceMotion', 'Reduce motion', 'appearance', choice(MOTION), { group: 'Mode', description: 'System follows your OS setting' }),
-  pref('translucentSidebar', 'Translucent sidebar', 'appearance', SWITCH, { group: 'Mode', description: 'The sidebar shows your desktop through the window material' }),
   pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }, { group: 'Folders', description: 'Where Open folder starts, and where clones and new projects go' }),
   pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, { group: 'Startup', description: 'Off, each space opens on its default view' }),
   ...Object.entries(ALERT_KINDS).map(
