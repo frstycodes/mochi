@@ -46,6 +46,7 @@ const embeddedReplay = readEmbeddedReplay();
 export function App() {
   const route = useHashRoute();
   useIdleScrollbars();
+  useSolidSidebar();
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ColorThemeController />
@@ -96,6 +97,14 @@ function ReducedMotion({ children }: { children: React.ReactNode }) {
 }
 
 const MOTION_CONFIG = { system: 'user', on: 'always', off: 'never' } as const;
+
+/** Settings › General's Translucent sidebar off: `data-solid-sidebar` turns off the material rules in index.css. */
+function useSolidSidebar() {
+  const { translucentSidebar } = usePrefs();
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-solid-sidebar', !translucentSidebar);
+  }, [translucentSidebar]);
+}
 
 function useHashRoute() {
   const [hash, setHash] = useState(() => location.hash.slice(1));

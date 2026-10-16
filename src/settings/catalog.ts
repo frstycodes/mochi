@@ -271,6 +271,7 @@ const APP_SETTINGS: Setting[] = [
   colorTheme('light'),
   colorTheme('dark'),
   pref('reduceMotion', 'Reduce motion', 'general', choice(MOTION)),
+  pref('translucentSidebar', 'Translucent sidebar', 'general', SWITCH),
   pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }),
   pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH),
   ...Object.entries(ALERT_KINDS).map(

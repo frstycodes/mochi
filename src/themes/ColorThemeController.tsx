@@ -1,4 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useTheme } from 'next-themes';
+import { host } from '@/host';
+import { APPEARANCES, type Appearance } from '@/host/types/windows';
 import { themeTokens } from './map';
 import { refreshThemes, useColorTheme } from './store';
 
@@ -10,6 +13,11 @@ export function ColorThemeController() {
   const { mode, theme } = useColorTheme();
   const tokens = useMemo(() => (theme ? themeTokens(theme.theme, theme.kind) : {}), [theme]);
   const applied = useRef<string[]>([]);
+  const { theme: appearance } = useTheme();
+
+  useEffect(() => {
+    if (APPEARANCES.includes(appearance as Appearance)) void host.windows.setAppearance(appearance as Appearance);
+  }, [appearance]);
 
   useEffect(() => {
     void refreshThemes().catch((error: Error) => console.warn('themes: could not list installed themes:', error.message));

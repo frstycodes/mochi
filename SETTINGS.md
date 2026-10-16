@@ -19,6 +19,7 @@ Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.ts
 | Theme | Light / Dark / System | System | now | src/App.tsx:27, cycled from the sidebar |
 | Color themes | the theme per appearance + Browse themes (opens Themes) | Mochi / Mochi | done | src/settings/sections/general.tsx |
 | Reduce motion | System / On / Off | System | now | only per browser page (src/browser/Toolbar.tsx:263) |
+| Translucent sidebar | switch (macOS and Windows desktop only) | on | done | vibrancy / Mica, electron/window.ts; off keeps the solid sidebar and its border |
 | Projects folder | path + Browse | `~/dev` | now | src/ProjectPicker.tsx:96 |
 | Open files in | Harness / VS Code / Cursor / Zed (only installed ones) | Harness | now | electron/fs/editors.ts:8 |
 | Restore layout on launch | switch | on | now | src/store/layout.ts:61 |
