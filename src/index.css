@@ -27,7 +27,7 @@
     @slot;
   }
 }
-/* Settings › General › Reduce motion: `data-reduce-motion` on <html> overrides the OS setting either way. */
+/* Settings › Appearance › Reduce motion: `data-reduce-motion` on <html> overrides the OS setting either way. */
 @custom-variant motion-reduce {
   @media (prefers-reduced-motion: reduce) {
     &:where(:root:not([data-reduce-motion='off']) *) {
@@ -53,6 +53,8 @@
 
 /* Tokens are documented in DESIGN.md. Neutrals lean cool (hue 285). */
 :root {
+  /* Where the native traffic lights end (x 75 at 100%), in CSS px at the page zoom; `followZoom` in `src/appZoom.ts` sets the zoom. */
+  --lights-end: calc(75px / var(--app-zoom, 1));
 
   --background: oklch(0.975 0.003 285);
   --foreground: oklch(0.2 0.01 285);
@@ -105,6 +107,7 @@
   --elev-popover: 0 0 0 1px var(--border), 0 8px 24px -6px oklch(0.2 0.02 285 / 0.14);
   --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
 }
@@ -149,6 +152,7 @@
     --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
     --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+    --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
 }
@@ -192,6 +196,7 @@
   --elev-popover: 0 0 0 1px var(--border), 0 12px 32px -8px oklch(0.05 0.01 285 / 0.6);
   --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
 
@@ -251,6 +256,7 @@
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
+  --shadow-composer: var(--elev-composer);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
@@ -356,6 +362,19 @@
   :root[data-traffic-lights] :is([data-radix-popper-content-wrapper], [role='dialog'], [role='alertdialog'], [role='menu']) {
     @apply app-no-drag;
   }
+}
+
+/* The shell window's native material (vibrancy / Mica, electron/window.ts) shows through the docked sidebar only, unless Settings › Appearance › Translucent sidebar is off; the page beside it stays opaque. */
+:root[data-material]:not([data-solid-sidebar]) body {
+  background: transparent;
+}
+/* The wash sits on the container, not the inner panel, so it covers the border too: raw material under the 1px border read as a dark line. */
+:root[data-material]:not([data-solid-sidebar]) [data-slot='sidebar-container'] {
+  background: color-mix(in oklab, var(--sidebar) 60%, transparent);
+  border-color: color-mix(in oklab, var(--sidebar-border) 50%, transparent);
+}
+:root[data-material]:not([data-solid-sidebar]) [data-slot='sidebar-inner'] {
+  background: transparent;
 }
 
 /* Unlayered on purpose: the Artifact host wraps the page in its own skeleton, and its unlayered body colour beats `@layer base`, so text without a colour class turned light-theme dark on the dark theme. */
@@ -492,6 +511,47 @@
   height: 13px;
 }
 
+/* A caption lying on a frame: eased stops, so the fade has no visible edge. Over an image the scrim is fixed black, so white text holds in both themes. */
+.caption-fade {
+  background: linear-gradient(to top, var(--color-muted) 0%, var(--color-muted) 28%, color-mix(in oklab, var(--color-muted) 72%, transparent) 52%, color-mix(in oklab, var(--color-muted) 30%, transparent) 76%, transparent);
+}
+.caption-scrim {
+  background: linear-gradient(to top, rgb(0 0 0 / 0.62) 0%, rgb(0 0 0 / 0.45) 30%, rgb(0 0 0 / 0.2) 62%, rgb(0 0 0 / 0.06) 84%, transparent);
+}
+
+/* A generated image arriving: it opens out from where the light last pooled (--land-x/y) as its blur clears. Reduced motion keeps a fade. */
+@property --land-r {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: 150%;
+}
+@keyframes image-land {
+  from {
+    --land-r: 0%;
+    filter: blur(14px);
+    transform: scale(1.03);
+  }
+}
+@keyframes image-land-fade {
+  from {
+    opacity: 0;
+  }
+}
+.animate-image-land {
+  mask-image: radial-gradient(circle at var(--land-x, 50%) var(--land-y, 50%), black var(--land-r), transparent calc(var(--land-r) + 25%));
+  animation: image-land 900ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='off']) .animate-image-land {
+    mask-image: none;
+    animation: image-land-fade 300ms ease-out;
+  }
+}
+:root[data-reduce-motion='on'] .animate-image-land {
+  mask-image: none;
+  animation: image-land-fade 300ms ease-out;
+}
+
 /* One diagonal band crosses every skeleton on screen in step: the gradient is pinned to the viewport. */
 @keyframes skeleton-sheen {
   to {
@@ -554,6 +614,52 @@
 }
 [data-scrolling] {
   scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+
+/* Under an overlaid header: a progressive blur (layers stack, each starting higher, so the blur compounds toward the top, like iOS) under a wash of the page colour. Shown only once the `--chat` scroller has moved, so a resting thread has no edge. */
+@keyframes header-edge-in {
+  from {
+    opacity: 0;
+  }
+}
+@utility header-edge {
+  pointer-events: none;
+  /* The fade goes on each layer, never their parent: a parent below opacity 1 is a backdrop root, and the blurs inside it would sample nothing. */
+  & > i,
+  &::after {
+    position: absolute;
+    inset: 0;
+    /* Shorthand first: `animation` resets animation-timeline. */
+    animation: header-edge-in linear both;
+    animation-timeline: --chat;
+    animation-range: 0 1.5rem;
+  }
+  & > i:nth-child(1) {
+    backdrop-filter: blur(2px);
+    mask-image: linear-gradient(to top, transparent, #000 25%);
+  }
+  & > i:nth-child(2) {
+    backdrop-filter: blur(4px);
+    mask-image: linear-gradient(to top, transparent 25%, #000 50%);
+  }
+  & > i:nth-child(3) {
+    backdrop-filter: blur(8px);
+    mask-image: linear-gradient(to top, transparent 50%, #000 75%);
+  }
+  & > i:nth-child(4) {
+    backdrop-filter: blur(16px);
+    mask-image: linear-gradient(to top, transparent 75%, #000);
+  }
+  &::after {
+    content: '';
+    background: linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--background) 85%, transparent),
+      color-mix(in oklab, var(--background) 60%, transparent) 35%,
+      color-mix(in oklab, var(--background) 25%, transparent) 70%,
+      transparent
+    );
+  }
 }
 
 /* Fades an edge only while there is more content past it. A scroller that doesn't overflow has an inactive timeline, so both fades stay 0. */
@@ -676,4 +782,11 @@
 }
 :root[data-reduce-motion='on'] .pane-layout-animating :is(.pane-card, .pane-chat) {
   transition: none;
+}
+
+/* The toast countdown runs on an invisible element: `animationend` dismisses it, so pausing the animation pauses the timer. */
+@keyframes toast-countdown {
+  to {
+    opacity: 1;
+  }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { MochiAccount } from '../host/types/account';
 
@@ -17,5 +17,6 @@ export function useMochiAccount() {
   }, []);
   const signIn = () => host.account.signIn().catch((error: Error) => !/cancelled/.test(error.message) && toast.error(error.message));
   const signOut = () => host.account.signOut().catch((error: Error) => toast.error(`Signing out failed: ${error.message}`));
-  return { account, signIn, signOut, cancelSignIn: () => host.account.cancelSignIn() };
+  const openAccountPortal = () => host.account.openAccountPortal().catch((error: Error) => toast.error(error.message));
+  return { account, signIn, signOut, openAccountPortal, cancelSignIn: () => host.account.cancelSignIn() };
 }

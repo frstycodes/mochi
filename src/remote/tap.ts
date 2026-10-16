@@ -6,7 +6,7 @@ const tapped = new WeakSet<Action>();
 let tappedCount = 0;
 /** Empty while remote is off. A fresh one each time streaming starts, so main never stitches numbers across a gap. */
 let epoch = '';
-// Until Settings › Devices is read.
+// Until Settings › Remote access is read.
 let machineName = 'this computer';
 const MAX_ANSWERS = 1000;
 /** Queue item id → where it was answered, for "Already answered on <device>". */

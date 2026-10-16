@@ -23,6 +23,9 @@ const OVERLAYS = [
   '[data-slot=alert-dialog-overlay]',
   '[data-slot=sheet-overlay]',
   '[data-slot=drawer-overlay]',
+  // Streamdown's "Open external link?" modal: a plain div, no dialog role.
+  '[data-streamdown=link-safety-modal]',
+  '[data-toast-id]',
 ].join(', ');
 // How often the stand-in snapshot refreshes while an overlay stays open, so a playing video or a loading page still moves.
 const PEEK_MS = 400;
@@ -124,6 +127,9 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
 
   useEffect(() => {
     if (!id) return;
+    // An inert copy of this surface (the sidebar peek's thumbnail) would pull the one native view onto itself, then hide it on
+    // unmount while the real surface's deduped loop never resends: it gets a still snapshot instead and never drives the view.
+    if (frameRef.current?.closest('[inert]')) return showSnapshot(id, standInRef);
     let last = '';
     let frame = 0;
     let isCovered = false;
@@ -174,7 +180,8 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
       if (img && placed) Object.assign(img.style, { left: `${placed.x - r.x}px`, top: `${placed.y - r.y}px`, width: `${placed.width}px`, height: `${placed.height}px` });
       const bounds = isStanding ? null : placed;
       const zoom = page.zoom;
-      const next = JSON.stringify([bounds, zoom]);
+      // ⌘+ / ⌘− can leave the CSS rect unchanged while main's conversion to window DIPs changes; the ratio forces a resend.
+      const next = JSON.stringify([bounds, zoom, window.devicePixelRatio]);
       if (next === last) return;
       last = next;
       void host.browser.setBounds(id, bounds);
@@ -190,6 +197,23 @@ function useNativeView(frameRef: RefObject<HTMLDivElement | null>, page: Page, d
     };
   }, [id, frameRef]);
   return standInRef;
+}
+
+function showSnapshot(id: string, standInRef: RefObject<HTMLImageElement | null>) {
+  let isLive = true;
+  void host.browser
+    .peek(id)
+    .then((src) => {
+      const img = standInRef.current;
+      if (!isLive || !img) return;
+      Object.assign(img.style, { left: '0px', top: '0px', width: '100%', height: '100%' });
+      img.src = src;
+      img.hidden = false;
+    })
+    .catch(() => {});
+  return () => {
+    isLive = false;
+  };
 }
 
 function useEmulation(page: Page, fit: ReturnType<typeof fitDevice> | null) {

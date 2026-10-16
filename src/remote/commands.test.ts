@@ -183,7 +183,7 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
 
   const opened = await runRemoteCommand({ type: 'terminal-open', threadId, cols: 80, rows: 24 }, env);
   assert.deepEqual(opened, { isOk: true, data: { terminalId: 'pty-remote-1' } });
-  assert.deepEqual(spawn.mock.calls[0].arguments, [{ cwd: '/work/reply', cols: 80, rows: 24, port: 4100 }]);
+  assert.deepEqual(spawn.mock.calls[0].arguments, [{ cwd: '/work/reply', cols: 80, rows: 24, port: 4100, threadId }]);
   emit({ id: 'pty-remote-1', data: 'hello ' });
   emit({ id: 'pty-remote-1', data: 'world' });
   assert.deepEqual(await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 6 }, env), {

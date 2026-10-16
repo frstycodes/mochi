@@ -11,8 +11,8 @@ import { cn } from '@/lib/utils';
 import { AskAboutFileRange } from '@/sidechat/AskInSideChat';
 import { noteOpened } from './recentFiles';
 import type { PaneTabProps } from './tabs';
-import { Shortcut } from '../Shortcut';
-import { isMod } from '../keys';
+import { BoundShortcut } from '../Shortcut';
+import { commandOf } from '../keymap';
 
 export function FilesTab({ thread, tab }: PaneTabProps) {
   const root = threadCwd(thread);
@@ -41,15 +41,10 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
     setFocusKey((k) => k + 1);
   };
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!isMod(e)) return;
-    const key = e.key.toLowerCase();
-    if (key === 'f' && e.shiftKey) {
-      e.preventDefault();
-      return focusFinder('contents');
-    }
-    if (key !== 'p' || e.shiftKey) return;
+    const command = commandOf(e, ['files-go-to', 'files-search']);
+    if (!command) return;
     e.preventDefault();
-    focusFinder('name');
+    focusFinder(command === 'files-search' ? 'contents' : 'name');
   };
   const toolbar = (
     <>
@@ -68,7 +63,7 @@ function FilesBrowser({ threadId, root, initial }: { threadId: string; root: str
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          Go to file <Shortcut keys={['mod', 'P']} />
+          Go to file <BoundShortcut command="files-go-to" />
         </TooltipContent>
       </Tooltip>
       {!!selected && <AskAboutFileRange threadId={threadId} path={selected.path} />}
@@ -104,7 +99,7 @@ function NoFileState({ toolbar }: { toolbar: React.ReactNode }) {
         <EmptyHeader>
           <EmptyTitle>Pick a file</EmptyTitle>
           <EmptyDescription>
-            Choose one from the tree, press <Shortcut keys={['mod', 'P']} /> to go to a file or <Shortcut keys={['mod', 'shift', 'F']} /> to search inside files.
+            Choose one from the tree, press <BoundShortcut command="files-go-to" /> to go to a file or <BoundShortcut command="files-search" /> to search inside files.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

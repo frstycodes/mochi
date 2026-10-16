@@ -65,6 +65,8 @@ export function AgentLoader({ phase, flavor = 'vanilla', className }: { phase: A
       </defs>
       <ellipse ref={refs.shadow} cy={GROUND[1] + 0.3} ry={1.1} {...frame.shadow} fill={`url(#${id}-shadow)`} />
       <g ref={refs.body} transform={frame.body}>
+        {/* Light pages wash out the pale flavours; drawn under the body so only the outer 1px shows, at any size. */}
+        <path d={BODY} fill="none" strokeWidth={2} vectorEffect="non-scaling-stroke" className="stroke-foreground/25 dark:stroke-transparent" />
         <path d={BODY} fill={`url(#${id}-body)`} />
         <path d={BODY} fill={`url(#${id}-base)`} stroke={colors.shade} strokeOpacity={0.5} strokeWidth={0.3} />
         <ellipse cx={-2.7} cy={-7.2} rx={2.3} ry={1.2} transform="rotate(-25 -2.7 -7.2)" fill={`url(#${id}-shine)`} />

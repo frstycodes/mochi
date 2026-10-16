@@ -26,6 +26,11 @@ export const windows: WindowsHost = {
   onFullScreenChange() {
     return () => {};
   },
+  async zoomFactor() {
+    return 1;
+  },
+  async resetZoom() {},
+  async setAppearance() {},
   async listApps() {
     return { access: 'unsupported', windows: [] };
   },

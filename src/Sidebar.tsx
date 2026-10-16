@@ -1,12 +1,8 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
-import { useTheme } from 'next-themes';
-import { Archive, ChatRound, ChevronRight, Edit, Eye, Flash, Hierarchy, Inbox, Monitor, Moon, Pause, Play, Refresh, Route, Search, Setting2, Sun, TaskSquare, Undo } from 'reicon-react';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Kbd } from '@/components/ui/kbd';
+import { AnimatePresence, motion, useReducedMotionConfig, type MotionProps } from 'motion/react';
+import { Archive, ChatRound, ChevronRight, Edit, Eye, Hierarchy, Inbox, Route, Search, TaskSquare, Undo } from 'reicon-react';
 import {
   Sidebar,
   SidebarContent,
@@ -20,17 +16,20 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
+import { useIdleVerdict, VerdictChip } from './goals/VerdictChip';
 import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
 import { ThreadPeek } from './layout/ThreadPeek';
 import { ThreadRowMenu } from './menus/ThreadRowMenu';
+import { useIsMultiSplit } from './SidebarToggle';
 import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
 import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
@@ -41,21 +40,22 @@ import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
-import { showsDemoData } from './demoData';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
 import { duration, goalProgress } from './progress';
-import { openSettings } from './settings/open';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
-import { OverflowIcon, ProgressRing, SpaceIcon } from './ui';
-import { isWorking, workingLabel } from './agentPhase';
+import { ProgressRing, SpaceIcon } from './ui';
+import { agentPhase, isWorking, PHASE_LABELS, workingLabel } from './agentPhase';
+import { AgentLoader } from './AgentLoader';
 import { runningBackground } from './runtime/subagents';
-import { Shortcut } from './Shortcut';
+import { BoundShortcut } from './Shortcut';
+import { spaceCommand } from './keymap';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import { remoteDecisions, remoteThreads } from './remote/mirror';
 import { openRemoteThread, useRemoteThreadRoute } from './remote/open';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';
+import { UserMenu } from './UserMenu';
 
 export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearch: () => void; collapsible?: 'offcanvas' | 'icon' | 'none'; width?: number; onResize?: (px: number) => void }) {
   const { state, dispatch } = useHarness();
@@ -83,11 +83,14 @@ export function AppSidebar({ onSearch, collapsible, width, onResize }: { onSearc
 }
 
 const PEEK_CLOSE_DELAY = 240;
+// Outlasts the 160ms morph and the chat's 260ms slide; the docked sidebar underneath is identical, so lingering costs nothing.
+const DOCK_MS = 300;
 
-/** Arc-style: with the sidebar collapsed, resting on the left edge slides it back in as a floating panel. */
+/** Arc-style: with the sidebar collapsed, resting on the left edge slides it back in as a floating panel. Its own toggle docks it in place: the panel grows to the window edge and loses its corners while the chat makes room behind it, then the docked sidebar takes over underneath. */
 export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpen: setSidebarOpen } = useSidebar();
   const [isOpen, setOpen] = useState(false);
+  const [isDocking, setDocking] = useState(false);
   const closeTimer = useRef(0);
   const isCollapsed = state === 'collapsed' && !isMobile;
 
@@ -95,7 +98,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
     if (!isCollapsed) setOpen(false);
   }, [isCollapsed]);
 
-  if (!isCollapsed) return null;
+  if (!isCollapsed && !isDocking) return null;
   const open = () => {
     window.clearTimeout(closeTimer.current);
     setOpen(true);
@@ -104,17 +107,29 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
     window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => setOpen(false), PEEK_CLOSE_DELAY);
   };
+  const dock = (e: ReactMouseEvent) => {
+    if (!(e.target as Element).closest('[data-sidebar="trigger"]')) return;
+    e.stopPropagation();
+    window.clearTimeout(closeTimer.current);
+    setDocking(true);
+    setSidebarOpen(true);
+    window.setTimeout(() => setDocking(false), DOCK_MS);
+  };
 
   return (
     <>
-      <div aria-hidden onPointerEnter={open} onPointerLeave={close} className="fixed inset-y-0 left-0 z-40 w-2" />
+      {!isDocking && <div aria-hidden onPointerEnter={open} onPointerLeave={close} className="fixed inset-y-0 left-0 z-40 w-2" />}
       <div
         onPointerEnter={open}
         onPointerLeave={close}
-        inert={!isOpen || undefined}
+        onClickCapture={dock}
+        inert={(!isOpen && !isDocking) || undefined}
         className={cn(
-          'fixed inset-y-2 left-2 z-40 w-(--sidebar-width) overflow-hidden rounded-xl bg-sidebar shadow-float transition-[translate,opacity] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
-          isOpen ? 'translate-x-0 opacity-100 duration-[240ms]' : 'pointer-events-none -translate-x-[calc(100%+1rem)] opacity-0 duration-200',
+          'fixed z-40 w-(--sidebar-width) overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
+          isDocking
+            ? 'inset-y-0 left-0 rounded-none border-sidebar-border shadow-none transition-[top,bottom,left,border-radius,border-color,box-shadow] duration-[160ms]'
+            : 'inset-y-2 left-2 rounded-xl border-transparent shadow-float transition-[translate,opacity]',
+          !isDocking && (isOpen ? 'translate-x-0 opacity-100 duration-[240ms]' : 'pointer-events-none -translate-x-[calc(100%+1rem)] opacity-0 duration-200'),
         )}
       >
         <AppSidebar onSearch={onSearch} collapsible="none" />
@@ -125,8 +140,11 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
 
 function SpaceHeader() {
   const space = useSpace();
+  const { isMobile } = useSidebar();
+  const isMulti = useIsMultiSplit();
   return (
-    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:pl-10 md:in-data-traffic-lights:pl-28">
+    <SidebarHeader className="app-drag h-11 flex-row items-center gap-1.5 py-0 pr-2 pl-2 md:in-data-traffic-lights:pl-[calc(var(--lights-end)+5px)]">
+      {!isMobile && !isMulti && <SidebarTrigger className="ml-1 text-muted-foreground" />}
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="flex min-w-0 items-center gap-2 px-1">
@@ -188,10 +206,10 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               label="Search"
               onClick={onSearch}
               trailing={
-                <Shortcut keys={['mod', 'K']} className="hidden md:inline-flex" />
+                <BoundShortcut command="palette" className="hidden md:inline-flex" />
               }
             />
-            <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<Kbd className="hidden md:inline-flex">N</Kbd>} />
+            <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<BoundShortcut command="go-new" className="hidden md:inline-flex" />} />
             <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length + remoteQueueCount > 0 ? queue.length + remoteQueueCount : undefined} />
             {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NotificationBell spaceId={spaceId} />
@@ -219,25 +237,41 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
   );
 }
 
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+const ACCORDION = { duration: 0.2, ease: EASE_OUT };
+const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
+
 /** Settled threads, folded under a count. */
 function SettledGroup({ count, children }: { count: number; children: ReactNode }) {
+  const [isOpen, setOpen] = useState(false);
+  const reduce = useReducedMotionConfig();
+  const contentId = useId();
   return (
-    <Collapsible className="group/settled">
-      <SidebarGroup>
-        <SidebarGroupLabel asChild>
-          <CollapsibleTrigger className="hover:text-sidebar-foreground">
-            Settled
-            <span className="ml-1 tabular">{count}</span>
-            <ChevronRight className="ml-auto size-3 transition-transform duration-150 group-data-[state=open]/settled:rotate-90" />
-          </CollapsibleTrigger>
-        </SidebarGroupLabel>
-        <CollapsibleContent>
-          <SidebarGroupContent>
-            <SidebarMenu>{children}</SidebarMenu>
-          </SidebarGroupContent>
-        </CollapsibleContent>
-      </SidebarGroup>
-    </Collapsible>
+    <SidebarGroup>
+      <SidebarGroupLabel asChild>
+        <button type="button" aria-expanded={isOpen} aria-controls={contentId} onClick={() => setOpen(!isOpen)} className="hover:text-sidebar-foreground">
+          Settled
+          <span className="ml-1 tabular">{count}</span>
+          <ChevronRight className={cn('ml-auto size-3 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none', isOpen && 'rotate-90')} />
+        </button>
+      </SidebarGroupLabel>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            id={contentId}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={reduce ? { duration: 0 } : ACCORDION}
+            className="overflow-hidden"
+          >
+            <SidebarGroupContent>
+              <SidebarMenu>{children}</SidebarMenu>
+            </SidebarGroupContent>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </SidebarGroup>
   );
 }
 
@@ -333,6 +367,7 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
       const item = (
         <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selectedIds}>
           <SidebarMenuItem
+            asChild
             data-row-id={t.id}
             data-thread-row={t.id}
             data-pinned={isPinned || undefined}
@@ -344,7 +379,7 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
             }}
             aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
           >
-            {row(t)}
+            <motion.li {...glide}>{row(t)}</motion.li>
           </SidebarMenuItem>
         </ThreadRowMenu>
       );
@@ -357,29 +392,31 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
     const slot = drag.state?.slot;
     // Threads sort by recency, so a row dropped there lands where its last activity puts it, not where the pointer is.
     const at = slot && !isPinned && dragged ? threads.filter((t) => t.id !== dragged.id && lastActivityAt(t) > lastActivityAt(dragged)).length : slot?.index;
-    if (slot && slot.toPinned === isPinned) rows.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} />);
+    if (slot && slot.toPinned === isPinned) rows.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} glide={glide} />);
     return rows;
   };
   const showPinned = pinned.length > 0 || !!drag.state;
+  // Rows only re-measure when the order or the drop slot changes, so ticks, scrolling and space swipes never animate them.
+  const glide = { layout: 'position', layoutDependency: rowOrderKey(pinnedIds, activeIds, drag.state), transition: ROW_LAYOUT } as const;
   const isPinnedEmpty = pinned.filter((t) => t.id !== drag.state?.id).length === 0 && drag.state?.slot?.toPinned !== true;
 
   return (
     <SidebarGroup>
-      <SidebarMenu ref={listRef} className="select-none">
+      <SidebarMenu ref={listRef} className="relative select-none">
         {showPinned && (
-          <li>
+          <motion.li {...glide}>
             <SidebarGroupLabel>Pinned</SidebarGroupLabel>
-          </li>
+          </motion.li>
         )}
         {section(pinned, true)}
         {!!drag.state && isPinnedEmpty && (
-          <li aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
+          <motion.li {...glide} aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
             Drop here to pin
-          </li>
+          </motion.li>
         )}
-        <li data-threads-label className="mt-3">
+        <motion.li {...glide} data-threads-label className="mt-3">
           <SidebarGroupLabel>Threads</SidebarGroupLabel>
-        </li>
+        </motion.li>
         {section(active, false)}
       </SidebarMenu>
       {!!drag.state && !!dragged && <RowGhost thread={dragged} drag={drag.state} />}
@@ -387,11 +424,16 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: Thread[]; ac
   );
 }
 
-function DropPlaceholder({ height }: { height: number }) {
+function rowOrderKey(pinnedIds: string[], activeIds: string[], drag: RowDragState | null) {
+  const slot = drag?.slot ? `${drag.slot.toPinned ? 'p' : 'u'}${drag.slot.index}` : '';
+  return `${pinnedIds.join(',')}|${activeIds.join(',')}|${drag?.id ?? ''}|${slot}`;
+}
+
+function DropPlaceholder({ height, glide }: { height: number; glide: MotionProps }) {
   return (
-    <li aria-hidden className="relative" style={{ height }}>
+    <motion.li {...glide} aria-hidden className="relative" style={{ height }}>
       <span className="absolute inset-x-1 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-foreground/40" />
-    </li>
+    </motion.li>
   );
 }
 
@@ -504,27 +546,25 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
 
 /**
  * Where a dragged row would land, read from the rows as rendered (the placeholder included), so moving the placeholder never flips the answer back.
+ * Positions come from `offsetTop` within the (relative) list, not `getBoundingClientRect`: rows gliding to their new place carry a transform that would flip the slot mid-animation.
  * Above the Threads label is Pinned; a full Pinned sends the row to the top of Threads.
  */
 function slotAt(list: HTMLUListElement | null, draggedId: string, pinnedIds: string[], x: number, y: number): RowDragState['slot'] {
   if (!list) return null;
   const box = list.getBoundingClientRect();
   if (x < box.left - LIST_SLACK_PX || x > box.right + LIST_SLACK_PX) return null;
-  const label = list.querySelector('[data-threads-label]')!.getBoundingClientRect();
+  const mid = (el: HTMLElement) => box.top + el.offsetTop + el.offsetHeight / 2;
   const isFull = pinnedIds.filter((id) => id !== draggedId).length >= PIN_SLOTS.length;
-  const toPinned = y < label.top + label.height / 2 && !isFull;
+  const toPinned = y < mid(list.querySelector<HTMLElement>('[data-threads-label]')!) && !isFull;
   const rows = [...list.querySelectorAll<HTMLElement>(toPinned ? '[data-row-id][data-pinned]' : '[data-row-id]:not([data-pinned])')];
-  const index = rows.filter((r) => {
-    const rr = r.getBoundingClientRect();
-    return rr.top + rr.height / 2 < y;
-  }).length;
+  const index = rows.filter((r) => mid(r) < y).length;
   return { toPinned, index };
 }
 
 function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: ReactNode; label: string; isActive?: boolean; onClick: () => void; trailing?: ReactNode; badge?: number }) {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton isActive={isActive} onClick={onClick}>
+      <SidebarMenuButton isActive={isActive} onClick={onClick} className="text-xs [&_svg]:size-3.5">
         {icon}
         <span>{label}</span>
         {!!trailing && <span className="ml-auto flex items-center opacity-0 transition-opacity group-hover/menu-item:opacity-100">{trailing}</span>}
@@ -534,8 +574,12 @@ function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: Re
   );
 }
 
-function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
+export function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
   const row = useThreadRow(thread);
+  // Demo threads have no agent; their rows keep reading from goal steps.
+  const verdict = useIdleVerdict(thread);
+  const shown = thread.live ? verdict : null;
+  const hasChip = !!shown && shown.kind !== 'idle' && shown.kind !== 'checking';
   const { isSettled, toggle: settle } = useSettle(thread);
   return (
     <>
@@ -570,18 +614,16 @@ function ThreadItem({ thread, isActive, isSelected, onSelect }: { thread: Thread
         <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
           <ProgressRing met={row.progress.met} total={row.progress.total} slot={thread.line} size={12} isWorking={row.isWorking} />
           {!!row.progress.total && <span className="shrink-0 tabular">{`${row.progress.met}/${row.progress.total}`}</span>}
-          {row.isWorking ? (
-            <span className="flex min-w-0 flex-1" title={row.detail}>
-              <Shimmer as="span" className="min-w-0 truncate">{row.detail}</Shimmer>
-            </span>
-          ) : (
-            <span className="min-w-0 flex-1 truncate">{row.detail}</span>
-          )}
+          {!row.isWorking && hasChip && <VerdictChip verdict={shown} />}
+          <span className="flex min-w-0 flex-1 items-center gap-1" title={shown?.reason ?? row.detail}>
+            <AgentLoader phase={row.phase} className="size-3.5" />
+            {row.isWorking ? <Shimmer as="span" className="min-w-0 truncate">{PHASE_LABELS[row.phase]}</Shimmer> : !hasChip && <span className="min-w-0 truncate">{PHASE_LABELS[row.phase]}</span>}
+          </span>
           {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
           <PrStack thread={thread} />
           <AgentsBadge thread={thread} />
           <NextRunBadge threadId={thread.id} />
-          {row.needsYou && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
+          {row.needsYou && shown?.kind !== 'needs-you' && <span aria-label="Needs you" className="size-1.5 shrink-0 rounded-full bg-warning" />}
         </span>
       </SidebarMenuButton>
       <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] px-1.5 type-caption [&>svg]:size-3.5">
@@ -618,7 +660,7 @@ function useThreadRow(thread: Thread) {
   const lastAt = lastActivityAt(thread);
   const minutes = Math.max(0, state.now - lastAt);
   const detail = threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { progress, detail, ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
+  return { progress, detail, phase: agentPhase(thread), ago: minutes < 1 ? 'now' : duration(minutes), needsYou: thread.status === 'needs-you', isWorking: isWorking(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {
@@ -639,7 +681,9 @@ function SpaceFooter() {
   const profiles = useProfiles();
   return (
     <SidebarFooter className="flex-row items-center gap-1 px-2 py-2">
-      <div role="radiogroup" aria-label="Space" className="flex items-center gap-0.5">
+      <UserMenu />
+      <span className="flex-1" />
+      <div role="radiogroup" aria-label="Profile" className="flex items-center gap-0.5">
         {profiles.map((s, i) => {
           const isCurrent = s.id === state.spaceId;
           return (
@@ -649,7 +693,7 @@ function SpaceFooter() {
                   type="button"
                   role="radio"
                   aria-checked={isCurrent}
-                  aria-label={`${s.name} space`}
+                  aria-label={`${s.name} profile`}
                   onClick={() => dispatch({ type: 'space', id: s.id })}
                   className={cn('flex size-7 cursor-default items-center justify-center rounded-md text-subtle-foreground hover:bg-sidebar-accent/60 hover:text-foreground', isCurrent && 'bg-sidebar-accent text-foreground')}
                 >
@@ -657,66 +701,12 @@ function SpaceFooter() {
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top">
-                {s.name} <Shortcut keys={['nav', String(i + 1)]} className="ml-1" />
+                {s.name} <BoundShortcut command={spaceCommand(i + 1)} className="ml-1" />
               </TooltipContent>
             </Tooltip>
           );
         })}
       </div>
-      <span className="flex-1" />
-      <ThemeButton />
-      <DemoMenu paused={state.paused} />
     </SidebarFooter>
-  );
-}
-
-function DemoMenu({ paused }: { paused: boolean }) {
-  const { dispatch } = useHarness();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Settings and prototype controls" className="text-muted-foreground">
-          <OverflowIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="end" className="w-56">
-        <DropdownMenuItem onSelect={() => openSettings()}>
-          <Setting2 />
-          Settings
-          <Shortcut keys={['mod', ',']} className="ml-auto" />
-        </DropdownMenuItem>
-        {showsDemoData() && (
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Prototype</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'pause' })}>
-              {paused ? <Play /> : <Pause />}
-              {paused ? 'Resume simulation' : 'Pause simulation'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'trigger-overlap' })}>
-              <Flash />
-              Trigger an overlap
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => dispatch({ type: 'reset' })}>
-              <Refresh />
-              Reset demo
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        )}
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="font-normal text-subtle-foreground">Hold Option, or long-press, for Orbit</DropdownMenuLabel>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function ThemeButton() {
-  const { theme = 'system', setTheme } = useTheme();
-  const next = { system: 'light', light: 'dark', dark: 'system' }[theme] ?? 'system';
-  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
-  return (
-    <Button variant="ghost" size="icon-sm" onClick={() => setTheme(next)} aria-label={`Theme: ${theme}. Switch to ${next}`} title={`Theme: ${theme}`} className="text-muted-foreground">
-      <Icon />
-    </Button>
   );
 }

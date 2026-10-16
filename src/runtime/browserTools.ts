@@ -1,8 +1,8 @@
 import type { Page } from '../browser/pages.ts';
 import { DEVICES, RESPONSIVE } from '../browser/devices.ts';
+import { dialogNote } from '../browser/dialog.ts';
 import { displayUrl, normalizeUrl } from '../browser/url.ts';
 import type { BrowserAct, BrowserSnapshot } from '../host/types/browser.ts';
-import { leaves } from '../layout/tree.ts';
 import { authorName, type PaneTab } from '../model.ts';
 import type { ToolContext, ToolSpec } from './tools.ts';
 import type { ToolName } from './toolTable.ts';
@@ -157,6 +157,16 @@ export const BROWSER_TOOLS = {
   browser_back: { run: (ctx) => command(ctx, 'back', 'went back') },
   browser_forward: { run: (ctx) => command(ctx, 'forward', 'went forward') },
   browser_reload: { run: (ctx) => command(ctx, 'reload', 'reloaded the page') },
+  browser_dialog: {
+    run: async (ctx) => {
+      const { key, tab, page } = await shown(ctx, tabFor(ctx));
+      if (!page.dialog) throw new Error('No dialog is open in this tab');
+      const { kind, message } = page.dialog;
+      await ctx.env.browser.answerDialog(page.hostId!, { accept: ctx.args.accept });
+      await new Promise((r) => setTimeout(r, SETTLE_MS));
+      return { changed: `answered ${JSON.stringify(message)} with ${kind === 'confirm' && !ctx.args.accept ? 'Cancel' : 'OK'}`, isFinal: true, result: pageResult(tab, await loaded(ctx, key)) };
+    },
+  },
   browser_set_device: {
     run: async (ctx) => {
       const device = ctx.args.device === RESPONSIVE ? null : DEVICES.find((d) => d.id === ctx.args.device);
@@ -208,13 +218,18 @@ function tabFor(ctx: Ctx) {
   return tab;
 }
 
-/** Marks the tab as driven, so it floats unless it's already in front, and waits for its native view. Needs the thread on screen: the floating window is what renders it. */
+/** `shown`, for a page no dialog blocks: every tool but browser_dialog would wait on its answer. */
 async function live(ctx: Ctx, tab: PaneTab) {
+  const found = await shown(ctx, tab);
+  if (found.page.dialog) throw new Error(dialogNote(found.page.dialog));
+  return found;
+}
+
+/** Marks the tab as driven, so it floats unless it's already in front, and waits for its native view. Off screen, the view is opened hidden: CDP drives and captures it without a window. */
+async function shown(ctx: Ctx, tab: PaneTab) {
   const { state, caller, dispatch, env } = ctx;
   const key = pageKey(caller.id, tab.id);
-  const layout = state().layouts[caller.spaceId];
-  const isShown = state().spaceId === caller.spaceId && !!layout && leaves(layout.root).some((l) => (l.view.kind === 'thread' && l.view.id === caller.id) || (l.view.kind === 'tab' && l.view.threadId === caller.id && l.view.tabId === tab.id));
-  if (!isShown) throw new Error(`Your thread isn't on screen, so its browser can't render. Call focus_thread with threadId "${caller.id}" first.`);
+  env.pages.open(key, tab.url ?? '', caller.spaceId);
   if (state().panes.find((p) => p.threadId === caller.id)?.drivenTab !== tab.id) dispatch({ type: 'pane-drive', threadId: caller.id, tabId: tab.id });
   const page = await until(() => env.pages.get(key)?.hostId && env.pages.get(key), VIEW_TIMEOUT_MS);
   if (!page) throw new Error(env.isDesktop ? 'The browser tab did not start in time; try again' : 'Driving the browser needs the Mochi desktop app');

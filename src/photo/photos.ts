@@ -4,6 +4,8 @@ import { download } from '../viz/exportVisual';
 export interface Photo {
   src: string;
   name: string;
+  /** Selects the image's file in Finder; set when it lives on disk (an image the agent generated). */
+  reveal?: () => void;
 }
 
 export interface PhotoRequest {

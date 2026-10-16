@@ -67,9 +67,9 @@ async function reasonFor(spaceId: string, provider: Provider): Promise<string> {
   const name = providerName(provider);
   const { accounts, links } = await host.settings.accounts();
   const account = accounts.find((a) => a.id === linkedAccountId(links, spaceId, provider));
-  if (!account) return `No ${name} account is linked to this profile. Link one in Settings › Agents`;
+  if (!account) return `No ${name} account is linked to this profile. Link one in Settings › Harnesses`;
   const install = await host.settings.detect(account.id);
-  if (!install.path) return `${name} isn't installed. Install it, or set its path in Settings › Agents`;
+  if (!install.path) return `${name} isn't installed. Install it, or set its path in Settings › Harnesses`;
   if (install.login.state === 'logged-out') return `${name} is signed out for this profile. Run \`${signInCommand(account)}\` in a terminal`;
   // 'unknown' (status unreadable) is let through: the run itself reports a real sign-in problem.
   return '';

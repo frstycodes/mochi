@@ -49,7 +49,7 @@ const results = new Map<string, (result: CommandResult) => void>();
 /** The computers this one follows as a device, by machine id. */
 const followers = new Map<string, MachineFollower>();
 
-/** Reads Settings › Devices and, when it is on, starts listening and keeps the renderer alive. */
+/** Reads Settings › Remote access and, when it is on, starts listening and keeps the renderer alive. */
 export function startRemote() {
   settings = loadSettings();
   app.on('before-quit', () => (isQuitting = true));

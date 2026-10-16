@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { gitError } from '../git/useGit.ts';
 import { useWorktreePath } from '../git/worktrees.ts';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
 import { useHarness } from '../store/index.tsx';
 import { editedLater, isTurnUndone, turnChanges, type TurnChanges } from '../chat/turnChanges.ts';
-import { excerpt, rewindBlockedReason, type Checkpoint } from './checkpoints.ts';
+import { excerpt, rewindBlockedReason, turnCheckpoint } from './checkpoints.ts';
 
 /** What undoing the turn would also take back: later turns' edits to the same files, and changes made outside the agent since its last turn. */
 export interface UndoConflicts {
@@ -90,8 +90,3 @@ export function useTurnUndo(thread: Thread, turn: TurnChanges) {
 
 const NO_WORKTREE = 'This thread works in the project folder, not a worktree of its own, so its files have no saved checkpoints';
 const NOT_SAVED = 'The files from before this turn weren’t saved';
-
-/** The checkpoint saved just before the turn's message (the thread's start for work before your first message), never a later one. */
-function turnCheckpoint(list: Checkpoint[], start: number) {
-  return start < 0 ? list[0] : list.findLast((c) => c.before === start);
-}

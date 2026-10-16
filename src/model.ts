@@ -68,6 +68,39 @@ export interface TurnReport {
 }
 
 /** Another thread doing the same work (`same`) or overlapping it (`related`), found when this goal was drafted. */
+/** A goal the agent wrote after its first look: waiting for your Accept, or applied with an Undo (Settings › Goals and checks). */
+export interface GoalProposal {
+  goal: string;
+  criteria: { text: string; command?: string }[];
+  /** What the agent saw that makes this the goal, one line. */
+  basis?: string;
+  at: number;
+  by: Provider;
+  state: 'waiting' | 'accepted' | 'applied' | 'kept' | 'undone';
+  /** The goal it replaces: struck through on the card, put back by Undo. */
+  before: { goal: string; criteria: { text: string; command?: string }[] };
+}
+
+export interface IdleCheck {
+  at: number;
+  /** Uncommitted files in the thread's folder; unset without one or until read. */
+  uncommitted?: number;
+  /** Checks, git status and the transcript audit are still coming in; the verdict reads Checking until they have. */
+  isGathering?: boolean;
+  /** Unset when no model could read the turn. */
+  audit?: TurnAudit;
+  /** Gap ids you accepted this turn. */
+  accepted: string[];
+  /** You chose Open anyway: open_pr goes ahead past this turn's critical gaps. */
+  canOpenPr?: boolean;
+}
+
+/** What the agent's last turn says, read by a model: a question it asked in prose, things it says it didn't verify. */
+export interface TurnAudit {
+  question?: string;
+  unverified: { text: string; quote: string }[];
+}
+
 export interface Similar {
   threadId: string;
   relation: 'same' | 'related';
@@ -114,8 +147,12 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
-  /** Your messages: thumbnails (data URLs) of the images sent with it. */
+  /** Your messages: thumbnails (data URLs) of the images sent with it. Tool entries: images the call returned, as absolute paths. */
   images?: string[];
+  /** Tool entries: the image this call made, shown as its own card in the transcript. */
+  generated?: GeneratedImage;
+  /** Tool entries: the MCP App view this call declared, shown as its own card after the call's group. */
+  widget?: McpWidget;
   /** Events only: the file changes of the turn your message at activity index `start` began were undone, or put back. */
   turnUndo?: { start: number; isUndone: boolean };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
@@ -148,9 +185,43 @@ export interface ThreadRef {
   title: string;
 }
 
+/** An image an agent generated. `src` is a file path or a data URL; `aspect` (width / height) is the size it asked for, square when unknown. */
+export interface GeneratedImage {
+  status: 'running' | 'done' | 'failed';
+  prompt?: string;
+  src?: string;
+  aspect?: number;
+  /** Why it failed, as the harness said it. */
+  error?: string;
+}
+
 export interface McpCall {
   server: string;
   tool: string;
+}
+
+/**
+ * An MCP Apps (SEP-1865) view a tool call declared: its `ui://` resource on `server`, with the call's input and result to
+ * hand it. `server` is the name the harness reports, for reading the resource back.
+ */
+export interface McpWidget {
+  server: string;
+  uri: string;
+  input: Record<string, unknown>;
+  result: McpWidgetResult;
+}
+
+/** GAP: image blocks are left out (they're saved as the call's `images`); a view that draws from them gets text only. */
+// A type, not an interface: it's handed to `AppBridge.sendToolResult`, whose param has an index signature an interface can't meet.
+export type McpWidgetResult = {
+  content: { type: 'text'; text: string }[];
+  structuredContent?: Record<string, unknown>;
+};
+
+/** A `ui://` resource as read: the view's HTML and the sandbox it asks for (`_meta.ui.csp`, `_meta.ui.permissions`). */
+export interface McpWidgetResource {
+  html: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface WebLink {
@@ -249,6 +320,9 @@ export interface Thread {
   isGoalOff?: boolean;
   /** The latest `report`; a newer message from you starts a turn it no longer describes. */
   report?: TurnReport;
+  /** What Mochi gathered when the agent last went idle; `src/goals/verdict.ts` reads it with the thread's own state. */
+  idle?: IdleCheck;
+  proposal?: GoalProposal;
   providers: Provider[];
   status: ThreadStatus;
   line: LineSlot;
@@ -354,14 +428,14 @@ export interface LiveRun {
   limit?: { resetsAt?: string; label?: string; isTurnHeld?: boolean; autoResume?: boolean };
   /** Restored after Mochi restarted: no agent process holds it, so the next message starts one with `resume`. */
   isDetached?: boolean;
+  /** `seq` of the last agent event applied: after a window reload, main replays the ones after it. */
+  eventSeq?: number;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
   /** Background agents' reports, sent to the agent ahead of your next message. */
   notes?: string[];
   /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
   restart?: { forkAt: string } | { seed: string };
-  /** Send now interrupted the turn for a queued message: the interrupted turn's end isn't the agent stopping, since it goes on with that message. */
-  isReplacingTurn?: boolean;
 }
 
 /** `run`: a scheduled or background run finished (`src/schedule`). */
@@ -430,7 +504,7 @@ export function answerText(answers: string[][]) {
   return answers.filter((a) => a.length).map((a) => a.join(', ')).join(' · ');
 }
 
-export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual'] as const;
+export const PANE_TAB_KINDS = ['browser', 'changes', 'terminal', 'files', 'simulator', 'ports', 'sidechat', 'agents', 'visual', 'artifacts'] as const;
 export type PaneTabKind = (typeof PANE_TAB_KINDS)[number];
 
 export interface PaneTab {
@@ -468,6 +542,8 @@ export interface Pane {
   shown?: Partial<Record<PaneTabKind, string>>;
   /** The browser tab the thread's agent last drove; it floats while the agent works and the tab is off screen. */
   drivenTab?: string;
+  /** Counts requests to bring the pane in front, so a narrow window, which shows the pane in place of the chat by its own state, swaps to it. */
+  reveals?: number;
 }
 
 export function seedPanes(): Pane[] {

@@ -12,6 +12,7 @@ const providerConfig = (provider: Provider): ProviderConfig => ({
   instructions: { path: `/x/${provider}.md`, text: 'Be brief.\n' },
   mcpServers: [{ def: { name: 'github', type: 'stdio', command: 'npx' }, enabled: true, scope: 'user', needs: [] }],
   skills: [{ name: 'review', description: '', dir: '/x/review', enabled: false }],
+  commands: [],
   plugins: [],
   projectInstructions: null,
 });
@@ -61,4 +62,20 @@ test('writes land where the setting lives, and a value outside the control is re
   assert.deepEqual(write('machineName', 'studio'), { to: 'remote', patch: { machineName: 'studio' } });
   assert.equal(write('profile.name', '  '), null);
   assert.equal(write('profile.claudeAccount', 'codex-default'), null, 'another harness’s account');
+});
+
+test("a shortcut row reads the chord now and writes it the widget's way: a clash loses its shortcut, a reserved chord is no value", () => {
+  const row = settingsCatalog().find((s) => s.key === 'keybinding.palette')!;
+  assert.equal(row.read(sources), 'mod+K');
+  assert.deepEqual(row.write('mod+P', sources), { to: 'prefs', patch: { keybindings: { palette: 'mod+P', 'files-go-to': '' } } });
+  assert.deepEqual(row.write('', sources), { to: 'prefs', patch: { keybindings: { palette: '' } } });
+  assert.equal(row.write('mod+C', sources), null);
+  assert.equal(row.write('cmd+K', sources), null);
+});
+
+test('every app setting sits in a titled group on its page; profile settings group by profile instead', () => {
+  for (const setting of settingsCatalog({ profile: DEFAULT_SPACES[0], config })) {
+    if (setting.section === 'profile') assert.equal(setting.group, undefined, setting.key);
+    else assert.ok(setting.group, `${setting.key} has a group`);
+  }
 });

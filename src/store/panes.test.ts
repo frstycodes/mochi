@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Pane } from '../model.ts';
 import type { State } from './index.tsx';
+import { defaultBrowserUrl } from '../terminal/devServer.ts';
 import { panesReducer, shownTab } from './panes.ts';
 
 const pane = (rest: Partial<Pane> = {}): Pane => ({
@@ -37,6 +38,16 @@ test('Preview keeps several tabs in one pane and shows the newest', () => {
   assert.equal(p.tabs.filter((t) => t.kind === 'browser').length, 2);
   assert.equal(shownTab(p, 'browser')?.url, 'localhost:5173');
   assert.deepEqual(p.layout?.columns, [['browser', 'changes', 'terminal']]);
+});
+
+test('a new Preview tab opens on the one running dev server, else blank', () => {
+  const port = (n: number) => ({ port: n, pid: n, command: 'vite', startedAt: 0 });
+  assert.equal(defaultBrowserUrl([port(5173)]), 'http://localhost:5173');
+  assert.equal(defaultBrowserUrl([port(5173), port(3000)]), undefined);
+  assert.equal(defaultBrowserUrl([]), undefined);
+  assert.equal(defaultBrowserUrl(undefined), undefined);
+  const p = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser' });
+  assert.equal(shownTab(p, 'browser')?.url, undefined);
 });
 
 test('closing a Preview tab shows its right neighbour, then its left; closing the last one closes the pane', () => {
@@ -92,6 +103,20 @@ test('a popped-out open adds a floating tab without opening the pane or changing
   assert.deepEqual(p.tabs.at(-1), { id: p.tabs.at(-1)!.id, kind: 'visual', title: 'Latency', visual: { language: 'svg', code: '<svg/>' }, isPopped: true, url: undefined, file: undefined });
 });
 
+test('opening the same visual again reuses its tab: docked selects it, popped out pops it, a different visual adds one', () => {
+  const visual = { language: 'svg', code: '<svg></svg>' } as const;
+  const open = (p: Pane | undefined, isPopped = false) => run(p, { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Logo', visual, isPopped });
+  const docked = open(pane());
+  const id = docked.activeTab;
+  const again = open(run(docked, { type: 'pane-select-tab', threadId: 't', tabId: 'a' }));
+  assert.deepEqual([again.tabs.length, again.activeTab], [docked.tabs.length, id]);
+  const popped = open(docked, true);
+  assert.deepEqual([popped.tabs.length, popped.tabs.find((t) => t.id === id)?.isPopped], [docked.tabs.length, true]);
+  assert.equal(open(popped, true).tabs.length, docked.tabs.length);
+  const other = run(docked, { type: 'pane-open-tab', threadId: 't', kind: 'visual', title: 'Other', visual: { language: 'svg', code: '<svg><g/></svg>' } });
+  assert.equal(other.tabs.length, docked.tabs.length + 1);
+});
+
 test('a background tab leaves the layout and your pane in front, and a thread with no pane gets a closed one', () => {
   const fresh = run(undefined, { type: 'pane-open-tab', threadId: 't', kind: 'browser', url: 'localhost:3000', isBackground: true });
   assert.equal(fresh.isOpen, false);
@@ -105,4 +130,11 @@ test('showing an agent opens the Agents pane with that agent picked', () => {
   const p = run(pane(), { type: 'pane-show-agent', threadId: 't', subagentId: 's1' });
   assert.equal(p.tabs.find((t) => t.kind === 'agents')?.agentId, 's1');
   assert.equal(p.layout?.focused, 'agents');
+  const again = run(p, { type: 'pane-show-agent', threadId: 't', subagentId: 's1' });
+  assert.equal(again.reveals, (p.reveals ?? 0) + 1, 'showing the same agent again still asks a narrow window to swap to the pane');
+});
+
+test('a tab opened with a tabId keeps it, so two popups in one render get two tabs', () => {
+  const p = run(pane(), { type: 'pane-open-tab', threadId: 't', kind: 'browser', tabId: 'popup_view-1' }, { type: 'pane-open-tab', threadId: 't', kind: 'browser', tabId: 'popup_view-2' });
+  assert.deepEqual(p.tabs.slice(-2).map((t) => t.id), ['popup_view-1', 'popup_view-2']);
 });

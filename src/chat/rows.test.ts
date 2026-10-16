@@ -130,3 +130,12 @@ test("another thread's message is its own log row: it ends the work group before
   assert.deepEqual([...finalReplies(rows, false)], [2, 5], 'the reply before it is final, like before your own message');
   assert.equal(liveWorkIndex(chatRows(activity.slice(0, 4))), -1, 'the group before it is no longer live');
 });
+
+test("an MCP App view gets its own row after its call's group, and the turn goes on in a new group", () => {
+  const widget = { server: 'claude.ai mobbin', uri: 'ui://mobbin/search-screens.html', input: {}, result: { content: [] } };
+  const rows = chatRows([e('tool', 'claude', 'Search Mobbin'), { ...e('tool', 'claude', 'Search screens'), widget }, e('tool', 'claude', 'Read a.ts'), e('message', 'claude', 'Done.')]);
+  assert.deepEqual(
+    rows.map((r) => (r.kind === 'work' ? `work(${r.entries.map((x) => x.text).join(', ')})` : 'entry' in r ? `${r.kind}:${r.entry.text}` : r.kind)),
+    ['work(Search Mobbin, Search screens)', 'widget:Search screens', 'work(Read a.ts)', 'message:Done.'],
+  );
+});

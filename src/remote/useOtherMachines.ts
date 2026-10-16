@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import type { OtherMachine } from '../host/types/remote';
 import { ipcMessage } from '../settings/AgentSettings';

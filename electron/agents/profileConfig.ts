@@ -7,8 +7,10 @@ import type { Provider } from '../../src/model.ts';
 import {
   claudeDeniedServers,
   claudeServers,
+  claudePluginRoots,
   claudeSkillOff,
   codexServers,
+  commandMeta,
   codexSkillOverrides,
   INSTRUCTIONS_FILE,
   placeholders,
@@ -119,13 +121,14 @@ const TEST_TIMEOUT_MS = 20_000;
 async function readProvider(spaceId: string, provider: Provider, projectRoot?: string): Promise<ProviderConfig> {
   const { account } = await accountFor(spaceId, provider);
   const files = paths(provider, account);
-  const config: ProviderConfig = { provider, account, instructions: { path: files.instructions, text: '' }, mcpServers: [], skills: [], plugins: [], projectInstructions: null };
+  const config: ProviderConfig = { provider, account, instructions: { path: files.instructions, text: '' }, mcpServers: [], skills: [], commands: [], plugins: [], projectInstructions: null };
   try {
     config.instructions.text = await readText(files.instructions);
     const [servers, settings] = await Promise.all([readText(files.servers), readText(files.settings)]);
     config.mcpServers = provider === 'claude' ? claudeEntries(servers, settings) : codexServers(servers).map(({ def, enabled }) => entry(def, enabled, 'user'));
     config.skills = await readSkills(provider, files.skills, settings);
     config.plugins = provider === 'claude' ? await claudePlugins(files.dir) : codexPlugins(settings);
+    if (provider === 'claude') config.commands = await claudeCommands(files.dir, settings, projectRoot);
     if (projectRoot) {
       const local = join(projectRoot, INSTRUCTIONS_FILE[provider]);
       config.projectInstructions = (await exists(local)) ? local : null;
@@ -177,6 +180,54 @@ async function readSkills(provider: Provider, skillsDir: string, settings: strin
     }),
   );
   return skills.filter((s) => s !== null);
+}
+
+// GAP: Codex's project skills and prompts, plugins a project's own settings turn on, and commands in subfolders aren't read;
+// each shows once the agent reports its own list.
+async function claudeCommands(dir: string, settings: string, projectRoot?: string): Promise<ProviderConfig['commands']> {
+  const off = claudeSkillOff(settings);
+  const project = projectRoot && join(projectRoot, '.claude');
+  const plugins = await enabledPlugins(dir, settings);
+  const lists = await Promise.all([
+    ...(project ? [skillsIn(join(project, 'skills')), commandsIn(join(project, 'commands'))] : []),
+    commandsIn(join(dir, 'commands')),
+    ...plugins.flatMap(({ name, root }) => [skillsIn(join(root, 'skills'), `${name}:`), commandsIn(join(root, 'commands'), `${name}:`)]),
+  ]);
+  return lists.flat().filter((c) => !off.has(c.name));
+}
+
+async function skillsIn(skillsDir: string, prefix = ''): Promise<ProviderConfig['commands']> {
+  const folders = await readdir(skillsDir).catch(() => []);
+  const skills = await Promise.all(
+    folders.filter((n) => !n.startsWith('.')).map(async (folder) => {
+      const md = await readText(join(skillsDir, folder, 'SKILL.md'));
+      if (!md) return [];
+      const meta = skillMeta(md, folder);
+      return [{ ...meta, name: `${prefix}${meta.name}`, isSkill: true }];
+    }),
+  );
+  return skills.flat();
+}
+
+async function commandsIn(commandsDir: string, prefix = ''): Promise<ProviderConfig['commands']> {
+  const files = await readdir(commandsDir).catch(() => []);
+  return Promise.all(
+    files
+      .filter((f) => f.endsWith('.md'))
+      .map(async (file) => {
+        const meta = commandMeta(await readText(join(commandsDir, file)), basename(file, '.md'));
+        return { ...meta, name: `${prefix}${meta.name}`, isSkill: false };
+      }),
+  );
+}
+
+// A broken plugins file leaves their commands out rather than failing the whole config read.
+async function enabledPlugins(dir: string, settings: string) {
+  try {
+    return claudePluginRoots(await readText(join(dir, 'plugins', 'installed_plugins.json')), settings);
+  } catch {
+    return [];
+  }
 }
 
 async function claudePlugins(dir: string): Promise<string[]> {

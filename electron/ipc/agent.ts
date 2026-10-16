@@ -1,12 +1,13 @@
-import { mkdir, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { app } from 'electron';
 import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentAskModel, type AgentImage, type AgentAskEvent, type AgentAskMessage, type AgentEvent, type AgentHost, type AgentReviewEvent, type AgentReviewRequest, type AgentRunOptions, type SetupChoice, type StartWorkspace } from '../../src/host/types/agent.ts';
 import { classifyWithModel } from '../../src/drift.ts';
-import type { Provider, Thread } from '../../src/model.ts';
+import type { McpWidgetResource, Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, claudeRunOptions, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, claudeRunOptions, readClaudeWidget, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
@@ -16,12 +17,15 @@ import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
-import { codexUrl, resolveToolCall } from '../mcp/server.ts';
+import { codexUrl, resolveToolCall, undeliveredToolCalls } from '../mcp/server.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
-import { emitAgentEvent, markBusy, markIdle } from '../agents/events.ts';
+import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
 import { prepareWorktree } from '../git/setup.ts';
 import { Starts } from '../agents/starts.ts';
+import { threadSessions } from '../agents/settle.ts';
+import { killThreadSessions } from '../pty/sessions.ts';
+import { stopCompare } from '../browser/compare.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
 import { topLevel } from '../git/run.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
@@ -55,6 +59,21 @@ function skillNames(value: unknown) {
 }
 
 const broadcast = emitAgentEvent;
+
+/** The live read, kept on disk so a view still opens once no Claude session runs (after a restart). The view's own scripts load from the network either way. */
+async function readWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource> {
+  const file = join(app.getPath('userData'), 'mcp-apps', `${createHash('sha256').update(`${server}\n${uri}`).digest('hex')}.json`);
+  try {
+    const resource = await readClaudeWidget(threadId, server, uri);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(resource));
+    return resource;
+  } catch (error) {
+    const kept = await readFile(file, 'utf8').then((text) => JSON.parse(text) as McpWidgetResource, () => null);
+    if (kept) return kept;
+    throw error;
+  }
+}
 // Codex review threads report like any thread; their events go to the review that owns them, never to the store.
 const reviewers = new Map<string, (event: AgentEvent) => void>();
 const codex = new CodexAdapter(
@@ -78,12 +97,13 @@ export const agent = {
   async start(_sender, threadId, options) {
     return startAgent(threadId, options);
   },
-  async send(_sender, threadId, text, pictures, skills, speed) {
+  async send(_sender, threadId, text, pictures, skills, speed, steer) {
     string(threadId, 'threadId', 256);
     string(text, 'text', 100_000);
     images(pictures);
     skillNames(skills);
     if (speed !== undefined) string(speed, 'speed', 256);
+    if (steer !== undefined && typeof steer !== 'boolean') throw new TypeError('steer must be a boolean');
     // Sent while the worktree is being set up: it goes to the agent once that start is through.
     await starts.wait(threadId as string);
     const run = claudeRunOptions(threadId as string) ?? codex.runOptions(threadId as string);
@@ -91,8 +111,8 @@ export const agent = {
     // '' is standard; a tier the running model doesn't list runs standard too.
     const tier = speed === undefined ? undefined : ((await offered(run.provider, run.spaceId, run.model, undefined, speed as string)).speed ?? '');
     markBusy(threadId as string);
-    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier);
-    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier);
+    if (hasClaudeSession(threadId as string)) return sendClaude(threadId as string, text as string, pictures as AgentImage[] | undefined, tier, steer === true);
+    return codex.send(threadId as string, text as string, pictures as AgentImage[] | undefined, skills as string[] | undefined, tier, steer === true);
   },
   async compact(_sender, threadId, focus) {
     string(threadId, 'threadId', 256);
@@ -122,12 +142,19 @@ export const agent = {
     return resolveRequest(requestId, decision);
   },
   async stop(_sender, threadId) {
-    string(threadId, 'threadId', 256);
-    markIdle(threadId as string);
-    starts.abort(threadId as string);
-    if (hasClaudeSession(threadId as string)) return stopClaude(threadId as string);
-    if (codex.owns(threadId as string)) return codex.stop(threadId as string);
-    // Stopping a thread with no agent process is a no-op, so settling twice or settling then deleting never errors.
+    return stopSession(string(threadId, 'threadId', 256));
+  },
+  async settle(_sender, threadId) {
+    const id = string(threadId, 'threadId', 256);
+    killThreadSessions(id);
+    await Promise.all([...threadSessions(id, [...claudeSessionIds(), ...codex.threadIds(), ...starts.ids()]).map(stopSession), stopCompare(id)]);
+  },
+  async attached(_sender, threads) {
+    if (!Array.isArray(threads)) throw new TypeError('threads must be an array');
+    return threads
+      .map((t, i) => ({ threadId: string(t?.threadId, `threads[${i}].threadId`, 256), after: typeof t?.after === 'number' ? t.after : undefined }))
+      .filter((t) => hasClaudeSession(t.threadId) || codex.owns(t.threadId))
+      .map(({ threadId, after }) => ({ threadId, isWorking: isBusy(threadId), events: after === undefined ? [] : eventsSince(threadId, after) }));
   },
   async stopSubagent(_sender, threadId, subagentId) {
     string(threadId, 'threadId', 256);
@@ -159,6 +186,13 @@ export const agent = {
     string(text, 'text', 100_000);
     if (hasClaudeSession(threadId as string)) return claudeRewindPoint(threadId as string, text as string);
     return codex.rewindPoint(threadId as string, text as string);
+  },
+  async readWidget(_sender, threadId, server, uri) {
+    string(threadId, 'threadId', 256);
+    string(server, 'server', 256);
+    string(uri, 'uri', 2048);
+    if (!(uri as string).startsWith('ui://')) throw new TypeError('uri must be a ui:// resource');
+    return readWidget(threadId as string, server as string, uri as string);
   },
   async ask(sender, context, messages, model) {
     const m = record(model, 'model');
@@ -208,6 +242,9 @@ export const agent = {
     })();
     return { id };
   },
+  async pendingToolCalls(sender) {
+    return undeliveredToolCalls(sender);
+  },
   async toolResult(_sender, id, result) {
     string(id, 'id', 256);
     const r = record(result, 'result');
@@ -243,6 +280,15 @@ export const agent = {
   },
 } satisfies Handlers<AgentHost>;
 
+/** Stopping a session with no agent process is a no-op, so settling twice or settling then deleting never errors. */
+async function stopSession(threadId: string) {
+  markIdle(threadId);
+  forgetEvents(threadId);
+  starts.abort(threadId);
+  if (hasClaudeSession(threadId)) return stopClaude(threadId);
+  return codex.stop(threadId);
+}
+
 /** Answers a pending approval or question, from the renderer or a notification's buttons. */
 export async function resolveRequest(requestId: unknown, decision: unknown) {
   string(requestId, 'requestId', 256);
@@ -272,17 +318,16 @@ export async function startAgent(threadId: unknown, options: unknown) {
   const launch = async (cwd: string) => {
     const run = { ...rest, cwd, ...(await offered(o.provider as Provider, o.spaceId as string, o.model as string | undefined, o.effort as string | undefined, speed as string | undefined)) } as unknown as AgentRunOptions;
     if (o.provider === 'claude') return startClaude(id, run);
-    return codex.start(id, run);
+    return codex.start(id, run, start.signal);
   };
-  let isSettingUp = false;
+  let isLaunching = false;
   try {
     const folder = await agentFolder(id, o.cwd);
     const { cwd, setup } = await workspaceFolder(id, folder, startWorkspace(workspace, worktree), start);
-    if (!setup) return await launch(cwd);
-    // The renderer runs agent calls one after another, so a start that waited out the setup would hold back the Stop (and
-    // every other thread's calls) behind it. It returns here; the setup and the launch report through events.
-    isSettingUp = true;
-    void setup
+    // The renderer runs agent calls one after another, so a start that waited out the setup, or an app-server slow to answer,
+    // would hold back the Stop (and every other thread's calls) behind it. It returns here; setup and launch report through events.
+    isLaunching = true;
+    void (setup ?? Promise.resolve())
       .then(() => {
         if (!start.signal.aborted) return launch(cwd);
         markIdle(id);
@@ -297,7 +342,7 @@ export async function startAgent(threadId: unknown, options: unknown) {
     markIdle(id);
     throw error;
   } finally {
-    if (!isSettingUp) start.end();
+    if (!isLaunching) start.end();
   }
 }
 

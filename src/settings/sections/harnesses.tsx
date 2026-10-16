@@ -1,78 +1,40 @@
-import { useState, type ReactNode } from 'react';
-import { ChevronDown, Refresh, Trash3 } from 'reicon-react';
+import { useState } from 'react';
+import { Refresh, Trash3 } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ModelMenu, toggleStar, useModels } from '../../ModelControls';
-import { optionFor, type ModelOption } from '../../runtime/models';
-import { useSpace } from '../../store';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Provider } from '../../model';
 import { ProviderMark, TooltipIconButton } from '../../ui';
 import { defaultAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
 import { CatalogRow } from '../CatalogRow';
 import { AccountsGroup, ProfilesGroup } from '../HarnessAccounts';
+import { useLinkedTab } from '../open';
 import { HARNESS_IDS, HARNESSES } from '../harnesses';
-import { CommandLine, DesktopOnly, SettingsGroup, SettingsRow, SettingsSelect, settingControlId } from '../parts';
+import { CommandLine, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 
-/** Every harness from the registry, one after another; nothing here names a specific harness. */
+/** Every harness from the registry, one tab each; nothing here names a specific harness. Deep links (`claudePath`) open their harness. */
 export function HarnessesSection() {
+  const [shown, setShown] = useLinkedTab((settingId) => HARNESS_IDS.find((id) => settingId.startsWith(id)), HARNESS_IDS[0]);
   return (
     <div className="flex flex-col gap-10">
       <p className="type-meta text-muted-foreground">Mochi runs your own installs with the logins you set up in them. It never signs in for you and never sees your credentials.</p>
       <DesktopOnly what="Detecting your agent harnesses and their accounts, and storing an API key, only work in the Mochi desktop app.">
-        {HARNESS_IDS.map((provider) => (
-          <HarnessSettings key={provider} provider={provider} />
-        ))}
+        <Tabs value={shown} onValueChange={(v) => setShown(v as Provider)} className="gap-6">
+          <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+            {HARNESS_IDS.map((provider) => (
+              <TabsTrigger key={provider} value={provider} className="flex-none px-2">
+                <ProviderMark provider={provider} size={14} />
+                {HARNESSES[provider].name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value={shown}>
+            <HarnessSettings key={shown} provider={shown} />
+          </TabsContent>
+        </Tabs>
       </DesktopOnly>
-      <ModelsGroup />
     </div>
-  );
-}
-
-/** Across harnesses: the model chip's scroll dock shows starred models, and new threads start at this effort and speed. */
-function ModelsGroup() {
-  return (
-    <SettingsGroup id="starredModels" title="Models" footer="Starred models show up when you scroll over the model button in the composer. The lists are this profile's accounts' own. Fast speed runs only on models that offer it and costs more; the composer's speed menu shows each model's price.">
-      <CatalogRow settingKey="starredModels" />
-      <CatalogRow settingKey="effort" />
-      <CatalogRow settingKey="speed" />
-    </SettingsGroup>
-  );
-}
-
-/** The model menu in star mode: picking a model stars or unstars it, and the menu stays open. */
-export function StarredModelsRow({ rowId, value: starredModels, onChange, children }: { rowId: string; value: string[]; onChange: (ids: string[]) => void; children?: ReactNode }) {
-  const catalog = useModels(useSpace().id);
-  const models = HARNESS_IDS.flatMap((h) => (catalog[h] ?? []).map((m): ModelOption => ({ ...m, harness: h })));
-  const starred = models.filter((m) => starredModels.includes(m.id));
-  return (
-    <SettingsRow
-      id={rowId}
-      label="Starred models"
-      description={starred.map((m) => m.name).join(', ') || 'None starred yet'}
-      control={
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button id={settingControlId(rowId)} variant="outline" size="sm">
-              Choose models
-              <ChevronDown data-icon="inline-end" />
-            </Button>
-          </DropdownMenuTrigger>
-          <ModelMenu
-            models={models}
-            pending={HARNESS_IDS.filter((h) => !catalog[h])}
-            harnesses={HARNESS_IDS}
-            isChecked={(m) => starredModels.includes(m.id)}
-            onPick={(m) => onChange(toggleStar(starredModels, m.id))}
-            keepsOpen
-            align="end"
-          />
-        </DropdownMenu>
-      }
-    >
-      {children}
-    </SettingsRow>
   );
 }
 
@@ -98,41 +60,25 @@ function HarnessSettings({ provider }: { provider: Provider }) {
           <Refresh />
         </TooltipIconButton>
       </header>
-      {isMissing && (
-        <SettingsGroup footer={`If it's installed somewhere unusual, set its path below.`}>
+      {isMissing ? (
+        <SettingsGroup title="Not installed" footer="Installed somewhere unusual? Set its path here instead.">
           <SettingsRow label={`Install ${harness.name}`} description={<a href={harness.docs} target="_blank" rel="noreferrer" className="underline underline-offset-4">Setup guide</a>}>
             <CommandLine command={harness.install} />
           </SettingsRow>
+          {!!settings && <CatalogRow settingKey={`${provider}.path`} />}
         </SettingsGroup>
-      )}
-      {!!settings && (
-        <SettingsGroup>
-          <CatalogRow settingKey={`${provider}.path`} />
-          <CatalogRow settingKey={`${provider}.model`} />
-          <CatalogRow settingKey={`${provider}.secondOpinionModel`} />
-        </SettingsGroup>
+      ) : (
+        !!settings && (
+          <SettingsGroup title="Install">
+            <CatalogRow settingKey={`${provider}.path`} />
+          </SettingsGroup>
+        )
       )}
       {!isMissing && <AccountsGroup provider={provider} />}
       <ProfilesGroup provider={provider} />
       {!!harness.apiKey && <ApiKeyGroup provider={provider} />}
     </section>
   );
-}
-
-// Radix Select reserves '': the account's own default gets a sentinel.
-const ACCOUNT_DEFAULT = 'account-default';
-
-/** The current profile's list for `provider`, its account default first; a saved model the account no longer offers stays listed as Unavailable. */
-export function ModelSelect({ id, provider, value, emptyLabel, onChange }: { id: string; provider: Provider; value: string; emptyLabel?: string; onChange: (model: string) => void }) {
-  const models = useModels(useSpace().id)[provider];
-  const stored = optionFor(models, value, provider);
-  const fallback = optionFor(models, '', provider);
-  const options = [
-    { value: ACCOUNT_DEFAULT, label: emptyLabel ?? (models?.length ? `Account default (${fallback.name})` : 'Account default') },
-    ...(models ?? []).map((m) => ({ value: m.id, label: m.name })),
-    ...(value && !models?.some((m) => m.id === value) ? [{ value, label: stored.isUnavailable ? `${value} (Unavailable)` : value }] : []),
-  ];
-  return <SettingsSelect id={id} value={value || ACCOUNT_DEFAULT} options={options} onChange={(v) => onChange(v === ACCOUNT_DEFAULT ? '' : v)} className="w-56" />;
 }
 
 function ApiKeyGroup({ provider }: { provider: Provider }) {

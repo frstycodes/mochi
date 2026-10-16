@@ -12,6 +12,8 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/componen
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { threadCwd } from '@/host/cwd';
+import { useGitDiff } from './git/useGit';
+import { DiffIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
@@ -39,7 +41,7 @@ import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
+import { isCollapsible, openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
 import { BranchName } from './git/BranchLabel';
 
 const LIST_LIMIT = 3;
@@ -59,7 +61,7 @@ export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thre
   );
 }
 
-/** The base panel says where the thread stands, what needs you and what shipped; everything else waits in collapsed sections. */
+/** The base panel says where the thread stands, what needs you and what shipped; the rest sits in sections below, most of them collapsed. */
 function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
   const summary = summarize(thread.activity);
   const sections = useSummarySections(thread, summary);
@@ -114,23 +116,48 @@ function SummarySections({ sections, ...props }: SectionProps & { sections: Summ
       onValueChange={(ids) => rememberOpen(sections, ids)}
       className="gap-0.5 pt-2"
     >
-      {sections.map((section) => {
-        const Body = SECTION_BODIES[section.id];
-        return (
-          <AccordionItem key={section.id} value={section.id} className="not-last:border-b-0">
-            <AccordionTrigger className="h-7 items-center gap-2 px-2 py-0 font-normal text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground hover:no-underline aria-expanded:text-foreground **:data-[slot=accordion-trigger-icon]:size-3.5">
-              <span className="min-w-0 flex-1 truncate">
-                {section.title}
-                {!!section.detail && <span className="tabular text-subtle-foreground"> · {section.detail}</span>}
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-0.5 pt-0.5 pb-2">
-              <Body {...props} />
-            </AccordionContent>
-          </AccordionItem>
-        );
-      })}
+      {sections.map((section) =>
+        isCollapsible(section) ? <CollapsibleSection key={section.id} section={section} {...props} /> : <ShownSection key={section.id} section={section} {...props} />,
+      )}
     </Accordion>
+  );
+}
+
+function CollapsibleSection({ section, ...props }: SectionProps & { section: SummarySection }) {
+  const Body = SECTION_BODIES[section.id];
+  return (
+    <AccordionItem value={section.id} className="not-last:border-b-0">
+      <AccordionTrigger className="h-7 min-w-0 items-center gap-2 px-2 py-0 font-normal text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground hover:no-underline aria-expanded:text-foreground **:data-[slot=accordion-trigger-icon]:size-3.5">
+        <SectionHeading section={section} />
+      </AccordionTrigger>
+      <AccordionContent className="flex flex-col gap-0.5 pt-0.5 pb-2">
+        <Body {...props} />
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
+function ShownSection({ section, ...props }: SectionProps & { section: SummarySection }) {
+  const Body = SECTION_BODIES[section.id];
+  return (
+    <section className="flex flex-col text-sm">
+      <h3 className="flex h-7 items-center border border-transparent px-2">
+        <SectionHeading section={section} />
+      </h3>
+      <div className="flex flex-col gap-0.5 pt-0.5 pb-2">
+        <Body {...props} />
+      </div>
+    </section>
+  );
+}
+
+/** The title keeps its place; the detail gives way, truncated, so the row's end (a chevron) stays in view. */
+function SectionHeading({ section }: { section: SummarySection }) {
+  return (
+    <span className="flex min-w-0 flex-1">
+      <span className="max-w-full shrink-0 truncate">{section.title}</span>
+      {!!section.detail && <span className="min-w-0 truncate tabular text-subtle-foreground">{'\u00a0'}· {section.detail}</span>}
+    </span>
   );
 }
 
@@ -149,19 +176,33 @@ function NeedsYou({ thread }: { thread: Thread }) {
 }
 
 function ChangesRow({ thread, summary, open }: SectionProps) {
-  if (!thread.repo && summary.files.length === 0) return null;
+  if (!thread.repo) return summary.files.length > 0 && <ChangesSummaryRow thread={thread} files={summary.files} />;
+  return <BranchChangesRow thread={thread} onClick={open.changes} />;
+}
+
+/** The branch against its base, as the Changes pane shows it by default: edits made through shell commands count too. */
+function BranchChangesRow({ thread, onClick }: { thread: Thread; onClick: () => void }) {
+  const diffQuery = useGitDiff(threadCwd(thread) ?? '.', 'branch', thread.repo?.base);
+  return <ChangesSummaryRow thread={thread} files={diffQuery.data?.files} onClick={onClick} />;
+}
+
+function ChangesSummaryRow({ thread, files, onClick }: { thread: Thread; files?: { added: number; removed: number }[]; onClick?: () => void }) {
+  const added = files?.reduce((n, f) => n + f.added, 0) ?? 0;
+  const removed = files?.reduce((n, f) => n + f.removed, 0) ?? 0;
   return (
-    <SummaryRow icon={Edit} label="Changes" onClick={thread.repo ? open.changes : undefined}>
-      <span className="tabular type-caption text-subtle-foreground">
-        {summary.files.length === 0 ? (
-          (thread.status === 'settled' ? 'None' : 'None yet')
-        ) : (
-          <>
-            <span className="text-success">+{summary.added}</span> <span className="text-destructive">−{summary.removed}</span> · {summary.files.length}{' '}
-            {PLURAL.select(summary.files.length) === 'one' ? 'file' : 'files'}
-          </>
-        )}
-      </span>
+    <SummaryRow icon={DiffIcon} label="Changes" onClick={onClick}>
+      {!!files && (
+        <span className="tabular type-caption text-subtle-foreground">
+          {files.length === 0 ? (
+            (thread.status === 'settled' ? 'None' : 'None yet')
+          ) : (
+            <>
+              <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span> · {files.length}{' '}
+              {PLURAL.select(files.length) === 'one' ? 'file' : 'files'}
+            </>
+          )}
+        </span>
+      )}
     </SummaryRow>
   );
 }

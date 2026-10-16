@@ -1,17 +1,19 @@
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { useSidebar } from '@/components/ui/sidebar';
+import { displayRoot, leaves } from './layout/tree';
+import { useHarness } from './store';
 
-/** One toggle for open and collapsed alike, fixed where the sidebar header has it, so it never jumps between the sidebar and the thread header. */
-export function SidebarToggle() {
-  const { isMobile } = useSidebar();
-  if (isMobile) return null;
-  return <SidebarTrigger className="app-no-drag fixed top-2.5 left-3 z-50 text-muted-foreground in-data-traffic-lights:left-21" />;
-}
-
-/** Phones carry their own trigger in the first split's header; on desktop that header only keeps the fixed toggle's spot clear while the sidebar is collapsed. */
-export function useToggleSlot(isFirst: boolean) {
+/** A page header carries the sidebar trigger while the sidebar is hidden (always on phones, where it's a sheet), never once several splits are on screen. While collapsed on desktop, the first header also clears the traffic lights. */
+export function useToggleSlot(isFirst: boolean, isMulti: boolean) {
   const { state, isMobile } = useSidebar();
-  return { hasTrigger: isFirst && isMobile, reservesToggle: isFirst && !isMobile && state === 'collapsed' };
+  const isCollapsed = state === 'collapsed' && !isMobile;
+  return { hasTrigger: isFirst && (isMobile || (isCollapsed && !isMulti)), clearsLights: isFirst && isCollapsed };
 }
 
-// Web: the toggle's icon sits in the nav-icon column (x 16). Desktop: an even 12px from the traffic lights to the toggle to what follows it.
-export const TOGGLE_RESERVE = 'pl-10 in-data-traffic-lights:pl-29';
+/** Several splits on screen (zoomed counts, like `SplitInfo.isMulti`): the sidebar drops its trigger too. */
+export function useIsMultiSplit() {
+  const { state } = useHarness();
+  return leaves(displayRoot(state.layouts[state.spaceId], state.orientation)).length > 1;
+}
+
+// An even 9px from the traffic lights to the trigger, matching the sidebar header's.
+export const LIGHTS_RESERVE = 'in-data-traffic-lights:pl-[calc(var(--lights-end)+9px)]';

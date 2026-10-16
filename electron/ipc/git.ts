@@ -139,8 +139,11 @@ export const git = {
     if (!Array.isArray(value)) throw new TypeError('refs must be an array');
     const refs = value.slice(0, MAX_REFS).map(validRef).filter((r) => r !== null);
     if (refs.length === 0) return {};
-    const dir = cwd === null ? homedir() : string(cwd, 'cwd');
-    const account = cwd === null ? undefined : githubAccount(user);
+    // A settled thread's worktree is gone; spawning gh there fails with ENOENT, so read as gh's active account from home.
+    const folder = cwd === null ? null : string(cwd, 'cwd');
+    const hasFolder = folder !== null && existsSync(folder);
+    const dir = hasFolder ? folder : homedir();
+    const account = hasFolder ? githubAccount(user) : undefined;
     // gh exits 1 when any ref doesn't resolve and still prints the others; no gh, no login or offline leaves every ref unknown.
     const json = await runGh(dir, refsQuery(refs), account, { okCodes: [0, 1] }).catch(() => '');
     try {
@@ -254,6 +257,12 @@ export const git = {
     return { branch, base, files: parseDiff(await runGit(top, ['diff', from, commit, ...DIFF_FLAGS]), false) };
   },
 
+  async turnDiff(_sender, cwd, from, to) {
+    const top = await topLevel(string(cwd, 'cwd'));
+    const end = to === undefined ? await snapshotCommit(top, 'harness turn diff') : commitHash(to, 'to');
+    return parseDiff(await runGit(top, ['diff', commitHash(from, 'from'), end, ...DIFF_FLAGS]), false);
+  },
+
   async runCheck(_sender, cwd, command) {
     const top = await topLevel(string(cwd, 'cwd'));
     return runCheck(top, string(command, 'command', 2000));
@@ -363,12 +372,18 @@ function parseChecks(json: string): PrCheck[] {
   }));
 }
 
+function commitHash(value: unknown, name: string) {
+  const sha = string(value, name, 64);
+  if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha)) throw new TypeError(`${name} must be a commit hash`);
+  return sha;
+}
+
 function oneOf<T extends string>(value: unknown, options: readonly T[], name: string): T {
   if (!options.includes(value as T)) throw new TypeError(`${name} must be one of ${options.join(', ')}`);
   return value as T;
 }
 
-/** Thread worktrees live under the worktree root (Settings › Git), never inside the project, so its own `git status` stays clean. */
+/** Thread worktrees live under the worktree root (Settings › Git and worktrees), never inside the project, so its own `git status` stays clean. */
 function insideWorktreeRoot(path: string) {
   const abs = resolve(path);
   if (!isUnderWorktreeRoot(abs)) throw new Error(`${path} is not a Mochi worktree`);

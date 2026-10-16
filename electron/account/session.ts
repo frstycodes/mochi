@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 import type { MochiAccount, MochiUser } from '../../src/host/types/account.ts';
 import { openWindows } from '../agents/events.ts';
-import { authorizeUrl, codeExchange, codeFromCallback, ENDPOINTS, newPkce, refreshExchange, tokensFrom, userFrom, type Tokens } from './oauth.ts';
+import { accountPortalUrl, authorizeUrl, codeExchange, codeFromCallback, ENDPOINTS, newPkce, refreshExchange, tokensFrom, userFrom, type Tokens } from './oauth.ts';
 
 /**
  * The Clerk instance's Frontend API URL and its OAuth application's client id: public values, not secrets (a public PKCE
@@ -84,6 +84,12 @@ export async function signIn(): Promise<MochiAccount> {
 
 export async function cancelSignIn() {
   pending?.cancel();
+}
+
+/** Your profile, email, password and connected accounts are Clerk's to edit: its hosted Account Portal, in your browser. */
+export async function openAccountPortal() {
+  if (!ISSUER) throw new Error("Sign-in isn't set up in this build of Mochi");
+  await shell.openExternal(accountPortalUrl(ISSUER));
 }
 
 /** Forgets the session here and revokes its refresh token at Clerk, best effort: signing out never waits on the network to succeed. */

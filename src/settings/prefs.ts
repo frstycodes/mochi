@@ -3,6 +3,7 @@ import type { SearchEngine } from '../host/types/browser.ts';
 import type { PaneTabKind } from '../model.ts';
 import { accessOf, type SharedAccess } from '../runtime/access.ts';
 import { effortId, modelId } from '../runtime/models.ts';
+import type { ToolPolicies } from '../runtime/toolPolicy.ts';
 
 /**
  * Renderer-only preferences (SETTINGS.md): one localStorage entry, read synchronously so reducers and module code can use
@@ -10,9 +11,13 @@ import { effortId, modelId } from '../runtime/models.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
+  /** Off: the sidebar stays solid instead of showing the window's vibrancy (macOS) or Mica (Windows 11). */
+  translucentSidebar: boolean;
   /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
   lightTheme: string;
   darkTheme: string;
+  /** Installed color theme ids, in the order you starred them: first in the theme pickers and in ⌘K. Kept when a package is removed, so reinstalling brings them back. */
+  starredThemes: string[];
   projectsFolder: string;
   restoreLayout: boolean;
   /** NoticeKind values that raise an OS notification while the window is in the background. */
@@ -39,6 +44,14 @@ export interface Prefs {
   simplifyAuto: boolean;
   simplifyAutoWords: number;
   branchFrom: 'current' | 'base';
+  /** When the agent goes idle, whether Mochi runs the goal's criterion checks (`useIdleChecks`). */
+  idleChecks: 'edited' | 'always' | 'off';
+  /** What open_pr does with critical gaps: refuse until fixed or Open anyway, or open and list them. */
+  prGaps: 'block' | 'warn';
+  /** A goal the agent proposes (`propose_goal`) waits for your Accept, or applies at once with an undo. */
+  proposedGoals: 'ask' | 'apply';
+  /** VerdictKind values that notify when a thread you aren't looking at goes idle. */
+  idleAlerts: string[];
   branchPrefix: string;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
@@ -55,12 +68,16 @@ export interface Prefs {
   demoData: boolean;
   /** How far agents may change Mochi through its tools (RUNTIME.md › Mochi tools): deletes and settings always ask first. */
   agentControl: AgentControl;
+  /** Per-tool choices over the level (`src/runtime/toolPolicy.ts`); a choice a tool's tier doesn't offer is ignored when read. */
+  toolPolicies: ToolPolicies;
   /** What model and effort `create_thread` may give a new thread (RUNTIME.md › Mochi tools). */
   threadModels: ThreadModels;
   /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
   recordReplays: boolean;
   /** The rewind mode you last ran, offered first next time. */
   rewindMode: 'chat' | 'files';
+  /** Rebound shortcuts only, command id → chord text (`src/keymap.ts`); '' leaves a command without one. */
+  keybindings: Record<string, string>;
 }
 
 export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
@@ -71,16 +88,25 @@ export const AGENT_CONTROLS = ['read', 'changes', 'everything'] as const;
 
 export type AgentControl = (typeof AGENT_CONTROLS)[number];
 
+/** Adds `id` to a starred list (models, themes) or takes it out. */
+export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
+
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
+  translucentSidebar: true,
   lightTheme: 'mochi',
   darkTheme: 'mochi',
   projectsFolder: '~/dev',
   restoreLayout: true,
+  idleChecks: 'edited',
+  proposedGoals: 'ask',
+  prGaps: 'block',
+  idleAlerts: ['gaps', 'needs-you', 'stalled'],
   alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],
+  starredThemes: [],
   effort: 'high',
   speed: '',
   agent: 'claude',
@@ -105,9 +131,11 @@ export const DEFAULT_PREFS: Prefs = {
   simulator: '',
   demoData: false,
   agentControl: 'everything',
+  toolPolicies: {},
   threadModels: 'cheaper',
   recordReplays: true,
   rewindMode: 'files',
+  keybindings: {},
 };
 
 export const PREFS_KEY = 'mochi.prefs.v1';
@@ -135,7 +163,7 @@ export function setPrefs(patch: Partial<Prefs>) {
   listeners.forEach((l) => l());
 }
 
-/** Settings › General's Reduce motion, falling back to the OS setting; for code outside React (scroll behaviour). */
+/** Settings › Appearance's Reduce motion, falling back to the OS setting; for code outside React (scroll behaviour). */
 export function prefersReducedMotion() {
   const { reduceMotion } = prefs;
   return reduceMotion === 'system' ? matchMedia('(prefers-reduced-motion: reduce)').matches : reduceMotion === 'on';
@@ -166,6 +194,8 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
   if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
+  if (!isStringRecord(saved.keybindings)) delete saved.keybindings;
+  if (!isStringRecord(saved.toolPolicies)) delete saved.toolPolicies;
   const next: Record<string, unknown> = { ...DEFAULT_PREFS };
   for (const [key, fallback] of Object.entries(DEFAULT_PREFS)) {
     const value = saved[key];
@@ -182,6 +212,11 @@ function load(): Prefs {
   } catch {
     return DEFAULT_PREFS;
   }
+}
+
+// A declaration, not a const: `load()` runs at the top of this module, before a const below it would exist.
+function isStringRecord(value: unknown) {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.values(value).every((v) => typeof v === 'string');
 }
 
 if (typeof window !== 'undefined') window.addEventListener('storage', (e) => e.key === PREFS_KEY && reloadPrefs());

@@ -1,8 +1,8 @@
 import { app, BrowserWindow, Notification } from 'electron';
 import type { AgentEvent } from '../../src/host/types/agent.ts';
-import type { WatchConfig } from '../../src/host/types/notify.ts';
+import type { ThreadAddressed, WatchConfig } from '../../src/host/types/notify.ts';
 import type { ScheduleEvent } from '../../src/host/types/schedule.ts';
-import { isQuiet } from '../../src/notify/model.ts';
+import { isAddressed, isQuiet } from '../../src/notify/model.ts';
 import { resetLabel } from '../../src/usage/limits.ts';
 import { ciTitle, ciTransition, coalesce, type CiSeen, type OsNotice } from '../../src/notify/watch.ts';
 import { emitAgentEvent, onAgentEvent } from '../agents/events.ts';
@@ -29,7 +29,7 @@ const BURST_MS = 1500;
 let burst: OsNotice[] = [];
 let burstTimer: ReturnType<typeof setTimeout> | undefined;
 // macOS drops click handlers for notifications that get garbage-collected, so live ones are held until clicked or closed.
-const live = new Set<Notification>();
+const live = new Map<Notification, OsNotice>();
 
 const CI_BASE_MS = 2 * 60_000;
 const CI_MAX_MS = 30 * 60_000;
@@ -75,10 +75,27 @@ function noticeFor(event: AgentEvent, title: string): OsNotice | null {
   return event.status === 'done' ? { ...base, kind: 'done', body: 'Turn finished, ready for review' } : { ...base, kind: 'failed', body: event.error ?? 'The agent stopped with an error' };
 }
 
+/** Closes a thread's notifications that what you did in Mochi settled; a summary spans threads, so it stays. */
+export function closeAddressed({ threadId, ...signal }: ThreadAddressed) {
+  closeWhere((n) => n.threadId === threadId && n.kind !== 'summary' && isAddressed({ kind: n.kind }, signal));
+}
+
+function closeWhere(isDone: (notice: OsNotice) => boolean) {
+  for (const [n, notice] of live) {
+    if (!isDone(notice)) continue;
+    n.close();
+    live.delete(n);
+  }
+}
+
 function trackRequests(event: AgentEvent) {
   const open = requests.get(event.threadId) ?? new Set<string>();
   if (event.type === 'approval' || event.type === 'question') open.add(event.requestId);
-  else if (event.type === 'resolved') open.delete(event.requestId);
+  else if (event.type === 'resolved') {
+    open.delete(event.requestId);
+    // Answered in a window or on another device: its Approve/Deny would now answer nothing.
+    closeWhere((n) => n.requestId === event.requestId);
+  }
   // A turn's end or limit withdraws whatever it was still asking.
   else if (event.type === 'turn-end' || (event.type === 'limit' && !event.isTurnHeld)) open.clear();
   else return;
@@ -107,7 +124,7 @@ function show(notice: OsNotice) {
   // macOS shows the first action as a button and the rest under it only in the Alerts style (System Settings › Notifications).
   const actions = notice.requestId ? ['Approve', 'Deny'] : ['Open'];
   const n = new Notification({ title: notice.title, body: notice.body, actions: actions.map((text) => ({ type: 'button' as const, text })) });
-  live.add(n);
+  live.set(n, notice);
   n.on('close', () => live.delete(n));
   n.on('click', () => {
     live.delete(n);

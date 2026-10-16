@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { ChevronDown, Hierarchy2, Warning } from 'reicon-react';
-import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -14,6 +13,7 @@ import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
 import { getPrefs } from '../settings/prefs';
 import { useHarness } from '../store';
+import { MetaChip } from '../MetaChip';
 import { SwitchBranchDialog } from './SwitchBranchDialog';
 import { branchName, isUnstarted, uniqueBranch, type WorkspaceDraft } from './workspace';
 
@@ -62,10 +62,15 @@ export function useThreadWorkspace(thread: Thread): Workspace | null {
 /** The meta row's workspace controls: worktree or project folder, then its branch. */
 export function WorkspaceControls({ workspace }: { workspace: Workspace }) {
   return (
-    <>
+    <div role="group" aria-label="Branch and worktree" className="flex h-7 items-center rounded-lg bg-foreground/5">
+      {!workspace.branches.error && (
+        <>
+          <BranchPicker workspace={workspace} />
+          <span aria-hidden className="h-3.5 w-px bg-foreground/15" />
+        </>
+      )}
       <WorktreeCheckbox workspace={workspace} />
-      {!workspace.branches.error && <BranchPicker workspace={workspace} />}
-    </>
+    </div>
   );
 }
 
@@ -74,9 +79,9 @@ function WorktreeCheckbox({ workspace }: { workspace: Workspace }) {
   const { draft, onChange } = workspace;
   const id = useId();
   return (
-    <label htmlFor={id} className="flex h-6 cursor-pointer items-center gap-1.5 rounded-full px-2 font-medium text-subtle-foreground transition-colors select-none hover:text-foreground has-data-checked:text-foreground">
+    <label htmlFor={id} className="flex h-7 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-muted-foreground transition-colors select-none hover:bg-foreground/5 hover:text-foreground has-data-checked:text-foreground">
       <Checkbox id={id} checked={draft.mode === 'worktree'} onCheckedChange={(on) => onChange({ mode: on ? 'worktree' : 'folder' })} className="size-3.5 border-current [&_svg]:size-3!" />
-      Worktree
+      worktree
     </label>
   );
 }
@@ -108,11 +113,11 @@ function BranchPicker({ workspace }: { workspace: Workspace }) {
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="xs" className="max-w-48 text-subtle-foreground hover:text-foreground" aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}>
+        <MetaChip className="bg-transparent" aria-label={`${isNew ? 'From' : 'Branch'}: ${label ?? 'loading'}`}>
           <Hierarchy2 />
           <span className="truncate">{isNew ? `from ${label ?? '…'}` : (label ?? 'Pick a branch')}</span>
           <ChevronDown data-icon="inline-end" />
-        </Button>
+        </MetaChip>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 max-w-[calc(100vw-2rem)] p-0">
         <BranchList workspace={workspace} onChoose={choose} />
@@ -240,7 +245,7 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
   ].filter((n): n is string => !!n);
   if (!notes.length) return null;
   return (
-    <ul role="status" className="flex flex-col gap-0.5 px-2 pb-1 type-caption text-subtle-foreground">
+    <ul role="status" className="flex flex-col gap-0.5 px-2 pt-2 pb-1 type-caption text-subtle-foreground">
       {notes.map((note) => (
         <li key={note} className="flex gap-1.5">
           <Warning className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden />

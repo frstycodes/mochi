@@ -4,10 +4,12 @@ import { linkedAccountId, profilesUsing } from '../settings/accounts.ts';
 import { REDACTED, redactSecrets, stripSecrets, type ConfigChange, type McpEntry, type McpServerDef } from '../settings/agentConfig.ts';
 import { findSetting, recordValue, settingsCatalog, valueLabel, type Setting, type SettingSources } from '../settings/catalog.ts';
 import { HARNESSES } from '../settings/harnesses.ts';
+import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
+import { IS_MAC } from '../keys.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
 
-type SettingsToolName = 'get_settings' | 'update_settings' | 'list_profiles' | 'add_mcp_server' | 'remove_mcp_server' | 'remove_profile';
+type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'remove_mcp_server' | 'remove_profile';
 
 /**
  * Settings tools (RUNTIME.md › Mochi tools). Reads go through the settings catalog; a suggestion opens one live settings
@@ -21,7 +23,8 @@ export const SETTINGS_TOOLS = {
       const { section, profileId } = ctx.args;
       const profile = await reach(ctx, profileId);
       const sources = await sourcesFor(ctx, profile);
-      const catalog = settingsCatalog({ profile, config: sources.config }).filter((s) => !section || s.section === section);
+      // Shortcuts have their own pair of tools, which check clashes; listed here only when asked for.
+      const catalog = settingsCatalog({ profile, config: sources.config }).filter((s) => (section ? s.section === section : s.section !== 'keyboard'));
       const settings = await Promise.all(catalog.map((s) => settingView(ctx, s, sources, section === 'profile')));
       return { result: { profile: { id: profile.id, name: profile.name }, settings } };
     },
@@ -45,6 +48,7 @@ export const SETTINGS_TOOLS = {
         const setting = findSetting(catalog, change.key);
         if (!setting) throw new Error(`No setting ${change.key}${isProfileKey ? ` in ${profile.name}` : ''}; get_settings lists them`);
         if (setting.locked) throw new Error(`${setting.label} is the user's alone: ${setting.locked}`);
+        if (setting.control.type === 'shortcut') throw new Error(`${change.key} is a shortcut; suggest it with set_keybinding, which checks clashes and reserved chords`);
         const current = setting.read(sources);
         if (current === undefined) throw new Error(`${setting.label} can't be read here, so it can't be suggested (it needs the desktop app)`);
         if (!setting.write(change.value, sources)) throw new Error(`"${change.value}" isn't a value of ${change.key}${allowedHint(setting)}`);
@@ -60,6 +64,41 @@ export const SETTINGS_TOOLS = {
       const title = changes.length === 1 ? `${authorName(by)} suggests changing ${labels[0]}` : `${authorName(by)} suggests ${changes.length} setting changes`;
       open(ctx, card(ctx, cardId('setting', caller.id), 'setting', { title, detail: args.reason, settings: { by, reason: args.reason, changes, before } }));
       return { result: { shown: labels, note: SHOWN_NOTE } };
+    },
+  },
+  get_keybindings: {
+    run: ({ env }) => {
+      const overrides = env.prefs.get().keybindings;
+      return {
+        result: {
+          platform: IS_MAC ? 'macOS' : 'Windows or Linux',
+          commands: COMMAND_IDS.map((id) => ({ id, title: COMMANDS[id].title, group: COMMANDS[id].group, scope: COMMANDS[id].scope, keys: chordText(bindingOf(id, overrides)), default: chordText(defaultKeys(id)), isCustom: isCustom(id, overrides) })),
+          fixed: FIXED_KEYS.map(({ keys, what }) => ({ keys: chordText(keys), what })),
+          reserved: RESERVED_NOTE,
+        },
+      };
+    },
+  },
+  set_keybinding: {
+    run: (ctx) => {
+      const { args, caller, env } = ctx;
+      const { command, onConflict } = args;
+      if (!isCommandId(command)) throw new Error(`No command ${command}; get_keybindings lists them`);
+      const keys = args.keys.trim() === '' ? null : parseChord(args.keys);
+      if (args.keys.trim() !== '' && !keys) throw new Error(`"${args.keys}" isn't a chord: modifiers from mod, nav, alt, shift, then one key, joined by +, like "mod+shift+K"`);
+      const overrides = env.prefs.get().keybindings;
+      const current = bindingOf(command, overrides);
+      if (chordText(current) === chordText(keys)) throw new Error(`${COMMANDS[command].title} is already ${keys ? chordText(keys) : 'without a shortcut'}`);
+      const check = checkBinding(command, keys, overrides);
+      if (!check.ok && 'reason' in check) throw new Error(`${chordText(keys)} is reserved: ${check.reason}`);
+      const holder = check.ok ? undefined : check.conflict;
+      if (holder && !onConflict) throw new Error(`${chordText(keys)} is already used by ${COMMANDS[holder].title} (${holder}); pass onConflict "swap" (it gets ${chordText(current) || 'no shortcut'}) or "replace" (it loses its shortcut)`);
+      const changes = [{ key: `keybinding.${command}`, value: chordText(keys) }, ...(holder ? [{ key: `keybinding.${holder}`, value: onConflict === 'swap' ? chordText(current) : '' }] : [])];
+      const before = Object.fromEntries(changes.map((c) => [c.key, chordText(bindingOf(c.key.slice('keybinding.'.length) as CommandId, overrides))]));
+      const by = caller.providers[0];
+      const target = `${keys ? 'a new shortcut' : 'removing the shortcut'} for ${COMMANDS[command].title}`;
+      open(ctx, card(ctx, cardId('setting', caller.id), 'setting', { title: `${authorName(by)} suggests ${target}`, detail: args.reason, settings: { by, reason: args.reason, changes, before } }));
+      return { result: { shown: changes.map((c) => c.key), note: SHOWN_NOTE } };
     },
   },
   list_profiles: {
@@ -127,6 +166,10 @@ export const SETTINGS_TOOLS = {
   },
 } satisfies { [K in SettingsToolName]: ToolSpec<K> };
 
+const RESERVED_NOTE = IS_MAC
+  ? 'Refused on macOS: mod+Q, mod+H, mod+alt+H, mod+M, mod+Tab, mod+`, mod+Space, nav+Space, nav+left/right/up/down (Mission Control), mod+shift+3/4/5, Copy, Paste, Cut, Select all, Undo, Redo; and a chord without mod, nav or alt unless it ends in a letter, digit or F-key'
+  : 'Refused on Windows and Linux: nav+Tab, nav+F4, nav+Space, mod+alt+Delete, Copy, Paste, Cut, Select all, Undo, Redo (mod+Y too); the Windows key; and a chord without mod, nav or alt unless it ends in a letter, digit or F-key';
+
 const SHOWN_NOTE = "The user sees these as live settings in your thread and changes them there if they want. You won't get their answer; get_settings reads the values later.";
 
 type Ctx<K extends SettingsToolName> = ToolContext<Args<K>>;
@@ -171,6 +214,7 @@ async function settingView(ctx: ToolContext<unknown>, setting: Setting, sources:
     key: setting.key,
     label: setting.label,
     section: setting.section,
+    ...(setting.group && { group: setting.group }),
     type: control.type,
     value: value === undefined ? null : control.type === 'instructions' ? redactSecrets(value) : value,
     ...((control.type === 'choice' || control.type === 'select') && { allowed: control.options.map((o) => o.value) }),

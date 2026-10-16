@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
@@ -23,17 +23,17 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input';
 import { AutoHeight } from '@/components/ui/auto-height';
-import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { MetaChip } from './MetaChip';
 import type { Provider, Repo } from './model';
-import { EffortPicker, ModelPicker, SpeedPicker, useModels } from './ModelControls';
+import { EffortPicker, ModelPicker, SpeedPicker, useModels, useNewThreadDefaults } from './ModelControls';
 import { optionFor, type ModelOption } from './runtime/models';
 import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
 import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import type { SlashItem } from './chat/slash';
-import { TokenTextarea } from './chat/SlashToken';
+import { ComposerEditor } from './chat/ComposerEditor';
 import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
 import { IMAGE_ERRORS, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES } from './chat/images';
 
@@ -68,13 +68,13 @@ export function useComposerHandoff(leafId: string) {
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-lift transition-colors has-[textarea:focus]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
+    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-composer transition-colors has-[.cm-focused]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
       <AutoHeight className="justify-end">{children}</AutoHeight>
     </div>
   );
 }
 
-type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | 'onSubmit'> & {
+type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> & {
   controls: ThreadControls;
   provider: Provider;
   /** Keeps the model list to `provider`. */
@@ -97,8 +97,10 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', hasNoAttachments, meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
-  const model = optionFor(useModels(useSpace().id)[provider], controls.model, provider);
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', hasNoAttachments, meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
+  const catalog = useModels(useSpace().id);
+  const model = optionFor(catalog[provider], controls.model, provider);
+  const defaults = useNewThreadDefaults(catalog, model);
   const draft = useComposerDraft(draftKey, draftExtra);
   const send = async (message: PromptInputMessage) => {
     const result = await onSend(message);
@@ -109,7 +111,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
     <PromptInput multiple globalDrop accept={IMAGE_TYPES.join(',')} maxFileSize={MAX_IMAGE_BYTES} maxFiles={MAX_IMAGES} onError={(e) => toast.error(IMAGE_ERRORS[e.code])} onSubmit={send}>
       <ComposerAttachments />
       <PromptInputBody>
-        <TokenTextarea items={slashItems} className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
+        <ComposerEditor items={slashItems} className={cn('type-prose max-md:text-base', className)} {...editorProps} />
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>
@@ -124,9 +126,9 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
               </PromptInputActionMenuContent>
             </PromptInputActionMenu>
           )}
-          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} />
-          <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} />
-          <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} />
+          <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} defaults={defaults.model} />
+          <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />
+          <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />
         </PromptInputTools>
         <PromptInputTools>
           {meter}
@@ -239,7 +241,7 @@ export function ComposerMeta({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       className={cn(
-        'relative flex min-h-8 flex-wrap items-center gap-x-1 px-1 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
+        'relative flex min-h-8 flex-wrap items-center gap-1.5 px-1 pt-2 type-caption text-subtle-foreground before:absolute before:-inset-x-6 before:-top-6 before:-bottom-6 before:-z-10 before:bg-linear-to-t before:from-background before:from-40% before:to-transparent',
         className,
       )}
       {...props}
@@ -264,15 +266,10 @@ export function PermissionsMenu({ threadId, provider, value, onChange }: { threa
   return (
     <DropdownMenu onOpenChange={(open) => !open && setIsArmed(false)}>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="xs"
-          className={cn('text-subtle-foreground hover:text-foreground', access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:hover:bg-warning/20')}
-          aria-label={`Permissions: ${access}`}
-        >
+        <MetaChip className={cn(access === 'Full access' && 'bg-warning/12 text-warning hover:bg-warning/20 hover:text-warning aria-expanded:bg-warning/20 aria-expanded:text-warning dark:bg-warning/12 dark:hover:bg-warning/20')} aria-label={`Permissions: ${access}`}>
           <AccessIcon access={access} />
           {access}
-        </Button>
+        </MetaChip>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-76">
         <DropdownMenuGroup>

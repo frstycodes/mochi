@@ -25,6 +25,8 @@ export interface AccountHost {
   signIn(): Promise<MochiAccount>;
   cancelSignIn(): Promise<void>;
   signOut(): Promise<MochiAccount>;
+  /** Opens Clerk's Account Portal (profile, email, password) in your browser. */
+  openAccountPortal(): Promise<void>;
   onChange(callback: (account: MochiAccount) => void): () => void;
 }
 
@@ -33,5 +35,6 @@ export const accountMethods = {
   signIn: 'invoke',
   cancelSignIn: 'invoke',
   signOut: 'invoke',
+  openAccountPortal: 'invoke',
   onChange: 'event',
 } satisfies Manifest<AccountHost>;

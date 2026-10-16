@@ -1,5 +1,5 @@
 import { Trash3 } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
 import { useSimulators } from '../../sim/useSimulators';
@@ -13,8 +13,8 @@ export function BrowserSection() {
     toast('Address history cleared', { duration: UNDO_MS, action: { label: 'Undo', onClick: () => replaceAddressHistory(previous) } });
   };
   return (
-    <div className="flex flex-col gap-8">
-      <SettingsGroup footer="What the address bar searches when you type something that isn't a URL.">
+    <div className="flex flex-col gap-10">
+      <SettingsGroup title="Browser">
         <CatalogRow settingKey="searchEngine" />
         <SettingsRow
           id="addressHistory"
@@ -41,7 +41,7 @@ const FIRST_BOOTED = 'first-booted';
 
 function SimulatorGroup() {
   return (
-    <SettingsGroup footer="The Simulator tab opens on this device; you can still switch per thread. A simulator that's gone falls back to the first booted one.">
+    <SettingsGroup title="Simulator" footer="A simulator that's gone falls back to the first booted one.">
       <CatalogRow settingKey="simulator" />
     </SettingsGroup>
   );

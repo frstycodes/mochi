@@ -2,14 +2,19 @@ import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
-import type { AgentCommand, AgentInfo, McpCall, McpServer, WebLink } from '../../../src/model.ts';
+import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
+import type { AgentCommand, AgentInfo, McpCall, McpServer, McpWidgetResult, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
+import type { SaveImage } from '../images.ts';
 
-/** Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across messages. */
-export function createMapper(threadId: string, cwd: string) {
+/**
+ * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across
+ * messages. `saveImage` keeps images a tool returns as files; without it they're dropped.
+ */
+export function createMapper(threadId: string, cwd: string, saveImage?: SaveImage) {
   const tools = new Map<string, { name: string; input: Record<string, unknown> }>();
   const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
@@ -26,6 +31,9 @@ export function createMapper(threadId: string, cwd: string) {
   /** Skill names from init; until it arrives, skills sent messages open with wait in `typed`. */
   let skills: string[] | undefined;
   const typed: string[] = [];
+  /** `mcp__<server>__<tool>` → the MCP App view it declares, from `mcpServerStatus()`; `read`: tool-name prefixes of servers already read while connected. */
+  const widgets = new Map<string, { server: string; uri: string }>();
+  const read = new Set<string>();
 
   // A message opening with `/skill` loads it with no event of its own in the stream (2.1.296), so the load is reported here.
   function typedSkills(): AgentEvent[] {
@@ -69,6 +77,11 @@ export function createMapper(threadId: string, cwd: string) {
     const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block, result) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
     if (links) end.links = links;
+    // A Read of an image returns it too, but the file is already on disk: the work log shows it from its path.
+    const images = saveImage && tool.name !== 'Read' ? imageBlocks(block).map((i) => saveImage(i.media_type, i.data)) : [];
+    if (images.length) end.images = images;
+    const widget = widgets.get(tool.name);
+    if (widget && !block.is_error) end.widget = { ...widget, input: tool.input, result: widgetResult(block, result) };
     const task = (result as { task?: { id?: unknown } } | undefined)?.task;
     if (tool.name !== 'TaskCreate' || typeof task?.id !== 'string') return [end];
     tasks.push({ id: task.id, title: String(tool.input.subject ?? ''), status: 'pending' });
@@ -232,6 +245,8 @@ export function createMapper(threadId: string, cwd: string) {
     return cleared;
   }
 
+  const isUnread = (name?: string) => !!name?.startsWith('mcp__') && ![...read].some((p) => name.startsWith(p));
+
   return {
     map,
     /** A message handed to Claude Code: a leading `/skill` is a skill load, reported once init has listed the skills. */
@@ -242,6 +257,23 @@ export function createMapper(threadId: string, cwd: string) {
     },
     /** The task id `query.stopTask` takes for a subagent, once Claude Code has registered it. */
     taskOf: (subagentId: string) => agents.get(subagentId)?.taskId,
+    /** `message` ends a call to an MCP server whose tools haven't been read yet: `learnWidgets` must run before it's mapped. */
+    needsWidgets(message: SDKMessage) {
+      if (message.type !== 'user' || typeof message.message.content === 'string') return false;
+      return message.message.content.some((b) => b.type === 'tool_result' && isUnread(tools.get(b.tool_use_id)?.name));
+    },
+    /** Records which tools declare an MCP App view. Servers still connecting are read again on their next call. */
+    learnWidgets(list: McpServerStatus[]) {
+      for (const s of list) {
+        if (s.status !== 'connected') continue;
+        const prefix = `mcp__${mcpToolPrefix(s.name)}__`;
+        read.add(prefix);
+        for (const t of s.tools ?? []) {
+          const uri = getToolUiResourceUri({ _meta: t._meta });
+          if (uri) widgets.set(prefix + t.name, { server: s.name, uri });
+        }
+      }
+    },
     markInterrupting() {
       isInterrupting = true;
     },
@@ -303,7 +335,20 @@ const mcpStatus = (status: string) => (MCP_STATUSES.has(status) ? status : 'fail
 // Claude Code names an MCP tool `mcp__<server>__<tool>`, with characters outside [A-Za-z0-9_-] in the server name replaced by `_`.
 const mcpToolPrefix = (name: string) => name.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: boolean; content?: string | { type: string; text?: string }[] };
+type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: boolean; content?: string | { type: string; text?: string; source?: { type: string; media_type?: string; data?: string } }[] };
+
+/** What an MCP App view gets of a call's result: its text blocks, and `structuredContent` from `tool_use_result` (an MCP tool's raw result in 2.1.296). */
+function widgetResult(block: ToolResultBlock, result: unknown): McpWidgetResult {
+  const content = typeof block.content === 'string' ? [{ type: 'text' as const, text: block.content }] : (block.content ?? []).flatMap((c) => (c.type === 'text' && typeof c.text === 'string' ? [{ type: 'text' as const, text: c.text }] : []));
+  const structured = (result as { structuredContent?: unknown } | undefined)?.structuredContent;
+  return structured && typeof structured === 'object' ? { content, structuredContent: structured as Record<string, unknown> } : { content };
+}
+
+/** The base64 image blocks in a tool's result (a screenshot); URL-sourced ones aren't Claude Code's to return. */
+function imageBlocks(block: ToolResultBlock) {
+  if (typeof block.content === 'string') return [];
+  return (block.content ?? []).flatMap((c) => (c.type === 'image' && c.source?.type === 'base64' && c.source.media_type && c.source.data ? [{ media_type: c.source.media_type, data: c.source.data }] : []));
+}
 
 const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 // `Task` is the Agent tool's name in Claude Code before 2.1.

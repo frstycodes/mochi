@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from './toast/store.ts';
 
 export function copyText(text: string, message: string) {
   navigator.clipboard.writeText(text).then(

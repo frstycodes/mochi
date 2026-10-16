@@ -115,6 +115,18 @@ function criteriaFrom(thread: Thread, draft: GoalDraft, n: number, diff: string[
   return next;
 }
 
+/** The message that tells the agent about steps you added: it plans in its own task tools, so a step added only to Mochi's goal never reaches it. Null when nothing was added. */
+export function addedStepsNote(draft: GoalDraft) {
+  const added = draft.steps.filter((d) => !d.id && !d.isRemoved && d.title.trim());
+  if (!added.length) return null;
+  const lines = added.map((d) => {
+    const acceptance = acceptanceOf(d);
+    const done = acceptance && [acceptance.text, acceptance.command && `\`${acceptance.command}\``].filter(Boolean).join(': ');
+    return `- ${d.title.trim()}${done ? ` (done when ${done})` : ''}`;
+  });
+  return `I added to the goal's plan while you worked:\n${lines.join('\n')}\nFit it into your plan; get_goal has the step ids.`;
+}
+
 function acceptanceOf(d: DraftStep) {
   const text = d.acceptance?.text.trim() ?? '';
   const command = d.acceptance?.command?.trim() || undefined;

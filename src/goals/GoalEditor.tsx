@@ -11,9 +11,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
+import { queuedMessage } from '../chat/outbox';
 import { useHarness } from '../store';
-import { StepStatusIcon, TooltipIconButton } from '../ui';
-import { applyDraft, draftFrom, type DraftCriterion, type DraftStep, type GoalDraft } from './edit';
+import { IconSwap, StepStatusIcon, TooltipIconButton } from '../ui';
+import { addedStepsNote, applyDraft, draftFrom, type DraftCriterion, type DraftStep, type GoalDraft } from './edit';
 import { templatesFor } from './templates';
 import { goalPrompt, parseSteps } from '../utility/prompts';
 import { useDraft } from '../utility/useDraft';
@@ -67,6 +68,9 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
 
   const save = () => {
     if (hasEdits) dispatch({ type: 'edit-goal', threadId: thread.id, draft });
+    // Mid-turn the agent is busy with its own plan: the note waits in the queue and goes out when it's idle, never interrupting.
+    const note = hasEdits && thread.live?.isWorking ? addedStepsNote(draft) : null;
+    if (note) dispatch({ type: 'queued-add', threadId: thread.id, message: queuedMessage(note, { mentions: [], isCommand: false, typedSkills: [] }) });
     if (hasDriftEdits) dispatch({ type: 'drift-settings', threadId: thread.id, isMuted: isDriftMuted });
     onClose();
   };
@@ -257,7 +261,7 @@ function StepEditRow({
           <ArrowDown />
         </TooltipIconButton>
         <TooltipIconButton label={step.isRemoved ? 'Keep this step' : 'Remove this step'} hint={step.isLocked ? "Done steps stay in the goal's history." : undefined} disabled={step.isLocked} onClick={() => onChange({ isRemoved: !step.isRemoved })}>
-          {step.isRemoved ? <Undo /> : <Trash3 />}
+          <IconSwap id={step.isRemoved ? 'undo' : 'remove'}>{step.isRemoved ? <Undo /> : <Trash3 />}</IconSwap>
         </TooltipIconButton>
       </div>
       {isCriteriaOpen && !step.isRemoved && (

@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import { host } from '@/host';
-import type { BrowserContextMenu, BrowserDevtools, BrowserEmulation, CompareBase } from '@/host/types/browser';
+import type { BrowserContextMenu, BrowserDevtools, BrowserDialog, BrowserEmulation, CompareBase } from '@/host/types/browser';
 import { DEVICES, RESPONSIVE } from './devices';
+import { notifyDownload } from './downloads';
 import { pushHistory } from './url';
 
 export interface ConsoleEntry {
@@ -51,6 +52,8 @@ export interface Page {
   find: FindState | null;
   /** The page's right-click menu while it's open, at the point the page reported. */
   menu: BrowserContextMenu | null;
+  /** The alert or confirm blocking the page; the user answers it in the native sheet. */
+  dialog: BrowserDialog | null;
 }
 
 const CONSOLE_LIMIT = 50;
@@ -60,7 +63,7 @@ const TITLES_KEY = 'harness.browser.titles.v1';
 const pages = new Map<string, Page>();
 const listeners = new Set<() => void>();
 const byHostId = new Map<string, string>();
-let openListener: ((key: string, url: string) => void) | null = null;
+let tabListener: ((request: TabRequest) => void) | null = null;
 let history = load<string[]>(HISTORY_KEY, []);
 let titles = load<Record<string, string>>(TITLES_KEY, {});
 
@@ -142,6 +145,12 @@ export async function ensureView(key: string, spaceId: string) {
 }
 const creating = new Set<string>();
 
+/** The page and its native view without a mounted surface, so an agent can drive a tab while its thread is off screen. */
+export function openPage(key: string, url: string, spaceId: string) {
+  if (!pages.has(key)) seed(key, url);
+  return ensureView(key, spaceId);
+}
+
 export function destroyPage(key: string) {
   const page = pages.get(key);
   const id = page?.hostId;
@@ -161,10 +170,20 @@ export function pageKeys() {
   return [...pages.keys()];
 }
 
-/** `window.open` and target=_blank links in a page open as a new browser tab; the pane store decides where. */
-export function onOpenTab(listener: (key: string, url: string) => void) {
-  openListener = listener;
-  return () => void (openListener = null);
+/** What a page asks of its pane: a tab for its popup (`key` is the opener's page), or closing its own tab. */
+export type TabRequest = { type: 'popup'; key: string; hostId: string; url: string } | { type: 'close'; key: string };
+
+/** `window.open` and target=_blank links open a new browser tab; a popup's `window.close()` closes it. The pane store decides where. */
+export function onTabRequest(listener: (request: TabRequest) => void) {
+  tabListener = listener;
+  return () => void (tabListener = null);
+}
+
+/** Seeds the page at `key` with a native view main already made (a popup), so `ensureView` doesn't create another. */
+export function adoptView(key: string, hostId: string, url: string) {
+  byHostId.set(hostId, key);
+  pages.set(key, { ...seed(key, url), hostId });
+  listeners.forEach((l) => l());
 }
 
 export function emulationOf(page: Page, fit: { cssWidth: number; cssHeight: number; scale: number } | null): BrowserEmulation {
@@ -189,7 +208,10 @@ if (host.isDesktop)
       const { level, message, source, line } = event;
       updatePage(key, { console: [...(pages.get(key)?.console ?? []), { level, message, source, line }].slice(-CONSOLE_LIMIT) });
     } else if (event.type === 'devtools') updatePage(key, { devtools: event.mode });
-    else if (event.type === 'open') openListener?.(key, event.url);
+    else if (event.type === 'popup') tabListener?.({ type: 'popup', key, hostId: event.viewId, url: event.url });
+    else if (event.type === 'closed') forgetClosed(key, event.id);
+    else if (event.type === 'download') notifyDownload(event);
+    else if (event.type === 'dialog') updatePage(key, { dialog: event.kind && { kind: event.kind, message: event.message } });
     else if (event.type === 'found') {
       const find = pages.get(key)?.find;
       if (find) updatePage(key, { find: { ...find, active: event.active, matches: event.matches } });
@@ -199,6 +221,13 @@ if (host.isDesktop)
       updatePage(key, { menu });
     }
   });
+
+/** The view is already gone, so the page drops its host id before the tab closes: `destroyPage` would destroy it again. */
+function forgetClosed(key: string, hostId: string) {
+  byHostId.delete(hostId);
+  pages.delete(key);
+  tabListener?.({ type: 'close', key });
+}
 
 const viewports = new Map<string, { width: number; height: number }>();
 
@@ -243,6 +272,7 @@ function seed(key: string, url: string): Page {
     compare: null,
     find: null,
     menu: null,
+    dialog: null,
   };
   // Seeding inside a getSnapshot must return the same object every call until it changes.
   pages.set(key, page);

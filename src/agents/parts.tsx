@@ -3,9 +3,13 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { AgentLoader, type MochiFlavor } from '../AgentLoader';
 import { toolLabel, toolPhase } from '../agentPhase';
-import type { Subagent, Thread } from '../model';
+import type { Provider, Subagent, Thread } from '../model';
 import { oneLine } from '../runtime/subagents';
+import { useModels } from '../ModelControls';
+import { optionFor } from '../runtime/models';
+import { useSpace } from '../store';
 import { parseTool } from '../summary';
+import { ProviderMark } from '../ui';
 
 /** Each subagent is a Mochi of its own flavor, named after it; vanilla stays the thread's own Mochi. Past five, names count up ("Matcha 2"). */
 export function subagentPersona(thread: Thread, subagent: Subagent): { flavor: MochiFlavor; name: string } {
@@ -51,6 +55,17 @@ function currentStep(s: Subagent) {
   return last && !last.isDone ? toolLabel(parseTool(last.text)) : undefined;
 }
 
+/** The model it ran on by its picker name ("Haiku 5.5") beside its harness's mark; an id the list lacks shows as written. */
+export function SubagentModel({ provider, model, className }: { provider: Provider; model: string; className?: string }) {
+  const models = useModels(useSpace().id)[provider];
+  return (
+    <span className={cn('flex shrink-0 items-center gap-1.5 text-muted-foreground', className)}>
+      <ProviderMark provider={provider} size={14} />
+      {optionFor(models, model, provider).name}
+    </span>
+  );
+}
+
 /** Elapsed time and tokens, live while it runs. */
 export function SubagentMeta({ subagent, className }: { subagent: Subagent; className?: string }) {
   const elapsed = useElapsed(subagent.startedAt, subagent.endedAt);
@@ -62,7 +77,7 @@ export function SubagentMeta({ subagent, className }: { subagent: Subagent; clas
   );
 }
 
-const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
 export function useElapsed(startedAt: number, endedAt?: number) {
   const [now, setNow] = useState(() => Date.now());

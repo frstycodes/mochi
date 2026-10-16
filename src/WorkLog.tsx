@@ -23,11 +23,13 @@ import { describeCall } from './chat/describe';
 import { McpIcon } from './chat/McpIcon';
 import { PREVIEW_KINDS } from './files/kinds';
 import { patchSections } from './chat/turnChanges';
-import { imageMime } from './files/previews';
 import { outputLines } from './chat/output';
 import { Favicon, LinkList, LinkRow } from './WebLinks';
 import { isSendCall } from './chat/threadMessages';
 import { ThreadMessageBody, ThreadMessageIcon, ThreadMessageLine } from './chat/ThreadMessage';
+import { ICON_SWAP } from './ui';
+import { MessageImages } from './chat/MessageImages';
+import { isFilePath, useImageUrls } from './chat/imageSrc';
 
 const EXPAND = { duration: 0.2, ease: [0.23, 1, 0.32, 1] } as const;
 
@@ -45,7 +47,7 @@ export function WorkLog({ entries, skills = [], action }: { entries: ActivityEnt
   const lastTool = entries.findLastIndex((e) => e.kind === 'tool');
   const title = action ? { key: `live:${action.label}`, value: action } : { key: 'done', value: turnSummary(entries) };
   const files = useWorkLogFiles();
-  const images = [...new Set(tools.map(toolCall).flatMap((c) => (c.verb === 'Read' && isImage(c.target) ? [c.target] : [])))].slice(0, THUMBS_SHOWN);
+  const images = [...new Set(tools.flatMap((e) => [...(e.images ?? []), ...readImage(toolCall(e))]))].slice(0, THUMBS_SHOWN);
 
   return (
     <div className="-mx-2 flex flex-col">
@@ -115,7 +117,7 @@ export function CallList({ className, ...props }: ComponentProps<'ol'>) {
 }
 
 /** What a row needs from a call, whether the thread's own (`ActivityEntry`) or a subagent's (`SubagentStep`). */
-type ToolEntry = Pick<ActivityEntry, 'text' | 'description' | 'output' | 'exitCode' | 'patch' | 'links' | 'mcp' | 'sent'>;
+type ToolEntry = Pick<ActivityEntry, 'text' | 'description' | 'output' | 'exitCode' | 'patch' | 'links' | 'mcp' | 'sent' | 'images'>;
 
 /** One call: what it did in words, opening in place to the detail behind it. */
 export function CallRow({ entry, isRunning, files }: { entry: ToolEntry; isRunning: boolean; files: ThreadFiles | null }) {
@@ -175,12 +177,14 @@ function CallText({ call, description, hasOwnDescription, files }: { call: ToolC
 /** What a call opens to: the command and its output, the edit's diff, the file it read, the pages a search returned. */
 function callDetail(entry: ToolEntry, call: ToolCall, files: ThreadFiles | null): ReactNode {
   if (entry.sent) return <ThreadMessageBody text={entry.sent.text}>Delivered to {entry.sent.title}</ThreadMessageBody>;
+  // Saved under a content hash, so the file name says nothing; the viewer titles them by order.
+  if (entry.images?.length) return <MessageImages photos={entry.images.map((src, i) => ({ src, name: `Image ${i + 1}` }))} />;
   if (call.verb === 'Run') return <RunOutput command={call.target} run={runOf(entry)} />;
   if (call.verb === 'Edit' || call.verb === 'Write') {
     const patch = entry.patch ?? PATCHES[call.target];
     return patch ? <DiffView patch={patch} /> : null;
   }
-  if (call.verb === 'Read' && files) return isImage(call.target) ? <ImageDetail files={files} path={call.target} /> : <FilePreview files={files} path={call.target} />;
+  if (call.verb === 'Read' && files) return isImage(call.target) ? <MessageImages photos={[{ src: absolutePath(files, call.target), name: call.target.split('/').pop()! }]} /> : <FilePreview files={files} path={call.target} />;
   if (call.verb === 'Search') return entry.links?.length ? <LinkList links={entry.links} /> : null;
   if (call.verb === 'Fetch') return <LinkRow link={entry.links?.[0] ?? { url: call.target }} />;
   return null;
@@ -256,10 +260,13 @@ function useOpenCallFile(threadId: string) {
 const THUMBS_SHOWN = 3;
 
 const isImage = (path: string) => PREVIEW_KINDS.image.test(path) || PREVIEW_KINDS.svg.test(path);
+const readImage = (call: ToolCall) => (call.verb === 'Read' && isImage(call.target) ? [call.target] : []);
+// A Read's target is relative to the thread's folder when inside it; a returned image is already absolute (or a URL).
+const absolutePath = (files: ThreadFiles, path: string) => (!isFilePath(path) || path.startsWith('/') || !files.root ? path : `${files.root}/${path}`);
 
 /** An image the agent read, small, opening in the side pane's Files tab. */
 function ImageThumb({ files, path }: { files: ThreadFiles; path: string }) {
-  const url = useImageUrl(files, path);
+  const [url] = useImageUrls([absolutePath(files, path)]);
   const openCallFile = useOpenCallFile(files.threadId);
   const name = path.split('/').pop() ?? path;
   return (
@@ -274,40 +281,6 @@ function ImageThumb({ files, path }: { files: ThreadFiles; path: string }) {
   );
 }
 
-function ImageDetail({ files, path }: { files: ThreadFiles; path: string }) {
-  const url = useImageUrl(files, path);
-  if (!url) return <p className="type-caption text-subtle-foreground">Loading…</p>;
-  return (
-    <div className="flex justify-center overflow-hidden rounded-lg border bg-card p-3">
-      <img src={url} alt={path.split('/').pop()} className="max-h-64 max-w-full object-contain" />
-    </div>
-  );
-}
-
-/** A workspace image as an object URL, revoked when the row goes; `null` while it loads or when it can't be read. */
-function useImageUrl(files: ThreadFiles, path: string) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let next: string | undefined;
-    let isCurrent = true;
-    loadViewerFile({ source: 'workspace', ...fileAt(files, fileLink(path).path) }).then(
-      (content) => {
-        if (!isCurrent) return;
-        next = URL.createObjectURL(new Blob([(content.kind === 'text' ? content.text : content.bytes) as BlobPart], { type: PREVIEW_KINDS.svg.test(path) ? 'image/svg+xml' : imageMime(path) }));
-        setUrl(next);
-      },
-      () => isCurrent && setUrl(null),
-    );
-    return () => {
-      isCurrent = false;
-      if (next) URL.revokeObjectURL(next);
-    };
-  }, [files, path]);
-  return url;
-}
-
-const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' } };
-
 /** After the title, so it sits flush with the prose like Claude's: the chevron, or the needs-you dot while paused on you (the chevron on hover, so it still reads as openable). Working needs no icon: Mochi under the chat and the shimmering title say it. */
 export function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: boolean }) {
   const chevron = <ChevronRight className={cn('size-3 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} />;
@@ -315,12 +288,12 @@ export function TrailIcon({ isWaiting, isOpen }: { isWaiting: boolean; isOpen: b
     <span className="grid size-3 shrink-0 place-items-center *:col-start-1 *:row-start-1">
       <AnimatePresence initial={false}>
         {isWaiting ? (
-          <motion.span key="waiting" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center *:col-start-1 *:row-start-1">
+          <motion.span key="waiting" {...ICON_SWAP} className="grid place-items-center *:col-start-1 *:row-start-1">
             <span aria-hidden className="size-1.5 rounded-full bg-warning group-hover/log:opacity-0" />
             <span className="opacity-0 group-hover/log:opacity-100">{chevron}</span>
           </motion.span>
         ) : (
-          <motion.span key="chevron" {...ICON_SWAP} transition={{ duration: 0.2 }} className="grid place-items-center">
+          <motion.span key="chevron" {...ICON_SWAP} className="grid place-items-center">
             {chevron}
           </motion.span>
         )}

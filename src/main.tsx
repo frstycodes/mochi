@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { host } from './host';
+import { followZoom } from './appZoom';
 import { restoreFailed, restoreSaved } from './store/persist';
 import { loadDrafts } from './chat/drafts';
 import './index.css';
@@ -27,4 +28,5 @@ function showTrafficLights() {
   set(false);
   void host.windows.isFullScreen().then(set);
   host.windows.onFullScreenChange(set);
+  followZoom();
 }

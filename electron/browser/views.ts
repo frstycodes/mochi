@@ -1,14 +1,17 @@
-import { randomBytes } from 'node:crypto';
 import { stat } from 'node:fs/promises';
-import { BrowserWindow, screen, session, WebContentsView, type WebContents } from 'electron';
-import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserEmulation, BrowserEvent, BrowserLog, BrowserMenuCommand, BrowserSnapshot, FindOptions, PickedElement } from '../../src/host/types/browser.ts';
+import { BrowserWindow, screen, session, WebContentsView, type BrowserWindowConstructorOptions, type WebContents } from 'electron';
+import { errors, type Locator, type Page } from 'playwright-core';
+import type { BrowserAct, BrowserWait, BrowserBounds, BrowserCommand, BrowserDevtools, BrowserDialog, BrowserEmulation, BrowserEvent, BrowserLog, BrowserMenuCommand, BrowserSnapshot, FindOptions, PickedElement } from '../../src/host/types/browser.ts';
+import { dialogNote } from '../../src/browser/dialog.ts';
 import { CANCEL_PICK_SCRIPT, PICK_SCRIPT } from './picker.ts';
-import { clickScript, focusScript, hoverScript, locateScript, markScript, scrollScript, SNAPSHOT_SCRIPT } from './snapshot.ts';
+import { agentSnapshot, ariaSelector } from './ariaRefs.ts';
 import { evalResult, EVAL_TIMEOUT_MS, withTimeout, type CdpEvaluate } from './evaluate.ts';
+import { canNavigate, isAllowedUrl } from './navigation.ts';
+import { downloadsSince, trackDownloads } from './downloads.ts';
+import { debuggerFor, dropPage, pageFor, type Automated } from './playwright.ts';
 import { HMR_GRACE_MS, isHmrLog, READ_SCROLL_SCRIPT, restoreScrollScript, ScrollMemory, watchTree, type ScrollPos } from './reload.ts';
 
-interface Entry {
-  view: WebContentsView;
+interface Entry extends Automated {
   win: BrowserWindow;
   owner: WebContents;
   bounds: BrowserBounds | null;
@@ -27,6 +30,9 @@ interface Entry {
   holdScrollUntil: number;
   /** Escape in the page closes the find bar only while a search is open. */
   isFinding: boolean;
+  /** Counts snapshots; an agent ref carries the one it came from. */
+  snapshotGeneration: number;
+  dialog: BrowserDialog | null;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -34,7 +40,7 @@ const DEVTOOLS_SHARE = 0.45;
 const ERR_ABORTED = -3;
 // Isolated world for the picker so the page can't see or tamper with it.
 const PICK_WORLD = 1001;
-// The agent's snapshot refs live in their own isolated world, apart from the picker's.
+// Scroll memory reads and restores the page from its own isolated world, apart from the picker's.
 const AGENT_WORLD = 1002;
 const LOG_LIMIT = 200;
 const LOG_LEVELS = ['debug', 'info', 'warning', 'error'] as const;
@@ -51,45 +57,66 @@ const views = new Map<string, Entry>();
 const hardenedSessions = new Set<string>();
 let nextId = 0;
 
-export const isAllowedUrl = (url: string) => {
-  try {
-    return ['http:', 'https:', 'about:'].includes(new URL(url).protocol);
-  } catch {
-    return false;
-  }
-};
-
 export function createView(owner: WebContents, url: string, spaceId: string) {
   const win = BrowserWindow.fromWebContents(owner);
   if (!win) throw new Error('browser.create: no window for sender');
   const partition = `persist:space-${spaceId}`;
   harden(partition);
-  const view = new WebContentsView({
-    // No preload: the page gets no bridge at all, and is sandboxed like a normal Chrome tab.
-    webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
-  });
+  // No preload: the page gets no bridge at all, and is sandboxed like a normal Chrome tab.
+  const view = new WebContentsView({ webPreferences: { partition, ...HARDENED } });
+  const id = register(view, owner, win);
+  void view.webContents.loadURL(url);
+  return { id };
+}
+
+const HARDENED = { sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true };
+
+function register(view: WebContentsView, owner: WebContents, win: BrowserWindow) {
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false, automation: null, snapshotGeneration: 0, dialog: null };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
   wire(id, entry);
   win.once('closed', () => {
     entry.stopAutoReload?.();
+    dropPage(entry);
     views.delete(id);
   });
-  void view.webContents.loadURL(url);
-  return { id };
+  // The page closed itself (a popup's window.close()); destroyView and the window closing unregister first.
+  view.webContents.once('destroyed', () => {
+    if (views.get(id) !== entry) return;
+    unregister(id, entry);
+    if (!owner.isDestroyed()) owner.send('browser:onEvent', { id, type: 'closed' } satisfies BrowserEvent);
+  });
+  return id;
+}
+
+/**
+ * A page's `window.open` as a tab of its own that keeps `window.opener`, so sign-in popups can post back. The popup shares the
+ * opener's session (Chromium created its webContents there), owner and window.
+ */
+function openPopup(openerId: string, opener: Entry, url: string, options: BrowserWindowConstructorOptions) {
+  // `options` inherits the opener's preferences and the page's features string; ours win (getLastWebPreferences, Electron 44).
+  const view = new WebContentsView({ ...options, webPreferences: { ...options.webPreferences, ...HARDENED } });
+  const viewId = register(view, opener.owner, opener.win);
+  if (!opener.owner.isDestroyed()) opener.owner.send('browser:onEvent', { id: openerId, type: 'popup', viewId, url } satisfies BrowserEvent);
+  return view.webContents;
 }
 
 export function destroyView(owner: WebContents, id: string) {
   const entry = get(owner, id);
+  unregister(id, entry);
+  entry.view.webContents.close();
+}
+
+function unregister(id: string, entry: Entry) {
   stopMirror(entry);
   views.delete(id);
   entry.stopAutoReload?.();
+  dropPage(entry);
   closeDevtools(entry);
-  entry.win.contentView.removeChildView(entry.view);
-  entry.view.webContents.close();
+  if (!entry.win.isDestroyed()) entry.win.contentView.removeChildView(entry.view);
 }
 
 export function navigateView(owner: WebContents, id: string, url: string) {
@@ -106,6 +133,8 @@ export function runCommand(owner: WebContents, id: string, command: BrowserComma
 }
 
 export function setViewBounds(owner: WebContents, id: string, bounds: BrowserBounds | null) {
+  // A popup that closed itself is gone before its tab unmounts and hides it.
+  if (!views.has(id)) return;
   const entry = get(owner, id);
   entry.bounds = bounds;
   layout(entry);
@@ -199,8 +228,9 @@ export async function emulateView(owner: WebContents, id: string, e: BrowserEmul
 
 async function applyEmulation(entry: Entry, e: BrowserEmulation) {
   const dbg = await debuggerFor(entry.view.webContents);
+  // dontSetVisibleSize: otherwise Chromium grows the view to width × height and draws the scaled page in its top-left corner.
   if (e.width || e.dpr || e.mobile)
-    await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: e.width, height: e.height, scale: e.scale, deviceScaleFactor: e.dpr, mobile: e.mobile });
+    await dbg.sendCommand('Emulation.setDeviceMetricsOverride', { width: e.width, height: e.height, scale: e.scale, deviceScaleFactor: e.dpr, mobile: e.mobile, dontSetVisibleSize: true });
   else await dbg.sendCommand('Emulation.clearDeviceMetricsOverride');
   await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: e.touch, maxTouchPoints: 5 });
   await dbg.sendCommand('Emulation.setEmitTouchEventsForMouse', { enabled: e.touch, configuration: e.mobile ? 'mobile' : 'desktop' });
@@ -311,96 +341,189 @@ export async function cancelPick(owner: WebContents, id: string) {
 }
 
 export async function snapshotView(owner: WebContents, id: string): Promise<BrowserSnapshot> {
-  return (await get(owner, id).view.webContents.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: SNAPSHOT_SCRIPT }])) as BrowserSnapshot;
+  const entry = get(owner, id);
+  const page = await pageFor(entry);
+  const yaml = await page.ariaSnapshot({ mode: 'ai', timeout: SNAPSHOT_TIMEOUT_MS }).catch(rethrowForAgent);
+  const generation = ++entry.snapshotGeneration;
+  const { text, refs } = agentSnapshot(yaml, generation);
+  const flags = await Promise.all(refs.map(({ ref }) => formFlags(page.locator(ariaSelector(ref, generation)!))));
+  return { text, refs: Object.fromEntries(refs.map(({ ref, role, name }, i) => [ref, { role, name, ...flags[i]! }])) };
 }
+
+/** Whether clicking the element sends its form, and whether it takes a password: the agent asks or masks before acting. */
+function formFlags(target: Locator) {
+  return target
+    .evaluate(
+      (el) => {
+        const type = (el.getAttribute('type') ?? '').toLowerCase();
+        const form = (el as HTMLButtonElement).form ?? el.closest('form');
+        return { isSubmit: !!form && (type === 'submit' || type === 'image' || (el.localName === 'button' && !type)), isPassword: type === 'password' };
+      },
+      undefined,
+      { timeout: FLAGS_TIMEOUT_MS },
+    )
+    .catch(() => FAIL_CLOSED_FLAGS);
+}
+
+// An element that can't be checked is treated as both, so the agent asks before clicking it and never echoes what it types.
+const FAIL_CLOSED_FLAGS = { isSubmit: true, isPassword: true };
+const SNAPSHOT_TIMEOUT_MS = 10_000;
+const FLAGS_TIMEOUT_MS = 2000;
 
 export function viewLogs(owner: WebContents, id: string) {
   return get(owner, id).logs;
 }
 
-/** Clicks and keys go through CDP so the page gets trusted events, the same a person's input makes. */
+/** Playwright's input goes through CDP, so the page gets trusted events, the same a person's input makes. */
 export async function actOnView(owner: WebContents, id: string, act: BrowserAct): Promise<{ note?: string }> {
   const entry = get(owner, id);
-  const wc = entry.view.webContents;
-  const run = async <T>(code: string) => {
-    const result = (await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code }])) as T & { error?: string };
-    if (result.error) throw new Error(result.error);
-    return result;
-  };
-  // GAP: assumes CDP takes viewport CSS px times the tab's zoom; not checked on a device-emulated page.
-  const locate = async (ref: string) => {
-    const { x, y, isHidden } = await run<{ x: number; y: number; isHidden: boolean }>(locateScript(ref));
-    return { at: { x: x * entry.zoom, y: y * entry.zoom }, isHidden };
-  };
-  const dbg = await debuggerFor(wc);
-  const mouse = (type: string, at: { x: number; y: number }, extra = {}) => dbg.sendCommand('Input.dispatchMouseEvent', { type, ...at, ...extra });
+  if (entry.dialog) throw new Error(dialogNote(entry.dialog));
+  const page = await pageFor(entry);
+  const startedAt = Date.now();
+  const done = new AbortController();
+  const result = await Promise.race([runAct(entry, page, act), dialogOpened(entry, done.signal)])
+    .catch(rethrowForAgent)
+    .finally(() => done.abort());
+  const downloaded = downloadsSince(id, startedAt).map((d) => `Downloaded ${d.name} to ${d.path}`);
+  return downloaded.length ? { note: [result.note, ...downloaded].filter(Boolean).join('; ') } : result;
+}
+
+/** Playwright's action waits for the dialog it opened to be answered; the agent gets the dialog back as a note instead. */
+function dialogOpened(entry: Entry, signal: AbortSignal) {
+  const dbg = entry.view.webContents.debugger;
+  return new Promise<{ note: string }>((resolve) => {
+    const check = () => entry.dialog && resolve({ note: dialogNote(entry.dialog) });
+    dbg.on('message', check);
+    signal.addEventListener('abort', () => dbg.off('message', check));
+  });
+}
+
+export async function answerDialogInView(owner: WebContents, id: string, accept: boolean) {
+  const entry = get(owner, id);
+  if (!entry.dialog) throw new Error('No dialog is open in this tab');
+  const dbg = await debuggerFor(entry.view.webContents);
+  await dbg.sendCommand('Page.handleJavaScriptDialog', { accept });
+}
+
+async function runAct(entry: Entry, page: Page, act: BrowserAct): Promise<{ note?: string }> {
+  const timeout = ACTION_TIMEOUT_MS;
   switch (act.kind) {
-    case 'click': {
-      const { at, isHidden } = await locate(act.ref);
-      // A hidden page (window on another Space) gets no hit testing, so CDP's mouse events go nowhere; click in the DOM instead.
-      if (isHidden) {
-        await run(clickScript(act.ref));
-        return { note: HIDDEN_NOTE('click') };
-      }
-      await mouse('mouseMoved', at);
-      await mouse('mousePressed', at, { button: 'left', clickCount: 1 });
-      await mouse('mouseReleased', at, { button: 'left', clickCount: 1 });
+    case 'click':
+      await (await locate(entry, page, act.ref)).click({ timeout });
       return {};
-    }
-    case 'hover': {
-      const { at, isHidden } = await locate(act.ref);
-      if (!isHidden) {
-        await mouse('mouseMoved', at);
-        return {};
-      }
-      await run(hoverScript(act.ref));
-      return { note: `${HIDDEN_NOTE('hover')}; CSS :hover styles don't apply` };
-    }
+    case 'hover':
+      await (await locate(entry, page, act.ref)).hover({ timeout });
+      return {};
     case 'drag': {
-      const from = await locate(act.from);
-      const to = await locate(act.to);
-      if (from.isHidden) throw new Error("Mochi's window is in the background, so the page gets no pointer input; ask the user to bring Mochi forward, then drag again");
-      // GAP: mouse-event drags (sortable lists, sliders); HTML5 drag and drop through CDP's mouse events is not verified.
-      await mouse('mouseMoved', from.at);
-      await mouse('mousePressed', from.at, { button: 'left', clickCount: 1 });
-      for (let i = 1; i <= DRAG_STEPS; i++) await mouse('mouseMoved', { x: from.at.x + ((to.at.x - from.at.x) * i) / DRAG_STEPS, y: from.at.y + ((to.at.y - from.at.y) * i) / DRAG_STEPS }, { button: 'left', buttons: 1 });
-      await mouse('mouseReleased', to.at, { button: 'left', clickCount: 1 });
+      const from = await locate(entry, page, act.from);
+      await from.dragTo(await locate(entry, page, act.to), { timeout });
       return {};
     }
     case 'type': {
-      const { isSelect } = await run<{ isSelect: boolean }>(focusScript(act.ref, act.text));
-      if (!isSelect) await dbg.sendCommand('Input.insertText', { text: act.text });
+      const target = await locate(entry, page, act.ref);
+      const select = await selectState(target, act.text);
+      if (!select.isSelect) await target.fill(act.text, { timeout });
+      else await pickOption(target, act.text, select.value);
       return {};
     }
     case 'select': {
-      const { isSelect } = await run<{ isSelect: boolean }>(focusScript(act.ref, act.value));
-      if (!isSelect) throw new Error('That element is not a <select>; use browser_type for a text field or browser_click for a custom dropdown');
+      const target = await locate(entry, page, act.ref);
+      const select = await selectState(target, act.value);
+      if (!select.isSelect) throw new Error('That element is not a <select>; use browser_type for a text field or browser_click for a custom dropdown');
+      await pickOption(target, act.value, select.value);
       return {};
     }
     case 'upload': {
       if (!(await stat(act.path).then((s) => s.isFile(), () => false))) throw new Error(`No file at ${act.path}`);
-      // CDP sets files by DOM node id; the ref lives in the isolated world, so it marks the element for a moment to find it.
-      const mark = randomBytes(8).toString('hex');
-      await run(markScript(act.ref, mark));
-      const { root } = (await dbg.sendCommand('DOM.getDocument', { depth: 0 })) as { root: { nodeId: number } };
-      const { nodeId } = (await dbg.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector: `[data-mochi-upload="${mark}"]` })) as { nodeId: number };
-      if (!nodeId) throw new Error('That element is not on the page now; take a new browser_snapshot');
-      await dbg.sendCommand('DOM.removeAttribute', { nodeId, name: 'data-mochi-upload' });
-      await dbg.sendCommand('DOM.setFileInputFiles', { nodeId, files: [act.path] });
+      const target = await locate(entry, page, act.ref);
+      if (!(await isFileInput(target))) throw new Error('That element is not a file input; browser_snapshot shows one as a button named after its label');
+      await target.setInputFiles(act.path, { timeout });
       return {};
     }
-    case 'press':
-      await pressKey(dbg, act.key);
+    case 'press': {
+      const key = act.key === 'Space' ? ' ' : act.key;
+      await page.keyboard.press(key).catch((error: unknown) => {
+        throw String(error).includes('Unknown key') ? new Error(`Unknown key "${act.key}"; use a single character or a key name like Enter, Tab, Escape, Backspace, ArrowDown, PageDown or Space`) : error;
+      });
       return {};
+    }
     case 'scroll': {
-      const { x, y, maxY } = await run<{ x: number; y: number; maxY: number }>(scrollScript(act.ref, act.dx, act.dy));
+      const target = act.ref ? await locate(entry, page, act.ref) : page.locator(':root');
+      if (act.ref) await target.scrollIntoViewIfNeeded({ timeout });
+      const box = act.ref ? await target.boundingBox({ timeout }) : null;
+      const at = box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : await page.evaluate(() => ({ x: innerWidth / 2, y: innerHeight / 2 }));
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.wheel(act.dx, act.dy);
+      const { x, y, maxY } = await target.evaluate(settledScroll, undefined, { timeout });
       return { note: `Scrolled to ${x}, ${y} of ${maxY}` };
     }
   }
 }
 
-const DRAG_STEPS = 8;
-const HIDDEN_NOTE = (what: string) => `Mochi's window is in the background, so this was a DOM ${what} (event.isTrusted is false)`;
+const ACTION_TIMEOUT_MS = 5000;
+const GONE = (ref: string) => `No element ${ref} on the page now; take a new browser_snapshot`;
+
+/** `ref`'s element from the latest snapshot; one from an older snapshot, or gone from the page, fails at once. */
+async function locate(entry: Entry, page: Page, ref: string) {
+  const selector = ariaSelector(ref, entry.snapshotGeneration);
+  if (!selector) throw new Error(GONE(ref));
+  const target = page.locator(selector);
+  if (!(await target.count().catch(() => 0))) throw new Error(GONE(ref));
+  return target;
+}
+
+/** For a `<select>`, the value of the option whose label or value is `want` (null when none is). */
+function selectState(target: Locator, want: string) {
+  return target.evaluate(
+    (el, want) => (el instanceof HTMLSelectElement ? { isSelect: true, value: [...el.options].find((o) => o.label === want || o.value === want)?.value ?? null } : { isSelect: false, value: null }),
+    want,
+    { timeout: ACTION_TIMEOUT_MS },
+  );
+}
+
+/** Playwright waits out its timeout on any other element instead of failing. A label stands for its control, as in Playwright. */
+function isFileInput(target: Locator) {
+  return target.evaluate(
+    (el) => {
+      const input = el instanceof HTMLLabelElement ? el.control : el;
+      return input instanceof HTMLInputElement && input.type === 'file';
+    },
+    undefined,
+    { timeout: ACTION_TIMEOUT_MS },
+  );
+}
+
+async function pickOption(target: Locator, want: string, value: string | null) {
+  if (value === null) throw new Error(`No option ${JSON.stringify(want)} in that list`);
+  await target.selectOption({ value }, { timeout: ACTION_TIMEOUT_MS });
+}
+
+/** The scroll position of `el` (the page's, for the root) once it has stopped moving, so a smooth scroll reports where it ends. */
+function settledScroll(el: Element) {
+  const box = el === document.documentElement ? (document.scrollingElement ?? el) : el;
+  const read = () => ({ x: Math.round(box.scrollLeft), y: Math.round(box.scrollTop), maxY: Math.round(box.scrollHeight - box.clientHeight) });
+  return new Promise<ReturnType<typeof read>>((resolve) => {
+    let last = read();
+    let still = 0;
+    const deadline = Date.now() + 1000;
+    const tick = () => {
+      const now = read();
+      still = now.x === last.x && now.y === last.y ? still + 1 : 0;
+      last = now;
+      if (still >= 3 || Date.now() > deadline) resolve(now);
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/** Playwright's errors carry a call log; the agent gets one line it can act on. */
+function rethrowForAgent(error: unknown): never {
+  const message = (error instanceof Error ? error.message : String(error)).split('\n')[0]!.replace(/^[\w.]+: /, '');
+  if (error instanceof errors.TimeoutError) throw new Error(`${message} The page may be busy, or the element hidden, disabled or covered; take a new browser_snapshot`);
+  if (message.includes('Element is not an <input>, <textarea>')) throw new Error('That element takes no text');
+  throw new Error(message);
+}
 
 /** The page's own world, so the script can read app state; `replMode` gives top-level await and the last expression's value. */
 export async function evalInView(owner: WebContents, id: string, script: string) {
@@ -409,46 +532,30 @@ export async function evalInView(owner: WebContents, id: string, script: string)
   return evalResult(await answer);
 }
 
-const WAIT_POLL_MS = 200;
-
 /** Resolves once the page shows `text`, matches `selector` or its URL contains `url` (any one given), or after `timeoutMs`. */
 export async function waitForView(owner: WebContents, id: string, until: BrowserWait) {
-  const wc = get(owner, id).view.webContents;
-  const check = `(() => { const want = ${JSON.stringify(until)}; return (!!want.text && !!document.body && document.body.innerText.includes(want.text)) || (!!want.selector && !!document.querySelector(want.selector)) || (!!want.url && location.href.includes(want.url)); })()`;
+  const entry = get(owner, id);
+  const { text, selector, url } = until;
   const start = Date.now();
-  for (;;) {
-    const isMet = until.text || until.selector || until.url ? await wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: check }]).catch(() => false) : false;
-    if (isMet) return { isMet: true, waitedMs: Date.now() - start };
-    if (Date.now() - start >= until.timeoutMs) return { isMet: false, waitedMs: Date.now() - start };
-    await new Promise((r) => setTimeout(r, WAIT_POLL_MS));
-  }
+  const page = text || selector || url ? await pageFor(entry) : null;
+  // Playwright reads a timeout of 0 as "never"; connecting already spent part of the wait.
+  const timeout = Math.max(1, until.timeoutMs - (Date.now() - start));
+  const waits = !page
+    ? []
+    : [
+        text && page.getByText(text).first().waitFor({ timeout }),
+        selector && page.locator(selector).first().waitFor({ state: 'attached', timeout }),
+        url && page.waitForURL((u) => u.href.includes(url), { timeout, waitUntil: 'commit' }),
+      ].filter((wait) => !!wait);
+  if (!waits.length) await new Promise((r) => setTimeout(r, timeout));
+  const isMet = !!waits.length && (await Promise.any(waits).then(() => true, falseIfAllTimedOut));
+  return { isMet, waitedMs: Date.now() - start };
 }
 
-const KEYS: Record<string, { code: string; keyCode: number; text?: string }> = {
-  Enter: { code: 'Enter', keyCode: 13, text: '\r' },
-  Tab: { code: 'Tab', keyCode: 9 },
-  Escape: { code: 'Escape', keyCode: 27 },
-  Backspace: { code: 'Backspace', keyCode: 8 },
-  Delete: { code: 'Delete', keyCode: 46 },
-  ArrowUp: { code: 'ArrowUp', keyCode: 38 },
-  ArrowDown: { code: 'ArrowDown', keyCode: 40 },
-  ArrowLeft: { code: 'ArrowLeft', keyCode: 37 },
-  ArrowRight: { code: 'ArrowRight', keyCode: 39 },
-  Home: { code: 'Home', keyCode: 36 },
-  End: { code: 'End', keyCode: 35 },
-  PageUp: { code: 'PageUp', keyCode: 33 },
-  PageDown: { code: 'PageDown', keyCode: 34 },
-  ' ': { code: 'Space', keyCode: 32, text: ' ' },
-};
-
-async function pressKey(dbg: Electron.Debugger, name: string) {
-  const key = name === 'Space' ? ' ' : name;
-  const known = KEYS[key];
-  if (!known && [...key].length !== 1) throw new Error(`Unknown key "${key}"; use a single character or one of ${Object.keys(KEYS).filter((k) => k !== ' ').join(', ')}, Space`);
-  const { code, keyCode, text } = known ?? { code: '', keyCode: key.toUpperCase().charCodeAt(0), text: key };
-  const base = { key, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
-  await dbg.sendCommand('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', ...base, ...(text && { text, unmodifiedText: text }) });
-  await dbg.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+/** A wait that failed for any reason but time, like a bad selector, is the agent's to see. */
+function falseIfAllTimedOut({ errors: reasons }: AggregateError) {
+  const failure = reasons.find((reason) => !(reason instanceof errors.TimeoutError));
+  return failure ? rethrowForAgent(failure) : false;
 }
 
 function get(owner: WebContents, id: string) {
@@ -484,6 +591,13 @@ function wire(id: string, entry: Entry) {
     void wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: restoreScrollScript(pos) }]).catch(() => {});
   });
   for (const name of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(name as 'did-start-loading', state);
+  const closeDialog = watchDialogs(id, entry, emit);
+  wc.on('render-process-gone', (_event, { reason }) => {
+    entry.error = reason === 'crashed' ? 'The page crashed' : `The page crashed (${reason})`;
+    dropPage(entry);
+    closeDialog();
+    state();
+  });
   wc.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     if (!isMainFrame || code === ERR_ABORTED) return;
     entry.error = `${description} (${url})`;
@@ -533,21 +647,60 @@ function wire(id: string, entry: Entry) {
     emit({ id, type: 'devtools', mode: 'closed' });
   });
   wc.setWindowOpenHandler(({ url }) => {
-    if (isAllowedUrl(url)) emit({ id, type: 'open', url });
-    return { action: 'deny' };
+    if (!canNavigate(wc.getURL(), url)) return { action: 'deny' };
+    return { action: 'allow', outlivesOpener: true, createWindow: (options) => openPopup(id, entry, url, options) };
   });
-  const guard = (event: { preventDefault(): void }, url: string) => !isAllowedUrl(url) && event.preventDefault();
+  const guard = (event: { preventDefault(): void }, url: string) => !canNavigate(wc.getURL(), url) && event.preventDefault();
   wc.on('will-navigate', (event) => guard(event, event.url));
   wc.on('will-redirect', (event) => guard(event, event.url));
 }
 
-function layout({ view, devtools, bounds, mirror }: Entry) {
+/** The page's alert or confirm, seen over CDP, which can also answer it. Electron shows the user its own sheet either way. */
+function watchDialogs(id: string, entry: Entry, emit: (event: BrowserEvent) => void) {
+  const wc = entry.view.webContents;
+  // Electron opens its sheet a task after CDP reports the dialog, and answering over CDP leaves the sheet up with nothing behind
+  // it. '-run-dialog' and '-cancel-dialogs' are Electron's internal events that open and abort that sheet
+  // (lib/browser/api/web-contents.ts, Electron 44). This listener runs after Electron's, once the sheet is open.
+  let sheet: 'none' | 'open' | 'stale' = 'none';
+  const cancelSheet = () => {
+    sheet = 'none';
+    wc.emit('-cancel-dialogs');
+  };
+  (wc as NodeJS.EventEmitter).on('-run-dialog', () => (sheet === 'stale' ? cancelSheet() : (sheet = 'open')));
+  const closed = () => {
+    if (!entry.dialog) return;
+    entry.dialog = null;
+    emit({ id, type: 'dialog', kind: null });
+  };
+  void debuggerFor(wc)
+    .then((dbg) => dbg.sendCommand('Page.enable'))
+    .catch(() => {});
+  wc.debugger.on('message', (_event, method, params: { type?: string; message?: string }, sessionId) => {
+    if (sessionId) return;
+    if (method === 'Page.javascriptDialogOpening' && (params.type === 'alert' || params.type === 'confirm')) {
+      entry.dialog = { kind: params.type, message: params.message ?? '' };
+      emit({ id, type: 'dialog', ...entry.dialog });
+    } else if (method === 'Page.javascriptDialogClosed') {
+      if (sheet === 'open') cancelSheet();
+      else if (entry.dialog) sheet = 'stale';
+      closed();
+    }
+  });
+  return () => {
+    sheet = 'none';
+    closed();
+  };
+}
+
+function layout({ view, devtools, bounds, mirror, owner }: Entry) {
   view.setVisible(!!bounds && !mirror);
   devtools?.setVisible(!!bounds && !mirror);
   if (mirror) return view.setBounds({ x: 0, y: 0, width: Math.round(mirror.width), height: Math.round(mirror.height) });
   if (!bounds) return;
-  view.setBorderRadius(Math.round(bounds.radius));
-  const r = round(bounds);
+  // The renderer measures in CSS px; child views are placed in window DIPs, which differ by the app's ⌘+ / ⌘− zoom.
+  const zoom = owner.isDestroyed() ? 1 : owner.getZoomFactor();
+  view.setBorderRadius(Math.round(bounds.radius * zoom));
+  const r = round(bounds, zoom);
   if (!devtools) return view.setBounds(r);
   const tools = Math.round(r.height * DEVTOOLS_SHARE);
   view.setBounds({ ...r, height: r.height - tools });
@@ -561,25 +714,26 @@ function closeDevtools(entry: Entry) {
   entry.devtools = null;
 }
 
-async function debuggerFor(wc: WebContents) {
-  if (!wc.debugger.isAttached()) wc.debugger.attach('1.3');
-  return wc.debugger;
-}
-
 export async function clearSpaceData(spaceId: string) {
   const ses = session.fromPartition(`persist:space-${spaceId}`);
   await Promise.all([ses.clearStorageData(), ses.clearCache(), ses.clearAuthCache()]);
+}
+
+function viewOf(wc: WebContents) {
+  for (const [id, entry] of views) if (entry.view.webContents === wc) return { id, owner: entry.owner };
+  return null;
 }
 
 function harden(partition: string) {
   if (hardenedSessions.has(partition)) return;
   hardenedSessions.add(partition);
   const ses = session.fromPartition(partition);
+  trackDownloads(ses, viewOf);
   // Pages get nothing that reaches past the tab: no camera, mic, location, notifications or USB/HID prompts.
   ses.setPermissionRequestHandler((_wc, permission, callback) => callback(permission === 'fullscreen' || permission === 'clipboard-sanitized-write'));
   ses.setPermissionCheckHandler((_wc, permission) => permission === 'fullscreen' || permission === 'clipboard-sanitized-write');
 }
 
-function round(b: BrowserBounds) {
-  return { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
+function round(b: BrowserBounds, zoom: number) {
+  return { x: Math.round(b.x * zoom), y: Math.round(b.y * zoom), width: Math.round(b.width * zoom), height: Math.round(b.height * zoom) };
 }

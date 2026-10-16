@@ -15,7 +15,7 @@ import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { sidechatReducer } from '../store/sidechat.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { CLAUDE_FALLBACK_MODELS } from './models.ts';
+import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
@@ -24,7 +24,7 @@ const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidec
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
 
 /** The demo profile "latitude", you looking at "rl" (Claude), with "rl"'s pane holding one browser tab. */
-function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/', gitBranches = null as string[] | null, gitCurrent = 'main' as string | null } = {}) {
+function setup({ control = 'everything' as AgentControl, url = 'http://localhost:5173/', gitBranches = null as string[] | null, gitCurrent = 'main' as string | null, failing = [] as string[] } = {}) {
   const view = { kind: 'thread', id: 'rl' } as const;
   let state = {
     ...initialThreads(undefined, true),
@@ -44,7 +44,9 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const commands: string[] = [];
   const removed: string[] = [];
   const evals: string[] = [];
+  const answers: boolean[] = [];
   const pushes: string[] = [];
+  const opened: string[] = [];
   const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
@@ -57,7 +59,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
     removeWorktree: async (id) => void removed.push(id),
-    pages: { get: (k) => pages.get(k), update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }) },
+    pages: { get: (k) => pages.get(k), update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }), open: (k) => void opened.push(k) },
     browser: {
       navigate: async (_id, to) => void pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, url: to }),
       command: async (_id, c) => void commands.push(c),
@@ -70,9 +72,10 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       logs: async () => [{ level: 'error', message: 'boom', source: 'http://localhost:5173/main.js', line: 3 }],
       eval: async (_id, script) => (evals.push(script), script.includes('throw') ? Promise.reject(new Error('Error: nope\n    at <anonymous>:1:7')) : { value: '42', isTruncated: false }),
       waitFor: async (_id, until) => ({ isMet: until.text === 'Hello', waitedMs: 120 }),
+      answerDialog: async (_id, { accept }) => void (answers.push(accept), pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, dialog: null })),
     },
     cwdOf: () => '/repo/rl',
-    models: async () => CLAUDE_FALLBACK_MODELS,
+    models: async () => CLAUDE_DEMO_MODELS,
     profiles: {
       list: () => profiles,
       update: (id, patch) => void (profiles = profiles.map((p) => (p.id === id ? { ...p, ...patch } : p))),
@@ -85,7 +88,9 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     isDesktop: true,
     git: {
       branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
-      push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9') },
+      push: async (cwd) => void pushes.push(cwd), createPr: async (_cwd, pr) => (prs.push(pr), 'https://github.com/o/r/pull/9'),
+      runCheck: async (_cwd, command) => (failing.includes(command) ? { exitCode: 1, output: 'ℹ tests 714\nℹ fail 5', ms: 9 } : { exitCode: 0, output: 'ok', ms: 9 }),
+    },
   };
   const call = (name: string, args: Record<string, unknown> = {}, threadId = 'rl') => runTool({ id: 'c1', threadId, name, args }, env);
   const ok = async (name: string, args?: Record<string, unknown>, threadId?: string) => {
@@ -108,7 +113,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, pages, pushes, prs };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened };
   return t;
 }
 
@@ -138,6 +143,7 @@ function fakeSettings() {
     instructions: { path: `/acct/${provider}/${provider === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}`, text: config[provider].instructions },
     mcpServers: config[provider].servers,
     skills: config[provider].skills,
+    commands: [],
     plugins: [],
     projectInstructions: null,
   });
@@ -192,7 +198,7 @@ test('every tool in the table has a handler', async () => {
 });
 
 test('only deletes and settings ask; everything else runs without a widget', () => {
-  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
+  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'set_keybinding', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
 });
 
 test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
@@ -287,6 +293,36 @@ test('read only blocks every write, settings included, and shows agent control i
   assert.equal(cards[0].settings!.by, 'harness');
   assert.equal(t.thread('rl').activity.filter((a) => a.card?.id === cards[0].id).length, 1);
   assert.ok((await t.ok('list_threads')).length > 0, 'reads still work');
+});
+
+test('a tool set to Off refuses, Ask waits on a widget showing the call, and your choice beats the level', async () => {
+  const t = setup({ control: 'read' });
+  t.env.prefs.set({ toolPolicies: { settle_thread: 'allow', rename_thread: 'ask', list_threads: 'off' } });
+  await t.ok('settle_thread', { threadIds: ['adm'] });
+  assert.equal(t.thread('adm').status, 'settled', 'Allow runs it under Read only');
+  assert.match(await t.err('list_threads'), /turned list_threads off for agents in Settings › Mochi access/);
+  assert.equal(t.state().queue.some((q) => q.kind === 'setting'), false, 'Off is yours: no agent-control widget');
+  const { result, card } = await t.asking('rename_thread', { title: 'Renamed' });
+  assert.equal(t.thread('rl').title === 'Renamed', false, 'nothing happens while it waits');
+  assert.match(card.title, /wants to rename thread/);
+  assert.match(card.code!, /"title": "Renamed"/);
+  decideTool(card.tool!.callId, { isApproved: true });
+  assert.ok(!(await result).isError);
+  assert.equal(t.thread('rl').title, 'Renamed');
+  const denied = await t.asking('rename_thread', { title: 'Again' });
+  decideTool(denied.card.tool!.callId, { isApproved: false });
+  assert.match((await denied.result).text, /denied/);
+  assert.equal(t.thread('rl').title, 'Renamed');
+});
+
+test("deletes can't be set to run on their own: a saved Allow is ignored and they still ask", async () => {
+  const t = setup();
+  t.env.prefs.set({ toolPolicies: { delete_thread: 'allow' } as never });
+  const { result, card } = await t.asking('delete_thread', { threadIds: ['e2e'] });
+  assert.equal(card.tool!.isDestructive, true);
+  decideTool(card.tool!.callId, { isApproved: false });
+  assert.match((await result).text, /denied/);
+  assert.ok(t.thread('e2e'));
 });
 
 test('changes runs everything that doesn’t ask, and blocks deletes and settings without showing their widget', async () => {
@@ -496,12 +532,6 @@ test('open_pane_tab opens the kind asked for', async () => {
   assert.ok(t.state().panes.find((p) => p.threadId === 'rl')!.tabs.some((x) => x.kind === 'terminal'));
 });
 
-test('focus_thread moves you to the thread', async () => {
-  const t = setup();
-  await t.ok('focus_thread', { threadId: 'adm' });
-  assert.deepEqual(t.state().views.latitude, { kind: 'thread', id: 'adm' });
-});
-
 test('split_with opens a split', async () => {
   const t = setup();
   await t.ok('split_with', { threadId: 'adm' });
@@ -566,10 +596,12 @@ test('browser_open navigates the active tab; a non-local origin is logged and to
   assert.match(t.toasts.at(-1)!.text, /opened example.com/);
 });
 
-test('browser tools fail with a fix when the thread is off screen', async () => {
+test('browser tools drive an off-screen thread without moving the user', async () => {
   const t = setup();
   t.env.dispatch({ type: 'go', view: { kind: 'thread', id: 'adm' } });
-  assert.match(await t.err('browser_snapshot'), /focus_thread/);
+  await t.ok('browser_snapshot');
+  assert.deepEqual(t.opened, ['rl/tab-1']);
+  assert.deepEqual(t.state().views.latitude, { kind: 'thread', id: 'adm' });
 });
 
 test('browser_snapshot returns the tree with refs', async () => {
@@ -656,6 +688,18 @@ test('browser_hover, browser_select and browser_drag act on snapshot refs', asyn
   assert.match(await t.err('browser_drag', { from: 'e1', to: 'e9' }), /browser_snapshot first/);
 });
 
+test('browser_dialog answers the open dialog; until then the other browser tools fail with its message', async () => {
+  const t = setup();
+  assert.match(await t.err('browser_dialog', { accept: true }), /No dialog is open/);
+  t.pages.set('rl/tab-1', { ...t.pages.get('rl/tab-1')!, dialog: { kind: 'confirm', message: 'Delete it?' } });
+  for (const [name, args] of [['browser_snapshot', {}], ['browser_press', { key: 'Enter' }], ['browser_reload', {}], ['browser_open', { url: 'localhost:5173/x' }]] as const)
+    assert.equal(await t.err(name, args), 'A confirm dialog is open: "Delete it?"; answer it with browser_dialog', name);
+  assert.deepEqual([t.acts, t.commands], [[], []]);
+  await t.ok('browser_dialog', { accept: false });
+  assert.deepEqual(t.answers, [false]);
+  await t.ok('browser_snapshot');
+});
+
 test('browser_wait_for reports whether the condition was met', async () => {
   const t = setup();
   assert.equal((await t.ok('browser_wait_for', { text: 'Hello' })).isMet, true);
@@ -730,7 +774,7 @@ test('widget ids carry a per-launch part, so a reload never reuses a saved entry
 
 const SECRETS = ['sk-live-abcdefghijklmnop', 'ghp_abcdefghijklmnopqrstuvwxyz', 'ghp_ZYXWVUTSRQPONMLKJIHGFEDCBA'];
 
-type SettingView = { key: string; value: string | null; allowed?: string[]; locked?: string; server?: Record<string, unknown> };
+type SettingView = { key: string; value: string | null; allowed?: string[]; locked?: string; section?: string; group?: string; server?: Record<string, unknown> };
 const byKey = (r: { settings: SettingView[] }, key: string) => r.settings.find((s) => s.key === key)!;
 const widget = (t: ReturnType<typeof setup>) => t.state().queue.find((q) => q.settings)!;
 
@@ -743,6 +787,8 @@ test('get_settings reads every app setting and your profile’s, with values, al
   assert.equal(byKey(r, 'concurrency').value, '6', 'host settings come from main');
   assert.equal(byKey(r, 'alert.needs-you').value, 'true');
   assert.equal(byKey(r, 'quietFrom').value, '22');
+  assert.deepEqual([byKey(r, 'permissions').section, byKey(r, 'permissions').group], ['general', 'New threads'], 'the page and its titled section');
+  assert.deepEqual([byKey(r, 'idleAlert.gaps').section, byKey(r, 'idleAlert.gaps').group], ['notifications', 'Idle threads']);
   for (const key of ['agentControl', 'permissions', 'threadModels', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
   assert.equal(byKey(r, 'profile.name').value, 'Latitude');
   assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');
@@ -827,6 +873,54 @@ test('update_settings validates every change before showing anything', async () 
   assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
 });
 
+test('get_keybindings lists every command with its chord now and its default, and get_settings leaves shortcuts to it', async () => {
+  const t = setup();
+  t.env.prefs.set({ keybindings: { palette: 'mod+shift+K', 'go-new': '' } });
+  const r = await t.ok('get_keybindings');
+  const palette = r.commands.find((c: { id: string }) => c.id === 'palette');
+  assert.deepEqual(palette, { id: 'palette', title: 'Command palette', group: 'General', scope: 'global', keys: 'mod+shift+K', default: 'mod+K', isCustom: true });
+  assert.equal(r.commands.find((c: { id: string }) => c.id === 'go-new').keys, '', 'a removed shortcut reads as ""');
+  assert.ok(r.fixed.some((f: { what: string }) => /composer/.test(f.what)));
+  assert.match(r.reserved, /Copy/);
+  const settings = await t.ok('get_settings');
+  assert.equal(settings.settings.some((s: { key: string }) => s.key.startsWith('keybinding.')), false);
+  assert.match(await t.err('update_settings', { changes: [{ key: 'keybinding.palette', value: 'mod+J' }], reason: 'x' }), /set_keybinding/);
+});
+
+test('set_keybinding shows current → proposed on a settings widget, and refuses what Settings › Keyboard refuses', async () => {
+  const t = setup();
+  const r = await t.ok('set_keybinding', { command: 'palette', keys: 'shift+mod+k', reason: 'You asked for ⌘⇧K' });
+  assert.deepEqual(r.shown, ['keybinding.palette']);
+  const { settings, title } = widget(t);
+  assert.equal(title, 'Claude suggests a new shortcut for Command palette');
+  assert.deepEqual(settings!.changes, [{ key: 'keybinding.palette', value: 'mod+shift+K' }]);
+  assert.deepEqual(settings!.before, { 'keybinding.palette': 'mod+K' });
+  assert.deepEqual(t.prefs().keybindings, {}, 'only the user applies it');
+
+  const err = (args: Record<string, string>) => t.err('set_keybinding', { reason: 'x', ...args });
+  assert.match(await err({ command: 'nope', keys: 'mod+J' }), /No command nope/);
+  assert.match(await err({ command: 'palette', keys: 'cmd+J' }), /isn't a chord/);
+  assert.match(await err({ command: 'palette', keys: 'mod+K' }), /already mod\+K/);
+  assert.match(await err({ command: 'palette', keys: 'mod+C' }), /mod\+C is reserved: Copy/);
+  assert.match(await err({ command: 'palette', keys: 'Tab' }), /needs/);
+  assert.match(await err({ command: 'palette', keys: 'mod+P' }), /already used by Go to file \(files-go-to\); pass onConflict/);
+});
+
+test('set_keybinding settles a clash on the widget: swap gives the other command the old chord, replace clears it', async () => {
+  const swap = setup();
+  await swap.ok('set_keybinding', { command: 'palette', keys: 'mod+P', onConflict: 'swap', reason: 'x' });
+  assert.deepEqual(widget(swap).settings!.changes, [
+    { key: 'keybinding.palette', value: 'mod+P' },
+    { key: 'keybinding.files-go-to', value: 'mod+K' },
+  ]);
+  const replace = setup();
+  await replace.ok('set_keybinding', { command: 'palette', keys: 'mod+P', onConflict: 'replace', reason: 'x' });
+  assert.deepEqual(widget(replace).settings!.changes[1], { key: 'keybinding.files-go-to', value: '' });
+  const cleared = setup();
+  await cleared.ok('set_keybinding', { command: 'go-new', keys: '', reason: 'x' });
+  assert.match(widget(cleared).title, /removing the shortcut for New thread/);
+});
+
 test('account suggestions: only an existing account, only for a profile without its own, never under active threads', async () => {
   const t = setup();
   const account = (profileId: string, value: string) => t.call('update_settings', { changes: [{ key: 'profile.claudeAccount', value, profileId }], reason: 'x' });
@@ -899,6 +993,7 @@ test('Read only and Changes block every settings suggestion and delete with no w
   const writes = {
     update_settings: { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' },
     add_mcp_server: { name: 'docs', command: 'npx', reason: 'x' },
+    set_keybinding: { command: 'palette', keys: 'mod+shift+K', reason: 'x' },
     remove_mcp_server: { name: 'github' },
     remove_profile: { profileId: 'scratch' },
   };
@@ -933,7 +1028,22 @@ test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and 
   assert.equal(r.url, 'https://github.com/o/r/pull/9');
   assert.deepEqual(t.pushes, ['/repo/rl']);
   assert.equal(t.prs[0].title, 'feat(api): rate limit keys by plan');
-  assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [ ] Tests pass'].join('\n'));
+  assert.equal(t.prs[0].body, ['## What', t.thread('rl').goal, '', '## Why', 'Enterprise keys need higher limits.', '', '## Checks', '- [x] 429s carry Retry-After: curl -i shows it', '- [x] Tests pass: `pnpm test` passed'].join('\n'));
+});
+
+test('open_pr runs the checks first and refuses on a failing one with the same reason the card shows; Open anyway lets it through, noted', async () => {
+  const t = setup({ gitBranches: ['main', 'feat/rate-limit'], gitCurrent: 'feat/rate-limit', failing: ['pnpm test'] });
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: 'Tests pass', command: 'pnpm test' }] } });
+  const [tests] = t.thread('rl').criteria!;
+  t.env.dispatch({ type: 'criterion-claim', threadId: 'rl', criterionId: tests.id, evidence: 'all green', by: 'claude' });
+  const refusal = await t.err('open_pr', { title: 'fix: x', why: 'y' });
+  assert.match(refusal, /open_pr refused: 1 critical gap: Check fails: Tests pass \(ℹ fail 5\)\. Fix it, or ask the user to choose Open anyway/);
+  assert.equal(t.thread('rl').criteria![0].check?.status, 'failed', 'the claim no longer counts');
+  assert.deepEqual(t.pushes, []);
+  t.env.dispatch({ type: 'idle-start', threadId: 'rl' });
+  t.env.dispatch({ type: 'idle-update', threadId: 'rl', patch: { canOpenPr: true, audit: { unverified: [{ text: 'Not checked in the app', quote: "I haven't checked it in the app" }] } } });
+  await t.ok('open_pr', { title: 'fix: x', why: 'y' });
+  assert.match(t.prs[0].body, /## Not verified\n- \*\*Critical, opened anyway:\*\* Check fails: Tests pass\n- Not checked in the app \(agent: "I haven't checked it in the app"\)$/);
 });
 
 test('open_pr refuses a detached HEAD and the default branch, and pushes nothing', async () => {
@@ -942,4 +1052,54 @@ test('open_pr refuses a detached HEAD and the default branch, and pushes nothing
   const onMain = setup({ gitBranches: ['main'] });
   assert.match(await onMain.err('open_pr', { title: 'fix: x', why: 'y' }), /push straight to it/);
   assert.deepEqual([...detached.pushes, ...onMain.pushes], []);
+});
+
+test('propose_goal waits for Accept by default; Keep leaves the draft; Apply with undo sets it and Undo puts the draft back', async () => {
+  const proposal = { goal: 'PR chips in a deleted worktree show live GitHub state', criteria: [{ text: 'Home folder reads PR state', command: 'pnpm test' }, { text: 'Chip #133 shows its state in the app' }], basis: 'refStates runs gh in the removed folder' };
+  const t = setup();
+  const draft = t.thread('rl').goal;
+  const waiting = await t.ok('propose_goal', proposal);
+  assert.match(waiting.status, /Waiting for the user/);
+  assert.equal(t.thread('rl').goal, draft, 'nothing changes until you accept');
+  t.env.dispatch({ type: 'goal-proposal', threadId: 'rl', decision: 'accept' });
+  assert.equal(t.thread('rl').goal, proposal.goal);
+  assert.deepEqual(
+    t.thread('rl').criteria!.map((c) => [c.text, c.command]),
+    [
+      ['Home folder reads PR state', 'pnpm test'],
+      ['Chip #133 shows its state in the app', undefined],
+    ],
+  );
+  assert.match(await t.err('propose_goal', proposal), /already has the goal you proposed/);
+
+  const kept = setup();
+  await kept.ok('propose_goal', proposal);
+  kept.env.dispatch({ type: 'goal-proposal', threadId: 'rl', decision: 'keep' });
+  assert.deepEqual([kept.thread('rl').goal, kept.thread('rl').proposal?.state], [draft, 'kept']);
+
+  const applied = setup();
+  applied.env.prefs.set({ proposedGoals: 'apply' });
+  const before = applied.thread('rl').criteria;
+  assert.match((await applied.ok('propose_goal', proposal)).status, /Applied; the user can undo/);
+  assert.equal(applied.thread('rl').goal, proposal.goal);
+  applied.env.dispatch({ type: 'goal-proposal', threadId: 'rl', decision: 'undo' });
+  assert.equal(applied.thread('rl').goal, draft);
+  assert.deepEqual(applied.thread('rl').criteria?.map((c) => c.text) ?? [], before?.map((c) => c.text) ?? []);
+});
+
+test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and report_turn wait for propose_goal", async () => {
+  const t = setup();
+  const { id } = await t.ok('create_thread', { prompt: 'Something is off with sum' });
+  t.env.dispatch({ type: 'goal-drafted', threadId: id, outcome: 'sum returns correct results', criteria: [{ text: 'Tests pass', command: 'npm test' }] });
+  const drafted = await t.ok('get_goal', {}, id);
+  assert.equal(drafted.isDraft, true);
+  assert.match(drafted.next, /call propose_goal/);
+  const [criterion] = t.thread(id).criteria!;
+  assert.match(await t.err('claim_criterion', { criterionId: criterion.id, evidence: 'x' }, id), /^Call propose_goal first/);
+  assert.match(await t.err('report_turn', { decisions: [], left: [] }, id), /^Call propose_goal first/);
+  await t.ok('propose_goal', { goal: 'sum adds its arguments', criteria: [{ text: 'node sum.test.mjs prints ok', command: 'node sum.test.mjs' }] }, id);
+  assert.equal((await t.ok('get_goal', {}, id)).isDraft, undefined, 'a proposal waiting on the user is enough');
+  await t.ok('report_turn', { decisions: ['Fixed a - b'], left: [] }, id);
+  t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: draftFrom(t.thread('rl')) });
+  assert.equal((await t.ok('get_goal')).isDraft, undefined, 'a goal you wrote is never a draft');
 });

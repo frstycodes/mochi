@@ -1,16 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import { hooksEnv } from '../../git/hooks.ts';
 import { PR_GUARD } from './prGuard.ts';
+import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
+import type { McpWidgetResource } from '../../../src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
+import { HIDDEN_CLAUDE_SKILLS, MOCHI_INSTRUCTIONS } from '../instructions.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -24,7 +27,7 @@ import { FORK_MISSING_NOTICE, FORK_REFUSED_NOTICE, forkPoint, MISSING_FORK_POINT
 interface Session {
   threadId: string;
   options: AgentRunOptions;
-  inbox: { text: string; images?: AgentImage[] }[];
+  inbox: { text: string; images?: AgentImage[]; priority?: 'next' }[];
   /** Every message handed to Claude Code, with the uuid `rewindFiles` takes and the chain entry before it (`rewindPoint`). */
   sent: { uuid: string; text: string; images?: AgentImage[]; after: string | null }[];
   /** The newest entry of the main conversation chain; undefined while a resumed session hasn't shown one yet. */
@@ -50,6 +53,7 @@ const DEFAULT_CAP = 6;
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const hasClaudeSession = (threadId: string) => sessions.has(threadId);
+export const claudeSessionIds = () => [...sessions.keys()];
 
 /** What a live session runs on, with the speed its latest message set. */
 export const claudeRunOptions = (threadId: string) => sessions.get(threadId)?.options;
@@ -60,21 +64,22 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.speed && options.speed !== 'fast') throw new TypeError('speed must be fast');
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd, saveImage), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
   sessions.set(threadId, session);
   void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
 }
 
 /** `speed`: '' standard, 'fast' fast mode, unset keeps it; a live process switches before reading the message. */
-export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string) {
+/** `steer`: the turn in flight folds the message in at its next step instead of answering it after (the queue's Send now). */
+export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string, steer?: boolean) {
   const session = sessions.get(threadId);
   if (!session) throw new Error('No Claude session for this thread in this run of Harness; start it again with resume');
   if (speed !== undefined && speed !== (session.options.speed ?? '')) {
     session.options = { ...session.options, speed: speed || undefined };
     await session.query?.applyFlagSettings({ fastMode: !!speed });
   }
-  session.inbox.push({ text, images });
+  session.inbox.push({ text, images, ...(steer && { priority: 'next' as const }) });
   session.isBusy = true;
   if (session.query) session.wake.emit('push');
   else if (!waiting.includes(session)) await schedule(session);
@@ -191,6 +196,8 @@ async function launch(session: Session) {
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: MOCHI_INSTRUCTIONS },
+        settings: { skillOverrides: HIDDEN_CLAUDE_SKILLS },
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
@@ -224,6 +231,8 @@ async function launch(session: Session) {
       // Auto mode depends on the plan, the model and fast mode; where Claude Code can't run it, edits fall back to acceptEdits rather than asking every time.
       if (message.type === 'system' && message.subtype === 'init' && mode === 'auto' && message.permissionMode !== 'auto') void session.query.setPermissionMode('acceptEdits').catch(() => {});
       if (message.type === 'rate_limit_event') void recordLimits(session.account.id, 'claude', [claudeEventWindow(message.rate_limit_info)].filter((w) => !!w));
+      // A server's tools load on its first call (deferred behind tool search), so which ones declare a view is read then.
+      if (session.mapper.needsWidgets(message)) session.mapper.learnWidgets(await session.query.mcpServerStatus().catch(() => []));
       session.mapper.map(message).forEach(emit);
       if (message.type !== 'result') continue;
       void session.query.mcpServerStatus().then((list) => emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } }), () => {});
@@ -246,6 +255,21 @@ async function resumeWhole(session: Session, sentBefore: number) {
   session.isBusy = true;
   emit({ threadId: session.threadId, type: 'notice', text: FORK_REFUSED_NOTICE });
   await schedule(session);
+}
+
+/**
+ * A tool's MCP App view, read through the Claude Code process that dialed `server`: the thread's own, or another live one on
+ * the same account (its connectors are the account's). Throws when none is live.
+ */
+export async function readClaudeWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource> {
+  const account = sessions.get(threadId)?.account.id;
+  const live = sessions.get(threadId)?.query ?? [...sessions.values()].find((s) => s.query && s.account.id === account)?.query;
+  if (!live) throw new Error('No Claude session is running to read this view from.');
+  const { contents } = await live.readMcpResource(server, uri);
+  const item = contents.find((c) => c.uri === uri) ?? contents[0];
+  const html = item?.text ?? (item?.blob && Buffer.from(item.blob, 'base64').toString('utf8'));
+  if (!html) throw new Error(`${server} returned no HTML for ${uri}.`);
+  return { html, ...(item._meta && { meta: item._meta }) };
 }
 
 /** Ends a session's process and hands its slot to the next waiting thread. The record stays for `send` unless stopped. */
@@ -276,7 +300,8 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
       session.sent.push({ uuid, text: next.text, images: next.images, after: session.lastUuid ?? null });
       session.lastUuid = uuid;
       session.mapper.sent(next.text).forEach(emit);
-      yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid };
+      // `priority: 'next'` is read from the 0.3.296 binary: 'next' folds into the running turn, 'now' cuts it, 'later' waits for it to end.
+      yield { type: 'user', message: { role: 'user', content: userContent(next.text, next.images) }, parent_tool_use_id: null, uuid, ...(next.priority && { priority: next.priority }) };
       continue;
     }
     try {

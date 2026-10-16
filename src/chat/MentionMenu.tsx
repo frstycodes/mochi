@@ -1,12 +1,12 @@
-import { useEffect, useId, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ChatRound, Note, Server, ShieldAlert, Window, X, type IconComponent } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { host } from '../host';
 import type { AgentImage } from '../host/types/agent';
 import type { AppWindow, ScreenAccess } from '../host/types/windows';
-import type { AgentCommand, McpServer, Thread } from '../model';
+import type { AgentCommand, McpServer } from '../model';
 import { openPhotos } from '../photo/photos';
 import { useHarness } from '../store';
 import { mentionFor, mentionGroups, mentionOptions, mentionQuery, optionId, withoutQuery, type Mention, type MentionOption } from './mentions';
@@ -136,10 +136,10 @@ function ChipIcon({ kind }: { kind: Exclude<Mention['kind'], 'window'> }) {
 }
 
 /**
- * The menu's state, the picked references and the textarea props that drive them: arrows move, Enter or Tab picks, Esc
+ * The menu's state, the picked references and the editor props that drive them: arrows move, Enter or Tab picks, Esc
  * closes until the text changes, Backspace in an empty input drops the last reference. Needs the composer's `PromptInputProvider`.
  */
-export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: McpServer[]) {
+export function useMentionMenu(selfId: string, skills: AgentCommand[], servers: McpServer[]) {
   const listId = useId();
   const { state } = useHarness();
   const { textInput } = usePromptInputController();
@@ -151,7 +151,7 @@ export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: 
   const screen = useAppWindows(isQuerying);
 
   const picked = new Set(mentions.map((m) => m.id));
-  const options = mentionOptions(query ?? '', state.threads, screen.windows, thread.id, skills, servers).filter((o) => !picked.has(optionId(o)));
+  const options = mentionOptions(query ?? '', state.threads, screen.windows, selfId, skills, servers).filter((o) => !picked.has(optionId(o)));
   const items: MenuItem[] = isBlocked(screen.access) ? [...options, { kind: 'permission' }] : options;
   const isOpen = isQuerying && items.length > 0;
   const current = items[Math.min(active, items.length - 1)];
@@ -168,7 +168,7 @@ export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: 
   };
   const remove = (id: string) => setMentions((all) => all.filter((m) => m.id !== id));
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (e: KeyboardEvent) => {
     if (!isOpen) {
       if (e.key === 'Backspace' && textInput.value === '' && mentions.length) setMentions((all) => all.slice(0, -1));
       return;
@@ -182,15 +182,13 @@ export function useMentionMenu(thread: Thread, skills: AgentCommand[], servers: 
     e.stopPropagation();
   };
 
-  const textareaProps = {
+  const editorProps = {
     onKeyDown,
-    'aria-autocomplete': 'list' as const,
-    'aria-controls': isOpen ? listId : undefined,
-    'aria-activedescendant': isOpen ? `${listId}-${items.indexOf(current)}` : undefined,
+    attributes: { 'aria-autocomplete': 'list', 'aria-controls': isOpen ? listId : undefined, 'aria-activedescendant': isOpen ? `${listId}-${items.indexOf(current)}` : undefined },
   };
   // Edit on a queued message brings its references back beside any you already picked.
   const restore = (list: Mention[]) => setMentions((all) => [...all, ...list.filter((m) => !all.some((a) => a.id === m.id))]);
-  return { listId, items, active, isOpen, choose, mentions, remove, restore, clear: () => setMentions([]), textareaProps };
+  return { listId, items, active, isOpen, choose, mentions, remove, restore, clear: () => setMentions([]), editorProps };
 }
 
 /** Other apps' windows, listed fresh each time the menu opens. */

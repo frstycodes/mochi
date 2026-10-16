@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuT
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ActionItems } from '../menus/ActionItems';
 import { BROWSER_PANE_MENU, PANE_MENU } from '../menus/menus';
-import { OverflowIcon, TooltipIconButton } from '../ui';
+import { IconSwap, OverflowIcon, TooltipIconButton } from '../ui';
 import type { PaneTabKind } from '../model';
 import { PANE_TABS } from './tabs';
 
@@ -91,7 +91,7 @@ export function PaneHeader({
         </DropdownMenu>
       )}
       <TooltipIconButton label={isExpanded ? 'Exit full size' : 'Expand'} hint={isExpanded ? 'Back beside the chat (Esc)' : 'Fill the thread, over the chat'} aria-pressed={isExpanded} onClick={onExpand} className="text-muted-foreground">
-        {isExpanded ? <ExitFullscreen /> : <Fullscreen />}
+        <IconSwap id={isExpanded ? 'exit' : 'expand'}>{isExpanded ? <ExitFullscreen /> : <Fullscreen />}</IconSwap>
       </TooltipIconButton>
       <TooltipIconButton label={`Close ${title}`} hint="It opens again where you left it" onClick={onClose} className="text-muted-foreground">
         <X />

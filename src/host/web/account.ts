@@ -10,5 +10,6 @@ export const account: AccountHost = {
   },
   cancelSignIn: async () => {},
   signOut: async () => UNCONFIGURED,
+  openAccountPortal: async () => {},
   onChange: () => () => {},
 };

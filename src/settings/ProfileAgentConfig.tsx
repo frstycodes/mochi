@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Add, Download, Flash, FolderOpen, InfoCircle, Trash3 } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import type { ConfigPreview, ProfileConfig, ProviderConfig } from '../host/types
 import type { Provider, Space } from '../model';
 import { useProfiles, updateProfile } from '../profiles';
 import { useHarness, useView } from '../store';
-import { OverflowIcon } from '../ui';
+import { OverflowIcon, ProviderMark } from '../ui';
 import { INSTRUCTIONS_FILE, parseServerCommand, parseServerJson, serverSummary, toClaude, type ConfigChange, type McpEntry, type McpServerDef } from './agentConfig';
 import { ipcMessage } from './AgentSettings';
 import { FileDiffs } from './FileDiffs';
@@ -127,7 +127,7 @@ export function InstructionsRow({ profile, config, review, provider: first = 'cl
       id={`${profile.id}-instructions`}
       isOpenAtFirst={proposal !== undefined}
       label="Instructions"
-      description={!config ? 'Reading…' : isSynced ? 'CLAUDE.md and AGENTS.md, kept the same' : HARNESS_IDS.map((p) => `${INSTRUCTIONS_FILE[p]} ${lineCount(config[p].instructions.text)}`).join(' · ')}
+      description={!config ? 'Reading…' : isSynced ? 'CLAUDE.md and AGENTS.md, kept the same' : <PerHarness text={(p) => `${INSTRUCTIONS_FILE[p]} ${lineCount(config[p].instructions.text)}`} />}
     >
       {!isSynced && <HarnessPicker value={provider} onChange={setProvider} />}
       <Textarea
@@ -169,7 +169,7 @@ function McpRow({ profile, config, review }: { profile: Space; config?: ProfileC
   const current = config?.[provider];
   const other = HARNESS_IDS.find((p) => p !== provider)!;
   return (
-    <ExpandRow id={rowId} label="MCP servers" description={!config ? 'Reading…' : HARNESS_IDS.map((p) => `${countLabel(config[p].mcpServers.filter((s) => s.scope === 'user').length, 'server')} on ${HARNESSES[p].name}`).join(' · ')}>
+    <ExpandRow id={rowId} label="MCP servers" description={!config ? 'Reading…' : <PerHarness text={(p) => countLabel(config[p].mcpServers.filter((s) => s.scope === 'user').length, 'server')} />}>
       <HarnessPicker value={provider} onChange={setProvider} />
       {!!current && <AccountNote config={current} />}
       {!!current?.mcpServers.length && (
@@ -190,7 +190,8 @@ function McpRow({ profile, config, review }: { profile: Space; config?: ProfileC
         )}
         <Button variant="ghost" size="sm" onClick={() => void review(`Import MCP servers from ${HARNESSES[other].name}`, [{ kind: 'import', from: { spaceId: profile.id, provider: other }, provider, parts: ['mcp'] }])}>
           <Download data-icon="inline-start" />
-          Import from {HARNESSES[other].name}
+          Import from <ProviderMark provider={other} size={14} />
+          {HARNESSES[other].name}
         </Button>
       </div>
     </ExpandRow>
@@ -357,7 +358,7 @@ function SkillsRow({ profile, config, review }: { profile: Space; config?: Profi
       (e: Error) => toast.error('Could not open the folder picker', { description: e.message }),
     );
   return (
-    <ExpandRow id={rowId} label="Skills" description={!config ? 'Reading…' : HARNESS_IDS.map((p) => `${countLabel(config[p].skills.length, 'skill')} on ${HARNESSES[p].name}`).join(' · ')}>
+    <ExpandRow id={rowId} label="Skills" description={!config ? 'Reading…' : <PerHarness text={(p) => countLabel(config[p].skills.length, 'skill')} />}>
       <HarnessPicker value={provider} onChange={setProvider} />
       {!!current && <AccountNote config={current} />}
       {!!current?.skills.length && (
@@ -390,7 +391,8 @@ function SkillsRow({ profile, config, review }: { profile: Space; config?: Profi
         </Button>
         <Button variant="ghost" size="sm" onClick={() => void review(`Import skills from ${HARNESSES[other].name}`, [{ kind: 'import', from: { spaceId: profile.id, provider: other }, provider, parts: ['skills'] }])}>
           <Download data-icon="inline-start" />
-          Import from {HARNESSES[other].name}
+          Import from <ProviderMark provider={other} size={14} />
+          {HARNESSES[other].name}
         </Button>
       </div>
     </ExpandRow>
@@ -480,11 +482,26 @@ function useRequestedHarness(rowId: string) {
   return [provider, setProvider] as const;
 }
 
+/** One summary per harness, each led by the harness's mark instead of its name. */
+function PerHarness({ text }: { text: (provider: Provider) => string }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+      {HARNESS_IDS.map((p) => (
+        <span key={p} className="inline-flex items-center gap-1">
+          <ProviderMark provider={p} size={12} />
+          {text(p)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function HarnessPicker({ value, onChange }: { value: Provider; onChange: (provider: Provider) => void }) {
   return (
     <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={value} onValueChange={(v) => v && onChange(v as Provider)}>
       {HARNESS_IDS.map((id) => (
         <ToggleGroupItem key={id} value={id}>
+          <ProviderMark provider={id} size={14} />
           {HARNESSES[id].name}
         </ToggleGroupItem>
       ))}

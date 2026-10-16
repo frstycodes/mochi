@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type { Thread } from '../model.ts';
@@ -62,7 +62,7 @@ function forkWorktree(threads: Thread[], thread: Thread, fork: Fork) {
 const SEEN_KEY = 'mochi.worktrees.settled';
 const CLEANUP_MS = 60 * 60 * 1000;
 
-/** Removes worktrees of threads settled longer than Settings › Git says, on launch and hourly. Git refuses a dirty one, which stays. */
+/** Removes worktrees of threads settled longer than Settings › Git and worktrees says, on launch and hourly. Git refuses a dirty one, which stays. */
 export function useWorktreeCleanup() {
   const { state } = useHarness();
   const { worktreeCleanup } = usePrefs();

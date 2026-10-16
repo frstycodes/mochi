@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { toast } from '../toast/store.ts';
 import { host } from '../host';
 import { DEFAULT_SETTINGS, type ModelChoice } from '../host/types/settings';
 import type { Thread } from '../model';
@@ -41,7 +41,7 @@ export function useSideChat(thread: Thread, tabId: string) {
   };
 }
 
-/** Settings › Defaults' side chat model, old catalog ids read as the provider's own (null until read), and a setter that saves it. */
+/** Settings › Models' side chat model, old catalog ids read as the provider's own (null until read), and a setter that saves it. */
 export function useSideChatDefault() {
   const [model, setModel] = useState<ModelChoice | null>(null);
   useEffect(() => {

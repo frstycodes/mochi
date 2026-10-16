@@ -1,11 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { useSimplifyReveal } from './simplify/useSimplify';
+import { useIsSimplifying } from './simplify/useSimplify';
+import { SimplifySwap } from './simplify/SimplifyMotion';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
+import type { EditorView } from '@codemirror/view';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Hourglass, Sparkles } from 'reicon-react';
+import { ChevronDown, ChevronUp, Hourglass, Stars } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -33,7 +35,8 @@ import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
 import { ReportCard } from './goals/ReportCard';
-import { currentReport } from './goals/report';
+import { showsVerdictCard } from './goals/report';
+import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import { ReceivedMessageRow } from './chat/ThreadMessage';
 import { turnChanges } from './chat/turnChanges';
@@ -52,12 +55,15 @@ import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkil
 import { SlashTokenText } from './chat/SlashToken';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
-import { toast } from 'sonner';
-import { openPhotos } from './photo/photos';
+import { ImageGenCard } from './chat/ImageGenCard';
+import { McpAppCard } from './chat/McpAppCard';
+import { MessageImages } from './chat/MessageImages';
+import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import type { Mention } from './chat/mentions';
+import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
 import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
@@ -90,7 +96,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   const pins = useThreadPins(thread.id);
   usePinHighlights(messages, pins);
   const handoff = useComposerHandoff(useSplit().leafId);
-  const slashItems = useSlashItems(thread.providers[0], thread.spaceId, thread.agent);
+  const slashItems = useSlashItems(thread.providers[0], thread.spaceId, projectRef(thread.repo), thread.agent);
   const transcript = useRef<TranscriptHandle | null>(null);
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
 
@@ -99,25 +105,26 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
       {/* Instant while opening: a thread opens at its latest message, and a thread that unmounted reopens where it was left. */}
       <Conversation data-photo-scope initial={remembered && !remembered.isAtBottom ? false : 'instant'} resize={resize} className="min-h-0 flex-1">
         <VizThreadProvider value={thread.id}>
-          <ConversationContent className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-6 pb-[calc(var(--composer-h)+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
+          <ConversationContent scrollClassName="[scroll-timeline:--chat_y]" className={cn('mx-auto w-full max-w-[720px] gap-5 px-4 pt-[calc(var(--chat-top,0px)+1.5rem)] pb-[calc(max(var(--composer-h),var(--composer-hold,0px))+1.5rem)] md:px-6', handoff.isHandoff && 'animate-in duration-300 fade-in')}>
             <div ref={messages} className="contents">
               {hasGoal(thread) && <GoalCard thread={thread} />}
               {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
               <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
                 {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} messageBar={messageBar} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
               </Transcript>
-              <ReportCard thread={thread} />
+              <ProposalCard thread={thread} />
+              <ReportCard thread={thread} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
               <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
             </div>
           </ConversationContent>
         </VizThreadProvider>
         <ConversationScrollButton className="bottom-[calc(var(--composer-h)+0.75rem)]" />
         {!isReadOnly && <SelectionPin threadId={thread.id} scope={messages} />}
-        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-6 left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
-        {!isReadOnly && <ScrollIntent onScrollUp={tray.collapse} onReachBottom={tray.expand} />}
+        <ThreadMinimap items={outline(rows, pins)} onJump={(rowIndex) => transcript.current?.scrollToIndex(rowIndex, { align: 'start' })} className="absolute top-[calc(var(--chat-top,0px)+1.5rem)] left-0 bottom-[calc(var(--composer-h)+1rem)] z-10 hidden md:flex" />
+        {!isReadOnly && <ScrollIntent onScrollUp={() => (composer.hold(), tray.collapse())} onReachBottom={() => (tray.expand(), !decisions.length && composer.release())} />}
       </Conversation>
       {!isReadOnly && (
-        <div ref={composer} className="absolute inset-x-0 bottom-0 z-10">
+        <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
           <PromptInputProvider key={thread.id}>
             <ImageDropTarget>
               <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
@@ -130,18 +137,37 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   );
 }
 
-// Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
+/**
+ * Writes --composer-h on the parent directly: the composer animates its height every frame, and a state update would re-render the whole chat.
+ * `hold` pins --composer-hold at the current height, so folding the tray under a reader who just scrolled up doesn't shrink the chat's bottom
+ * padding: the shrink would clamp the scroll back to the bottom, and `use-stick-to-bottom` re-locks on a shrink near the bottom.
+ */
 function useComposerHeightVar() {
   const ref = useRef<HTMLDivElement>(null);
+  const held = useRef(0);
+  const release = () => {
+    held.current = 0;
+    ref.current?.parentElement?.style.removeProperty('--composer-hold');
+  };
+  const hold = () => {
+    const el = ref.current;
+    if (!el?.parentElement || held.current) return;
+    held.current = el.offsetHeight;
+    el.parentElement.style.setProperty('--composer-hold', `${held.current}px`);
+  };
   useEffect(() => {
     const el = ref.current;
     const parent = el?.parentElement;
     if (!el || !parent) return;
-    const ro = new ResizeObserver(([e]) => parent.style.setProperty('--composer-h', `${e.borderBoxSize[0].blockSize}px`));
+    const ro = new ResizeObserver(([e]) => {
+      const height = e.borderBoxSize[0].blockSize;
+      parent.style.setProperty('--composer-h', `${height}px`);
+      if (height >= held.current) release();
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return ref;
+  return { ref, hold, release };
 }
 
 // isLive: the newest row of a running thread, the one still being written. Memoized: a scroll re-renders the virtualized list, and only rows that just mounted should render.
@@ -153,6 +179,8 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     const subagent = thread.subagents?.find((s) => s.id === row.entry.subagentId);
     return subagent ? <SubagentRow thread={thread} subagent={subagent} /> : null;
   }
+  if (row.kind === 'image') return <ImageGenCard image={row.entry.generated!} startedMs={row.entry.ms} />;
+  if (row.kind === 'widget') return <McpAppCard threadId={thread.id} widget={row.entry.widget!} />;
   if (row.kind === 'thread-message') return <ReceivedMessageRow entry={row.entry} from={row.entry.from!} index={row.index} />;
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
@@ -170,7 +198,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
           Queued
         </span>
       )}
-      {isYou && !!entry.images?.length && <SentImages thumbs={entry.images} />}
+      {isYou && !!entry.images?.length && <MessageImages photos={entry.images.map((src, i) => ({ src, name: `Image ${i + 1}` }))} className="justify-end" />}
       <Message from={isYou ? 'user' : 'assistant'} title={`${authorName(entry.who)} · ${clock(entry.at)}`}>
         <MessageContent className={cn('type-prose', isAgent && 'w-full')}>
           {isAgent && row.showAuthor && (
@@ -202,56 +230,29 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   );
 });
 
-/** The images you sent with a message, as the small copies the transcript keeps; click opens them larger. */
-function SentImages({ thumbs }: { thumbs: string[] }) {
-  const photos = thumbs.map((src, i) => ({ src, name: `Image ${i + 1}` }));
-  return (
-    <div className="flex flex-wrap justify-end gap-2">
-      {photos.map((photo, i) => (
-        <button
-          key={i}
-          type="button"
-          aria-label={`View ${photo.name}`}
-          onClick={() => openPhotos({ photos, index: i })}
-          className="relative size-16 cursor-zoom-in overflow-hidden rounded-lg bg-muted after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:after:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08)]"
-        >
-          <img src={photo.src} alt="" className="size-full object-cover" />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** An agent's reply, or its Simplify bullets: they come in with the word reveal, and the reply pulses while they're made. */
+/** An agent's reply, or its simplified version: it shimmers while that is made, then crossfades to it. */
 function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {
   const entry = thread.activity[index];
-  const { isSimplifying, isRevealing } = useSimplifyReveal(thread.id, index);
+  const isSimplifying = useIsSimplifying(thread.id, index);
   const simplified = entry.simplified?.isShown ? entry.simplified.text : null;
   return (
-    <>
+    <SimplifySwap view={simplified === null ? 'original' : 'simplified'} isSimplifying={isSimplifying}>
       {simplified !== null && (
         <span className="flex items-center gap-1 type-caption text-subtle-foreground">
-          <Sparkles aria-hidden className="size-3" />
+          <Stars aria-hidden className="size-3" />
           Simplified for you
         </span>
       )}
-      <MessageResponse
-        key={simplified === null ? 'original' : 'simplified'}
-        plugins={VIZ_PLUGINS}
-        components={VIZ_COMPONENTS}
-        rehypePlugins={VIZ_REHYPE_PLUGINS}
-        isAnimating={isLive || (simplified !== null && isRevealing)}
-        className={cn('transition-[opacity,filter] duration-300 motion-reduce:transition-none', isSimplifying && 'opacity-50 blur-[1.5px]')}
-      >
+      <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} isAnimating={isLive}>
         {simplified ?? entry.text}
       </MessageResponse>
-    </>
+    </SimplifySwap>
   );
 }
 
 /** Finished turns' file changes: the turn still running gets its card once it ends, and a turn with a report lists its files there instead. */
 function shownTurnChanges(thread: Thread, isRunning: boolean) {
-  const isOpenTurnHidden = isRunning || !!currentReport(thread);
+  const isOpenTurnHidden = isRunning || showsVerdictCard(thread);
   return turnChanges(thread.activity).filter((t) => t.end < thread.activity.length - 1 || !isOpenTurnHidden);
 }
 
@@ -338,19 +339,20 @@ function Composer({
   const isQueueing = shouldQueue(thread, whileWorking, isHeld);
   const queued = thread.queued ?? [];
   const { textInput, attachments } = usePromptInputController();
-  const textarea = useRef<HTMLTextAreaElement>(null);
+  const editor = useRef<EditorView>(null);
   const controls = controlsOf(thread);
   const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
-  const mention = useMentionMenu(thread, useThreadSkills(provider, thread.spaceId, thread.agent), useThreadServers(provider, thread.spaceId, thread.agent));
+  const root = projectRef(thread.repo);
+  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, isQueueing, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
   const items = useMemo(() => slashItems.map((i) => (i.source === 'mochi' && i.name === 'compact' && offReason ? { ...i, disabledReason: offReason } : i)), [slashItems, offReason]);
   const slash = useSlashMenu(items);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
-  const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
+  const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
   const draftKey = threadDraftKey(thread.id);
   useSeedAttachment(thread.id === 'adm' && !getDraft(draftKey));
   const draftExtra = useMemo(() => (mention.mentions.length > 0 ? { mentions: mention.mentions } : undefined), [mention.mentions]);
@@ -375,7 +377,7 @@ function Composer({
     textInput.setInput(textInput.value.trim() ? `${textInput.value}\n${message.draft}` : message.draft);
     mention.restore(message.mentions);
     if (message.images?.length) attachments.add(imageFiles(message.images));
-    textarea.current?.focus();
+    editor.current?.focus();
   };
 
   return (
@@ -387,10 +389,10 @@ function Composer({
           <MentionMenu menu={mention} />
           <ComposerCard className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, interrupts: true })} />
+            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, steers: true })} />
             <MentionChips menu={mention} />
             <ComposerInput
-              ref={textarea}
+              ref={editor}
               draftKey={draftKey}
               draftExtra={draftExtra}
               controls={controls}
@@ -422,12 +424,12 @@ function Composer({
               placeholder={placeholder(thread, decisions.length > 0, isQueueing)}
               autoFocus={handoff.isHandoff}
               {...menuProps}
-              onKeyDown={(e) => {
-                mention.textareaProps.onKeyDown(e);
-                if (!e.isPropagationStopped()) slash.textareaProps.onKeyDown(e);
+              onKeyDown={(e, view) => {
+                mention.editorProps.onKeyDown(e);
+                if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
                 if (e.key === MOD_KEY) setIsHeld(true);
                 const newest = queued.at(-1);
-                if (e.key !== 'ArrowUp' || e.defaultPrevented || e.altKey || e.shiftKey || isMod(e) || e.currentTarget.value || mention.mentions.length || !newest) return;
+                if (e.key !== 'ArrowUp' || e.defaultPrevented || e.altKey || e.shiftKey || isMod(e) || view.state.doc.length || mention.mentions.length || !newest) return;
                 e.preventDefault();
                 edit(newest);
               }}
@@ -521,4 +523,10 @@ function useOpeningResize() {
     return () => window.clearTimeout(t);
   }, []);
   return isOpening ? 'instant' : 'smooth';
+}
+
+/** Scrolls to the agent's last message holding `quote`: a verdict gap's source. */
+function jumpToQuote(transcript: TranscriptHandle | null, rows: ChatRow[], quote: string) {
+  const i = rows.findLastIndex((r) => r.kind === 'message' && r.entry.text.includes(quote));
+  if (i >= 0) transcript?.scrollToIndex(i, { align: 'center' });
 }

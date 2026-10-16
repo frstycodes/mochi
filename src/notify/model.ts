@@ -1,10 +1,14 @@
-import type { LiveRun, Provider, QueueItem, Thread } from '../model.ts';
+import { isMochiCard, type LiveRun, type Provider, type QueueItem, type Thread } from '../model.ts';
 import { resetLabel } from '../usage/limits.ts';
+import { bareState } from '../chat/refs.ts';
+import { idleVerdict, type Verdict, type VerdictKind } from '../goals/verdict.ts';
 
-export type NoticeKind = 'needs-you' | 'limit' | 'step-done' | 'review' | 'ci' | 'pr-review' | 'overlap' | 'race-lost' | 'run';
+export type NoticeKind = 'needs-you' | 'limit' | 'step-done' | 'review' | 'ci' | 'pr-review' | 'overlap' | 'race-lost' | 'run' | 'idle';
 
 /** Only main alerts these, as OS notifications for watched threads (`electron/notify/watch.ts`); they never land in the center. */
 type WatchKind = 'done' | 'failed';
+
+export type AlertKind = NoticeKind | WatchKind;
 
 export interface Notice {
   id: string;
@@ -13,6 +17,8 @@ export interface Notice {
   queueId?: string;
   /** `pr-review`: the PR it's about, for its preview card. */
   prNumber?: number;
+  /** `idle`: Mochi's verdict, which Settings › Goals and checks picks alerts by. */
+  verdict?: VerdictKind;
   title: string;
   body: string;
   /** Simulation minutes, same clock as `State.now`. */
@@ -49,9 +55,55 @@ export const ALERT_KINDS = {
 
 export const isAlertKind = (kind: NoticeKind): kind is NoticeKind & keyof typeof ALERT_KINDS => kind in ALERT_KINDS;
 
-export const hourLabel = (h: number) => `${String(h).padStart(2, '0')}:00`;
+/**
+ * What you did in a notice's thread, and where it stands now. `thread`/`queue` are absent in main, which only hears view and act
+ * signals, so the rules that read them don't fire there.
+ */
+export interface Addressing {
+  /** The thread is on screen in a focused window. */
+  isViewed?: boolean;
+  /** You sent, answered, rewound, resumed, stopped or settled in the thread since the notice arrived. */
+  isActedOn?: boolean;
+  thread?: Thread;
+  queue?: QueueItem[];
+}
+
+type Addressable = { kind: AlertKind; queueId?: string; prNumber?: number; verdict?: VerdictKind };
+
+/** Per kind, when a notice has been dealt with inside its thread and leaves the center (and the OS notification closes). */
+const ADDRESSED = {
+  // Looking doesn't answer a question; answering it, or anything else you send, does.
+  'needs-you': (_, a) => !!a.isActedOn || (!!a.thread && a.thread.status !== 'needs-you'),
+  review: (_, a) => !!a.isViewed || !!a.isActedOn || (!!a.thread && a.thread.status !== 'review'),
+  done: (_, a) => !!a.isViewed || !!a.isActedOn,
+  failed: (_, a) => !!a.isActedOn,
+  limit: (_, a) => !!a.isViewed || !!a.isActedOn,
+  'step-done': (_, a) => !!a.isViewed || !!a.isActedOn,
+  'race-lost': (_, a) => !!a.isViewed || !!a.isActedOn,
+  idle: (n, a) => !!a.isActedOn || (!!a.isViewed && (n.verdict === 'done' || n.verdict === 'gaps')),
+  ci: (n, a) => !!a.isActedOn || isSettled(n, a),
+  run: (n, a) => !!a.isViewed || !!a.isActedOn || isSettled(n, a),
+  // Only the Queue resolves an overlap; nothing in either thread does.
+  overlap: (n, a) => isSettled(n, a),
+  'pr-review': (n, a) => !!a.isViewed || (!!a.thread && !a.thread.prs.some((pr) => pr.number === n.prNumber && pr.state === 'open')),
+} satisfies Record<AlertKind, (n: Addressable, a: Addressing) => boolean>;
+
+export const isAddressed = (n: Addressable, a: Addressing) => ADDRESSED[n.kind](n, a);
+
+const isSettled = (n: Addressable, a: Addressing) => !!a.queue && !!n.queueId && !a.queue.some((q) => q.id === n.queueId);
+
+export const hourLabel =(h: number) => `${String(h).padStart(2, '0')}:00`;
 
 const BURST_MINUTES = 3;
+
+/**
+ * The question or approval a thread is waiting on, newest first, so its needs-you toast opens straight into it.
+ * GAP: one that lands in the queue after the status change, in a later action, leaves the notice without it.
+ */
+function pendingAsk(queue: QueueItem[], threadId: string) {
+  const asks = queue.filter((q) => q.threadId === threadId && (q.kind === 'question' || q.kind === 'approval') && !isMochiCard(q));
+  return asks.reduce<QueueItem | undefined>((newest, q) => (!newest || q.createdAt > newest.createdAt ? q : newest), undefined);
+}
 
 /** Notices for what changed between two store snapshots. Pure: the notifications slice runs it after every action that touches threads or queue. */
 export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, next: { threads: Thread[]; queue: QueueItem[] }, now: number): Notice[] {
@@ -67,10 +119,14 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
     if (limit && !was) add({ id: `limit-${t.id}`, kind: 'limit', threadId: t.id, title: limit.isTurnHeld ? `${t.title} is waiting` : `${t.title} stopped`, body: limitBody(t.providers[0], limit) });
     // Going on by itself: Claude Code past the reset, or Codex on the Resume at reset you chose. Not a stop you made, not the API key.
     else if (was && !limit && (was.isTurnHeld || was.autoResume) && t.live?.isWorking && !t.live.isOnApiKey) add({ id: `limit-resumed-${t.id}`, kind: 'limit', threadId: t.id, title: `${t.title} continued`, body: 'Its usage limit reset' });
-    if (p.status !== 'needs-you' && t.status === 'needs-you' && !limit) {
+    // A failed turn also lands on needs-you; its idle verdict (Stalled) says why instead.
+    if (p.status !== 'needs-you' && t.status === 'needs-you' && !limit && t.queuePause !== 'failed') {
       const blocked = t.steps.find((s) => s.status === 'blocked');
-      add({ id: `needs-you-${t.id}`, kind: 'needs-you', threadId: t.id, title: `${t.title} needs you`, body: blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer' });
+      const ask = pendingAsk(next.queue, t.id);
+      add({ id: `needs-you-${t.id}`, kind: 'needs-you', threadId: t.id, queueId: ask?.id, title: `${t.title} needs you`, body: ask?.title ?? (blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer') });
     }
+    const verdict = p.idle?.isGathering && t.idle && !t.idle.isGathering ? idleVerdict(t, t.prs.map((pr) => bareState('pr', pr.state, pr.title, pr.url ?? ''))) : null;
+    if (verdict && isIdleNotice(t, verdict)) add({ id: `idle-${t.id}`, kind: 'idle', verdict: verdict.kind, threadId: t.id, title: idleTitle(t.title, verdict), body: verdict.reason });
     if (p.status !== 'review' && t.status === 'review') add({ id: `review-${t.id}`, kind: 'review', threadId: t.id, title: `${t.title} is ready for review`, body: 'Every step is done' });
 
     const steps = new Map(p.steps.map((s) => [s.id, s]));
@@ -114,6 +170,20 @@ export function isQuiet(quiet: QuietHours, date: Date) {
   if (!quiet.isOn || quiet.start === quiet.end) return false;
   const h = date.getHours();
   return quiet.start < quiet.end ? h >= quiet.start && h < quiet.end : h >= quiet.start || h < quiet.end;
+}
+
+/** What the other notices don't already say: a tray question and a usage limit have their own. */
+function isIdleNotice(t: Thread, v: Verdict) {
+  if (v.kind === 'needs-you') return t.status !== 'needs-you';
+  if (v.kind === 'stalled') return v.chip !== 'Limit';
+  return v.kind === 'gaps' || v.kind === 'done';
+}
+
+function idleTitle(title: string, v: Verdict) {
+  if (v.kind === 'gaps') return `${v.chip} in “${title}”`;
+  if (v.kind === 'needs-you') return `“${title}” needs you`;
+  if (v.kind === 'stalled') return `“${title}” stalled`;
+  return `“${title}” is done`;
 }
 
 function limitBody(provider: Provider, limit: NonNullable<LiveRun['limit']>) {

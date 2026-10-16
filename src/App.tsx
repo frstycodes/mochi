@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/toast/Toaster';
+import { queueToast, useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
+import { useAppZoom } from './appZoom';
+import { ZoomChip } from './ZoomChip';
+import { host } from './host';
 import { FileViewer } from './files/FileViewer';
 import { PhotoViewer } from './photo/PhotoViewer';
 import { AppSidebar, SidebarPeek } from './Sidebar';
 import { useSidebarWidth } from './SidebarResizer';
-import { SidebarToggle } from './SidebarToggle';
 import { PinnedPager } from './pager/PinnedPager';
 import { TornWindow } from './stage/TornWindow';
 import { CommandPalette } from './palette/CommandPalette';
@@ -43,6 +46,7 @@ const embeddedReplay = readEmbeddedReplay();
 export function App() {
   const route = useHashRoute();
   useIdleScrollbars();
+  useSolidSidebar();
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ColorThemeController />
@@ -67,7 +71,8 @@ export function App() {
               <ScheduleLayer />
               <GoalEditorLayer />
               <DeviceApprovalLayer />
-              <Toaster position="bottom-right" />
+              <Toaster />
+              <AppZoomChip />
             </HarnessProvider>
           )}
         </TooltipProvider>
@@ -76,7 +81,13 @@ export function App() {
   );
 }
 
-/** Settings › General's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
+/** Rendered after the headers: Electron applies `app-region` in document order, so an earlier no-drag control under a drag header can't be clicked. */
+function AppZoomChip() {
+  const zoom = useAppZoom();
+  return <ZoomChip zoom={zoom} onReset={() => void host.windows.resetZoom()} className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag" />;
+}
+
+/** Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
 function ReducedMotion({ children }: { children: React.ReactNode }) {
   const { reduceMotion } = usePrefs();
   useEffect(() => {
@@ -86,6 +97,14 @@ function ReducedMotion({ children }: { children: React.ReactNode }) {
 }
 
 const MOTION_CONFIG = { system: 'user', on: 'always', off: 'never' } as const;
+
+/** Settings › Appearance's Translucent sidebar off: `data-solid-sidebar` turns off the material rules in index.css. */
+function useSolidSidebar() {
+  const { translucentSidebar } = usePrefs();
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-solid-sidebar', !translucentSidebar);
+  }, [translucentSidebar]);
+}
 
 function useHashRoute() {
   const [hash, setHash] = useState(() => location.hash.slice(1));
@@ -103,6 +122,7 @@ function Shell() {
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
+  useResolvedQueueToasts();
   useWorktreeManager();
   useCheckoutRecovery();
   useWorktreeCleanup();
@@ -114,6 +134,13 @@ function Shell() {
 
   return (
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
+      {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
+      <SidebarInset className="isolate order-last min-h-0 overflow-hidden">
+        <div className="min-h-0 flex-1">
+          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
+        </div>
+      </SidebarInset>
+      {/* After the page in the DOM, back on the left through `order-last` above: Electron applies app-region in document order, so the page's drag headers would otherwise swallow the sidebar's toggle. */}
       {isSettingsOpen ? (
         <SettingsSidebar width={sidebarWidth} onResize={setSidebarWidth} />
       ) : (
@@ -122,30 +149,20 @@ function Shell() {
           <SidebarPeek onSearch={() => setSearchOpen(true)} />
         </>
       )}
-      <SidebarInset className="min-h-0 overflow-hidden">
-        <div className="min-h-0 flex-1">
-          {isSettingsOpen ? <SettingsPage /> : isReplayOpen ? <ReplayView /> : isRemoteOpen ? <RemoteThreadView /> : review.isOpen ? <ReviewView /> : <PinnedPager />}
-        </div>
-      </SidebarInset>
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
-      {/* Last on purpose: Electron applies app-region in document order, so the headers' drag regions after it would swallow its clicks. */}
-      <SidebarToggle />
     </SidebarProvider>
   );
 }
 
 function useOverlapToasts() {
-  const { state, dispatch } = useHarness();
+  const { state } = useHarness();
   const seen = useRef(new Set(state.queue.map((q) => q.id)));
   useEffect(() => {
     for (const q of state.queue) {
       if (seen.current.has(q.id)) continue;
       seen.current.add(q.id);
       if (q.kind !== 'overlap') continue;
-      toast('Overlap caught before any duplicate work', {
-        description: q.title,
-        action: { label: 'Decide', onClick: () => dispatch({ type: 'go', view: { kind: 'queue' } }) },
-      });
+      toast('Overlap caught before any duplicate work', { description: q.title, ...queueToast(q.id) });
     }
-  }, [state.queue, dispatch]);
+  }, [state.queue]);
 }

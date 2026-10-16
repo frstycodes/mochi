@@ -28,7 +28,7 @@ export async function openShell(threadId: string, cwd: string, cols: number, row
   spawning++;
   try {
     const port = await host.ports.allocate(threadId);
-    const { id } = await host.pty.spawn({ cwd, cols, rows, port });
+    const { id } = await host.pty.spawn({ cwd, cols, rows, port, threadId });
     shells.set(id, { threadId, output: '', start: 0 });
     append(id, early.get(id) ?? '');
     if (shells.size > MAX_SHELLS) closeShell(shells.keys().next().value!);

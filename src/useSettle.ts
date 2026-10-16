@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { toast } from 'sonner';
+import { toast } from './toast/store.ts';
 import type { Thread } from './model';
 import { useHarness, type Action } from './store';
 
@@ -16,7 +16,7 @@ export function toggleSettle(threads: Thread[], dispatch: Dispatch<Action>) {
   each(isSettled ? 'unsettle' : 'settle');
   const count = threads.length === 1 ? 'Thread' : `${threads.length} threads`;
   toast(isSettled ? `${count} active again` : `${count} settled`, {
-    description: isSettled ? undefined : 'Idle terminals closed, PR watches stopped.',
+    description: isSettled ? undefined : 'Agent, terminals and dev servers stopped, PR watches too.',
     action: { label: 'Undo', onClick: () => each(isSettled ? 'settle' : 'unsettle') },
   });
 }

@@ -31,6 +31,10 @@ export type Fence<L extends VizLanguage = VizLanguage> = { status: 'pending' } |
 
 export const VIZ_LANGUAGES = ['chart', 'svg', 'html', 'harness-metro', 'harness-diff'] as const satisfies readonly VizLanguage[];
 
+export function metaTitle(meta?: string) {
+  return meta?.match(/title="([^"]+)"/)?.[1];
+}
+
 const MARKUP = new Set<VizLanguage>(['svg', 'html']);
 
 /** Streaming-aware: an unfinished fence stays pending until it parses; a finished one that doesn't parse is an error. */

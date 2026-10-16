@@ -11,9 +11,11 @@ import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSe
 import { linkedAccountId } from './accounts.ts';
 import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
+import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type CommandId } from '../keymap.ts';
+import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, MOTION, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -25,6 +27,8 @@ export interface Setting {
   key: string;
   label: string;
   section: SettingSection;
+  /** The titled group it sits in on its page; profile settings group by profile instead. */
+  group?: string;
   description?: string;
   /** What the row needs to say outside its section, where the group title is missing (a settings widget). */
   context?: string;
@@ -45,7 +49,7 @@ export type Control =
   | { type: 'switch' }
   | { type: 'number'; min: number; max: number; step: number }
   /** `fallback` is what an emptied field saves; without it, empty is a value of its own ("use $SHELL"). */
-  | { type: 'text'; placeholder: string; fallback?: string; isPath?: boolean; isMono?: boolean }
+  | { type: 'text'; placeholder: string; fallback?: string; isPath?: boolean; isMono?: boolean; isMultiline?: boolean }
   /** A model id; `provider` limits it to one harness, else the value is `provider:model`. */
   | { type: 'model'; provider?: Provider; emptyLabel?: string }
   | { type: 'starredModels' }
@@ -56,7 +60,9 @@ export type Control =
   | { type: 'account'; provider: Provider }
   | { type: 'instructions'; provider: Provider }
   | { type: 'mcp'; provider: Provider; name: string }
-  | { type: 'skill'; provider: Provider; name: string };
+  | { type: 'skill'; provider: Provider; name: string }
+  /** A command's chord as `chordText` writes it; '' is no shortcut. */
+  | { type: 'shortcut'; command: CommandId };
 
 /** Everything a value can live in. Optional parts aren't loaded everywhere (the web build has no host settings). */
 export interface SettingSources {
@@ -98,6 +104,7 @@ export function valueLabel(setting: Setting, value: string | undefined) {
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return value === 'true' ? 'On' : 'Off';
   if (control.type === 'choice' || control.type === 'select') return control.options.find((o) => o.value === value)?.label ?? value;
   if (control.type === 'instructions') return `${value.trimEnd().split('\n').length} lines`;
+  if (control.type === 'shortcut') return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
   // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
   if (control.type === 'colorTheme') return value === MOCHI_THEME_ID ? 'Mochi' : value.split(':').pop()!;
   return value || 'Not set';
@@ -200,7 +207,8 @@ function colorTheme(slot: ThemeSlot): Setting {
   return {
     key,
     label: slot === 'light' ? 'Light theme' : 'Dark theme',
-    section: 'themes',
+    section: 'appearance',
+    group: 'Color theme',
     description: 'Mochi, or an installed VS Code color theme',
     control: { type: 'colorTheme', slot },
     read: ({ prefs }) => prefs[key],
@@ -217,7 +225,8 @@ function remoteSetting(key: keyof RemoteSettings, label: string, control: Contro
   return {
     key: REMOTE_KEYS[key],
     label,
-    section: 'devices',
+    section: 'remote',
+    group: 'This computer',
     control,
     read: ({ remote }) => remote && String(remote[key]),
     write: (value) => {
@@ -228,27 +237,56 @@ function remoteSetting(key: keyof RemoteSettings, label: string, control: Contro
   };
 }
 
+/**
+ * One row per keymap command. A write takes the chord from whichever command holds it (the widget's Use, after
+ * `set_keybinding` showed that command's row too); Settings › Keyboard asks first instead (`ShortcutRecorder`).
+ */
+function keybinding(id: CommandId): Setting {
+  return {
+    key: `keybinding.${id}`,
+    label: COMMANDS[id].title,
+    section: 'keyboard',
+    group: COMMANDS[id].group,
+    context: 'Keyboard shortcut',
+    control: { type: 'shortcut', command: id },
+    read: ({ prefs }) => chordText(bindingOf(id, prefs.keybindings)),
+    write: (value, { prefs }) => {
+      const keys = value === '' ? null : parseChord(value);
+      if (value !== '' && !keys) return null;
+      try {
+        return { to: 'prefs', patch: { keybindings: rebind(prefs.keybindings, id, keys, 'replace') } };
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
 const REMOTE_REACH = "It opens this computer to other devices; only you do that.";
 
 const APP_SETTINGS: Setting[] = [
   {
     key: 'theme',
     label: 'Theme',
-    section: 'general',
+    section: 'appearance',
+    group: 'Mode',
+    description: 'System follows your OS appearance',
     control: choice(THEMES),
     read: ({ theme }) => theme,
     write: (value) => (THEMES.some((t) => t.value === value) ? { to: 'theme', theme: value } : null),
   },
   colorTheme('light'),
   colorTheme('dark'),
-  pref('reduceMotion', 'Reduce motion', 'general', choice(MOTION)),
-  pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }),
-  pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH),
+  pref('reduceMotion', 'Reduce motion', 'appearance', choice(MOTION), { group: 'Mode', description: 'System follows your OS setting' }),
+  pref('translucentSidebar', 'Translucent sidebar', 'appearance', SWITCH, { group: 'Mode', description: 'The sidebar shows your desktop through the window material' }),
+  pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }, { group: 'Folders', description: 'Where Open folder starts in the project picker' }),
+  pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, { group: 'Startup', description: 'Off, each space opens on its default view' }),
   ...Object.entries(ALERT_KINDS).map(
     ([kind, label]): Setting => ({
       key: `alert.${kind}`,
       label,
       section: 'notifications',
+      group: 'System alerts',
       context: 'System alert',
       control: SWITCH,
       read: ({ prefs }) => String(prefs.alertKinds.includes(kind)),
@@ -259,11 +297,13 @@ const APP_SETTINGS: Setting[] = [
       },
     }),
   ),
-  pref('watchedToasts', 'Toasts for watched threads', 'notifications', SWITCH),
+  pref('watchedToasts', 'Toasts for watched threads', 'notifications', SWITCH, { group: 'While Mochi is open', description: 'Only while Mochi is in front' }),
   {
     key: 'dockBadge',
     label: 'App icon badge counts',
     section: 'notifications',
+    group: 'While Mochi is open',
+    description: 'Counts the threads that need you',
     control: choice(BADGE),
     read: ({ prefs }) => (prefs.dockBadge ? 'on' : 'off'),
     write: (value) => (value === 'on' || value === 'off' ? { to: 'prefs', patch: { dockBadge: value === 'on' } } : null),
@@ -272,6 +312,8 @@ const APP_SETTINGS: Setting[] = [
     key: 'quietHours',
     label: 'Quiet hours',
     section: 'notifications',
+    group: 'Quiet hours',
+    description: 'No alerts or toasts; the notification list still fills',
     control: SWITCH,
     read: ({ quiet }) => String(quiet.isOn),
     write: (value) => (value === 'true' || value === 'false' ? { to: 'quiet', patch: { isOn: value === 'true' } } : null),
@@ -281,21 +323,24 @@ const APP_SETTINGS: Setting[] = [
       key: edge === 'start' ? 'quietFrom' : 'quietUntil',
       label: edge === 'start' ? 'Quiet from' : 'Quiet until',
       section: 'notifications',
+      group: 'Quiet hours',
       control: select(HOURS),
       read: ({ quiet }) => String(quiet[edge]),
       write: (value) => (HOURS.some((h) => h.value === value) ? { to: 'quiet', patch: { [edge]: Number(value) } } : null),
     }),
   ),
-  remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, { locked: REMOTE_REACH }),
-  remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, { locked: REMOTE_REACH }),
-  remoteSetting('reachesAnywhere', 'Reach this computer from anywhere', SWITCH, { locked: REMOTE_REACH }),
+  remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, { locked: REMOTE_REACH, description: 'Your other devices can follow and steer threads running here' }),
+  remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, { locked: REMOTE_REACH, description: 'Devices on your local network or Tailscale can connect' }),
+  remoteSetting('reachesAnywhere', 'Reach this computer from anywhere', SWITCH, { locked: REMOTE_REACH, description: 'Through Mochi’s encrypted relay, off this network' }),
   remoteSetting('machineName', 'Computer name', { type: 'text', placeholder: 'This computer’s host name' }, { description: 'How your devices list this computer; empty uses the host name' }),
-  pref('agent', 'Agent', 'defaults', choice(AGENTS)),
-  pref('permissions', 'Permissions', 'defaults', choice(SHARED_ACCESS.map((a) => ({ value: a, label: a, ...(a === 'Full access' && { tone: 'warning' as const }) }))), { locked: AGENT_REACH }),
+  pref('agent', 'Agent', 'general', choice(AGENTS), { group: 'New threads', description: 'The harness a new thread starts on' }),
+  pref('permissions', 'Permissions', 'general', choice(SHARED_ACCESS.map((a) => ({ value: a, label: a, ...(a === 'Full access' && { tone: 'warning' as const }) }))), { locked: AGENT_REACH, group: 'New threads', description: 'What a new thread’s agent may do without asking' }),
   {
     key: 'sideChatModel',
     label: 'Side chat model',
-    section: 'defaults',
+    section: 'models',
+    group: 'Side chats',
+    description: 'New side chats answer on this model; each can switch',
     control: { type: 'model' },
     read: ({ host }) => host && modelValue(host.sideChatModel),
     write: (value) => {
@@ -303,18 +348,19 @@ const APP_SETTINGS: Setting[] = [
       return sideChatModel && { to: 'host', patch: { sideChatModel } };
     },
   },
-  pref('whileWorking', 'While the agent is working, new messages', 'defaults', select(WHILE_WORKING)),
-  pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS)),
-  pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH),
-  pref('simplifyRules', 'Your rules', 'simplify', { type: 'text', placeholder: 'Keep numbers, no jargon, one line per file' }),
-  pref('simplifyAuto', 'Simplify long replies automatically', 'simplify', SWITCH),
-  pref('simplifyAutoWords', 'Long means more than (words)', 'simplify', { type: 'number', min: 50, max: 2000, step: 50 }),
-  hostSetting('concurrency', 'Agents running at once', 'defaults', { type: 'number', ...CONCURRENCY_RANGE, step: 1 }),
+  pref('whileWorking', 'While the agent is working, new messages', 'general', select(WHILE_WORKING), { group: 'New threads', description: 'Queued messages go out one per turn, in order' }),
+  pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS), { group: 'Style', description: 'A few short sentences, or more of the detail' }),
+  pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH, { group: 'Style', description: 'Lead with questions and decisions waiting on you' }),
+  pref('simplifyRules', 'Your rules', 'simplify', { type: 'text', placeholder: 'Keep numbers, no jargon, one line per file', isMultiline: true }, { group: 'Style', description: 'Followed in every simplified reply' }),
+  pref('simplifyAuto', 'Simplify long replies automatically', 'simplify', SWITCH, { group: 'Automatic', description: 'Once a thread goes idle; Show original is one click away' }),
+  pref('simplifyAutoWords', 'Long means more than (words)', 'simplify', { type: 'number', min: 50, max: 2000, step: 50 }, { group: 'Automatic' }),
+  hostSetting('concurrency', 'Agents running at once', 'general', { type: 'number', ...CONCURRENCY_RANGE, step: 1 }, { group: 'Running agents', description: 'Threads past this wait their turn' }),
   ...UTILITY_TASKS.map(
     (task): Setting => ({
       key: `utility.${task}`,
       label: UTILITY_TASK_LABELS[task],
-      section: 'background',
+      section: 'models',
+      group: 'Background tasks',
       context: 'Background task model',
       control: { type: 'model' },
       read: ({ host }) => host && modelValue(host.utilityModels[task]),
@@ -324,31 +370,52 @@ const APP_SETTINGS: Setting[] = [
       },
     }),
   ),
-  pref('driftGuard', 'Drift guard', 'goals', SWITCH),
-  pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM)),
-  hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.harness/worktrees', isPath: true }),
-  hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH),
-  hostSetting('prepareWorktrees', 'Prepare worktrees before starting', 'git', SWITCH),
-  hostSetting('worktreeInclude', 'Ignored files to copy', 'git', { type: 'text', placeholder: '.env*, .claude/settings.local.json', isMono: true }),
-  pref('worktreeCleanup', 'Remove settled worktrees', 'git', select(WORKTREE_CLEANUP)),
-  pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES)),
-  pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: 'None', fallback: DEFAULT_PREFS.branchPrefix, isMono: true }),
-  pref('diffStyle', 'Diffs', 'git', choice(DIFF_STYLES)),
-  hostSetting('shell', 'Shell', 'terminal', { type: 'text', placeholder: '$SHELL', isMono: true }),
-  pref('restoreTerminals', 'Restore terminals on launch', 'terminal', SWITCH),
-  pref('terminalFontSize', 'Font size', 'terminal', { type: 'number', min: 9, max: 24, step: 1 }),
-  pref('terminalScrollback', 'Scrollback lines', 'terminal', { type: 'number', min: 1000, max: 100_000, step: 1000 }),
-  pref('searchEngine', 'Search engine', 'browser', select(ENGINES)),
-  pref('simulator', 'Default simulator', 'browser', { type: 'simulator' }),
-  pref('agentControl', AGENT_CONTROL.label, 'tools', select(AGENT_CONTROL.options), { locked: AGENT_REACH, description: 'Threads, goals, panes, settings and the in-app browser' }),
-  pref('threadModels', THREAD_MODELS.label, 'tools', select(THREAD_MODELS.options), { locked: AGENT_REACH, description: "Compared with the starting thread's model and effort" }),
-  pref('demoData', 'Show demo data', 'data', SWITCH, { description: 'Mochi reloads to apply' }),
-  pref('recordReplays', 'Record threads for replay', 'data', SWITCH),
-  pref('effort', 'Default effort', 'harnesses', select(EFFORTS.map((level) => ({ value: level, label: effortName(level) })))),
+  pref('driftGuard', 'Drift guard', 'goals', SWITCH, { group: 'Drift', description: 'Suggest a new thread when a message starts separate work' }),
+  pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM), { group: 'Drift' }),
+  pref('proposedGoals', 'Agent-proposed goals', 'goals', select(PROPOSED_GOALS), { group: 'Writing goals', description: 'Written after the agent’s first look at the code' }),
+  pref('idleChecks', 'Run criterion checks', 'goals', select(IDLE_CHECKS), { group: 'When a thread goes idle', description: 'Mochi checks the goal itself, never from the agent’s report' }),
+  pref('prGaps', 'Gaps when opening a pull request', 'goals', select(PR_GAPS), { group: 'Before a pull request', description: 'Critical: failing checks, failing CI, merge conflicts' }),
+  ...IDLE_ALERTS.map(
+    ({ value, label }): Setting => ({
+      key: `idleAlert.${value}`,
+      label,
+      section: 'notifications',
+      group: 'Idle threads',
+      context: 'Notify when a thread goes idle with',
+      control: SWITCH,
+      read: ({ prefs }) => String(prefs.idleAlerts.includes(value)),
+      write: (raw, { prefs }) => {
+        const isOn = parseValue(SWITCH, raw);
+        if (isOn === null) return null;
+        return { to: 'prefs', patch: { idleAlerts: isOn ? [...new Set([...prefs.idleAlerts, value])] : prefs.idleAlerts.filter((k) => k !== value) } };
+      },
+    }),
+  ),
+  hostSetting('worktreeRoot', 'Worktrees folder', 'git', { type: 'text', placeholder: '~/.mochi/worktrees', isPath: true }, { group: 'Worktrees', description: 'Outside the project, so its git status stays clean' }),
+  hostSetting('prDrafts', 'Open pull requests as drafts', 'git', SWITCH, { group: 'Branches and pull requests' }),
+  hostSetting('prepareWorktrees', 'Prepare worktrees before starting', 'git', SWITCH, { group: 'Worktree setup', description: 'Copy ignored files, install dependencies, then run the setup command' }),
+  hostSetting('worktreeInclude', 'Ignored files to copy', 'git', { type: 'text', placeholder: '.env*, .claude/settings.local.json', isMono: true }, { group: 'Worktree setup', description: 'Gitignore patterns, comma separated' }),
+  pref('worktreeCleanup', 'Remove settled worktrees', 'git', select(WORKTREE_CLEANUP), { group: 'Worktrees', description: 'Only clean ones; their branches stay' }),
+  pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES), { group: 'Worktrees', description: 'A worktree keeps a thread’s changes out of your checkout' }),
+  pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: 'None', fallback: DEFAULT_PREFS.branchPrefix, isMono: true }, { group: 'Branches and pull requests', description: 'Comes before names read from your prompt, like fix/login-bug' }),
+  pref('diffStyle', 'Diffs', 'git', choice(DIFF_STYLES), { group: 'Changes', description: 'In the Changes tab and the work log’s edits' }),
+  hostSetting('shell', 'Shell', 'terminal', { type: 'text', placeholder: '$SHELL', isMono: true }, { group: 'Shell', description: 'Empty uses your login shell' }),
+  pref('restoreTerminals', 'Restore terminals on launch', 'terminal', SWITCH, { group: 'Shell', description: 'Each thread’s tabs and recent output; shells start fresh' }),
+  pref('terminalFontSize', 'Font size', 'terminal', { type: 'number', min: 9, max: 24, step: 1 }, { group: 'Display' }),
+  pref('terminalScrollback', 'Scrollback lines', 'terminal', { type: 'number', min: 1000, max: 100_000, step: 1000 }, { group: 'Display' }),
+  pref('searchEngine', 'Search engine', 'browser', select(ENGINES), { group: 'Browser', description: 'For address bar text that isn’t a URL' }),
+  pref('simulator', 'Default simulator', 'browser', { type: 'simulator' }, { group: 'Simulator', description: 'Where the Simulator tab opens; each thread can switch' }),
+  pref('agentControl', AGENT_CONTROL.label, 'access', select(AGENT_CONTROL.options), { locked: AGENT_REACH, group: 'Agents', description: 'Threads, goals, panes, settings and the in-app browser' }),
+  pref('threadModels', THREAD_MODELS.label, 'access', select(THREAD_MODELS.options), { locked: AGENT_REACH, group: 'Agents', description: "Compared with the starting thread's model and effort" }),
+  pref('demoData', 'Show demo data', 'data', SWITCH, { group: 'Developer', description: 'Sample threads and profiles that never run; Mochi reloads' }),
+  pref('recordReplays', 'Record threads for replay', 'data', SWITCH, { group: 'Developer', description: 'Keep each thread’s events, up to 8 MB, so Replay can rebuild it' }),
+  pref('effort', 'Default effort', 'models', select(EFFORTS.map((level) => ({ value: level, label: effortName(level) }))), { group: 'Composer', description: 'New threads start at this effort' }),
   {
     key: 'speed',
     label: 'Default speed',
-    section: 'harnesses',
+    section: 'models',
+    group: 'Composer',
+    description: 'Fast costs more and runs only on models that offer it',
     context: 'New threads',
     control: choice(SPEEDS),
     read: ({ prefs }) => prefs.speed || 'standard',
@@ -358,7 +425,8 @@ const APP_SETTINGS: Setting[] = [
   {
     key: 'starredModels',
     label: 'Starred models',
-    section: 'harnesses',
+    section: 'models',
+    group: 'Composer',
     description: 'Model ids, comma-separated',
     control: { type: 'starredModels' },
     read: ({ prefs }) => prefs.starredModels.join(','),
@@ -369,7 +437,8 @@ const APP_SETTINGS: Setting[] = [
     const harness = (field: 'path' | 'model' | 'secondOpinionModel', label: string, control: Control, extra: Partial<Setting> = {}): Setting => ({
       key: `${provider}.${field}`,
       label: `${name} ${label}`,
-      section: 'harnesses',
+      section: field === 'path' ? 'harnesses' : 'models',
+      group: name,
       control,
       read: ({ host }) => host?.harnesses[provider][field],
       write: (value) => ({ to: 'host', patch: { harnesses: { [provider]: { [field]: value } } } }),
@@ -377,10 +446,11 @@ const APP_SETTINGS: Setting[] = [
     });
     return [
       harness('path', 'custom path', { type: 'text', placeholder: 'Found on your PATH', isMono: true }, { locked: `It picks the program that runs every agent with your login.`, description: 'Leave empty to use the one on your PATH.' }),
-      harness('model', 'default model', { type: 'model', provider }, { description: 'New threads start on this model.' }),
-      harness('secondOpinionModel', 'second opinion model', { type: 'model', provider, emptyLabel: 'Default model' }, { description: `What ${name} reviews other threads on.` }),
+      harness('model', 'default model', { type: 'model', provider }, { description: 'New threads start on this model' }),
+      harness('secondOpinionModel', 'second opinion model', { type: 'model', provider, emptyLabel: 'Default model' }, { description: `What ${name} reviews other threads on` }),
     ];
   }),
+  ...COMMAND_IDS.map(keybinding),
 ];
 
 // {PROFILE}

@@ -1,13 +1,13 @@
-import type { AgentEvent, AgentImage } from '../host/types/agent.ts';
+import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
 import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
-import { applyDraft, type GoalDraft } from '../goals/edit.ts';
+import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { goalProgress } from '../progress.ts';
 import { reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
@@ -45,7 +45,7 @@ export interface ThreadsState {
 export type ThreadsAction =
   | { type: 'tick' }
   /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
-  | { type: 'agent'; event: AgentEvent; ms?: number }
+  | { type: 'agent'; event: SeqAgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
   | { type: 'overlap'; queueId: string; mode: OverlapMode }
   | { type: 'trigger-overlap' }
@@ -56,7 +56,7 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[] }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[] }
   /** What the thread's checkout really has (`useWorktreeRecovery`); `worktree`: its own worktree, found on disk. */
   | { type: 'repo-head'; threadId: string; head: Head; worktree?: string }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
@@ -68,9 +68,9 @@ export type ThreadsAction =
   | { type: 'limit-auto-resume'; threadId: string; isOn: boolean }
   /**
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
-   * `queuedId`: the queued message this sends, which leaves the queue. `interrupts`: ends the turn in flight first (the queue's Send now).
+   * `queuedId`: the queued message this sends, which leaves the queue. `steers`: joins the turn in flight instead of waiting for it to end (the queue's Send now).
    */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; interrupts?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** Thumbnails of the images you attached, for the transcript. */ thumbs?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef }
   /** `/compact`: the harness compacts the live session now. `queuedId`: it waited in the queue as typed. */
   | { type: 'compact'; threadId: string; focus: string; queuedId?: string }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
@@ -97,6 +97,12 @@ export type ThreadsAction =
   | { type: 'simplify-toggle'; threadId: string; index: number }
   | { type: 'criterion-claim'; threadId: string; criterionId: string; evidence: string; by: Provider }
   | { type: 'report'; threadId: string; report: Omit<TurnReport, 'at'> }
+  /** The agent went idle: a fresh record replaces the last turn's, accepted gaps and Open anyway included. */
+  /** The agent's `propose_goal`; `isApplied` when Settings › Goals and checks applies proposals with an undo instead of asking. */
+  | { type: 'goal-propose'; threadId: string; goal: string; criteria: { text: string; command?: string }[]; basis?: string; by: Provider; isApplied: boolean }
+  | { type: 'goal-proposal'; threadId: string; decision: 'accept' | 'keep' | 'undo' }
+  | { type: 'idle-start'; threadId: string }
+  | { type: 'idle-update'; threadId: string; patch: Partial<Omit<IdleCheck, 'at'>> }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
@@ -148,7 +154,7 @@ function reduce(state: State, action: Action): State {
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
-      return stampNew(state, applyAgentEvent(state, action.event), action.event.threadId, action.ms);
+      return stampNew(state, withEventSeq(applyAgentEvent(state, action.event), action.event), action.event.threadId, action.ms);
     case 'agent-starting':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'trigger-overlap':
@@ -239,6 +245,14 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => checkCriterion(t, action, state.now)) };
     case 'criterion-claim':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => claimCriterion(t, action, state.now)) };
+    case 'goal-propose':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => propose(t, action, state.now)) };
+    case 'goal-proposal':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => decideProposal(t, action.decision, state.now)) };
+    case 'idle-start':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, idle: { at: state.now, accepted: [], isGathering: true } })) };
+    case 'idle-update':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.idle ? { ...t, idle: { ...t.idle, ...action.patch } } : t)) };
     case 'report':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now } })) };
     case 'simplified':
@@ -314,6 +328,11 @@ export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thre
 
 export function mapStep(thread: Thread, id: string, fn: (s: Step) => Step): Thread {
   return { ...thread, steps: thread.steps.map((s) => (s.id === id ? fn(s) : s)) };
+}
+
+function withEventSeq(state: State, event: SeqAgentEvent): State {
+  if (event.seq === undefined) return state;
+  return { ...state, threads: mapThread(state.threads, event.threadId, (t) => (t.live ? { ...t, live: { ...t.live, eventSeq: event.seq } } : t)) };
 }
 
 function stampNew(before: State, after: State, threadId: string, ms?: number): State {
@@ -555,7 +574,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
     threads: mapThread(threads, action.threadId, (t) => {
       // The agent gets its background agents' notes with this message (`agentCalls`), so they're delivered.
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
-      const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined, ...(action.interrupts && t.live.isWorking && { isReplacingTurn: true }) };
+      const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
       const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.thumbs?.length && { images: action.thumbs }), ...(from && { from }) });
       return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
@@ -578,6 +597,26 @@ function setDraftedGoal(t: Thread, outcome: string, criteria: DraftedCriterion[]
   const n = (t.revisions.at(-1)?.n ?? 0) + 1;
   const set = { ...t, goal: outcome, ...(similar.length && { similar }), criteria: criteria.map((c, i) => ({ id: `${t.id}-c${n}-${i}`, ...c })), revisions: [...t.revisions, { n, at: now, label: 'Goal drafted', by: 'harness' as const, diff: [`+ Goal: ${outcome}`, ...criteria.map((c) => `+ Done when: ${c.text}`)] }] };
   return log(set, { at: now, who: 'harness', kind: 'event', text: `Goal: ${outcome}` });
+}
+
+function propose(t: Thread, action: Extract<Action, { type: 'goal-propose' }>, now: number): Thread {
+  const before = { goal: t.goal, criteria: (t.criteria ?? []).map(({ text, command }) => ({ text, command })) };
+  const proposal = { goal: action.goal, criteria: action.criteria, basis: action.basis, at: now, by: action.by, state: 'waiting' as const, before };
+  if (!action.isApplied) return log({ ...t, proposal }, { at: now, who: action.by, kind: 'event', text: `Proposed a goal: ${action.goal}`, detail: action.basis });
+  return { ...withGoal(t, proposal, now, action.by), proposal: { ...proposal, state: 'applied' } };
+}
+
+/** Accept puts the proposal in place, Keep leaves the draft, Undo puts back what an applied proposal replaced. */
+function decideProposal(t: Thread, decision: 'accept' | 'keep' | 'undo', now: number): Thread {
+  const p = t.proposal;
+  if (!p) return t;
+  if (decision === 'keep') return log({ ...t, proposal: { ...p, state: 'kept' } }, { at: now, who: 'you', kind: 'event', text: `Kept the draft goal: ${t.goal}` });
+  if (decision === 'undo') return { ...withGoal(t, p.before, now, 'you'), proposal: { ...p, state: 'undone' } };
+  return { ...withGoal(t, p, now, 'you'), proposal: { ...p, state: 'accepted' } };
+}
+
+function withGoal(t: Thread, goal: { goal: string; criteria: { text: string; command?: string }[] }, now: number, by: Author): Thread {
+  return applyDraft(t, { ...draftFrom(t), goal: goal.goal, criteria: goal.criteria }, now, by);
 }
 
 function checkCriterion(t: Thread, action: Extract<Action, { type: 'criterion-check' }>, now: number): Thread {

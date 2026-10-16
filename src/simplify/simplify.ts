@@ -3,13 +3,19 @@ import type { Prefs } from '../settings/prefs.ts';
 const MAX_LOCAL_BULLETS = { short: 5, detailed: 10 } satisfies Record<Prefs['simplifyLength'], number>;
 const FENCE = /```[\s\S]*?```/g;
 
+const FORM = 'Write the simplest form that fits the content: a few short, plain sentences or one short paragraph by default. Use bullets only when the content really is a list of parallel items, and number steps only when their order matters.';
+const KEEP_AS_WRITTEN = 'Code blocks, commands, file paths, links and PR or issue references stay exactly as written.';
+const LENGTH = { short: 'Keep it short: about 5 sentences or items at most.', detailed: 'Keep every fact that matters, one line each.' } satisfies Record<Prefs['simplifyLength'], string>;
+
 /** What a simplification depends on: change any of these and stored ones are out of date. */
-export const rulesKey = (p: Pick<Prefs, 'simplifyLength' | 'simplifyNeedsFirst' | 'simplifyRules'>) => JSON.stringify([p.simplifyLength, p.simplifyNeedsFirst, p.simplifyRules.trim()]);
+export const rulesKey = (p: Pick<Prefs, 'simplifyLength' | 'simplifyNeedsFirst' | 'simplifyRules'>) => JSON.stringify([FORM, p.simplifyLength, p.simplifyNeedsFirst, p.simplifyRules.trim()]);
 
 /** The background model's prompt: your Simplify settings, then the reply. */
 export function simplifyPrompt(text: string, p: Pick<Prefs, 'simplifyLength' | 'simplifyNeedsFirst' | 'simplifyRules'>) {
   const rules = [
-    p.simplifyLength === 'short' ? `At most ${MAX_LOCAL_BULLETS.short} bullets.` : 'As many bullets as the facts need, one line each.',
+    FORM,
+    LENGTH[p.simplifyLength],
+    KEEP_AS_WRITTEN,
     p.simplifyNeedsFirst && 'If anything needs the reader (a question, a decision, something to check), put it first, starting with "Needs you:".',
     p.simplifyRules.trim() && `The reader's own rules: ${p.simplifyRules.trim()}`,
   ].filter(Boolean);

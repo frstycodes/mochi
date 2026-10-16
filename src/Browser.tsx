@@ -9,7 +9,7 @@ import { ComparePane } from './browser/Compare';
 import { RESPONSIVE } from './browser/devices';
 import { deviceSize, PageSurface, useSize } from './browser/PageSurface';
 import { FindBar } from './browser/FindBar';
-import { destroyPage, ensureView, getPage, onOpenTab, openFind, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
+import { adoptView, destroyPage, ensureView, getPage, onTabRequest, openFind, pageKey, pageKeys, tabPageKey, usePage, viewportOf, type Page } from './browser/pages';
 import { BrowserToolbar, DeviceBar, DriveBar } from './browser/Toolbar';
 import { normalizeUrl } from './browser/url';
 import type { Pane, PaneTab, Thread } from './model';
@@ -18,7 +18,7 @@ import { PaneSlotBar, PaneSlots } from './pane/PaneHeader';
 import { PANE_TABS, tabTitle } from './pane/tabs';
 import { useHarness } from './store';
 import { isWorking } from './agentPhase';
-import { isMod } from './keys';
+import { isCommand } from './keymap';
 import { PreviewContext } from './layout/SplitContext';
 
 type Corner = 'tl' | 'tr' | 'bl' | 'br';
@@ -43,7 +43,7 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
     <div
       className="flex h-full min-h-0 flex-col"
       onKeyDown={(e) => {
-        if (!isMod(e) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') return;
+        if (!isCommand(e, 'find')) return;
         e.preventDefault();
         openFind(pageId);
       }}
@@ -79,14 +79,18 @@ function useTabSync(threadId: string, tab: PaneTab, page: Page) {
   }, [dispatch, threadId, tab.id, tab.url, tab.title, page.url, title]);
 }
 
-/** Closed tabs free their native view; links that open a new window land in a new browser tab instead. */
+/** Closed tabs free their native view; a page's popup lands in a new browser tab, which closes when the popup does. */
 function useBrowserHousekeeping() {
   const { state, dispatch } = useHarness();
   useEffect(
     () =>
-      onOpenTab((pageId, url) => {
-        const [threadId] = pageId.split('/');
-        dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url });
+      onTabRequest((request) => {
+        const [threadId, tabId] = tabPageKey(request.key).split('/');
+        if (request.type === 'close') return dispatch({ type: 'pane-close-tab', threadId, tabId });
+        // Named here, not by the reducer: two popups opened before a re-render would both get the next free id.
+        const popupTabId = `popup_${request.hostId}`;
+        adoptView(pageKey(threadId, popupTabId), request.hostId, request.url);
+        dispatch({ type: 'pane-open-tab', threadId, kind: 'browser', url: request.url, tabId: popupTabId });
       }),
     [dispatch],
   );

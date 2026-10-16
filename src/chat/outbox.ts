@@ -61,7 +61,7 @@ export function queuedMessage(draft: string, fields: Omit<QueuedMessage, 'id' | 
  * Sends a message now: references resolve and the drift guard judges it against the thread as it is at this moment, so a
  * queued message is checked when it goes out, not when you wrote it. A confident off-goal verdict waits in `useDriftPending`.
  */
-export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'threads'>, thread: Thread, message: QueuedMessage, extra?: { queuedId?: string; interrupts?: boolean }) {
+export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'threads'>, thread: Thread, message: QueuedMessage, extra?: { queuedId?: string; steers?: boolean }) {
   const { draft, images = [] } = message;
   const { text, ...references } = withReferences(draft, message.mentions, state.threads, { isCommand: message.isCommand, provider: thread.providers[0], typedSkills: message.typedSkills });
   // A new message answers an open suggestion by ignoring it.

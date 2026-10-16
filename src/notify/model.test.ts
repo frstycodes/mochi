@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { QueueItem, Step, Thread } from '../model.ts';
-import { diffNotices, groupBursts, isQuiet, type Notice } from './model.ts';
+import { diffNotices, groupBursts, isAddressed, isQuiet, type Notice } from './model.ts';
 
 const step = (rest: Partial<Step> = {}): Step => ({ id: 's1', title: 'Wire gateway', size: 1, status: 'running', progress: 0.5, footprint: [], addedAt: 0, addedBy: 'you', revision: 1, ...rest });
 const thread = (rest: Partial<Thread> = {}): Thread =>
@@ -13,6 +13,16 @@ test('status transitions become needs-you and review notices', () => {
   assert.deepEqual(diff(thread(), thread({ status: 'needs-you' })), ['needs-you']);
   assert.deepEqual(diff(thread(), thread({ status: 'review' })), ['review']);
   assert.deepEqual(diff(thread({ status: 'needs-you' }), thread({ status: 'needs-you', title: 'renamed' })), []);
+});
+
+test("a needs-you notice carries the thread's newest question or approval, so its toast opens into it", () => {
+  const ask = (rest: Partial<QueueItem>) => item({ kind: 'question', title: 'Stub or record?', ...rest });
+  const notice = (queue: QueueItem[]) => diffNotices({ threads: [thread()], queue: [] }, { threads: [thread({ status: 'needs-you' })], queue }, 10)[0];
+  const newest = notice([ask({ id: 'old', createdAt: 1 }), ask({ id: 'new', kind: 'approval', title: 'Run the backfill', createdAt: 5 }), ask({ id: 'other', threadId: 'u', createdAt: 9 })]);
+  assert.equal(newest.queueId, 'new');
+  assert.equal(newest.body, 'Run the backfill');
+  assert.equal(notice([ask({ id: 'mochi', tool: { callId: 'c' } }), item({ id: 'ci' })]).queueId, undefined, 'Mochi cards and CI are not asks');
+  assert.equal(notice([]).body, 'Waiting on your answer');
 });
 
 test('step done and race lost come from step transitions', () => {
@@ -66,4 +76,35 @@ test('a usage limit notifies what the harness does; going on by itself notifies 
   assert.deepEqual(diff(running, stopped), ['limit'], 'no second "needs you" for the same stop');
   assert.deepEqual(diff(stopped, running), ['limit'], 'Resume at reset went out');
   assert.deepEqual(diff(stopped, thread({ status: 'running', live: { ...working, isOnApiKey: true } })), [], 'moving to the API key is your own click');
+});
+
+test('one idle notice per turn, once Mochi has gathered its evidence; a failed turn says stalled, not waiting on you', () => {
+  const audit = { unverified: [{ text: 'Not checked in the app', quote: 'q' }] };
+  const goal = { goal: 'Ship it', criteria: [{ id: 'c', text: 'c', check: { status: 'passed' as const, at: 1 } }], live: { isWorking: false } };
+  const gathering = thread({ ...goal, idle: { at: 1, accepted: [], isGathering: true } });
+  const gathered = thread({ ...goal, idle: { at: 1, accepted: [], audit } });
+  const [notice] = diffNotices({ threads: [gathering], queue: [] }, { threads: [gathered], queue: [] }, 10);
+  assert.deepEqual([notice.kind, notice.verdict, notice.title, notice.body], ['idle', 'gaps', '1 gap in “Rate limits”', 'Not checked in the app']);
+  assert.deepEqual(diff(gathered, thread({ ...goal, idle: { at: 1, accepted: ['x'], audit } })), [], 'accepting a gap later is no new notice');
+  const failed = { ...goal, status: 'needs-you' as const, queuePause: 'failed' as const };
+  assert.deepEqual(diff(thread({ ...failed, idle: { at: 1, accepted: [], isGathering: true } }), thread({ ...failed, idle: { at: 1, accepted: [] } })), ['idle']);
+  assert.deepEqual(diff(thread(goal), thread({ ...failed })), [], 'the turn-end itself waits for the verdict');
+});
+
+test('a notice is addressed by what its kind waits for: looking, acting, or the thing it reported being over', () => {
+  const viewed = { isViewed: true };
+  const acted = { isActedOn: true };
+  assert.equal(isAddressed({ kind: 'needs-you' }, viewed), false, 'looking does not answer the question');
+  assert.equal(isAddressed({ kind: 'needs-you' }, acted), true);
+  assert.equal(isAddressed({ kind: 'needs-you' }, { thread: thread({ status: 'running' }) }), true, 'answered from the OS notification');
+  assert.equal(isAddressed({ kind: 'needs-you' }, { thread: thread({ status: 'needs-you' }) }), false);
+  assert.equal(isAddressed({ kind: 'review' }, viewed), true);
+  assert.equal(isAddressed({ kind: 'done' }, viewed), true);
+  assert.equal(isAddressed({ kind: 'failed' }, viewed), false, 'an error waits for you to act');
+  assert.equal(isAddressed({ kind: 'idle', verdict: 'stalled' }, viewed), false);
+  assert.equal(isAddressed({ kind: 'idle', verdict: 'done' }, viewed), true);
+  assert.equal(isAddressed({ kind: 'overlap', queueId: 'q1' }, { ...viewed, ...acted, queue: [item({ kind: 'overlap' })] }), false, 'only the Queue settles an overlap');
+  assert.equal(isAddressed({ kind: 'ci', queueId: 'q1' }, { queue: [] }), true, 'settled in the Queue');
+  assert.equal(isAddressed({ kind: 'pr-review', prNumber: 4 }, { thread: thread({ prs: [{ number: 4, state: 'merged', title: 'x' }] }) }), true);
+  assert.equal(isAddressed({ kind: 'step-done' }, {}), false, 'no signal, no change');
 });

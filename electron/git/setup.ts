@@ -11,9 +11,9 @@ export interface SetupRun {
   root: string;
   /** The new worktree. */
   dir: string;
-  /** Patterns from Settings › Git; the project's `.worktreeinclude` adds to them. */
+  /** Patterns from Settings › Git and worktrees; the project's `.worktreeinclude` adds to them. */
   include: string;
-  /** The project's setup command from Settings › Git, if any. */
+  /** The project's setup command from Settings › Git and worktrees, if any. */
   command?: string;
   emit: (setup: WorktreeSetup) => void;
   /** After a failed step; never resolves for a setup nobody can answer, so those pass `() => Promise.resolve('skip')`. */
@@ -89,7 +89,7 @@ async function planSetup({ root, dir, include, command }: SetupRun): Promise<Pla
   return steps;
 }
 
-/** A project's own setup script, run when Settings › Git has no command for the project. */
+/** A project's own setup script, run when Settings › Git and worktrees has no command for the project. */
 export const MOCHI_SETUP_SCRIPT = '.mochi/setup.sh';
 
 function commandStep(id: string, label: string, command: string[] | string, root: string, dir: string): Planned {

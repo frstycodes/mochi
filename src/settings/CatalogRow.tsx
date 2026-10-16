@@ -1,9 +1,13 @@
+import type { ComponentProps } from 'react';
 import { useTheme } from 'next-themes';
 import { TickCircle } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { ModelPicker, useUnavailableHarnesses } from '../ModelControls';
+import { Textarea } from '@/components/ui/textarea';
+import { ModelPicker } from '../ModelControls';
+import { ProviderMark } from '../ui';
+import { THEMES } from '../UserMenu';
 import { host } from '../host';
 import { authorName, type Author, type Provider, type Space } from '../model';
 import { updateProfile } from '../profiles';
@@ -14,10 +18,13 @@ import { CommitInput, FolderInput, NumberInput, SettingsChoice, SettingsRow, Set
 import { setPrefs, usePrefs } from './prefs';
 import { InstructionsRow, useConfigWriter, useProfileConfig } from './ProfileAgentConfig';
 import { AccountSelect, GitHubAccountSelect, IconPicker } from './sections/profiles';
-import { ModelSelect, StarredModelsRow } from './sections/harnesses';
+import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
-import { SlotSelect } from './sections/themes';
+import { ThemePicker } from './ThemePicker';
 import { useRemoteStatus } from '../remote/useRemoteStatus';
+import { parseChord } from '../keymap';
+import { Shortcut } from '../Shortcut';
+import { ShortcutRecorder } from './ShortcutRecorder';
 import { useThemesState } from '../themes/store';
 
 /** An agent's value for a row: shown under it with Use, until the setting holds it. */
@@ -29,16 +36,17 @@ export interface RowSuggestion {
 /**
  * One setting's row as Settings draws it, from the catalog: the same label, control and write, live. Settings' sections
  * and the settings widget in a thread both render these, so a setting looks and works the same in both. `idPrefix` keeps
- * ids unique when the same setting shows twice (two widgets in one thread).
+ * ids unique when the same setting shows twice (two widgets in one thread). `label` shortens it where the group title
+ * already names part of it ("Default model" under "Claude Code").
  */
-export function CatalogRow({ settingKey, profile, suggestion, idPrefix = '' }: { settingKey: string; profile?: Space; suggestion?: RowSuggestion; idPrefix?: string }) {
+export function CatalogRow({ settingKey, label, profile, suggestion, idPrefix = '' }: { settingKey: string; label?: string; profile?: Space; suggestion?: RowSuggestion; idPrefix?: string }) {
   const { sources, reload } = useSettingSources(profile, isConfigKey(settingKey), REMOTE_KEYS.has(settingKey));
   const setting = findSetting(settingsCatalog({ profile, config: sources.config }), settingKey);
   if (!setting) return <SettingsRow label={settingKey} description="Not a setting here any more" />;
-  return <SettingRow setting={setting} sources={sources} profile={profile} rowId={idPrefix + rowIdOf(setting, profile)} suggestion={suggestion} onConfigWritten={reload} />;
+  return <SettingRow setting={label ? { ...setting, label } : setting} sources={sources} profile={profile} rowId={idPrefix + rowIdOf(setting, profile)} suggestion={suggestion} onConfigWritten={reload} />;
 }
 
-/** Settings › Devices lives in main's remote server; only its rows read it. */
+/** Settings › Remote access lives in main's remote server; only its rows read it. */
 const REMOTE_KEYS = new Set(['remoteEnabled', 'remoteNetwork', 'machineName']);
 
 /** Instructions, MCP servers and skills live in the profile's config files; nothing else needs them read. */
@@ -46,7 +54,7 @@ export const isConfigKey = (key: string) => /^profile\.\w+\.(instructions|mcp|sk
 
 /**
  * Every source a catalog setting reads, live: prefs, theme, color themes, quiet hours, main's settings and accounts, the
- * profile's files when `withConfig`, Settings › Devices when `withRemote`.
+ * profile's files when `withConfig`, Settings › Remote access when `withRemote`.
  */
 export function useSettingSources(profile: Space | undefined, withConfig: boolean, withRemote = false) {
   const prefs = usePrefs();
@@ -65,6 +73,7 @@ function rowIdOf(setting: Setting, profile?: Space) {
   if (setting.key.startsWith('profile.') && profile) return `${profile.id}-${setting.key.slice('profile.'.length)}`;
   if (setting.key.startsWith('alert.')) return `alert-${setting.key.slice('alert.'.length)}`;
   if (setting.key.startsWith('utility.')) return `utility-${setting.key.slice('utility.'.length)}`;
+  if (setting.key.startsWith('keybinding.')) return `shortcut-${setting.key.slice('keybinding.'.length)}`;
   return setting.key.replace(/\.(\w)/g, (_, c: string) => c.toUpperCase());
 }
 
@@ -92,9 +101,20 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
         {line}
       </StarredModelsRow>
     );
+  const description = suggestion ? (setting.description ?? setting.context) : setting.description;
+  if (control.type === 'text' && control.isMultiline && value !== undefined)
+    return (
+      <>
+        <SettingsRow id={rowId} label={setting.label} description={description}>
+          <CommitTextarea id={settingControlId(rowId)} value={value} placeholder={control.placeholder} onCommit={set} />
+          {line}
+        </SettingsRow>
+        {apply.dialog}
+      </>
+    );
   return (
     <>
-      <SettingsRow id={rowId} label={setting.label} description={suggestion ? (setting.description ?? setting.context) : setting.description} control={value === undefined ? <Unavailable /> : <SettingControl setting={setting} value={value} rowId={rowId} onChange={set} />}>
+      <SettingsRow id={rowId} label={control.type === 'account' ? <MarkedLabel provider={control.provider}>{setting.label}</MarkedLabel> : setting.label} description={description} control={value === undefined ? <Unavailable /> : <SettingControl setting={setting} value={value} rowId={rowId} onChange={set} />}>
         {line}
       </SettingsRow>
       {apply.dialog}
@@ -113,7 +133,7 @@ function SettingControl({ setting, value, rowId, onChange }: { setting: Setting;
   const id = settingControlId(rowId);
   switch (control.type) {
     case 'choice':
-      return <SettingsChoice id={rowId} value={value} options={control.options.map((o) => ({ ...o, className: o.tone === 'warning' ? WARNING_TOGGLE : undefined }))} onChange={onChange} />;
+      return <SettingsChoice id={rowId} value={value} options={control.options.map((o) => ({ ...o, icon: optionIcon(setting.key, o.value), className: o.tone === 'warning' ? WARNING_TOGGLE : undefined }))} onChange={onChange} />;
     case 'select':
       return <SettingsSelect id={rowId} value={value} options={control.options} onChange={onChange} className="w-56" />;
     case 'switch':
@@ -129,7 +149,7 @@ function SettingControl({ setting, value, rowId, onChange }: { setting: Setting;
       if (control.provider) return <ModelSelect id={rowId} provider={control.provider} value={value} emptyLabel={control.emptyLabel} onChange={onChange} />;
       return <SideChatModelPicker id={id} value={value} onChange={onChange} />;
     case 'colorTheme':
-      return <SlotSelect slot={control.slot} />;
+      return <ThemePicker slot={control.slot} />;
     case 'simulator':
       return <SimulatorSelect id={rowId} value={value} onChange={onChange} />;
     case 'icon':
@@ -138,16 +158,39 @@ function SettingControl({ setting, value, rowId, onChange }: { setting: Setting;
       return <GitHubAccountSelect id={rowId} value={value} onChange={onChange} />;
     case 'account':
       return <AccountSelect id={rowId} provider={control.provider} value={value} onChange={onChange} />;
+    case 'shortcut':
+      return <ShortcutRecorder id={id} command={control.command} />;
     default:
       return null;
   }
 }
 
+function MarkedLabel({ provider, children }: { provider: Provider; children: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <ProviderMark provider={provider} size={14} />
+      {children}
+    </span>
+  );
+}
+
+/** Harnesses by their mark and theme modes by the user menu's icons; other options are words alone. */
+function optionIcon(key: string, value: string) {
+  if (key === 'agent') return <ProviderMark provider={value as Provider} size={14} />;
+  if (key !== 'theme') return undefined;
+  const Icon = THEMES.find((t) => t.value === value)?.Icon;
+  return !!Icon && <Icon aria-hidden />;
+}
+
+/** Free text over several lines, under its label at full width: saved on blur, so Enter makes a new line. */
+function CommitTextarea({ value, onCommit, ...props }: { value: string; onCommit: (value: string) => void } & Omit<ComponentProps<typeof Textarea>, 'value' | 'defaultValue' | 'onBlur'>) {
+  return <Textarea key={value} defaultValue={value} onBlur={(e) => e.target.value.trim() !== value && onCommit(e.target.value.trim())} className="min-h-[calc(3lh+1rem+2px)] resize-none" {...props} />;
+}
+
 /** `provider:model`, the way the side chat stores its default. */
 function SideChatModelPicker({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
-  const unavailable = useUnavailableHarnesses(useHarness().state.spaceId);
   const [provider, ...model] = value.split(':');
-  return <ModelPicker id={id} value={model.join(':')} provider={provider as Provider} unavailable={unavailable} onChange={(m) => onChange(`${m.harness}:${m.id}`)} />;
+  return <ModelPicker id={id} value={model.join(':')} provider={provider as Provider} onChange={(m) => onChange(`${m.harness}:${m.id}`)} />;
 }
 
 function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Setting; value: string | undefined; suggestion: RowSuggestion; onUse: () => void }) {
@@ -162,7 +205,7 @@ function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Settin
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 type-meta text-muted-foreground">
       <span className="min-w-0 [overflow-wrap:anywhere]">
-        {who} suggests <span className="font-medium text-foreground">{valueLabel(setting, suggestion.value)}</span>
+        {who} suggests <span className="font-medium text-foreground">{setting.control.type === 'shortcut' && suggestion.value ? <Shortcut keys={parseChord(suggestion.value) ?? []} /> : valueLabel(setting, suggestion.value)}</span>
       </span>
       <Button variant="outline" size="xs" onClick={onUse} disabled={value === undefined}>
         Use
@@ -198,7 +241,7 @@ function useSettingWriter(profile: Space | undefined, onConfigWritten: () => voi
       case 'remote':
         return host.remote.set(w.patch).then(
           () => true,
-          (error: Error) => (toast.error('Couldn’t change Settings › Devices', { description: error.message }), false),
+          (error: Error) => (toast.error('Couldn’t change Settings › Remote access', { description: error.message }), false),
         );
       case 'profile':
         updateProfile(profile!.id, w.patch);

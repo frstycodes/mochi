@@ -3,6 +3,7 @@ import { closeKind, EMPTY_LAYOUT, moveKind, openKind, type PaneLayout } from '..
 import type { Action, State } from './index.tsx';
 import { showsDemoData } from '../demoData.ts';
 import { runningBackground } from '../runtime/subagents.ts';
+import { defaultBrowserUrl, listeningPorts } from '../terminal/devServer.ts';
 
 export interface PanesState {
   panes: Pane[];
@@ -10,8 +11,8 @@ export interface PanesState {
 
 export type PanesAction =
   | { type: 'pane-toggle'; threadId: string }
-  /** Opens the kind's pane with a tab: multi-tab kinds always get a new one, the others reuse theirs (a Files pane switches to `file`). `isPopped` adds it as a floating window, `isBackground` without touching the layout; both leave the selection as it is (a thread with no pane gets a closed one). */
-  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean; isBackground?: boolean }
+  /** Opens the kind's pane with a tab: multi-tab kinds always get a new one, the others reuse theirs (a Files pane switches to `file`). `isPopped` adds it as a floating window, `isBackground` without touching the layout; both leave the selection as it is (a thread with no pane gets a closed one). `tabId` names the new tab up front, for a caller that keys state by it before the reducer runs. */
+  | { type: 'pane-open-tab'; threadId: string; kind: PaneTabKind; url?: string; file?: { path: string; line?: number }; title?: string; visual?: PaneVisual; isPopped?: boolean; isBackground?: boolean; tabId?: string }
   /** Shows the tab in its pane, opening and focusing the pane. */
   | { type: 'pane-select-tab'; threadId: string; tabId: string }
   /** The thread's pane of this kind, open and focused; a new tab when there is none. */
@@ -29,8 +30,8 @@ export type PanesAction =
   | { type: 'pane-drive'; threadId: string; tabId: string | undefined }
   | { type: 'pane-reorder'; threadId: string; order: string[] }
   | { type: 'pane-update-tab'; threadId: string; tabId: string; patch: Pick<PaneTab, 'url' | 'title'> }
-  /** The thread's Agents pane, open, with this agent expanded. */
-  | { type: 'pane-show-agent'; threadId: string; subagentId: string };
+  /** The thread's Agents pane, open on this agent's transcript, or on the list when `subagentId` is unset. */
+  | { type: 'pane-show-agent'; threadId: string; subagentId?: string };
 
 const STORAGE_KEY = 'harness.panes.v1';
 
@@ -48,9 +49,11 @@ export function panesReducer(state: State, action: Action): State {
       return { ...state, panes: [...state.panes, { ...emptyPane(action.threadId), isOpen: true }] };
     }
     case 'pane-open-tab': {
-      const thread = state.threads.find((t) => t.id === action.threadId);
       const current = state.panes.find((p) => p.threadId === action.threadId);
       const existing = current ?? emptyPane(action.threadId);
+      const sameVisual = action.visual && existing.tabs.find((t) => t.visual?.language === action.visual!.language && t.visual.code === action.visual!.code);
+      // The same chat visual opened again goes to its tab (docked, or popped out to match) instead of a duplicate.
+      if (sameVisual) return !!sameVisual.isPopped && !!action.isPopped ? state : panesReducer(state, { type: 'pane-pop', threadId: action.threadId, tabId: sameVisual.id, isPopped: !!action.isPopped });
       const reused = !isMultiTab(action.kind) && !action.isPopped ? existing.tabs.find((t) => t.kind === action.kind && !t.isPopped) : undefined;
       if (reused) {
         const patched = action.file ? { ...reused, file: action.file, title: action.title ?? action.file.path.split('/').pop() } : reused;
@@ -59,9 +62,9 @@ export function panesReducer(state: State, action: Action): State {
         return { ...state, panes: upsert(state.panes, pane) };
       }
       const tab: PaneTab = {
-        id: nextTabId(existing.tabs),
+        id: action.tabId ?? nextTabId(existing.tabs),
         kind: action.kind,
-        url: action.url ?? (action.kind === 'browser' ? `localhost:3000/${thread?.repo?.branch.split('/')[1] ?? ''}` : undefined),
+        url: action.url ?? (action.kind === 'browser' ? defaultBrowserUrl(listeningPorts(action.threadId)) : undefined),
         file: action.file,
         title: action.title ?? action.file?.path.split('/').pop(),
         ...(action.visual && { visual: action.visual }),
@@ -112,7 +115,7 @@ export function panesReducer(state: State, action: Action): State {
       return { ...state, panes: state.panes.filter((p) => !action.threadIds.includes(p.threadId)) };
     case 'pane-show-agent': {
       const shown = panesReducer(state, { type: 'pane-show-tab', threadId: action.threadId, kind: 'agents' });
-      return { ...shown, panes: mapPane(shown.panes, action.threadId, (p) => ({ ...p, tabs: p.tabs.map((t) => (t.kind === 'agents' ? { ...t, isPopped: false, agentId: action.subagentId } : t)) })) };
+      return { ...shown, panes: mapPane(shown.panes, action.threadId, (p) => ({ ...p, reveals: (p.reveals ?? 0) + 1, tabs: p.tabs.map((t) => (t.kind === 'agents' ? { ...t, isPopped: false, agentId: action.subagentId } : t)) })) };
     }
     case 'agent':
     case 'bg-start': {

@@ -6,28 +6,24 @@ import { CommitInput, DesktopOnly, SettingsGroup, SettingsRow } from '../parts';
 
 export function GitSection() {
   return (
-    <div className="flex flex-col gap-8">
-      <DesktopOnly what="The worktrees folder and draft pull requests only work in the Mochi desktop app.">
-        <SettingsGroup footer="New threads get their worktree here, never inside the project, so its own git status stays clean. Moving it leaves existing worktrees where they are.">
-          <CatalogRow settingKey="worktreeRoot" />
-          <CatalogRow settingKey="prDrafts" />
-        </SettingsGroup>
-      </DesktopOnly>
-      <SettingsGroup footer="A new worktree keeps a thread's changes out of your checkout; the project folder works right in it, on its current branch. The worktree checkbox in the new-thread composer changes it too, and keeps your last choice. New branches read type/words from your prompt, like fix/login-bug, after the prefix if you set one. Agents' commits must follow Conventional Commits, type(scope): subject; the repo's own hooks still run.">
+    <div className="flex flex-col gap-10">
+      <SettingsGroup title="Worktrees" footer="The new-thread composer's worktree checkbox changes where each thread works, and keeps your last choice. Moving the folder leaves existing worktrees where they are.">
         <CatalogRow settingKey="workspaceMode" />
-        <CatalogRow settingKey="branchPrefix" />
+        <CatalogRow settingKey="worktreeRoot" />
+        <CatalogRow settingKey="worktreeCleanup" />
       </SettingsGroup>
       <DesktopOnly what="Worktree setup only runs in the Mochi desktop app.">
-        <SettingsGroup footer="Before a new worktree's first turn: ignored files matching these patterns are copied from the project (gitignore patterns, comma separated; a .worktreeinclude in the project adds to them, as in Claude Code), dependencies install from the lockfile with the project's package manager, then the project's setup command runs. The agent starts once that's done.">
+        <SettingsGroup title="Worktree setup" footer="Runs before a new worktree's first turn; the agent starts once it's done. A .worktreeinclude in the project adds to the patterns, as in Claude Code.">
           <CatalogRow settingKey="prepareWorktrees" />
           <CatalogRow settingKey="worktreeInclude" />
         </SettingsGroup>
         <ProjectSetupCommands />
-        <SettingsGroup footer="Only worktrees with nothing uncommitted are removed; their branches stay, and sending to the thread again makes the worktree anew.">
-          <CatalogRow settingKey="worktreeCleanup" />
-        </SettingsGroup>
       </DesktopOnly>
-      <SettingsGroup footer="In the Changes tab and in the work log's edits. The Changes tab's own toggle changes it too.">
+      <SettingsGroup title="Branches and pull requests" footer="Agents' commits follow Conventional Commits, type(scope): subject; the repo's own hooks still run.">
+        <CatalogRow settingKey="branchPrefix" />
+        <CatalogRow settingKey="prDrafts" />
+      </SettingsGroup>
+      <SettingsGroup title="Changes">
         <CatalogRow settingKey="diffStyle" />
       </SettingsGroup>
     </div>
@@ -44,7 +40,7 @@ function ProjectSetupCommands() {
     void update({ setupCommands: command ? { ...rest, [folder]: command } : rest });
   };
   return (
-    <SettingsGroup footer="Runs in the new worktree after the install, with MOCHI_ROOT_PATH (the project folder) and MOCHI_WORKTREE_PATH set. Empty runs the project's .mochi/setup.sh when it has one.">
+    <SettingsGroup title="Setup commands" footer="Run in the new worktree after the install, with MOCHI_ROOT_PATH and MOCHI_WORKTREE_PATH set. Empty runs the project's .mochi/setup.sh when it has one.">
       {folders.map((folder) => (
         <SettingsRow key={folder} label={`${projectName(folder)} setup command`} description={<span className="block truncate" title={folder}>{folder}</span>} control={<CommitInput aria-label={`Setup command for ${projectName(folder)}`} value={settings.setupCommands[folder] ?? ''} placeholder="pnpm build" onCommit={(command) => save(folder, command)} className="font-mono placeholder:font-sans" />} />
       ))}

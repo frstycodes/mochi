@@ -1,4 +1,4 @@
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { host } from '@/host';
 import { threadCwd } from '@/host/cwd';
 import type { Thread } from '@/model';

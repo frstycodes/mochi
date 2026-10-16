@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
+import { gateRefusal, prGate } from '../goals/verdict.ts';
 import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
-import type { BranchList } from '../host/types/git.ts';
+import type { BranchList, CheckRun } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
@@ -22,7 +23,8 @@ import { BROWSER_TOOLS } from './browserTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { defaultModelOf, effortRank, modelTier } from './models.ts';
-import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type Tier, type ToolName } from './toolTable.ts';
+import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
+import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
 
 /** What the store and the app give a tool run. The renderer wires the real ones (`store/index.tsx`); tests pass stubs. */
@@ -38,8 +40,8 @@ export interface ToolEnv {
   /** Removes a thread's worktree from disk after a delete; resolves when done. */
   removeWorktree: (threadId: string) => Promise<void>;
   /** The browser tabs' pages (`src/browser/pages.ts`) and main's native views behind them. */
-  pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void };
-  browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor'>;
+  pages: { get: (key: string) => Page | undefined; update: (key: string, patch: Partial<Page>) => void; open: (key: string, url: string, spaceId: string) => void };
+  browser: Pick<BrowserHost, 'navigate' | 'command' | 'capture' | 'snapshot' | 'act' | 'logs' | 'eval' | 'waitFor' | 'answerDialog'>;
   /** The folder a thread's agent runs in (its worktree), for checking upload paths. */
   cwdOf: (thread: Thread) => string | null | undefined;
   /** The models `provider` offers the profile's account; empty when they couldn't be read. */
@@ -53,12 +55,12 @@ export interface ToolEnv {
    * in or stores a credential, and nothing that sets a setting: only the user does that, on the widget.
    */
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
-  /** Installed color themes and Settings › Devices, read for `get_settings`. */
+  /** Installed color themes and Settings › Remote access, read for `get_settings`. */
   themes: Pick<ThemesHost, 'list'>;
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
-  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string> };
+  git: { branches: (root: string) => Promise<BranchList>; push: (cwd: string, githubUser?: string) => Promise<void>; createPr: (cwd: string, pr: { title: string; body: string }, githubUser?: string) => Promise<string>; runCheck: (cwd: string, command: string) => Promise<CheckRun> };
   now?: () => number;
 }
 
@@ -112,9 +114,6 @@ export interface ToolSpec<K extends ToolName> {
 
 type Specs = { [K in ToolName]: ToolSpec<K> };
 
-/** The least agent-control level each tier runs under; asking tiers (and browser escalations) still wait on their widget. */
-const LEVEL = { read: 'read', change: 'changes', destructive: 'everything', setting: 'everything' } satisfies Record<Tier, AgentControl>;
-
 const levelLabel = (control: AgentControl) => AGENT_CONTROL.options.find((o) => o.value === control)!.label;
 
 /**
@@ -131,9 +130,11 @@ export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentT
   const ctx = context(env, caller, parsed.data, name);
   const spec = SPECS[name] as ToolSpec<ToolName>;
   const tier = tierOf(name);
+  const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);
   try {
-    gate(ctx, name, LEVEL[tier]);
-    const approval = spec.ask?.(ctx);
+    if (isChosen && policy === 'off') throw new Error(`The user turned ${name} off for agents in Settings › Mochi access. Don't call it again unless they turn it back on.`);
+    if (!isChosen) gate(ctx, name, LEVEL[tier]);
+    const approval = spec.ask?.(ctx) ?? (policy === 'ask' ? approvalFor(ctx, name) : undefined);
     // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.
     const options = approval ? await ask(ctx, approval instanceof Promise ? await approval : approval) : [];
     const before = env.getState();
@@ -166,9 +167,19 @@ function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): Tool
   return ctx;
 }
 
-/** Throws when the setting is below `needs`, after putting that setting in the thread as a widget (once while it's open). */
+/** A tool you set to ask first: the widget names the call and shows exactly what it was given. */
+function approvalFor(ctx: ToolContext<unknown>, name: ToolName): Approval {
+  const verb = name.replaceAll('_', ' ');
+  return { title: `${authorName(ctx.caller.providers[0])} wants to ${verb}`, detail: 'You asked to approve this tool each time in Settings › Mochi access.', code: JSON.stringify(ctx.args, null, 2), denied: `Didn't ${verb}` };
+}
+
+/**
+ * Throws when the setting is below `needs`, after putting that setting in the thread as a widget (once while it's open).
+ * A tool you chose Allow or Ask for passes whatever the level, and so may ask mid-run (a browser escalation).
+ */
 function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
   const control = ctx.env.prefs.get().agentControl;
+  if (toolPolicy(name, control, ctx.env.prefs.get().toolPolicies).isChosen) return;
   if (AGENT_CONTROLS.indexOf(control) >= AGENT_CONTROLS.indexOf(needs)) return;
   const verb = name.replaceAll('_', ' ');
   const shown = ctx.state().queue.find((q) => q.threadId === ctx.caller.id && q.settings?.changes.some((c) => c.key === 'agentControl'));
@@ -452,24 +463,45 @@ const GOAL_SPECS = {
     },
   },
   open_pr: {
-    run: async ({ env, caller, args, dispatch }) => {
+    run: async ({ env, state, caller, args, dispatch }) => {
       const cwd = caller.repo && env.cwdOf(caller);
       if (!cwd) throw new Error('This thread has no project folder, so there is no branch to open a pull request for');
       const { current, defaultBranch } = await env.git.branches(cwd);
       if (!current) throw new Error(`${cwd} is on a detached HEAD, so there is no branch to push. Commit on this thread's own branch, not in another worktree`);
       if (current === defaultBranch) throw new Error(`${cwd} is on ${defaultBranch}; open_pr would push straight to it. Commit on a branch of its own first`);
+      // Checks run again here: open_pr usually comes mid-turn, before the idle pass would have run them.
+      for (const c of caller.criteria ?? []) {
+        if (!c.command) continue;
+        const result = await env.git.runCheck(cwd, c.command).catch((error: Error) => ({ exitCode: null, output: error.message, ms: 0 }));
+        dispatch({ type: 'criterion-check', threadId: caller.id, criterionId: c.id, result });
+      }
+      const checked = target(state(), caller, caller.id);
+      const gate = prGate(checked, env.prefs.get().prGaps);
+      if (gate.blocking.length) throw new Error(gateRefusal(checked, gate.blocking));
       const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
       await env.git.push(cwd, githubUser);
-      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(caller, args.why) }, githubUser);
+      const url = await env.git.createPr(cwd, { title: args.title.trim(), body: prBody(checked, args.why, gate.noted) }, githubUser);
       const opened = openedPr(url, args.title.trim());
       if (opened) dispatch({ type: 'prs-seen', threadId: caller.id, prs: [opened] });
       return { changed: `opened ${url}`, result: { url } };
+    },
+  },
+  propose_goal: {
+    run: ({ state, env, caller, args, dispatch }) => {
+      if (caller.isGoalOff) throw new Error('The user removed this thread\'s goal; carry on without one');
+      if (caller.proposal && caller.proposal.state !== 'waiting' && caller.proposal.state !== 'undone') throw new Error('This thread already has the goal you proposed; edit_goal changes it');
+      const isApplied = env.prefs.get().proposedGoals === 'apply';
+      const criteria = args.criteria.map((c) => ({ text: c.text.trim(), ...(c.command?.trim() && { command: c.command.trim() }) }));
+      dispatch({ type: 'goal-propose', threadId: caller.id, goal: args.goal.trim(), criteria, basis: args.basis?.trim() || undefined, by: caller.providers[0], isApplied });
+      const result = isApplied ? 'Applied; the user can undo it. get_goal lists the new criterion ids.' : 'Waiting for the user to accept it; keep working on the current goal meanwhile.';
+      return { changed: isApplied ? `set the goal: ${args.goal}` : `proposed the goal: ${args.goal}`, result: { status: result, goal: goalOf(target(state(), caller, caller.id)) } };
     },
   },
   claim_criterion: {
     run: ({ state, caller, args, dispatch }) => {
       const criterion = caller.criteria?.find((c) => c.id === args.criterionId);
       if (!caller.goal) throw new Error('This thread has no goal; nothing to claim');
+      if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
       if (!criterion) throw new Error(`No criterion ${args.criterionId}; get_goal lists them`);
       dispatch({ type: 'criterion-claim', threadId: caller.id, criterionId: criterion.id, evidence: args.evidence.trim(), by: caller.providers[0] });
       return { changed: `claimed "${criterion.text}"`, result: goalOf(target(state(), caller, caller.id)) };
@@ -478,6 +510,7 @@ const GOAL_SPECS = {
   report_turn: {
     run: ({ state, caller, args, dispatch }) => {
       if (!caller.goal) throw new Error('This thread has no goal; there is nothing to report against');
+      if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
       dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }) } });
       return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
     },
@@ -505,13 +538,6 @@ const LAYOUT_SPECS = {
       if (kind === 'sidechat') dispatch({ type: 'sidechat-open', threadId: thread.id });
       else dispatch({ type: 'pane-open-tab', threadId: thread.id, kind });
       return { changed: `opened ${args.kind} in "${thread.title}"'s side pane`, result: paneOf(state(), thread.id) };
-    },
-  },
-  focus_thread: {
-    run: ({ state, caller, args, dispatch }) => {
-      const thread = target(state(), caller, args.threadId);
-      dispatch({ type: 'go', view: { kind: 'thread', id: thread.id } });
-      return { changed: `brought you to "${thread.title}"`, result: { focused: thread.id } };
     },
   },
   split_with: {
@@ -656,12 +682,12 @@ async function newWorktree(env: ToolEnv, project: string, prompt: string) {
   return { mode: 'worktree' as const, branch: uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken) };
 }
 
-/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Tools allows them. */
+/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Mochi access allows them. */
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
   const inherited = provider === caller.providers[0] ? caller.controls : undefined;
   if (!picked.model && !picked.effort) return inherited;
   const rule = env.prefs.get().threadModels;
-  const setting = `"${THREAD_MODELS.label}" is "${THREAD_MODELS.options.find((o) => o.value === rule)!.label}" in Settings › Tools`;
+  const setting = `"${THREAD_MODELS.label}" is "${THREAD_MODELS.options.find((o) => o.value === rule)!.label}" in Settings › Mochi access`;
   if (rule === 'default') throw new Error(`${setting}: call again without model and effort, or ask the user to change that setting`);
   const models = await env.models(provider, caller.spaceId);
   if (picked.model && models.length && !models.some((m) => m.id === picked.model)) throw new Error(`${picked.model} isn't offered; use one of ${models.map((m) => m.id).join(', ')}`);
@@ -697,8 +723,17 @@ function agentOf(s: Subagent, now = Date.now()) {
 }
 
 function goalOf(thread: Thread) {
-  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, steps: thread.steps.map(stepOf) };
+  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, steps: thread.steps.map(stepOf), ...(isDraftGoal(thread) && { isDraft: true, next: DRAFT_NEXT }) };
 }
+
+/** A goal only Mochi's drafter has written: guessed from the first message, never checked against the code, so the agent replaces it with propose_goal. */
+function isDraftGoal(thread: Thread) {
+  return !!thread.goal && !thread.proposal && thread.revisions.every((r) => r.by === 'harness');
+}
+
+const DRAFT_NEXT = "This goal is Mochi's guess from the user's first message, not checked against the code. Once you've looked at the code, call propose_goal with the real outcome and 2 to 4 criteria (a command for each where one proves it); claim_criterion and report_turn wait until you have.";
+
+const DRAFT_REFUSAL = `Call propose_goal first. ${DRAFT_NEXT}`;
 
 function stepOf(s: Thread['steps'][number]) {
   return { id: s.id, title: s.title, status: s.status, size: s.size, ...(s.acceptance && { acceptance: s.acceptance }), ...(s.note && { note: s.note }) };

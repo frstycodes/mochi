@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Trash3 } from 'reicon-react';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { PINS_STORAGE_KEY, replaceAllPins, useAllPins } from '../../chat/pins';
 import { useConfirm } from '../../git/useConfirm';
@@ -11,9 +11,8 @@ import { SIDECHAT_STORAGE_KEY } from '../../store/sidechat';
 import { clearTerminalHistory, TERMINAL_STORAGE_PREFIX } from '../../terminal/sessions';
 import { SettingsGroup, SettingsRow, settingControlId, UNDO_MS } from '../parts';
 import { CatalogRow } from '../CatalogRow';
-import pkg from '../../../package.json';
 
-/** What Mochi keeps in this window's local storage, by what clearing it would remove. */
+/** What Mochi keeps on this computer, by what clearing it would remove, then the switches for demo data and replays. */
 export function DataSection() {
   const { state, dispatch } = useHarness();
   const { confirm, dialog } = useConfirm();
@@ -50,7 +49,7 @@ export function DataSection() {
   const clearEverything = async () => {
     const isConfirmed = await confirm({
       title: 'Clear everything Mochi stores here?',
-      description: 'Pins, side chats, terminal history, layouts, address history and every preference on this page go back to their defaults, and Mochi reloads. Agent accounts and API keys stay.',
+      description: 'Pins, side chats, terminal history, layouts, address history and every preference go back to their defaults, and Mochi reloads. Agent accounts and API keys stay.',
       confirm: 'Clear and reload',
       cancel: 'Keep my data',
       isDestructive: true,
@@ -68,50 +67,27 @@ export function DataSection() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      {host.isDesktop && (
-        <SettingsGroup footer="Sample threads, queue items and profiles from the prototype, shown next to your own. They never run an agent and aren't saved. Mochi reloads to apply.">
-          <CatalogRow settingKey="demoData" />
-        </SettingsGroup>
-      )}
-      <SettingsGroup
-        id="replay"
-        title="Replay"
-        footer="Each of your threads keeps its agent's events, with your messages and answers, so Replay can rebuild it step by step. Up to 8 MB per thread; turning this off keeps what's already recorded."
-      >
-        <CatalogRow settingKey="recordReplays" />
-        <ClearRow id="clearReplays" label="Recordings" area={replays.usage} onClear={() => void clearReplays()} />
-      </SettingsGroup>
+    <div className="flex flex-col gap-10">
       <SettingsGroup id="storage" title="Stored on this computer" footer={`${formatBytes(usage.total)} in all. Pins and side chats can be undone right after clearing.`}>
         <ClearRow id="clearPins" label="Pins" area={usage.pins} onClear={clearPins} />
         <ClearRow id="clearSideChats" label="Side chats" area={usage.sidechats} onClear={clearSideChats} />
         <ClearRow id="clearTerminals" label="Terminal history" area={usage.terminals} onClear={clearTerminals} />
+      </SettingsGroup>
+      <SettingsGroup id="replay" title="Developer" footer="Turning recording off keeps what's already recorded.">
+        {host.isDesktop && <CatalogRow settingKey="demoData" />}
+        <CatalogRow settingKey="recordReplays" />
+        <ClearRow id="clearReplays" label="Replay recordings" area={replays.usage} onClear={() => void clearReplays()} />
+      </SettingsGroup>
+      <SettingsGroup title="Start over" footer="Agent accounts and API keys stay.">
         <SettingsRow
           id="clearEverything"
-          label="Everything"
-          description="Resets this page too"
+          label="Clear everything"
+          description="Pins, side chats, terminal history, layouts and every setting go back to their defaults, and Mochi reloads"
           control={
-            <Button id={settingControlId('clearEverything')} variant="outline" size="sm" onClick={() => void clearEverything()}>
-              <Trash3 data-icon="inline-start" className="text-destructive" />
+            <Button id={settingControlId('clearEverything')} variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => void clearEverything()}>
+              <Trash3 data-icon="inline-start" />
               Clear everything
             </Button>
-          }
-        />
-      </SettingsGroup>
-      <SettingsGroup id="about" title="About">
-        <SettingsRow label="Mochi" control={<span className="type-meta text-muted-foreground tabular">{pkg.version}</span>} />
-        {host.isDesktop && <SettingsRow label="Electron" control={<span className="type-meta text-muted-foreground tabular">{engineVersion('Electron')}</span>} />}
-        <SettingsRow label="Chromium" control={<span className="type-meta text-muted-foreground tabular">{engineVersion('Chrome') || 'Not Chromium'}</span>} />
-        <SettingsRow
-          label="Docs"
-          control={
-            <div className="flex gap-3 type-meta">
-              {DOCS.map((d) => (
-                <a key={d.href} href={d.href} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-                  {d.label}
-                </a>
-              ))}
-            </div>
           }
         />
       </SettingsGroup>
@@ -134,13 +110,6 @@ function ClearRow({ id, label, area, onClear }: { id: string; label: string; are
     />
   );
 }
-
-const REPO = 'https://github.com/frstycodes/mochi/blob/main';
-const DOCS = [
-  { label: 'README', href: `${REPO}/README.md` },
-  { label: 'Runtime', href: `${REPO}/RUNTIME.md` },
-  { label: 'Settings', href: `${REPO}/SETTINGS.md` },
-];
 
 interface Area {
   items: number;
@@ -205,8 +174,4 @@ const BYTES = new Intl.NumberFormat('en', { style: 'unit', unit: 'kilobyte', max
 
 function formatBytes(bytes: number) {
   return BYTES.format(bytes / 1024);
-}
-
-function engineVersion(name: string) {
-  return navigator.userAgent.match(new RegExp(`${name}/([\\d.]+)`))?.[1] ?? '';
 }

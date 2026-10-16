@@ -6,7 +6,7 @@ import { closeSettings, useSettingsRoute, type SettingsRoute } from './open';
 import { prefersReducedMotion } from './prefs';
 import { SETTINGS_SECTIONS } from './sections';
 
-/** The content column while settings are open: one section, scrolling on its own. */
+/** The content column while settings are open: one page under its title, scrolling on its own. */
 export function SettingsPage() {
   const route = useSettingsRoute();
   const section = SETTINGS_SECTIONS.find((s) => s.id === route?.section) ?? SETTINGS_SECTIONS[0];
@@ -18,11 +18,12 @@ export function SettingsPage() {
     <AgentSettingsProvider>
       {/* Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track. */}
       <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-        <TitleBar className="px-4">
-          <h1 className="truncate type-title">{section.title}</h1>
-        </TitleBar>
+        <TitleBar className="px-4" />
         <ScrollArea type="scroll" className="min-h-0">
-          <div className="mx-auto w-full max-w-2xl px-4 pt-2 pb-12 md:px-6"><Section /></div>
+          <div className="mx-auto flex w-full max-w-180 flex-col gap-8 px-4 pt-6 pb-16 md:px-8">
+            <h1 className="px-1 type-display">{section.title}</h1>
+            <Section />
+          </div>
         </ScrollArea>
       </div>
     </AgentSettingsProvider>

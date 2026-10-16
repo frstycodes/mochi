@@ -18,7 +18,7 @@ const otherThread = z.string().describe('A thread in this profile; ids come from
 const threadIds = z.array(z.string()).min(1).describe('Threads in this profile; ids come from list_threads');
 const stepId = z.string().describe('A step id from get_goal');
 const tabId = z.string().optional().describe("One of your thread's browser tabs from browser_tabs; defaults to the active one");
-const ref = z.string().describe('An element ref like "e12" from the latest browser_snapshot');
+const ref = z.string().describe('An element ref like "g3-e12" from the latest browser_snapshot');
 const profileId = z.string().optional().describe('A profile id from list_profiles; defaults to your own');
 const configProvider = z.enum(['claude', 'codex']).optional().describe("Which harness's config; defaults to your own");
 const reason = z.string().min(1).max(240).describe('Why, in a sentence the user reads on the widget');
@@ -118,6 +118,20 @@ export const TOOL_TABLE = {
     shape: {
       title: z.string().min(1).max(72).describe('Conventional Commits style, like "fix(auth): keep the session cookie"'),
       why: z.string().min(1).max(300).describe('One sentence: why this change'),
+    },
+  },
+  propose_goal: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "After your first look at the code, propose this thread's goal: the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. Once per task; the user accepts it, or Mochi applies it with an undo. Keep working while it waits.",
+    shape: {
+      goal: z.string().min(1).max(120).describe('What will be true when this is done, specific to what you found'),
+      criteria: z
+        .array(z.object({ text: z.string().min(1).max(120), command: z.string().optional().describe('A command that proves it, like "pnpm test"; leave out for what the user checks') }))
+        .min(1)
+        .max(4),
+      basis: z.string().max(200).optional().describe('One line: what you saw that makes this the goal'),
     },
   },
   claim_criterion: {
@@ -231,6 +245,12 @@ export const TOOL_TABLE = {
   browser_back: { tier: 'change', quiet: true, description: 'Go back in the tab.', shape: { tabId } },
   browser_forward: { tier: 'change', quiet: true, description: 'Go forward in the tab.', shape: { tabId } },
   browser_reload: { tier: 'change', quiet: true, description: 'Reload the tab.', shape: { tabId } },
+  browser_dialog: {
+    tier: 'change',
+    quiet: true,
+    description: "Answer the alert or confirm the page is showing: accept true is OK, false is Cancel. While one is open, the other browser tools on that tab fail with its message.",
+    shape: { tabId, accept: z.boolean() },
+  },
   browser_set_device: {
     tier: 'change',
     quiet: true,
@@ -244,7 +264,6 @@ export const TOOL_TABLE = {
     description: "Open a tab in a thread's side pane: preview (browser), changes, terminal, files or sidechat.",
     shape: { kind: z.enum(['preview', 'changes', 'terminal', 'files', 'sidechat']), threadId },
   },
-  focus_thread: { tier: 'change', description: 'Show a thread in the focused split, moving the user there. Undoable.', shape: { threadId: otherThread } },
   split_with: { tier: 'change', description: 'Open a thread in a new split beside the focused one.', shape: { threadId: otherThread } },
   close_pane: { tier: 'change', quiet: true, description: "Close a thread's side pane (its tabs are kept).", shape: { threadId } },
   show_file: {
@@ -271,7 +290,7 @@ export const TOOL_TABLE = {
   get_settings: {
     tier: 'read',
     description:
-      "Read Mochi's settings: each key with its label, section, current value, the values it takes, and whether you may propose it. Profile settings (name, icon, GitHub and agent accounts, instructions files, MCP servers, skills) are your profile's unless you pass profileId. section: profile adds each MCP server's tool count (it starts the servers). Secret values are never returned.",
+      "Read Mochi's settings: each key with its label, section (the Settings page) and group (the titled section on that page), current value, the values it takes, and whether you may propose it. Profile settings (name, icon, GitHub and agent accounts, instructions files, MCP servers, skills) are your profile's unless you pass profileId. section: profile adds each MCP server's tool count (it starts the servers). Secret values are never returned.",
     shape: {
       section: z.enum(SETTING_SECTIONS).optional(),
       profileId,
@@ -286,6 +305,23 @@ export const TOOL_TABLE = {
         .array(z.object({ key: z.string().describe('A key from get_settings'), value: z.string().describe('As get_settings shows values: "true"/"false", an allowed value, a number or text'), profileId }))
         .min(1)
         .max(20),
+      reason,
+    },
+  },
+  get_keybindings: {
+    tier: 'read',
+    description:
+      "Read Mochi's keyboard shortcuts: each command's id, title, group, where it listens (global, pane, list), its chord now and its default (\"\" = none), the keys that can't be rebound, and this platform's reserved chords. Chords read like \"mod+shift+K\": mod is ⌘ on macOS and Ctrl elsewhere, nav is ⌃ on macOS and Alt elsewhere, then alt, shift and one key.",
+    shape: {},
+  },
+  set_keybinding: {
+    tier: 'setting',
+    description:
+      'Suggest a new shortcut for one command: a settings widget in your thread shows its current → proposed chord with your reason, and the user applies it there. Ids and chords from get_keybindings; keys "" suggests removing the shortcut. Reserved chords (⌘Q, ⌘Tab, ⌃←/→ on macOS, Alt+Tab elsewhere, Copy and Paste) are refused. A chord another command uses is refused unless onConflict says what happens to it: swap (it gets this command\'s old chord) or replace (it loses its shortcut); both rows show on the widget.',
+    shape: {
+      command: z.string().describe('A command id from get_keybindings'),
+      keys: z.string().describe('Like "mod+shift+K", "nav+1" or "J"; "" for no shortcut'),
+      onConflict: z.enum(['swap', 'replace']).optional(),
       reason,
     },
   },

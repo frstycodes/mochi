@@ -14,6 +14,9 @@ export interface AppWindow {
   icon?: string;
 }
 
+export const APPEARANCES = ['system', 'light', 'dark'] as const;
+export type Appearance = (typeof APPEARANCES)[number];
+
 export interface WindowsHost {
   /** `route` becomes the new window's location hash, e.g. `window/t1` → `#/window/t1`. A window already showing that route is focused instead. */
   open(route: string): Promise<void>;
@@ -22,6 +25,12 @@ export interface WindowsHost {
   onMessage(listener: (message: unknown) => void): () => void;
   isFullScreen(): Promise<boolean>;
   onFullScreenChange(listener: (isFullScreen: boolean) => void): () => void;
+  /** The page zoom (⌘+ / ⌘−). Asking also re-centres the traffic lights on the headers at that zoom. */
+  zoomFactor(): Promise<number>;
+  /** Back to 100%, like ⌘0. */
+  resetZoom(): Promise<void>;
+  /** Settings' Light / Dark / System for native chrome (menus, the sidebar's material), which otherwise follows the OS. */
+  setAppearance(appearance: Appearance): Promise<void>;
   /** Other apps' windows on every Space (macOS) or on screen, never Mochi's own. Empty unless `access` is `granted`; asking while `not-determined` shows the OS prompt. */
   listApps(): Promise<{ access: ScreenAccess; windows: AppWindow[] }>;
   /** A JPEG of that window, or null once it has closed. */
@@ -35,6 +44,9 @@ export const windowsMethods = {
   onMessage: 'event',
   isFullScreen: 'invoke',
   onFullScreenChange: 'event',
+  zoomFactor: 'invoke',
+  resetZoom: 'invoke',
+  setAppearance: 'invoke',
   listApps: 'invoke',
   captureApp: 'invoke',
   openScreenRecordingSettings: 'invoke',

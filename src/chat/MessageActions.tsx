@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
-import { Copy3, PinTack, RotateLeft, Sparkles, type IconProps } from 'reicon-react';
+import { Copy3, PinTack, RotateLeft, Stars, type IconProps } from 'reicon-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
+import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../model';
 import { timeAgo } from '../progress';
@@ -58,8 +58,8 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
   const simplify: MessageAction = {
     id: 'simplify',
     label: isShown ? 'Show original' : 'Simplify',
-    hint: isShown ? undefined : "Bullets for you to skim, made by your Simplify settings. The agent never sees them.",
-    icon: Sparkles,
+    hint: isShown ? undefined : 'A plainer version for you to read, made by your Simplify settings. The agent never sees it.',
+    icon: Stars,
     isActive: isShown,
     disabledReason: isSimplifying ? 'Simplifying…' : undefined,
     run: () => void run(thread, index),
