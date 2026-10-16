@@ -443,7 +443,13 @@
   }
 }
 
-/* Menus, popovers and selects: glass a step above the page so they read as raised; pair with `shadow-glass`. */
+/* Menus, popovers and selects: glass a step above the page so they read as raised; pair with `shadow-glass`.
+   A container that inherits `bg-popover` overrides it with `bg-(--glass-raised)`, which the media query below also turns solid. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-raised: var(--popover);
+  }
+}
 @utility surface-glass-raised {
   background: var(--glass-raised);
   border-color: var(--glass-edge);
@@ -803,21 +809,21 @@
   }
 }
 
-/* Menus, popovers, selects, hover cards and tooltips: scale out of the pointer (`usePopOrigin` sets --pop-origin) with a small overshoot while a blur clears. */
+/* Menus, popovers, selects, autocompletes, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): scale out of the pointer (`usePopOrigin` sets --pop-origin) with a small overshoot while a blur clears. */
 @utility animate-pop {
-  &:not([data-state='closed']) {
+  &:not([data-state='closed'], [data-closed]) {
     animation:
       pop-scale 420ms var(--ease-pop) both,
       pop-focus 220ms var(--ease-out) both;
   }
-  &[data-state='closed'] {
+  &:is([data-state='closed'], [data-closed]) {
     animation: pop-out 150ms var(--ease-out) both;
   }
   @variant motion-reduce {
-    &:not([data-state='closed']) {
+    &:not([data-state='closed'], [data-closed]) {
       animation: pop-fade-in 150ms var(--ease-out) both;
     }
-    &[data-state='closed'] {
+    &:is([data-state='closed'], [data-closed]) {
       animation: pop-fade-out 100ms var(--ease-out) both;
     }
   }

@@ -22,7 +22,7 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   if (!menu.isOpen) return null;
   const groups = [menu.matches.filter((m) => m.source === 'mochi'), menu.matches.filter((m) => m.source !== 'mochi')].filter((g) => g.length);
   return (
-    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto rounded-xl bg-popover p-1 shadow-popover">
+    <div ref={list} id={menu.listId} role="listbox" aria-label="Commands and skills" className="absolute inset-x-0 bottom-full z-10 mb-2 flex max-h-80 flex-col gap-0.5 overflow-y-auto origin-bottom-left animate-pop rounded-xl surface-glass-raised p-1 shadow-glass">
       {groups.map((group) => (
         <div key={group[0].source} role="group" aria-label={groupName(group[0].source)} className="flex flex-col gap-0.5">
           <div aria-hidden className="px-2 pt-1.5 pb-0.5 type-caption text-subtle-foreground">
@@ -38,7 +38,7 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
               onPointerDown={(e) => e.preventDefault()}
               aria-disabled={!!item.disabledReason || undefined}
               onClick={() => menu.choose(item)}
-              className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-accent/60 aria-selected:bg-accent aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:aria-selected:bg-accent/60"
+              className="flex h-8 shrink-0 cursor-default items-center gap-2 rounded-md px-2 type-body hover:bg-glass-accent/50 aria-selected:bg-glass-accent aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:aria-selected:bg-accent/60"
             >
               <SlashIcon item={item} />
               <span className="shrink-0 font-medium">/{item.name}</span>
