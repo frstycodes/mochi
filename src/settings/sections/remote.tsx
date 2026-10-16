@@ -16,45 +16,42 @@ import { ipcMessage } from '../AgentSettings';
 import { CommitInput, DesktopOnly, SettingsGroup, SettingsRow, settingControlId } from '../parts';
 
 /** Turning on remote access, how far it reaches, what this computer is called, who is paired, and your other computers. */
-export function DevicesSection() {
+export function RemoteSection() {
   return (
     <DesktopOnly what="Other devices connect to Mochi running on a computer.">
-      <Devices />
+      <RemoteAccess />
     </DesktopOnly>
   );
 }
 
-function Devices() {
+function RemoteAccess() {
   const { status, update } = useRemoteStatus();
   const { account } = useMochiAccount();
   const isSignedIn = account?.status === 'signed-in';
   if (!status) return null;
   const { settings } = status;
   return (
-    <div className="flex flex-col gap-8">
-      <SettingsGroup footer="Your other devices can follow and steer threads running here. While this is on, closing the window keeps Mochi running in the background so they can still reach it.">
+    <div className="flex flex-col gap-10">
+      <SettingsGroup title="This computer" footer="While devices can control it, closing the window keeps Mochi running in the background. The relay is encrypted between your devices; it can’t read anything.">
         <SettingsRow
           id="remoteEnabled"
           label="Let devices control this computer"
           description={<ListeningState status={status} />}
           control={<Switch id={settingControlId('remoteEnabled')} checked={settings.isEnabled} onCheckedChange={(isEnabled) => void update({ isEnabled })} />}
         />
-      </SettingsGroup>
-      <SettingsGroup footer="Off, only this computer can connect. On, devices on your local network or Tailscale can too. On Windows, Windows Defender Firewall may ask whether to allow Mochi the first time.">
         <SettingsRow
           id="remoteNetwork"
           label="Allow devices on this network"
+          description="Your local network or Tailscale; Windows Firewall may ask once"
           control={<Switch id={settingControlId('remoteNetwork')} checked={settings.allowsNetwork} onCheckedChange={(allowsNetwork) => void update({ allowsNetwork })} />}
         />
-        <SettingsRow id="machineName" label="Computer name" description="How your devices list this computer" control={<CommitInput id={settingControlId('machineName')} value={settings.machineName} placeholder={status.hostName} maxLength={64} onCommit={(machineName) => void update({ machineName })} />} />
-      </SettingsGroup>
-      <SettingsGroup footer="Through Mochi’s relay, your devices reach this computer when they aren’t on its network. Everything is encrypted between your devices; the relay can’t read it.">
         <SettingsRow
           id="remoteAnywhere"
           label="Reach this computer from anywhere"
           description={isSignedIn ? <RelayState status={status} /> : 'Needs your Mochi account'}
           control={<Switch id={settingControlId('remoteAnywhere')} checked={settings.reachesAnywhere} disabled={!isSignedIn || !settings.isEnabled} onCheckedChange={(reachesAnywhere) => void update({ reachesAnywhere })} />}
         />
+        <SettingsRow id="machineName" label="Computer name" description="How your devices list this computer" control={<CommitInput id={settingControlId('machineName')} value={settings.machineName} placeholder={status.hostName} maxLength={64} onCommit={(machineName) => void update({ machineName })} />} />
       </SettingsGroup>
       <PairedDevices status={status} />
       <OtherComputers isSignedIn={isSignedIn} />
@@ -115,7 +112,7 @@ function PairedDevices({ status }: { status: RemoteStatus }) {
 const SCOPE_LABELS = { read: 'Read', operate: 'Operate', manage: 'Manage', code: 'Code', terminal: 'Terminal' } satisfies Record<Scope, string>;
 
 const PAIRED_FOOTER =
-  'Read follows threads and the Queue. Operate answers, sends, stops, forks and hands off. Manage starts, renames, pins and settles threads, edits goals and schedules, and commits, pushes and opens PRs. Code reads files and diffs. Terminal is a shell on this computer. A change reconnects the device. A new device pairs from its own Settings › Devices, and you approve it here.';
+  'Read follows threads and the Queue. Operate answers, sends, stops, forks and hands off. Manage starts, renames, pins and settles threads, edits goals and schedules, and commits, pushes and opens PRs. Code reads files and diffs. Terminal is a shell on this computer. A change reconnects the device. A new device pairs from its own Settings › Remote access, and you approve it here.';
 
 /** What the device may do here; terminal starts off, as a shell on this computer. */
 function ScopeToggles({ device }: { device: PairedDeviceInfo }) {

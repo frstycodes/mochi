@@ -290,7 +290,7 @@ export const TOOL_TABLE = {
   get_settings: {
     tier: 'read',
     description:
-      "Read Mochi's settings: each key with its label, section, current value, the values it takes, and whether you may propose it. Profile settings (name, icon, GitHub and agent accounts, instructions files, MCP servers, skills) are your profile's unless you pass profileId. section: profile adds each MCP server's tool count (it starts the servers). Secret values are never returned.",
+      "Read Mochi's settings: each key with its label, section (the Settings page) and group (the titled section on that page), current value, the values it takes, and whether you may propose it. Profile settings (name, icon, GitHub and agent accounts, instructions files, MCP servers, skills) are your profile's unless you pass profileId. section: profile adds each MCP server's tool count (it starts the servers). Secret values are never returned.",
     shape: {
       section: z.enum(SETTING_SECTIONS).optional(),
       profileId,

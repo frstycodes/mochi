@@ -383,7 +383,7 @@ function oneOf<T extends string>(value: unknown, options: readonly T[], name: st
   return value as T;
 }
 
-/** Thread worktrees live under the worktree root (Settings › Git), never inside the project, so its own `git status` stays clean. */
+/** Thread worktrees live under the worktree root (Settings › Git and worktrees), never inside the project, so its own `git status` stays clean. */
 function insideWorktreeRoot(path: string) {
   const abs = resolve(path);
   if (!isUnderWorktreeRoot(abs)) throw new Error(`${path} is not a Mochi worktree`);

@@ -26,7 +26,7 @@ export interface SideChat {
   messages: SideMessage[];
   /** A selection waiting in the composer for its question. */
   draft?: Quote;
-  /** The model answering, either provider; unset follows Settings › Defaults. */
+  /** The model answering, either provider; unset follows Settings › Models. */
   model?: ModelChoice;
   /** A question `/side` sent from the thread's composer, asked as soon as the tab mounts. */
   pending?: string;
@@ -44,7 +44,7 @@ export type SideChatAction =
   | { type: 'sidechat-ask'; threadId: string; tabId: string; id: string; text: string }
   | { type: 'sidechat-stream'; threadId: string; tabId: string; id: string; text: string; isDone?: boolean }
   | { type: 'sidechat-clear'; threadId: string; tabId: string }
-  /** Every side chat at once: Settings › Data clears them and its undo puts them back. */
+  /** Every side chat at once: Settings › Data and storage clears them and its undo puts them back. */
   | { type: 'sidechat-replace'; sidechats: SideChatState['sidechats'] }
   | { type: 'sidechat-promote'; threadId: string; tabId: string; id: string; to: 'message' | 'thread' };
 

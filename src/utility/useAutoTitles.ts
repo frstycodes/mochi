@@ -8,7 +8,7 @@ import { titleRequest } from './titles';
 // Once per thread per launch: a thread no model could name keeps its truncated first message.
 const asked = new Set<string>();
 
-/** Names each live thread after its first exchange, on the Settings › Background tasks model. */
+/** Names each live thread after its first exchange, on the Settings › Models › Background tasks model. */
 export function useAutoTitles(threads: Thread[], dispatch: Dispatch<Action>) {
   useEffect(() => {
     if (!host.isDesktop) return;

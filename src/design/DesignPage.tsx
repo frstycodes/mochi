@@ -710,7 +710,7 @@ function Recipes() {
             </SidebarProvider>
           </div>
         </Block>
-        <Block title="Proposed goal" use="The goal the agent writes after its first look: the vague draft struck through, criteria marked as a command Mochi runs or you check. Settings › Goals decides Accept or Apply, with undo." wide>
+        <Block title="Proposed goal" use="The goal the agent writes after its first look: the vague draft struck through, criteria marked as a command Mochi runs or you check. Settings › Goals and checks decides Accept or Apply, with undo." wide>
           <div className="flex w-full flex-col gap-4">
             <ProposalCard thread={{ ...rl, proposal: proposalFixture(rl.activity.at(-1)?.at ?? 0, 'waiting') }} />
             <ProposalCard thread={{ ...rl, proposal: proposalFixture(rl.activity.at(-1)?.at ?? 0, 'applied') }} />

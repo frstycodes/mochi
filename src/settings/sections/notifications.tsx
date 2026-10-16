@@ -3,18 +3,24 @@ import { ALERT_KINDS } from '../../notify/model';
 import { useHarness } from '../../store';
 import { CatalogRow } from '../CatalogRow';
 import { SettingsGroup, SettingsRow } from '../parts';
+import { IDLE_ALERTS } from '../settingOptions';
 
 export function NotificationsSection() {
   return (
-    <div className="flex flex-col gap-8">
-      <SettingsGroup id="alertKinds" title="System alerts" footer="An OS notification while Mochi is in the background. Watched threads also alert when their turn finishes, fails or hits the usage limit, and with every window closed. Every notice still lands in the notification list.">
+    <div className="flex flex-col gap-10">
+      <SettingsGroup id="alertKinds" title="System alerts" footer="An OS notification while Mochi is in the background. Watched threads also alert when their turn finishes, fails or hits the usage limit. Every notice still lands in the notification list.">
         {Object.keys(ALERT_KINDS).map((kind) => (
           <CatalogRow key={kind} settingKey={`alert.${kind}`} />
         ))}
       </SettingsGroup>
-      <SettingsGroup footer="Toasts show while Mochi is in front, only for threads you watch.">
+      <SettingsGroup title="While Mochi is open">
         <CatalogRow settingKey="watchedToasts" />
         <CatalogRow settingKey="dockBadge" />
+      </SettingsGroup>
+      <SettingsGroup title="Idle threads" footer="When a thread you aren't looking at goes idle with one of these.">
+        {IDLE_ALERTS.map(({ value }) => (
+          <CatalogRow key={value} settingKey={`idleAlert.${value}`} />
+        ))}
       </SettingsGroup>
       <QuietHoursGroup />
       <MutedThreadsGroup />
@@ -25,7 +31,7 @@ export function NotificationsSection() {
 function QuietHoursGroup() {
   const { state } = useHarness();
   return (
-    <SettingsGroup footer="No alerts or toasts in these hours; the notification list still fills.">
+    <SettingsGroup title="Quiet hours">
       <CatalogRow settingKey="quietHours" />
       {state.notifications.quiet.isOn && (
         <>

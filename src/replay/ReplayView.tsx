@@ -545,7 +545,7 @@ function NothingRecorded({ header }: { header: ReactNode }) {
             <VideoPlay />
           </EmptyMedia>
           <EmptyTitle>Nothing recorded yet</EmptyTitle>
-          <EmptyDescription>Threads record what their agent does from the next message on, while Settings › Data › Record threads for replay is on.</EmptyDescription>
+          <EmptyDescription>Threads record what their agent does from the next message on, while Settings › Data and storage › Record threads for replay is on.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     </div>

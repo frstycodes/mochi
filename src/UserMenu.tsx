@@ -141,7 +141,7 @@ function SignedInLabel({ user, isPersistent }: { user: MochiUser; isPersistent: 
 
 const firstName = (name: string | null) => name?.trim().split(/\s+/)[0] || null;
 
-const THEMES = [
+export const THEMES = [
   { value: 'system', label: 'System', Icon: Monitor },
   { value: 'light', label: 'Light', Icon: Sun },
   { value: 'dark', label: 'Dark', Icon: Moon },

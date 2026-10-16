@@ -3,6 +3,7 @@ import { Add, Trash3 } from 'reicon-react';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -20,38 +21,49 @@ import { AgentConfigRows } from '../ProfileAgentConfig';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS } from '../harnesses';
 import { CatalogRow } from '../CatalogRow';
+import { useLinkedTab } from '../open';
 import { DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
 
-/** One group per profile: what it's called, how it looks in the sidebar, and what it signs in with. */
+/** One profile at a time behind a tab per profile: what it's called, how it looks in the sidebar, and what it signs in with. */
 export function ProfilesSection() {
   const profiles = useProfiles();
   const gh = useGhAccounts();
   const { confirm, dialog } = useConfirm();
+  const [shownId, setShownId] = useShownProfile(profiles);
+  const shown = profiles.find((p) => p.id === shownId) ?? profiles[0];
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
       <p className="type-meta text-muted-foreground">Each profile is a space in the sidebar with its own threads, agent accounts and browser logins. Switch with the icons at the bottom of the sidebar.</p>
       {!host.isDesktop && <DesktopOnlyNotice what="Choosing GitHub and agent accounts and clearing browsing data need the Mochi desktop app." />}
-      {profiles.map((profile) => (
-        <ProfileGroup key={profile.id} profile={profile} isLast={profiles.length === 1} gh={gh} confirm={confirm} />
-      ))}
-      <AddProfileGroup isFull={profiles.length >= MAX_PROFILES} />
+      <Tabs value={shown.id} onValueChange={setShownId} className="gap-4">
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+          {profiles.map((profile) => (
+            <TabsTrigger key={profile.id} value={profile.id} className="flex-none px-2">
+              <SpaceIcon space={profile} className="size-3.5" />
+              {profile.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={shown.id}>
+          <ProfileGroup key={shown.id} profile={shown} isLast={profiles.length === 1} gh={gh} confirm={confirm} />
+        </TabsContent>
+      </Tabs>
+      <AddProfileGroup isFull={profiles.length >= MAX_PROFILES} onAdded={setShownId} />
       {dialog}
     </div>
   );
 }
 
+/** The profile on screen: the one a deep link names (`<profileId>-<row>`), else the one you're in. */
+function useShownProfile(profiles: Space[]) {
+  const { state } = useHarness();
+  return useLinkedTab((settingId) => profiles.find((p) => settingId.startsWith(`${p.id}-`))?.id, state.spaceId);
+}
+
 function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast: boolean; gh: GhAccountsState; confirm: ReturnType<typeof useConfirm>['confirm'] }) {
   const { id } = profile;
   return (
-    <SettingsGroup
-      id={`${id}-profile`}
-      title={
-        <span className="flex items-center gap-1.5">
-          <SpaceIcon space={profile} className="size-3.5" />
-          {profile.name}
-        </span>
-      }
-    >
+    <SettingsGroup id={`${id}-profile`}>
       <CatalogRow settingKey="profile.name" profile={profile} />
       <CatalogRow settingKey="profile.icon" profile={profile} />
       {host.isDesktop && <GitHubAccountRow profile={profile} gh={gh} />}
@@ -210,12 +222,13 @@ function RemoveProfileRow({ profile, isLast }: { profile: Space; isLast: boolean
 
 const THREADS = new Intl.PluralRules('en');
 
-function AddProfileGroup({ isFull }: { isFull: boolean }) {
+function AddProfileGroup({ isFull, onAdded }: { isFull: boolean; onAdded: (id: string) => void }) {
   const { dispatch } = useHarness();
   const [name, setName] = useState<string | null>(null);
   const create = (value: string) => {
     const profile = addProfile(value);
     setName(null);
+    onAdded(profile.id);
     toast(`${profile.name} added`, { action: { label: 'Open', onClick: () => dispatch({ type: 'space', id: profile.id }) } });
   };
   return (

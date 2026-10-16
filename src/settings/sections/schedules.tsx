@@ -14,7 +14,7 @@ import { SettingsGroup, SettingsRow } from '../parts';
 export function SchedulesSection() {
   const triggers = useSchedules();
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-10">
       <SettingsGroup id="schedules" footer="Runs start each thread's agent in its worktree without opening it, while Mochi is running, windows open or not. Add one from a thread's menu or the clock in the new-thread composer.">
         {triggers.length === 0 && <SettingsRow label={<span className="text-muted-foreground">No schedules yet</span>} />}
         {triggers.map((t) => (

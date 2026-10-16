@@ -8,7 +8,7 @@ import { goalDraftRequest, localGoalDraft } from './draft';
 // Once per message per launch: a message no model could read keeps the local verdict.
 const asked = new Set<string>();
 
-/** Drafts a goal for each thread whose newest message has none yet, on the Settings › Background tasks model; never blocks the send. */
+/** Drafts a goal for each thread whose newest message has none yet, on the Settings › Models › Background tasks model; never blocks the send. */
 export function useGoalDrafts(threads: Thread[], dispatch: Dispatch<Action>) {
   useEffect(() => {
     for (const t of threads) {

@@ -26,6 +26,19 @@ export function groupThemes(installed: ColorTheme[]) {
   return { packages: [...packages.values()].sort((a, b) => a.displayName.localeCompare(b.displayName)), custom };
 }
 
+/**
+ * The packages a library filter shows, each with the themes to list: all of them when the package's name matches,
+ * otherwise only the themes whose label does. An empty query shows everything.
+ */
+export function filterPackages(packages: PackageGroup[], query: string) {
+  const q = query.trim().toLowerCase();
+  const matches = (text: string) => text.toLowerCase().includes(q);
+  return packages.flatMap((group) => {
+    const themes = !q || matches(group.displayName) ? group.themes : group.themes.filter((t) => matches(t.label));
+    return themes.length ? [{ group, themes }] : [];
+  });
+}
+
 /** The starred themes that are installed, in the order you starred them, and every other theme in its own order. */
 export function splitStarred(themes: ColorTheme[], starred: string[]) {
   const byId = new Map(themes.map((t) => [t.id, t]));

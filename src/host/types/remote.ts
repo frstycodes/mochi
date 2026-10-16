@@ -14,7 +14,7 @@ export type DeviceKind = (typeof DEVICE_KINDS)[number];
 /** A new device gets every scope but `terminal`: a terminal is a shell on this machine. */
 export const DEFAULT_SCOPES: Scope[] = ['read', 'operate', 'manage', 'code'];
 
-/** Settings › Devices, kept in main's userData. Off until you turn it on. */
+/** Settings › Remote access, kept in main's userData. Off until you turn it on. */
 export interface RemoteSettings {
   isEnabled: boolean;
   /** Binds the LAN and Tailscale addresses as well as 127.0.0.1. */
@@ -134,7 +134,7 @@ export interface RemoteCommandRequest {
 }
 
 /**
- * Settings › Devices, and the bridge that lets the renderer (the store's only writer) stream to devices and run their commands.
+ * Settings › Remote access, and the bridge that lets the renderer (the store's only writer) stream to devices and run their commands.
  * Main numbers nothing: the renderer numbers its actions within an `epoch` (one per page load and per turning streaming on).
  */
 export interface RemoteHost {

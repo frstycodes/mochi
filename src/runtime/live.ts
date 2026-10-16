@@ -152,7 +152,7 @@ function reattach(thread: Thread, prompt: string, onApiKey?: boolean, images?: A
   return start(thread, provider, controlsOf(thread), seed ? `${seed}\n\n${prompt}` : prompt, { resume, ...(forkAt && { forkAt }), useApiKey: onApiKey || thread.live?.isOnApiKey || undefined, ...(images && { images }), ...(skills && { skills }), ...remake });
 }
 
-/** A worktree thread whose agent ran in a worktree that's gone from the list (Settings › Git cleanup, Clean up settled worktrees). */
+/** A worktree thread whose agent ran in a worktree that's gone from the list (Settings › Git and worktrees cleanup, Clean up settled worktrees). */
 function isCleanedUp(thread: Thread) {
   if (!thread.repo || workspaceMode(thread.repo) !== 'worktree' || !thread.live?.cwd) return false;
   const root = projectRoot(thread.repo);

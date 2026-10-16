@@ -14,17 +14,35 @@ import { IconSwap, TooltipIconButton } from '../ui';
 import type { InstallState } from './AgentSettings';
 
 /**
- * An inset grouped list, like Apple's System Settings: an optional heading, rows on one card surface split by inset
- * hairlines, and the explanation as a footnote under the group. `id` makes the whole group a deep-link target.
+ * One titled section of a settings page: its heading (with an `action` on the right, such as tabs), what it holds, and a
+ * caveat as a footnote. `id` makes the whole section a deep-link target.
  */
-export function SettingsGroup({ id, title, footer, children }: { id?: string; title?: ReactNode; footer?: ReactNode; children: ReactNode }) {
+export function SettingsSection({ id, title, action, footer, children }: { id?: string; title?: ReactNode; action?: ReactNode; footer?: ReactNode; children: ReactNode }) {
   return (
-    <section data-setting-id={id} className="flex flex-col gap-1.5 rounded-xl transition-colors duration-700 data-flash:bg-accent/60">
-      {!!title && <h3 className="px-3 type-meta font-medium text-muted-foreground">{title}</h3>}
-      <div className="rounded-xl border bg-card">{children}</div>
-      {!!footer && <p className="px-3 type-caption text-muted-foreground">{footer}</p>}
+    <section data-setting-id={id} className="flex flex-col gap-2.5 rounded-xl transition-colors duration-700 data-flash:bg-accent/60">
+      {(!!title || !!action) && (
+        <div className="flex min-h-7 items-center justify-between gap-3 px-1">
+          {!!title && <h2 className="type-title">{title}</h2>}
+          {action}
+        </div>
+      )}
+      {children}
+      {!!footer && <p className="px-1 type-caption text-muted-foreground">{footer}</p>}
     </section>
   );
+}
+
+/** A section whose rows sit on one card surface, split by inset hairlines. */
+export function SettingsGroup({ children, ...section }: Omit<React.ComponentProps<typeof SettingsSection>, 'action'>) {
+  return (
+    <SettingsSection {...section}>
+      <SettingsCard>{children}</SettingsCard>
+    </SettingsSection>
+  );
+}
+
+export function SettingsCard({ children }: { children: ReactNode }) {
+  return <div className="rounded-xl border bg-card">{children}</div>;
 }
 
 /**
@@ -36,10 +54,10 @@ export function SettingsRow({ id, label, description, control, children, classNa
     <div
       data-setting-id={id}
       {...props}
-      className={cn("relative flex flex-col gap-2.5 px-3.5 py-2.5 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-3.5 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent", className)}
+      className={cn("relative flex flex-col gap-2.5 px-4 py-3 transition-colors duration-700 first:rounded-t-xl last:rounded-b-xl not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border data-flash:bg-accent", className)}
     >
       <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 *:not-first:shrink-0">
-        <div className="min-w-40 flex-1">
+        <div className="flex min-w-40 flex-1 flex-col gap-0.5">
           {id ? (
             <label htmlFor={settingControlId(id)} className="block type-body">
               {label}
@@ -196,11 +214,12 @@ export function SettingsSelect<T extends string>({
 }
 
 /** One of a few named values, as separate bordered toggles; the row's label names the group. */
-export function SettingsChoice<T extends string>({ id, value, options, onChange, ...props }: { id: string; value: T; options: readonly { value: T; label: string; className?: string }[]; onChange: (value: T) => void; 'aria-label'?: string }) {
+export function SettingsChoice<T extends string>({ id, value, options, onChange, ...props }: { id: string; value: T; options: readonly { value: T; label: string; icon?: ReactNode; className?: string }[]; onChange: (value: T) => void; 'aria-label'?: string }) {
   return (
     <ToggleGroup id={settingControlId(id)} aria-label={props['aria-label']} type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as T)}>
       {options.map((o) => (
         <ToggleGroupItem key={o.value} value={o.value} className={o.className}>
+          {o.icon}
           {o.label}
         </ToggleGroupItem>
       ))}

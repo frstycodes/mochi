@@ -77,7 +77,7 @@ function isDone(thread: Thread) {
 // Undo covers two changes at once, so it stays up longer than a plain toast.
 const UNDO_MS = 8000;
 
-/** The card's choice is Settings › Goals and drift's "Off-goal work branches from", so it sticks across threads. */
+/** The card's choice is Settings › Goals and checks's "Off-goal work branches from", so it sticks across threads. */
 function useRememberedBranchFrom() {
   const { branchFrom } = usePrefs();
   return [branchFrom, (next: BranchFrom) => setPrefs({ branchFrom: next })] as const;

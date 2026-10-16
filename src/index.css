@@ -27,7 +27,7 @@
     @slot;
   }
 }
-/* Settings › General › Reduce motion: `data-reduce-motion` on <html> overrides the OS setting either way. */
+/* Settings › Appearance › Reduce motion: `data-reduce-motion` on <html> overrides the OS setting either way. */
 @custom-variant motion-reduce {
   @media (prefers-reduced-motion: reduce) {
     &:where(:root:not([data-reduce-motion='off']) *) {
