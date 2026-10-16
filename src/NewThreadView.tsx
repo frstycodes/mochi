@@ -87,7 +87,7 @@ function NewThread() {
   // No thread is this page's own, so none is left out.
   const mention = useMentionMenu(layoutId, useThreadSkills(provider, spaceId, project), useThreadServers(provider, spaceId, project));
   // Slash tracks the caret always; the open menu owns the listbox attributes.
-  const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
+  const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
   useEffect(() => {
     mention.restore(saved?.mentions ?? []);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -176,9 +176,9 @@ function NewThread() {
               onControlsChange={setControls}
               slashItems={slashItems}
               {...menuProps}
-              onKeyDown={(e) => {
-                mention.textareaProps.onKeyDown(e);
-                if (!e.isPropagationStopped()) slash.textareaProps.onKeyDown(e);
+              onKeyDown={(e, view) => {
+                mention.editorProps.onKeyDown(e);
+                if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
               }}
               onSend={start}
               submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}

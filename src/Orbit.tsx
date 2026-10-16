@@ -293,7 +293,7 @@ function clamp(v: number, lo: number, hi: number) {
 
 // `data-no-orbit`: surfaces where holding the pointer still is part of the gesture (drawing on a screenshot).
 function isInteractive(target: EventTarget | null) {
-  return target instanceof Element && !!target.closest('button, a, input, textarea, select, [role="button"], [role="radio"], [role="slider"], [data-no-orbit], pre, code, p, h1, h2');
+  return target instanceof Element && !!target.closest('button, a, input, textarea, select, [contenteditable], [role="button"], [role="radio"], [role="slider"], [data-no-orbit], pre, code, p, h1, h2');
 }
 
 function useOrbitTriggers(handlers: {

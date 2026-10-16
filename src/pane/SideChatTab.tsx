@@ -2,11 +2,13 @@ import { ArrowUp, Broom, Document, MessageAdd, MessageQuestion, Send, X, type Ic
 import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageActions, MessageContent, MessageResponse } from '@/components/ai-elements/message';
-import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputHeader, PromptInputSubmit, PromptInputTextarea, PromptInputTools } from '@/components/ai-elements/prompt-input';
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputHeader, PromptInputProvider, PromptInputSubmit, PromptInputTools } from '@/components/ai-elements/prompt-input';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ComposerCard } from '../Composer';
+import { ComposerEditor } from '../chat/ComposerEditor';
+import type { SlashItem } from '../chat/slash';
 import { ModelPicker } from '../ModelControls';
 import { useSideChat } from '../sidechat/useSideChat';
 import { SOURCE_NAMES, type Quote, type QuoteSource, type SideMessage } from '../store/sidechat';
@@ -41,6 +43,7 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
       )}
       <div className="shrink-0 px-3 pb-3">
         <ComposerCard>
+          <PromptInputProvider>
           <PromptInput onSubmit={({ text }) => void (text.trim() && side.ask(text.trim()))}>
             {!!side.chat.draft && (
               <PromptInputHeader className="px-3 pt-3">
@@ -48,7 +51,7 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
               </PromptInputHeader>
             )}
             <PromptInputBody>
-              <PromptInputTextarea data-sidechat-input={thread.id} autoFocus={!!side.chat.draft} placeholder={side.chat.draft ? 'Ask about this selection' : 'Ask about this thread'} className="min-h-10 px-4 pt-3 type-prose max-md:text-base" />
+              <ComposerEditor items={NO_SLASH_ITEMS} attributes={{ 'data-sidechat-input': thread.id }} autoFocus={!!side.chat.draft} placeholder={side.chat.draft ? 'Ask about this selection' : 'Ask about this thread'} className="type-prose max-md:text-base" />
             </PromptInputBody>
             <PromptInputFooter className="px-2 pb-2">
               <PromptInputTools>
@@ -61,11 +64,14 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
               </PromptInputTools>
             </PromptInputFooter>
           </PromptInput>
+          </PromptInputProvider>
         </ComposerCard>
       </div>
     </div>
   );
 }
+
+const NO_SLASH_ITEMS: SlashItem[] = [];
 
 function HeaderAction({ label, icon: Icon, ...props }: { label: string; icon: IconComponent } & Omit<React.ComponentProps<typeof Button>, 'children'>) {
   return (

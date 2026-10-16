@@ -33,7 +33,7 @@ import { useSpace } from './store';
 import type { ThreadControls } from './runtime/controls';
 import { accessFor, PERMISSIONS, type Access } from './runtime/access';
 import type { SlashItem } from './chat/slash';
-import { TokenTextarea } from './chat/SlashToken';
+import { ComposerEditor } from './chat/ComposerEditor';
 import { clearDraft, getDraft, saveDraft, type DraftFile } from './chat/drafts';
 import { IMAGE_ERRORS, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES } from './chat/images';
 
@@ -68,13 +68,13 @@ export function useComposerHandoff(leafId: string) {
 /** The glass card. Holds an optional tray above a ComposerInput. */
 export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-composer transition-colors has-[textarea:focus]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
+    <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-composer transition-colors has-[.cm-focused]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
       <AutoHeight className="justify-end">{children}</AutoHeight>
     </div>
   );
 }
 
-type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | 'onSubmit'> & {
+type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> & {
   controls: ThreadControls;
   provider: Provider;
   /** Keeps the model list to `provider`. */
@@ -97,7 +97,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof TokenTextarea>, 'items' | '
   draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', isTextOnly, meter, draftKey, draftExtra, className, ...textareaProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', isTextOnly, meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
   const catalog = useModels(useSpace().id);
   const model = optionFor(catalog[provider], controls.model, provider);
   const defaults = useNewThreadDefaults(catalog, model);
@@ -111,7 +111,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
     <PromptInput multiple globalDrop accept={IMAGE_TYPES.join(',')} maxFileSize={MAX_IMAGE_BYTES} maxFiles={MAX_IMAGES} onError={(e) => toast.error(IMAGE_ERRORS[e.code])} onSubmit={send}>
       <ComposerAttachments />
       <PromptInputBody>
-        <TokenTextarea items={slashItems} className={cn('min-h-12 px-4 pt-3 type-prose max-md:text-base', className)} {...textareaProps} />
+        <ComposerEditor items={slashItems} className={cn('type-prose max-md:text-base', className)} {...editorProps} />
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>

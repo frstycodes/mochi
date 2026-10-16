@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { host } from '../../host';
+import { IS_MAC, IS_WINDOWS } from '../../keys';
 import { filterPackages, groupThemes, type PackageGroup } from '../../themes/groups';
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeKind, type ThemeSlot } from '../../themes/model';
 import type { MarketplaceExtension } from '../../themes/openVsx';
@@ -32,6 +33,7 @@ export function AppearanceSection() {
       <SettingsGroup title="Mode">
         <CatalogRow settingKey="theme" />
         <CatalogRow settingKey="reduceMotion" />
+        {HAS_MATERIAL && <CatalogRow settingKey="translucentSidebar" />}
       </SettingsGroup>
       <SettingsSection id="colorTheme" title="Color theme" footer="Arrow through or hover a theme to preview it; nothing changes until you pick one.">
         <div className="@container">
@@ -45,6 +47,9 @@ export function AppearanceSection() {
     </div>
   );
 }
+
+// Linux has no window material (electron/window.ts), so the switch would do nothing there.
+const HAS_MATERIAL = host.isDesktop && (IS_MAC || IS_WINDOWS);
 
 /** One appearance's theme as a small painted app; the whole card opens the picker. */
 function SlotCard({ slot }: { slot: ThemeSlot }) {

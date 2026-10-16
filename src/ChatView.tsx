@@ -5,6 +5,7 @@ import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
+import type { EditorView } from '@codemirror/view';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 import { ChevronDown, ChevronUp, Hourglass, Stars } from 'reicon-react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
@@ -332,7 +333,7 @@ function Composer({
   const isQueueing = shouldQueue(thread, whileWorking, isHeld);
   const queued = thread.queued ?? [];
   const { textInput, attachments } = usePromptInputController();
-  const textarea = useRef<HTMLTextAreaElement>(null);
+  const editor = useRef<EditorView>(null);
   const controls = controlsOf(thread);
   const workspace = useThreadWorkspace(thread);
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
@@ -345,7 +346,7 @@ function Composer({
   const items = useMemo(() => slashItems.map((i) => (i.source === 'mochi' && i.name === 'compact' && offReason ? { ...i, disabledReason: offReason } : i)), [slashItems, offReason]);
   const slash = useSlashMenu(items);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
-  const menuProps = { ...slash.textareaProps, ...(mention.isOpen && mention.textareaProps) };
+  const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
   const draftKey = threadDraftKey(thread.id);
   useSeedAttachment(thread.id === 'adm' && !getDraft(draftKey));
   const draftExtra = useMemo(() => (mention.mentions.length > 0 ? { mentions: mention.mentions } : undefined), [mention.mentions]);
@@ -370,7 +371,7 @@ function Composer({
     textInput.setInput(textInput.value.trim() ? `${textInput.value}\n${message.draft}` : message.draft);
     mention.restore(message.mentions);
     if (message.images?.length) attachments.add(imageFiles(message.images));
-    textarea.current?.focus();
+    editor.current?.focus();
   };
 
   return (
@@ -385,7 +386,7 @@ function Composer({
             <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, steers: true })} />
             <MentionChips menu={mention} />
             <ComposerInput
-              ref={textarea}
+              ref={editor}
               draftKey={draftKey}
               draftExtra={draftExtra}
               controls={controls}
@@ -417,12 +418,12 @@ function Composer({
               placeholder={placeholder(thread, decisions.length > 0, isQueueing)}
               autoFocus={handoff.isHandoff}
               {...menuProps}
-              onKeyDown={(e) => {
-                mention.textareaProps.onKeyDown(e);
-                if (!e.isPropagationStopped()) slash.textareaProps.onKeyDown(e);
+              onKeyDown={(e, view) => {
+                mention.editorProps.onKeyDown(e);
+                if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
                 if (e.key === MOD_KEY) setIsHeld(true);
                 const newest = queued.at(-1);
-                if (e.key !== 'ArrowUp' || e.defaultPrevented || e.altKey || e.shiftKey || isMod(e) || e.currentTarget.value || mention.mentions.length || !newest) return;
+                if (e.key !== 'ArrowUp' || e.defaultPrevented || e.altKey || e.shiftKey || isMod(e) || view.state.doc.length || mention.mentions.length || !newest) return;
                 e.preventDefault();
                 edit(newest);
               }}
