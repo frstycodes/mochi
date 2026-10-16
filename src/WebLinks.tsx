@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ArrowUpRight, Copy3, Global } from 'reicon-react';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
@@ -69,12 +69,12 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
   );
 }
 
-/** The page's favicon over a globe that shows until it loads, and stays when it never does; fixed size, so nothing shifts. */
-export function Favicon({ host }: { host: string }) {
+/** The page's favicon over `fallback` (a globe) that shows until it loads, and stays when it never does; fixed size, so nothing shifts. */
+export function Favicon({ host, fallback = <Global className="size-3.5 text-subtle-foreground" /> }: { host: string; fallback?: ReactNode }) {
   const [state, setState] = useState<'loading' | 'shown' | 'failed'>('loading');
   return (
     <span aria-hidden className="relative flex size-4 shrink-0 items-center justify-center">
-      {state !== 'shown' && <Global className="size-3.5 text-subtle-foreground" />}
+      {state !== 'shown' && fallback}
       {state !== 'failed' && (
         <img
           src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`}
