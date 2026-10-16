@@ -14,7 +14,7 @@ export const DEVICE_KINDS = ['mac', 'windows', 'linux', 'phone'] as const;
 
 export type DeviceKind = (typeof DEVICE_KINDS)[number];
 
-/** A new device gets every scope but `terminal`: a terminal is a shell on this machine. */
+/** A new member gets every scope but `terminal` on each computer: a terminal is a shell on that machine. */
 export const DEFAULT_SCOPES: Scope[] = ['read', 'operate', 'manage', 'code'];
 
 /** Settings › Remote access, kept in main's userData. Off until you turn it on. */
@@ -30,31 +30,31 @@ export interface RemoteSettings {
 
 export type RelayState = { status: 'off' } | { status: 'connecting' } | { status: 'connected' } | { status: 'error'; error: string };
 
-/** A device this computer approved; only its public key, kept here and nowhere else. */
-export interface PairedDeviceInfo {
+/** Another computer among yours (DEVICES.md › Pairing), with what it may do on this one. */
+export interface MemberInfo {
+  /** Its key's id. */
   id: string;
   name: string;
-  /** Missing for a device paired before devices named their kind. */
   kind?: DeviceKind;
   scopes: Scope[];
-  pairedAt: number;
+  /** Epoch ms it was first vouched for. */
+  addedAt: number;
+  /** How this computer's connection to it stands, once it knows where it is. */
+  machineStatus?: FollowedMachine['status'];
 }
 
-/** Another computer on your account, as the relay lists it. */
+/** A computer on your account that isn't among yours yet, as the relay lists it. */
 export interface OtherMachine {
   id: string;
   name: string;
-  /** Known once paired: the relay doesn't list it. */
-  kind?: DeviceKind;
   isOnline: boolean;
-  isPaired: boolean;
-  /** The six digits both screens show while pairing with it. */
+  /** The six digits both screens show while joining. */
   pairingCode: string;
 }
 
 /**
- * Another computer of yours that this one follows as a device. `refused`: it said no (removed this computer, or its key
- * changed), so nothing retries until you pair again.
+ * Another computer of yours that this one follows as a device. `refused`: it said no (it doesn't trust this computer yet,
+ * or removed it), so nothing retries until the membership records change.
  */
 export interface FollowedMachine {
   id: string;
@@ -97,7 +97,10 @@ export interface RemoteStatus {
   /** `host:port` the server listens on; empty while it is off. */
   addresses: string[];
   devices: ConnectedDevice[];
-  pairedDevices: PairedDeviceInfo[];
+  /** Your other computers. */
+  members: MemberInfo[];
+  /** Another of your computers removed this one: it trusts nobody until it joins again. */
+  isRemoved: boolean;
   relay: RelayState;
   /** Why the server isn't listening, when it should be (port taken, interface gone). */
   error?: string;
@@ -222,17 +225,16 @@ export interface RemoteHost {
   onSnapshotRequest(listener: (requestId: string) => void): () => void;
   onCommand(listener: (request: RemoteCommandRequest) => void): () => void;
   commandResult(id: string, result: CommandResult): Promise<void>;
-  /** Forgets a paired device and ends its connections; it has to pair again. */
-  removeDevice(id: string): Promise<RemoteStatus>;
-  /** What a paired device may do; its open connections end so the next one runs under these. */
+  /** Removes a computer from all of yours and ends its connections everywhere; it has to join again. */
+  removeMember(id: string): Promise<RemoteStatus>;
+  /** What a member may do here; its open connections end so the next one runs under these. */
   setDeviceScopes(id: string, scopes: Scope[]): Promise<RemoteStatus>;
   onApproval(listener: (request: ApprovalRequest) => void): () => void;
   answerApproval(id: string, isAllowed: boolean): Promise<void>;
-  /** Your account's other computers, through the relay. */
+  /** Computers on your account that aren't among yours yet, through the relay. */
   otherMachines(): Promise<OtherMachine[]>;
-  /** Pairs with another computer of yours; resolves once it allowed this one, rejects with its reason otherwise. */
-  pair(machineId: string): Promise<void>;
-  forgetMachine(machineId: string): Promise<void>;
+  /** Joins your computers through that one; resolves once it allowed this one, rejects with its reason otherwise. */
+  join(machineId: string): Promise<void>;
   /** The computers this one follows, and how each connection stands. */
   machines(): Promise<FollowedMachine[]>;
   onMachines(listener: (machines: FollowedMachine[]) => void): () => void;
@@ -255,13 +257,12 @@ export const remoteMethods = {
   onSnapshotRequest: 'event',
   onCommand: 'event',
   commandResult: 'invoke',
-  removeDevice: 'invoke',
+  removeMember: 'invoke',
   setDeviceScopes: 'invoke',
   onApproval: 'event',
   answerApproval: 'invoke',
   otherMachines: 'invoke',
-  pair: 'invoke',
-  forgetMachine: 'invoke',
+  join: 'invoke',
   machines: 'invoke',
   onMachines: 'event',
   follow: 'invoke',

@@ -257,8 +257,8 @@ export const SETTINGS_SECTIONS = [
       { id: 'remoteNetwork', label: 'Allow devices on this network', keywords: 'lan tailscale wifi firewall remote' },
       { id: 'machineName', label: 'Computer name', keywords: 'machine host name remote' },
       { id: 'remoteAnywhere', label: 'Reach this computer from anywhere', keywords: 'relay internet away remote account' },
-      { id: 'pairedDevices', label: 'Paired devices', keywords: 'remove trusted devices approve connected' },
-      { id: 'otherComputers', label: 'Your other computers', keywords: 'pair computer machine account relay' },
+      { id: 'members', label: 'Your computers', keywords: 'remove trusted devices members approve connected scopes pair' },
+      { id: 'otherComputers', label: 'Join your computers', keywords: 'join pair computer machine account relay code' },
     ],
   },
   {

@@ -4,7 +4,7 @@ import { host } from '../host';
 import type { ApprovalRequest } from '../host/types/remote';
 import { PairingCode } from './PairingCode';
 
-/** "Allow <device>?" when a device of yours pairs through the relay. Unanswered by its deadline, it closes as No in main too. */
+/** "Let <computer> join?" when a computer of yours joins through this one. Unanswered by its deadline, it closes as No in main too. */
 export function DeviceApprovalLayer() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([]);
   useEffect(() => host.remote.onApproval((request) => setRequests((all) => [...all, request])), []);
@@ -24,17 +24,17 @@ export function DeviceApprovalLayer() {
       {!!request && (
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Allow “{request.name}” to control this computer?</AlertDialogTitle>
+            <AlertDialogTitle>Let “{request.name}” join your computers?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="flex flex-col gap-3">
-                <p>It will follow and steer the threads here. Allow it only if “{request.name}” shows this code:</p>
+                <p>It will reach every computer of yours, and they it, to follow and steer their threads. Allow it only if “{request.name}” shows this code:</p>
                 <PairingCode code={request.pairingCode} />
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Don’t allow</AlertDialogCancel>
-            <AlertDialogAction onClick={() => answer(true)}>Allow</AlertDialogAction>
+            <AlertDialogAction onClick={() => answer(true)}>Let it join</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       )}

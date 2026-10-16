@@ -58,6 +58,8 @@ export interface HelloFrame {
   type: 'hello';
   version: number;
   resume?: { epoch: string; seq: number };
+  /** The device's membership records, unchecked here: `members.ts` parses and weighs them. */
+  members?: unknown;
 }
 
 export interface CommandFrame {
@@ -69,8 +71,11 @@ export interface CommandFrame {
 
 export type ServerFrame =
   /** `addresses`: where the machine listens on its LAN or Tailscale, so the device tries those before the relay next time. */
-  | { type: 'welcome'; version: number; deviceId: string; machineName: string; machineKind: DeviceKind; scopes: Scope[]; addresses: string[] }
+  /** `members`: the machine's membership records, so each side learns the other's computers over a direct link too. */
+  | { type: 'welcome'; version: number; deviceId: string; machineName: string; machineKind: DeviceKind; scopes: Scope[]; addresses: string[]; members?: unknown }
   | { type: 'refused'; reason: string }
+  /** The machine's membership records changed (a computer joined or was removed). */
+  | { type: 'members'; members: unknown }
   | StreamFrame
   | ({ type: 'result'; id: string } & CommandResult);
 
@@ -93,9 +98,10 @@ export function parseHello(raw: string): HelloFrame | string {
   if (frame?.type !== 'hello') return 'The first frame must be hello';
   if (frame.version !== PROTOCOL_VERSION) return `This machine speaks protocol ${PROTOCOL_VERSION}; update Mochi on both sides`;
   const resume = frame.resume as Record<string, unknown> | undefined;
-  if (resume === undefined) return { type: 'hello', version: PROTOCOL_VERSION };
+  const members = frame.members !== undefined && { members: frame.members };
+  if (resume === undefined) return { type: 'hello', version: PROTOCOL_VERSION, ...members };
   if (!isString(resume?.epoch, MAX_ID) || !resume.epoch || !Number.isSafeInteger(resume.seq) || (resume.seq as number) < 0) return 'resume must be { epoch, seq }';
-  return { type: 'hello', version: PROTOCOL_VERSION, resume: { epoch: resume.epoch, seq: resume.seq as number } };
+  return { type: 'hello', version: PROTOCOL_VERSION, resume: { epoch: resume.epoch, seq: resume.seq as number }, ...members };
 }
 
 /** This computer's kind, from its OS. */
@@ -110,7 +116,7 @@ export function parseServerFrame(raw: string): ServerFrame | null {
   return SERVER_FRAMES.includes(frame?.type as never) ? (frame as unknown as ServerFrame) : null;
 }
 
-const SERVER_FRAMES = ['welcome', 'refused', 'snapshot', 'action', 'result'] satisfies ServerFrame['type'][];
+const SERVER_FRAMES = ['welcome', 'refused', 'members', 'snapshot', 'action', 'result'] satisfies ServerFrame['type'][];
 
 export function parseCommand(raw: string): CommandFrame | string {
   const frame = parseJson(raw);

@@ -2,9 +2,9 @@ import { app, BrowserWindow, safeStorage, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
-import { join } from 'node:path';
+import { join as joinPath } from 'node:path';
 import sodium from 'libsodium-wrappers';
-import type { ApprovalRequest, CommandResult, FollowedMachine, OtherMachine, RelayState, RemoteCommand, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
+import type { ApprovalRequest, CommandResult, FollowedMachine, MemberInfo, OtherMachine, RelayState, RemoteCommand, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
 import { accessToken, current as currentAccount, onAccountChange } from '../account/session.ts';
 import { createWindow, mainWindow } from '../window.ts';
 import { MachineCache } from './cache.ts';
@@ -13,11 +13,12 @@ import { loadDeviceKeys, type DeviceKeys } from './crypto/keys.ts';
 import { networkHosts } from './interfaces.ts';
 import type { RawLink } from './link.ts';
 import type { PairedMachine } from './registry.ts';
+import { approveMember, mergeRecords, parseRecords, resolveMembers, signMember, signRemoval, vouches, type MemberRecord, type Membership } from './members.ts';
 import { ActionLog } from './log.ts';
 import { APPROVAL_TIMEOUT_MS, deviceId, pairingCode, secureAsDevice, secureAsMachine, type Origin } from './pairing.ts';
-import { asKind, PROTOCOL_VERSION, type ServerFrame } from './protocol.ts';
+import { asKind, PROTOCOL_VERSION, THIS_KIND, type ServerFrame } from './protocol.ts';
 import { Registry } from './registry.ts';
-import { connectMachine, listMachines, openDeviceChannel, type MachineConnection } from './relayClient.ts';
+import { connectMachine, forgetMachineAtRelay, listMachines, listMembers, openDeviceChannel, publishMembers, type MachineConnection } from './relayClient.ts';
 import { startRemoteServer, type RemoteServer, type RendererBridge } from './server.ts';
 
 // One fixed port; a setting if it collides with something users run. `MOCHI_REMOTE_PORT` lets a dev run sit beside an installed Mochi.
@@ -27,7 +28,7 @@ const COMMAND_TIMEOUT_MS = 30_000;
 const DEFAULTS: RemoteSettings = { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false };
 const WELCOME_TIMEOUT_MS = 15_000;
 
-const file = () => join(app.getPath('userData'), 'remote.json');
+const file = () => joinPath(app.getPath('userData'), 'remote.json');
 const log = new ActionLog();
 let settings = DEFAULTS;
 let server: RemoteServer | undefined;
@@ -47,7 +48,10 @@ let isQuitting = false;
 const snapshots = new Map<string, (snapshot: Awaited<ReturnType<RendererBridge['snapshot']>>) => void>();
 const results = new Map<string, (result: CommandResult) => void>();
 /** The computers this one follows as a device, by machine id. */
-const followers = new Map<string, MachineFollower>();
+const followers = new Map<string, MachineFollower & { publicKey: string }>();
+/** Who this computer trusts, from the records in `devices.json`; set by the first `absorb`. */
+let membership: Membership | undefined;
+let absorbing: Promise<unknown> = Promise.resolve();
 
 /** Reads Settings › Remote access and, when it is on, starts listening and keeps the renderer alive. */
 export function startRemote() {
@@ -67,6 +71,7 @@ export function startRemote() {
   // Signing in or out starts or stops the relay connection.
   onAccountChange((account) => {
     if (settings.isEnabled && settings.reachesAnywhere) void restart();
+    if (account.status === 'signed-in') void pullMembers();
     // Signing in opens the relay route to computers that weren't reachable; signing out ends it.
     for (const follower of followers.values()) {
       const { status, route } = follower.state();
@@ -75,18 +80,25 @@ export function startRemote() {
   });
   if (settings.isEnabled) void restart();
   app.on('will-quit', () => followers.forEach((f) => f.close()));
-  syncFollowers();
+  void absorb([]).then(pullMembers);
 }
 
 export function remoteStatus(): RemoteStatus {
-  const pairedDevices = theRegistry().devices().map(({ id, name, kind, scopes, pairedAt }) => ({ id, name, kind, scopes, pairedAt }));
-  return { settings, hostName: hostname(), addresses: server?.addresses ?? [], devices: server?.devices() ?? [], pairedDevices, relay: relayState, ...(error && { error }) };
+  const registry = theRegistry();
+  const members = registry.devices().map(({ id, name, kind, scopes, pairedAt, publicKey }): MemberInfo => {
+    const machine = registry.machines().find((m) => m.publicKey === publicKey);
+    const followed = machine && followers.get(machine.id)?.state();
+    return { id, name, kind: followed?.kind ?? kind, scopes, addedAt: pairedAt, ...(followed && { machineStatus: followed.status }) };
+  });
+  return { settings, hostName: hostname(), addresses: server?.addresses ?? [], devices: server?.devices() ?? [], members, isRemoved: membership?.isRemoved ?? false, relay: relayState, ...(error && { error }) };
 }
 
 export async function setRemote(patch: Partial<RemoteSettings>) {
   const previous = settings;
   settings = { ...settings, ...patch };
   writeFileSync(file(), JSON.stringify(settings), { mode: 0o600 });
+  // Its own record carries its name: renaming signs a new one.
+  if (settings.machineName !== previous.machineName) void absorb([]);
   if (settings.isEnabled !== previous.isEnabled || settings.allowsNetwork !== previous.allowsNetwork || settings.reachesAnywhere !== previous.reachesAnywhere) await restart();
   else broadcast();
   return remoteStatus();
@@ -109,10 +121,15 @@ export function answerCommand(sender: WebContents, id: string, result: CommandRe
   results.delete(id);
 }
 
-export function removeDevice(id: string) {
-  theRegistry().removeDevice(id);
-  server?.disconnect(id);
-  broadcast();
+/**
+ * Removes a member from all your computers: a signed removal, spread like any record, ends its connections wherever it
+ * arrives. It joins again only with a new approval.
+ */
+export async function removeMember(id: string) {
+  const machineId = theRegistry().machines().find((m) => m.publicKey === theRegistry().findDevice(id)?.publicKey)?.id;
+  await absorb([signRemoval(await theKeys(), id, Date.now())]);
+  // Off the relay's list too, which closes its relay socket; it registers again if it is still running, as a stranger.
+  if (machineId && currentAccount().status === 'signed-in') await forgetMachineAtRelay(await accessToken(), machineId).catch(() => {});
   return remoteStatus();
 }
 
@@ -153,39 +170,34 @@ async function secure(raw: RawLink, origin: Origin) {
   const secured = await secureAsMachine(raw, origin, {
     keys: await theKeys(),
     find: (id) => registry.findDevice(id),
+    refresh: pullMembers,
     approve,
-    add: (device) => {
-      const added = registry.addDevice(device);
-      broadcast();
-      return added;
+    add: async (device) => {
+      await absorb([approveMember(registry.records() ?? [], await theKeys(), device, Date.now())]);
+      return registry.findDevice(device.id);
     },
   });
   if ('device' in secured) registry.setDeviceKind(secured.device.deviceId, secured.device.kind);
   return secured;
 }
 
-/** Your account's other computers, from the relay, each with the code both screens show if you pair with it. */
+/** Computers on your account that aren't members yet, from the relay, each with the code both screens show to join. */
 export async function otherMachines(): Promise<OtherMachine[]> {
-  const [listed, own] = await Promise.all([listMachines(await accessToken()), theKeys()]);
+  const [listed, own] = await Promise.all([listMachines(await accessToken()), theKeys(), pullMembers()]);
   await sodium.ready;
   const registry = theRegistry();
+  const isMember = (publicKey: string) => publicKey === sodium.to_base64(own.publicKey, sodium.base64_variants.ORIGINAL) || registry.devices().some((d) => d.publicKey === publicKey);
   return listed
-    .filter((m) => m.id !== registry.machineId)
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      isOnline: m.isOnline,
-      isPaired: registry.machines().some((p) => p.id === m.id && p.publicKey === m.publicKey),
-      kind: registry.machines().find((p) => p.id === m.id)?.kind,
-      pairingCode: pairingCode(sodium.from_base64(m.publicKey, sodium.base64_variants.ORIGINAL), own.publicKey),
-    }));
+    .filter((m) => m.id !== registry.machineId && !isMember(m.publicKey))
+    .map((m) => ({ id: m.id, name: m.name, isOnline: m.isOnline, pairingCode: pairingCode(sodium.from_base64(m.publicKey, sodium.base64_variants.ORIGINAL), own.publicKey) }));
 }
 
 /**
- * Pairs this computer, as a device, with another of yours: through the relay, its key checked against the relay's listing
- * and, by you, the code on both screens. Resolves once that computer allowed this one and welcomed it.
+ * Joins your computers through one of them: through the relay, its key checked against the relay's listing and, by you,
+ * the code on both screens. Once it allowed this one, each vouches for the other, and every member's records reach this
+ * computer, so it reaches all of them and they it with no more prompts.
  */
-export async function pair(machineId: string) {
+export async function join(machineId: string) {
   const token = await accessToken();
   const [listed, own] = await Promise.all([listMachines(token), theKeys()]);
   const machine = listed.find((m) => m.id === machineId);
@@ -207,21 +219,65 @@ export async function pair(machineId: string) {
     });
     if (welcome.type === 'refused') throw new Error(welcome.reason);
     if (welcome.type !== 'welcome') throw new Error('That computer answered something unexpected');
-    theRegistry().addMachine({ id: machine.id, name: machine.name, kind: asKind(welcome.machineKind), publicKey: machine.publicKey });
+    const theirs = parseRecords(welcome.members);
+    const vouch = approveMember([...(theRegistry().records() ?? []), ...theirs], own, { publicKey: machine.publicKey, machineId: machine.id, name: machine.name, kind: asKind(welcome.machineKind) }, Date.now());
+    await absorb([...theirs, vouch]);
   } finally {
-    raw.close(1000, 'Paired');
+    raw.close(1000, 'Joined');
   }
-  // A new key (paired again after a change) needs a new connection, not the old one's.
-  followers.get(machineId)?.close();
-  followers.delete(machineId);
-  syncFollowers();
+  await pullMembers();
 }
 
-export function forgetMachine(machineId: string) {
-  theRegistry().removeMachine(machineId);
-  theCache().remove(machineId);
-  syncFollowers();
+/**
+ * Folds membership records in from anywhere (the relay, a link, this computer's own signatures), then works out again who
+ * this computer trusts: devices and followed machines follow, and anything new reaches the relay and every connected
+ * device. One at a time, so two arrivals never lose each other's records.
+ */
+function absorb(incoming: MemberRecord[]): Promise<void> {
+  const run = absorbing.then(() => applyRecords(incoming));
+  absorbing = run.catch(() => {});
+  return run;
 }
+
+async function applyRecords(incoming: MemberRecord[]) {
+  await sodium.ready;
+  const self = await theKeys();
+  const registry = theRegistry();
+  const held = registry.records();
+  const merged = mergeRecords(held ?? legacyRecords(self), incoming);
+  const resolved = resolveMembers(merged.records, self);
+  const fresh = vouches(merged.records, resolved, self, { machineId: registry.machineId, name: settings.machineName || hostname(), kind: THIS_KIND }, Date.now());
+  const records = mergeRecords(merged.records, fresh).records;
+  const isChanged = !held || merged.changed || fresh.length > 0;
+  if (!isChanged && membership) return;
+  membership = resolved;
+  if (isChanged) registry.saveRecords(records);
+  for (const id of registry.reconcile([...resolved.members.values()], deviceId(self.publicKey))) server?.disconnect(id);
+  syncFollowers();
+  broadcast();
+  if (!isChanged) return;
+  server?.publishMembers(records);
+  // GAP: a failed publish waits for the next change or connection to reach the relay; links still carry the records.
+  if (currentAccount().status === 'signed-in') await accessToken().then((token) => publishMembers(token, records)).catch(() => {});
+}
+
+/** Pairings from before membership: this computer signs a record for each, dated when it paired. */
+function legacyRecords(self: DeviceKeys): MemberRecord[] {
+  const { devices, machines } = theRegistry().legacy();
+  return [
+    ...machines.map((m) => signMember(self, { publicKey: m.publicKey, machineId: m.id, name: m.name, kind: m.kind }, m.pairedAt)),
+    ...devices.map((d) => signMember(self, { publicKey: d.publicKey, name: d.name, kind: d.kind }, d.pairedAt)),
+  ];
+}
+
+/** The account's records from the relay, when signed in. Offline computers catch up here when they next connect. */
+async function pullMembers() {
+  if (currentAccount().status !== 'signed-in') return;
+  const listed = await accessToken().then(listMembers).catch(() => null);
+  if (listed) await absorb(parseRecords(listed));
+}
+
+const ownRecords = () => theRegistry().records() ?? [];
 
 /** The main window's latest copy of a followed machine's store, kept for the next launch and for reading it offline. */
 export function cacheMachine(sender: WebContents, machineId: string, saved: string) {
@@ -251,25 +307,39 @@ export function commandMachine(machineId: string, command: RemoteCommand): Promi
 function syncFollowers() {
   const machines = theRegistry().machines();
   for (const [id, follower] of followers) {
-    if (machines.some((m) => m.id === id)) continue;
+    if (machines.some((m) => m.id === id && m.publicKey === follower.publicKey)) continue;
     follower.close();
     followers.delete(id);
+    theCache().remove(id);
   }
-  for (const machine of machines) if (!followers.has(machine.id)) followers.set(machine.id, startFollowing(machine));
+  for (const machine of machines) {
+    const follower = followers.get(machine.id);
+    // It refused this computer before it heard this one joined; it may know now.
+    if (follower?.state().status === 'refused') follower.resync();
+    if (!follower) followers.set(machine.id, startFollowing(machine));
+  }
   broadcastMachines();
 
   function startFollowing(machine: PairedMachine) {
-    return followMachine({
+    const follower = followMachine({
       machine: { ...machine, lastSeenAt: theCache().savedAt(machine.id) },
       routes: () => routesTo(machine.id),
       secure: async (raw) => {
         await sodium.ready;
         return secureAsDevice(raw, await theKeys(), sodium.from_base64(machine.publicKey, sodium.base64_variants.ORIGINAL), settings.machineName || hostname(), true);
       },
-      onChange: broadcastMachines,
+      onChange: (state) => {
+        broadcastMachines();
+        broadcast();
+        // A refusal may mean it removed this computer: the records say so, and whether to join again.
+        if (state.status === 'refused') void pullMembers();
+      },
       onFrame: (frame) => mainWindow()?.webContents.send('remote:onMachineFrame', { machineId: machine.id, frame }),
       onWelcome: (welcome) => theRegistry().noteWelcome(machine.id, welcome),
+      members: ownRecords,
+      onMembers: (members) => void absorb(parseRecords(members)),
     });
+    return Object.assign(follower, { publicKey: machine.publicKey });
   }
 }
 
@@ -328,7 +398,17 @@ function restart() {
     // GAP: addresses are read once here; after joining another network, turn the setting off and on to bind the new one.
     const hosts = ['127.0.0.1', ...(settings.allowsNetwork ? networkHosts() : [])];
     try {
-      server = await startRemoteServer({ hosts, port: REMOTE_PORT, secure, bridge, log, machineName: () => settings.machineName || hostname(), onDevicesChange: broadcast });
+      server = await startRemoteServer({
+        hosts,
+        port: REMOTE_PORT,
+        secure,
+        bridge,
+        log,
+        machineName: () => settings.machineName || hostname(),
+        onDevicesChange: broadcast,
+        members: ownRecords,
+        onMembers: (members) => void absorb(parseRecords(members)),
+      });
     } catch (e) {
       error = (e as NodeJS.ErrnoException).code === 'EADDRINUSE' ? `Port ${REMOTE_PORT} is already in use` : String(e);
     }
@@ -350,6 +430,7 @@ async function startRelay(listening: RemoteServer) {
       relayState = state;
       broadcast();
     },
+    onMembers: () => void pullMembers(),
   });
 }
 

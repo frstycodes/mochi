@@ -11,7 +11,8 @@ import type { Link, RawLink } from './link.ts';
  *   device → machine   { type: 'pair', version, name, kind, publicKey, hello, isReturning? }   its key, and a handshake signed with it
  *   machine → device   { type: 'paired', hello } | { type: 'refused', reason }
  *
- * The machine trusts only keys it approved on its own screen; the relay vouches for nothing but the account.
+ * The machine trusts only its members' keys (`members.ts`): ones some computer of yours approved on its own screen. The
+ * relay vouches for nothing but the account.
  */
 export const PAIRING_VERSION = 1;
 const MAX_NAME = 64;
@@ -42,9 +43,12 @@ export interface PairedDevice {
 export interface MachineSide {
   keys: DeviceKeys;
   find(deviceId: string): PairedDevice | undefined;
-  /** "Allow <name>?" on this machine's screen, showing `code`; false on No or after `APPROVAL_TIMEOUT_MS`. */
+  /** Fetches the account's membership records, for a key another computer may have approved since. */
+  refresh(): Promise<void>;
+  /** "Let <name> join?" on this machine's screen, showing `code`; false on No or after `APPROVAL_TIMEOUT_MS`. */
   approve(request: { name: string; code: string }): Promise<boolean>;
-  add(device: { id: string; name: string; kind?: DeviceKind; publicKey: string }): PairedDevice;
+  /** Vouches for the device as a member, and has the record reach the relay before the device hears it was allowed. */
+  add(device: { id: string; name: string; kind?: DeviceKind; publicKey: string }): Promise<PairedDevice | undefined>;
 }
 
 export type Secured = { link: Link; device: AuthenticatedDevice } | { refusal: string };
@@ -66,15 +70,18 @@ export async function secureAsMachine(raw: RawLink, origin: Origin, side: Machin
     return refuse(raw, 'The pairing request wasn’t signed by the key it names');
   }
   let device = side.find(id);
+  // Another computer of yours may have let it join since this one last heard.
+  if (!device && origin === 'relay') device = await side.refresh().then(() => side.find(id), () => undefined);
   if (!device) {
     // On the LAN nothing vouches that the device is yours; through the relay it is signed in to your account.
-    if (origin === 'lan') return refuse(raw, 'Pair this device through your Mochi account first');
+    if (origin === 'lan') return refuse(raw, 'Join your computers through your Mochi account first');
     // Reconnecting on its own after being removed here: nobody at that device asked, so nobody here is asked either.
-    if (pair.isReturning) return refuse(raw, 'That computer removed this one; pair again');
+    if (pair.isReturning) return refuse(raw, 'That computer doesn’t trust this one; join again');
     const isAllowed = await side.approve({ name: pair.name, code: pairingCode(side.keys.publicKey, pair.publicKey) });
     if (!isAllowed) return refuse(raw, 'That computer didn’t allow this one');
     if (!raw.isOpen()) return { refusal: 'The device left' };
-    device = side.add({ id, name: pair.name, kind: pair.kind, publicKey: sodium.to_base64(pair.publicKey, sodium.base64_variants.ORIGINAL) });
+    device = await side.add({ id, name: pair.name, kind: pair.kind, publicKey: sodium.to_base64(pair.publicKey, sodium.base64_variants.ORIGINAL) });
+    if (!device) return refuse(raw, 'This computer couldn’t vouch for that one');
   }
   sendJson(raw, { type: 'paired', hello: b64(handshake.hello) });
   return { link: encrypted(raw, session), device: { deviceId: device.id, name: device.name, kind: pair.kind, scopes: device.scopes } };
