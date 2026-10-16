@@ -36,13 +36,13 @@ export function FileViewer() {
   return (
     <DialogPrimitive.Root open={!!file} onOpenChange={(open) => !open && openFiles(null)}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           onKeyDown={onKeyDown}
           // Focusing the first header button would pop its tooltip on open; the dialog itself still takes Esc and the arrows.
           onOpenAutoFocus={(e) => (e.preventDefault(), (e.currentTarget as HTMLElement).focus())}
-          className="fixed inset-0 z-50 flex flex-col outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.98] data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none"
+          className="fixed inset-0 z-50 flex flex-col outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none"
         >
           {!!file && <FilePane key={`${index}:${viewerPath(file)}`} file={file} position={step && `${index + 1} of ${files.length}`} onStep={step} />}
           {files.length > 1 && <FileStrip files={files} index={index} onSelect={setIndex} />}
