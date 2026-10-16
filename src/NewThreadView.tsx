@@ -127,13 +127,16 @@ function NewThread() {
   const start = async ({ text, files }: PromptInputMessage) => {
     const title = text.trim();
     if (!title) return;
-    // GAP: another computer's thread starts with its model only; effort, speed, permissions and the worktree choice are that computer's defaults.
+    // Worktree or folder is that computer's default, which follows yours (`workspaceMode` is shared).
     if (remote) {
-      if (files.length > 0 || mention.mentions.length > 0) {
-        toast.error(`Images and references can’t go to ${remote.name} yet`);
+      // A reference names a thread or file on this computer, which means nothing there.
+      const problem = mention.mentions.length > 0 ? `References can’t go to ${remote.name}` : imageProblem(files);
+      if (problem) {
+        toast.error(problem);
         return false;
       }
-      const result = await machines.run(remote.id, { type: 'create', title, provider, project: remoteProject, ...(picked && { model: controls.model }) });
+      const images = await sentImages(files);
+      const result = await machines.run(remote.id, { type: 'create', title, provider, project: remoteProject, ...(picked && { controls }), ...(images.length > 0 && { images }) });
       if (!result.isOk) return false;
       return void toast.success(`Started on ${remote.name}`, { description: 'It’s in the sidebar under that computer.' });
     }
@@ -192,7 +195,6 @@ function NewThread() {
                 }}
                 onSend={start}
                 submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
-                hasNoAttachments={!!remote}
                 meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
                 placeholder={placeholder(remote?.name, remote ? remoteProject : project)}
               />
@@ -201,7 +203,12 @@ function NewThread() {
         </div>
         <ComposerMeta>
           <RunsOnMenu value={runsOn} onChange={changeRunsOn} />
-          {!!remote && <ProjectPicker value={remoteProject} onChange={setRemoteProject} projects={catalog?.projects.map((p) => p.ref) ?? []} />}
+          {!!remote && (
+            <>
+              <ProjectPicker value={remoteProject} onChange={setRemoteProject} projects={catalog?.projects.map((p) => p.ref) ?? []} />
+              {!!remoteProject && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+            </>
+          )}
           {!remote && (
             <>
               <ProjectPicker value={project} onChange={changeProject} />

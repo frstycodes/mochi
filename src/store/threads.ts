@@ -9,7 +9,7 @@ import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
 import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { goalProgress } from '../progress.ts';
-import { reorderThreads } from '../reorder.ts';
+import { pinAt, reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents, overlapEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
@@ -104,7 +104,10 @@ export type ThreadsAction =
   | { type: 'idle-start'; threadId: string }
   | { type: 'idle-update'; threadId: string; patch: Partial<Omit<IdleCheck, 'at'>> }
   | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
-  | { type: 'reorder'; pinned: string[]; unpinned: string[] }
+  /** `at`: epoch ms, the order key a new pin at the end takes (`reorderThreads`). */
+  | { type: 'reorder'; pinned: string[]; unpinned: string[]; at: number }
+  /** Pins or moves a pin to order key `order` among all your computers' pins (`pinAt`). */
+  | { type: 'pin-at'; threadId: string; order: number }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
   | { type: 'rewind'; threadId: string; n: number; mode?: RewindMode; forkAt?: string | null }
@@ -266,7 +269,11 @@ function reduce(state: State, action: Action): State {
     case 'step-status':
       return setStepStatus(state, action);
     case 'reorder':
-      return { ...state, threads: reorderThreads(state.threads, action.pinned, action.unpinned) };
+      return { ...state, threads: reorderThreads(state.threads, action.pinned, action.unpinned, action.at) };
+    case 'pin-at': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      return { ...state, threads: (thread && pinAt(state.threads, thread.spaceId, thread.id, action.order)) ?? state.threads };
+    }
     case 'say':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => log(t, { ...action.entry, at: state.now })) };
     case 'restore':

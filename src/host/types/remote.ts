@@ -1,4 +1,5 @@
-import type { Provider } from '../../model.ts';
+import type { Provider, SentImage } from '../../model.ts';
+import type { ThreadControls } from '../../runtime/controls.ts';
 import type { AgentModel } from './agent.ts';
 import type { ChangeTarget, DiffScope, GitDiff } from './git.ts';
 import type { Manifest } from './manifest.ts';
@@ -111,6 +112,8 @@ export interface RemoteStatus {
 export type RemoteCommand =
   // read
   | { type: 'catalog' }
+  /** Every setting a device may change here (`setting`), by catalog key, as Settings reads it. */
+  | { type: 'settings' }
   // operate
   | { type: 'send'; threadId: string; text: string }
   | { type: 'resolve'; queueId: string; answers?: string[][] }
@@ -126,12 +129,16 @@ export type RemoteCommand =
       type: 'create';
       title: string;
       provider: Provider;
-      /** A project ref from `catalog`; null for a folderless chat. */ project: string | null;
-      /** Unset: Settings › Defaults. */ model?: string;
+      /** A project ref from `catalog`; null for a folderless chat. */
+      project: string | null;
+      /** Model, effort, speed and permissions as picked; unset, that computer's defaults. */
+      controls?: ThreadControls;
+      images?: SentImage[];
     }
   | { type: 'rename'; threadId: string; title: string }
   | { type: 'edit-goal'; threadId: string; goal: string }
-  | { type: 'pin'; threadId: string; isPinned: boolean }
+  /** `order`: where the pin sorts among all your computers' pins (`pinAt`); unset pins it last. */
+  | { type: 'pin'; threadId: string; isPinned: boolean; order?: number }
   | { type: 'settle'; threadId: string; isSettled: boolean }
   | { type: 'schedule'; threadId: string; action: 'pause' | 'resume' | 'run' | 'remove' }
   | { type: 'commit'; threadId: string; message: string }
@@ -163,6 +170,7 @@ export type ThreadPoint = { kind: 'message'; index: number } | { kind: 'checkpoi
 /** What a command answers with, by type; the others answer with nothing beyond `isOk`. */
 export interface CommandData {
   catalog: MachineCatalog;
+  settings: Record<string, string>;
   diff: GitDiff;
   'checkpoint-diff': GitDiff;
   files: { paths: string[]; isTruncated: boolean };

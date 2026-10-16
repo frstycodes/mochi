@@ -1,11 +1,11 @@
-import { isValidElement, type ComponentProps, type ReactNode } from 'react';
+import { isValidElement, useContext, type ComponentProps, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { defaultComponents, type ExtraProps } from 'streamdown';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { copyText } from '../clipboard';
 import { worktreeLink } from '../files/kinds';
-import { useWorktreeFiles } from '../files/useWorktreeFiles';
+import { RemoteFilesContext, useWorktreeFiles } from '../files/useWorktreeFiles';
 import { useThreadFiles } from '../files/viewer';
 import { fileLink } from '../terminal/links';
 import { useGithubScope } from '../git/useThreadPrs';
@@ -95,8 +95,10 @@ function PathLink({ path, children }: { path: string; children: ReactNode }) {
 
 /** The viewer link (`src/a.ts:12`) for `text` when it names a file in the thread's folder, else null. */
 export function useWorktreeLink(text: string) {
+  const remote = useContext(RemoteFilesContext);
   const base = useThreadFiles();
-  const files = useWorktreeFiles(base?.root ?? null);
+  const local = useWorktreeFiles(remote ? null : (base?.root ?? null));
+  const files = remote ?? local;
   return base && files ? worktreeLink(text, base.root, files) : null;
 }
 

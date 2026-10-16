@@ -13,7 +13,7 @@ import { authorName, type Author, type Provider, type Space } from '../model';
 import { updateProfile } from '../profiles';
 import { useHarness } from '../store';
 import { useAgentSettings } from './AgentSettings';
-import { findSetting, settingsCatalog, valueLabel, type Setting, type SettingSources, type SettingWrite } from './catalog';
+import { findSetting, isSharedSetting, settingsCatalog, valueLabel, type Setting, type SettingSources, type SettingWrite } from './catalog';
 import { CommitInput, FolderInput, NumberInput, SettingsChoice, SettingsRow, SettingsSelect, settingControlId } from './parts';
 import { setPrefs, usePrefs } from './prefs';
 import { InstructionsRow, useConfigWriter, useProfileConfig } from './ProfileAgentConfig';
@@ -21,6 +21,7 @@ import { AccountSelect, GitHubAccountSelect, IconPicker } from './sections/profi
 import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
 import { ThemePicker } from './ThemePicker';
+import { useShareSetting } from '../remote/SharedSettingsNotice';
 import { useRemoteStatus } from '../remote/useRemoteStatus';
 import { parseChord } from '../keymap';
 import { Shortcut } from '../Shortcut';
@@ -79,10 +80,12 @@ function rowIdOf(setting: Setting, profile?: Space) {
 
 function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWritten }: { setting: Setting; sources: SettingSources; profile?: Space; rowId: string; suggestion?: RowSuggestion; onConfigWritten: () => void }) {
   const apply = useSettingWriter(profile, onConfigWritten);
+  const share = useShareSetting();
   const value = setting.read(sources);
   const set = (next: string) => {
     const write = setting.write(next, sources);
-    if (write) void apply.write(write);
+    if (!write) return;
+    void apply.write(write).then((isSaved) => isSaved && isSharedSetting(setting.key) && share(setting.key, next));
   };
   const line = !!suggestion && <SuggestionLine setting={setting} value={value} suggestion={suggestion} onUse={() => set(suggestion.value)} />;
   const { control } = setting;
@@ -128,7 +131,7 @@ function Unavailable() {
   return <span className="type-meta text-muted-foreground">{host.isDesktop ? 'Reading…' : 'Needs the desktop app'}</span>;
 }
 
-function SettingControl({ setting, value, rowId, onChange }: { setting: Setting; value: string; rowId: string; onChange: (value: string) => void }) {
+export function SettingControl({ setting, value, rowId, onChange }: { setting: Setting; value: string; rowId: string; onChange: (value: string) => void }) {
   const { control } = setting;
   const id = settingControlId(rowId);
   switch (control.type) {

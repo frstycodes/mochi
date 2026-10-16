@@ -7,6 +7,7 @@ import { initialNotifications } from '../notify/slice.ts';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { runRemoteCommand } from './commands.ts';
+import { closeIdleShells } from './terminals.ts';
 import { tapAction } from './tap.ts';
 
 function machine() {
@@ -207,6 +208,10 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
     { isOk: false, error: 'That terminal is closed' },
     'the machine’s own terminals are out of reach',
   );
+  closeIdleShells(Date.now() + 30_000);
+  assert.equal((await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 11 }, env)).isOk, true, 'a shell in use stays open');
+  closeIdleShells(Date.now() + 61_000);
+  assert.deepEqual(await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 0 }, env), { isOk: false, error: 'That terminal is closed' }, 'a device that left without closing it');
   await runRemoteCommand({ type: 'terminal-close', threadId, terminalId: 'pty-remote-1' }, env);
   assert.deepEqual(await runRemoteCommand({ type: 'terminal-read', threadId, terminalId: 'pty-remote-1', after: 0 }, env), {
     isOk: false,
@@ -214,7 +219,7 @@ test('a device shell runs in the thread’s folder and is that thread’s alone;
   });
 });
 
-test('a new thread starts only in a project the machine listed, with the model asked for', async (t) => {
+test('a new thread starts only in a project the machine listed, with the controls and images sent', async (t) => {
   const { state } = machine();
   const withProject = {
     ...state,
@@ -232,16 +237,14 @@ test('a new thread starts only in a project the machine listed, with the model a
     isOk: false,
     error: 'That project isn’t on this machine',
   });
-  assert.deepEqual(
-    await runRemoteCommand(
-      { type: 'create', title: 'Fix it', provider: 'codex', project: '/src/api', model: 'gpt-6' },
-      device(withProject, 'Laptop', dispatched),
-    ),
-    { isOk: true },
-  );
+  const controls = { model: 'gpt-6', effort: 'high', speed: '', access: 'Auto' } as const;
+  const images = [{ mediaType: 'image/png' as const, data: 'iVBOR', thumb: 'data:image/png;base64,iVBOR' }];
+  const sent = await runRemoteCommand({ type: 'create', title: 'Fix it', provider: 'codex', project: '/src/api', controls, images }, device(withProject, 'Laptop', dispatched));
+  assert.deepEqual(sent, { isOk: true });
   const create = dispatched[0] as Extract<Action, { type: 'create' }>;
   assert.equal(create.project, '/src/api');
-  assert.equal(create.controls?.model, 'gpt-6');
+  assert.deepEqual(create.controls, controls, 'model, effort, speed and permissions as picked on the device');
+  assert.deepEqual(create.images, images);
 });
 
 test('settings a device writes stay on the machine; Devices and the demo switch can’t be changed from one', async (t) => {
@@ -253,4 +256,27 @@ test('settings a device writes stay on the machine; Devices and the demo switch 
   assert.match(!remoteRow.isOk ? remoteRow.error : '', /can only be changed on that computer$/);
   const demo = await runRemoteCommand({ type: 'setting', key: 'demoData', value: 'true' }, env);
   assert.match(!demo.isOk ? demo.error : '', /can only be changed on that computer$/);
+});
+
+test('a device reads the settings it may change, as this machine’s Settings reads them', async () => {
+  const { state } = machine();
+  const result = await runRemoteCommand({ type: 'settings' }, device(state, 'Laptop', []));
+  assert.ok(result.isOk && result.data && !('paths' in result.data));
+  const values = result.data as Record<string, string>;
+  assert.equal(typeof values.diffStyle, 'string');
+  assert.equal(typeof values['claude.model'], 'string', 'main’s settings are read too');
+  assert.equal(typeof values.shell, 'string', 'machine-specific rows are readable to change there');
+  assert.equal('theme' in values || 'remoteEnabled' in values || 'demoData' in values, false, 'what only changes on the machine isn’t offered');
+});
+
+test('a pin with an order lands where the device put it among all computers’ pins; Pinned full refuses', async () => {
+  const { state, threadId } = machine();
+  const dispatched: Action[] = [];
+  assert.deepEqual(await runRemoteCommand({ type: 'pin', threadId, isPinned: true, order: 150 }, device(state, 'Laptop', dispatched)), { isOk: true });
+  assert.deepEqual(dispatched, [{ type: 'pin-at', threadId, order: 150 }]);
+  const pinned = threadsReducer(state, dispatched[0]).threads.find((t) => t.id === threadId)!;
+  assert.deepEqual([pinned.orbitSlot, pinned.pinOrder], [1, 150]);
+
+  const full = { ...state, threads: [...state.threads, ...[1, 2, 3, 5, 7].map((slot, i) => ({ ...state.threads[0], id: `p${i}`, orbitSlot: slot }))] };
+  assert.deepEqual(await runRemoteCommand({ type: 'pin', threadId, isPinned: true, order: 1 }, device(full, 'Laptop', [])), { isOk: false, error: 'Pinned is full; unpin a thread first' });
 });

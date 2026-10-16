@@ -97,6 +97,42 @@ export function findSetting(catalog: Setting[], key: string) {
   return catalog.find((s) => s.key === key);
 }
 
+/**
+ * Settings that follow you across your computers: how Mochi behaves for you, not how this computer is set up. A change to
+ * one is written to each paired computer too, and a computer that missed one is offered this computer's values
+ * (`src/remote/sharedSettings.ts`). Paths, shell, keys, appearance, access and Devices stay with each computer.
+ */
+export const isSharedSetting = (key: string) => SHARED_KEYS.has(key) || SHARED_PREFIXES.some((prefix) => key.startsWith(prefix));
+
+const SHARED_KEYS = new Set([
+  'agent',
+  'whileWorking',
+  'watchedToasts',
+  'dockBadge',
+  'quietHours',
+  'quietFrom',
+  'quietUntil',
+  'sideChatModel',
+  'effort',
+  'speed',
+  'starredModels',
+  'claude.model',
+  'claude.secondOpinionModel',
+  'codex.model',
+  'codex.secondOpinionModel',
+  'driftGuard',
+  'branchFrom',
+  'proposedGoals',
+  'idleChecks',
+  'prGaps',
+  'prDrafts',
+  'branchPrefix',
+  'workspaceMode',
+  'worktreeCleanup',
+  'diffStyle',
+]);
+const SHARED_PREFIXES = ['alert.', 'idleAlert.', 'utility.', 'simplify'];
+
 /** A value as the user reads it: an option's label, On / Off, or the value itself. */
 export function valueLabel(setting: Setting, value: string | undefined) {
   if (value === undefined) return '…';

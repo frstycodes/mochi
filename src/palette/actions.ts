@@ -223,9 +223,10 @@ function closeTabs(threadId: string, tabs: PaneTab[], { state, dispatch }: Actio
 }
 
 function pin(threads: Thread[], { state, dispatch }: ActionContext) {
-  const lists = pinMany(state.threads, state.spaceId, threads.map((t) => t.id));
+  const at = Date.now();
+  const lists = pinMany(state.threads, state.spaceId, threads.map((t) => t.id), at);
   if (!lists) return toast('Pinned is full', { description: 'Orbit has five pin slots. Unpin a thread first.' });
-  dispatch({ type: 'reorder', ...lists });
+  dispatch({ type: 'reorder', ...lists, at });
   toast(lists.pinned.includes(threads[0].id) ? `Pinned ${named(threads)}` : `Unpinned ${named(threads)}`);
 }
 
