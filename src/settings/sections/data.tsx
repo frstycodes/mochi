@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Trash3 } from 'reicon-react';
+import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { PINS_STORAGE_KEY, replaceAllPins, useAllPins } from '../../chat/pins';
@@ -85,7 +85,7 @@ export function DataSection() {
           description="Pins, side chats, terminal history, layouts and every setting go back to their defaults, and Mochi reloads"
           control={
             <Button id={settingControlId('clearEverything')} variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => void clearEverything()}>
-              <Trash3 data-icon="inline-start" />
+              <Trash data-icon="inline-start" />
               Clear everything
             </Button>
           }

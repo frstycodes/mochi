@@ -1,6 +1,6 @@
 import { Children, cloneElement, isValidElement, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react';
 import { defaultComponents, type ExtraProps } from 'streamdown';
-import { ArrowDown, ArrowUp, SortV } from 'reicon-react';
+import { ArrowDown, ArrowUp, SortVertical } from '@/icons';
 import { compareCells, nextSort, type SortDir } from './cells';
 
 type HastElement = NonNullable<ExtraProps['node']>;
@@ -23,7 +23,7 @@ export function SortableTable({ children, ...props }: ComponentProps<'table'> & 
 
   function header(th: Part, col: number) {
     const dir = sort?.col === col ? sort.dir : null;
-    const Icon = dir === 'asc' ? ArrowUp : dir === 'desc' ? ArrowDown : SortV;
+    const Icon = dir === 'asc' ? ArrowUp : dir === 'desc' ? ArrowDown : SortVertical;
     return cloneElement(th, {
       'aria-sort': dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none',
       children: (

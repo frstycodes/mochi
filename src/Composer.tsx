@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { toast } from '@/toast/store';
-import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
+import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from '@/icons';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
 import { BranchIcon, BranchName } from './git/BranchLabel';

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RotateLeft } from 'reicon-react';
+import { RotateLeft } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { checkBinding, chordOf, COMMANDS, defaultKeys, isCustom, rebind, type CommandId, type OnConflict } from '../keymap';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Search } from 'reicon-react';
+import { ArrowLeft, Search } from '@/icons';
 import {
   Sidebar,
   SidebarContent,

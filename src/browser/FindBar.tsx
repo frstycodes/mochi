@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, X } from 'reicon-react';
+import { ChevronDown, ChevronUp, X } from '@/icons';
 import { Input } from '@/components/ui/input';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';

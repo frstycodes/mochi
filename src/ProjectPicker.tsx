@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChatRound, ChevronDown, Folder, FolderAdd } from 'reicon-react';
+import { Chat, ChevronDown, Folder, FolderPlus } from '@/icons';
 import type { Project } from './host/types/projects';
 import { ProjectIcon } from './ProjectIcon';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
@@ -51,7 +51,7 @@ export function ProjectPicker({ value, projects, machine, onChange, onAdded }: {
     >
       <PopoverTrigger asChild>
         <MetaChip aria-label={`Project: ${name ?? 'No project'}`}>
-          {!value && <ChatRound />}
+          {!value && <Chat />}
           {!!value && (chosen?.icon ? <ProjectIcon name={chosen.name} icon={chosen.icon} /> : <Folder />)}
           <span className="truncate">{name ?? 'No project'}</span>
           <ChevronDown data-icon="inline-end" />
@@ -88,14 +88,14 @@ function ProjectList({ projects, value, onChoose, onAdd }: { projects: PickerPro
         )}
         <CommandGroup>
           <CommandItem value="No project" keywords={['chat', 'folder']} data-checked={value === null} onSelect={() => onChoose(null)}>
-            <ChatRound />
+            <Chat />
             <span className="flex min-w-0 flex-col">
               No project
               <span className="type-caption text-subtle-foreground">Chat without a folder, branch or files</span>
             </span>
           </CommandItem>
           <CommandItem value="Add project" keywords={['open', 'folder', 'clone', 'github', 'git', 'new']} onSelect={onAdd}>
-            <FolderAdd />
+            <FolderPlus />
             Add project…
           </CommandItem>
         </CommandGroup>

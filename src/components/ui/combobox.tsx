@@ -11,7 +11,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { ChevronDown as ChevronDownIcon, X as XIcon, Check as CheckIcon } from 'reicon-react'
+import { ChevronDown as ChevronDownIcon, X as XIcon, Check as CheckIcon } from '@/icons'
 
 const Combobox = ComboboxPrimitive.Root
 

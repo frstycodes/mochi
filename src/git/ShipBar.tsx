@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUp, ArrowUpRight, ChevronDown, ClockCircle, CloseCircle, MinusCircle, Sparkles, TickCircle } from 'reicon-react';
+import { ArrowUp, ArrowUpRight, ChevronDown, ClockCircle, XCircle, MinusCircle, Sparkles, CheckBadge } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -147,12 +147,12 @@ function PrLink({ thread, pr }: { thread: Thread; pr: PrInfo }) {
 }
 
 const CHECK = {
-  pass: { icon: TickCircle, className: 'text-success', label: 'Passed' },
-  fail: { icon: CloseCircle, className: 'text-destructive', label: 'Failed' },
+  pass: { icon: CheckBadge, className: 'text-success', label: 'Passed' },
+  fail: { icon: XCircle, className: 'text-destructive', label: 'Failed' },
   pending: { icon: ClockCircle, className: 'text-warning', label: 'Running' },
   skipping: { icon: MinusCircle, className: 'text-subtle-foreground', label: 'Skipped' },
   cancel: { icon: MinusCircle, className: 'text-subtle-foreground', label: 'Cancelled' },
-} satisfies Record<CheckState, { icon: typeof TickCircle; className: string; label: string }>;
+} satisfies Record<CheckState, { icon: typeof CheckBadge; className: string; label: string }>;
 
 // Worst state first, so the summary icon is the one that needs you.
 const SEVERITY = ['fail', 'pending', 'cancel', 'skipping', 'pass'] satisfies CheckState[];

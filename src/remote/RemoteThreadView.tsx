@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
-import { ArrowUp, Copy3, RotateLeft, Stop, Trash3, X } from 'reicon-react';
+import { ArrowUp, CopyStack, RotateLeft, Stop, Trash, X } from '@/icons';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -197,7 +197,7 @@ function RemoteHeader({
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" disabled={!canManage} onSelect={() => setIsDeleting(true)}>
-            <Trash3 />
+            <Trash />
             Delete thread…
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -281,7 +281,7 @@ function RemoteMessageBar({ thread, index, align }: ComponentProps<MessageBar>) 
       )}
     >
       <TooltipIconButton label="Copy" onClick={() => copyText(entry.text, 'Copied')} className={BAR_BUTTON}>
-        <Copy3 />
+        <CopyStack />
       </TooltipIconButton>
       {entry.who === 'you' && (
         <DropdownMenu>

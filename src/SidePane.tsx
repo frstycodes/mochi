@@ -1,6 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { Reorder } from 'motion/react';
-import { Add, X } from 'reicon-react';
+import { Plus, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
@@ -299,7 +299,7 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
       </Reorder.Group>
       {kind !== 'visual' && (
         <Button variant="ghost" size="icon-sm" aria-label="New tab" className="shrink-0 text-muted-foreground" onClick={() => dispatch({ type: 'pane-open-tab', threadId: thread.id, kind })}>
-          <Add />
+          <Plus />
         </Button>
       )}
     </PaneTitle>

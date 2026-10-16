@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
-import { Archive, ChatRound, Edit, Folder, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from 'reicon-react';
+import { Archive, Chat, Edit, Folder, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -644,7 +644,7 @@ export function ThreadItem({ thread, machine, isActive, isSelected, onSelect }: 
             </>
           ) : (
             <>
-              <ChatRound className="size-4 shrink-0" />
+              <Chat className="size-4 shrink-0" />
               <span className="shrink-0">No project</span>
             </>
           )}

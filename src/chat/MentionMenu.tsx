@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { ChatRound, Note, Server, ShieldAlert, Window, X, type IconComponent } from 'reicon-react';
+import { Chat, Note, Server, ShieldAlert, Window, X, type IconComponent } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -83,7 +83,7 @@ function MentionItem({ item }: { item: MenuItem }) {
     );
   return (
     <>
-      <ChatRound className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <Chat className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="min-w-0 truncate">{item.thread.title}</span>
       <span className="ml-auto shrink-0 type-caption text-subtle-foreground">{item.thread.repo?.project ?? 'No project'}</span>
     </>
@@ -128,7 +128,7 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
   );
 }
 
-const CHIP_ICONS = { thread: ChatRound, skill: Note, mcp: Server } satisfies Record<Exclude<Mention['kind'], 'window'>, IconComponent>;
+const CHIP_ICONS = { thread: Chat, skill: Note, mcp: Server } satisfies Record<Exclude<Mention['kind'], 'window'>, IconComponent>;
 
 function ChipIcon({ kind }: { kind: Exclude<Mention['kind'], 'window'> }) {
   const Icon = CHIP_ICONS[kind];

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronRight, DocumentText } from 'reicon-react';
+import { ChevronRight, FileText } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,7 +39,7 @@ function NoPdfViewerState() {
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <DocumentText />
+          <FileText />
         </EmptyMedia>
         <EmptyTitle>No PDF viewer here</EmptyTitle>
         <EmptyDescription>This browser can't show PDFs inline. Download the file or open it in the desktop app.</EmptyDescription>

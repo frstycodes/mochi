@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState, type PointerEvent } from 'react';
-import { ArrowUpRight, Pen, Redo, Stop, TextTool, Undo } from 'reicon-react';
+import { ArrowUpRight, Pen, Redo, Stop, TextTool, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

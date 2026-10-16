@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
-import { Compress, MessageQuestion } from 'reicon-react';
+import { Minimize, MessageQuestion } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { revealIn } from '@/lib/revealIn';
 import { host } from '../host';
@@ -59,7 +59,7 @@ export function SlashMenu({ menu }: { menu: ReturnType<typeof useSlashMenu> }) {
   );
 }
 
-const MOCHI_ICONS = { side: MessageQuestion, compact: Compress } satisfies Record<string, typeof MessageQuestion>;
+const MOCHI_ICONS = { side: MessageQuestion, compact: Minimize } satisfies Record<string, typeof MessageQuestion>;
 
 function SlashIcon({ item }: { item: SlashItem }) {
   if (item.source !== 'mochi') return <ProviderMark provider={item.source} size={14} className="mx-px" />;

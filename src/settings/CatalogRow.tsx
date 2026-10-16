@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { useTheme } from 'next-themes';
-import { TickCircle } from 'reicon-react';
+import { CheckBadge } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -201,7 +201,7 @@ function SuggestionLine({ setting, value, suggestion, onUse }: { setting: Settin
   if (value === suggestion.value)
     return (
       <p className="flex items-center gap-1.5 type-meta text-muted-foreground">
-        <TickCircle aria-hidden className="size-3.5 text-success" />
+        <CheckBadge aria-hidden className="size-3.5 text-success" />
         Set to {who}'s suggestion
       </p>
     );

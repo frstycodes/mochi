@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Add, AlertTriangle, Lock, Search, Send, TerminalSquare, X } from 'reicon-react';
+import { Plus, AlertTriangle, Lock, Search, SendAlt, Terminal, X } from '@/icons';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
@@ -18,7 +18,7 @@ import { isCommand } from '../keymap';
 
 export function TerminalTab({ thread, tab }: PaneTabProps) {
   const cwd = threadCwd(thread);
-  if (!cwd) return <PlannedTab icon={TerminalSquare} title="No project folder" description="This chat has no folder, so there is no shell to open." />;
+  if (!cwd) return <PlannedTab icon={Terminal} title="No project folder" description="This chat has no folder, so there is no shell to open." />;
   return <Terminals thread={thread} tabId={tab.id} cwd={cwd} />;
 }
 
@@ -57,14 +57,14 @@ function Terminals({ thread, tabId, cwd }: { thread: Thread; tabId: string; cwd:
             );
           })}
           <IconAction aria-label="New terminal" className="text-muted-foreground" onClick={() => addShell(key, context)}>
-            <Add />
+            <Plus />
           </IconAction>
         </div>
       </PaneTitle>
       <PaneActions>
         {!!focused?.selection && (
           <Button variant="secondary" size="sm" onClick={() => sendSelection(focused)}>
-            <Send aria-hidden />
+            <SendAlt aria-hidden />
             Send to chat
           </Button>
         )}

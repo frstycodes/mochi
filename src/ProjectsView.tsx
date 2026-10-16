@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Check, Edit, Edit2, Folder, FolderAdd, FolderMove, Gallery, Link, Search, Trash3 } from 'reicon-react';
+import { Check, Edit, Pencil, Folder, FolderPlus, FolderMove, Image, Link, Search, Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -149,7 +149,7 @@ function AddProjectButton({ machine, onAdded }: { machine?: FollowedMachine; onA
     <Popover open={isOpen} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button size="xs">
-          <FolderAdd />
+          <FolderPlus />
           Add project
         </Button>
       </PopoverTrigger>
@@ -223,7 +223,7 @@ function ProjectRow({ spaceId, project, usage }: { spaceId: string; project: Pro
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
-                <Edit2 />
+                <Pencil />
                 Rename
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={relocate}>
@@ -232,7 +232,7 @@ function ProjectRow({ spaceId, project, usage }: { spaceId: string; project: Pro
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={remove}>
-                <Trash3 />
+                <Trash />
                 Remove from list
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -308,7 +308,7 @@ function IconPicker({ spaceId, project }: { spaceId: string; project: Project })
         <button type="button" aria-label={`Change ${project.name}’s icon`} className="group/tile relative rounded-lg focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
           <IconTile project={project} />
           <span aria-hidden className="absolute inset-0 flex items-center justify-center rounded-lg bg-foreground/50 text-background opacity-0 transition-opacity group-hover/tile:opacity-100 group-aria-expanded/tile:opacity-100">
-            <Gallery className="size-4" />
+            <Image className="size-4" />
           </span>
         </button>
       </PopoverTrigger>

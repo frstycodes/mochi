@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Refresh, Trash3 } from 'reicon-react';
+import { Refresh, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -108,7 +108,7 @@ function ApiKeyGroup({ provider }: { provider: Provider }) {
           }
           control={
             <Button id={settingControlId(id)} variant="outline" size="sm" onClick={() => void saveApiKey(provider, null)}>
-              <Trash3 data-icon="inline-start" />
+              <Trash data-icon="inline-start" />
               Remove key
             </Button>
           }

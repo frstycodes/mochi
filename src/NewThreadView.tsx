@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Link, Warning as TriangleAlert } from 'reicon-react';
+import { Link, WarningAlt as TriangleAlert } from '@/icons';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { getPrefs, setPrefs, usePrefs } from './settings/prefs';

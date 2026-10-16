@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, DirectboxReceive, DirectboxSend } from 'reicon-react';
+import { ChevronRight, InboxIn, InboxOut } from '@/icons';
 import { MessageResponse } from '@/components/ai-elements/message';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, ThreadRef } from '../model';
@@ -32,7 +32,7 @@ export function ReceivedMessageRow({ entry, from, index }: { entry: ActivityEntr
 }
 
 export function ThreadMessageIcon({ direction }: { direction: Direction }) {
-  const Icon = direction === 'from' ? DirectboxReceive : DirectboxSend;
+  const Icon = direction === 'from' ? InboxIn : InboxOut;
   return <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />;
 }
 

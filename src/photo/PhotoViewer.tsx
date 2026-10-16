@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
-import { ChevronLeft, ChevronRight, Copy, Download, FolderOpen, Maximize, SearchZoomIn, SearchZoomOut, X } from 'reicon-react';
+import { ChevronLeft, ChevronRight, Copy, Download, FolderOpen, Maximize, ZoomIn, ZoomOut, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -97,11 +97,11 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
         {!!position && <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular">{position}</span>}
         <span className="flex-1" />
         <TooltipIconButton label="Zoom out" hint={<Shortcut keys={['-']} />} disabled={!isZoomed} onClick={() => zoom(1 / STEP)}>
-          <SearchZoomOut />
+          <ZoomOut />
         </TooltipIconButton>
         <span className="w-11 text-center type-meta text-muted-foreground tabular">{Math.round(view.scale * 100)}%</span>
         <TooltipIconButton label="Zoom in" hint={<Shortcut keys={['+']} />} onClick={() => zoom(STEP)}>
-          <SearchZoomIn />
+          <ZoomIn />
         </TooltipIconButton>
         <TooltipIconButton label="Fit to window" hint={<Shortcut keys={['0']} />} disabled={!isZoomed} onClick={() => setView(FIT)}>
           <Maximize />

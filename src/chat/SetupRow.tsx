@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { toast } from '@/toast/store';
-import { Box, Check, ChevronRight, DocumentCopy, TerminalSquare } from 'reicon-react';
+import { Box, Check, ChevronRight, FileCopy, Terminal } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -59,11 +59,11 @@ function setupTitle(status: WorktreeSetup['status'], elapsed: string) {
   }[status];
 }
 
-const STEP_ICONS = { copy: DocumentCopy, install: Box, script: TerminalSquare } as Record<string, typeof Box>;
+const STEP_ICONS = { copy: FileCopy, install: Box, script: Terminal } as Record<string, typeof Box>;
 
 function SetupStepRow({ step }: { step: SetupStep }) {
   const [isOpen, setOpen] = useState(step.status === 'failed');
-  const Icon = STEP_ICONS[step.id] ?? TerminalSquare;
+  const Icon = STEP_ICONS[step.id] ?? Terminal;
   const hasDetail = !!step.output || !!step.command;
   const isRunning = step.status === 'running';
 
@@ -115,7 +115,7 @@ function SetupFailedActions({ threadId }: { threadId: string }) {
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <Button size="sm" variant="ghost" onClick={() => dispatch({ type: 'pane-open-tab', threadId, kind: 'terminal' })}>
-        <TerminalSquare />
+        <Terminal />
         Open terminal
       </Button>
       <Button size="sm" variant="outline" onClick={() => choose('skip')}>

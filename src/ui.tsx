@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Book, Briefcase, ClipboardTick, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, Hand, Link as Link2, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
+import { Book, Briefcase, ClipboardCheck, Code, Coffee, Home, Layers, More, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Ban as CircleSlash, Hand, Link as Link2, customIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from '@/icons';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
@@ -61,7 +61,7 @@ export function LiveDot({ className, style }: { className?: string; style?: CSSP
 export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
   if (status === 'running') return <LiveDot className="mx-1 text-success" />;
   if (status === 'needs-you') return <MessageCircleQuestion aria-label="Needs you" className="size-4 shrink-0 text-warning" />;
-  if (status === 'review') return <ClipboardTick aria-label="Ready for review" className="size-4 shrink-0 text-muted-foreground" />;
+  if (status === 'review') return <ClipboardCheck aria-label="Ready for review" className="size-4 shrink-0 text-muted-foreground" />;
   return <CircleCheck aria-label="Settled" className="size-4 shrink-0 text-subtle-foreground" />;
 }
 
@@ -150,17 +150,15 @@ export function TooltipIconButton({ label, hint, children, ...props }: { label: 
 }
 
 /**
- * The overflow-menu icon: reicon MoreH, filled. `vertical` (⋮, reicon has no MoreV, so the same dots turned 90°) is for a menu that belongs
+ * The overflow-menu icon, filled. `vertical` (⋮, the same dots turned 90°) is for a menu that belongs
  * to one item or card and for the end of an address bar; horizontal (⋯) is for app headers and toolbars.
  */
 export function OverflowIcon({ vertical, className, ...props }: IconProps & { vertical?: boolean }) {
-  return <MoreH weight="Filled" className={cn(vertical && 'rotate-90', className)} {...props} />;
+  return <More filled className={cn(vertical && 'rotate-90', className)} {...props} />;
 }
 
-// reicon has no fork arrow (a line that splits in two, like `-<`): drawn on its 24px grid at its 1.5 stroke. The one fork icon everywhere.
-export const ForkIcon = createIcon('ForkIcon', {
-  O: `<path d="M3.75 12h5.5l6.5-6.25M9.25 12l6.5 6.25M13.25 5.75h2.5v2.5M13.25 18.25h2.5v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
-});
+// The fork arrow (a line that splits in two, like `-<`), drawn on Solar's 24px grid at its 1.5 stroke. The one fork icon everywhere.
+export const ForkIcon = customIcon('ForkIcon', `<path d="M3.75 12h5.5l6.5-6.25M9.25 12l6.5 6.25M13.25 5.75h2.5v2.5M13.25 18.25h2.5v-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);
 
 export const ICON_SWAP = { initial: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, animate: { opacity: 1, scale: 1, filter: 'blur(0px)' }, exit: { opacity: 0, scale: 0.25, filter: 'blur(4px)' }, transition: { duration: 0.2, ease: [0.23, 1, 0.32, 1] } } as const;
 

@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
-import { Send as CornerDownLeftIcon, Image as ImageIcon, Monitor, Add as PlusIcon, Stop as SquareIcon, X as XIcon } from 'reicon-react';
+import { SendAlt as CornerDownLeftIcon, Photo as ImageIcon, Monitor, Plus as PlusIcon, Stop as SquareIcon, X as XIcon } from '@/icons';
 import { nanoid } from "nanoid";
 import type {
   ChangeEvent,

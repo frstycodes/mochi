@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
-import { ChevronDown, SidebarRight, TextalignLeft } from 'reicon-react';
+import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
 import type { FollowedMachine } from './host/types/remote';
 import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
 import { Badge } from '@/components/ui/badge';
@@ -264,7 +264,7 @@ function ThreadHeader({
                   <span className="tabular">{progressLabel(progress)}</span>
                 </>
               ) : (
-                <TextalignLeft className="size-4" aria-hidden />
+                <TextAlignLeft className="size-4" aria-hidden />
               )}
             </Button>
           </TooltipTrigger>

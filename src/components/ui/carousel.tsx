@@ -5,7 +5,7 @@ import useEmblaCarousel, {
 } from "embla-carousel-react"
 
 import { Button } from "@/components/ui/button"
-import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from 'reicon-react'
+import { ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '@/icons'
 
 type CarouselApi = UseEmblaCarouselType[1]
 type UseCarouselParameters = Parameters<typeof useEmblaCarousel>

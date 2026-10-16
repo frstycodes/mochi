@@ -13,7 +13,7 @@ import {
   InputGroup,
   InputGroupAddon,
 } from "@/components/ui/input-group"
-import { Search as SearchIcon, Check as CheckIcon } from 'reicon-react'
+import { Search as SearchIcon, Check as CheckIcon } from '@/icons'
 
 function Command({
   className,

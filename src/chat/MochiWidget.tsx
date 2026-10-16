@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Flag, Setting2, ShieldCheck, Trash3, type IconComponent } from 'reicon-react';
+import { Flag, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -44,7 +44,7 @@ export function EventLine({ text, detail, at }: { text: string; detail?: string;
 }
 
 const KIND = {
-  delete: { icon: Trash3, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
+  delete: { icon: Trash, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
   confirm: { icon: ShieldCheck, label: 'Approval', approve: 'Allow', deny: 'Deny' },
 } satisfies Record<string, { icon: IconComponent; label: string; approve: string; deny: string }>;
 
@@ -127,7 +127,7 @@ function SettingsWidget({ item, settings }: { item: QueueItem; settings: Setting
       <WidgetCard item={item} onEscape={() => void close()}>
         <CardHeader>
           <CardDescription className="flex items-center gap-1 type-caption font-medium text-foreground">
-            <Setting2 aria-hidden className="size-3.5" />
+            <Settings aria-hidden className="size-3.5" />
             Settings
           </CardDescription>
           <CardTitle className="text-pretty">{item.title}</CardTitle>

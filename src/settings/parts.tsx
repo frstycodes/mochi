@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Check, Copy3, InfoCircle, Refresh, TickCircle, Warning } from 'reicon-react';
+import { Check, CopyStack, Info, Refresh, CheckBadge, WarningAlt } from '@/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -95,7 +95,7 @@ export function LoginBadge({ install }: { install: InstallState | undefined }) {
 }
 
 function StatusBadge({ tone, children }: { tone: 'success' | 'warning'; children: ReactNode }) {
-  const Icon = tone === 'success' ? TickCircle : Warning;
+  const Icon = tone === 'success' ? CheckBadge : WarningAlt;
   return (
     <Badge variant="outline">
       <Icon data-icon="inline-start" className={tone === 'success' ? 'text-success' : 'text-warning'} />
@@ -133,7 +133,7 @@ export function CommandLine({ command }: { command: string }) {
         {command}
       </code>
       <TooltipIconButton label={isCopied ? 'Copied' : 'Copy command'} hint="Paste it into a terminal" onClick={copy}>
-        <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <Copy3 />}</IconSwap>
+        <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <CopyStack />}</IconSwap>
       </TooltipIconButton>
     </div>
   );
@@ -181,7 +181,7 @@ export function DesktopOnly({ what, children }: { what: ReactNode; children: Rea
 export function DesktopOnlyNotice({ what }: { what: ReactNode }) {
   return (
     <Alert>
-      <InfoCircle />
+      <Info />
       <AlertTitle>Needs the desktop app</AlertTitle>
       <AlertDescription>{what} Here, threads run on the demo agents, so everything else keeps working.</AlertDescription>
     </Alert>

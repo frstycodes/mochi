@@ -1,4 +1,4 @@
-import { ArrowUp, Broom, Document, MessageAdd, MessageQuestion, Send, X, type IconComponent } from 'reicon-react';
+import { ArrowUp, Broom, File, MessagePlus, MessageQuestion, SendAlt, X, type IconComponent } from '@/icons';
 import { DiffIcon, TerminalIcon } from '../icons/panes';
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageActions, MessageContent, MessageResponse } from '@/components/ai-elements/message';
@@ -124,11 +124,11 @@ export function Answer({ message, onPromote }: { message: SideMessage; onPromote
       {canPromote && (
         <MessageActions className="-ml-2">
           <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote?.('message')}>
-            <Send aria-hidden />
+            <SendAlt aria-hidden />
             Send to thread
           </Button>
           <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote?.('thread')}>
-            <MessageAdd aria-hidden />
+            <MessagePlus aria-hidden />
             New thread
           </Button>
         </MessageActions>
@@ -138,7 +138,7 @@ export function Answer({ message, onPromote }: { message: SideMessage; onPromote
   );
 }
 
-const SOURCE_ICONS = { diff: DiffIcon, terminal: TerminalIcon, file: Document } satisfies Record<QuoteSource, IconComponent>;
+const SOURCE_ICONS = { diff: DiffIcon, terminal: TerminalIcon, file: File } satisfies Record<QuoteSource, IconComponent>;
 
 function QuoteCard({ quote, onRemove }: { quote: Quote; onRemove?: () => void }) {
   const Icon = SOURCE_ICONS[quote.source];
