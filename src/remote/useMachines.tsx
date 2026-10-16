@@ -150,24 +150,27 @@ export function useMachines() {
 }
 
 /** What a new thread on that computer can start in and with; null while it's read, offline or when it can't be read. */
+/** That machine's catalog, read when it comes online; `reload` reads it again (after adding a project there). */
 export function useMachineCatalog(machine: FollowedMachine | undefined) {
   const { ask } = useMachines();
-  const [catalog, setCatalog] = useState<MachineCatalog | null>(null);
+  const [read, setRead] = useState<{ machineId: string; catalog: MachineCatalog } | null>(null);
+  const [reads, setReads] = useState(0);
   const machineId = machine?.id;
   const isOnline = machine?.status === 'online';
   useEffect(() => {
-    setCatalog(null);
     if (!machineId || !isOnline) return;
     let isCurrent = true;
     ask(machineId, { type: 'catalog' }).then(
-      (read) => isCurrent && setCatalog(read),
+      (catalog) => isCurrent && setRead({ machineId, catalog }),
       (error: unknown) => console.error('Reading that computer’s projects and models failed', error),
     );
     return () => {
       isCurrent = false;
     };
-  }, [ask, machineId, isOnline]);
-  return catalog;
+  }, [ask, machineId, isOnline, reads]);
+  const reload = useCallback(() => setReads((n) => n + 1), []);
+  // A reload keeps the list it had meanwhile; another machine, or this one offline, has none until it answers.
+  return { catalog: isOnline && read && read.machineId === machineId ? read.catalog : null, reload };
 }
 
 /**
@@ -194,6 +197,9 @@ export function RemoteScope({ machine, state, onOpenTab, children }: { machine: 
 const COMMAND_VERBS = {
   catalog: 'read its projects',
   settings: 'read its settings',
+  projects: 'read its projects',
+  'add-project': 'create the project',
+  'clone-project': 'clone the project',
   send: 'send the message',
   resolve: 'answer',
   interrupt: 'stop the agent',

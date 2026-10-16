@@ -3,6 +3,7 @@ import type { ThreadControls } from '../../runtime/controls.ts';
 import type { AgentModel } from './agent.ts';
 import type { ChangeTarget, DiffScope, GitDiff } from './git.ts';
 import type { Manifest } from './manifest.ts';
+import type { CloneSource, Project } from './projects.ts';
 
 /** What a paired device may do on this machine (DEVICES.md › Devices and what they can do). */
 export const SCOPES = ['read', 'operate', 'manage', 'code', 'terminal'] as const;
@@ -114,6 +115,8 @@ export type RemoteCommand =
   | { type: 'catalog' }
   /** Every setting a device may change here (`setting`), by catalog key, as Settings reads it. */
   | { type: 'settings' }
+  /** This profile's projects as that computer keeps them (its Projects page). */
+  | { type: 'projects' }
   // operate
   | { type: 'send'; threadId: string; text: string }
   | { type: 'resolve'; queueId: string; answers?: string[][] }
@@ -129,7 +132,7 @@ export type RemoteCommand =
       type: 'create';
       title: string;
       provider: Provider;
-      /** A project ref from `catalog`; null for a folderless chat. */
+      /** A project's id from `catalog`; null for a folderless chat. */
       project: string | null;
       /** Model, effort, speed and permissions as picked; unset, that computer's defaults. */
       controls?: ThreadControls;
@@ -147,6 +150,10 @@ export type RemoteCommand =
   | { type: 'open-pr'; threadId: string; title: string; body: string }
   /** The thread and its history; its worktree stays on disk. */
   | { type: 'delete'; threadId: string }
+  /** A new empty project (`git init`) in this computer's projects folder; `publish` also creates it on GitHub as the profile's gh login. */
+  | { type: 'add-project'; name: string; publish?: 'private' | 'public' }
+  /** Cloned into this computer's projects folder, which this computer picks: a device never names a folder here. */
+  | { type: 'clone-project'; source: CloneSource }
   /** A Settings catalog row (`src/settings/catalog.ts`) on this computer only: never synced, never Devices, accounts or profiles. */
   | { type: 'setting'; key: string; value: string }
   // code
@@ -171,6 +178,9 @@ export type ThreadPoint = { kind: 'message'; index: number } | { kind: 'checkpoi
 export interface CommandData {
   catalog: MachineCatalog;
   settings: Record<string, string>;
+  projects: Project[];
+  'add-project': CatalogProject;
+  'clone-project': CatalogProject;
   diff: GitDiff;
   'checkpoint-diff': GitDiff;
   files: { paths: string[]; isTruncated: boolean };
@@ -181,11 +191,16 @@ export interface CommandData {
 
 /** What a new thread on this computer can start in and with. */
 export interface MachineCatalog {
-  /** Refs as this computer names them; a device sends one back as is, and never reads it as a path. */
-  projects: { ref: string; name: string }[];
+  projects: CatalogProject[];
   models: Partial<Record<Provider, AgentModel[]>>;
   /** Settings › Defaults per harness; '' is the harness's own. */
   defaults: Record<Provider, string>;
+}
+
+/** A project as a device names it: `ref` is the project's id there, sent back as is (`create`), never a path. */
+export interface CatalogProject {
+  ref: string;
+  name: string;
 }
 
 export interface TerminalOutput {

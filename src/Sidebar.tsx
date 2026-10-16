@@ -1,8 +1,8 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotionConfig, type MotionProps } from 'motion/react';
-import { Archive, ChatRound, ChevronRight, Edit, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from 'reicon-react';
+import { motion, type MotionProps } from 'motion/react';
+import { Archive, ChatRound, Edit, Folder, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from 'reicon-react';
 import {
   Sidebar,
   SidebarContent,
@@ -57,6 +57,9 @@ import { DeviceIcon } from './remote/DeviceIcon';
 import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';
 import { UserMenu } from './UserMenu';
+import { FoldGroup } from './SidebarFold';
+import { ProjectIcon } from './ProjectIcon';
+import { useProjectAt } from './projects';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { host } from './host';
 
@@ -231,6 +234,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
             {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NotificationBell spaceId={spaceId} />
             <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
+            <NavItem icon={<Folder />} label="Projects" isActive={view.kind === 'projects'} onClick={() => go({ kind: 'projects' })} />
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -240,13 +244,13 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
         <ThreadList pinned={pinned} remotePins={useRemotePins()} active={active} row={row} selectedIds={selection.ids} />
 
         {settled.length > 0 && (
-          <SettledGroup count={settled.length}>
+          <FoldGroup label="Settled" count={settled.length}>
             {settled.map((t) => (
               <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
                 <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
               </ThreadRowMenu>
             ))}
-          </SettledGroup>
+          </FoldGroup>
         )}
       </div>
       <MachineThreads />
@@ -255,42 +259,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
 }
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
-const ACCORDION = { duration: 0.2, ease: EASE_OUT };
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
-
-/** Settled threads, folded under a count. */
-function SettledGroup({ count, children }: { count: number; children: ReactNode }) {
-  const [isOpen, setOpen] = useState(false);
-  const reduce = useReducedMotionConfig();
-  const contentId = useId();
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel asChild>
-        <button type="button" aria-expanded={isOpen} aria-controls={contentId} onClick={() => setOpen(!isOpen)} className="hover:text-sidebar-foreground">
-          Settled
-          <span className="ml-1 tabular">{count}</span>
-          <ChevronRight className={cn('ml-auto size-3 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none', isOpen && 'rotate-90')} />
-        </button>
-      </SidebarGroupLabel>
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            id={contentId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={reduce ? { duration: 0 } : ACCORDION}
-            className="overflow-hidden"
-          >
-            <SidebarGroupContent>
-              <SidebarMenu>{children}</SidebarMenu>
-            </SidebarGroupContent>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </SidebarGroup>
-  );
-}
 
 /** Your other computers' threads, each under its computer's name: they run there, and open here to follow and steer. */
 function MachineThreads() {
@@ -326,7 +295,7 @@ function MachineThreads() {
             {active.length === 0 && <li className="px-2 type-caption text-subtle-foreground">No active threads</li>}
           </SidebarMenu>
         </SidebarGroup>
-        {settled.length > 0 && <SettledGroup count={settled.length}>{settled.map(row)}</SettledGroup>}
+        {settled.length > 0 && <FoldGroup label="Settled" count={settled.length}>{settled.map(row)}</FoldGroup>}
       </RemoteScope>
     );
   });
@@ -647,6 +616,7 @@ export function ThreadItem({ thread, machine, isActive, isSelected, onSelect }: 
   const shown = thread.live ? verdict : null;
   const hasChip = !!shown && shown.kind !== 'idle' && shown.kind !== 'checking';
   const { isSettled, toggle: settle } = useSettle(thread);
+  const project = useProjectAt(thread.spaceId, thread.repo?.path);
   return (
     <>
       <SidebarMenuButton
@@ -666,7 +636,7 @@ export function ThreadItem({ thread, machine, isActive, isSelected, onSelect }: 
           )}
           {thread.repo ? (
             <>
-              <ProjectAvatar name={thread.repo.project} />
+              <ProjectIcon name={thread.repo.project} icon={project?.icon} />
               <span className="shrink-0">{thread.repo.project}</span>
               {/* A worktree is the default; working in the project's own checkout, or on a detached HEAD, is worth a glance. */}
               {(thread.repo.mode === 'folder' || thread.repo.isDetached) && <BranchIcon repo={thread.repo} />}
@@ -704,10 +674,6 @@ export function ThreadItem({ thread, machine, isActive, isSelected, onSelect }: 
       </SidebarMenuAction>
     </>
   );
-}
-
-function ProjectAvatar({ name }: { name: string }) {
-  return <span aria-hidden className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[0.625rem] font-semibold text-foreground uppercase">{name[0]}</span>;
 }
 
 /** How many background agents the thread has running; nothing when none do. */

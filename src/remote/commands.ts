@@ -5,10 +5,11 @@ import { draftFrom } from '../goals/edit.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type { CommandResult, MachineCatalog, RemoteCommand } from '../host/types/remote.ts';
+import type { Project } from '../host/types/projects.ts';
 import type { Thread } from '../model.ts';
 import { reviewNote } from '../git/files.ts';
 import { getProfiles } from '../profiles.ts';
-import { projectName, projectRef, savedProjects } from '../projects.ts';
+import { byRecentUse, cloneProject, createProject, loadProjects } from '../projects.ts';
 import { rewindThread } from '../rewind/run.ts';
 import { sideChatChoice } from '../runtime/controls.ts';
 import { findSetting, settingsCatalog, type SettingSources, type SettingWrite } from '../settings/catalog.ts';
@@ -43,6 +44,8 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
   if (command.type === 'resolve') return resolve(command, env);
   if (command.type === 'catalog') return { isOk: true, data: await catalog(state) };
   if (command.type === 'settings') return { isOk: true, data: writableValues(await machineSources(state)) };
+  if (command.type === 'projects') return { isOk: true, data: (await projectsHere(state)).map(withSmallIcon) };
+  if (command.type === 'add-project' || command.type === 'clone-project') return addProject(command, state);
   if (command.type === 'create') return create(command, env);
   if (command.type === 'setting') return setting(command, env);
   const thread = state.threads.find((t) => t.id === command.threadId);
@@ -148,31 +151,46 @@ function terminal(thread: Thread, cwd: string, command: TerminalCommand): Promis
   }
 }
 
-/** Where a new thread can start here: this profile's projects as the picker lists them, and each harness's models. */
+/** Where a new thread can start here: this profile's projects as the picker lists them, by id, and each harness's models. */
 async function catalog(state: State): Promise<MachineCatalog> {
   const settings = await host.settings.get();
   const models = await Promise.all(HARNESS_IDS.map(async (h) => [h, await host.agent.models(h, state.spaceId).catch(() => [])] as const));
   return {
-    projects: machineProjects(state).map((ref) => ({ ref, name: projectName(ref) })),
+    projects: (await projectsHere(state)).filter((p) => !p.isMissing).map((p) => ({ ref: p.id, name: p.name })),
     models: Object.fromEntries(models),
     defaults: { claude: settings.harnesses.claude.model, codex: settings.harnesses.codex.model },
   };
 }
 
-/** `useRecentProjects` outside React: saved folders first, then those of the profile's threads, newest first. */
-function machineProjects(state: State) {
-  const threads = state.threads.filter((t) => t.spaceId === state.spaceId).sort((a, b) => b.startedAt - a.startedAt);
-  return [...new Set([...savedProjects(state.spaceId), ...threads.flatMap((t) => (t.repo ? [projectRef(t.repo)!] : []))])];
+/** `useProjects` outside React: the registry, most recently used first. */
+async function projectsHere(state: State) {
+  const threads = state.threads.filter((t) => t.spaceId === state.spaceId);
+  return byRecentUse(await loadProjects(state.spaceId, threads), threads);
 }
 
-/** The new-thread page's start, in the background. A project has to be one `catalog` listed: a device never names a folder. */
-function create(command: Extract<RemoteCommand, { type: 'create' }>, { state, dispatch }: CommandEnv): CommandResult {
-  if (command.project !== null && !machineProjects(state).includes(command.project)) return fail('That project isn’t on this machine');
+/** A favicon past this stays home: a list of projects shouldn't cost a device megabytes. */
+const MAX_REMOTE_ICON_CHARS = 64 * 1024;
+const withSmallIcon = (project: Project): Project => (project.icon && project.icon.url.length > MAX_REMOTE_ICON_CHARS ? { ...project, icon: null } : project);
+
+/** Add project's own calls, into this computer's projects folder as this profile's GitHub login. */
+async function addProject(command: Extract<RemoteCommand, { type: 'add-project' | 'clone-project' }>, state: State): Promise<CommandResult> {
+  try {
+    const project = command.type === 'clone-project' ? await cloneProject(state.spaceId, command.source) : await createProject(state.spaceId, command.name, command.publish);
+    return { isOk: true, data: { ref: project.id, name: project.name } };
+  } catch (error) {
+    return fail((error as Error).message);
+  }
+}
+
+/** The new-thread page's start, in the background. A project has to be one `catalog` listed, by id: a device never names a folder. */
+async function create(command: Extract<RemoteCommand, { type: 'create' }>, { state, dispatch }: CommandEnv): Promise<CommandResult> {
+  const project = command.project === null ? null : (await projectsHere(state)).find((p) => p.id === command.project && !p.isMissing);
+  if (project === undefined) return fail('That project isn’t on this machine');
   dispatch({
     type: 'create',
     title: command.title,
     provider: command.provider,
-    project: command.project,
+    project: project?.path ?? null,
     ...(command.controls && { controls: command.controls }),
     ...(command.images && { images: command.images }),
     isLive: host.isDesktop,

@@ -189,3 +189,14 @@ test('only LAN and Tailscale addresses count as this network', () => {
   ] as const;
   for (const [address, family, expected] of cases) assert.equal(isPrivate(address, family), expected, address);
 });
+
+test('a device without manage can’t clone a project, and the renderer never sees the clone', async () => {
+  const { server, runs } = await serve();
+  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
+  viewer.command('c1', { type: 'clone-project', source: { url: 'https://github.com/a/b.git' } });
+  const [result] = await viewer.until('result');
+  assert.deepEqual(result, { type: 'result', id: 'c1', isOk: false, error: 'This device can’t clone-project: it needs the manage scope' });
+  assert.equal(runs.length, 0);
+  await viewer.close();
+  await server.close();
+});

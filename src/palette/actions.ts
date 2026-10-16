@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, ArrowUpRightSquare, Flag, Link, SearchNormal, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
+import { Archive, ArrowUpRightSquare, Flag, Link, SearchNormal, ArrowLeft, ArrowRight, Clock, Scale, ArrowSwapHorizontal, CloseSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, Folder, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, RowHorizontal, RowVertical, Setting2, Sidebar, SidebarRight, Sun, TaskSquare, TransferH, VideoPlay, Export, X, type IconComponent } from 'reicon-react';
 import { ForkIcon } from '../ui';
 import { toast } from '../toast/store.ts';
 import { getPage, openFind, pageKey, reloadPage } from '../browser/pages';
@@ -69,6 +69,7 @@ export const ACTIONS = [
   { id: 'go-queue', group: 'Go to', title: 'Queue', icon: Inbox, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'queue' } }) },
   { id: 'go-review', group: 'Go to', title: 'Review mode', icon: TaskSquare, keywords: 'inbox approve', when: when.reviews, run: ({ openReview }) => openReview() },
   { id: 'go-board', group: 'Go to', title: 'Board', icon: Route, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }) },
+  { id: 'go-projects', group: 'Go to', title: 'Projects', icon: Folder, keywords: 'folder repository clone add', run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'projects' } }) },
   { id: 'go-settings', group: 'Go to', title: 'Settings', icon: Setting2, command: 'go-settings', keywords: 'agents claude codex accounts login api key preferences', run: () => openSettings() },
   { id: 'go-new', group: 'Go to', title: 'New thread', icon: Edit, command: 'go-new', run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'new' } }) },
 

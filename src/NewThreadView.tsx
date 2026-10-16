@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Folder, Link, Warning as TriangleAlert } from 'reicon-react';
+import { Link, Warning as TriangleAlert } from 'reicon-react';
 import type { Step, Thread } from './model';
 import { similarity } from './progress';
 import { getPrefs, setPrefs, usePrefs } from './settings/prefs';
@@ -16,8 +16,9 @@ import { cn } from '@/lib/utils';
 import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
-import { ProjectPicker, useRecentProjects } from './ProjectPicker';
-import { projectName } from './projects';
+import { ProjectPicker, type PickerProject } from './ProjectPicker';
+import { ProjectIcon } from './ProjectIcon';
+import { projectName, takeRequestedProject, useProjects, useRequestedProject } from './projects';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
 import { MachineModelsContext, useDefaultModels } from './ModelControls';
@@ -78,8 +79,10 @@ function NewThread() {
     if (model) setProvider(model.harness);
     setPicked(next);
   };
-  const recentProjects = useRecentProjects();
-  const [project, setProject] = useState<string | null>(saved ? saved.project : (recentProjects[0] ?? null));
+  const projects = useProjectRows(spaceId);
+  // Unset until you pick: the most recently used project, once the list has loaded.
+  const [chosenProject, setProject] = useState<string | null | undefined>(saved?.project);
+  const project = chosenProject === undefined ? (projects.find((p) => !p.isMissing)?.ref ?? null) : chosenProject;
   // /side needs a thread to ask about.
   const slashItems = useSlashItems(provider, spaceId, project).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
@@ -95,7 +98,7 @@ function NewThread() {
   const machines = useMachines();
   const [runsOn, setRunsOn] = useState<string | null>(null);
   const remote = machines.machines.find((m) => m.machine.id === runsOn)?.machine;
-  const catalog = useMachineCatalog(remote);
+  const { catalog, reload: reloadCatalog } = useMachineCatalog(remote);
   const [remoteProject, setRemoteProject] = useState<string | null>(null);
   // Another computer's projects and models are its own: picks made for this one don't carry over, either way.
   const changeRunsOn = (next: string | null) => {
@@ -123,6 +126,15 @@ function NewThread() {
     setProject(next);
     setWorkspaceDraft({ mode: workspaceDraft.mode });
   };
+  // The sidebar's Projects: a new thread here, in that project, whatever was picked before.
+  const requestedProject = useRequestedProject();
+  useEffect(() => {
+    if (!requestedProject) return;
+    const ref = takeRequestedProject();
+    if (!ref) return;
+    changeRunsOn(null);
+    changeProject(ref);
+  }, [requestedProject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = async ({ text, files }: PromptInputMessage) => {
     const title = text.trim();
@@ -196,7 +208,7 @@ function NewThread() {
                 onSend={start}
                 submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
                 meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
-                placeholder={placeholder(remote?.name, remote ? remoteProject : project)}
+                placeholder={placeholder(remote?.name, remote ? (catalog?.projects.find((p) => p.ref === remoteProject)?.name ?? null) : (projects.find((p) => p.ref === project)?.name ?? (project && projectName(project))))}
               />
             </MachineModelsContext.Provider>
           </ComposerCard>
@@ -205,13 +217,13 @@ function NewThread() {
           <RunsOnMenu value={runsOn} onChange={changeRunsOn} />
           {!!remote && (
             <>
-              <ProjectPicker value={remoteProject} onChange={setRemoteProject} projects={catalog?.projects.map((p) => p.ref) ?? []} />
+              <ProjectPicker value={remoteProject} onChange={setRemoteProject} projects={catalog?.projects ?? NO_PROJECTS} machine={remote} onAdded={reloadCatalog} />
               {!!remoteProject && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
             </>
           )}
           {!remote && (
             <>
-              <ProjectPicker value={project} onChange={changeProject} />
+              <ProjectPicker value={project} onChange={changeProject} projects={projects} />
               {!!project && <WorkspaceControls workspace={workspace} />}
               {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
             </>
@@ -244,7 +256,7 @@ function NewThread() {
           )}
         </AnimatePresence>
 
-        {matches.length === 0 && recentProjects.length > 1 && <ProjectShortcuts projects={recentProjects.slice(0, MAX_SHORTCUTS)} value={project} onChange={changeProject} />}
+        {matches.length === 0 && !remote && projects.length > 1 && <ProjectShortcuts projects={projects.filter((p) => !p.isMissing).slice(0, MAX_SHORTCUTS)} value={project} onChange={changeProject} />}
       </div>
     </div>
   );
@@ -256,9 +268,16 @@ function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
 }
 
 const NO_CATALOG = { models: {}, defaults: { claude: '', codex: '' } };
+const NO_PROJECTS: PickerProject[] = [];
 
-function placeholder(machineName: string | undefined, project: string | null) {
-  if (project) return `What should this thread get done in ${projectName(project)}?${machineName ? ` Runs on ${machineName}` : ''}`;
+/** This computer's projects as the picker lists them: by folder, which is what a thread here starts in. */
+function useProjectRows(spaceId: string): PickerProject[] {
+  const projects = useProjects(spaceId, useSpaceThreads());
+  return useMemo(() => projects?.map((p) => ({ ref: p.path, name: p.name, ...(p.path !== p.name && { detail: p.path }), isMissing: p.isMissing, icon: p.icon })) ?? NO_PROJECTS, [projects]);
+}
+
+function placeholder(machineName: string | undefined, projectLabel: string | null) {
+  if (projectLabel) return `What should this thread get done in ${projectLabel}?${machineName ? ` Runs on ${machineName}` : ''}`;
   return machineName ? `Ask anything; runs on ${machineName}, no folder attached` : 'Ask anything, no folder attached';
 }
 
@@ -270,20 +289,20 @@ function greeting(now: Date) {
 }
 
 /** The latest projects one click away; the picker in the meta row holds the rest. */
-function ProjectShortcuts({ projects, value, onChange }: { projects: string[]; value: string | null; onChange: (project: string) => void }) {
+function ProjectShortcuts({ projects, value, onChange }: { projects: PickerProject[]; value: string | null; onChange: (project: string) => void }) {
   return (
     <div role="group" aria-label="Recent projects" className="flex flex-wrap justify-center gap-2">
       {projects.map((p) => (
         <Button
-          key={p}
+          key={p.ref}
           variant="outline"
           size="sm"
-          aria-pressed={p === value}
-          onClick={() => onChange(p)}
+          aria-pressed={p.ref === value}
+          onClick={() => onChange(p.ref)}
           className="rounded-full font-normal text-muted-foreground aria-pressed:border-foreground/40 aria-pressed:bg-muted aria-pressed:text-foreground dark:aria-pressed:bg-input"
         >
-          <Folder />
-          {projectName(p)}
+          <ProjectIcon name={p.name} icon={p.icon} />
+          {p.name}
         </Button>
       ))}
     </div>

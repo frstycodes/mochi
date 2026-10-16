@@ -35,6 +35,8 @@ export interface MachineFollower {
 const LAN_TIMEOUT_MS = 2000;
 const MAX_BACKOFF_MS = 30_000;
 const COMMAND_TIMEOUT_MS = 60_000;
+/** A clone runs as long as the repository takes to download. */
+const LONG_COMMAND_TIMEOUT_MS = { 'clone-project': 15 * 60_000, 'add-project': 2 * 60_000 } satisfies Partial<Record<RemoteCommand['type'], number>>;
 
 /**
  * This computer's connection to one machine it paired with, as a device: kept open with backoff, resuming the stream where
@@ -120,7 +122,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
         const timer = setTimeout(() => {
           pending.delete(id);
           resolve({ isOk: false, error: `${state.name} didn’t answer; check the thread before trying again` });
-        }, COMMAND_TIMEOUT_MS);
+        }, LONG_COMMAND_TIMEOUT_MS[command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS] ?? COMMAND_TIMEOUT_MS);
         pending.set(id, (result) => {
           clearTimeout(timer);
           resolve(result);

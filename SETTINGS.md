@@ -21,7 +21,7 @@ Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.ts
 | New threads | While the agent is working, new messages | Queue / Steer | Queue |
 | Running agents | Agents running at once | stepper 1–16 | 6 |
 | Running agents | When a usage limit hits | Fixed: each harness's own behaviour; resume at reset, API key and handoff are per-thread choices on the limit card | — |
-| Folders | Projects folder | path + Browse | `~/dev` |
+| Folders | Projects folder (Open folder starts here; clones and new projects land here) | path + Browse | `~/dev` |
 | Startup | Restore layout on launch | switch | on |
 
 Runs on (This computer / a paired computer) is chosen in the new-thread composer (`src/remote/RunsOnMenu.tsx`).
@@ -158,4 +158,19 @@ Stored on this computer: Storage used, Clear pins / side chats / terminal histor
 Versions (Mochi, Electron, Chromium) and links to the README, RUNTIME and SETTINGS docs (`src/settings/sections/about.tsx`).
 
 ## Not settings
+
+### Projects page
+Its own page in the app (sidebar › Projects, ⌘K › Go to Projects), not a Settings page, since projects are things you work in rather than preferences. The folders threads work in, per profile, kept by main in `userData/projects.json` (`electron/projects/registry.ts`): id, name, path, origin (the `origin` remote normalised by `normalizeOrigin` in `src/git/origin.ts`, the same project on every computer; null for a folder that isn't a repo) and when it was added. A profile's first load takes in, once, the folders it used before the registry (this window's recents and its threads' folders). Each row: an icon tile (the folder's favicon from the usual places: root, `public/`, `app/`, `static/`, `assets/`, `build/`; or an uploaded image kept in `userData/project-icons/`; or the letter; click it to choose), the name, origin with GitHub's mark, thread count and last use, the path; one ⋯ menu with New thread here, Show folder, Rename (the list's name, never the folder's), Relocate (a folder that moved; refused when the new folder is a clone of something else), Remove (from the list only, never from disk; undo toast). A folder that's gone shows "Folder not found" in the warning colour with Relocate… beside it. Add project opens the same flow as the project picker. Below, each other computer you follow that's online, its list read with `projects` and Add project running there. The same icon shows in thread rows, the picker and the composer's shortcuts. Done.
+
+Add project, in the new-thread composer's project chip (bottom of the list) and here:
+
+| Source | What happens |
+|---|---|
+| Open folder | The path field with Tab completion and Browse, as before |
+| Clone from GitHub | `gh repo list` as the profile's GitHub login, searchable; a typed `owner/repo` clones any other. Cloned over HTTPS with the login's token from a credential helper (never in the URL or the repo's config), or `gh repo clone` when the profile has no login |
+| Clone from a URL | Any https://, ssh:// or `git@host:path` remote, with your own git credentials (GitLab, Bitbucket and other hosts this way for now); options, `ext::` and local paths are refused before git runs |
+| New project | `git init` in the projects folder; optionally Private or Public on GitHub through `gh repo create` (a failed publish keeps the local project and says so) |
+
+Clones land in General › Projects folder under the repo's name, refused if that folder exists. Progress shows git's latest line; a failure shows git's own words. On another computer (Runs on) the same calls run there, in its projects folder, as its login; GitHub there takes a typed `owner/repo` (its repositories can't be listed from here) and its progress isn't streamed, only the outcome.
+
 Internal caps and timings (patch size, poll intervals, animation durations, drift cut-offs, pin slots) stay constants. Usage budgets and prices come from the providers, not the user.

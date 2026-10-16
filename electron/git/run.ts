@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { dirname, normalize, relative, resolve, sep } from 'node:path';
 import { parseWorktrees } from '../../src/git/parse.ts';
 import { userPath } from '../shellPath.ts';
@@ -24,6 +24,38 @@ export function run(
     if (input !== undefined) child.stdin?.end(input);
   }));
 }
+
+/**
+ * `run` for long commands that report progress (a clone): each line it prints, `\r` redraws included, goes to `onLine` as it
+ * comes. On failure the error holds what it printed, progress bars left out.
+ */
+export function runStreaming(cmd: 'git' | 'gh', cwd: string, args: string[], onLine: (line: string) => void, env?: Record<string, string>) {
+  return userPath().then((PATH) => new Promise<void>((done, fail) => {
+    const child = spawn(cmd, args, { cwd, env: { ...ENV, PATH, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const printed: string[] = [];
+    const line = (text: string) => {
+      if (!text.trim()) return;
+      onLine(text.trimEnd());
+      if (!isProgress(text)) printed.push(text.trimEnd());
+    };
+    // A chunk can end mid-line; each stream keeps its unfinished line for the next chunk.
+    const reader = () => {
+      let rest = '';
+      return (chunk: Buffer) => {
+        const lines = (rest + chunk.toString()).split(/[\r\n]/);
+        rest = lines.pop() ?? '';
+        lines.forEach(line);
+      };
+    };
+    child.stdout.on('data', reader());
+    child.stderr.on('data', reader());
+    child.on('error', fail);
+    child.on('close', (code) => (code === 0 ? done() : fail(new Error(printed.slice(-20).join('\n') || `${cmd} exited with ${code}`))));
+  }));
+}
+
+/** git's redrawn counters: "Receiving objects:  42% (420/1000)". */
+const isProgress = (line: string) => /:\s+\d+% \(\d+\/\d+\)/.test(line);
 
 export const runGit = (cwd: string, args: string[], options?: Parameters<typeof run>[3]) => run('git', cwd, ['-c', 'core.quotePath=false', ...args], options);
 
