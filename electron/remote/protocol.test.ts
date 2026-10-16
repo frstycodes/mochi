@@ -118,7 +118,7 @@ test('a result too large for the relay is refused with its size instead of sent'
   assert.deepEqual(resultFrame('c1', { isOk: true, data: { text: 'hi' } }), { type: 'result', id: 'c1', isOk: true, data: { text: 'hi' } });
   const big = resultFrame('c1', { isOk: true, data: { text: 'x'.repeat(MAX_RESULT_BYTES) } });
   assert.equal(big.type === 'result' && big.isOk, false);
-  assert.match(big.type === 'result' && !big.isOk ? big.error : '', /^Too large to send here \(0\.8 MB\)/);
+  assert.match(big.type === 'result' && !big.isOk ? big.error : '', /^Too large to send here \(8\.0 MB\)/);
 });
 
 test('side chats reach only devices with code: they quote diffs and files', () => {

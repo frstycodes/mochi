@@ -122,10 +122,23 @@ export function deviceId(publicKey: Uint8Array): string {
   return sodium.to_base64(sodium.crypto_generichash(12, publicKey, null), sodium.base64_variants.URLSAFE_NO_PADDING);
 }
 
-/** After pairing: text frames in, ciphertext out. A frame that fails to decrypt ends the connection. */
+/**
+ * After pairing: text frames in, ciphertext out. A frame that fails to decrypt ends the connection.
+ * A message too big for one relay frame (the relay closes the machine's socket past 1 MB, `infra/relay/src/relay.ts`) goes
+ * as pieces of `MAX_PIECE_BYTES`, each encrypted on its own: every piece but the last starts with a 0x00 byte, which JSON
+ * text never contains, so a message that fits in one frame needs no marker.
+ */
 function encrypted(raw: RawLink, session: Session): Link {
+  let pieces: Uint8Array[] = [];
+  let held = 0;
   return {
-    send: (text) => raw.send(session.encrypt(sodium.from_string(text))),
+    send(text) {
+      const bytes = sodium.from_string(text);
+      for (let at = 0; at < bytes.length; at += MAX_PIECE_BYTES) {
+        const piece = bytes.subarray(at, at + MAX_PIECE_BYTES);
+        raw.send(session.encrypt(at + MAX_PIECE_BYTES < bytes.length ? concatBytes([MORE, piece]) : piece));
+      }
+    },
     close: (code, reason) => raw.close(code, reason),
     onMessage: (listener) =>
       raw.onMessage((bytes) => {
@@ -135,12 +148,27 @@ function encrypted(raw: RawLink, session: Session): Link {
         } catch {
           return raw.close(4403, 'A frame failed to decrypt');
         }
-        listener(sodium.to_string(plain));
+        const isMore = plain[0] === 0;
+        held += plain.length;
+        if (held > MAX_MESSAGE_BYTES) return raw.close(4413, 'Message too large');
+        pieces.push(isMore ? plain.subarray(1) : plain);
+        if (isMore) return;
+        const message = pieces.length === 1 ? pieces[0] : concatBytes(pieces);
+        pieces = [];
+        held = 0;
+        listener(sodium.to_string(message));
       }),
     onClose: (listener) => raw.onClose(() => listener()),
     isOpen: () => raw.isOpen(),
   };
 }
+
+/** Under the relay's 1 MB frame with room for the sequence number, stream header and tag. */
+export const MAX_PIECE_BYTES = 512 * 1024;
+/** Past this a peer is sending garbage, not a snapshot. */
+const MAX_MESSAGE_BYTES = 64 * 1024 * 1024;
+const MORE = new Uint8Array([0]);
+const concatBytes = (parts: Uint8Array[]) => new Uint8Array(Buffer.concat(parts));
 
 function parsePair(bytes: Uint8Array) {
   const frame = parseJson(bytes);
