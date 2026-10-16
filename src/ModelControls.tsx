@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowLeft, ChevronDown, ChevronRight, Flash, Search, Star } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
+import type { MachineCatalog } from './host/types/remote';
 import { effortFor, effortName, FAST, optionFor, searchModels, speedFor, type ModelOption } from './runtime/models';
 import { setPrefs, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
@@ -396,8 +397,12 @@ function unavailableReason(install: AgentInstall) {
   if (install.login.state === 'logged-out') return 'Signed out';
 }
 
+/** Another computer's models and defaults, for a composer starting a thread there; unset, the pickers read this computer's. */
+export const MachineModelsContext = createContext<Pick<MachineCatalog, 'models' | 'defaults'> | null>(null);
+
 /** Each harness's models on the profile's account, from main (cached there per account); a harness missing until its list arrives, [] when it can't be read. */
 export function useModels(spaceId: string) {
+  const machine = useContext(MachineModelsContext);
   const [models, setModels] = useState<Partial<Record<Provider, AgentModel[]>>>({});
   useEffect(() => {
     let isCurrent = true;
@@ -412,12 +417,13 @@ export function useModels(spaceId: string) {
       isCurrent = false;
     };
   }, [spaceId]);
-  return models;
+  return machine?.models ?? models;
 }
 
 export const toggleStar = (starred: string[], id: string) => (starred.includes(id) ? starred.filter((x) => x !== id) : [...starred, id]);
 /** Each harness's default model from Settings ('' = the harness's own); null until read. */
 export function useDefaultModels() {
+  const machine = useContext(MachineModelsContext);
   const [models, setModels] = useState<Record<Provider, string> | null>(null);
   useEffect(() => {
     let isCurrent = true;
@@ -429,7 +435,7 @@ export function useDefaultModels() {
       isCurrent = false;
     };
   }, []);
-  return models;
+  return machine?.defaults ?? models;
 }
 
 function FavoriteToggle({ isOn, name, onToggle }: { isOn: boolean; name: string; onToggle: () => void }) {

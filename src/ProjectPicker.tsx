@@ -9,10 +9,14 @@ import { getPrefs } from './settings/prefs';
 import { useHarness, useSpaceThreads } from './store';
 import { addRecentProject, projectName, projectRef, useSavedProjects } from './projects';
 
-/** Where a new thread runs: a folder this profile opened before, one opened by path, or no folder at all. `value` is a project ref (`src/projects.ts`). */
-export function ProjectPicker({ value, onChange }: { value: string | null; onChange: (project: string | null) => void }) {
+/**
+ * Where a new thread runs: a folder this profile opened before, one opened by path, or no folder at all. `value` is a project ref
+ * (`src/projects.ts`). `projects` lists another computer's instead, which can't be browsed from here.
+ */
+export function ProjectPicker({ value, onChange, projects: machineProjects }: { value: string | null; onChange: (project: string | null) => void; projects?: string[] }) {
   const spaceId = useHarness().state.spaceId;
-  const projects = useRecentProjects();
+  const recent = useRecentProjects();
+  const projects = machineProjects ?? recent;
   const [isOpen, setOpen] = useState(false);
   const [isBrowsing, setBrowsing] = useState(false);
   const name = value && projectName(value);
@@ -43,7 +47,7 @@ export function ProjectPicker({ value, onChange }: { value: string | null; onCha
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-0">
-        {isBrowsing ? <FolderBrowser onBack={() => setBrowsing(false)} onChoose={openFolder} /> : <ProjectList projects={projects} value={value} onChoose={choose} onBrowse={() => setBrowsing(true)} />}
+        {isBrowsing ? <FolderBrowser onBack={() => setBrowsing(false)} onChoose={openFolder} /> : <ProjectList projects={projects} value={value} onChoose={choose} onBrowse={machineProjects ? undefined : () => setBrowsing(true)} />}
       </PopoverContent>
     </Popover>
   );
@@ -57,7 +61,7 @@ export function useRecentProjects() {
   return [...new Set([...saved, ...fromThreads])];
 }
 
-function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string[]; value: string | null; onChoose: (project: string | null) => void; onBrowse: () => void }) {
+function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string[]; value: string | null; onChoose: (project: string | null) => void; onBrowse?: () => void }) {
   return (
     <Command>
       <CommandInput placeholder="Search projects" />
@@ -87,10 +91,12 @@ function ProjectList({ projects, value, onChoose, onBrowse }: { projects: string
               <span className="type-caption text-subtle-foreground">Chat without a folder, branch or files</span>
             </span>
           </CommandItem>
-          <CommandItem value="Open folder" keywords={['add', 'project', 'path']} onSelect={onBrowse}>
-            <FolderAdd />
-            Open folder
-          </CommandItem>
+          {!!onBrowse && (
+            <CommandItem value="Open folder" keywords={['add', 'project', 'path']} onSelect={onBrowse}>
+              <FolderAdd />
+              Open folder
+            </CommandItem>
+          )}
         </CommandGroup>
       </CommandList>
     </Command>
