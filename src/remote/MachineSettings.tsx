@@ -58,7 +58,7 @@ export function MachineSettings({ machine, section }: { machine: FollowedMachine
   useEffect(() => void load(), [load]);
   const canChange = machine.status === 'online' && machine.scopes.includes('manage');
   const rows = settingsCatalog().filter((s) => s.section === section && REMOTE_CONTROLS.includes(s.control.type) && values && s.key in values);
-  const groups = Map.groupBy(rows, (s) => s.group ?? '');
+  const groups = groupRows(rows);
 
   const change = async (setting: Setting, value: string) => {
     setValues((all) => all && { ...all, [setting.key]: value });
@@ -94,6 +94,13 @@ const REMOTE_CONTROLS: Control['type'][] = ['choice', 'select', 'switch', 'numbe
 const remoteControl = (setting: Setting): Setting => (setting.control.type === 'text' ? { ...setting, control: { ...setting.control, isPath: false } } : setting);
 
 const NO_CATALOG = { models: {}, defaults: { claude: '', codex: '' } };
+
+/** Rows by their titled group, in catalog order. */
+function groupRows(rows: Setting[]) {
+  const groups = new Map<string, Setting[]>();
+  for (const row of rows) groups.set(row.group ?? '', [...(groups.get(row.group ?? '') ?? []), row]);
+  return groups;
+}
 
 function MachineSettingsState({ title, description }: { title: string; description: string }) {
   return (
