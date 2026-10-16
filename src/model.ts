@@ -421,6 +421,8 @@ export interface SubagentStep {
 
 export interface LiveRun {
   isWorking: boolean;
+  /** How the last turn ended, for an alert on another computer that only sees it stop working. */
+  turnEnd?: 'done' | 'interrupted' | 'failed';
   /** Mochi launched this agent and it hasn't reported anything yet. */
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
