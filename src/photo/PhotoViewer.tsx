@@ -91,7 +91,8 @@ function Stage({ photo, position, onStep }: { photo: Photo; position?: string; o
 
   return (
     <>
-      <header className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
+      {/* Fills the window, so it always sits under Windows' caption buttons. */}
+      <header data-under-captions className="app-drag flex h-11 shrink-0 items-center gap-1 px-3 in-data-traffic-lights:pl-20">
         <DialogPrimitive.Title className="min-w-0 truncate px-1 type-title">{photo.name}</DialogPrimitive.Title>
         {!!position && <span className="shrink-0 px-1 type-meta text-subtle-foreground tabular">{position}</span>}
         <span className="flex-1" />
