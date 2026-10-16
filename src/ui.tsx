@@ -58,6 +58,11 @@ export function LiveDot({ className, style }: { className?: string; style?: CSSP
   return <span aria-hidden className={cn('pulse relative inline-block size-2 shrink-0 rounded-full bg-current', className)} style={style} />;
 }
 
+/** Something new since you last looked; the same mark wherever read state shows. */
+export function UnreadDot({ className }: { className?: string }) {
+  return <span aria-label="Unread" className={cn('size-1.5 shrink-0 rounded-full bg-foreground', className)} />;
+}
+
 export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
   if (status === 'running') return <LiveDot className="mx-1 text-success" />;
   if (status === 'needs-you') return <MessageCircleQuestion aria-label="Needs you" className="size-4 shrink-0 text-warning" />;

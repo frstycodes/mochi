@@ -32,6 +32,7 @@ export const COMMAND_SCOPES = {
   handoff: 'operate',
   rewind: 'operate',
   'side-chat': 'operate',
+  seen: 'operate',
   create: 'manage',
   rename: 'manage',
   'edit-goal': 'manage',
@@ -95,6 +96,7 @@ export function resultFrame(id: string, result: CommandResult): ServerFrame {
 }
 
 const MAX_ID = 128;
+const MAX_SEEN = 500;
 const MAX_TEXT = 256 * 1024;
 
 /** Device frames are untrusted: anything off-shape becomes an error string, never a half-read command. */
@@ -158,6 +160,12 @@ function parseRemoteCommand(value: unknown): RemoteCommand | string {
       return isString(c.threadId, MAX_ID) && isText(c.text, MAX_TEXT)
         ? { type: 'side-chat', threadId: c.threadId, text: c.text }
         : 'side-chat needs threadId and text';
+    case 'seen': {
+      const hasThread = c.threadId !== undefined;
+      const hasQueue = c.queueIds !== undefined;
+      if ((!hasThread && !hasQueue) || (hasThread && !isString(c.threadId, MAX_ID)) || (hasQueue && !isIds(c.queueIds))) return `seen needs threadId, queueIds (up to ${MAX_SEEN} ids) or both`;
+      return { type: 'seen', ...(hasThread && { threadId: c.threadId as string }), ...(hasQueue && { queueIds: c.queueIds as string[] }) };
+    }
     case 'catalog':
       return { type: 'catalog' };
     case 'settings':
@@ -370,3 +378,5 @@ const MAX_PATH = 4096;
 
 const isAnswers = (value: unknown): value is string[][] =>
   Array.isArray(value) && value.length <= 64 && value.every((a) => Array.isArray(a) && a.length <= 64 && a.every((s) => isString(s, 16 * 1024)));
+
+const isIds = (value: unknown): value is string[] => Array.isArray(value) && value.length <= MAX_SEEN && value.every((id) => isString(id, MAX_ID) && !!id);

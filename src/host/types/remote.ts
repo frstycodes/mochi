@@ -134,6 +134,8 @@ export type RemoteCommand =
   | { type: 'rewind'; threadId: string; point: ThreadPoint; mode: 'chat' | 'files' }
   /** Asked in the thread's side chat on this computer; the answer streams in like any store change. */
   | { type: 'side-chat'; threadId: string; text: string }
+  /** Opened on the device: the thread (with its asks) and Queue cards read here too, and on every other device. */
+  | { type: 'seen'; threadId?: string; queueIds?: string[] }
   // manage
   | {
       type: 'create';

@@ -355,6 +355,8 @@ export interface Thread {
   queued?: QueuedMessage[];
   /** Why the queue stopped sending; cleared by your next send or Resume. */
   queuePause?: QueuePause;
+  /** How many `activity` entries you had seen when you last had it open, on any device; more now is unread. */
+  seenActivity?: number;
 }
 
 /** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
@@ -463,6 +465,8 @@ export interface QueueItem {
   /** A `ci` card: the PR and the first failed check, whose log "Send failing log to agent" fetches. */
   ci?: { pr: number; url: string; check?: { name: string; link?: string } };
   createdAt: number;
+  /** You looked at it, on any device. */
+  isSeen?: boolean;
 }
 
 /** What a Mochi widget asks and waits on: a delete naming exactly what goes, or a browser escalation. */

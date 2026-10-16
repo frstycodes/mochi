@@ -25,6 +25,7 @@ import { recordPrs } from '../git/prs.ts';
 import { branchName, repoWorkspace, withHead, type WorkspaceDraft } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 import { getRestored } from './persist.ts';
+import { markSeen, type SeenAction } from './seen.ts';
 import { showsDemoData } from '../demoData.ts';
 import type { TriggerDraft } from '../schedule/calls.ts';
 import { describeTrigger } from '../schedule/describe.ts';
@@ -44,6 +45,7 @@ export interface ThreadsState {
 
 export type ThreadsAction =
   | { type: 'tick' }
+  | SeenAction
   /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
   | { type: 'agent'; event: SeqAgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
@@ -125,7 +127,8 @@ export type ThreadsAction =
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
 export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
-  const demo = isDemo ? seedThreads() : [];
+  // Demo threads start read, as a restored save does.
+  const demo = isDemo ? seedThreads().map((t) => ({ ...t, seenActivity: t.activity.length })) : [];
   let checkpointSeq = saved?.checkpointSeq ?? 0;
   const checkpoints = Object.fromEntries(
     demo.map((t) => {
@@ -154,6 +157,8 @@ function reduce(state: State, action: Action): State {
   switch (action.type) {
     case 'tick':
       return tick(state);
+    case 'seen':
+      return markSeen(state, action);
     case 'overlap':
       return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':

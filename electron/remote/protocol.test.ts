@@ -153,3 +153,26 @@ test('reading projects needs read; adding or cloning one needs manage', () => {
   assert.deepEqual(scopes({ type: 'clone-project', source: { github: 'a/b' } }), ['manage']);
   assert.equal(hasScope(['read', 'operate', 'code'], { type: 'clone-project', source: { github: 'a/b' } }), false);
 });
+
+test('seen parses strictly: a thread, Queue cards or both, and nothing else', () => {
+  assert.deepEqual(parse({ type: 'seen', threadId: 't', extra: 1 }), { type: 'command', id: 'c1', command: { type: 'seen', threadId: 't' } });
+  assert.deepEqual(parse({ type: 'seen', queueIds: ['q1', 'q2'] }), { type: 'command', id: 'c1', command: { type: 'seen', queueIds: ['q1', 'q2'] } });
+  assert.deepEqual(parse({ type: 'seen', threadId: 't', queueIds: [] }), { type: 'command', id: 'c1', command: { type: 'seen', threadId: 't', queueIds: [] } });
+  for (const bad of [
+    { type: 'seen' },
+    { type: 'seen', threadId: 7 },
+    { type: 'seen', threadId: 'x'.repeat(200) },
+    { type: 'seen', queueIds: 'q1' },
+    { type: 'seen', queueIds: ['q1', 3] },
+    { type: 'seen', queueIds: [''] },
+    { type: 'seen', queueIds: Array.from({ length: 501 }, (_, i) => `q${i}`) },
+  ])
+    assert.equal(typeof parse(bad), 'string', JSON.stringify(bad).slice(0, 80));
+});
+
+test('marking read needs operate: a read-only device can follow, not change what others see', () => {
+  const frame = parse({ type: 'seen', threadId: 't' });
+  assert.ok(typeof frame !== 'string');
+  assert.equal(hasScope(['read'], frame.command), false);
+  assert.equal(hasScope(['read', 'operate'], frame.command), true);
+});

@@ -49,10 +49,12 @@ import { hasGoal } from './drift';
 import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
+import { useSeen } from './notify/useSeen';
 
 export function ThreadView({ thread }: { thread: Thread }) {
   const { state, dispatch } = useHarness();
   const { isWide, isFocused } = useSplit();
+  useSeen({ threadId: thread.id }, 'open-and-leave');
   const pane = state.panes.find((p) => p.threadId === thread.id);
   const isPaneOpen = !!pane?.isOpen;
   const summary = useSummaryState(isWide && isPaneOpen, isWide);
