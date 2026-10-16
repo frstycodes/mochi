@@ -28,7 +28,7 @@ const sources: SettingSources = {
   accounts: { accounts: DEFAULT_ACCOUNTS, links: {} },
   config,
   colorThemes: [{ id: 'ext:a.b:Night', label: 'Night', kind: 'dark' }],
-  remote: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false },
+  remote: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true },
 };
 
 test('every setting reads its default and takes that value back', () => {

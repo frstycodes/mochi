@@ -1,4 +1,4 @@
-import { app, BrowserWindow, safeStorage, type WebContents } from 'electron';
+import { app, BrowserWindow, powerMonitor, safeStorage, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
@@ -6,11 +6,13 @@ import { join as joinPath } from 'node:path';
 import sodium from 'libsodium-wrappers';
 import type { ApprovalRequest, CommandResult, FollowedMachine, MemberInfo, OtherMachine, RelayState, RemoteCommand, RemoteSettings, RemoteStatus, Scope } from '../../src/host/types/remote.ts';
 import { accessToken, current as currentAccount, onAccountChange } from '../account/session.ts';
+import { isAnyBusy, onBusyChange } from '../agents/events.ts';
 import { createWindow, mainWindow } from '../window.ts';
 import { MachineCache } from './cache.ts';
 import { followMachine, openLan, type MachineFollower, type Route } from './client.ts';
 import { loadDeviceKeys, type DeviceKeys } from './crypto/keys.ts';
 import { networkHosts } from './interfaces.ts';
+import { holdAwake } from './keepAwake.ts';
 import type { RawLink } from './link.ts';
 import type { PairedMachine } from './registry.ts';
 import { approveMember, mergeRecords, parseRecords, resolveMembers, signMember, signRemoval, vouches, type MemberRecord, type Membership } from './members.ts';
@@ -25,7 +27,7 @@ import { startRemoteServer, type RemoteServer, type RendererBridge } from './ser
 export const REMOTE_PORT = Number(process.env.MOCHI_REMOTE_PORT) || 47373;
 const SNAPSHOT_TIMEOUT_MS = 15_000;
 const COMMAND_TIMEOUT_MS = 30_000;
-const DEFAULTS: RemoteSettings = { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false };
+const DEFAULTS: RemoteSettings = { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true };
 const WELCOME_TIMEOUT_MS = 15_000;
 
 const file = () => joinPath(app.getPath('userData'), 'remote.json');
@@ -80,6 +82,9 @@ export function startRemote() {
   });
   if (settings.isEnabled) void restart();
   app.on('will-quit', () => followers.forEach((f) => f.close()));
+  onBusyChange(syncAwake);
+  powerMonitor.on('on-battery', broadcast);
+  powerMonitor.on('on-ac', broadcast);
   void absorb([]).then(pullMembers);
 }
 
@@ -90,7 +95,7 @@ export function remoteStatus(): RemoteStatus {
     const followed = machine && followers.get(machine.id)?.state();
     return { id, name, kind: followed?.kind ?? kind, scopes, addedAt: pairedAt, ...(followed && { machineStatus: followed.status }) };
   });
-  return { settings, hostName: hostname(), addresses: server?.addresses ?? [], devices: server?.devices() ?? [], members, isRemoved: membership?.isRemoved ?? false, relay: relayState, ...(error && { error }) };
+  return { settings, hostName: hostname(), addresses: server?.addresses ?? [], devices: server?.devices() ?? [], members, isRemoved: membership?.isRemoved ?? false, relay: relayState, isOnBattery: powerMonitor.isOnBatteryPower(), ...(error && { error }) };
 }
 
 export async function setRemote(patch: Partial<RemoteSettings>) {
@@ -441,7 +446,14 @@ function keepRendererAlive() {
   if (!settings.isEnabled && win && !win.isVisible()) win.close();
 }
 
+/** Awake while devices may control this computer and something is going on: a turn in flight, or a device connected. */
+function syncAwake() {
+  holdAwake(settings.isEnabled && settings.keepsAwake && (isAnyBusy() || !!server?.devices().length));
+}
+
+/** Every change to settings or connected devices lands here, so keep-awake follows it too. */
 function broadcast() {
+  syncAwake();
   const status = remoteStatus();
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send('remote:onStatus', status);
 }
@@ -449,7 +461,7 @@ function broadcast() {
 function loadSettings(): RemoteSettings {
   try {
     const saved = JSON.parse(readFileSync(file(), 'utf8')) as Partial<RemoteSettings>;
-    return { isEnabled: saved.isEnabled === true, allowsNetwork: saved.allowsNetwork === true, machineName: typeof saved.machineName === 'string' ? saved.machineName : '', reachesAnywhere: saved.reachesAnywhere === true };
+    return { isEnabled: saved.isEnabled === true, allowsNetwork: saved.allowsNetwork === true, machineName: typeof saved.machineName === 'string' ? saved.machineName : '', reachesAnywhere: saved.reachesAnywhere === true, keepsAwake: saved.keepsAwake !== false };
   } catch {
     return DEFAULTS;
   }

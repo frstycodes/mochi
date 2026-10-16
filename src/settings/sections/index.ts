@@ -255,6 +255,7 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'remoteEnabled', label: 'Let devices control this computer', keywords: 'remote control phone laptop server connect' },
       { id: 'remoteNetwork', label: 'Allow devices on this network', keywords: 'lan tailscale wifi firewall remote' },
+      { id: 'keepAwake', label: 'Keep this computer awake', keywords: 'sleep power battery lid caffeinate remote' },
       { id: 'machineName', label: 'Computer name', keywords: 'machine host name remote' },
       { id: 'remoteAnywhere', label: 'Reach this computer from anywhere', keywords: 'relay internet away remote account' },
       { id: 'members', label: 'Your computers', keywords: 'remove trusted devices members approve connected scopes pair' },

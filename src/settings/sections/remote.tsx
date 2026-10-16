@@ -51,6 +51,12 @@ function RemoteAccess() {
           description={isSignedIn ? <RelayState status={status} /> : 'Needs your Mochi account'}
           control={<Switch id={settingControlId('remoteAnywhere')} checked={settings.reachesAnywhere} disabled={!isSignedIn || !settings.isEnabled} onCheckedChange={(reachesAnywhere) => void update({ reachesAnywhere })} />}
         />
+        <SettingsRow
+          id="keepAwake"
+          label="Keep this computer awake"
+          description={<AwakeState status={status} />}
+          control={<Switch id={settingControlId('keepAwake')} checked={settings.keepsAwake} disabled={!settings.isEnabled} onCheckedChange={(keepsAwake) => void update({ keepsAwake })} />}
+        />
         <SettingsRow id="machineName" label="Computer name" description="How your devices list this computer" control={<CommitInput id={settingControlId('machineName')} value={settings.machineName} placeholder={status.hostName} maxLength={64} onCommit={(machineName) => void update({ machineName })} />} />
       </SettingsGroup>
       <Members status={status} />
@@ -64,6 +70,11 @@ function ListeningState({ status }: { status: RemoteStatus }) {
   if (!status.settings.isEnabled) return 'Off';
   if (status.addresses.length === 0) return 'Starting…';
   return `Listening on ${new Intl.ListFormat('en', { type: 'conjunction' }).format(status.addresses)}`;
+}
+
+function AwakeState({ status }: { status: RemoteStatus }) {
+  if (status.isOnBattery && status.settings.isEnabled && status.settings.keepsAwake) return <span className="text-warning">On battery, it drains the charge while a thread works or a device is connected</span>;
+  return 'While a thread works or a device is connected, so it doesn’t sleep under them';
 }
 
 function RelayState({ status }: { status: RemoteStatus }) {

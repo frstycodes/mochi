@@ -17,6 +17,7 @@ export const remote = {
     if (p.allowsNetwork !== undefined) next.allowsNetwork = boolean(p.allowsNetwork, 'allowsNetwork');
     if (p.machineName !== undefined) next.machineName = string(p.machineName, 'machineName', MAX_NAME).trim();
     if (p.reachesAnywhere !== undefined) next.reachesAnywhere = boolean(p.reachesAnywhere, 'reachesAnywhere');
+    if (p.keepsAwake !== undefined) next.keepsAwake = boolean(p.keepsAwake, 'keepsAwake');
     return setRemote(next);
   },
   async push(sender, epoch, seq, action) {

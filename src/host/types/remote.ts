@@ -27,6 +27,8 @@ export interface RemoteSettings {
   machineName: string;
   /** Also reachable through Mochi's relay from anywhere; needs a signed-in Mochi account. */
   reachesAnywhere: boolean;
+  /** While devices can control it and a thread works or a device is connected, the computer doesn't sleep. */
+  keepsAwake: boolean;
 }
 
 export type RelayState = { status: 'off' } | { status: 'connecting' } | { status: 'connected' } | { status: 'error'; error: string };
@@ -103,6 +105,8 @@ export interface RemoteStatus {
   /** Another of your computers removed this one: it trusts nobody until it joins again. */
   isRemoved: boolean;
   relay: RelayState;
+  /** A laptop running on its battery, where keeping awake costs charge. */
+  isOnBattery: boolean;
   /** Why the server isn't listening, when it should be (port taken, interface gone). */
   error?: string;
 }

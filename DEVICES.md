@@ -166,7 +166,8 @@ Mochi on macOS, Windows and Linux are equal peers: any of them can own threads a
 - **No account, no network:** Mochi on one machine works exactly as today. Nothing here runs until you sign in and turn on Settings › Devices.
 - **Device can't reach the machine:** the device shows the cached snapshot with "<machine> offline since <time>" and disables actions. Drafts stay in the composer. Nothing queues to send later, because sending later could spend usage unasked (the same rule as `pauseQueue` on restart, verified in `src/store/persist.ts`).
 - **Relay down:** already-paired devices on the LAN or Tailscale keep working from the keys they hold; new pairing waits for the relay, and remote devices see "offline".
-- **Machine asleep:** agents pause with the machine, as today. Keep-awake while threads run is a separate checklist item if wanted.
+- **Machine asleep:** agents pause with the machine. To keep that rare, while "Let devices control this computer" is on and a thread is working or a device is connected, the machine holds Electron's `powerSaveBlocker` (`prevent-app-suspension`) and releases it otherwise (`electron/remote/keepAwake.ts`, built). Settings › Devices › "Keep this computer awake" turns it off; on battery the row says it drains the charge. It stops idle sleep only: closing a laptop's lid or choosing Sleep still sleeps it (not verified per OS).
+- **Waking a sleeping machine:** not possible through the relay. Wake-on-LAN is a broadcast "magic packet" on the machine's own network segment; the relay only forwards traffic to a machine that keeps its own outbound connection open, and a sleeping one has none. A device on the same LAN could send one, but the NIC, firmware and OS each have to allow it, and nothing here builds that.
 
 ## Hosting and cost (proposed)
 
