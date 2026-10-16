@@ -86,7 +86,7 @@ function HeaderAction({ label, icon: Icon, ...props }: { label: string; icon: Ic
   );
 }
 
-function EmptySideChat() {
+export function EmptySideChat() {
   return (
     <ConversationEmptyState className="min-h-0 flex-1">
       <MessageQuestion className="size-6 text-muted-foreground" aria-hidden />
@@ -98,7 +98,7 @@ function EmptySideChat() {
   );
 }
 
-function Question({ message }: { message: SideMessage }) {
+export function Question({ message }: { message: SideMessage }) {
   return (
     <Message from="user">
       <MessageContent className="type-prose">
@@ -109,9 +109,10 @@ function Question({ message }: { message: SideMessage }) {
   );
 }
 
-function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 'message' | 'thread') => void }) {
+/** `onPromote` unset: another computer's answer, which can't be sent on from here. */
+export function Answer({ message, onPromote }: { message: SideMessage; onPromote?: (to: 'message' | 'thread') => void }) {
   const isThinking = !!message.isStreaming && !message.text;
-  const canPromote = !message.isStreaming && !message.promotedTo;
+  const canPromote = !!onPromote && !message.isStreaming && !message.promotedTo;
   return (
     <Message from="assistant" className="max-w-full">
       <MessageContent className="w-full type-prose">
@@ -122,11 +123,11 @@ function Answer({ message, onPromote }: { message: SideMessage; onPromote: (to: 
       </MessageContent>
       {canPromote && (
         <MessageActions className="-ml-2">
-          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote('message')}>
+          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote?.('message')}>
             <Send aria-hidden />
             Send to thread
           </Button>
-          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote('thread')}>
+          <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => onPromote?.('thread')}>
             <MessageAdd aria-hidden />
             New thread
           </Button>

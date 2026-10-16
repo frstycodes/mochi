@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowUp, Stop, X } from 'reicon-react';
+import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
+import { ArrowUp, Copy3, RotateLeft, Stop, Trash3, X } from 'reicon-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -8,7 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { ChatView } from '../ChatView';
+import { ChatView, type MessageBar } from '../ChatView';
+import { copyText } from '../clipboard';
+import { cn } from '@/lib/utils';
+import { PANE_TABS } from '../pane/tabs';
+import { rewindBlockedReason, type RewindMode } from '../rewind/checkpoints';
+import { REWIND_MODE_ORDER, REWIND_MODES } from '../rewind/modes';
 import { ComposerCard } from '../Composer';
 import type { FollowedMachine, Scope } from '../host/types/remote';
 import { isTyping } from '../keys';
@@ -18,10 +24,11 @@ import { QueueDecision } from '../QueueView';
 import { useHarness, useView } from '../store';
 import { TitleBar } from '../TitleBar';
 import { DeviceIndicator } from '../ThreadView';
-import { OverflowIcon, TooltipIconButton } from '../ui';
+import { ForkIcon, OverflowIcon, TooltipIconButton } from '../ui';
 import { closeRemoteThread, useRemoteThreadRoute } from './open';
 import { remoteDecisions } from './mirror';
 import { MachinePresence } from './MachinePresence';
+import { REMOTE_PANES, RemotePane, type RemotePaneKind } from './RemotePanes';
 import { machineStatus } from './status';
 import { RemoteScope, useMachines } from './useMachines';
 
@@ -36,17 +43,32 @@ export function RemoteThreadView() {
   if (!thread) return <Missing machine={followed.machine} title="This thread is gone" description={`It isn’t on ${followed.machine.name} anymore.`} />;
   return (
     <RemoteScope machine={followed.machine} state={followed.state}>
-      <div className="flex h-full min-h-0 flex-col">
-        <RemoteHeader machine={followed.machine} thread={thread} />
+      <RemoteThread machine={followed.machine} thread={thread} />
+    </RemoteScope>
+  );
+}
+
+/** The chat column, and beside it one pane reading from that computer, like the machine's own thread view. */
+function RemoteThread({ machine, thread }: { machine: FollowedMachine; thread: Thread }) {
+  const [pane, setPane] = useState<RemotePaneKind | null>(null);
+  return (
+    <div className="flex h-full min-h-0">
+      <div className="@container flex min-h-0 min-w-[420px] flex-1 flex-col">
+        <RemoteHeader machine={machine} thread={thread} pane={pane} onPane={(kind) => setPane(kind === pane ? null : kind)} />
         <SplitContext.Provider value={SPLIT}>
-          {/* Read-only: rewinds, forks and the files behind links are that computer's, not this one's. */}
+          {/* Links and the per-message actions that would act on this computer stay off; the bar below acts on that one. */}
           <PreviewContext.Provider value>
-            <ChatView thread={thread} isReadOnly />
+            <ChatView thread={thread} isReadOnly messageBar={RemoteMessageBar} />
           </PreviewContext.Provider>
         </SplitContext.Provider>
-        <RemoteComposer machine={followed.machine} thread={thread} />
+        <RemoteComposer machine={machine} thread={thread} />
       </div>
-    </RemoteScope>
+      {!!pane && (
+        <div className="flex w-[45%] max-w-[720px] min-w-[320px] flex-col py-2 pr-2">
+          <RemotePane kind={pane} machine={machine} thread={thread} onClose={() => setPane(null)} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -71,9 +93,21 @@ function useCloseOnLeave() {
 
 const can = (machine: FollowedMachine, scope: Scope) => machine.status === 'online' && machine.scopes.includes(scope);
 
-function RemoteHeader({ machine, thread }: { machine: FollowedMachine; thread: Thread }) {
+function RemoteHeader({
+  machine,
+  thread,
+  pane,
+  onPane,
+}: {
+  machine: FollowedMachine;
+  thread: Thread;
+  pane: RemotePaneKind | null;
+  onPane: (kind: RemotePaneKind) => void;
+}) {
   const { run } = useMachines();
   const [shipping, setShipping] = useState<'commit' | 'open-pr' | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const hasFolder = !!thread.repo || !!thread.live?.cwd;
   const isSettled = thread.status === 'settled';
   const canManage = can(machine, 'manage');
   return (
@@ -88,6 +122,11 @@ function RemoteHeader({ machine, thread }: { machine: FollowedMachine; thread: T
           Stop
         </Button>
       )}
+      <span className="hidden items-center gap-0.5 @md:flex">
+        {PANE_KINDS.filter((kind) => hasFolder || !REMOTE_PANES[kind].needsFolder).map((kind) => (
+          <PaneToggle key={kind} kind={kind} machine={machine} isOpen={pane === kind} onToggle={() => onPane(kind)} />
+        ))}
+      </span>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label="Thread actions">
@@ -112,15 +151,158 @@ function RemoteHeader({ machine, thread }: { machine: FollowedMachine; thread: T
               </DropdownMenuItem>
             </>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" disabled={!canManage} onSelect={() => setIsDeleting(true)}>
+            <Trash3 />
+            Delete thread…
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <TooltipIconButton label="Close" hint="Back to this computer’s threads (Esc)" onClick={closeRemoteThread}>
         <X />
       </TooltipIconButton>
       <ShipDialog kind={shipping} machine={machine} thread={thread} onClose={() => setShipping(null)} />
+      <AlertDialog open={isDeleting} onOpenChange={setIsDeleting}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{thread.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Stops its agent on {machine.name} and removes its history there. Its files stay on disk. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep thread</AlertDialogCancel>
+            <AlertDialogAction
+              variant="danger"
+              onClick={() =>
+                void run(machine.id, {
+                  type: 'delete',
+                  threadId: thread.id,
+                }).then((r) => r.isOk && closeRemoteThread())
+              }
+            >
+              Delete thread
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TitleBar>
   );
 }
+
+const PANE_KINDS = Object.keys(REMOTE_PANES) as RemotePaneKind[];
+
+function PaneToggle({ kind, machine, isOpen, onToggle }: { kind: RemotePaneKind; machine: FollowedMachine; isOpen: boolean; onToggle: () => void }) {
+  const { title, icon: Icon } = PANE_TABS[kind];
+  const { scope } = REMOTE_PANES[kind];
+  const canOpen = machine.scopes.includes(scope);
+  return (
+    <TooltipIconButton
+      label={title}
+      hint={canOpen ? `Reads from ${machine.name}` : `${machine.name} hasn’t given this computer the ${scope} scope`}
+      aria-pressed={isOpen}
+      disabled={!canOpen && !isOpen}
+      onClick={onToggle}
+      className="text-muted-foreground aria-pressed:bg-accent aria-pressed:text-foreground"
+    >
+      <Icon />
+    </TooltipIconButton>
+  );
+}
+
+/** Under each message: copy, and rewind or fork run on that computer. A files rewind asks here, without the file list the machine shows. */
+function RemoteMessageBar({ thread, index, align }: ComponentProps<MessageBar>) {
+  const { run, machines } = useMachines();
+  const machineId = useRemoteThreadRoute()?.machineId;
+  const machine = machines.find((m) => m.machine.id === machineId)?.machine;
+  const [isConfirming, setIsConfirming] = useState(false);
+  const entry = thread.activity[index];
+  if (!entry || !machine) return null;
+  const canOperate = can(machine, 'operate');
+  const blocked = rewindBlockedReason(thread) ?? (canOperate ? undefined : `${machine.name} is offline or lets this computer read only`);
+  const rewind = (mode: RewindMode) =>
+    void run(machine.id, {
+      type: 'rewind',
+      threadId: thread.id,
+      point: { kind: 'message', index },
+      mode,
+    });
+  return (
+    <div
+      role="toolbar"
+      aria-label="Message actions"
+      className={cn(
+        'flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100',
+        align === 'end' && 'justify-end',
+      )}
+    >
+      <TooltipIconButton label="Copy" onClick={() => copyText(entry.text, 'Copied')} className={BAR_BUTTON}>
+        <Copy3 />
+      </TooltipIconButton>
+      {entry.who === 'you' && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={!!blocked}>
+            <TooltipIconButton
+              label="Rewind to here"
+              hint={blocked ?? `Back to just before this message, on ${machine.name}`}
+              disabled={!!blocked}
+              className={BAR_BUTTON}
+            >
+              <RotateLeft />
+            </TooltipIconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            {REWIND_MODE_ORDER.map((mode) => {
+              const { label, hint, icon: Icon } = REWIND_MODES[mode];
+              return (
+                <DropdownMenuItem key={mode} className="items-start" onSelect={() => (mode === 'files' ? setIsConfirming(true) : rewind(mode))}>
+                  <Icon className="mt-0.5" />
+                  <span className="flex min-w-0 flex-col">
+                    {label}
+                    <span className="type-caption text-pretty text-muted-foreground">
+                      {mode === 'files' ? `Files in ${machine.name}’s worktree go back too.` : hint}
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <TooltipIconButton
+        label="Fork from here"
+        hint={canOperate ? `A new thread on ${machine.name} with everything up to this message` : blocked}
+        disabled={!canOperate}
+        onClick={() =>
+          void run(machine.id, {
+            type: 'fork',
+            threadId: thread.id,
+            point: { kind: 'message', index },
+          })
+        }
+        className={BAR_BUTTON}
+      >
+        <ForkIcon />
+      </TooltipIconButton>
+      <AlertDialog open={isConfirming} onOpenChange={setIsConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rewind chat and files on {machine.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The worktree goes back to just before this message, including edits made outside the agent since. Undo on {machine.name} brings it back.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep files</AlertDialogCancel>
+            <AlertDialogAction onClick={() => rewind('files')}>Rewind chat and files</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+const BAR_BUTTON = 'size-6 text-subtle-foreground hover:text-foreground [&_svg]:size-3.5';
 
 /** A commit message, or a pull request's title and body, written here and sent to the machine that owns the worktree. */
 function ShipDialog({ kind, machine, thread, onClose }: { kind: 'commit' | 'open-pr' | null; machine: FollowedMachine; thread: Thread; onClose: () => void }) {

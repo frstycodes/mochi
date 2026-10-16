@@ -96,6 +96,33 @@ test('a device without the scope a command needs is refused, and the renderer ne
   await server.close();
 });
 
+test('a new device can read code but not open a terminal; a viewer can do neither', async () => {
+  const { server, runs } = await serve();
+  const laptop = await connect(server.addresses[0], { auth: 'laptop' });
+  laptop.command('c1', { type: 'terminal-open', threadId: 't1', cols: 80, rows: 24 });
+  laptop.command('c2', { type: 'diff', threadId: 't1', scope: 'branch' });
+  const results = await laptop.until('result', 2);
+  assert.deepEqual(
+    results.find((r) => r.id === 'c1'),
+    { type: 'result', id: 'c1', isOk: false, error: 'This device can’t terminal-open: it needs the terminal scope' },
+  );
+  assert.deepEqual(
+    results.find((r) => r.id === 'c2'),
+    { type: 'result', id: 'c2', isOk: true },
+  );
+  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
+  viewer.command('c3', { type: 'read-file', threadId: 't1', path: 'src/a.ts' });
+  const [refused] = await viewer.until('result');
+  assert.deepEqual(refused, { type: 'result', id: 'c3', isOk: false, error: 'This device can’t read-file: it needs the code scope' });
+  assert.deepEqual(
+    runs.map((r) => r.command.type),
+    ['diff'],
+  );
+  await laptop.close();
+  await viewer.close();
+  await server.close();
+});
+
 test('a duplicate command id runs once and both get the first result', async () => {
   const { server, runs } = await serve();
   const laptop = await connect(server.addresses[0], { auth: 'laptop' });

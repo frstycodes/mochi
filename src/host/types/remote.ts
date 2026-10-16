@@ -1,4 +1,6 @@
 import type { Provider } from '../../model.ts';
+import type { AgentModel } from './agent.ts';
+import type { ChangeTarget, DiffScope, GitDiff } from './git.ts';
 import type { Manifest } from './manifest.ts';
 
 /** What a paired device may do on this machine (DEVICES.md › Devices and what they can do). */
@@ -102,18 +104,31 @@ export interface RemoteStatus {
 
 /**
  * What a device can ask this computer to do, each run through the same store action or host call the UI uses
- * (DEVICES.md › Devices and what they can do). `operate` steers threads; `manage` changes them and ships their work.
- * GAP: `code` and `terminal` commands (files, diffs, terminals), rewind, side chat, settings and delete are the next PR.
+ * (DEVICES.md › Devices and what they can do). `read` lists what a new thread can start with; `operate` steers threads;
+ * `manage` changes them and ships their work; `code` reads and changes the worktree; `terminal` runs shells in it. Paths are
+ * relative to the thread's folder, which only this computer resolves.
  */
 export type RemoteCommand =
+  // read
+  | { type: 'catalog' }
   // operate
   | { type: 'send'; threadId: string; text: string }
   | { type: 'resolve'; queueId: string; answers?: string[][] }
   | { type: 'interrupt'; threadId: string }
-  | { type: 'fork'; threadId: string; point: { kind: 'message'; index: number } | { kind: 'checkpoint'; n: number } }
+  | { type: 'fork'; threadId: string; point: ThreadPoint }
   | { type: 'handoff'; threadId: string; to: Provider }
+  /** `chat`, or `files` too (`RewindMode`). */
+  | { type: 'rewind'; threadId: string; point: ThreadPoint; mode: 'chat' | 'files' }
+  /** Asked in the thread's side chat on this computer; the answer streams in like any store change. */
+  | { type: 'side-chat'; threadId: string; text: string }
   // manage
-  | { type: 'create'; title: string; provider: Provider; /** A project ref; null for a folderless chat. */ project: string | null }
+  | {
+      type: 'create';
+      title: string;
+      provider: Provider;
+      /** A project ref from `catalog`; null for a folderless chat. */ project: string | null;
+      /** Unset: Settings › Defaults. */ model?: string;
+    }
   | { type: 'rename'; threadId: string; title: string }
   | { type: 'edit-goal'; threadId: string; goal: string }
   | { type: 'pin'; threadId: string; isPinned: boolean }
@@ -122,9 +137,60 @@ export type RemoteCommand =
   | { type: 'commit'; threadId: string; message: string }
   /** Visible to others: the device asks its user first, as the machine's ship bar does. */
   | { type: 'push'; threadId: string }
-  | { type: 'open-pr'; threadId: string; title: string; body: string };
+  | { type: 'open-pr'; threadId: string; title: string; body: string }
+  /** The thread and its history; its worktree stays on disk. */
+  | { type: 'delete'; threadId: string }
+  /** A Settings catalog row (`src/settings/catalog.ts`) on this computer only: never synced, never Devices, accounts or profiles. */
+  | { type: 'setting'; key: string; value: string }
+  // code
+  | { type: 'diff'; threadId: string; scope: DiffScope }
+  | { type: 'checkpoint-diff'; threadId: string; n: number }
+  | { type: 'change'; threadId: string; action: 'stage' | 'unstage' | 'revert'; target: ChangeTarget }
+  /** A review note on a diff line, sent to the thread as the Changes tab sends it. */
+  | { type: 'comment'; threadId: string; path: string; side: 'additions' | 'deletions'; line: number; text: string }
+  | { type: 'files'; threadId: string }
+  | { type: 'read-file'; threadId: string; path: string }
+  // terminal: a shell this computer opens in the thread's folder for the device, separate from its own terminal tabs
+  | { type: 'terminal-open'; threadId: string; cols: number; rows: number }
+  | { type: 'terminal-write'; threadId: string; terminalId: string; data: string }
+  | { type: 'terminal-resize'; threadId: string; terminalId: string; cols: number; rows: number }
+  /** Output from offset `after` on; the device polls with the `next` it got. */
+  | { type: 'terminal-read'; threadId: string; terminalId: string; after: number }
+  | { type: 'terminal-close'; threadId: string; terminalId: string };
 
-export type CommandResult = { isOk: true; /** A short outcome a device can show: a commit's sha, a PR's URL. */ detail?: string } | { isOk: false; error: string };
+export type ThreadPoint = { kind: 'message'; index: number } | { kind: 'checkpoint'; n: number };
+
+/** What a command answers with, by type; the others answer with nothing beyond `isOk`. */
+export interface CommandData {
+  catalog: MachineCatalog;
+  diff: GitDiff;
+  'checkpoint-diff': GitDiff;
+  files: { paths: string[]; isTruncated: boolean };
+  'read-file': { text: string };
+  'terminal-open': { terminalId: string };
+  'terminal-read': TerminalOutput;
+}
+
+/** What a new thread on this computer can start in and with. */
+export interface MachineCatalog {
+  /** Refs as this computer names them; a device sends one back as is, and never reads it as a path. */
+  projects: { ref: string; name: string }[];
+  models: Partial<Record<Provider, AgentModel[]>>;
+  /** Settings › Defaults per harness; '' is the harness's own. */
+  defaults: Record<Provider, string>;
+}
+
+export interface TerminalOutput {
+  data: string;
+  /** Where the next read starts. */
+  next: number;
+  /** Set once the shell exited. */
+  exitCode?: number;
+}
+
+export type CommandResult =
+  | { isOk: true; /** A short outcome a device can show: a commit's sha, a PR's URL. */ detail?: string; data?: CommandData[keyof CommandData] }
+  | { isOk: false; error: string };
 
 /** A device's command as the renderer runs it. */
 export interface RemoteCommandRequest {

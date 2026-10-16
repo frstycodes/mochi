@@ -18,6 +18,16 @@ export function commandFor(action: Action): RemoteCommand | { type: 'open'; thre
       return { type: 'settle', threadId: action.threadId, isSettled: action.type === 'settle' };
     case 'handoff':
       return { type: 'handoff', threadId: action.threadId, to: action.to };
+    case 'fork':
+      return { type: 'fork', threadId: action.threadId, point: action.point };
+    case 'rewind':
+      return { type: 'rewind', threadId: action.threadId, point: { kind: 'checkpoint', n: action.n }, mode: action.mode ?? 'files' };
+    case 'rewind-message':
+      return { type: 'rewind', threadId: action.threadId, point: { kind: 'message', index: action.index }, mode: action.mode ?? 'files' };
+    case 'edit-goal':
+      return { type: 'edit-goal', threadId: action.threadId, goal: action.draft.goal };
+    case 'delete':
+      return action.threadIds.length === 1 ? { type: 'delete', threadId: action.threadIds[0] } : null;
     case 'go':
       return action.view.kind === 'thread' ? { type: 'open', threadId: action.view.id } : null;
     default:

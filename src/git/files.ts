@@ -37,3 +37,9 @@ export function hunkCovers(header: string, side: 'additions' | 'deletions', line
   const [start, count = '1'] = side === 'deletions' ? [m[1], m[2]] : [m[3], m[4]];
   return line >= Number(start) && line < Number(start) + Number(count);
 }
+
+/** A line comment from the Changes tab as the thread reads it. */
+export function reviewNote(path: string, side: 'additions' | 'deletions', line: number, text: string) {
+  const where = side === 'deletions' ? `${path}, removed line ${line}` : `${path}:${line}`;
+  return `Review note on \`${where}\`\n\n${text}`;
+}

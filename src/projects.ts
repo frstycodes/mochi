@@ -15,7 +15,12 @@ export function projectRef(repo: Thread['repo']) {
 }
 
 export function projectName(ref: string) {
-  return ref.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || ref;
+  return (
+    ref
+      .replace(/[\\/]+$/, '')
+      .split(/[\\/]/)
+      .pop() || ref
+  );
 }
 
 export function isAbsolutePath(path: string) {
@@ -30,8 +35,10 @@ const listeners = new Set<() => void>();
 
 /** Folders opened in this profile, most recent first. */
 export function useSavedProjects(spaceId: string): string[] {
-  return useSyncExternalStore(subscribe, () => recent[spaceId] ?? NONE);
+  return useSyncExternalStore(subscribe, () => savedProjects(spaceId));
 }
+
+export const savedProjects = (spaceId: string): string[] => recent[spaceId] ?? NONE;
 
 export function addRecentProject(spaceId: string, ref: string) {
   recent = { ...recent, [spaceId]: [ref, ...(recent[spaceId] ?? []).filter((r) => r !== ref)].slice(0, MAX_RECENT) };

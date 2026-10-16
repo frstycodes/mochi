@@ -5,7 +5,19 @@ import type { CommandResult, ConnectedDevice, RemoteCommandRequest } from '../..
 import { socketLink, type Link, type RawLink } from './link.ts';
 import type { ActionLog } from './log.ts';
 import type { AuthenticatedDevice, Origin, Secured } from './pairing.ts';
-import { COMMAND_SCOPES, hasScope, parseCommand, parseHello, PROTOCOL_VERSION, THIS_KIND, visibleAction, visibleSnapshot, type HelloFrame, type ServerFrame } from './protocol.ts';
+import {
+  COMMAND_SCOPES,
+  hasScope,
+  parseCommand,
+  parseHello,
+  PROTOCOL_VERSION,
+  resultFrame,
+  THIS_KIND,
+  visibleAction,
+  visibleSnapshot,
+  type HelloFrame,
+  type ServerFrame,
+} from './protocol.ts';
 
 /** The renderer, which owns the store: it snapshots it and runs commands through the UI's own code paths. */
 export interface RendererBridge {
@@ -140,7 +152,7 @@ export async function startRemoteServer(options: RemoteServerOptions): Promise<R
       receipts.set(key, result);
       if (receipts.size > MAX_RECEIPTS) receipts.delete(receipts.keys().next().value!);
     }
-    send(connection.socket, { type: 'result', id, ...(await result) });
+    send(connection.socket, resultFrame(id, await result));
   }
 
   return {

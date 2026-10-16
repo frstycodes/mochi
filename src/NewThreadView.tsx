@@ -20,7 +20,7 @@ import { ProjectPicker, useRecentProjects } from './ProjectPicker';
 import { projectName } from './projects';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
-import { useDefaultModels } from './ModelControls';
+import { MachineModelsContext, useDefaultModels } from './ModelControls';
 import { initialControls, type ThreadControls } from './runtime/controls';
 import { contextMax } from './runtime/models';
 import { ContextRing } from './ContextRing';
@@ -30,7 +30,7 @@ import { imageProblem, sentImages } from './chat/images';
 import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from './git/WorkspacePicker';
 import type { WorkspaceDraft } from './git/workspace';
 import { RunsOnMenu } from './remote/RunsOnMenu';
-import { useMachines } from './remote/useMachines';
+import { useMachineCatalog, useMachines } from './remote/useMachines';
 
 const MATCH_THRESHOLD = 0.5;
 const MAX_SHORTCUTS = 3;
@@ -69,12 +69,11 @@ function NewThread() {
   const draftKey = newThreadDraftKey(spaceId);
   const [saved] = useState(() => getDraft<NewThreadPicks>(draftKey)?.extra);
   const [provider, setProvider] = useState<Provider>(() => saved?.provider ?? getPrefs().agent);
-  const defaults = useDefaultModels();
+  const localDefaults = useDefaultModels();
   // Subscribed so the defaults below follow Make default in the pickers; `initialControls` reads them once.
   usePrefs();
   // The Settings default model until you pick one here.
   const [picked, setPicked] = useState<ThreadControls | null>(saved?.picked ?? null);
-  const controls = picked ?? initialControls(provider, defaults?.[provider] ?? '');
   const setControls = (next: ThreadControls, model?: { harness: Provider }) => {
     if (model) setProvider(model.harness);
     setPicked(next);
@@ -96,6 +95,16 @@ function NewThread() {
   const machines = useMachines();
   const [runsOn, setRunsOn] = useState<string | null>(null);
   const remote = machines.machines.find((m) => m.machine.id === runsOn)?.machine;
+  const catalog = useMachineCatalog(remote);
+  const [remoteProject, setRemoteProject] = useState<string | null>(null);
+  // Another computer's projects and models are its own: picks made for this one don't carry over, either way.
+  const changeRunsOn = (next: string | null) => {
+    setRunsOn(next);
+    setRemoteProject(null);
+    setPicked(null);
+  };
+  const defaults = remote ? catalog?.defaults : localDefaults;
+  const controls = picked ?? initialControls(provider, defaults?.[provider] ?? '');
   const draft = textInput.value;
   // Picks only ride along with something typed or attached; on their own they aren't a draft.
   const hasDraft = !!draft || attachments.files.length > 0 || mention.mentions.length > 0;
@@ -118,13 +127,13 @@ function NewThread() {
   const start = async ({ text, files }: PromptInputMessage) => {
     const title = text.trim();
     if (!title) return;
-    // GAP: another computer's thread starts folderless, with its defaults: its projects and models aren't listed here yet.
+    // GAP: another computer's thread starts with its model only; effort, speed, permissions and the worktree choice are that computer's defaults.
     if (remote) {
       if (files.length > 0 || mention.mentions.length > 0) {
         toast.error(`Images and references can’t go to ${remote.name} yet`);
         return false;
       }
-      const result = await machines.run(remote.id, { type: 'create', title, provider, project: null });
+      const result = await machines.run(remote.id, { type: 'create', title, provider, project: remoteProject, ...(picked && { model: controls.model }) });
       if (!result.isOk) return false;
       return void toast.success(`Started on ${remote.name}`, { description: 'It’s in the sidebar under that computer.' });
     }
@@ -167,29 +176,32 @@ function NewThread() {
           <MentionMenu menu={mention} />
           <ComposerCard>
             <MentionChips menu={mention} />
-            <ComposerInput
-              autoFocus
-              draftKey={draftKey}
-              draftExtra={draftExtra}
-              controls={controls}
-              provider={provider}
-              onControlsChange={setControls}
-              slashItems={slashItems}
-              {...menuProps}
-              onKeyDown={(e, view) => {
-                mention.editorProps.onKeyDown(e);
-                if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
-              }}
-              onSend={start}
-              submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
-              isTextOnly={!!remote}
-              meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
-              placeholder={remote ? `Ask anything; runs on ${remote.name}, no folder attached` : project ? `What should this thread get done in ${projectName(project)}?` : 'Ask anything, no folder attached'}
-            />
+            <MachineModelsContext.Provider value={remote ? (catalog ?? NO_CATALOG) : null}>
+              <ComposerInput
+                autoFocus
+                draftKey={draftKey}
+                draftExtra={draftExtra}
+                controls={controls}
+                provider={provider}
+                onControlsChange={setControls}
+                slashItems={slashItems}
+                {...menuProps}
+                onKeyDown={(e, view) => {
+                  mention.editorProps.onKeyDown(e);
+                  if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
+                }}
+                onSend={start}
+                submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
+                hasNoAttachments={!!remote}
+                meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
+                placeholder={placeholder(remote?.name, remote ? remoteProject : project)}
+              />
+            </MachineModelsContext.Provider>
           </ComposerCard>
         </div>
         <ComposerMeta>
-          <RunsOnMenu value={runsOn} onChange={setRunsOn} />
+          <RunsOnMenu value={runsOn} onChange={changeRunsOn} />
+          {!!remote && <ProjectPicker value={remoteProject} onChange={setRemoteProject} projects={catalog?.projects.map((p) => p.ref) ?? []} />}
           {!remote && (
             <>
               <ProjectPicker value={project} onChange={changeProject} />
@@ -234,6 +246,13 @@ function NewThread() {
 /** The draft with the branch spelled out: the generated name, or the folder's current branch. */
 function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
   return { ...draft, branch };
+}
+
+const NO_CATALOG = { models: {}, defaults: { claude: '', codex: '' } };
+
+function placeholder(machineName: string | undefined, project: string | null) {
+  if (project) return `What should this thread get done in ${projectName(project)}?${machineName ? ` Runs on ${machineName}` : ''}`;
+  return machineName ? `Ask anything; runs on ${machineName}, no folder attached` : 'Ask anything, no folder attached';
 }
 
 function greeting(now: Date) {

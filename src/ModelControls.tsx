@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
 import { toast } from '@/toast/store';
 import { ArrowLeft, Bolt, ChevronDown, ChevronRight, Search, Star } from 'reicon-react';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import type { Provider } from './model';
 import type { AgentModel } from './host/types/agent';
+import type { MachineCatalog } from './host/types/remote';
 import { effortFor, effortName, FAST, isNewThreadModel, listedHarnesses, optionFor, searchModels, speedFor, type ModelOption } from './runtime/models';
 import { setPrefs, toggleStar, usePrefs } from './settings/prefs';
 import { ScrollDock, WheelStepper } from './ScrollDock';
@@ -410,8 +411,12 @@ function unavailableReason(install: AgentInstall) {
   if (install.login.state === 'logged-out') return 'Signed out';
 }
 
+/** Another computer's models and defaults, for a composer starting a thread there; unset, the pickers read this computer's. */
+export const MachineModelsContext = createContext<Pick<MachineCatalog, 'models' | 'defaults'> | null>(null);
+
 /** Each harness's models on the profile's account, from main (cached there per account); a harness missing until its list arrives, [] when it can't be read. */
 export function useModels(spaceId: string) {
+  const machine = useContext(MachineModelsContext);
   const [models, setModels] = useState<Partial<Record<Provider, AgentModel[]>>>({});
   useEffect(() => {
     let isCurrent = true;
@@ -426,16 +431,17 @@ export function useModels(spaceId: string) {
       isCurrent = false;
     };
   }, [spaceId]);
-  return models;
+  return machine?.models ?? models;
 }
 
 /** Each harness's default model from Settings ('' = the harness's own); null until read. Re-read on mount, updated in place by `makeDefaultModel`. */
 export function useDefaultModels() {
+  const machine = useContext(MachineModelsContext);
   const models = useSyncExternalStore(subscribeDefaultModels, () => defaultModels);
   useEffect(() => {
     host.settings.get().then(publishDefaultModels, () => {});
   }, []);
-  return models;
+  return machine?.defaults ?? models;
 }
 
 /** New threads start on `model`: its harness becomes the default agent and the model that harness's Settings default. */

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
 import { getDraft, threadDraftKey } from './chat/drafts';
@@ -69,8 +69,13 @@ import { controlsOf } from './runtime/controls';
 import { SubagentRow } from './agents/SubagentRow';
 import { rememberedScroll, Transcript, type TranscriptHandle } from './chat/Transcript';
 
-/** `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread. */
-export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: boolean }) {
+export type MessageBar = ComponentType<{ thread: Thread; index: number; align: 'start' | 'end' }>;
+
+/**
+ * `isReadOnly`: a replay's transcript, without the composer and the per-message actions that would change the thread.
+ * `messageBar` puts actions of its own back under the messages that would have them (another computer's thread).
+ */
+export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; isReadOnly?: boolean; messageBar?: MessageBar }) {
   const { state } = useHarness();
   // A live agent thread may have no planned steps; its turn is what's running.
   const isRunning = thread.live ? thread.live.isWorking : thread.steps.some((s) => s.status === 'running');
@@ -105,7 +110,7 @@ export function ChatView({ thread, isReadOnly }: { thread: Thread; isReadOnly?: 
               {hasGoal(thread) && <GoalCard thread={thread} />}
               {!!thread.setup && <SetupRow thread={thread} setup={thread.setup} />}
               <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
-                {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
+                {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} messageBar={messageBar} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
               </Transcript>
               <ProposalCard thread={thread} />
               <ReportCard thread={thread} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
@@ -166,7 +171,7 @@ function useComposerHeightVar() {
 }
 
 // isLive: the newest row of a running thread, the one still being written. Memoized: a scroll re-renders the virtualized list, and only rows that just mounted should render.
-const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; hasActions: boolean; action?: CurrentAction }) {
+const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive, isReadOnly, messageBar, hasActions, action }: { thread: Thread; row: ChatRow; slashItems: SlashItem[]; isLive: boolean; isReadOnly?: boolean; messageBar?: MessageBar; hasActions: boolean; action?: CurrentAction }) {
   if (row.kind === 'work') return <WorkLog entries={row.entries} skills={slashItems} action={isLive ? action : undefined} />;
   if (row.kind === 'review') return <SecondOpinionRow thread={thread} review={row.review} />;
   if (row.kind === 'changes') return <TurnChangesCard thread={thread} turn={row.turn} isReadOnly={isReadOnly} />;
@@ -182,6 +187,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
 
   const { entry } = row;
+  const Bar = isReadOnly ? messageBar : MessageActions;
   const isYou = entry.who === 'you';
   const isAgent = entry.who === 'claude' || entry.who === 'codex';
   const message = (
@@ -213,7 +219,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
           )}
         </MessageContent>
       </Message>
-      {!isReadOnly && (isYou || hasActions) && <MessageActions thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
+      {!!Bar && (isYou || hasActions) && <Bar thread={thread} index={row.index} align={isYou ? 'end' : 'start'} />}
     </div>
   );
   if (isReadOnly) return message;

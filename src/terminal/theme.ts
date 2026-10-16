@@ -37,7 +37,12 @@ export function terminalTheme(): ITheme {
 export function onThemeChange(apply: () => void) {
   const observer = new MutationObserver(apply);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
+  const scheme = matchMedia('(prefers-color-scheme: dark)');
+  scheme.addEventListener('change', apply);
+  return () => {
+    observer.disconnect();
+    scheme.removeEventListener('change', apply);
+  };
 }
 
 function toRgba(color: string, alpha: number) {

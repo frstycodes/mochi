@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from '@/toast/store';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { host } from '../host';
-import type { CommandResult, FollowedMachine, RemoteCommand } from '../host/types/remote';
+import type { CommandData, CommandResult, FollowedMachine, MachineCatalog, RemoteCommand } from '../host/types/remote';
 import { HarnessContext, type Action, type State } from '../store';
 import { toSaved } from '../store/persist';
 import { commandFor } from './actions';
@@ -19,7 +19,11 @@ interface Machines {
   machines: FollowedView[];
   /** Runs a command on that machine and toasts the outcome; push and opening a PR ask here first, as the ship bar does. */
   run: (machineId: string, command: RemoteCommand) => Promise<CommandResult>;
+  /** Reads from that machine without a toast, for panes that show their own errors; rejects with the machine's reason. */
+  ask: <T extends RemoteCommand['type']>(machineId: string, command: Extract<RemoteCommand, { type: T }>) => Promise<DataOf<T>>;
 }
+
+type DataOf<T extends RemoteCommand['type']> = T extends keyof CommandData ? CommandData[T] : undefined;
 
 type Asking = { machineName: string; command: Extract<RemoteCommand, { type: 'push' | 'open-pr' }>; answer: (isSent: boolean) => void };
 
@@ -74,13 +78,19 @@ export function MachinesProvider({ children }: { children: ReactNode }) {
     return result;
   }, []);
 
+  const ask = useCallback(async <T extends RemoteCommand['type']>(machineId: string, command: Extract<RemoteCommand, { type: T }>) => {
+    const result = await host.remote.command(machineId, command);
+    if (!result.isOk) throw new Error(result.error);
+    return result.data as DataOf<T>;
+  }, []);
+
   const answer = (isSent: boolean) => {
     asking?.answer(isSent);
     setAsking(null);
   };
 
   return (
-    <MachinesContext.Provider value={useMemo(() => ({ machines, run }), [machines, run])}>
+    <MachinesContext.Provider value={useMemo(() => ({ machines, run, ask }), [machines, run, ask])}>
       {children}
       <AlertDialog open={!!asking} onOpenChange={(open) => !open && answer(false)}>
         {!!asking && (
@@ -139,6 +149,27 @@ export function useMachines() {
   return machines;
 }
 
+/** What a new thread on that computer can start in and with; null while it's read, offline or when it can't be read. */
+export function useMachineCatalog(machine: FollowedMachine | undefined) {
+  const { ask } = useMachines();
+  const [catalog, setCatalog] = useState<MachineCatalog | null>(null);
+  const machineId = machine?.id;
+  const isOnline = machine?.status === 'online';
+  useEffect(() => {
+    setCatalog(null);
+    if (!machineId || !isOnline) return;
+    let isCurrent = true;
+    ask(machineId, { type: 'catalog' }).then(
+      (read) => isCurrent && setCatalog(read),
+      (error: unknown) => console.error('Reading that computer’s projects and models failed', error),
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [ask, machineId, isOnline]);
+  return catalog;
+}
+
 /**
  * The app's own components on another computer's thread: they read its mirrored store and their actions become commands to
  * it. What a device can't do yet says so instead of changing this computer's store.
@@ -159,6 +190,7 @@ export function RemoteScope({ machine, state, children }: { machine: FollowedMac
 }
 
 const COMMAND_VERBS = {
+  catalog: 'read its projects',
   send: 'send the message',
   resolve: 'answer',
   interrupt: 'stop the agent',
@@ -173,6 +205,21 @@ const COMMAND_VERBS = {
   commit: 'commit',
   push: 'push',
   'open-pr': 'open the pull request',
+  rewind: 'rewind the thread',
+  'side-chat': 'ask the side chat',
+  delete: 'delete the thread',
+  setting: 'change the setting',
+  diff: 'read the changes',
+  'checkpoint-diff': 'read the checkpoint',
+  change: 'change the files',
+  comment: 'send the note',
+  files: 'list the files',
+  'read-file': 'read the file',
+  'terminal-open': 'open a terminal',
+  'terminal-write': 'type in the terminal',
+  'terminal-resize': 'resize the terminal',
+  'terminal-read': 'read the terminal',
+  'terminal-close': 'close the terminal',
 } satisfies Record<RemoteCommand['type'], string>;
 
 const SUCCESS: Partial<Record<RemoteCommand['type'], string>> = { commit: 'Committed', 'open-pr': 'Opened the pull request' };
