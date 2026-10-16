@@ -805,10 +805,12 @@
 /* Menus, popovers, selects, hover cards and tooltips (Radix `data-state` or Base UI `data-open`/`data-closed`): scale and fade in from the trigger,
    then leave with a slight blur. */
 @utility animate-pop {
+  /* Entrances fill backwards only: a transform left on after they finish makes the panel the containing block
+     for anything fixed inside it, which clipped submenus to their parent menu. */
   &:not([data-state='closed'], [data-closed]) {
     animation:
-      pop-scale var(--pop-duration, 300ms) var(--ease-pop) both,
-      pop-fade-in 180ms var(--ease-out) both;
+      pop-scale var(--pop-duration, 300ms) var(--ease-pop) backwards,
+      pop-fade-in 180ms var(--ease-out) backwards;
   }
   &:is([data-state='closed'], [data-closed]) {
     animation: pop-out 150ms var(--ease-out) both;
@@ -819,7 +821,7 @@
   }
   @variant motion-reduce {
     &:not([data-state='closed'], [data-closed]) {
-      animation: pop-fade-in 150ms var(--ease-out) both;
+      animation: pop-fade-in 150ms var(--ease-out) backwards;
     }
     &[data-state='instant-open'] {
       animation: none;
