@@ -152,6 +152,7 @@ export const SETTINGS_SECTIONS = [
         ];
       }),
       { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
+      { id: 'backgroundModel', label: 'Background model', keywords: 'background utility cheap model haiku luna every task all' },
       ...UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr goal steps handoff summary audit transcript verdict' })),
     ],
   },

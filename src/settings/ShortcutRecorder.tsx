@@ -104,7 +104,7 @@ function Conflict({ keys, next, holder, onCancel, onSettle }: { keys: Key[] | nu
 }
 
 /** While recording, every key press is the recorder's: captured on `window` before the app's own shortcuts and Radix's Esc. */
-function useRecording(isRecording: boolean, on: { onCancel: () => void; onClear: () => void; onChord: (keys: Key[]) => void }) {
+export function useRecording(isRecording: boolean, on: { onCancel: () => void; onClear: () => void; onChord: (keys: Key[]) => void }) {
   const latest = useRef(on);
   latest.current = on;
   useEffect(() => {
