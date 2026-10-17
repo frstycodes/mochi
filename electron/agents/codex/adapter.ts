@@ -11,6 +11,7 @@ import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
 import { CODEX_BROWSER_FEATURES_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
 import { killTree, spawnable } from '../../platform.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { CHEAP_MODELS } from '../../../src/utility/prompts.ts';
 
 interface Live {
   codexId: string;
@@ -274,7 +275,9 @@ export class CodexAdapter {
     const server = this.server(await this.accountFor(spaceId, 'codex'));
     const rpc = await server.client();
     await server.requireLogin(rpc);
-    const result = await rpc.request('thread/start', { ...IMAGE_THREAD, cwd: os.tmpdir(), developerInstructions: IMAGE_INSTRUCTIONS }, THREAD_TIMEOUT_MS);
+    // Never the user's config default: it can name a model their login doesn't serve (an API-only id on a ChatGPT account).
+    const model = imageModel(await this.models(spaceId));
+    const result = await rpc.request('thread/start', { ...IMAGE_THREAD, cwd: os.tmpdir(), model, developerInstructions: IMAGE_INSTRUCTIONS }, THREAD_TIMEOUT_MS);
     const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
     if (typeof codexId !== 'string') throw new Error('codex thread/start returned no thread id');
     const inbox = new Inbox();
@@ -617,6 +620,11 @@ class Inbox {
       else await Promise.race([new Promise<void>((resolve) => (this.wake = resolve)), aborted]);
     }
   }
+}
+
+/** The image thread's model from the account's own list: the cheap one (it only calls the image tool), else the account's default. Null leaves it to Codex. */
+export function imageModel(models: AgentModel[]) {
+  return (models.find((m) => m.id === CHEAP_MODELS.codex) ?? models.find((m) => m.isDefault) ?? models[0])?.id ?? null;
 }
 
 const turnIdOf = (result: unknown) => (result as { turn?: { id?: unknown } } | null)?.turn?.id;
