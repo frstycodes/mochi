@@ -25,6 +25,7 @@ import { RemoteSection } from './remote';
 import { SchedulesSection } from './schedules';
 import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
+import { ANIMATIONS } from '../settingOptions';
 
 export const SECTION_GROUPS = ['Mochi', 'Agents', 'Workspace', 'System'] as const;
 
@@ -65,6 +66,10 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
+      ...Object.entries(ANIMATIONS).flatMap(([area, { label, items }]) => [
+        { id: `animations${area[0]!.toUpperCase()}${area.slice(1)}`, label, keywords: 'animation motion transition slide' },
+        ...items.map((item) => ({ id: `animation-${item.value}`, label: item.label, keywords: `${label} animation motion` })),
+      ]),
       { id: 'lightTheme', label: 'Light theme', keywords: 'color theme vs code' },
       { id: 'darkTheme', label: 'Dark theme', keywords: 'color theme vs code' },
       { id: 'installedThemes', label: 'Installed themes', keywords: 'uninstall remove color theme' },

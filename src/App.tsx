@@ -86,12 +86,18 @@ function AppZoomChip() {
   return <ZoomChip zoom={zoom} onReset={() => void host.windows.resetZoom()} className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag" />;
 }
 
-/** Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
+/**
+ * Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css).
+ * Its Animations go to CSS as `data-animations`.
+ */
 function ReducedMotion({ children }: { children: React.ReactNode }) {
-  const { reduceMotion } = usePrefs();
+  const { reduceMotion, animations } = usePrefs();
   useEffect(() => {
     document.documentElement.dataset.reduceMotion = reduceMotion;
   }, [reduceMotion]);
+  useEffect(() => {
+    document.documentElement.dataset.animations = animations.join(' ');
+  }, [animations]);
   return <MotionConfig reducedMotion={MOTION_CONFIG[reduceMotion]}>{children}</MotionConfig>;
 }
 

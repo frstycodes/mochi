@@ -8,6 +8,29 @@ export const MOTION = [
   { value: 'off', label: 'Off' },
 ] as const;
 
+/** Settings › Appearance › Animations: each item's id is also a word in `data-animations` on <html> (index.css). */
+export const ANIMATIONS = {
+  sidebar: {
+    label: 'Sidebar animations',
+    description: 'Showing, hiding and peeking',
+    items: [
+      { value: 'sidebar-toggle', label: 'Show and hide', description: 'The docked sidebar slides when you toggle it' },
+      { value: 'sidebar-peek', label: 'Peek', description: 'The floating sidebar slides in from the left edge' },
+    ],
+  },
+  pane: {
+    label: 'Side pane animations',
+    description: 'Opening, closing, moving and expanding panes',
+    items: [
+      { value: 'pane-slide', label: 'First and last pane', description: 'Slides in from and out to the right edge' },
+      { value: 'pane-pop', label: 'Panes beside others', description: 'Scales in on open, fades out on close' },
+      { value: 'pane-layout', label: 'Moving and expanding', description: 'Panes glide to their new size and place' },
+    ],
+  },
+} as const;
+
+export type AnimationArea = keyof typeof ANIMATIONS;
+
 // Values, not '': toggle groups and Radix selects read '' as nothing chosen.
 export const SPEEDS = [
   { value: 'standard', label: 'Standard' },

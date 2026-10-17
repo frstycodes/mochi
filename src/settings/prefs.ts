@@ -11,6 +11,8 @@ import type { ToolPolicies } from '../runtime/toolPolicy.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
+  /** Sidebar and side pane animations that run (`ANIMATIONS`); none by default. Reduce motion still stops them all. */
+  animations: string[];
   /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
   lightTheme: string;
   darkTheme: string;
@@ -91,6 +93,7 @@ export const toggleStar = (starred: string[], id: string) => (starred.includes(i
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
+  animations: [],
   lightTheme: 'mochi',
   darkTheme: 'mochi',
   projectsFolder: '~/dev',

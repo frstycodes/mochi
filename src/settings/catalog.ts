@@ -15,7 +15,7 @@ import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type C
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, ANIMATIONS, type AnimationArea, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -314,6 +314,7 @@ const APP_SETTINGS: Setting[] = [
   colorTheme('light'),
   colorTheme('dark'),
   pref('reduceMotion', 'Reduce motion', 'appearance', choice(MOTION), { group: 'Mode', description: 'System follows your OS setting' }),
+  ...(Object.keys(ANIMATIONS) as AnimationArea[]).flatMap(animationSettings),
   pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }, { group: 'Folders', description: 'Where Open folder starts, and where clones and new projects go' }),
   pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, { group: 'Startup', description: 'Off, each space opens on its default view' }),
   ...Object.entries(ALERT_KINDS).map(
@@ -570,5 +571,23 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
         }),
       ),
     ]),
+  ];
+}
+
+/** One area's switch (on while any of its animations is; setting it sets them all), then one switch per animation. */
+function animationSettings(area: AnimationArea): Setting[] {
+  const { label, description, items } = ANIMATIONS[area];
+  const ids: string[] = items.map((item) => item.value);
+  const base = { section: 'appearance', group: 'Animations', control: SWITCH } as const;
+  const write = (only: string[]) => (value: string, { prefs }: SettingSources): SettingWrite | null => {
+    const isOn = parseValue(SWITCH, value);
+    if (isOn === null) return null;
+    return { to: 'prefs', patch: { animations: isOn ? [...new Set([...prefs.animations, ...only])] : prefs.animations.filter((id) => !only.includes(id)) } };
+  };
+  return [
+    { ...base, key: `animations.${area}`, label, description, read: ({ prefs }) => String(ids.some((id) => prefs.animations.includes(id))), write: write(ids) },
+    ...items.map(
+      (item): Setting => ({ ...base, key: `animation.${item.value}`, label: item.label, description: item.description, context: label, read: ({ prefs }) => String(prefs.animations.includes(item.value)), write: write([item.value]) }),
+    ),
   ];
 }

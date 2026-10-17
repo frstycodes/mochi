@@ -29,6 +29,8 @@ Runs on (This computer / a paired computer) is chosen in the new-thread composer
 ### Appearance
 Mode: Theme (Light / Dark / System, with the user menu's sun, moon and monitor icons), Reduce motion (System / On / Off).
 
+Animations: one switch for the sidebar and one for the side pane (on while any of theirs is; flipping it sets them all), each with Choose each animation folded under it: sidebar Show and hide, Peek; side pane First and last pane, Panes beside others, Moving and expanding. All off by default (`animations` pref, `ANIMATIONS` in `src/settings/settingOptions.ts`); CSS reads them from `data-animations` on <html>, Reduce motion still stops them all. The summary panel, sidebar folds and thread reordering always animate. Agents read and suggest them like any setting (`animations.sidebar`, `animation.pane-slide`, …).
+
 VS Code color themes, one per appearance like VS Code's preferred light and dark themes, so System keeps switching (`lightTheme` / `darkTheme` prefs; `mochi` is the built-in). `src/settings/sections/appearance.tsx`, picker in `src/settings/ThemePicker.tsx`. Done.
 
 | Section | What it holds |
