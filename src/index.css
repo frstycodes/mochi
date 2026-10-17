@@ -786,6 +786,22 @@
   transition: none;
 }
 
+/* Settings › Appearance › Animations: each one runs only while its id is a word in `data-animations` on <html>. */
+:root:not([data-animations~='sidebar-toggle']) :is([data-slot='sidebar-gap'], [data-slot='sidebar-container']),
+:root:not([data-animations~='sidebar-peek']) [data-sidebar-peek],
+:root:not([data-animations~='pane-slide']) .pane-layout-animating[data-motion='slide'] :is(.pane-card, .pane-chat),
+:root:not([data-animations~='pane-layout']) .pane-layout-animating:not([data-motion='slide']) :is(.pane-card, .pane-chat) {
+  transition: none;
+}
+:root:not([data-animations~='pane-slide']) .pane-card-entering[data-motion='slide'],
+:root:not([data-animations~='pane-pop']) .pane-card-entering:not([data-motion='slide']) {
+  animation: none;
+}
+:root:not([data-animations~='pane-slide']) .pane-card-leaving[data-motion='slide'],
+:root:not([data-animations~='pane-pop']) .pane-card-leaving:not([data-motion='slide']) {
+  display: none;
+}
+
 /* The toast countdown runs on an invisible element: `animationend` dismisses it, so pausing the animation pauses the timer. */
 @keyframes toast-countdown {
   to {

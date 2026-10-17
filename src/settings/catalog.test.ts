@@ -79,3 +79,16 @@ test('every app setting sits in a titled group on its page; profile settings gro
     else assert.ok(setting.group, `${setting.key} has a group`);
   }
 });
+
+test('animations start off; an area switch sets all of its animations, each switch only its own', () => {
+  const catalog = settingsCatalog({ profile: DEFAULT_SPACES[0], config });
+  const find = (key: string) => catalog.find((s) => s.key === key)!;
+  assert.equal(find('animations.sidebar').read(sources), 'false');
+  assert.equal(find('animation.pane-slide').read(sources), 'false');
+  const someOn = { ...sources, prefs: { ...DEFAULT_PREFS, animations: ['sidebar-peek', 'pane-slide'] } };
+  assert.equal(find('animations.sidebar').read(someOn), 'true', 'on while any is');
+  assert.deepEqual(find('animations.sidebar').write('false', someOn), { to: 'prefs', patch: { animations: ['pane-slide'] } });
+  assert.deepEqual(find('animations.pane').write('true', someOn), { to: 'prefs', patch: { animations: ['sidebar-peek', 'pane-slide', 'pane-pop', 'pane-layout'] } });
+  assert.deepEqual(find('animation.sidebar-toggle').write('true', someOn), { to: 'prefs', patch: { animations: ['sidebar-peek', 'pane-slide', 'sidebar-toggle'] } });
+  assert.equal(find('animation.sidebar-toggle').write('maybe', someOn), null);
+});

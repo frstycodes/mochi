@@ -74,6 +74,7 @@ function rowIdOf(setting: Setting, profile?: Space) {
   if (setting.key.startsWith('profile.') && profile) return `${profile.id}-${setting.key.slice('profile.'.length)}`;
   if (setting.key.startsWith('alert.')) return `alert-${setting.key.slice('alert.'.length)}`;
   if (setting.key.startsWith('utility.')) return `utility-${setting.key.slice('utility.'.length)}`;
+  if (setting.key.startsWith('animation.')) return `animation-${setting.key.slice('animation.'.length)}`;
   if (setting.key.startsWith('keybinding.')) return `shortcut-${setting.key.slice('keybinding.'.length)}`;
   return setting.key.replace(/\.(\w)/g, (_, c: string) => c.toUpperCase());
 }
