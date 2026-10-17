@@ -104,13 +104,13 @@ export function ThreadView({ thread }: { thread: Thread }) {
         {header}
       </div>
       <div
-        className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
+        className={cn('grid min-h-0 flex-1 overflow-hidden', summary.animates && 'transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none')}
         style={{ gridTemplateColumns: `minmax(0,1fr) ${isWide && summary.isDocked ? 'calc(300px + 0.75rem)' : '0px'}` }}
       >
         <ChatView thread={thread} />
-        {isWide && <DockedSummary thread={thread} isOpen={summary.isDocked} />}
+        {isWide && <DockedSummary thread={thread} isOpen={summary.isDocked} animates={summary.animates} />}
       </div>
-      {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} />}
+      {isWide && <FloatingSummary thread={thread} isOpen={summary.isFloating} animates={summary.animates} />}
       <div className="pointer-events-none absolute inset-x-0 top-1 bottom-36 z-30">
         <PipLayer thread={thread} />
       </div>
@@ -170,32 +170,40 @@ function usePaneShortcuts(isFocused: boolean, onToggle: (kind: PaneTabKind) => v
 /**
  * While the side pane is open the docked summary hides and the toggle opens a floating one instead.
  * Closing the pane docks the summary if the floating one was open, otherwise restores the docked state from before.
+ * Only the summary's own toggle animates it; the pane opening or closing moves it in one step.
  */
 function useSummaryState(isPaneOpen: boolean, isWide: boolean) {
   const [isDockedOpen, setDockedOpen] = useState(isWide);
   const [isFloatingOpen, setFloatingOpen] = useState(false);
   const [wasPaneOpen, setWasPaneOpen] = useState(isPaneOpen);
+  const [animates, setAnimates] = useState(false);
   if (isPaneOpen !== wasPaneOpen) {
     setWasPaneOpen(isPaneOpen);
+    setAnimates(false);
     if (!isPaneOpen && isFloatingOpen) setDockedOpen(true);
     setFloatingOpen(false);
   }
 
   const isDocked = !isPaneOpen && isDockedOpen;
   const isFloating = isPaneOpen && isFloatingOpen;
-  const toggle = () => (isPaneOpen ? setFloatingOpen((o) => !o) : setDockedOpen((o) => !o));
-  return { isDocked, isFloating, isShown: isDocked || isFloating, toggle };
+  const toggle = () => {
+    setAnimates(true);
+    if (isPaneOpen) setFloatingOpen((o) => !o);
+    else setDockedOpen((o) => !o);
+  };
+  return { isDocked, isFloating, isShown: isDocked || isFloating, animates, toggle };
 }
 
 /** The summary column grows from the right edge while the card itself rises out of the header toggle above it. */
-function DockedSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) {
+function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
   return (
     // Above the header's blur edge, which is for the scrolling chat only; the header's own controls stay clickable past it.
     <div className="pointer-events-none relative z-30 min-w-0 overflow-hidden pt-(--chat-top)" inert={!isOpen || undefined}>
       <div
         className={cn(
-          'pointer-events-auto h-full w-[300px] origin-top-right pr-3 pb-3 transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
-          isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
+          'pointer-events-auto h-full w-[300px] origin-top-right pr-3 pb-3',
+          isOpen ? 'scale-100 opacity-100' : 'scale-[0.97] opacity-0',
+          animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
         )}
       >
         <SummaryPanel thread={thread} className="h-full rounded-xl border bg-card" />
@@ -204,13 +212,14 @@ function DockedSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) 
   );
 }
 
-function FloatingSummary({ thread, isOpen }: { thread: Thread; isOpen: boolean }) {
+function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: boolean; animates: boolean }) {
   return (
     <div
       inert={!isOpen || undefined}
       className={cn(
-        'pointer-events-none absolute top-11 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity',
-        isOpen ? 'scale-100 opacity-100 duration-200' : 'scale-[0.97] opacity-0 duration-150',
+        'pointer-events-none absolute top-11 right-3 bottom-3 z-40 flex w-[300px] flex-col origin-top-right',
+        isOpen ? 'scale-100 opacity-100' : 'scale-[0.97] opacity-0',
+        animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
       )}
     >
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
