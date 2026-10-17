@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path';
-import { CONCURRENCY_RANGE, type AgentSettingsPatch, type HarnessSettings, type SettingsHost } from '../../src/host/types/settings.ts';
+import { CONCURRENCY_RANGE, IMAGE_GEN_HARNESSES, type AgentSettingsPatch, type ImageGenHarness, type HarnessSettings, type SettingsHost } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
 import { fromClaude, SERVER_NAME, type ConfigChange, type ConfigPart } from '../../src/settings/agentConfig.ts';
@@ -156,6 +156,10 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
       const text = string(command, 'setup command', 4096).trim();
       if (text) patch.setupCommands[absolutePath(folder, 'project folder')] = text;
     }
+  }
+  if (p.imageGen !== undefined) {
+    if (!(IMAGE_GEN_HARNESSES as readonly unknown[]).includes(p.imageGen)) throw new TypeError(`imageGen must be one of ${IMAGE_GEN_HARNESSES.join(', ')}`);
+    patch.imageGen = p.imageGen as ImageGenHarness;
   }
   if (p.sideChatModel !== undefined) {
     const side = record(p.sideChatModel, 'sideChatModel');

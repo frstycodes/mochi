@@ -354,3 +354,18 @@ test('an MCP tool that declares a ui:// view carries it, with its input and text
   call('b1', 'Bash');
   assert.equal(mapper.needsWidgets(result('b1')), false, 'not an MCP call');
 });
+
+test("Mochi's generate_image maps to the image card: running at the asked aspect, then done with the file or failed with why", () => {
+  const { map } = createMapper('t1', CWD);
+  const call = (id: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name: 'mcp__mochi__generate_image', input }] } } as unknown as SDKMessage);
+  const result = (id: string, content: string, is_error?: boolean) => map({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, content: [{ type: 'text', text: content }], is_error }] } } as unknown as SDKMessage);
+
+  assert.deepEqual(call('i1', { prompt: 'a fox', size: 'landscape' }), [{ threadId: 't1', type: 'tool', id: 'i1', phase: 'start', text: 'Generate image', generated: { status: 'running', prompt: 'a fox', aspect: 1.5 } }]);
+  assert.deepEqual(result('i1', 'Image file: /tmp/fox.png\nSaved to public/fox.png'), [
+    { threadId: 't1', type: 'tool', id: 'i1', phase: 'end', text: 'Generate image', generated: { status: 'done', prompt: 'a fox', aspect: 1.5, src: '/tmp/fox.png' } },
+  ]);
+
+  call('i2', { prompt: 'a cat' });
+  const [failed] = result('i2', 'Image generation limit reached.', true);
+  assert.deepEqual(failed?.type === 'tool' && failed.generated, { status: 'failed', prompt: 'a cat', aspect: 1, error: 'Image generation limit reached.' });
+});
