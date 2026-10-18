@@ -10,27 +10,59 @@ import { toast } from '@/toast/store';
 import { host } from '../host';
 import { copyText } from '../clipboard';
 import { connectorFor, connectorIcon, isSameServer, OAUTH_PROVIDERS, oauthProviderFor, type DeviceCode, type OAuthProviderId } from './connectors';
+import type { Space } from '../model';
+import { ListIcon, SettingsRow } from '../settings/parts';
 import { LibraryIcon } from './LibraryParts';
-import type { Library } from './useLibrary';
+import { useLibrary, type Library } from './useLibrary';
 
 /**
  * Adds an account on a remote MCP server: what to call it, then how it signs in. Without a `url` it's a custom server and
  * asks for the URL first. Stays open, waiting, while a browser sign-in runs.
  */
-export function ConnectAccountDialog({ open, onOpenChange, url, library }: { open: boolean; onOpenChange: (open: boolean) => void; url?: string; library: Library }) {
+export function ConnectAccountDialog({ open, onOpenChange, url, alias, library }: { open: boolean; onOpenChange: (open: boolean) => void; url?: string; alias?: string; library: Library }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <ConnectAccountForm fixedUrl={url} library={library} onCancel={() => onOpenChange(false)} onConnected={() => onOpenChange(false)} />
+        <ConnectAccountForm fixedUrl={url} initialAlias={alias} library={library} onCancel={() => onOpenChange(false)} onConnected={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** An account an agent suggested (`connect_account`), on its settings widget: Connect opens the dialog, filled in. */
+export function SuggestedConnectorRow({ profile, url, alias }: { profile: Space; url: string; alias?: string }) {
+  const library = useLibrary(profile.id);
+  const [isOpen, setOpen] = useState(false);
+  const name = connectorFor(url)?.name ?? new URL(url).hostname;
+  const isConnected = !!library.entries?.some((e) => e.kind === 'connector' && e.source === url && e.isLinked && (!alias || e.alias === alias));
+  return (
+    <SettingsRow
+      label={
+        <span className="flex items-center gap-2.5">
+          <ListIcon url={connectorIcon(url)} />
+          Connect {name}
+        </span>
+      }
+      description={`${alias ?? 'A new account'}, ${profile.name}`}
+      control={
+        isConnected ? (
+          <span className="type-meta text-muted-foreground">Connected</span>
+        ) : (
+          <Button size="sm" onClick={() => setOpen(true)}>
+            Connect
+          </Button>
+        )
+      }
+    >
+      <ConnectAccountDialog open={isOpen} onOpenChange={setOpen} url={url} alias={alias} library={library} />
+    </SettingsRow>
   );
 }
 
 type SignInMethod = 'oauth' | 'key' | 'app';
 
 // Lives inside the dialog's content, which unmounts when it closes, so every opening starts fresh.
-function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixedUrl?: string; library: Library; onCancel: () => void; onConnected: () => void }) {
+function ConnectAccountForm({ fixedUrl, initialAlias, library, onCancel, onConnected }: { fixedUrl?: string; initialAlias?: string; library: Library; onCancel: () => void; onConnected: () => void }) {
   const [typedUrl, setTypedUrl] = useState('');
   const url = fixedUrl ?? typedUrl.trim();
   const isUrlValid = URL.canParse(url) && /^https?:\/\//.test(url);
@@ -39,7 +71,7 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
   const mochiApps = useMochiOAuthApps();
   const hasMochiApp = !!provider && !!mochiApps?.includes(provider);
   const takenAliases = (library.entries ?? []).flatMap((e) => (e.kind === 'connector' && e.alias && !!e.source && isUrlValid && isSameServer(e.source, url) ? [e.alias] : []));
-  const [alias, setAlias] = useState(() => freeAlias(takenAliases));
+  const [alias, setAlias] = useState(() => initialAlias ?? freeAlias(takenAliases));
   const [chosenMethod, setMethod] = useState<SignInMethod>('oauth');
   // Without Mochi's own app, a provider that can't register one can't sign in in the browser: its own app is the default.
   const method = provider && !hasMochiApp && chosenMethod === 'oauth' ? 'app' : chosenMethod;

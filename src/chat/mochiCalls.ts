@@ -65,6 +65,8 @@ export const MOCHI_CALLS = {
   set_keybinding: ['Suggesting a shortcut', 'Suggested a shortcut'],
   list_profiles: ['Looking at your profiles', 'Looked at your profiles'],
   add_mcp_server: ['Suggesting an MCP server', 'Suggested an MCP server'],
+  list_connectors: ['Looking at your connectors', 'Looked at your connectors'],
+  connect_account: ['Suggesting a connector account', 'Suggested a connector account'],
   remove_mcp_server: ['Asking to remove an MCP server', 'Asked to remove an MCP server'],
   remove_profile: ['Asking to remove a profile', 'Asked to remove a profile'],
 } satisfies Record<ToolName, [live: string, done: string]>;

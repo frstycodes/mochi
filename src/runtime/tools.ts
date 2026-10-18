@@ -9,6 +9,7 @@ import type { BrowserHost } from '../host/types/browser.ts';
 import type { BranchList, CheckRun } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
+import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
@@ -57,6 +58,8 @@ export interface ToolEnv {
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   /** Installed color themes and Settings › Remote access, read for `get_settings`. */
   themes: Pick<ThemesHost, 'list'>;
+  /** The profile library's connector accounts, read for `list_connectors`; adding one is the user's, on the widget. */
+  library: Pick<LibraryHost, 'list'>;
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */

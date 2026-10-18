@@ -4,6 +4,7 @@ import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '../layout/tree.ts';
+import type { LibraryEntry } from '../library/library.ts';
 import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
 import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
@@ -84,6 +85,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     theme: () => 'system',
     settings: settings.host,
     themes: { list: async () => [] },
+    library: { list: async () => [connectorEntry('linear', 'https://mcp.linear.app/mcp', 'work')] },
     remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
     git: {
@@ -198,7 +200,7 @@ test('every tool in the table has a handler', async () => {
 });
 
 test('only deletes and settings ask; everything else runs without a widget', () => {
-  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'set_keybinding', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
+  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'set_keybinding', 'add_mcp_server', 'connect_account', 'remove_mcp_server', 'remove_profile']);
 });
 
 test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
@@ -946,6 +948,19 @@ test('add_mcp_server fills the server into a live widget, refusing anything that
   assert.equal(t.settings.config.claude.servers.length, 2, 'nothing added');
 });
 
+test('connect_account puts a Connect button for the service in a widget; list_connectors reads accounts and the directory', async () => {
+  const t = setup();
+  const list = await t.ok('list_connectors');
+  assert.deepEqual(list.accounts, [{ service: 'Linear', url: 'https://mcp.linear.app/mcp', account: 'work', isSignedIn: true, isOnProfile: true }]);
+  assert.ok(list.directory.some((c: { id: string }) => c.id === 'google-workspace'));
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'work', reason: 'x' }), /already a work account on Linear/);
+  assert.match(await t.err('connect_account', { connector: 'http://evil.example/mcp', reason: 'x' }), /neither a directory id/);
+  assert.equal(t.state().queue.length, 0);
+  const r = await t.ok('connect_account', { connector: 'google-workspace', alias: 'personal', reason: 'To read your calendar' });
+  assert.deepEqual(r.shown, ['Google Workspace account']);
+  assert.deepEqual(widget(t).settings!.addConnector, { profileId: 'latitude', url: 'http://localhost:47821/mcp', alias: 'personal' });
+});
+
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {
   const t = setup();
   const denied = await t.asking('remove_mcp_server', { name: 'linear' });
@@ -993,6 +1008,7 @@ test('Read only and Changes block every settings suggestion and delete with no w
   const writes = {
     update_settings: { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' },
     add_mcp_server: { name: 'docs', command: 'npx', reason: 'x' },
+    connect_account: { connector: 'notion', reason: 'x' },
     set_keybinding: { command: 'palette', keys: 'mod+shift+K', reason: 'x' },
     remove_mcp_server: { name: 'github' },
     remove_profile: { profileId: 'scratch' },
@@ -1103,3 +1119,7 @@ test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and 
   t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: draftFrom(t.thread('rl')) });
   assert.equal((await t.ok('get_goal')).isDraft, undefined, 'a goal you wrote is never a draft');
 });
+
+function connectorEntry(name: string, url: string, alias: string): LibraryEntry {
+  return { id: `${name}-${alias}`, kind: 'connector', name, title: name[0].toUpperCase() + name.slice(1), description: '', targets: ['claude', 'codex'], isEnabled: true, profileIds: ['latitude'], source: url, icon: null, contents: null, remotes: [], unsupported: [], isLinked: true, alias, autoUpdate: null, updatedAt: null };
+}

@@ -347,6 +347,23 @@ export const TOOL_TABLE = {
       reason,
     },
   },
+  list_connectors: {
+    tier: 'read',
+    description:
+      "List connectors (remote MCP services in Mochi's library): each account with its service, its name (agents pick it by this), whether it's signed in and whether the profile has it; and the directory of services you can suggest with connect_account.",
+    shape: { profileId },
+  },
+  connect_account: {
+    tier: 'setting',
+    description:
+      "Suggest connecting an account on a service: a directory id from list_connectors, or a remote MCP server's https URL. The user gets a Connect button on a widget in your thread and signs in in their browser; you don't get their answer, and list_connectors shows the account once it's connected. New threads in the profile get its tools.",
+    shape: {
+      connector: z.string().min(1).describe('A directory id from list_connectors, or an https MCP server URL'),
+      alias: z.string().regex(/^[a-z0-9-]{1,32}$/).optional().describe('The account name, like work or personal; defaults to the first free one'),
+      profileId,
+      reason,
+    },
+  },
   remove_mcp_server: {
     tier: 'destructive',
     description: "Remove an MCP server from a profile's account config. The user approves on a delete card showing the file diff; the file is backed up first.",

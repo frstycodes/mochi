@@ -6,10 +6,11 @@ import { findSetting, recordValue, settingsCatalog, valueLabel, type Setting, ty
 import { HARNESSES } from '../settings/harnesses.ts';
 import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
 import { IS_MAC } from '../keys.ts';
+import { CONNECTORS, connectorFor, isSameServer } from '../library/connectors.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
 
-type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'remove_mcp_server' | 'remove_profile';
+type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'list_connectors' | 'connect_account' | 'remove_mcp_server' | 'remove_profile';
 
 /**
  * Settings tools (RUNTIME.md › Mochi tools). Reads go through the settings catalog; a suggestion opens one live settings
@@ -139,6 +140,33 @@ export const SETTINGS_TOOLS = {
       return { result: { shown: [`MCP server ${args.name}`], note: SHOWN_NOTE } };
     },
   },
+  list_connectors: {
+    run: async (ctx) => {
+      const profile = profileNamed(ctx, ctx.args.profileId);
+      const entries = await ctx.env.library.list(profile.id);
+      return {
+        result: {
+          accounts: entries.flatMap((e) => (e.kind === 'connector' ? [{ service: e.title, url: e.source, account: e.alias, isSignedIn: e.isLinked, isOnProfile: e.isEnabled }] : [])),
+          directory: CONNECTORS.map(({ id, name, description }) => ({ id, name, description })),
+        },
+      };
+    },
+  },
+  connect_account: {
+    run: async (ctx) => {
+      const { args, caller } = ctx;
+      const profile = profileNamed(ctx, args.profileId);
+      const url = connectorUrl(args.connector);
+      const name = connectorFor(url)?.name ?? new URL(url).hostname;
+      const entries = await ctx.env.library.list(profile.id);
+      if (args.alias && entries.some((e) => e.kind === 'connector' && e.alias === args.alias && !!e.source && isSameServer(e.source, url)))
+        throw new Error(`There is already a ${args.alias} account on ${name}; list_connectors lists them`);
+      const by = caller.providers[0];
+      const title = `${authorName(by)} suggests connecting ${name}${args.alias ? ` (${args.alias})` : ''}${profile.id === caller.spaceId ? '' : ` in ${profile.name}`}`;
+      open(ctx, card(ctx, cardId('setting', caller.id), 'setting', { title, detail: args.reason, settings: { by, reason: args.reason, changes: [], addConnector: { profileId: profile.id, url, ...(args.alias && { alias: args.alias }) }, before: {} } }));
+      return { result: { shown: [`${name} account`], note: CONNECT_NOTE } };
+    },
+  },
   remove_mcp_server: {
     ask: async (ctx) => {
       const { profile, provider, config } = await configTarget(ctx);
@@ -172,7 +200,17 @@ const RESERVED_NOTE = IS_MAC
 
 const SHOWN_NOTE = "The user sees these as live settings in your thread and changes them there if they want. You won't get their answer; get_settings reads the values later.";
 
+const CONNECT_NOTE = "The user sees a Connect button in your thread and signs in in their browser there. You won't get their answer; list_connectors shows the account once it's connected.";
+
 type Ctx<K extends SettingsToolName> = ToolContext<Args<K>>;
+
+/** A directory id's server, else an https URL as given. */
+function connectorUrl(connector: string) {
+  const known = CONNECTORS.find((c) => c.id === connector);
+  if (known) return known.serverUrl;
+  if (URL.canParse(connector) && new URL(connector).protocol === 'https:') return connector;
+  throw new Error(`${connector} is neither a directory id (list_connectors lists them) nor an https URL`);
+}
 
 /** Everything a setting's value can live in, read now. Host settings and accounts are main's; a profile's files only when asked. */
 async function sourcesFor(ctx: ToolContext<unknown>, profile: Space): Promise<SettingSources> {
