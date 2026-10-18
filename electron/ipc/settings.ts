@@ -3,6 +3,7 @@ import { CONCURRENCY_RANGE, type AgentSettingsPatch, type HarnessSettings, type 
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
 import { fromClaude, SERVER_NAME, type ConfigChange, type ConfigPart } from '../../src/settings/agentConfig.ts';
+import { APP_ICONS, type AppIcon } from '../../src/settings/settingOptions.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '../agents/profileConfig.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
@@ -148,6 +149,10 @@ function validPatch(p: Record<string, unknown>): AgentSettingsPatch {
   if (p.prepareWorktrees !== undefined) {
     if (typeof p.prepareWorktrees !== 'boolean') throw new TypeError('prepareWorktrees must be true or false');
     patch.prepareWorktrees = p.prepareWorktrees;
+  }
+  if (p.appIcon !== undefined) {
+    if (!APP_ICONS.some((icon) => icon.value === p.appIcon)) throw new TypeError(`appIcon must be one of ${APP_ICONS.map((icon) => icon.value).join(', ')}`);
+    patch.appIcon = p.appIcon as AppIcon;
   }
   if (p.worktreeInclude !== undefined) patch.worktreeInclude = string(p.worktreeInclude, 'worktreeInclude', 4096);
   if (p.setupCommands !== undefined) {
