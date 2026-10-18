@@ -77,7 +77,7 @@ function MochiWidget({ item }: { item: QueueItem }) {
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
   return (
     <WidgetCard item={item} onEscape={() => decide(false)}>
-      <CardHeader>
+      <CardHeader className="gap-2">
         <CardDescription className={cn('flex items-center gap-1 type-caption font-medium', kind === 'delete' ? 'text-destructive' : 'text-foreground')}>
           <Icon aria-hidden className="size-3.5" />
           {label}
@@ -167,7 +167,7 @@ function SettingsWidget({ item, settings }: { item: QueueItem; settings: Setting
   return (
     <AgentSettingsProvider isDetecting={false}>
       <WidgetCard item={item} onEscape={() => void close()}>
-        <CardHeader>
+        <CardHeader className="gap-2">
           <CardDescription className="flex items-center gap-1 type-caption font-medium text-foreground">
             <Settings aria-hidden className="size-3.5" />
             Settings
