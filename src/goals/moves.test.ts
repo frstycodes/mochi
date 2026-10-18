@@ -4,7 +4,7 @@ import type { Thread } from '../model.ts';
 import { moveFor, questionFor } from './moves.ts';
 import type { Gap, Verdict } from './verdict.ts';
 
-const thread = (patch: Partial<Thread> = {}) => ({ idle: { at: 0, accepted: [] }, ...patch }) as Thread;
+const thread = (patch: Partial<Thread> = {}) => ({ idle: { at: 0, accepted: [] }, repo: { project: 'app', branch: 'fix/x' }, ...patch }) as Thread;
 const verdict = (kind: Verdict['kind'], patch: Partial<Verdict> = {}): Verdict => ({ kind, chip: '', tone: 'muted', reason: '', gaps: [], ...patch });
 const gap = (id: string, isAccepted = false): Gap => ({ id, severity: 'critical', label: id, text: id, isAccepted });
 
@@ -18,7 +18,7 @@ test('a met goal moves commit → pull request → review → settle, from git a
 test('gaps count only the ones you have not accepted; a question or a limit has no move', () => {
   assert.deepEqual(moveFor(thread(), verdict('gaps', { gaps: [gap('a'), gap('b', true)] }), []), { kind: 'close-gaps', label: 'Close 1 gap' });
   assert.equal(moveFor(thread(), verdict('needs-you'), []), null);
-  assert.deepEqual(moveFor(thread(), verdict('needs-you', { chip: 'Your call' }), []), { kind: 'confirm', label: 'Mark done' }, 'what only you can check');
+  assert.deepEqual(moveFor(thread({ repo: null }), verdict('needs-you', { chip: 'Your call' }), []), { kind: 'confirm', label: 'Verify outcome' }, 'what only you can check');
   assert.equal(moveFor(thread({ proposal: { state: 'waiting' } as Thread['proposal'] }), verdict('needs-you'), []), null, 'the proposal card above holds Accept');
   assert.equal(moveFor(thread(), verdict('stalled', { chip: 'Stopped' }), [])?.kind, 'continue');
   assert.equal(moveFor(thread(), verdict('stalled', { chip: 'Limit' }), []), null);
@@ -26,7 +26,7 @@ test('gaps count only the ones you have not accepted; a question or a limit has 
 
 test("the question is the agent's for a finished or stopped turn, Mochi's where only Mochi can name the move", () => {
   const report = { at: 0, by: 'claude' as const, decisions: [], left: [], next: 'Commit the cookie fix and its test?' };
-  assert.equal(questionFor(verdict('done'), { kind: 'commit', label: 'Commit' }, report, 'Claude'), 'Commit the cookie fix and its test?');
+  assert.equal(questionFor(verdict('done'), { kind: 'commit', label: 'Commit' }, report, 'Claude'), 'Commit these changes?');
   assert.equal(questionFor(verdict('done'), { kind: 'commit', label: 'Commit' }, undefined, 'Claude'), 'Commit these changes?');
   assert.equal(questionFor(verdict('gaps', { gaps: [gap('a'), gap('b')] }), { kind: 'close-gaps', label: 'Close 2 gaps' }, report, 'Claude'), 'Hand the 2 gaps back to Claude?', "the agent doesn't know Mochi's gaps");
   assert.equal(questionFor(verdict('needs-you', { reason: 'Retry or quarantine?' }), null, report, 'Claude'), 'Retry or quarantine?');
@@ -48,4 +48,25 @@ test("a sub-thread's own card opens its PR into the parent's branch, then hands 
   assert.equal(questionFor(verdict('done'), moveFor(child(), verdict('done'), [], { parent }), undefined, 'Claude', { parent }), 'Open a pull request into feat/limits?');
   assert.deepEqual(moveFor(child(), verdict('done'), ['open'], { parent }), { kind: 'hand-back', label: 'Hand back' });
   assert.equal(moveFor(child(5), verdict('done'), ['open'], { parent }), null, 'handed back: the parent merges it');
+});
+
+
+test('unverified human criteria do not hide commit or a missing PR', () => {
+  const v = verdict('needs-you', { chip: 'Your call', reason: 'Did this get you what you wanted?' });
+  const repo = { project: 'app', branch: 'fix/cookies' };
+  assert.equal(moveFor(thread({ repo, idle: { at: 0, accepted: [], uncommitted: 2 } }), v, [])?.kind, 'commit');
+  const move = moveFor(thread({ repo }), v, []);
+  assert.equal(move?.kind, 'open-pr');
+  const report = { at: 0, by: 'claude' as const, decisions: [], left: [], next: 'Mark this done?' };
+  assert.equal(questionFor(v, move, report, 'Claude'), 'Open a pull request for this?');
+  assert.equal(moveFor(thread({ repo: null }), v, [])?.kind, 'confirm');
+});
+
+
+test('folderless work offers verification or settling, never a pull request', () => {
+  const t = thread({ repo: null, criteria: [{ id: 'a', text: 'Summary delivered' }] });
+  const move = moveFor(t, verdict('done'), []);
+  assert.equal(move?.kind, 'confirm');
+  assert.equal(questionFor(verdict('done'), move, undefined, 'Codex'), 'Verify the completed work against the goal criteria?');
+  assert.equal(moveFor({ ...t, idle: { at: 0, accepted: [], isConfirmed: true } }, verdict('done'), [])?.kind, 'settle');
 });

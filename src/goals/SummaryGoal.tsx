@@ -1,12 +1,12 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { ChevronRight, XCircle, Edit, Maximize, CheckBadge } from '@/icons';
+import { ChevronRight, Edit, Maximize, CheckBadge } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { authorName, isMet, type Criterion, type Thread } from '../model';
 import { isWorking } from '../agentPhase';
 import { ProgressRing, TooltipIconButton } from '../ui';
 import { criterionState, type CriterionState } from './criteria';
-import { RunCheck } from './CriteriaList';
+import { CriterionIcon, RunCheck } from './CriteriaList';
 import { HandedCriterion } from './SubThreads';
 import { subThreadsOf } from '../reorder';
 import { useHarness } from '../store';
@@ -24,7 +24,7 @@ export function SummaryGoal({ className, ...props }: ComponentProps<'section'>) 
 /** "Goal", edit and open beside it, then what done means counted (met, claimed included) on the right, where a drag handle may cover it. */
 export function SummaryGoalHeader({ thread, onEdit, onOpen, countClassName }: { thread: Thread; onEdit: () => void; onOpen: () => void; countClassName?: string }) {
   const criteria = thread.criteria ?? [];
-  const met = criteria.filter(isMet).length;
+  const met = criteria.filter((c) => ['verified', 'claimed'].includes(criterionState(c, thread.idle?.isConfirmed))).length;
   return (
     <div className="flex items-center gap-1">
       <h2 className="mr-1 type-title">Goal</h2>
@@ -90,7 +90,7 @@ export function SummaryCriteria({ thread }: { thread: Thread }) {
 }
 
 function SummaryCriterion({ thread, criterion: c }: { thread: Thread; criterion: Criterion }) {
-  const state = criterionState(c);
+  const state = criterionState(c, thread.idle?.isConfirmed);
   return (
     <li className="group/criterion flex gap-2 type-meta">
       <CriterionIcon state={state} />
@@ -103,21 +103,11 @@ function SummaryCriterion({ thread, criterion: c }: { thread: Thread; criterion:
   );
 }
 
-function CriterionIcon({ state }: { state: CriterionState }) {
-  const label = STATE_LABEL[state];
-  if (state === 'failed') return <XCircle aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-destructive" />;
-  if (state === 'verified') return <CheckBadge aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-success" />;
-  if (state === 'claimed') return <CheckBadge aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground" />;
-  return <span role="img" aria-label={label} className={cn('mt-[3px] ml-px size-3 shrink-0 rounded-full border border-dashed border-subtle-foreground', state === 'running' && 'animate-spin border-solid border-t-transparent motion-reduce:animate-none')} />;
-}
-
-const STATE_LABEL = { verified: 'Verified', claimed: 'Claimed, not checked', failed: 'Check failed', running: 'Check running', open: 'Open' } satisfies Record<CriterionState, string>;
-
 function CriterionProof({ criterion: c, state, agent }: { criterion: Criterion; state: CriterionState; agent: string }) {
   if (state === 'running') return <Shimmer as="span" className="type-caption">{`Running ${c.command}`}</Shimmer>;
   if (state === 'failed') return <Proof className="text-destructive">{`Check failed${failureLine(c.check?.output) ? `: ${failureLine(c.check?.output)}` : ''}`}</Proof>;
-  if (state === 'verified') return <Proof>{`Verified by Mochi in ${Math.round((c.check?.ms ?? 0) / 1000)}s`}</Proof>;
-  if (state === 'claimed') return <Proof>{`${agent} says: ${c.claim!.evidence}${c.command ? ' · not checked yet' : ''}`}</Proof>;
+  if (state === 'verified') return <Proof>{c.check?.status === 'passed' ? `Verified by Mochi in ${Math.round((c.check.ms ?? 0) / 1000)}s` : 'Verified by you'}</Proof>;
+  if (state === 'claimed') return <><Proof className="text-info">Work done · awaiting verification</Proof><Proof>{`${agent}: ${c.claim!.evidence}`}</Proof></>;
   return <Proof>{c.command ? 'Not checked yet' : 'You check this one'}</Proof>;
 }
 

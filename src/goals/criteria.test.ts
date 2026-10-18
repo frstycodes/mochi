@@ -14,3 +14,10 @@ test("a check outweighs the agent's claim; a claim alone is only claimed", () =>
   assert.equal(criterionState(c({ claim, check: check('failed') })), 'failed');
   assert.equal(criterionState(c({ claim, check: check('running') })), 'running');
 });
+
+
+test('user confirmation verifies judged criteria, never overrides command checks', () => {
+  assert.equal(criterionState(c({ claim }), true), 'verified');
+  assert.equal(criterionState(c({ command: 'pnpm test', claim }), true), 'claimed');
+  assert.equal(criterionState(c({ check: check('failed') }), true), 'failed');
+});

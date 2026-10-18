@@ -64,10 +64,10 @@ export function idleVerdict(thread: Thread, prs: RefState[], subs: SubThreadVerd
   const asking = out.find((s) => s.verdict && s.verdict.kind !== 'checking');
   if (asking) return subNeedsYou(asking.thread, asking.verdict!, gaps);
   if (out.length) return { kind: 'waiting', chip: 'Waiting', tone: 'muted', reason: `Waiting on ${out.length} ${out.length === 1 ? 'sub-thread' : 'sub-threads'}`, gaps };
+  if (isStoppedShort(thread)) return { kind: 'stalled', chip: 'Stopped', tone: 'destructive', reason: stoppedReason(thread), gaps };
   const criteria = thread.criteria ?? [];
   const isDone = criteria.length ? criteria.every((c) => counts(thread, c)) : !!thread.idle?.isConfirmed;
   if (isDone) return { kind: 'done', ...doneLine(thread, prs), tone: 'success', gaps };
-  if (isStoppedShort(thread)) return { kind: 'stalled', chip: 'Stopped', tone: 'destructive', reason: stoppedReason(thread), gaps };
   // The turn ended cleanly and nothing says work is left: what's unmet is only yours to judge.
   return { kind: 'needs-you', chip: YOUR_CALL, tone: 'warning', reason: 'Did this get you what you wanted?', gaps };
 }
@@ -233,7 +233,7 @@ export function verdictTiles(thread: Thread, prs: RefState[], verdict: Verdict):
 function criteriaTile(thread: Thread): Tile | null {
   const criteria = thread.criteria ?? [];
   if (!criteria.length) return null;
-  const bars = criteria.map((c): TileTone => (c.check?.status === 'failed' ? 'destructive' : isMet(c) ? 'success' : 'none'));
+  const bars = criteria.map((c): TileTone => (c.check?.status === 'failed' ? 'destructive' : c.check?.status === 'passed' || (!c.command && thread.idle?.isConfirmed) ? 'success' : c.claim ? 'info' : 'none'));
   return { id: 'criteria', name: 'Criteria', bars, value: `${criteria.filter(isMet).length} of ${criteria.length}` };
 }
 

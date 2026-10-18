@@ -85,7 +85,7 @@ export const TOOL_TABLE = {
     shape: { threadIds },
   },
   // {GOALS}
-  get_goal: { tier: 'read', description: "Read a thread's goal (empty for a question or chat) and what done means: its criteria, each with its id, its check command when Mochi runs one, your claim and Mochi's check result.", shape: { threadId } },
+  get_goal: { tier: 'read', description: "Read a thread's goal (empty until a researched working-agent goal is accepted, or for a chat) and what done means: its criteria, each with its id, its check command when Mochi runs one, your claim and Mochi's check result.", shape: { threadId } },
   open_pr: {
     tier: 'change',
     description:

@@ -474,7 +474,7 @@ const GOAL_SPECS = {
   },
   report_turn: {
     run: ({ state, caller, args, dispatch }) => {
-      if (!caller.goal) throw new Error('This thread has no goal; there is nothing to report against');
+      if (!caller.goal && caller.proposal?.state !== 'waiting') throw new Error('This thread has no goal; propose a researched goal before reporting');
       if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
       const { summary, next, alternative } = args;
       dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }), ...(summary?.trim() && { summary: summary.trim() }), ...(next?.trim() && { next: next.trim() }), ...(alternative && { alternative: { label: alternative.label.trim(), draft: alternative.draft.trim() } }) } });
@@ -696,7 +696,7 @@ function agentOf(s: Subagent, now = Date.now()) {
 /** `threads`, when given, lists the thread's sub-threads and which criterion each covers. */
 function goalOf(thread: Thread, threads?: Thread[]) {
   const subs = threads ? subThreadsOf(threads, thread.id).map((t) => ({ threadId: t.id, title: t.title, criterionId: t.parent?.criterionId ?? null, status: t.status, isHandedBack: !!t.parent?.handedBackAt })) : [];
-  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, ...(subs.length && { subThreads: subs }), ...(isDraftGoal(thread) && { isDraft: true, next: DRAFT_NEXT }) };
+  return { threadId: thread.id, title: thread.title, goal: thread.goal, criteria: thread.criteria ?? [], status: thread.status, ...(subs.length && { subThreads: subs }), ...(isDraftGoal(thread) && { isDraft: true, next: DRAFT_NEXT }), ...(!thread.goal && !thread.isGoalOff && { next: thread.proposal?.state === 'waiting' ? 'Your researched goal is waiting for acceptance. Keep working and report progress; claim criteria after acceptance.' : 'For a task, research the code and request first, then call propose_goal with the concrete outcome and checkable criteria. Questions and chats need no goal.' }), ...(thread.proposal?.state === 'waiting' && { proposal: thread.proposal }) };
 }
 
 /** A goal only Mochi's drafter has written: guessed from the first message, never checked against the code, so the agent replaces it with propose_goal. */
