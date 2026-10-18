@@ -9,7 +9,8 @@ import { OAUTH_PROVIDER_IDS, type OAuthProviderId } from '../../src/library/conn
  * and accounts on it bring their own.
  */
 const BAKED = {
-  // "Mochi desktop" in Google Cloud project mochi-511921. Its secret isn't confidential (Google's docs) but GitHub's push protection blocks it, so it's in .env.local too.
+  // "Mochi desktop" in Google Cloud project mochi-511921, used by the local Google Workspace server (googleWorkspace.ts). Its secret
+  // isn't confidential (Google's docs) but GitHub's push protection blocks it, so it's in .env.local too.
   google: { clientId: '396170665891-1rg13stbmhbo6hhr79rkktc2hd73faap.apps.googleusercontent.com', clientSecret: '' },
   // The Mochi OAuth App (frstycodes); device flow, so no secret.
   github: { clientId: 'Ov23liprlzoHyVDFz3Ih', clientSecret: '' },
@@ -18,9 +19,9 @@ const BAKED = {
   asana: { clientId: '1219604610749623', clientSecret: '' },
   // MCP Connector 57544003 in portal 247722501; https redirects only, so it signs in through the relay.
   hubspot: { clientId: '14020a11-4d32-49fe-a3ac-d27ed717c054', clientSecret: '' },
-} satisfies Record<OAuthProviderId, { clientId: string; clientSecret: string }>;
+} satisfies Record<OAuthProviderId | 'google', { clientId: string; clientSecret: string }>;
 
-export function mochiOAuthApp(provider: OAuthProviderId): OAuthClientInformationMixed | undefined {
+export function mochiOAuthApp(provider: OAuthProviderId | 'google'): OAuthClientInformationMixed | undefined {
   const env = (name: string) => {
     const key = `MOCHI_OAUTH_${provider.toUpperCase()}_${name}`;
     return process.env[key] ?? BUILD_ENV[key];

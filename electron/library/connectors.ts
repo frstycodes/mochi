@@ -10,6 +10,7 @@ import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprot
 import { connectorFor, connectorKey, OAUTH_PROVIDERS, oauthProviderFor, relayState, type DeviceCode, type OAuthProviderId } from '../../src/library/connectors.ts';
 import { RELAY_URL } from '../remote/relayClient.ts';
 import { mochiOAuthApp } from './oauthApps.ts';
+import { ensureLocalServer } from './googleWorkspace.ts';
 import { profileConnectors, type LibraryConnector } from '../../src/library/library.ts';
 import { addLoopbackRoute, loopbackUrl } from '../mcp/server.ts';
 import { connectorServer } from './proxy.ts';
@@ -82,6 +83,7 @@ export async function addConnectorAccount(spaceId: string, input: NewConnectorAc
 /** Signs the account in: its key, else OAuth in the user's browser, else a server that needs neither. Marks it linked. */
 export async function signIn(account: LibraryConnector, onDeviceCode: (code: DeviceCode) => void = () => {}) {
   forget(account.id);
+  await ensureLocalServer(account.url);
   const secrets = await readSecrets(account.id);
   const oauthProvider = oauthProviderFor(account.url);
   const usesMochiApp = !!oauthProvider && !secrets.apiKey && !secrets.isOwnClient;
@@ -316,6 +318,7 @@ function forget(id: string) {
 }
 
 async function connect(account: LibraryConnector, provider: AccountAuth) {
+  await ensureLocalServer(account.url);
   const { apiKey } = await readSecrets(account.id);
   const transport = new StreamableHTTPClientTransport(new URL(account.url), apiKey ? { requestInit: { headers: { Authorization: `Bearer ${apiKey}` } } } : { authProvider: provider });
   const client = new Client({ name: 'mochi', version: '1.0.0' });

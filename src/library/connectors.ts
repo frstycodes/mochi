@@ -9,31 +9,22 @@ export interface Connector {
   note?: string;
 }
 
+/** workspace-mcp, which Mochi runs locally for Google Workspace (electron/library/googleWorkspace.ts). `localhost`, not 127.0.0.1: it's the host its OAuth metadata names. */
+export const GOOGLE_WORKSPACE_PORT = 47821;
+export const GOOGLE_WORKSPACE_URL = `http://localhost:${GOOGLE_WORKSPACE_PORT}/mcp`;
+
 export const CONNECTOR_CATEGORIES = ['Productivity', 'Engineering', 'Design', 'Business'] as const;
 
 type ConnectorCategory = (typeof CONNECTOR_CATEGORIES)[number];
 
 export const CONNECTORS = [
   {
-    id: 'gmail',
-    name: 'Gmail',
-    description: 'Search, read and draft email.',
+    id: 'google-workspace',
+    name: 'Google Workspace',
+    description: 'Gmail, Calendar and Drive: search and draft email, read your schedule, find files.',
     category: 'Productivity',
-    serverUrl: 'https://gmailmcp.googleapis.com/mcp/v1',
-  },
-  {
-    id: 'google-calendar',
-    name: 'Google Calendar',
-    description: 'Read your schedule, find free time and create events.',
-    category: 'Productivity',
-    serverUrl: 'https://calendarmcp.googleapis.com/mcp/v1',
-  },
-  {
-    id: 'google-drive',
-    name: 'Google Drive',
-    description: 'Find and read files in Drive.',
-    category: 'Productivity',
-    serverUrl: 'https://drivemcp.googleapis.com/mcp/v1',
+    serverUrl: GOOGLE_WORKSPACE_URL,
+    note: 'Runs on this computer. The first connection downloads what it needs, which takes a minute or two.',
   },
   {
     id: 'notion',
@@ -132,12 +123,9 @@ export const CONNECTORS = [
 
 type ConnectorId = (typeof CONNECTORS)[number]['id'];
 
-// The vendor's own site, for its favicon: MCP endpoints (`mcp.linear.app`, `gmailmcp.googleapis.com`) serve none.
-// Google's products share one favicon there, so theirs are product icons from Google's own CDN.
+// The vendor's own site, for its favicon: MCP endpoints (`mcp.linear.app`) serve none. Google Workspace's is Google's G.
 const CONNECTOR_SITES = {
-  gmail: 'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico',
-  'google-calendar': 'https://ssl.gstatic.com/calendar/images/dynamiclogo_2020q4/calendar_31_2x.png',
-  'google-drive': 'https://ssl.gstatic.com/images/branding/product/2x/drive_2020q4_48dp.png',
+  'google-workspace': 'https://www.gstatic.com/images/branding/productlogos/googleg/v6/36px.svg',
   notion: 'notion.so',
   slack: 'slack.com',
   asana: 'asana.com',
@@ -184,10 +172,9 @@ export function connectorKey(serverUrl: string) {
  * state, for providers that only take https redirects.
  * `flow: 'device'` signs in with a one-time code instead of a redirect (RFC 8628), for providers whose authorization
  * server offers it: no redirect, and no client secret in the app.
- * Not verified: which providers accept a loopback redirect; Google's desktop clients do (its docs).
+ * Google isn't here: its connector is a local server that registers clients itself (`GOOGLE_WORKSPACE_URL`).
  */
 export const OAUTH_PROVIDERS = {
-  google: { name: 'Google', hosts: [/\.googleapis\.com$/], consoleUrl: 'https://console.cloud.google.com/apis/credentials', authorizationParams: { access_type: 'offline', prompt: 'consent' }, redirect: 'loopback', flow: 'redirect' },
   github: { name: 'GitHub', hosts: [/^api\.githubcopilot\.com$/], consoleUrl: 'https://github.com/settings/applications/new', authorizationParams: {}, redirect: 'loopback', flow: 'device' },
   slack: { name: 'Slack', hosts: [/^mcp\.slack\.com$/], consoleUrl: 'https://api.slack.com/apps', authorizationParams: {}, redirect: 'relay', flow: 'redirect' },
   asana: { name: 'Asana', hosts: [/^mcp\.asana\.com$/], consoleUrl: 'https://app.asana.com/0/my-apps', authorizationParams: {}, redirect: 'relay', flow: 'redirect' },
