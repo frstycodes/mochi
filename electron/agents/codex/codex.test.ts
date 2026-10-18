@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
-import { CodexAdapter, reply } from './adapter.ts';
+import { CodexAdapter, imageModel, reply } from './adapter.ts';
 import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
@@ -505,4 +505,12 @@ test("a completed file change carries one patch with a section per file, so each
     ].join('\n'),
   );
   assert.equal(changesPatch([{ path: '/repo/x.ts', kind: { type: 'update', move_path: null }, diff: '' }], '/repo'), '', 'an update without hunks adds nothing');
+});
+
+test("image generation runs on a model the account lists: the cheap one, else its default, never the user's config default", () => {
+  const model = (id: string, isDefault = false) => ({ id, name: id, description: '', efforts: [], speeds: [], isDefault });
+  assert.equal(imageModel([model('gpt-6-astra', true), model('gpt-6-luna')]), 'gpt-6-luna');
+  assert.equal(imageModel([model('gpt-6-nova'), model('gpt-6-astra', true)]), 'gpt-6-astra');
+  assert.equal(imageModel([model('gpt-6-nova')]), 'gpt-6-nova');
+  assert.equal(imageModel([]), null);
 });

@@ -213,7 +213,7 @@ async function launch(session: Session) {
         enableFileCheckpointing: true,
         abortController: abort,
         canUseTool: approve(threadId),
-        mcpServers: { [SERVER]: claudeServer(threadId) },
+        mcpServers: { [SERVER]: claudeServer(threadId, options.spaceId, options.cwd) },
         hooks: { ...PR_GUARD, ...compactHooks(threadId) },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },

@@ -267,7 +267,7 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
  * Codex's `imageGeneration` item (0.155.1: `status`, `revisedPrompt`, `result`, `savedPath`, `failure`). Not verified against a
  * live run: `result` is taken as base64 PNG, and the image as done whenever its end carries a file or bytes and no failure.
  */
-function generatedImage(item: Record<string, unknown>, phase: 'start' | 'end', s: ThreadState): GeneratedImage {
+export function generatedImage(item: Record<string, unknown>, phase: 'start' | 'end', s: Pick<ThreadState, 'saveImage'>): GeneratedImage {
   const prompt = typeof item.revisedPrompt === 'string' && item.revisedPrompt ? { prompt: item.revisedPrompt } : {};
   const failure = obj(item.failure);
   if (failure || item.status === 'failed') return { status: 'failed', ...prompt, error: failureText(failure) };

@@ -46,9 +46,14 @@ export interface AgentSettings {
   sideChatModel: ModelChoice;
   /** Per background task (titles, commit and PR drafts…), the model tried first; `utilityCandidates` adds the fallbacks. */
   utilityModels: Record<UtilityTask, ModelChoice>;
+  /** The harness Claude's `generate_image` tool runs on (`electron/mcp/server.ts`); `off` hides the tool. */
+  imageGen: ImageGenHarness;
   /** The Dock and window icon, set at launch and on change (`electron/appIcon.ts`). */
   appIcon: AppIcon;
 }
+
+export const IMAGE_GEN_HARNESSES = ['codex', 'off'] as const;
+export type ImageGenHarness = (typeof IMAGE_GEN_HARNESSES)[number];
 
 export interface ModelChoice {
   provider: Provider;
@@ -178,6 +183,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
     // Measured on 20 finished turns: Haiku flagged things the agent never said it skipped (54 gaps, 10+ false); Sonnet 38, none false.
     audit: { provider: 'claude', model: 'claude-sonnet-5-5' },
   },
+  imageGen: 'codex',
 };
 
 /** Saved settings from before side chat could run on Codex held a bare Claude model id. */

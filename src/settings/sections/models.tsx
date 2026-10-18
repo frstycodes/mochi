@@ -36,6 +36,9 @@ export function ModelsSection() {
       <SettingsGroup title="Side chats">
         <CatalogRow settingKey="sideChatModel" />
       </SettingsGroup>
+      <SettingsGroup title="Image generation" footer="Claude can't make images, so it asks this harness. Codex threads always use their own.">
+        <CatalogRow settingKey="imageGen" />
+      </SettingsGroup>
       <BackgroundModels />
     </div>
   );
