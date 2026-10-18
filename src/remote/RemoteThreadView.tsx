@@ -155,7 +155,7 @@ function RemoteHeader({
       <MachinePresence machine={machine} />
       <span className="flex-1" />
       {!!thread.live?.isWorking && (
-        <Button variant="outline" size="sm" className="rounded-full" disabled={!can(machine, 'operate')} onClick={() => void run(machine.id, { type: 'interrupt', threadId: thread.id })}>
+        <Button variant="outline" size="sm" disabled={!can(machine, 'operate')} onClick={() => void run(machine.id, { type: 'interrupt', threadId: thread.id })}>
           <Stop data-icon="inline-start" />
           Stop
         </Button>
@@ -441,7 +441,7 @@ function RemoteComposer({ machine, thread }: { machine: FollowedMachine; thread:
             rows={1}
             className="max-h-60 min-h-10 resize-none border-0 bg-transparent! px-2 type-prose shadow-none focus-visible:ring-0 max-md:text-base"
           />
-          <TooltipIconButton label="Send" hint={`Runs on ${machine.name}`} type="submit" variant="default" className="shrink-0 rounded-full" disabled={!canSend || !text.trim()}>
+          <TooltipIconButton label="Send" hint={`Runs on ${machine.name}`} type="submit" variant="default" className="shrink-0" disabled={!canSend || !text.trim()}>
             <ArrowUp />
           </TooltipIconButton>
         </form>
