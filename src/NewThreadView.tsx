@@ -224,9 +224,9 @@ function NewThread() {
   );
 }
 
-/** The draft with the branch spelled out: the generated name, or the folder's current branch. */
+/** Keep whether the displayed branch was automatic when committing the draft. */
 function chosenWorkspace({ draft, branch }: Workspace): WorkspaceDraft {
-  return { ...draft, branch };
+  return { ...draft, branch, ...(draft.mode === 'worktree' && !draft.isExisting && !draft.branch && { autoBranch: branch }) };
 }
 
 const NO_CATALOG = { models: {}, defaults: { claude: '', codex: '' } };

@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { assertFreeBranch, branchNameError, listBranches, switchBranch } from './branches.ts';
+import { assertFreeBranch, branchNameError, listBranches, renameAutoBranch, switchBranch } from './branches.ts';
 
 // A Mochi session injects its commit-msg hook through GIT_CONFIG_*; the scratch repo's commits mustn't run it.
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_COUNT: '0' };
@@ -137,4 +137,19 @@ test('discard: tracked changes reset, untracked files gone, target clean', async
   assert.equal(git('status', '--porcelain'), '');
   assert.ok(!existsSync(join(dir, 'new.txt')));
   assert.equal(git('stash', 'list'), '');
+});
+
+test('automatic branch naming changes the real checkout, avoids collisions, and leaves switched or published branches alone', async () => {
+  const { dir, git } = repo();
+  git('switch', '-c', 'feat/first-prompt');
+  git('branch', 'feat/login-redirect');
+  assert.equal(await renameAutoBranch(dir, 'feat/first-prompt', 'feat/login-redirect'), 'feat/login-redirect-2');
+  assert.equal(git('branch', '--show-current').trim(), 'feat/login-redirect-2');
+  assert.equal(await renameAutoBranch(dir, 'feat/first-prompt', 'feat/other'), null, 'HEAD changed');
+  git('update-ref', 'refs/remotes/origin/feat/login-redirect-2', 'HEAD');
+  assert.equal(await renameAutoBranch(dir, 'feat/login-redirect-2', 'feat/other'), null, 'published without an upstream');
+  git('update-ref', '-d', 'refs/remotes/origin/feat/login-redirect-2');
+  git('config', 'branch.feat/login-redirect-2.remote', '.');
+  git('config', 'branch.feat/login-redirect-2.merge', 'refs/heads/main');
+  assert.equal(await renameAutoBranch(dir, 'feat/login-redirect-2', 'feat/other'), null, 'tracking a branch');
 });

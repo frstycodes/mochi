@@ -168,6 +168,8 @@ export interface GitHost {
   branchNameError(root: string, name: string): Promise<string | null>;
   /** Switches the project checkout to `branch` now; refuses a branch checked out elsewhere, naming where. */
   switchBranch(root: string, branch: string, options: SwitchOptions): Promise<void>;
+  /** Names an automatic branch once, unless HEAD changed or the branch was published. Returns the unique name, or null. */
+  renameAutoBranch(cwd: string, expected: string, name: string): Promise<string | null>;
   worktrees(root: string): Promise<Worktree[]>;
   /** What the checkout at `cwd` (a worktree or the project folder) has checked out now. */
   head(cwd: string): Promise<Head>;
@@ -229,6 +231,7 @@ export const gitMethods = {
   branches: 'invoke',
   branchNameError: 'invoke',
   switchBranch: 'invoke',
+  renameAutoBranch: 'invoke',
   worktrees: 'invoke',
   head: 'invoke',
   removeWorktree: 'invoke',

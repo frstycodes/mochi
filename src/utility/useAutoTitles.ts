@@ -3,7 +3,8 @@ import { host } from '../host';
 import type { Thread } from '../model';
 import type { Action } from '../store';
 import { parseTitle } from './prompts';
-import { titleRequest } from './titles';
+import { automaticBranchTitle, titleRequest } from './titles';
+import { worktreePath } from '../git/worktrees';
 
 // Once per thread per launch: a thread no model could name keeps its truncated first message.
 const asked = new Set<string>();
@@ -17,9 +18,19 @@ export function useAutoTitles(threads: Thread[], dispatch: Dispatch<Action>) {
       if (!prompt) continue;
       asked.add(t.id);
       void host.agent.utility('title', t.spaceId, prompt).then(
-        (text) => {
+        async (text) => {
           const title = text && parseTitle(text);
-          if (title) dispatch({ type: 'title-generated', threadId: t.id, title });
+          if (!title) return;
+          dispatch({ type: 'title-generated', threadId: t.id, title });
+          const name = automaticBranchTitle(t, title);
+          const cwd = worktreePath(t.id);
+          if (!name || !cwd) return;
+          try {
+            const branch = await host.git.renameAutoBranch(cwd, t.repo!.branch, name);
+            if (branch) dispatch({ type: 'repo-head', threadId: t.id, head: { branch, isDetached: false }, worktree: cwd });
+          } catch (error) {
+            console.warn('Automatic branch not renamed', error);
+          }
         },
         (error: unknown) => console.warn('Thread title not generated', error),
       );

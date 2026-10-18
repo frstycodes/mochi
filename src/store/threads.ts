@@ -431,7 +431,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
 /** `fallback` names the branch when the draft doesn't: a project folder thread is on whatever branch the folder is. */
 function withWorkspace(repo: NonNullable<Thread['repo']>, draft: WorkspaceDraft, fallback: string): NonNullable<Thread['repo']> {
   const { project, path } = repo;
-  return { project, ...(path && { path }), branch: draft.branch || fallback, ...repoWorkspace(draft) };
+  return { project, ...(path && { path }), branch: draft.branch || fallback, ...repoWorkspace(draft), ...(draft.mode === 'worktree' && !draft.isExisting && (draft.autoBranch || !draft.branch) && { autoBranch: draft.autoBranch || fallback }) };
 }
 
 function send(state: State, action: Extract<Action, { type: 'send' }>): State {
