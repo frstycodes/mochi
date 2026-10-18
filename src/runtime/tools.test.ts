@@ -716,7 +716,7 @@ test('browser_upload takes worktree files directly and asks for anything outside
 
 test('browser_eval runs on a local page without asking and logs the origin and the script', async () => {
   const t = setup();
-  const r = await t.ok('browser_eval', { script: 'window.store.getState().count' });
+  const r = await t.ok('browser_eval', { purpose: 'Read the page', script: 'window.store.getState().count' });
   assert.equal(r.value, '42');
   assert.deepEqual(t.evals, ['window.store.getState().count']);
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no card');
@@ -724,32 +724,33 @@ test('browser_eval runs on a local page without asking and logs the origin and t
   assert.equal(t.toasts.length, 0);
 });
 
-test('browser_eval on another origin needs approval and shows the whole script', async () => {
+test('browser_eval on another origin needs approval, saying in words what it does, then the whole script', async () => {
   const t = setup({ url: 'https://bank.example.com/' });
-  const pending = t.call('browser_eval', { script: 'document.cookie' });
+  const pending = t.call('browser_eval', { purpose: 'Read the page', script: 'document.cookie' });
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(t.card().title, /Run a script on bank.example.com\?/);
+  assert.equal(t.card().title, 'Read the page');
+  assert.match(t.card().detail, /bank\.example\.com, run as you, signed in/);
   assert.equal(t.card().code, 'document.cookie');
   assert.deepEqual(t.evals, [], 'nothing ran while the card waits');
   decideTool(t.card().tool!.callId, { isApproved: false });
   assert.match((await pending).text, /denied/);
   assert.deepEqual(t.evals, []);
-  const again = t.call('browser_eval', { script: 'document.title' });
+  const again = t.call('browser_eval', { purpose: 'Read the page', script: 'document.title' });
   await new Promise((r) => setTimeout(r, 0));
   decideTool(t.card().tool!.callId, { isApproved: true });
   assert.equal(JSON.parse((await again).text).value, '42');
 });
 
 test('browser_eval is blocked under Read only, and under Changes on other origins', async () => {
-  assert.match(await setup({ control: 'read' }).err('browser_eval', { script: '1' }), /Read only/);
+  assert.match(await setup({ control: 'read' }).err('browser_eval', { purpose: 'Read the page', script: '1' }), /Read only/);
   const remote = setup({ url: 'https://example.com/', control: 'changes' });
-  assert.match(await remote.err('browser_eval', { script: '1' }), /Everything, asking before deletes and settings/);
+  assert.match(await remote.err('browser_eval', { purpose: 'Read the page', script: '1' }), /Everything, asking before deletes and settings/);
   assert.deepEqual(remote.evals, []);
 });
 
 test('browser_eval passes the page error back and still logs the run', async () => {
   const t = setup();
-  assert.match(await t.err('browser_eval', { script: 'throw new Error("nope")' }), /nope/);
+  assert.match(await t.err('browser_eval', { purpose: 'Read the page', script: 'throw new Error("nope")' }), /nope/);
   assert.match(lastLog(t.thread('rl')), /\(threw\)$/);
 });
 
@@ -976,7 +977,9 @@ test('run_setup runs the recipe on the agent\'s tab and says what comes next for
   t.setupResults.push(
     { status: 'needs', stepId: 'workspace', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
     { status: 'done', captured: ['slackConfigToken'], params: { workspace: 'Acme' } },
-    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout' },
+    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout', params: { workspace: 'Acme' } },
+    { status: 'stopped', stepId: 'project-ready', note: 'Waits', kind: 'wait', nextStepId: 'next', reason: 'Google shows no project mochi-123456.', params: { suffix: '123456' }, isExpected: true },
+    { status: 'needs', stepId: 'owner', param: 'owner', question: 'Which Google account should own your Mochi app?', options: [] },
   );
   // Several workspaces: Mochi asks on its own card with one-of options, then resumes from the step that asked.
   const { result, card } = await t.asking('run_setup', { connector: 'slack' });
@@ -990,7 +993,11 @@ test('run_setup runs the recipe on the agent\'s tab and says what comes next for
   assert.deepEqual(t.setupRuns[1].options, { params: { workspace: 'Acme' }, fromStep: 'workspace' });
   assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => e.text === 'Which Slack workspace? Acme'), 'the card records the answer');
   const stopped = await t.ok('run_setup', { connector: 'slack', params: { workspace: 'Acme' } });
-  assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace"/);
+  assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace".*params \{"workspace":"Acme"\}/);
+  const expected = await t.ok('run_setup', { connector: 'slack' });
+  assert.match(expected.next, /^Google shows no project mochi-123456\. Tell the user.*params \{"suffix":"123456"\} each time/, "the recipe's own reason, said as is");
+  const owner = await t.ok('run_setup', { connector: 'slack' });
+  assert.match(owner.next, /^Ask the user in chat: Which Google account should own your Mochi app\?\. Then run_setup again with params\.owner/, 'nothing to pick from: the agent asks, no card');
   const fixed = await t.ok('update_setup_step', { connector: 'slack', stepId: 'generate', target: { role: 'button', name: 'Generate new token' } });
   assert.deepEqual(fixed.after, { role: 'button', name: 'Generate new token' });
   assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => /updated slack's setup step "generate": button "generate" → button "Generate new token"/.test(e.text)));

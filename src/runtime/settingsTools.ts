@@ -209,7 +209,8 @@ export const SETTINGS_TOOLS = {
       // A value only the user knows (which workspace) is asked on Mochi's own card, and the run goes on from that step.
       for (let asked = 0; ; asked++) {
         const result = await env.library.runSetup(args.connector, viewId, { params, ...(fromStep && { fromStep }) });
-        if (result.status !== 'needs' || asked === MAX_QUESTIONS) return { changed: `ran ${args.connector}'s setup`, isFinal: true, result: { ...result, next: setupNext(args.connector, result) } };
+        // With nothing to pick from (which Google account), the agent asks in chat instead.
+        if (result.status !== 'needs' || !result.options.length || asked === MAX_QUESTIONS) return { changed: `ran ${args.connector}'s setup`, isFinal: true, result: { ...result, next: setupNext(args.connector, result) } };
         params = { ...params, [result.param]: await ctx.choose({ title: result.question, options: result.options }) };
         fromStep = result.stepId;
       }
@@ -279,8 +280,12 @@ const MAX_QUESTIONS = 3;
 /** What the agent does after a setup run, in its words. */
 function setupNext(connector: string, result: SetupResult) {
   if (result.status === 'done') return `connect_account with connector "${connector}", an account name and fromSetup: true`;
-  if (result.status === 'needs') return `Ask the user in chat: ${result.question} (${result.options.join(', ')}). Then run_setup again with params.${result.param} set to their answer`;
-  if (result.kind === 'stopIf') return `${result.reason} Tell the user in chat, ask for what it needs, then run_setup again with it`;
+  if (result.status === 'needs') return `Ask the user in chat: ${result.question}${result.options.length ? ` (${result.options.join(', ')})` : ''}. Then run_setup again with params.${result.param} set to their answer`;
+  return `${stoppedNext(result)}. Pass params ${JSON.stringify(result.params)} each time, so the run keeps the same project instead of making another`;
+}
+
+function stoppedNext(result: Extract<SetupResult, { status: 'stopped' }>) {
+  if (result.isExpected) return `${result.reason} Tell the user in chat, ask for what it needs, then run_setup again with it`;
   if (result.kind === 'goto' || /left .*sign in/.test(result.reason)) return `${result.reason}. Ask the user to sign in in this tab, then run_setup again`;
   const fix = `update_setup_step with the role and name of the element that worked`;
   if (result.kind === 'capture') return `Find the element for "${result.stepId}" (${result.note}) with browser_snapshot, ${fix}, then run_setup with fromStep "${result.stepId}"`;

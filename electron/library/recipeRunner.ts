@@ -10,7 +10,8 @@ const STEP_TIMEOUT_MS = 10_000;
 
 /** Steps on the agent's tab: elements by role and name, the first match. */
 export function playwrightOps(page: Page): RecipeOps {
-  const find = (t: SetupTarget): Locator => (t.within ? find(t.within) : page).getByRole(t.role as Parameters<Page['getByRole']>[0], t.name ? { name: t.name, exact: t.exact } : {}).first();
+  const all = (t: SetupTarget): Locator => (t.within ? find(t.within) : page).getByRole(t.role as Parameters<Page['getByRole']>[0], t.name ? { name: t.name, exact: t.exact } : {});
+  const find = (t: SetupTarget) => all(t).first();
   let select: Locator | null = null;
   return {
     url: () => page.url(),
@@ -23,6 +24,10 @@ export function playwrightOps(page: Page): RecipeOps {
     },
     waitForText: (text, timeoutMs) => page.getByText(text).first().waitFor({ timeout: timeoutMs }),
     isPresent: (t, timeoutMs) => find(t).waitFor({ timeout: timeoutMs }).then(() => true, () => false),
+    texts: async (t, timeoutMs) => {
+      const isShown = await find(t).waitFor({ timeout: timeoutMs }).then(() => true, () => false);
+      return isShown ? all(t).allInnerTexts() : [];
+    },
     options: async (t) => {
       const target = find(t);
       await target.waitFor({ timeout: STEP_TIMEOUT_MS });

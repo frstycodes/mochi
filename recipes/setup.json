@@ -113,14 +113,13 @@
     ]
   },
   "google-workspace": {
-    "version": 3,
+    "version": 4,
     "domains": [
       "console.cloud.google.com"
     ],
     "params": {
       "owner": {
-        "question": "Which Google account should own your Mochi app?",
-        "default": "0"
+        "question": "Which Google account should own your Mochi app? A personal one if your work account can't make Cloud projects."
       },
       "suffix": {
         "generate": "suffix"
@@ -145,6 +144,30 @@
       }
     },
     "steps": [
+      {
+        "id": "owner",
+        "kind": "ask",
+        "param": "owner",
+        "note": "Which account owns the app is yours to say"
+      },
+      {
+        "id": "projects",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/cloud-resource-manager?authuser={owner}",
+        "note": "Looks for a Mochi app you already have"
+      },
+      {
+        "id": "existing",
+        "kind": "read",
+        "target": {
+          "role": "gridcell",
+          "name": "mochi-"
+        },
+        "pattern": "^mochi-(\\d+)$",
+        "param": "suffix",
+        "to": "reuse",
+        "note": "Uses its project when there is one"
+      },
       {
         "id": "open",
         "kind": "goto",
@@ -211,7 +234,9 @@
         "kind": "wait",
         "text": "You are going to make changes to project mochi-{suffix}",
         "timeoutMs": 60000,
-        "note": "Waits until the new project can be changed"
+        "note": "Waits until the new project can be changed, stopping at once if Google can't find it",
+        "stopText": "Failed to load.",
+        "reason": "Google shows no project mochi-{suffix} for this account. Wait a few seconds and run_setup with fromStep \"apis\"; if it fails again, ask which Google account should own the app."
       },
       {
         "id": "confirm-project",
@@ -566,6 +591,62 @@
           "exact": true
         },
         "note": "Closes the dialog"
+      },
+      {
+        "id": "finished",
+        "kind": "end",
+        "note": "A new app is ready"
+      },
+      {
+        "id": "reuse",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/clients?project=mochi-{suffix}&authuser={owner}",
+        "note": "Opens your existing app's clients"
+      },
+      {
+        "id": "open-client",
+        "kind": "click",
+        "target": {
+          "role": "link",
+          "name": "Mochi",
+          "within": {
+            "role": "rowheader"
+          }
+        },
+        "note": "Opens its Desktop client"
+      },
+      {
+        "id": "client-ready",
+        "kind": "wait",
+        "text": "Client ID for Desktop",
+        "note": "Waits for it"
+      },
+      {
+        "id": "reused-id",
+        "kind": "capture",
+        "urlPattern": "/auth/clients/([^/?]+\\.apps\\.googleusercontent\\.com)",
+        "as": "googleClientId",
+        "note": "Reads its Client ID from the page address"
+      },
+      {
+        "id": "add-secret",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Add client secret",
+          "exact": true
+        },
+        "note": "Adds a new secret: Google never shows an old one again"
+      },
+      {
+        "id": "reused-secret",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy to clipboard: GOCSPX-"
+        },
+        "as": "googleClientSecret",
+        "note": "Copies the new secret into Mochi"
       }
     ]
   }
