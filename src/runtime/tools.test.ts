@@ -53,6 +53,8 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
   const settings = fakeSettings();
+  const connects: { spaceId: string; account: unknown; options: unknown }[] = [];
+  const authorizeListeners = new Set<(page: { url: string; authorizationUrl: string }) => void>();
   const env: ToolEnv = {
     getState: () => state,
     dispatch: (a) => void (state = reduce(state, a)),
@@ -60,7 +62,14 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
     removeWorktree: async (id) => void removed.push(id),
-    pages: { get: (k) => pages.get(k), update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }), open: (k) => void opened.push(k) },
+    pages: {
+      get: (k) => pages.get(k),
+      update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }),
+      open: (k, url) => {
+        opened.push(k);
+        if (!pages.has(k)) pages.set(k, { hostId: `view-${++nextView}`, url, title: '', isLoading: false, canGoBack: false, canGoForward: false, error: null } as Page);
+      },
+    },
     browser: {
       navigate: async (_id, to) => void pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, url: to }),
       command: async (_id, c) => void commands.push(c),
@@ -85,7 +94,19 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     theme: () => 'system',
     settings: settings.host,
     themes: { list: async () => [] },
-    library: { list: async () => [connectorEntry('linear', 'https://mcp.linear.app/mcp', 'work')], oauthApps: async () => ['github'], ownAppRedirect: async () => 'https://relay.test/oauth/callback' },
+    library: {
+      list: async () => [connectorEntry('linear', 'https://mcp.linear.app/mcp', 'work')],
+      oauthApps: async () => ['github'],
+      ownAppRedirect: async () => 'https://relay.test/oauth/callback',
+      // Main sends the sign-in page, then keeps waiting for the agent to approve it.
+      addConnector: (spaceId, account, options) => {
+        connects.push({ spaceId, account, options });
+        queueMicrotask(() => authorizeListeners.forEach((l) => l({ url: account.url, authorizationUrl: 'https://slack.com/oauth/v2_user/authorize?client_id=x' })));
+        return new Promise(() => {});
+      },
+      onAuthorize: (listener) => (authorizeListeners.add(listener), () => void authorizeListeners.delete(listener)),
+      onDeviceCode: () => () => {},
+    },
     remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
     git: {
@@ -115,7 +136,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, connects };
   return t;
 }
 
@@ -200,7 +221,7 @@ test('every tool in the table has a handler', async () => {
 });
 
 test('only deletes and settings ask; everything else runs without a widget', () => {
-  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'set_keybinding', 'add_mcp_server', 'connect_account', 'remove_mcp_server', 'remove_profile']);
+  assert.deepEqual(TOOL_NAMES.filter((name) => asks(tierOf(name))), ['delete_thread', 'update_settings', 'set_keybinding', 'add_mcp_server', 'remove_mcp_server', 'remove_profile']);
 });
 
 test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
@@ -948,7 +969,7 @@ test('add_mcp_server fills the server into a live widget, refusing anything that
   assert.equal(t.settings.config.claude.servers.length, 2, 'nothing added');
 });
 
-test('connect_account puts a Connect button for the service in a widget; list_connectors reads accounts and the directory', async () => {
+test('connect_account connects in the agent\'s tab with the secret read by main; list_connectors reads accounts and the directory', async () => {
   const t = setup();
   const list = await t.ok('list_connectors');
   assert.deepEqual(list.accounts, [{ service: 'Linear', url: 'https://mcp.linear.app/mcp', account: 'work', isSignedIn: true, isOnProfile: true }]);
@@ -958,16 +979,18 @@ test('connect_account puts a Connect button for the service in a widget; list_co
   assert.equal(byId('google-workspace').needsOwnApp, true);
   assert.match(byId('slack').setup.openUrl, /^https:\/\/api\.slack\.com\/apps\?new_app=1&manifest_json=/);
   assert.deepEqual(JSON.parse(decodeURIComponent(byId('slack').setup.openUrl.split('manifest_json=')[1])).oauth_config.redirect_urls, ['https://relay.test/oauth/callback']);
-  assert.match(await t.err('connect_account', { connector: 'slack', clientId: 'GOCSPX-abc', reason: 'x' }), /looks like a client secret/);
-  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '7575573b1c2a4400de6115a61b557acc', reason: 'x' }), /looks like a client secret/);
-  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'work', reason: 'x' }), /already a work account on Linear/);
-  assert.match(await t.err('connect_account', { connector: 'http://evil.example/mcp', reason: 'x' }), /neither a directory id/);
-  assert.equal(t.state().queue.length, 0);
-  const r = await t.ok('connect_account', { connector: 'google-workspace', alias: 'personal', reason: 'To read your calendar' });
-  assert.deepEqual(r.shown, ['Google Workspace account']);
-  assert.deepEqual(widget(t).settings!.addConnector, { profileId: 'latitude', url: 'http://localhost:47821/mcp', alias: 'personal' });
-  await t.ok('connect_account', { connector: 'slack', alias: 'acme', clientId: '8325458480016.12371342152640', reason: 'x' });
-  assert.equal(t.state().queue.filter((q) => q.settings).at(-1)!.settings!.addConnector!.clientId, '8325458480016.12371342152640');
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: 'GOCSPX-abc' }), /looks like a client secret/);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '7575573b1c2a4400de6115a61b557acc' }), /looks like a client secret/);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '8325458480016.12371342152640' }), /Pass secretRef/);
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'work' }), /already a work account on Linear/);
+  assert.match(await t.err('connect_account', { connector: 'http://evil.example/mcp' }), /neither a directory id/);
+  assert.equal(t.connects.length, 0);
+  await t.ok('browser_snapshot');
+  const r = await t.ok('connect_account', { connector: 'slack', alias: 'acme', clientId: '8325458480016.12371342152640', secretRef: 'e2' });
+  assert.deepEqual(t.connects[0], { spaceId: 'latitude', account: { url: 'https://mcp.slack.com/mcp', alias: 'acme', clientId: '8325458480016.12371342152640' }, options: { inPane: true, secretFrom: { viewId: t.pages.get('rl/tab-1')!.hostId, ref: 'e2' } } });
+  assert.equal(r.url, 'https://slack.com/oauth/v2_user/authorize?client_id=x');
+  assert.match(r.next, /list_connectors/);
+  assert.equal(JSON.stringify(r).includes('secret"'), false, 'no secret in the result');
 });
 
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {
@@ -1017,7 +1040,6 @@ test('Read only and Changes block every settings suggestion and delete with no w
   const writes = {
     update_settings: { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' },
     add_mcp_server: { name: 'docs', command: 'npx', reason: 'x' },
-    connect_account: { connector: 'notion', reason: 'x' },
     set_keybinding: { command: 'palette', keys: 'mod+shift+K', reason: 'x' },
     remove_mcp_server: { name: 'github' },
     remove_profile: { profileId: 'scratch' },

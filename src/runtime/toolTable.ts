@@ -350,19 +350,20 @@ export const TOOL_TABLE = {
   list_connectors: {
     tier: 'read',
     description:
-      "List connectors (remote MCP services in Mochi's library): each account with its service, its name (agents pick it by this), whether it's signed in and whether the profile has it; and the directory of services you can suggest with connect_account. A service with needsOwnApp signs in through an app of the user's own: follow its setup steps in the user's browser first, then pass the Client ID to connect_account.",
+      "List connectors (remote MCP services in Mochi's library): each account with its service, its name (agents pick it by this), whether it's signed in and whether the profile has it; and the directory of services you can connect with connect_account. A service with needsOwnApp signs in through an app of the user's own: do its setup steps yourself in your browser tab (browser_open, browser_snapshot, browser_click), then connect_account with the Client ID and secretRef. Ask the user in chat only for what you can't decide or clear yourself (signing in to a site, 2-step verification, which workspace or account); don't end your turn until the account is signed in or you've hit a blocker, which you report.",
     shape: { profileId },
   },
   connect_account: {
-    tier: 'setting',
+    tier: 'change',
     description:
-      "Suggest connecting an account on a service: a directory id from list_connectors, or a remote MCP server's https URL. The user gets a Connect button on a widget in your thread and signs in in their browser; you don't get their answer, and list_connectors shows the account once it's connected. New threads in the profile get its tools.",
+      "Connect an account on a service (a directory id from list_connectors, or a remote MCP server's https URL) and open its sign-in page in a new tab of your browser, returned here: approve it there yourself, then call list_connectors until the account isSignedIn. With the user's own app, pass its Client ID and secretRef: Mochi reads the secret from the page itself and keeps it in the keychain; you never see it. New threads in the profile get the account's tools.",
     shape: {
       connector: z.string().min(1).describe('A directory id from list_connectors, or an https MCP server URL'),
       alias: z.string().regex(/^[a-z0-9-]{1,32}$/).optional().describe('The account name, like work or personal; defaults to the first free one'),
-      clientId: z.string().min(1).max(200).optional().describe("The Client ID of the user's own app (from a service's setup steps). Never the secret: the user pastes that on the card"),
+      clientId: z.string().min(1).max(200).optional().describe("The Client ID of the user's own app, from the service's setup steps"),
+      secretRef: z.string().optional().describe("The ref of the Client Secret on the page, from your latest browser_snapshot (reveal it first if it's masked). Never the secret itself"),
+      tabId,
       profileId,
-      reason,
     },
   },
   remove_mcp_server: {

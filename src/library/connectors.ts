@@ -190,6 +190,13 @@ export function oauthProviderFor(serverUrl: string): OAuthProviderId | undefined
 /** The argument every connector tool gains when a profile has more than one account on it. */
 export const ACCOUNT_ARGUMENT = '__mochi_account';
 
+const ALIAS_SUGGESTIONS = ['personal', 'work', 'client', 'team'];
+
+/** The first suggested account name no account on the service has yet. */
+export function freeAlias(taken: string[]) {
+  return ALIAS_SUGGESTIONS.find((a) => !taken.includes(a)) ?? `account-${taken.length + 1}`;
+}
+
 /** OAuth `state` for a sign-in through the relay: the loopback port first, so the relay (`infra/relay/src/oauth.ts`) knows where to send the browser back. */
 export function relayState(port: number, nonce: string) {
   return `${port}-${nonce}`;

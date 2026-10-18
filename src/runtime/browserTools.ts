@@ -196,6 +196,20 @@ const lastRefs = new Map<string, { hostId: string; url: string; refs: BrowserSna
 
 type Ctx = ToolContext<{ tabId?: string; [arg: string]: unknown }>;
 
+/** Opens `url` in a new background tab of the caller's pane, loaded, for a tool that hands the agent a page to act on. */
+export async function openInNewTab(ctx: ToolContext<unknown>, url: string) {
+  const c = ctx as Ctx;
+  c.dispatch({ type: 'pane-open-tab', threadId: c.caller.id, kind: 'browser', url, isBackground: true });
+  const tab = browserTabs(c).at(-1)!;
+  const { key } = await live(c, tab);
+  return pageResult(tab, await loaded(c, key));
+}
+
+/** The view behind `ref` from the latest snapshot of one of the caller's tabs, for main to read that element itself. */
+export function refView(ctx: ToolContext<unknown>, ref: string, tabId?: string) {
+  return refIn({ ...ctx, args: { tabId } } as Ctx, ref).page.hostId!;
+}
+
 function browserTabs({ state, caller }: Pick<Ctx, 'state' | 'caller'>) {
   return state().panes.find((p) => p.threadId === caller.id)?.tabs.filter((t) => t.kind === 'browser') ?? [];
 }

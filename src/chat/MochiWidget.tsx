@@ -16,7 +16,6 @@ import { CatalogRow, isConfigKey, useSettingSources } from '../settings/CatalogR
 import { FileDiffs } from '../settings/FileDiffs';
 import { SettingsRow } from '../settings/parts';
 import { SuggestedServerRow } from '../settings/ProfileAgentConfig';
-import { SuggestedConnectorRow } from '../library/ConnectDialog';
 import { useHarness } from '../store';
 import { revealCard } from './Transcript';
 
@@ -140,7 +139,6 @@ function SettingsWidget({ item, settings }: { item: QueueItem; settings: Setting
             <SuggestionGroup key={profileId} item={item} profile={profiles.find((p) => p.id === profileId)} profileId={profileId} changes={changes} settings={settings} readers={readers.current} />
           ))}
           {!!settings.addServer && <SuggestedServer server={settings.addServer} by={settings.by} readers={readers.current} />}
-          {!!settings.addConnector && <SuggestedConnector connector={settings.addConnector} readers={readers.current} />}
         </CardContent>
         <CardFooter className="justify-between gap-2 border-t-0 bg-transparent pt-0">
           <p className="type-caption text-muted-foreground">Changes apply as you make them.</p>
@@ -192,17 +190,6 @@ function SuggestedServer({ server, by, readers }: { server: NonNullable<Settings
       <p className="type-meta text-muted-foreground">Filled in by {authorName(by)}. Review it to add it; secrets stay as {'${VAR}'}.</p>
     </SuggestedServerRow>
   );
-}
-
-function SuggestedConnector({ connector, readers }: { connector: NonNullable<SettingsSuggestion['addConnector']>; readers: Map<string, Reader> }) {
-  const profile = useProfiles().find((p) => p.id === connector.profileId);
-  readers.set('addConnector', async () => {
-    const entries = await host.library.list(connector.profileId).catch(() => []);
-    const added = entries.find((e) => e.kind === 'connector' && e.source === connector.url && e.isLinked && (!connector.alias || e.alias === connector.alias));
-    return added ? [`connected ${added.title} (${added.alias})`] : [];
-  });
-  if (!profile) return <SettingsRow label="That profile was removed" />;
-  return <SuggestedConnectorRow profile={profile} url={connector.url} alias={connector.alias} clientId={connector.clientId} />;
 }
 
 /** Opens the widget's thread, then scrolls the widget into view and focuses it, so Esc and Tab act on it straight away. */

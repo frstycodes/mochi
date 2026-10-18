@@ -71,6 +71,9 @@ export const library: LibraryHost = {
   onDeviceCode() {
     return () => {};
   },
+  onAuthorize() {
+    return () => {};
+  },
   async oauthApps() {
     return [...OAUTH_PROVIDER_IDS, 'google' as const];
   },

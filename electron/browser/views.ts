@@ -350,6 +350,14 @@ export async function snapshotView(owner: WebContents, id: string): Promise<Brow
   return { text, refs: Object.fromEntries(refs.map(({ ref, role, name }, i) => [ref, { role, name, ...flags[i]! }])) };
 }
 
+/** `ref`'s value (an input's) or text, for main alone: Mochi stores a secret from the page without handing it to the agent. */
+export async function readRefValue(owner: WebContents, id: string, ref: string) {
+  const entry = get(owner, id);
+  const target = await locate(entry, await pageFor(entry), ref);
+  const value = await target.evaluate((el) => (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : (el.textContent ?? '')), undefined, { timeout: ACTION_TIMEOUT_MS });
+  return value.trim();
+}
+
 /** Whether clicking the element sends its form, and whether it takes a password: the agent asks or masks before acting. */
 function formFlags(target: Locator) {
   return target

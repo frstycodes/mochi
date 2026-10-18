@@ -1,9 +1,10 @@
 import type { ConnectorId } from './connectors.ts';
 
 /**
- * How an agent sets up the user's own app for a service Mochi has no app for (`list_connectors` hands it these), so the
- * user never hunts for settings: the agent does it in their browser, copies the client ID into `connect_account`, and
- * the user pastes only the secret, on the card. One-time per service (Slack: per workspace).
+ * How an agent sets up the user's own app for a service Mochi has no app for (`list_connectors` hands it these). The agent
+ * does every step in its own browser tab, asking in chat only for what it can't decide or clear; Mochi reads the client
+ * secret from the page itself (`connect_account`'s `secretRef`), so it never reaches the agent. One-time per service
+ * (Slack: per workspace).
  */
 export function ownAppSetup(id: ConnectorId, redirectUrl: string): OwnAppSetup | undefined {
   if (id === 'slack') return slackSetup(redirectUrl);
@@ -32,10 +33,10 @@ function slackSetup(redirectUrl: string): OwnAppSetup {
   return {
     openUrl: `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(manifest))}`,
     steps: [
-      'Open openUrl in the browser: Slack shows "Create app from manifest" with Mochi filled in. The user picks their workspace and clicks Next, then Create.',
-      'In the new app, open Features › Agents and turn on "Slack Model Context Protocol (MCP) Server". Slack lets only a workspace\'s own apps (and listed ones) use its MCP server, which this app is.',
-      'Open Settings › Basic Information and read the Client ID under App Credentials. Never read, reveal or copy the Client Secret.',
-      'Call connect_account with connector "slack", the Client ID, and an account name. The user pastes the secret on the card and signs in.',
+      'browser_open openUrl: Slack shows "Create app from manifest" with Mochi filled in. If it asks to sign in, ask the user to sign in in your tab and wait. Pick the workspace (ask in chat which one if there are several), then Next and Create.',
+      'In the new app: Features › Agents, turn on "Slack Model Context Protocol (MCP) Server" (Slack lets a workspace\'s own apps use it).',
+      'Settings › Basic Information › App Credentials: read the Client ID; click Show next to Client Secret, take a browser_snapshot, and note the secret\'s ref (its value shows to you as hidden).',
+      'connect_account with connector "slack", an account name (the workspace\'s, lowercased), the Client ID and secretRef. On the sign-in page it opens, click Allow, then list_connectors until it isSignedIn.',
     ],
   };
 }
@@ -43,11 +44,11 @@ function slackSetup(redirectUrl: string): OwnAppSetup {
 const GOOGLE_SETUP: OwnAppSetup = {
   openUrl: 'https://console.cloud.google.com/projectcreate',
   steps: [
-    'Create a project named "Mochi" (if Cloud asks for 2-Step Verification first, the user turns it on).',
-    'In that project, enable the Gmail API, Google Calendar API and Google Drive API (APIs & Services › Library).',
-    'Google Auth Platform › Branding: app name "Mochi", the user\'s email as support and developer contact. Audience: External.',
-    'Audience: Publish app, so sign-ins don\'t expire after 7 days. Google then shows the user an "unverified app" screen on sign-in, which is expected for an app only they use.',
-    'Clients › Create client › Application type "Desktop app", name "Mochi". Read the Client ID from the dialog; never read, reveal or copy the Client secret.',
-    'Call connect_account with connector "google-workspace", the Client ID, and an account name. The user pastes the secret on the card and signs in; every later Google account reuses this client.',
+    'browser_open openUrl and create a project named "Mochi". If Google asks the user to sign in or to turn on 2-Step Verification, ask them in chat and wait.',
+    'In that project enable the Gmail API, Google Calendar API and Google Drive API (APIs & Services › Library, Enable on each).',
+    'Google Auth Platform › Get started: app name "Mochi", the user\'s email as support and developer contact, Audience External, agree to the policy (ask the user first in chat), Create.',
+    'Audience: Publish app, so sign-ins don\'t expire after 7 days. Sign-in will show an "unverified app" screen, expected for an app only the user uses.',
+    'Clients › Create client › Desktop app, name "Mochi", Create. In the dialog that follows read the Client ID, take a browser_snapshot and note the Client secret\'s ref (its value shows to you as hidden).',
+    'connect_account with connector "google-workspace", an account name, the Client ID and secretRef. On the pages it opens, pick the account, approve Mochi\'s own consent page, then Advanced › Go to Mochi and Continue (say in chat it\'s the user\'s own app), then list_connectors until it isSignedIn. Later Google accounts reuse this client: connect_account without a Client ID.',
   ],
 };

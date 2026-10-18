@@ -20,7 +20,7 @@ export function agentSnapshot(yaml: string, generation: number): { text: string;
   const refs: AriaRef[] = [];
   const lines: string[] = [];
   let size = 0;
-  for (const line of yaml.split('\n')) {
+  for (const line of hideSecrets(yaml).split('\n')) {
     const labelled = label(line, generation);
     size += labelled.line.length + 1;
     if (size > MAX_CHARS) {
@@ -31,6 +31,14 @@ export function agentSnapshot(yaml: string, generation: number): { text: string;
     if (labelled.ref) refs.push(labelled.ref);
   }
   return { text: lines.join('\n') || '- (empty page)', refs };
+}
+
+/**
+ * Client secrets an agent sets up an app next to (Google's `GOCSPX-…`, Slack's 32 hex digits) never reach it: Mochi reads
+ * them from the page itself (`readRefValue`). GAP: a screenshot still shows them; 32-hex hashes on other pages hide too.
+ */
+export function hideSecrets(text: string) {
+  return text.replace(/GOCSPX-[\w-]+/g, '[secret hidden by Mochi]').replace(/\b[0-9a-f]{32}\b/gi, '[secret hidden by Mochi]');
 }
 
 function label(line: string, generation: number): { line: string; ref?: AriaRef } {

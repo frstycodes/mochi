@@ -60,6 +60,8 @@ export function saveSecrets(id: string, patch: Partial<Secrets> | null): Promise
   return next;
 }
 
+type OpenPage = (url: string) => Promise<unknown>;
+
 export interface NewConnectorAccount {
   url: string;
   alias: string;
@@ -84,8 +86,11 @@ export async function addConnectorAccount(spaceId: string, input: NewConnectorAc
   return account;
 }
 
-/** Signs the account in: its key, else OAuth in the user's browser, else a server that needs neither. Marks it linked. */
-export async function signIn(account: LibraryConnector, onDeviceCode: (code: DeviceCode) => void = () => {}) {
+/**
+ * Signs the account in: its key, else OAuth in the browser, else a server that needs neither. Marks it linked. `open`
+ * shows the sign-in page: the user's browser, or for an agent's connect the agent's own tab, where it clicks Allow.
+ */
+export async function signIn(account: LibraryConnector, onDeviceCode: (code: DeviceCode) => void = () => {}, open: OpenPage = (url) => shell.openExternal(url)) {
   forget(account.id);
   await ensureLocalServer(account.url);
   const secrets = await readSecrets(account.id);
@@ -94,7 +99,7 @@ export async function signIn(account: LibraryConnector, onDeviceCode: (code: Dev
   if (usesMochiApp && !mochiOAuthApp(oauthProvider))
     throw new Error(`${OAUTH_PROVIDERS[oauthProvider].name} doesn’t let apps register themselves, and this build of Mochi has no ${OAUTH_PROVIDERS[oauthProvider].name} app yet. Connect it with an API key or your own OAuth app.`);
   if (usesMochiApp && OAUTH_PROVIDERS[oauthProvider].flow === 'device') {
-    await deviceSignIn(account, mochiOAuthApp(oauthProvider)!.client_id, onDeviceCode);
+    await deviceSignIn(account, mochiOAuthApp(oauthProvider)!.client_id, onDeviceCode, open);
     await (await connect(account, new AccountAuth(account, await loopbackUrl(CALLBACK)))).close();
     return setLinked(account.id, true);
   }
@@ -104,12 +109,12 @@ export async function signIn(account: LibraryConnector, onDeviceCode: (code: Dev
   // Some servers (Google's) answer the handshake without a token and only refuse tool calls, so an account with no token
   // signs in up front whenever its server publishes OAuth metadata.
   const metadata = !secrets.apiKey && !secrets.tokens ? await discoverOAuthProtectedResourceMetadata(account.url).catch(() => undefined) : undefined;
-  if (metadata?.authorization_servers?.length && (await auth(provider, { serverUrl: account.url })) === 'REDIRECT') await finish(provider, account);
+  if (metadata?.authorization_servers?.length && (await auth(provider, { serverUrl: account.url })) === 'REDIRECT') await finish(provider, account, open);
   try {
     await (await connect(account, provider)).close();
   } catch (error) {
     if (!(error instanceof UnauthorizedError) || !provider.authorizationUrl) throw error;
-    await finish(provider, account);
+    await finish(provider, account, open);
   }
   await setLinked(account.id, true);
 }
@@ -119,7 +124,7 @@ export async function signIn(account: LibraryConnector, onDeviceCode: (code: Dev
  * token endpoint until you approve. No redirect and no client secret. Endpoints and scopes come from the server's
  * metadata. GAP: closing the dialog doesn't stop the polling; it ends when the code expires.
  */
-async function deviceSignIn(account: LibraryConnector, clientId: string, onCode: (code: DeviceCode) => void) {
+async function deviceSignIn(account: LibraryConnector, clientId: string, onCode: (code: DeviceCode) => void, open: OpenPage) {
   const { authorizationServerMetadata: server, resourceMetadata } = await discoverOAuthServerInfo(account.url);
   const deviceEndpoint = (server as { device_authorization_endpoint?: string } | undefined)?.device_authorization_endpoint;
   if (!server || !deviceEndpoint) throw new Error(`${account.title} doesn’t offer sign-in with a code`);
@@ -127,7 +132,7 @@ async function deviceSignIn(account: LibraryConnector, clientId: string, onCode:
   const start = (await postForm(deviceEndpoint, { client_id: clientId, ...(scope && { scope }) })) as DeviceStart;
   if (!start.device_code) throw new Error(start.error_description ?? start.error ?? `${account.title} gave no sign-in code`);
   onCode({ url: account.url, userCode: start.user_code, verificationUri: start.verification_uri });
-  await shell.openExternal(start.verification_uri_complete ?? start.verification_uri);
+  await open(start.verification_uri_complete ?? start.verification_uri);
   let interval = (start.interval ?? 5) * 1000;
   const deadline = Date.now() + (start.expires_in ?? 900) * 1000;
   while (Date.now() < deadline) {
@@ -164,10 +169,10 @@ async function redirectFor(provider: OAuthProviderId | undefined) {
 }
 
 /** Opens the sign-in page and waits for the browser to land on the callback with a code. */
-async function finish(provider: AccountAuth, account: LibraryConnector) {
+async function finish(provider: AccountAuth, account: LibraryConnector, open: OpenPage) {
   if (!provider.authorizationUrl || !provider.pendingState) throw new Error(`${account.url} asked for sign-in but gave no sign-in page`);
   const code = waitForCode(provider.pendingState);
-  await shell.openExternal(provider.authorizationUrl.toString());
+  await open(provider.authorizationUrl.toString());
   await auth(provider, { serverUrl: account.url, authorizationCode: await code });
 }
 

@@ -6,7 +6,8 @@ import { findSetting, recordValue, settingsCatalog, valueLabel, type Setting, ty
 import { HARNESSES } from '../settings/harnesses.ts';
 import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
 import { IS_MAC } from '../keys.ts';
-import { appProviderFor, CONNECTORS, connectorFor, isSameServer } from '../library/connectors.ts';
+import { appProviderFor, CONNECTORS, connectorFor, freeAlias, isSameServer } from '../library/connectors.ts';
+import { openInNewTab, refView } from './browserTools.ts';
 import { ownAppSetup } from '../library/ownApps.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
@@ -160,18 +161,35 @@ export const SETTINGS_TOOLS = {
   },
   connect_account: {
     run: async (ctx) => {
-      const { args, caller } = ctx;
+      const { args, env } = ctx;
       const profile = profileNamed(ctx, args.profileId);
       const url = connectorUrl(args.connector);
       const name = connectorFor(url)?.name ?? new URL(url).hostname;
-      const entries = await ctx.env.library.list(profile.id);
-      if (args.clientId && looksLikeSecret(args.clientId)) throw new Error('That looks like a client secret, not a Client ID. Never pass the secret: the user pastes it on the card');
-      if (args.alias && entries.some((e) => e.kind === 'connector' && e.alias === args.alias && !!e.source && isSameServer(e.source, url)))
-        throw new Error(`There is already a ${args.alias} account on ${name}; list_connectors lists them`);
-      const by = caller.providers[0];
-      const title = `${authorName(by)} suggests connecting ${name}${args.alias ? ` (${args.alias})` : ''}${profile.id === caller.spaceId ? '' : ` in ${profile.name}`}`;
-      open(ctx, card(ctx, cardId('setting', caller.id), 'setting', { title, detail: args.reason, settings: { by, reason: args.reason, changes: [], addConnector: { profileId: profile.id, url, ...(args.alias && { alias: args.alias }), ...(args.clientId && { clientId: args.clientId }) }, before: {} } }));
-      return { result: { shown: [`${name} account`], note: CONNECT_NOTE } };
+      const taken = (await env.library.list(profile.id)).flatMap((e) => (e.kind === 'connector' && !!e.alias && !!e.source && isSameServer(e.source, url) ? [e.alias] : []));
+      const alias = args.alias ?? freeAlias(taken);
+      if (taken.includes(alias)) throw new Error(`There is already a ${alias} account on ${name}; list_connectors lists them`);
+      if (args.clientId && looksLikeSecret(args.clientId)) throw new Error('That looks like a client secret, not a Client ID. Never pass the secret itself: pass secretRef and Mochi reads it');
+      const needsSecret = !!args.clientId && appProviderFor(url) !== 'github';
+      if (needsSecret && !args.secretRef) throw new Error('Pass secretRef: the ref of the Client Secret on the page, from browser_snapshot (reveal it first if it is hidden). Mochi reads it itself; you never see it');
+      const secretFrom = args.secretRef ? { viewId: refView(ctx, args.secretRef, args.tabId), ref: args.secretRef } : undefined;
+      const account = `${name} (${alias})`;
+      const page = signInPage(env, url);
+      const connecting = env.library.addConnector(profile.id, { url, alias, ...(args.clientId && { clientId: args.clientId }) }, { inPane: true, ...(secretFrom && { secretFrom }) });
+      // The sign-in goes on after this call returns, while the agent works the page; its end shows in the thread.
+      let isHandedOff = false;
+      void connecting.then(
+        () => isHandedOff && say(ctx, `Connected ${account}`),
+        (error: unknown) => isHandedOff && say(ctx, `Couldn't connect ${account}: ${error instanceof Error ? error.message : String(error)}`),
+      );
+      const first = await Promise.race([page.next, connecting.then(() => null), sleep(SIGN_IN_START_MS).then(() => 'slow' as const)]).finally(() => page.stop());
+      if (first === null) return { changed: `connected ${account}`, result: { account: alias, isSignedIn: true } };
+      isHandedOff = true;
+      if (first === 'slow') return { changed: `started connecting ${account}`, result: { account: alias, note: `${name} is still starting; call list_connectors in a minute` } };
+      const tab = await openInNewTab(ctx, first.url);
+      return {
+        changed: `opened ${name}'s sign-in page`,
+        result: { account: alias, ...tab, ...('userCode' in first && { userCode: first.userCode }), next: 'userCode' in first ? CODE_NEXT : SIGN_IN_NEXT },
+      };
     },
   },
   remove_mcp_server: {
@@ -207,7 +225,24 @@ const RESERVED_NOTE = IS_MAC
 
 const SHOWN_NOTE = "The user sees these as live settings in your thread and changes them there if they want. You won't get their answer; get_settings reads the values later.";
 
-const CONNECT_NOTE = "The user sees a Connect button in your thread and signs in in their browser there. You won't get their answer; list_connectors shows the account once it's connected.";
+const SIGN_IN_NEXT = "Approve on this page in your tab: pick the account if asked and click Allow, Continue or Approve (for a Google project of the user's own, Advanced, then Go to Mochi, is expected: say so in chat). Then call list_connectors until the account isSignedIn. Ask the user in chat only to sign in to the site or choose between accounts.";
+const CODE_NEXT = 'Type userCode on this page in your tab and approve, then call list_connectors until the account isSignedIn.';
+// The local Google Workspace server's first start downloads Python and its packages.
+const SIGN_IN_START_MS = 3 * 60_000;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The first sign-in page (or one-time code) main sends for `url`'s connect; `stop` unsubscribes. */
+function signInPage(env: ToolContext<unknown>['env'], url: string) {
+  let resolve!: (page: { url: string } | { url: string; userCode: string }) => void;
+  const next = new Promise<{ url: string } | { url: string; userCode: string }>((r) => (resolve = r));
+  const offPage = env.library.onAuthorize((p) => p.url === url && resolve({ url: p.authorizationUrl }));
+  const offCode = env.library.onDeviceCode((c) => c.url === url && resolve({ url: c.verificationUri, userCode: c.userCode }));
+  return { next, stop: () => (offPage(), offCode()) };
+}
+
+function say(ctx: ToolContext<unknown>, text: string) {
+  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text } });
+}
 
 type Ctx<K extends SettingsToolName> = ToolContext<Args<K>>;
 

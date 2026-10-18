@@ -9,60 +9,28 @@ import { Spinner } from '@/components/ui/spinner';
 import { toast } from '@/toast/store';
 import { host } from '../host';
 import { copyText } from '../clipboard';
-import { appInfo, appProviderFor, connectorFor, connectorIcon, isSameServer, OAUTH_PROVIDERS, type AppProviderId, type DeviceCode } from './connectors';
-import type { Space } from '../model';
-import { ListIcon, SettingsRow } from '../settings/parts';
+import { appInfo, appProviderFor, connectorFor, connectorIcon, freeAlias, isSameServer, OAUTH_PROVIDERS, type AppProviderId, type DeviceCode } from './connectors';
 import { LibraryIcon } from './LibraryParts';
-import { useLibrary, type Library } from './useLibrary';
+import type { Library } from './useLibrary';
 
 /**
  * Adds an account on a remote MCP server: what to call it, then how it signs in. Without a `url` it's a custom server and
  * asks for the URL first. Stays open, waiting, while a browser sign-in runs.
  */
-export function ConnectAccountDialog({ open, onOpenChange, url, alias, clientId, library }: { open: boolean; onOpenChange: (open: boolean) => void; url?: string; alias?: string; clientId?: string; library: Library }) {
+export function ConnectAccountDialog({ open, onOpenChange, url, library }: { open: boolean; onOpenChange: (open: boolean) => void; url?: string; library: Library }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <ConnectAccountForm fixedUrl={url} initialAlias={alias} initialClientId={clientId} library={library} onCancel={() => onOpenChange(false)} onConnected={() => onOpenChange(false)} />
+        <ConnectAccountForm fixedUrl={url} library={library} onCancel={() => onOpenChange(false)} onConnected={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** An account an agent suggested (`connect_account`), on its settings widget: Connect opens the dialog, filled in. */
-export function SuggestedConnectorRow({ profile, url, alias, clientId }: { profile: Space; url: string; alias?: string; clientId?: string }) {
-  const library = useLibrary(profile.id);
-  const [isOpen, setOpen] = useState(false);
-  const name = connectorFor(url)?.name ?? new URL(url).hostname;
-  const isConnected = !!library.entries?.some((e) => e.kind === 'connector' && e.source === url && e.isLinked && (!alias || e.alias === alias));
-  return (
-    <SettingsRow
-      label={
-        <span className="flex items-center gap-2.5">
-          <ListIcon url={connectorIcon(url)} />
-          Connect {name}
-        </span>
-      }
-      description={`${alias ?? 'A new account'}, ${profile.name}${clientId ? ', with your own app: paste its secret' : ''}`}
-      control={
-        isConnected ? (
-          <span className="type-meta text-muted-foreground">Connected</span>
-        ) : (
-          <Button size="sm" onClick={() => setOpen(true)}>
-            Connect
-          </Button>
-        )
-      }
-    >
-      <ConnectAccountDialog open={isOpen} onOpenChange={setOpen} url={url} alias={alias} clientId={clientId} library={library} />
-    </SettingsRow>
   );
 }
 
 type SignInMethod = 'oauth' | 'key' | 'app';
 
 // Lives inside the dialog's content, which unmounts when it closes, so every opening starts fresh.
-function ConnectAccountForm({ fixedUrl, initialAlias, initialClientId, library, onCancel, onConnected }: { fixedUrl?: string; initialAlias?: string; initialClientId?: string; library: Library; onCancel: () => void; onConnected: () => void }) {
+function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixedUrl?: string; library: Library; onCancel: () => void; onConnected: () => void }) {
   const [typedUrl, setTypedUrl] = useState('');
   const url = fixedUrl ?? typedUrl.trim();
   const isUrlValid = URL.canParse(url) && /^https?:\/\//.test(url);
@@ -71,11 +39,11 @@ function ConnectAccountForm({ fixedUrl, initialAlias, initialClientId, library, 
   const mochiApps = useMochiOAuthApps();
   const hasMochiApp = !!provider && !!mochiApps?.includes(provider);
   const takenAliases = (library.entries ?? []).flatMap((e) => (e.kind === 'connector' && e.alias && !!e.source && isUrlValid && isSameServer(e.source, url) ? [e.alias] : []));
-  const [alias, setAlias] = useState(() => initialAlias ?? freeAlias(takenAliases));
-  const [chosenMethod, setMethod] = useState<SignInMethod>(initialClientId ? 'app' : 'oauth');
+  const [alias, setAlias] = useState(() => freeAlias(takenAliases));
+  const [chosenMethod, setMethod] = useState<SignInMethod>('oauth');
   // Without Mochi's own app, a provider that can't register one can't sign in in the browser: its own app is the default.
   const method = provider && !hasMochiApp && chosenMethod === 'oauth' ? 'app' : chosenMethod;
-  const [secret, setSecret] = useState({ apiKey: '', clientId: initialClientId ?? '', clientSecret: '' });
+  const [secret, setSecret] = useState({ apiKey: '', clientId: '', clientSecret: '' });
   const [isBusy, setBusy] = useState(false);
   const isTaken = takenAliases.includes(alias);
   // GitHub's device flow needs no secret; the other providers' apps are confidential clients.
@@ -145,7 +113,7 @@ function ConnectAccountForm({ fixedUrl, initialAlias, initialClientId, library, 
         <Field>
           <FieldLabel htmlFor="connect-client">OAuth app</FieldLabel>
           <Input id="connect-client" placeholder="Client ID" value={secret.clientId} onChange={(e) => setSecret({ ...secret, clientId: e.target.value })} />
-          <Input type="password" autoComplete="off" aria-label="Client secret" autoFocus={!!initialClientId} placeholder={needsSecret ? 'Client secret' : 'Client secret, if it has one'} value={secret.clientSecret} onChange={(e) => setSecret({ ...secret, clientSecret: e.target.value })} />
+          <Input type="password" autoComplete="off" aria-label="Client secret" placeholder={needsSecret ? 'Client secret' : 'Client secret, if it has one'} value={secret.clientSecret} onChange={(e) => setSecret({ ...secret, clientSecret: e.target.value })} />
           <FieldDescription>
             <OwnAppHint provider={provider} />
           </FieldDescription>
@@ -238,11 +206,4 @@ function useMochiOAuthApps() {
   const [apps, setApps] = useState<AppProviderId[] | null>(null);
   useEffect(() => void host.library.oauthApps().then(setApps, () => setApps([])), []);
   return apps;
-}
-
-const ALIAS_SUGGESTIONS = ['personal', 'work', 'client', 'team'];
-
-/** The first suggested name no account on the service has yet, so the dialog never opens already in an error. */
-function freeAlias(taken: string[]) {
-  return ALIAS_SUGGESTIONS.find((a) => !taken.includes(a)) ?? `account-${taken.length + 1}`;
 }

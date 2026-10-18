@@ -492,8 +492,6 @@ export interface SettingsSuggestion {
   changes: { key: string; value: string; profileId?: string }[];
   /** An MCP server to add, filled into Settings' add form. */
   addServer?: { profileId: string; provider: Provider; server: McpServerDef };
-  /** A connector account to add, opened in the connect dialog; `alias` and `clientId` (the user's own app) prefill it. */
-  addConnector?: { profileId: string; url: string; alias?: string; clientId?: string };
   /** Each row's value when the widget opened, by `settingRef`, so Done can say what changed. */
   before: Record<string, string>;
 }

@@ -6,6 +6,7 @@ import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
 import { addMarketplace, importFromAccount, installPlugin, installSkill, marketplaces, readLibrary, removeMarketplace, updateLibrary } from '../library/store.ts';
+import { readRefValue } from '../browser/views.ts';
 import { addConnectorAccount, forgetAccount, signIn } from '../library/connectors.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
@@ -68,10 +69,14 @@ export const library = {
     await installPlugin(space, string(marketplace, 'marketplace', 128), string(name, 'name', 128));
     return libraryEntries(await readLibrary(), space);
   },
-  async addConnector(sender, spaceId, input) {
+  async addConnector(sender, spaceId, input, options) {
     const space = spaceIdOf(spaceId);
-    const account = await addConnectorAccount(space, connectorInput(input));
-    await signIn(account, deviceCodeTo(sender));
+    const { inPane, secretFrom } = connectOptions(options);
+    const fields = connectorInput(input);
+    if (secretFrom) fields.clientSecret = await secretOnPage(sender, secretFrom);
+    const account = await addConnectorAccount(space, fields);
+    const open = inPane ? async (authorizationUrl: string) => void (!sender.isDestroyed() && sender.send('library:onAuthorize', { url: account.url, authorizationUrl })) : undefined;
+    await signIn(account, deviceCodeTo(sender), open);
     return libraryEntries(await readLibrary(), space);
   },
   async oauthApps() {
@@ -99,6 +104,21 @@ export const library = {
 
 /** A device sign-in's code goes to the window that started it, for the dialog to show. */
 const deviceCodeTo = (sender: WebContents) => (code: DeviceCode) => !sender.isDestroyed() && sender.send('library:onDeviceCode', code);
+
+function connectOptions(value: unknown) {
+  if (value === undefined) return {};
+  const options = record(value, 'options');
+  const secretFrom = options.secretFrom === undefined ? undefined : record(options.secretFrom, 'secretFrom');
+  if (secretFrom && !/^view-\d+$/.test(string(secretFrom.viewId, 'viewId', 32))) throw new TypeError('viewId is not a view id');
+  return { inPane: options.inPane === true, secretFrom: secretFrom && { viewId: secretFrom.viewId as string, ref: string(secretFrom.ref, 'ref', 64) } };
+}
+
+/** The client secret where an agent pointed: read in main, so it reaches only the keychain. A masked or empty field is refused. */
+async function secretOnPage(sender: WebContents, { viewId, ref }: { viewId: string; ref: string }) {
+  const value = await readRefValue(sender, viewId, ref);
+  if (value.length < 8 || /^[•*·●\s]+$/.test(value)) throw new Error('That field reads empty or masked: reveal the secret on the page (its Show button), take a new browser_snapshot and pass the ref again');
+  return value;
+}
 
 const ALIAS = /^[a-z0-9][a-z0-9-]{0,31}$/;
 

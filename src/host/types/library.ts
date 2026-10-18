@@ -21,8 +21,14 @@ export interface LibraryHost {
   removeMarketplace(name: string): Promise<Marketplace[]>;
   marketplaceCatalog(name: string): Promise<MarketplaceCatalog>;
   installPlugin(spaceId: string, marketplace: string, name: string): Promise<LibraryEntry[]>;
-  /** Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth. */
-  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }): Promise<LibraryEntry[]>;
+  /**
+   * Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth.
+   * For an agent's connect: `inPane` sends the sign-in page to `onAuthorize` instead of the user's browser, and `secretFrom`
+   * has main read the client secret from a page element itself, so it never passes through the renderer or the agent.
+   */
+  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: { viewId: string; ref: string } }): Promise<LibraryEntry[]>;
+  /** A sign-in page an `inPane` connect wants opened, for the agent's tab. */
+  onAuthorize(listener: (page: { url: string; authorizationUrl: string }) => void): () => void;
   /** The providers accounts can sign in with without bringing an app: Mochi's own, or for Google one the user saved. */
   oauthApps(): Promise<AppProviderId[]>;
   /** The redirect URL to register in an app the user brings for a provider that only takes https redirects (Mochi's relay). */
@@ -48,6 +54,7 @@ export const libraryMethods = {
   marketplaceCatalog: 'invoke',
   installPlugin: 'invoke',
   addConnector: 'invoke',
+  onAuthorize: 'event',
   oauthApps: 'invoke',
   ownAppRedirect: 'invoke',
   onDeviceCode: 'event',
