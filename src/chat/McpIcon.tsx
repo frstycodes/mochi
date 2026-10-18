@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import mochiIcon from '../../build/icon.svg';
 import { hostname } from '../agentPhase';
+import { IconImage } from '../IconImage';
 import { McpServerIcon } from '../icons/ObjectIcons';
 import { useLibraryNames } from '../library/names';
 import { MOCHI_SERVER } from '../runtime/toolTable';
@@ -23,9 +24,9 @@ export function McpIcon({ target, className }: { target: string; className?: str
 export function McpServerMark({ server, url, className }: { server: string; url?: string; className?: string }) {
   const name = useLibraryNames().server(server);
   if (server === MOCHI_SERVER) return <img src={mochiIcon} alt="" aria-hidden className={cn('size-4 shrink-0 rounded-[22%]', className)} />;
-  if (name.image) return <LibraryImage src={name.image} className={className} />;
+  if (name.image) return <LibraryImage src={name.image} fallback={<McpServerIcon className={className} />} className={className} />;
   const site = name.url ?? url;
-  if (site) return <Favicon host={siteOf(hostname(site))} fallback={<McpServerIcon className={className} />} />;
+  if (site) return <Favicon host={hostname(site)} fallback={<McpServerIcon className={className} />} />;
   return <McpServerIcon className={className} />;
 }
 
@@ -41,13 +42,6 @@ export function PluginMark({ plugin, fallback, className }: { plugin: string; fa
   return image ? <LibraryImage src={image} className={className} /> : fallback;
 }
 
-function LibraryImage({ src, className }: { src: string; className?: string }) {
-  return <img src={src} alt="" aria-hidden loading="lazy" referrerPolicy="no-referrer" className={cn('size-4 shrink-0 rounded-sm object-contain', className)} />;
-}
-
-// Servers live on a subdomain (`mcp.linear.app`) whose favicon is the generic one; the site's own sits one level up.
-// GAP: a two-part suffix (`mcp.example.co.uk`) loses too much and shows the wrench.
-function siteOf(host: string) {
-  const labels = host.split('.');
-  return labels.length > 2 ? labels.slice(1).join('.') : host;
+function LibraryImage({ src, fallback, className }: { src: string; fallback?: ReactNode; className?: string }) {
+  return <IconImage src={src} fallback={fallback} className={cn('size-4 rounded-sm', className)} />;
 }

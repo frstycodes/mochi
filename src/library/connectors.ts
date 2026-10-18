@@ -1,3 +1,5 @@
+import { faviconUrl } from '../favicon.ts';
+
 // Curated from the official MCP Registry and each vendor's docs (endpoints checked 2026-10-10). The registry itself is
 // open to anyone and full of proxies, so only vendors' own endpoints are listed here.
 export interface Connector {
@@ -129,9 +131,9 @@ const CONNECTOR_SITES = {
 /** A connector's icon: its product icon or vendor favicon (via Google's favicon service), else the server host's favicon. */
 export function connectorIcon(serverUrl: string) {
   const known = connectorFor(serverUrl);
-  const site = known ? CONNECTOR_SITES[known.id as ConnectorId] : URL.canParse(serverUrl) ? new URL(serverUrl).hostname.replace(/^mcp\./, '') : null;
+  const site = known ? CONNECTOR_SITES[known.id as ConnectorId] : URL.canParse(serverUrl) ? new URL(serverUrl).hostname : null;
   if (site?.startsWith('https://')) return site;
-  return site && `https://www.google.com/s2/favicons?domain=${site}&sz=64`;
+  return site && faviconUrl(site, 64);
 }
 
 export function connectorFor(serverUrl: string): Connector | undefined {
