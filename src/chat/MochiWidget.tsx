@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Cursor, Flag, Globe, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
+import { ChevronRight, Cursor, Flag, Globe, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -70,6 +70,7 @@ const KIND = {
 /** A call waiting on you: a delete, a browser escalation, or a question with one answer. Enter works on whichever button has focus; Esc anywhere inside says no. */
 function MochiWidget({ item }: { item: QueueItem }) {
   const [options, setOptions] = useState<string[]>([]);
+  const [isCodeOpen, setCodeOpen] = useState(false);
   const kind = item.tool?.isDestructive ? 'delete' : item.tool?.pick === 'one' ? 'choose' : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
   const decide = (isApproved: boolean, chosen?: string[]) => (item.tool ? decideTool(item.tool.callId, { isApproved, options: chosen }) : undefined);
@@ -93,7 +94,7 @@ function MochiWidget({ item }: { item: QueueItem }) {
           </ul>
         )}
         {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
-        {!!item.code && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
+        {!!item.code && isCodeOpen && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
         {kind === 'choose' && (
           <RadioGroup value={options[0] ?? ''} onValueChange={(v) => setOptions([v])} aria-label={item.title} className="gap-2">
             {item.tool?.options?.map((o) => (
@@ -116,6 +117,7 @@ function MochiWidget({ item }: { item: QueueItem }) {
         ))}
       </CardContent>
       <CardFooter className="flex-wrap justify-end gap-2 border-t-0 bg-transparent pt-0">
+        {!!item.code && <ShowCodeButton isOpen={isCodeOpen} onToggle={() => setCodeOpen((o) => !o)} />}
         <Button variant="outline" size="sm" onClick={() => decide(false)}>
           {deny}
         </Button>
@@ -124,6 +126,15 @@ function MochiWidget({ item }: { item: QueueItem }) {
         </Button>
       </CardFooter>
     </WidgetCard>
+  );
+}
+
+function ShowCodeButton({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
+  return (
+    <Button variant="ghost" size="xs" aria-expanded={isOpen} onClick={onToggle} className="-ms-2 me-auto text-muted-foreground">
+      {isOpen ? 'Hide code' : 'Show code'}
+      <ChevronRight aria-hidden data-icon="inline-end" className={cn('size-3 transition-transform', isOpen && 'rotate-90')} />
+    </Button>
   );
 }
 

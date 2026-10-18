@@ -124,7 +124,7 @@ export const BROWSER_TOOLS = {
       const { key, tab, page } = await live(ctx, tabFor(ctx));
       const origin = originOf(page.url);
       if (!isLocalUrl(page.url))
-        await ctx.confirm({ title: `Run a script on ${host(page.url)}?`, detail: `It runs as you on ${host(page.url)}, signed in, and can do anything you can do there.`, code: ctx.args.script });
+        await ctx.confirm({ title: ctx.args.purpose, detail: `A script on ${host(page.url)}, run as you, signed in: it can do anything you can do there.`, code: ctx.args.script });
       const changed = `ran a script on ${origin}: ${preview(ctx.args.script)}`;
       try {
         const { value, isTruncated } = await ctx.env.browser.eval(page.hostId!, ctx.args.script);
