@@ -732,7 +732,7 @@ function Recipes() {
           use="Codex-style card under its header toggle: goal, changes, context, PRs, skills used, tools called, sources. Hover the goal for the full timeline."
         >
           <div className="flex h-[560px] justify-end overflow-hidden rounded-xl border">
-            <SummaryPanel thread={rl} className="m-3 w-[300px] rounded-xl bg-popover shadow-popover" />
+            <SummaryPanel thread={rl} className="m-3 w-[300px]" />
           </div>
         </Block>
         <Block title="Idle verdict rows" use="An idle thread's row says why it stopped, read by Mochi: a toned chip, then the reason. Working rows keep their shimmer.">

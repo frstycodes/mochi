@@ -21,27 +21,25 @@ export function SummaryGoal({ className, ...props }: ComponentProps<'section'>) 
   return <section aria-label="Goal" className={cn('flex flex-col gap-2.5 rounded-lg px-2 py-2', className)} {...props} />;
 }
 
-/** "Goal", what done means counted (met, claimed included), then edit and open. */
-export function SummaryGoalHeader({ thread, onEdit, onOpen }: { thread: Thread; onEdit: () => void; onOpen: () => void }) {
+/** "Goal", edit and open beside it, then what done means counted (met, claimed included) on the right, where a drag handle may cover it. */
+export function SummaryGoalHeader({ thread, onEdit, onOpen, countClassName }: { thread: Thread; onEdit: () => void; onOpen: () => void; countClassName?: string }) {
   const criteria = thread.criteria ?? [];
   const met = criteria.filter(isMet).length;
   return (
     <div className="flex items-center gap-1">
-      <h2 className="type-title">Goal</h2>
-      <span className="flex flex-1 items-center gap-1.5 pl-1.5 tabular type-caption text-subtle-foreground">
-        {criteria.length > 0 && (
-          <>
-            <ProgressRing met={met} total={criteria.length} slot={thread.line} size={14} isWorking={isWorking(thread)} />
-            {`${met} of ${criteria.length}`}
-          </>
-        )}
-      </span>
+      <h2 className="mr-1 type-title">Goal</h2>
       <TooltipIconButton label="Edit goal" hint="Change the outcome or what done means" size="icon-xs" onClick={onEdit}>
         <Edit />
       </TooltipIconButton>
       <TooltipIconButton label="Open the goal" hint="History, the agent's notes, every check" size="icon-xs" onClick={onOpen}>
         <Maximize />
       </TooltipIconButton>
+      {criteria.length > 0 && (
+        <span className={cn('ml-auto flex items-center gap-1.5 tabular type-caption text-subtle-foreground', countClassName)}>
+          <ProgressRing met={met} total={criteria.length} slot={thread.line} size={14} isWorking={isWorking(thread)} />
+          {`${met} of ${criteria.length}`}
+        </span>
+      )}
     </div>
   );
 }

@@ -132,7 +132,7 @@ export function ThreadView({ thread }: { thread: Thread }) {
             <SummaryPanel
               thread={thread}
               // Room for the sheet's close button, which otherwise covers the summary's menu.
-              className="h-full pt-8"
+              className="h-full px-3 pt-10 pb-3"
               onPaneOpened={() => {
                 setSummarySheetOpen(false);
                 setPaneTabOpen(true);
@@ -206,7 +206,7 @@ function DockedSummary({ thread, isOpen, animates }: { thread: Thread; isOpen: b
           animates && ['transition-[opacity,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-opacity', isOpen ? 'duration-200' : 'duration-150'],
         )}
       >
-        <SummaryPanel thread={thread} className="h-full rounded-xl border bg-card" />
+        <SummaryPanel thread={thread} className="h-full" />
       </div>
     </div>
   );
@@ -223,7 +223,7 @@ function FloatingSummary({ thread, isOpen, animates }: { thread: Thread; isOpen:
       )}
     >
       {/* The wrapper spans to the bottom only to cap the card's height; it lets clicks through to the chat. */}
-      <SummaryPanel thread={thread} className={cn('max-h-full rounded-xl bg-popover shadow-float', isOpen && 'pointer-events-auto')} />
+      <SummaryPanel thread={thread} isFloating className={cn('max-h-full', isOpen && 'pointer-events-auto')} />
     </div>
   );
 }
