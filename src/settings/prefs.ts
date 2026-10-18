@@ -72,8 +72,6 @@ export interface Prefs {
   agentControl: AgentControl;
   /** Per-tool choices over the level (`src/runtime/toolPolicy.ts`); a choice a tool's tier doesn't offer is ignored when read. */
   toolPolicies: ToolPolicies;
-  /** What model and effort `create_thread` may give a new thread (RUNTIME.md › Mochi tools). */
-  threadModels: ThreadModels;
   /** Keep each live thread's agent events for Replay (`src/replay/recorder.ts`). */
   recordReplays: boolean;
   /** The rewind mode you last ran, offered first next time. */
@@ -81,10 +79,6 @@ export interface Prefs {
   /** Rebound shortcuts only, command id → chord text (`src/keymap.ts`); '' leaves a command without one. */
   keybindings: Record<string, string>;
 }
-
-export const THREAD_MODELS_RULES = ['cheaper', 'any', 'default'] as const;
-
-export type ThreadModels = (typeof THREAD_MODELS_RULES)[number];
 
 export const AGENT_CONTROLS = ['read', 'changes', 'everything'] as const;
 
@@ -135,7 +129,6 @@ export const DEFAULT_PREFS: Prefs = {
   demoData: false,
   agentControl: 'everything',
   toolPolicies: {},
-  threadModels: 'cheaper',
   recordReplays: true,
   rewindMode: 'files',
   keybindings: {},
@@ -195,7 +188,6 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
   if (saved.branchPrefix === 'mochi/') delete saved.branchPrefix;
   // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
-  if (!(THREAD_MODELS_RULES as readonly unknown[]).includes(saved.threadModels)) delete saved.threadModels;
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;
   if (!isStringRecord(saved.keybindings)) delete saved.keybindings;
   if (!isStringRecord(saved.toolPolicies)) delete saved.toolPolicies;

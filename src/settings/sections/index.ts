@@ -202,7 +202,6 @@ export const SETTINGS_SECTIONS = [
     component: AccessSection,
     settings: [
       { id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' },
-      { id: 'threadModels', label: 'Models for threads agents start', keywords: 'tools model effort cheaper start thread' },
       ...TOOL_NAMES.map((name) => ({ id: toolRowId(name), label: TOOL_GUIDE[name].label, keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent` })),
     ],
   },

@@ -170,11 +170,13 @@ test('a thread runs at the speed it started with, and a message changes it for i
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'tiers.log');
-  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  const events: AgentEvent[] = [];
+  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
   // Lets each turn end before the next send.
   const settle = () => new Promise((r) => setTimeout(r, 150));
   try {
-    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority' });
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority', effort: 'max' });
+    assert.ok(events.some((e) => e.type === 'info' && e.info.effort === 'max'));
     await settle();
     await codex.send('t', 'again');
     await settle();

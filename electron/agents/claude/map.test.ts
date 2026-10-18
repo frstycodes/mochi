@@ -30,8 +30,8 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
 });
 
-test('init lists tools, MCP servers with their tool counts, skills, plugins and slash commands', () => {
-  const { map } = createMapper('t1', CWD);
+test('init lists tools, MCP servers with their tool counts, skills, plugins, slash commands and the running effort', () => {
+  const { map } = createMapper('t1', CWD, undefined, 'max');
   const init = {
     type: 'system',
     subtype: 'init',
@@ -58,6 +58,7 @@ test('init lists tools, MCP servers with their tool counts, skills, plugins and 
       type: 'info',
       info: {
         model: 'claude-opus-5-5',
+        effort: 'max',
         cwd: '/repo',
         permissionMode: 'acceptEdits',
         version: '2.3.0',

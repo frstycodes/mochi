@@ -15,7 +15,7 @@ import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type C
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, ANIMATIONS, APP_ICONS, type AnimationArea, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, ANIMATIONS, APP_ICONS, type AnimationArea, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -452,7 +452,6 @@ const APP_SETTINGS: Setting[] = [
   pref('searchEngine', 'Search engine', 'browser', select(ENGINES), { group: 'Browser', description: 'For address bar text that isn’t a URL' }),
   pref('simulator', 'Default simulator', 'browser', { type: 'simulator' }, { group: 'Simulator', description: 'Where the Simulator tab opens; each thread can switch' }),
   pref('agentControl', AGENT_CONTROL.label, 'access', select(AGENT_CONTROL.options), { locked: AGENT_REACH, group: 'Agents', description: 'Threads, goals, panes, settings and the in-app browser' }),
-  pref('threadModels', THREAD_MODELS.label, 'access', select(THREAD_MODELS.options), { locked: AGENT_REACH, group: 'Agents', description: "Compared with the starting thread's model and effort" }),
   pref('demoData', 'Show demo data', 'data', SWITCH, { group: 'Developer', description: 'Sample threads and profiles that never run; Mochi reloads' }),
   pref('recordReplays', 'Record threads for replay', 'data', SWITCH, { group: 'Developer', description: 'Keep each thread’s events, up to 8 MB, so Replay can rebuild it' }),
   pref('effort', 'Default effort', 'models', select(EFFORTS.map((level) => ({ value: level, label: effortName(level) }))), { group: 'Composer', description: 'New threads start at this effort' }),

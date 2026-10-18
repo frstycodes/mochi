@@ -364,7 +364,7 @@ export class CodexAdapter {
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
-    this.emit({ threadId, type: 'info', info: infoFromStart(result) });
+    this.emit({ threadId, type: 'info', info: { ...infoFromStart(result), ...(options.effort && { effort: options.effort }) } });
     void this.discover(rpc, threadId, codexId, options.cwd);
   }
 
