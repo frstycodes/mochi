@@ -28,6 +28,7 @@ export function goalProgress(thread: Thread) {
 
 function phaseOf(thread: Thread, isAllMet: boolean): Phase {
   if (thread.status === 'settled') return 'settled';
+  // `review` is a status only threads saved before the verdict decided readiness still carry (and the demo's).
   if (isAllMet || thread.status === 'review') return 'ready';
   if (thread.criteria?.some((c) => c.claim || c.check)) return 'verifying';
   if (thread.steps.some((s) => s.status === 'done' || s.status === 'running') || summarize(thread.activity).files.length) return 'building';
@@ -39,33 +40,9 @@ export function progressLabel(p: ReturnType<typeof goalProgress>) {
   return p.total ? `${GOAL_PHASE_LABELS[p.phase]} · ${p.met}/${p.total}` : GOAL_PHASE_LABELS[p.phase];
 }
 
+/** Each step's column on the board: its place in its thread's plan. */
 export function boardColumns(lines: Step[][]): Map<string, number> {
-  const cols = new Map<string, number>();
-  for (const steps of lines) steps.forEach((s, i) => cols.set(s.id, i));
-
-  for (let pass = 0; pass < 8; pass++) {
-    let changed = false;
-    const byKey = new Map<string, Step[]>();
-    for (const steps of lines) for (const s of steps) if (s.sharedKey) byKey.set(s.sharedKey, [...(byKey.get(s.sharedKey) ?? []), s]);
-    for (const members of byKey.values()) {
-      const col = Math.max(...members.map((s) => cols.get(s.id)!));
-      for (const s of members) {
-        if (cols.get(s.id) === col) continue;
-        cols.set(s.id, col);
-        changed = true;
-      }
-    }
-    for (const steps of lines) {
-      for (let i = 1; i < steps.length; i++) {
-        const min = cols.get(steps[i - 1].id)! + 1;
-        if (cols.get(steps[i].id)! >= min) continue;
-        cols.set(steps[i].id, min);
-        changed = true;
-      }
-    }
-    if (!changed) break;
-  }
-  return cols;
+  return new Map(lines.flatMap((steps) => steps.map((s, i) => [s.id, i] as const)));
 }
 
 export function clock(minutes: number) {

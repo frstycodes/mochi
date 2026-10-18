@@ -74,6 +74,43 @@ export function activeThreads(threads: Thread[], spaceId: string) {
   return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot === undefined && t.status !== 'settled').sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
 }
 
+/** The parent a sub-thread nests under in the sidebar; none once that parent is settled or gone, so the sub-thread stands on its own. */
+export function parentOf(threads: Thread[], thread: Thread) {
+  const id = thread.parent?.threadId;
+  return id ? threads.find((p) => p.id === id && p.spaceId === thread.spaceId && p.status !== 'settled') : undefined;
+}
+
+/** A thread's sub-threads, settled ones included, in the order they were started. */
+export function subThreadsOf(threads: Thread[], parentId: string) {
+  return threads.filter((t) => t.parent?.threadId === parentId).sort((a, b) => a.startedAt - b.startedAt);
+}
+
+/** Why `id` can't nest under `parentId`, or null when it can: one level deep, never itself, never under one of its own sub-threads. */
+export function nestBlocker(threads: Thread[], id: string, parentId: string) {
+  const parent = threads.find((t) => t.id === parentId);
+  if (id === parentId || !parent) return 'Not a thread to nest under';
+  if (parent.parent) return 'Sub-threads nest one level deep';
+  if (threads.some((t) => t.parent?.threadId === id && t.status !== 'settled')) return 'It has sub-threads of its own';
+  return null;
+}
+
+/** A top-level sidebar row with the sub-threads nested under it: open ones in start order, finished ones only counted. */
+export interface ThreadGroup {
+  thread: Thread;
+  subs: Thread[];
+  settledSubs: number;
+}
+
+/** Pinned and Threads as the sidebar shows them: top-level rows only, each carrying its sub-threads wherever they'd sort alone. */
+export function sidebarGroups(threads: Thread[], spaceId: string) {
+  const group = (t: Thread): ThreadGroup => {
+    const subs = subThreadsOf(threads, t.id);
+    return { thread: t, subs: subs.filter((s) => s.status !== 'settled'), settledSubs: subs.filter((s) => s.status === 'settled').length };
+  };
+  const isTop = (t: Thread) => !parentOf(threads, t);
+  return { pinned: pinnedThreads(threads, spaceId).filter(isTop).map(group), active: activeThreads(threads, spaceId).filter(isTop).map(group) };
+}
+
 export function lastActivityAt(thread: Thread) {
   return thread.activity[thread.activity.length - 1]?.at ?? thread.startedAt;
 }
@@ -121,4 +158,36 @@ export function dropPin(pinned: string[], unpinned: string[], id: string, toPinn
   target.splice(Math.min(index, target.length), 0, id);
   if (p.length > PIN_SLOTS.length) return null;
   return { pinned: p, unpinned: u };
+}
+
+/** A sidebar row as laid out: list-relative `top`, its height, which section, and the parent for a sub-thread's row. */
+export interface RowBox {
+  id: string;
+  top: number;
+  height: number;
+  isPinned: boolean;
+  parentId?: string;
+}
+
+export interface DropAt {
+  /** Where a reorder would land; null leaves the row where it is. */
+  slot: { toPinned: boolean; index: number } | null;
+  /** The top-level row the pointer holds over the middle of, to nest under once it has stayed there. */
+  nestUnder: string | null;
+}
+
+/**
+ * Where a dragged row would go. The middle half of a top-level row nests under it (when it may), the rest reorders as before
+ * (Pinned above the Threads label unless Pinned is full). A sub-thread dragged within its own group stays put: moving it out
+ * takes leaving the group.
+ */
+export function dropAt(rows: RowBox[], labelMid: number, dragged: { id: string; parentId?: string }, y: number, isPinnedFull: boolean, canNest: (parentId: string) => boolean): DropAt {
+  const over = rows.find((r) => !r.parentId && r.id !== dragged.id && y >= r.top + r.height / 4 && y <= r.top + (r.height * 3) / 4);
+  const nestUnder = over && over.id !== dragged.parentId && canNest(over.id) ? over.id : null;
+  const group = dragged.parentId ? rows.filter((r) => r.id === dragged.parentId || r.parentId === dragged.parentId) : [];
+  const isInGroup = group.length > 0 && y >= Math.min(...group.map((r) => r.top)) && y <= Math.max(...group.map((r) => r.top + r.height));
+  if (nestUnder || isInGroup) return { slot: null, nestUnder };
+  const toPinned = y < labelMid && !isPinnedFull;
+  const index = rows.filter((r) => !r.parentId && r.id !== dragged.id && r.isPinned === toPinned && r.top + r.height / 2 < y).length;
+  return { slot: { toPinned, index }, nestUnder: null };
 }

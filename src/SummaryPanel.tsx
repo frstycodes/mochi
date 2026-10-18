@@ -1,12 +1,12 @@
-import { isValidElement, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
+import { isValidElement, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
-import { Plus, Code, File, Edit, Globe, GlobeSearch, Hourglass, Link, Maximize, Pin, PinOff, SettingsGear, Warning, type IconComponent } from '@/icons';
+import { Plus, Code, File, Edit, Globe, GlobeSearch, Hourglass, Link, Pin, PinOff, SettingsGear, Warning, type IconComponent } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -26,16 +26,17 @@ import { HARNESSES } from './settings/harnesses';
 import { openProfileConfig } from './settings/open';
 import { profileById } from './profiles';
 import { GoalDetails } from './goals/GoalDetails';
-import { StepLine, StepLinkLine } from './goals/steps';
 import { openGoalEditor } from './goals/GoalEditor';
-import { CriteriaList } from './goals/CriteriaList';
+import { useNextMove } from './goals/NextMove';
+import { useIdleVerdict } from './goals/VerdictChip';
+import { showsVerdictCard } from './goals/report';
+import { SummaryCriteria, SummaryGoal, SummaryGoalHeader, SummaryGoalStatus, SummaryGoalText, SummaryNextMove } from './goals/SummaryGoal';
 import { outcomeOf } from './goals/outcome';
-import { clock, duration, goalProgress, progressLabel } from './progress';
+import { clock, duration } from './progress';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
 import { summarize, type CountedVerb, type ThreadSummary } from './summary';
-import { isWorking } from './agentPhase';
-import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
+import { OverflowIcon, TooltipIconButton } from './ui';
 import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
@@ -88,6 +89,7 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
           <Separator className="mx-2 my-2 w-auto!" />
         </>
       )}
+      {hasGoal(thread) && <WaitingMove thread={thread} />}
       <NeedsYou thread={thread} />
       <RateLimitWarning thread={thread} />
       <ChangesRow {...props} />
@@ -651,52 +653,22 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   );
 }
 
+/** The goal block; Open shows its history in a popover beside the panel. */
 function GoalSection({ thread }: { thread: Thread }) {
   const [isOpen, setOpen] = useState(false);
   const [isPinned, setPinned] = useState(false);
-  const progress = goalProgress(thread);
-  const now = thread.steps.filter((s) => s.status === 'running' || s.status === 'blocked');
-  const waiting = thread.steps.filter((s) => s.status === 'waiting');
-  const next = thread.steps.filter((s) => s.status === 'ready').slice(0, 2);
-
+  const block = useRef<HTMLElement>(null);
+  const verdict = useIdleVerdict(thread);
+  const step = thread.steps.find((s) => s.status === 'running')?.title;
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <section aria-label="Goal" className="relative isolate flex flex-col gap-3 rounded-lg px-2 py-2 hover:bg-accent/40">
-          <div className="flex items-center gap-2">
-            <h2 className="type-title">Goal</h2>
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 tabular type-caption text-subtle-foreground">
-              <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
-              <span className="truncate">{progressLabel(progress)}</span>
-            </span>
-            {/* z-10 lifts it above the stretched open-goal button. */}
-            <Button variant="ghost" size="icon-xs" className="relative z-10" aria-label="Edit goal" onClick={() => openGoalEditor(thread.id)}>
-              <Edit />
-            </Button>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon-xs" className="after:absolute after:inset-0 after:rounded-lg" aria-label={isOpen ? 'Close the goal' : 'Open the goal'}>
-                <Maximize />
-              </Button>
-            </PopoverTrigger>
-          </div>
-          <p className="line-clamp-2 type-meta text-muted-foreground">{thread.goal}</p>
-          {!!thread.criteria?.length && <CriteriaList thread={thread} />}
-          {now.map((s) => (
-            <div key={s.id} className="flex flex-col gap-1.5">
-              <StepLine step={s} />
-              {s.status === 'blocked' && <span className="type-caption text-warning">{s.note ?? 'Needs you'}</span>}
-            </div>
-          ))}
-          {waiting.map((s) => (
-            <div key={s.id} className="flex flex-col gap-0.5">
-              <StepLine step={s} />
-              <StepLinkLine thread={thread} step={s} />
-            </div>
-          ))}
-          {next.map((s) => (
-            <StepLine key={s.id} step={s} />
-          ))}
-        </section>
+        <SummaryGoal ref={block}>
+          <SummaryGoalHeader thread={thread} onEdit={() => openGoalEditor(thread.id)} onOpen={() => setOpen((o) => !o)} />
+          <SummaryGoalStatus thread={thread} verdict={verdict} step={step} />
+          <SummaryGoalText>{thread.goal}</SummaryGoalText>
+          <SummaryCriteria thread={thread} />
+        </SummaryGoal>
       </PopoverAnchor>
       <PopoverContent
         side="left"
@@ -704,14 +676,11 @@ function GoalSection({ thread }: { thread: Thread }) {
         sideOffset={12}
         collisionPadding={16}
         onEscapeKeyDown={() => setPinned(false)}
-        onInteractOutside={(e) => isPinned && e.preventDefault()}
+        // The block's own Open button toggles; a click elsewhere in the block (Run check) leaves it open.
+        onInteractOutside={(e) => (isPinned || block.current?.contains(e.target as Node)) && e.preventDefault()}
         className="surface-float w-[min(440px,calc(100vw-420px))] max-h-[calc(100vh-32px)] gap-0 overflow-y-auto rounded-xl bg-float p-5 shadow-float"
       >
-        <div className="mb-3 flex items-center gap-2">
-          <span className="flex min-w-0 flex-1 items-center gap-1.5 tabular type-meta text-muted-foreground">
-            <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={14} isWorking={isWorking(thread)} />
-            <span className="truncate">{progressLabel(progress)}</span>
-          </span>
+        <div className="mb-3 flex justify-end">
           <Button variant="ghost" size="sm" onClick={() => setPinned((p) => !p)} aria-pressed={isPinned}>
             {isPinned ? <PinOff data-icon="inline-start" /> : <Pin data-icon="inline-start" />}
             {isPinned ? 'Unpin' : 'Keep open'}
@@ -723,18 +692,27 @@ function GoalSection({ thread }: { thread: Thread }) {
   );
 }
 
+/** The end-of-turn question while it waits in the chat; it scrolls there rather than answering here. */
+function WaitingMove({ thread }: { thread: Thread }) {
+  const next = useNextMove(thread);
+  if (!next?.question || !showsVerdictCard(thread)) return null;
+  return <SummaryNextMove question={next.question} onShow={() => showNextMove(thread.id)} />;
+}
+
+function showNextMove(threadId: string) {
+  const card = document.querySelector<HTMLElement>(`[data-next-move="${CSS.escape(threadId)}"]`);
+  card?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  card?.querySelector<HTMLElement>('button:last-of-type')?.focus({ preventScroll: true });
+}
+
 function OutcomeDetails({ thread }: SectionProps) {
   const outcome = outcomeOf(thread);
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-2 py-1 type-meta">
       <dt className="text-subtle-foreground">Time</dt>
       <dd className="tabular">{duration(outcome.minutes)} from start to settle</dd>
-      <dt className="text-subtle-foreground">Steps</dt>
-      <dd className="tabular">
-        {outcome.done} done
-        {outcome.dropped > 0 && `, ${outcome.dropped} dropped`}
-        {outcome.open > 0 && `, ${outcome.open} left open`}
-      </dd>
+      <dt className="text-subtle-foreground">Done when</dt>
+      <dd className="tabular">{criteriaLine(outcome)}</dd>
       <dt className="text-subtle-foreground">Goal</dt>
       <dd className="tabular">{outcome.revisions === 0 ? 'Unchanged since it was set' : `Revised to v${outcome.revisions + 1}`}</dd>
       <dt className="text-subtle-foreground">Cost</dt>
@@ -751,4 +729,10 @@ function OutcomeDetails({ thread }: SectionProps) {
       </dd>
     </dl>
   );
+}
+
+/** "3 of 4 verified, 1 claimed": Mochi's checks first, then what only the agent said. */
+function criteriaLine({ total, verified, claimed }: ReturnType<typeof outcomeOf>) {
+  if (total === 0) return 'No criteria';
+  return [`${verified} of ${total} verified`, claimed > 0 && `${claimed} claimed`].filter(Boolean).join(', ');
 }

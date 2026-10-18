@@ -97,3 +97,17 @@ test('a failed check outweighs a claim; a passed one meets the criterion; changi
   s = threadsReducer(s, { type: 'edit-goal', threadId: id, draft });
   assert.deepEqual(s.threads.at(-1)!.criteria![0], { id: c.id, text: 'Tests pass', command: 'pnpm vitest run' });
 });
+
+test('the drafter is told when a thread has no folder, so a lookup there reads as a chat', () => {
+  const rl = initialThreads().threads.find((t) => t.id === 'rl')!;
+  const benq = { ...rl, repo: null, goal: '', activity: [{ at: 1, who: 'you' as const, kind: 'message' as const, text: 'can you check my email for the benq monitor and see where it is right now' }] };
+  assert.match(goalDraftRequest(benq)!.prompt, /^No project folder\n/);
+  assert.match(goalDraftRequest({ ...benq, repo: rl.repo })!.prompt, /^Project: /);
+});
+
+test("a claim meets a criterion you judge, but one with a command only once its check passes", () => {
+  const claim = { evidence: 'looks right', at: 1, by: 'claude' as const };
+  assert.equal(isMet({ id: 'a', text: 'Copy reads well', claim }), true);
+  assert.equal(isMet({ id: 'b', text: 'Tests pass', command: 'pnpm test', claim }), false);
+  assert.equal(isMet({ id: 'b', text: 'Tests pass', command: 'pnpm test', claim, check: { status: 'passed', at: 2 } }), true);
+});

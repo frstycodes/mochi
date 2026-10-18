@@ -3,6 +3,7 @@ import { ArrowRight, ArrowUpRight, ClockCircle, XCircle, Edit, Eye, Hierarchy2, 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import { useThreadPr } from '../git/useThreadPrs';
@@ -44,13 +45,16 @@ export function RefListHoverCard({ items, title, side, align, children }: Placem
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent side={side} align={align} collisionPadding={8} className={cn('flex w-80 flex-col gap-1 p-1.5', REDUCED_MOTION)}>
         <p className="px-1.5 pt-0.5 type-caption text-subtle-foreground">{title}</p>
-        <ul className="flex flex-col gap-0.5">
-          {items.map((item) => (
-            <li key={item.label}>
-              <RefListRow item={item} />
-            </li>
-          ))}
-        </ul>
+        {/* Every PR at once; a long list scrolls inside the card instead of growing past the screen. */}
+        <ScrollArea type="scroll" className="[&>[data-slot=scroll-area-viewport]]:max-h-72">
+          <ul className="flex flex-col gap-0.5">
+            {items.map((item) => (
+              <li key={item.label}>
+                <RefListRow item={item} />
+              </li>
+            ))}
+          </ul>
+        </ScrollArea>
       </HoverCardContent>
     </HoverCard>
   );

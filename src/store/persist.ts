@@ -63,9 +63,18 @@ function restoreSavedThreads(saved: Saved, attached: Attached): Saved {
   // A Mochi tool card waits on the old page's run of the call; after a reload the new page runs it again and asks anew.
   const reasked = new Set(saved.queue.filter((q) => q.tool && attached.has(q.threadId)).map((q) => q.id));
   // A save from before read state reads as all seen, not as every thread unread at once.
-  const threads = migrateReceived(saved.threads.map((t) => (attached.has(t.id) ? reattachThread(t, attached.get(t.id)!, reasked) : restoreThread(t, saved.now)))).map((t) => ({ ...t, seenActivity: t.seenActivity ?? t.activity.length }));
+  const threads = migrateReceived(saved.threads.map((t) => (attached.has(t.id) ? reattachThread(t, attached.get(t.id)!, reasked) : restoreThread(t, saved.now))))
+    .map(migrateWaitingSteps)
+    .map((t) => ({ ...t, seenActivity: t.seenActivity ?? t.activity.length }));
   // Agent requests wait on a live call, which a restart ended; a reload didn't, so an attached agent's still wait on you.
-  return { ...saved, threads, queue: saved.queue.filter((q) => (!q.requestId || attached.has(q.threadId)) && !q.tool) };
+  // Overlap cards saved before that feature was removed have nothing left to answer them.
+  return { ...saved, threads, queue: saved.queue.filter((q) => (!q.requestId || attached.has(q.threadId)) && !q.tool && (q.kind as string) !== 'overlap') };
+}
+
+/** A step an overlap held was saved `waiting`, a status that went with overlaps; it's up next again. */
+function migrateWaitingSteps(thread: Thread): Thread {
+  if (!thread.steps.some((s) => (s.status as string) === 'waiting')) return thread;
+  return { ...thread, steps: thread.steps.map((s) => ((s.status as string) === 'waiting' ? { ...s, status: 'ready' } : s)) };
 }
 
 function reattachThread(thread: Thread, isWorking: boolean, reasked: Set<string>): Thread {

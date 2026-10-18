@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import { Link, WarningAlt as TriangleAlert } from '@/icons';
-import type { Step, Thread } from './model';
-import { similarity } from './progress';
+import { motion } from 'motion/react';
 import { getPrefs, setPrefs, usePrefs } from './settings/prefs';
 import { useHarness, useSpace, useSpaceThreads } from './store';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
@@ -12,8 +9,6 @@ import { withReferences, type Mention } from './chat/mentions';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
-import { ProviderMark, StepStatusIcon, lineColor, stepLabel } from './ui';
 import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ProjectPicker, type PickerProject } from './ProjectPicker';
@@ -33,14 +28,7 @@ import type { WorkspaceDraft } from './git/workspace';
 import { RunsOnMenu } from './remote/RunsOnMenu';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
 
-const MATCH_THRESHOLD = 0.5;
 const MAX_SHORTCUTS = 3;
-
-interface Match {
-  thread: Thread;
-  step: Step;
-  score: number;
-}
 
 /** The new-thread page's picks, kept with its draft. */
 interface NewThreadPicks {
@@ -94,7 +82,6 @@ function NewThread() {
     mention.restore(saved?.mentions ?? []);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [workspaceDraft, setWorkspaceDraft] = useState<WorkspaceDraft>(() => ({ mode: getPrefs().workspaceMode }));
-  const [dependOn, setDependOn] = useState<Match | null>(null);
   const machines = useMachines();
   const [runsOn, setRunsOn] = useState<string | null>(null);
   const remote = machines.machines.find((m) => m.machine.id === runsOn)?.machine;
@@ -112,8 +99,6 @@ function NewThread() {
   // Picks only ride along with something typed or attached; on their own they aren't a draft.
   const hasDraft = !!draft || attachments.files.length > 0 || mention.mentions.length > 0;
   const draftExtra = useMemo<NewThreadPicks | undefined>(() => (hasDraft ? { provider, picked, project, mentions: mention.mentions } : undefined), [hasDraft, provider, picked, project, mention.mentions]);
-  const matches = useStepMatches(draft);
-  const linked = dependOn && matches.some((m) => m.step.id === dependOn.step.id) ? dependOn : null;
   // The worktree checkbox remembers your last choice for the next new thread.
   const changeWorkspace = (next: WorkspaceDraft) => {
     if (next.mode !== workspaceDraft.mode) setPrefs({ workspaceMode: next.mode });
@@ -173,7 +158,6 @@ function NewThread() {
       workspace: project ? chosenWorkspace(workspace) : undefined,
       controls,
       isLive: host.isDesktop,
-      dependOn: linked ? { threadId: linked.thread.id, stepId: linked.step.id } : undefined,
     });
   };
 
@@ -206,7 +190,7 @@ function NewThread() {
                   if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
                 }}
                 onSend={start}
-                submitLabel={remote ? `Start on ${remote.name}` : linked ? 'Start thread, linked' : 'Start thread'}
+                submitLabel={remote ? `Start on ${remote.name}` : 'Start thread'}
                 meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
                 placeholder={placeholder(remote?.name, remote ? (catalog?.projects.find((p) => p.ref === remoteProject)?.name ?? null) : (projects.find((p) => p.ref === project)?.name ?? (project && projectName(project))))}
               />
@@ -234,29 +218,7 @@ function NewThread() {
       {/* In the bottom row, so a note coming or going never re-centres the composer. */}
       <div className="flex flex-col gap-5 pt-4 pb-16">
         {!remote && !!project && <WorkspaceNotes workspace={workspace} />}
-        <AnimatePresence initial={false}>
-          {matches.length > 0 && (
-            <motion.section
-              aria-label="Possible duplicates"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
-              className="flex flex-col gap-2"
-            >
-              <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <TriangleAlert className="size-4 text-warning" />
-                Some of this is already planned
-              </p>
-              {matches.map((m) => (
-                <MatchRow key={m.step.id} match={m} isLinked={linked?.step.id === m.step.id} onToggle={() => setDependOn(linked?.step.id === m.step.id ? null : m)} />
-              ))}
-              <p className="text-xs text-subtle-foreground">Link a step and this thread waits for it instead of building it again. You can still start without linking.</p>
-            </motion.section>
-          )}
-        </AnimatePresence>
-
-        {matches.length === 0 && !remote && projects.length > 1 && <ProjectShortcuts projects={projects.filter((p) => !p.isMissing).slice(0, MAX_SHORTCUTS)} value={project} onChange={changeProject} />}
+        {!remote && projects.length > 1 && <ProjectShortcuts projects={projects.filter((p) => !p.isMissing).slice(0, MAX_SHORTCUTS)} value={project} onChange={changeProject} />}
       </div>
     </div>
   );
@@ -309,35 +271,3 @@ function ProjectShortcuts({ projects, value, onChange }: { projects: PickerProje
   );
 }
 
-function useStepMatches(draft: string): Match[] {
-  const threads = useSpaceThreads();
-  if (draft.trim().length < 6) return [];
-  return threads
-    .filter((t) => t.status !== 'settled')
-    .flatMap((thread) => thread.steps.filter((s) => s.status !== 'dropped' && s.status !== 'done' && !s.link).map((step) => ({ thread, step, score: similarity(draft, step.title) })))
-    .filter((m) => m.score >= MATCH_THRESHOLD)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
-}
-
-function MatchRow({ match, isLinked, onToggle }: { match: Match; isLinked: boolean; onToggle: () => void }) {
-  const { thread, step } = match;
-  return (
-    <div className={cn('flex flex-wrap items-center gap-3 rounded-lg border p-3', isLinked ? 'border-subtle-foreground bg-muted' : 'border-border')}>
-      <StepStatusIcon status={step.status} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-foreground">{step.title}</span>
-        <span className="flex min-w-0 items-center gap-1.5 text-xs text-subtle-foreground">
-          <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: lineColor(thread.line) }} />
-          <span className="truncate">{thread.title}</span>
-          <ProviderMark provider={thread.providers[0]} size={12} />
-          <span>· {stepLabel(step.status)}</span>
-        </span>
-      </div>
-      <Button variant={isLinked ? 'default' : 'outline'} className="h-7 px-2.5 text-xs" onClick={onToggle} aria-pressed={isLinked}>
-        <Link className="size-3.5" />
-        {isLinked ? 'Linked' : 'Depend on it'}
-      </Button>
-    </div>
-  );
-}

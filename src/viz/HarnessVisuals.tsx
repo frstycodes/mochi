@@ -10,7 +10,7 @@ const ROW = 52;
 const TOP = 14;
 const LABEL_CHARS = 15;
 
-/** A slice of the metro board: one line per thread, shared steps drawn as interchanges. */
+/** A slice of the metro board: one line per thread. */
 export function MetroVisual({ threads }: { threads: Thread[] }) {
   const lines = threads.map((t) => t.steps.filter((s) => s.status !== 'dropped'));
   const cols = boardColumns(lines);
@@ -19,14 +19,10 @@ export function MetroVisual({ threads }: { threads: Thread[] }) {
   const height = TOP + threads.length * ROW;
   const x = (step: Step) => GUTTER + cols.get(step.id)! * COL + COL / 2;
   const y = (row: number) => TOP + row * ROW + 8;
-  const interchanges = sharedColumns(lines, cols);
 
   return (
     <div className="overflow-x-auto">
       <svg data-visual-svg width={width} height={height} role="img" aria-label={`Metro of ${threads.map((t) => t.title).join(', ')}`} className="block">
-        {interchanges.map(({ col, rows }) => (
-          <rect key={col} x={GUTTER + col * COL + COL / 2 - 8} y={y(rows[0]) - 8} width={16} height={y(rows.at(-1)!) - y(rows[0]) + 16} rx={8} fill="var(--card)" stroke="var(--muted-foreground)" strokeWidth={1.5} />
-        ))}
         {threads.map((thread, row) => {
           const steps = lines[row];
           const color = lineColor(thread.line);
@@ -53,19 +49,6 @@ export function MetroVisual({ threads }: { threads: Thread[] }) {
       </svg>
     </div>
   );
-}
-
-function sharedColumns(lines: Step[][], cols: Map<string, number>) {
-  const byKey = new Map<string, { col: number; rows: number[] }>();
-  lines.forEach((steps, row) => {
-    for (const s of steps) {
-      if (!s.sharedKey) continue;
-      const entry = byKey.get(s.sharedKey) ?? { col: cols.get(s.id)!, rows: [] };
-      entry.rows.push(row);
-      byKey.set(s.sharedKey, entry);
-    }
-  });
-  return [...byKey.values()].filter((e) => e.rows.length > 1);
 }
 
 function truncate(text: string, max: number) {

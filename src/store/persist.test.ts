@@ -63,3 +63,19 @@ test('after a window reload, a thread whose agent still runs in main stays attac
   assert.ok(back.queue.some((q) => q.requestId === 'req-1'), 'main still waits on the approval');
   assert.ok(!back.queue.some((q) => q.tool) && !thread.activity.some((e) => e.card), 'the reloaded page runs the Mochi call again and asks anew');
 });
+
+test('an overlap card or a step an overlap held, saved before overlaps were removed, comes back as nothing and up next', () => {
+  let s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-1' });
+  const saved = toSaved(s);
+  const held = { id: 's1', title: 'Run tests', status: 'waiting', addedAt: 0, addedBy: 'claude', footprint: [], sharedKey: 'shared-x' };
+  const old = {
+    ...saved,
+    threads: saved.threads.map((t) => ({ ...t, steps: [held] })),
+    queue: [{ id: 'q-overlap-1', kind: 'overlap', threadId: id, title: 'Two threads want to run tests', detail: '', blocks: { steps: 1, threads: 2 }, createdAt: 0 }],
+  };
+  const back = parseSaved(JSON.stringify(old))!;
+  assert.deepEqual(initialQueue(back, false).queue, []);
+  assert.equal(initialThreads(back, false).threads.find((t) => t.id === id)!.steps[0].status, 'ready');
+});

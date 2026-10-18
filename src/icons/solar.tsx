@@ -59,6 +59,7 @@ export const ExitFullscreen = solar(Linear.QuitFullScreenIcon, Bold.QuitFullScre
 export const ExitPip = solar(Linear.QuitPipIcon, Bold.QuitPipIcon);
 export const Expand = solar(Linear.MaximizeIcon, Bold.MaximizeIcon);
 export const ExternalLink = solar(Linear.SquareArrowRightUpIcon, Bold.SquareArrowRightUpIcon);
+export const DiagramTree = solar(Linear.DiagramDownIcon, Bold.DiagramDownIcon);
 export const Eye = solar(Linear.EyeIcon, Bold.EyeIcon);
 export const EyeOff = solar(Linear.EyeClosedIcon, Bold.EyeClosedIcon);
 export const EyeSlash = solar(Linear.EyeClosedIcon, Bold.EyeClosedIcon);
@@ -212,6 +213,8 @@ export const Plugin = customIcon('Plugin', `<path d="M6.7 8h2.9a2.3 2.3 0 1 1 3.
 export const Connector = customIcon('Connector', `<g transform="rotate(-45 12 12)" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 10.7a4.3 4.3 0 1 1 0 2.6"/><path d="M1.6 10.7h3.2v2.6H1.6"/><path d="M9.8 10.8h11a1.2 1.2 0 0 1 0 2.4h-11"/></g>`);
 export const Option = customIcon('Option', `<path d="M3.75 6.75h4.5l7.5 10.5h4.5M14.25 6.75h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);
 export const Control = solar(Linear.AltArrowUpIcon, Bold.AltArrowUpIcon);
+// Solar has no Return key glyph either; drawn on the same 24px grid at the same stroke.
+export const Return = customIcon('Return', `<path d="M18.75 5.25v6a3 3 0 0 1-3 3h-10.5m0 0 3.75-3.75M5.25 14.25 9 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);
 
 function solar(Outline: (props: SolarProps) => React.ReactNode, Filled: (props: SolarProps) => React.ReactNode): IconComponent {
   return forwardRef<SVGSVGElement, IconProps>(({ filled, ...props }, ref) => {

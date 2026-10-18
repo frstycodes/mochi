@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
+import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
@@ -197,9 +197,6 @@ export interface AgentQuestion {
 export interface AgentPlanItem {
   title: string;
   status: 'pending' | 'running' | 'done';
-  progress?: number;
-  size?: Size;
-  files?: string[];
 }
 
 /** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. `answers` holds each question's picked labels and typed text, in question order; empty means skipped. */
@@ -268,9 +265,6 @@ export interface AgentReviewRequest {
 
 /** A review's stream under the id `review` returned: what it is doing (`step`), then one `done` with its answer (structured output or text) or one `error`. */
 export type AgentReviewEvent = { id: string; type: 'step'; text: string } | { id: string; type: 'done'; result: unknown } | { id: string; type: 'error'; text: string };
-
-/** The statuses an agent may set on a step through Mochi's tools. */
-export const STEP_STATUSES = ['ready', 'running', 'waiting', 'blocked', 'done', 'dropped'] as const satisfies readonly StepStatus[];
 
 /** A Mochi tool an agent called (`electron/mcp`); the renderer runs it on the store and answers with `toolResult`. */
 export interface AgentToolCall {

@@ -43,7 +43,7 @@ export function queueReducer(state: State, action: Action): State {
 }
 
 export function rankQueue(items: QueueItem[]) {
-  const weight = (q: QueueItem) => q.blocks.steps * 2 + q.blocks.threads * 3 + (q.kind === 'overlap' ? 4 : 0);
+  const weight = (q: QueueItem) => q.blocks.steps * 2 + q.blocks.threads * 3;
   return [...items].sort((a, b) => weight(b) - weight(a) || a.createdAt - b.createdAt);
 }
 

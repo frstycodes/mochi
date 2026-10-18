@@ -61,7 +61,7 @@ export function ThreadMessageBody({ text, className, children }: { text: string;
 }
 
 /** Above the row's own toggle (`z-10`), so the name opens the thread and the rest of the row opens the message. */
-function ThreadName({ peer }: { peer: ThreadRef }) {
+export function ThreadName({ peer }: { peer: ThreadRef }) {
   const { state, dispatch } = useHarness();
   const { thread, title } = usePeer(peer);
   if (!thread) return <span className="max-w-[50%] shrink-0 truncate text-foreground">{title}</span>;

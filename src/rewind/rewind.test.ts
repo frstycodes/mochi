@@ -99,27 +99,20 @@ test('fork from a checkpoint names it for the worktree only once its files were 
   assert.equal(Object.values(s.forks)[0].checkpoint, cp.n);
 });
 
-test('handoff moves one step or the whole thread and logs an event and the summary, not a revision', () => {
+test('handoff moves the thread and logs an event and the summary, not a revision', () => {
   let s = base();
   const rl = thread(s, 'rl');
-  const summary = handoffSummary(rl, 'codex', undefined, { files: 3, added: 40, removed: 6 });
+  const summary = handoffSummary(rl, 'codex', { files: 3, added: 40, removed: 6 });
   assert.match(summary, /Goal:\*\* Every public API key/);
   assert.match(summary, /Add Redis client \(running\)/);
   assert.match(summary, /3 files, \+40 −6/);
 
-  s = threadsReducer(s, { type: 'handoff', threadId: 'rl', stepId: 'rl6', to: 'codex', summary });
-  let t = thread(s, 'rl');
-  assert.equal(t.steps.find((x) => x.id === 'rl6')!.owner, 'codex');
-  assert.deepEqual(t.providers, ['claude', 'codex']);
-  assert.equal(t.revisions.length, rl.revisions.length, 'what done means is unchanged');
-  assert.equal(t.activity.at(-2)!.text, 'Handed "Token bucket middleware" from Claude to Codex with a context summary');
-  assert.equal(t.activity.at(-1)!.text, summary);
-
   s = threadsReducer(s, { type: 'handoff', threadId: 'rl', to: 'codex', summary });
-  t = thread(s, 'rl');
+  const t = thread(s, 'rl');
   assert.deepEqual(t.providers, ['codex', 'claude']);
-  assert.equal(t.steps.find((x) => x.id === 'rl1')!.owner, 'claude', 'finished steps keep who did them');
-  assert.equal(t.steps.find((x) => x.id === 'rl6')!.owner, undefined, 'open steps follow the thread');
+  assert.equal(t.revisions.length, rl.revisions.length, 'what done means is unchanged');
+  assert.equal(t.activity.at(-2)!.text, 'Handed the thread from Claude to Codex with a context summary');
+  assert.equal(t.activity.at(-1)!.text, summary);
 });
 
 test('rewinding to a message drops it and everything after, keeps what came before, and undoes in one step', () => {

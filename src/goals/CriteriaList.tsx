@@ -44,13 +44,13 @@ function CriterionEvidence({ criterion: c }: { criterion: Criterion }) {
   return !!c.claim && <span className="type-caption text-subtle-foreground">{c.claim.evidence}</span>;
 }
 
-function RunCheck({ thread, criterion }: { thread: Thread; criterion: Criterion }) {
+export function RunCheck({ thread, criterion, className }: { thread: Thread; criterion: Criterion; className?: string }) {
   const { dispatch } = useHarness();
   useWorktreePath(thread.id); // re-renders once the worktree is made
   const reason = checkBlockedReason(thread, criterion);
   return (
     // z-10 lifts it above the summary goal block's stretched open button.
-    <TooltipIconButton label="Run check" hint={reason ?? `Runs \`${criterion.command}\` in this thread's worktree`} disabled={!!reason} className="relative z-10 -my-1 size-6" onClick={() => runCriterionCheck(dispatch, thread, criterion)}>
+    <TooltipIconButton label="Run check" hint={reason ?? `Runs \`${criterion.command}\` in this thread's worktree`} disabled={!!reason} className={cn('relative z-10 -my-1 size-6', className)} onClick={() => runCriterionCheck(dispatch, thread, criterion)}>
       <Play className="size-3.5" />
     </TooltipIconButton>
   );

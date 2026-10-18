@@ -9,7 +9,7 @@ const demoState = () => ({ ...initialThreads(null, true), ...initialQueue(null, 
 const run = (s: State, action: Action) => threadsReducer(s, action);
 const thread = (s: State, id: string) => s.threads.find((t) => t.id === id)!;
 
-test('a message sent before its verdict goes out untagged, and the late verdict tags it and adds the step', () => {
+test('a message sent before its verdict goes out untagged, and the late verdict tags it without adding a step', () => {
   let s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
   const id = s.threads.at(-1)!.id;
   s = run(s, { type: 'send', threadId: id, text: 'also add a license', reason: 'Checking against the goal' });
@@ -22,7 +22,7 @@ test('a message sent before its verdict goes out untagged, and the late verdict 
   s = run(s, { type: 'drift-verdict', threadId: id, text: 'also add a license', drift: 'scope-add', reason: 'Asks for something new' });
   const t = thread(s, id);
   assert.equal(t.activity.find((e) => e.text === 'also add a license')!.drift, 'scope-add', 'tags the earlier message, not the newest one');
-  assert.deepEqual(t.steps.map((st) => st.title), ['A license']);
+  assert.deepEqual(t.steps, [], 'the agent plans it; Mochi adds nothing');
 });
 
 test('a late verdict for a message that is already tagged changes nothing', () => {

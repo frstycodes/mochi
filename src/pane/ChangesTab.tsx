@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ChangeList, type ChangeActions, type DiffStyle, type LineNote } from '../git/ChangeList';
-import { fileKey, filesForStep, reviewNote } from '../git/files';
+import { fileKey, reviewNote } from '../git/files';
 import { ShipBar } from '../git/ShipBar';
 import { useConfirm } from '../git/useConfirm';
 import { useGitAction, useGitDiff } from '../git/useGit';
@@ -30,12 +30,9 @@ export function ChangesTab({ thread, tab }: PaneTabProps) {
   return <Changes key={cwd} thread={thread} cwd={cwd} tabId={tab.id} />;
 }
 
-const ALL_STEPS = 'all';
-
 function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: string }) {
   usePaneMenu();
   const [scope, setScope] = useState<DiffScope>('branch');
-  const [stepId, setStepId] = useState(ALL_STEPS);
   const { diffStyle } = usePrefs();
   const diffQuery = useGitDiff(cwd, scope, thread.repo?.base);
   const { run } = useGitAction(diffQuery.refresh);
@@ -43,10 +40,8 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
   const actions = useChangeActions({ thread, cwd, canStage: scope === 'uncommitted', diffStyle, run, confirm });
 
   const diff = diffQuery.data;
-  const steps = thread.steps.filter((s) => s.footprint.length > 0);
-  const files = filesForStep(diff?.files ?? [], steps.find((s) => s.id === stepId));
+  const files = diff?.files ?? [];
   const isEmpty = !!diff && diff.files.length === 0;
-  const isFilteredEmpty = !!diff && !isEmpty && files.length === 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -62,23 +57,6 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
             </SelectGroup>
           </SelectContent>
         </Select>
-        {steps.length > 0 && (
-          <Select value={stepId} onValueChange={setStepId}>
-            <SelectTrigger size="sm" aria-label="Filter by step" className="min-w-0 max-w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value={ALL_STEPS}>All steps</SelectItem>
-                {steps.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.title}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        )}
       </PaneTitle>
       <PaneActions>
         {files.length > 0 && (
@@ -102,11 +80,10 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
       {!!diffQuery.error && !diff && <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />}
       {diffQuery.isLoading && <ChangesSkeleton />}
       {isEmpty && <NoChanges scope={scope} />}
-      {isFilteredEmpty && <NoStepChanges />}
       {/* Radix lays the viewport content out as `display: table`, which grows to the widest diff line instead of scrolling it. */}
       {files.length > 0 && (
         <ScrollArea type="scroll" className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
-          <ChangeList key={`${scope}:${stepId}`} files={files} actions={actions} />
+          <ChangeList key={scope} files={files} actions={actions} />
         </ScrollArea>
       )}
       {!!diff && <ShipBar thread={thread} cwd={cwd} diff={diff} canCommit={scope === 'uncommitted'} run={run} confirm={confirm} />}
@@ -213,20 +190,6 @@ export function NoChanges({ scope }: { scope: DiffScope }) {
         </EmptyMedia>
         <EmptyTitle>No changes</EmptyTitle>
         <EmptyDescription>{scope === 'branch' ? 'This branch matches its base. Edits land here as the agent makes them.' : 'Everything is committed.'}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
-function NoStepChanges() {
-  return (
-    <Empty className="flex-1">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <File />
-        </EmptyMedia>
-        <EmptyTitle>No changes for this step</EmptyTitle>
-        <EmptyDescription>None of the changed files are in this step's footprint.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

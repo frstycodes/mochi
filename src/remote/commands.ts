@@ -63,7 +63,7 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
       return ok;
     case 'handoff':
       if (thread.providers[0] === command.to) return fail('The thread is already on that agent');
-      dispatch({ type: 'handoff', threadId: thread.id, to: command.to, summary: handoffSummary(thread, command.to, undefined, null) });
+      dispatch({ type: 'handoff', threadId: thread.id, to: command.to, summary: handoffSummary(thread, command.to, null) });
       return ok;
     case 'rename':
       dispatch({ type: 'rename', threadId: thread.id, title: command.title });

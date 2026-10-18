@@ -20,6 +20,7 @@ import { isTyping } from '../keys';
 import { Shortcut } from '../Shortcut';
 import { HarnessContext, useHarness, type State } from '../store';
 import { TITLE_BAR, TitleBar } from '../TitleBar';
+import { summarize } from '../summary';
 import { TooltipIconButton } from '../ui';
 import { DiffStat, DiffView, Expand } from '../WorkLog';
 import type { ReplayExport } from './export';
@@ -434,12 +435,12 @@ function FilesSheet({ children }: { children: ReactNode }) {
 
 /**
  * The diff as the nearest checkpoint at or before this point saved it; before any checkpoint (or with none saved), the
- * files the agent had touched so far, from the steps' footprints.
+ * files the agent had touched so far, from its tool calls.
  */
 function ReplayFiles({ source, thread, now }: { source: CheckpointSource; thread: Thread; now: number }) {
   const index = source.list.findLastIndex((c) => c.at <= now);
   const files = useCheckpointFiles(source, index);
-  const touched = [...new Set(thread.steps.flatMap((s) => (s.startedAt === undefined ? [] : s.footprint)))];
+  const touched = summarize(thread.activity.filter((a) => a.at <= now)).files.map((f) => f.path);
   const checkpoint = source.list[index];
   const caption = checkpoint ? `As saved at “${checkpoint.label}”` : 'No checkpoint saved by this point';
   return (
