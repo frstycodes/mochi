@@ -33,6 +33,8 @@ interface Entry extends Automated {
   /** Counts snapshots; an agent ref carries the one it came from. */
   snapshotGeneration: number;
   dialog: BrowserDialog | null;
+  /** The page's own icon (http(s) or data URL), for its tab; dropped when the main frame navigates until the new page names one. */
+  favicon: string | null;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -73,7 +75,7 @@ const HARDENED = { sandbox: true, contextIsolation: true, nodeIntegration: false
 
 function register(view: WebContentsView, owner: WebContents, win: BrowserWindow) {
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false, automation: null, snapshotGeneration: 0, dialog: null };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false, automation: null, snapshotGeneration: 0, dialog: null, favicon: null };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
@@ -585,6 +587,7 @@ function wire(id: string, entry: Entry) {
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
       error: entry.error,
+      favicon: entry.favicon,
     });
 
   // Before `state` so the new load reports no stale error.
@@ -597,6 +600,11 @@ function wire(id: string, entry: Entry) {
     if (!pos) return;
     entry.holdScrollUntil = Date.now() + SCROLL_HOLD_MS;
     void wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: restoreScrollScript(pos) }]).catch(() => {});
+  });
+  wc.on('did-navigate', () => (entry.favicon = null));
+  wc.on('page-favicon-updated', (_event, favicons) => {
+    entry.favicon = favicons.find((url) => /^(https?|data):/.test(url)) ?? null;
+    state();
   });
   for (const name of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(name as 'did-start-loading', state);
   const closeDialog = watchDialogs(id, entry, emit);

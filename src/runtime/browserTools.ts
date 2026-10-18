@@ -44,8 +44,6 @@ export const BROWSER_TOOLS = {
       const { key } = await live(ctx, tab);
       const page = await loaded(ctx, key);
       const isLocal = isLocalUrl(url);
-      // browser_open is quiet; leaving the machine is the one navigation the user should hear about.
-      if (!isLocal) env.toast(`${name(ctx)} opened ${displayUrl(url)} in the browser`);
       return { changed: `opened ${displayUrl(url)}${isLocal ? '' : ' (outside your machine)'}`, isFinal: true, result: pageResult(tab, page) };
     },
   },

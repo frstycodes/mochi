@@ -609,14 +609,13 @@ test('browser_tabs lists only the caller’s browser tabs', async () => {
   assert.deepEqual(await t.ok('browser_tabs', {}, 'adm'), [], 'adm has no tabs in this setup');
 });
 
-test('browser_open navigates the active tab; a non-local origin is logged and toasted', async () => {
+test('browser_open navigates the active tab; a non-local origin is logged, never toasted', async () => {
   const t = setup();
   const r = await t.ok('browser_open', { url: 'localhost:5173/settings' });
   assert.equal(r.url, 'http://localhost:5173/settings');
-  assert.equal(t.toasts.length, 0, 'local: no toast');
   const out = await t.ok('browser_open', { url: 'example.com' });
   assert.match(out.changed, /outside your machine/);
-  assert.match(t.toasts.at(-1)!.text, /opened example.com/);
+  assert.equal(t.toasts.length, 0);
 });
 
 test('browser tools drive an off-screen thread without moving the user', async () => {
