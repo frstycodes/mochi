@@ -32,7 +32,7 @@ const ARROWS = { left: 'left', right: 'right', up: 'up', down: 'down' } as const
 export const COMMANDS = {
   palette: { title: 'Command palette', group: 'General', scope: 'global', keys: ['mod', 'K'] },
   'go-settings': { title: 'Settings', group: 'General', scope: 'global', keys: ['mod', ','] },
-  'go-new': { title: 'New thread', group: 'General', scope: 'global', keys: ['N'] },
+  'go-new': { title: 'New thread', group: 'General', scope: 'global', keys: ['mod', 'N'] },
   'layout-overview': { title: 'Show all sessions', group: 'General', scope: 'global', keys: ['mod', 'up'] },
 
   'thread-pin': { title: 'Pin or unpin thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', 'P'] },
