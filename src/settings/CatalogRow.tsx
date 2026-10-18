@@ -21,6 +21,7 @@ import { AccountSelect, GitHubAccountSelect, IconPicker } from './sections/profi
 import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
 import { ThemePicker } from './ThemePicker';
+import { AppIconPicker } from './AppIconPicker';
 import { useShareSetting } from '../remote/SharedSettingsNotice';
 import { useRemoteStatus } from '../remote/useRemoteStatus';
 import { parseChord } from '../keymap';
@@ -106,6 +107,16 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
       </StarredModelsRow>
     );
   const description = suggestion ? (setting.description ?? setting.context) : setting.description;
+  if (control.type === 'appIcon' && value !== undefined)
+    return (
+      <>
+        <SettingsRow id={rowId} label={setting.label} description={description}>
+          <AppIconPicker id={settingControlId(rowId)} value={value} onChange={set} />
+          {line}
+        </SettingsRow>
+        {apply.dialog}
+      </>
+    );
   if (control.type === 'text' && control.isMultiline && value !== undefined)
     return (
       <>

@@ -138,6 +138,11 @@
           "to": "windows"
         },
         {
+          "from": "build/icons",
+          "to": "icons",
+          "filter": ["*.png"]
+        },
+        {
           "from": "build/native/uv",
           "to": "uv"
         }
@@ -148,8 +153,9 @@
       "icon": "build/icon.png",
       "extraResources": [
         {
-          "from": "build/icon.png",
-          "to": "icon.png"
+          "from": "build/icons",
+          "to": "icons",
+          "filter": ["*.png"]
         }
       ]
     },
@@ -159,8 +165,9 @@
       "category": "Development",
       "extraResources": [
         {
-          "from": "build/icon.png",
-          "to": "icon.png"
+          "from": "build/icons",
+          "to": "icons",
+          "filter": ["*.png"]
         },
         {
           "from": "build/native/uv",

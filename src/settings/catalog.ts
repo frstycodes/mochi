@@ -15,7 +15,7 @@ import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type C
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, ANIMATIONS, type AnimationArea, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, ANIMATIONS, APP_ICONS, type AnimationArea, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -45,7 +45,8 @@ export interface Setting {
 type Option = { readonly value: string; readonly label: string; readonly tone?: 'warning' };
 
 export type Control =
-  | { type: 'choice' | 'select'; options: readonly Option[] }
+  /** `appIcon` draws its options as the icons themselves (`AppIconPicker`). */
+  | { type: 'choice' | 'select' | 'appIcon'; options: readonly Option[] }
   | { type: 'switch' }
   | { type: 'number'; min: number; max: number; step: number }
   /** `fallback` is what an emptied field saves; without it, empty is a value of its own ("use $SHELL"). */
@@ -138,7 +139,7 @@ export function valueLabel(setting: Setting, value: string | undefined) {
   if (value === undefined) return '…';
   const { control } = setting;
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return value === 'true' ? 'On' : 'Off';
-  if (control.type === 'choice' || control.type === 'select') return control.options.find((o) => o.value === value)?.label ?? value;
+  if ('options' in control) return control.options.find((o) => o.value === value)?.label ?? value;
   if (control.type === 'instructions') return `${value.trimEnd().split('\n').length} lines`;
   if (control.type === 'shortcut') return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
   // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
@@ -201,7 +202,7 @@ function pref(key: PrefKey, label: string, section: SettingSection, control: Con
 }
 
 /** A host (main-process) setting at the top level of `AgentSettings`. */
-function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
+function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude' | 'appIcon', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
   return {
     key,
     label,
@@ -219,7 +220,7 @@ function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' 
 /** The control's typed value for `value`, or null when the control can't take it. */
 function parseValue(control: Control, value: string): string | number | boolean | null {
   if (control.type === 'switch') return value === 'true' ? true : value === 'false' ? false : null;
-  if (control.type === 'choice' || control.type === 'select') return control.options.some((o) => o.value === value) ? value : null;
+  if ('options' in control) return control.options.some((o) => o.value === value) ? value : null;
   if (control.type === 'number') {
     const n = Number(value);
     return Number.isInteger(n) && n >= control.min && n <= control.max ? n : null;
@@ -315,6 +316,7 @@ const APP_SETTINGS: Setting[] = [
   colorTheme('dark'),
   pref('reduceMotion', 'Reduce motion', 'appearance', choice(MOTION), { group: 'Mode', description: 'System follows your OS setting' }),
   ...(Object.keys(ANIMATIONS) as AnimationArea[]).flatMap(animationSettings),
+  hostSetting('appIcon', 'App icon', 'appearance', { type: 'appIcon', options: APP_ICONS }, { group: 'App icon', description: 'While Mochi is open; Finder keeps the default' }),
   pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }, { group: 'Folders', description: 'Where Open folder starts, and where clones and new projects go' }),
   pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, { group: 'Startup', description: 'Off, each space opens on its default view' }),
   ...Object.entries(ALERT_KINDS).map(

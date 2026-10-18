@@ -34,6 +34,9 @@ export function AppearanceSection() {
         <CatalogRow settingKey="theme" />
         <CatalogRow settingKey="reduceMotion" />
       </SettingsGroup>
+      <SettingsGroup title="App icon">
+        <CatalogRow settingKey="appIcon" label="Dock icon" />
+      </SettingsGroup>
       <SettingsSection id="animations" title="Animations" footer="Off until you turn them on. Reduce motion stops these too.">
         <div className="flex flex-col gap-3">
           {(Object.keys(ANIMATIONS) as AnimationArea[]).map((area) => (
