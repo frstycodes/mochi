@@ -280,6 +280,7 @@ const MAX_QUESTIONS = 3;
 function setupNext(connector: string, result: SetupResult) {
   if (result.status === 'done') return `connect_account with connector "${connector}", an account name and fromSetup: true`;
   if (result.status === 'needs') return `Ask the user in chat: ${result.question} (${result.options.join(', ')}). Then run_setup again with params.${result.param} set to their answer`;
+  if (result.kind === 'stopIf') return `${result.reason} Tell the user in chat, ask for what it needs, then run_setup again with it`;
   if (result.kind === 'goto' || /left .*sign in/.test(result.reason)) return `${result.reason}. Ask the user to sign in in this tab, then run_setup again`;
   const fix = `update_setup_step with the role and name of the element that worked`;
   if (result.kind === 'capture') return `Find the element for "${result.stepId}" (${result.note}) with browser_snapshot, ${fix}, then run_setup with fromStep "${result.stepId}"`;

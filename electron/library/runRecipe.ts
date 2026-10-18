@@ -33,12 +33,18 @@ const PRESENT_MS = 3000;
 export async function runRecipe(recipe: SetupRecipe, params: Record<string, string>, ops: RecipeOps, fromStep?: string) {
   const values = { ...params };
   for (const [key, param] of Object.entries(recipe.params)) if (param.generate === 'suffix' && !values[key]) values[key] = String(randomInt(100_000, 1_000_000));
+  // Defaults that name another param ({email}) wait for it: a choose step may set it mid-run.
+  const fillDefaults = () => {
+    for (const [key, param] of Object.entries(recipe.params)) if (!values[key] && param.default !== undefined) values[key] = fillName(param.default, values);
+  };
+  fillDefaults();
   const captured: Partial<Record<CaptureKind, string>> = {};
   const start = fromStep ? recipe.steps.findIndex((s) => s.id === fromStep) : 0;
   if (start < 0) throw new Error(`No step ${fromStep}; its steps are ${recipe.steps.map((s) => s.id).join(', ')}`);
   const own = () => Object.fromEntries(Object.keys(recipe.params).flatMap((k) => (values[k] ? [[k, values[k]]] : [])));
   for (let i = start; i < recipe.steps.length; i++) {
     const step = recipe.steps[i];
+    fillDefaults();
     const target = 'target' in step ? fill(step.target, values) : undefined;
     const stop = (reason: string) => ({ result: { status: 'stopped', stepId: step.id, note: step.note, kind: step.kind, target, nextStepId: recipe.steps[i + 1]?.id, reason } satisfies SetupResult, captured, params: own() });
     const needs = (param: string, options: string[]) => ({ result: { status: 'needs', stepId: step.id, param, question: recipe.params[param]?.question ?? `Which ${param}?`, options } satisfies SetupResult, captured, params: own() });
@@ -54,6 +60,7 @@ export async function runRecipe(recipe: SetupRecipe, params: Record<string, stri
       if (step.kind === 'fill') await ops.fill(target!, fillName(step.value, values), !!step.submit);
       if (step.kind === 'wait') await ops.waitForText(fillName(step.text, values), step.timeoutMs ?? WAIT_MS);
       if (step.kind === 'jumpIfPresent' && (await ops.isPresent(target!, PRESENT_MS))) i = recipe.steps.findIndex((s) => s.id === step.to) - 1;
+      if (step.kind === 'stopIf' && (await ops.isPresent(target!, PRESENT_MS))) return stop(fillName(step.reason, values));
       if (step.kind === 'choose') {
         const options = await ops.options(target!);
         const value = values[step.param] ?? (options.length === 1 ? options[0] : undefined);

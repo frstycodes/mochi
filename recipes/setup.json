@@ -113,16 +113,23 @@
     ]
   },
   "google-workspace": {
-    "version": 1,
+    "version": 2,
     "domains": [
       "console.cloud.google.com"
     ],
     "params": {
+      "owner": {
+        "question": "Which Google account should own your Mochi app?",
+        "default": "0"
+      },
       "suffix": {
         "generate": "suffix"
       },
       "email": {
         "question": "Which Google account should Mochi's app belong to?"
+      },
+      "signInEmail": {
+        "default": "{email}"
       },
       "agree": {
         "question": "Agree to Google's API Services User Data Policy for your Mochi app?",
@@ -135,7 +142,7 @@
       {
         "id": "open",
         "kind": "goto",
-        "url": "https://console.cloud.google.com/projectcreate",
+        "url": "https://console.cloud.google.com/projectcreate?authuser={owner}",
         "note": "A new Cloud project for your Mochi app"
       },
       {
@@ -180,14 +187,24 @@
       {
         "id": "apis",
         "kind": "goto",
-        "url": "https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com&project=mochi-{suffix}",
+        "url": "https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com&project=mochi-{suffix}&authuser={owner}",
         "note": "Enables Gmail, Calendar and Drive for it"
+      },
+      {
+        "id": "org-blocked",
+        "kind": "stopIf",
+        "target": {
+          "role": "heading",
+          "name": "Permission Required"
+        },
+        "reason": "This Google account can't create Cloud projects (its organization blocks it). Run again with params.owner, a personal Google account, and params.signInEmail, the account to connect.",
+        "note": "A Workspace organization that blocks new projects stops the run with what to do"
       },
       {
         "id": "project-ready",
         "kind": "wait",
         "text": "You are going to make changes to project mochi-{suffix}",
-        "timeoutMs": 120000,
+        "timeoutMs": 60000,
         "note": "Waits until the new project can be changed"
       },
       {
@@ -220,7 +237,7 @@
       {
         "id": "consent",
         "kind": "goto",
-        "url": "https://console.cloud.google.com/auth/overview/create?project=mochi-{suffix}",
+        "url": "https://console.cloud.google.com/auth/overview/create?project=mochi-{suffix}&authuser={owner}",
         "note": "Sets up the consent screen"
       },
       {
@@ -337,7 +354,7 @@
       {
         "id": "audience",
         "kind": "goto",
-        "url": "https://console.cloud.google.com/auth/audience?project=mochi-{suffix}",
+        "url": "https://console.cloud.google.com/auth/audience?project=mochi-{suffix}&authuser={owner}",
         "note": "Testing allows only listed users: adds you"
       },
       {
@@ -357,9 +374,9 @@
           "role": "textbox",
           "name": "Text field for emails"
         },
-        "value": "{email}",
+        "value": "{signInEmail}",
         "submit": true,
-        "note": "Adds your email"
+        "note": "Adds the account that will sign in"
       },
       {
         "id": "save-user",
@@ -374,7 +391,7 @@
       {
         "id": "client",
         "kind": "goto",
-        "url": "https://console.cloud.google.com/auth/clients/create?project=mochi-{suffix}",
+        "url": "https://console.cloud.google.com/auth/clients/create?project=mochi-{suffix}&authuser={owner}",
         "note": "Creates the Desktop client Mochi signs in with"
       },
       {

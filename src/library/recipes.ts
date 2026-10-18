@@ -22,6 +22,8 @@ export interface RecipeParam {
   options?: string[];
   /** Filled in by Mochi when the run doesn't pass it: six random digits, for an id like `mochi-{suffix}`. */
   generate?: 'suffix';
+  /** Used when the run doesn't pass it: a fixed value, or `{other}` for another param's value. */
+  default?: string;
 }
 
 /** An element by ARIA role and accessible name (`{param}` filled in from the run's params), optionally inside another; no name matches the first of the role. */
@@ -50,6 +52,8 @@ export type SetupStep = { id: string; note: string } & (
   | { kind: 'capture'; target: SetupTarget; as: CaptureKind }
   /** Ends the run here, done; for the branch before a jump's target. */
   | { kind: 'end' }
+  /** Stops the run with `reason` (said to the agent, which tells the user) when the element shows within a few seconds, like a permission error. */
+  | { kind: 'stopIf'; target: SetupTarget; reason: string }
 );
 
 export type CaptureKind = 'slackConfigToken' | 'slackClientId' | 'slackClientSecret' | 'googleClientId' | 'googleClientSecret';
@@ -70,7 +74,7 @@ export const RECIPE_DOMAINS: Partial<Record<string, string[]>> = { slack: ['api.
 export const RECIPES_REPO = 'frstycodes/mochi';
 export const RECIPES_PATH = 'recipes/setup.json';
 
-const STEP_KINDS = ['goto', 'click', 'fill', 'choose', 'ask', 'wait', 'jumpIfPresent', 'capture', 'end'] as const;
+const STEP_KINDS = ['goto', 'click', 'fill', 'choose', 'ask', 'wait', 'jumpIfPresent', 'capture', 'end', 'stopIf'] as const;
 const CAPTURE_KINDS = ['slackConfigToken', 'slackClientId', 'slackClientSecret', 'googleClientId', 'googleClientSecret'] as const satisfies CaptureKind[];
 
 /** The recipes this build ships, the fallback when the repo's can't be read. Labels read from api.slack.com/apps on 2026-10-18. */
@@ -139,6 +143,8 @@ export function parseRecipe(connector: string, value: unknown): SetupRecipe {
       case 'jumpIfPresent':
         if (typeof s.to !== 'string' || ids.indexOf(s.to) <= index) throw new TypeError(`${connector}: ${s.id} jumps to a later step`);
         return { ...base, kind: 'jumpIfPresent', target: targetOf(s.target, where), to: s.to };
+      case 'stopIf':
+        return { ...base, kind: 'stopIf', target: targetOf(s.target, where), reason: shortText(s.reason, `${connector}: ${s.id}.reason`) };
       case 'capture':
         if (!CAPTURE_KINDS.includes(s.as as CaptureKind)) throw new TypeError(`${connector}: ${s.id} captures an unknown kind`);
         return { ...base, kind: 'capture', target: targetOf(s.target, where), as: s.as as CaptureKind };
@@ -154,7 +160,9 @@ function parseParam(connector: string, key: string, raw: unknown): RecipeParam {
   const options = p.options;
   if (options !== undefined && (!Array.isArray(options) || !options.length || options.some((o) => typeof o !== 'string' || o.length > 100))) throw new TypeError(`${connector}: params.${key}.options must be short texts`);
   if (p.generate !== undefined && p.generate !== 'suffix') throw new TypeError(`${connector}: params.${key}.generate must be suffix`);
+  if (p.default !== undefined && (typeof p.default !== 'string' || p.default.length > 200)) throw new TypeError(`${connector}: params.${key}.default must be short text`);
   return {
+    ...(p.default !== undefined && { default: p.default as string }),
     ...(p.question !== undefined && { question: shortText(p.question, `${connector}: params.${key}.question`) }),
     ...(options && { options: options as string[] }),
     ...(p.generate === 'suffix' && { generate: 'suffix' as const }),

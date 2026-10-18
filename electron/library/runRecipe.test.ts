@@ -158,5 +158,31 @@ test("Google's recipe runs to the Desktop client, stopping once for the user's a
   assert.ok(log.includes(`fill Project ID mochi-${suffix}`) && log.includes(`wait You are going to make changes to project mochi-${suffix}`));
   const done = await runRecipe(google, { ...asked.params, agree: 'I agree' }, ops, 'policy');
   assert.deepEqual(done.result.status === 'done' && done.result.captured, ['googleClientId', 'googleClientSecret']);
-  assert.ok(log.includes('fill Text field for emails me@x.com') && log.includes(`goto https://console.cloud.google.com/auth/clients/create?project=mochi-${suffix}`));
+  assert.ok(log.includes('fill Text field for emails me@x.com') && log.includes(`goto https://console.cloud.google.com/auth/clients/create?project=mochi-${suffix}&authuser=0`));
+});
+
+test('an org that blocks new projects stops the run at once with what to do, and the owner and sign-in account fill in', async () => {
+  const google = BUILT_IN_RECIPES['google-workspace']!;
+  const log: string[] = [];
+  const ops: RecipeOps = {
+    url: () => 'https://console.cloud.google.com/apis',
+    goto: async (to) => void log.push(`goto ${to}`),
+    click: async () => {},
+    fill: async (t, value) => void log.push(`fill ${t.name} ${value}`),
+    options: async () => ['me@personal.com'],
+    pick: async () => {},
+    close: async () => {},
+    waitForText: async () => {},
+    isPresent: async (t) => t.name === 'Permission Required',
+    capture: async () => '',
+  };
+  const blocked = await runRecipe(google, {}, ops);
+  assert.equal(blocked.result.status === 'stopped' && blocked.result.stepId, 'org-blocked');
+  assert.match(blocked.result.status === 'stopped' ? blocked.result.reason : '', /can't create Cloud projects.*params\.owner/);
+  assert.match(log[0], /projectcreate\?authuser=0$/, 'the default account until one is named');
+  log.length = 0;
+  const owned = await runRecipe(google, { owner: 'me@personal.com', signInEmail: 'sam@acme.com', agree: 'I agree' }, { ...ops, isPresent: async () => false });
+  assert.ok(log.every((l) => !l.startsWith('goto') || l.endsWith('authuser=me@personal.com')));
+  assert.ok(log.includes('fill Text field for emails me@personal.com') && log.includes('fill Text field for emails sam@acme.com'), 'the owner is the contact, the Workspace account the test user');
+  assert.equal(owned.result.status === 'stopped' && owned.result.stepId, 'client-id', 'runs to the capture (nothing to copy here)');
 });
