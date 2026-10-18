@@ -112,7 +112,7 @@ export function parseRecipe(connector: string, value: unknown): SetupRecipe {
     for (let t: SetupTarget | undefined = target; t; t = t.within) if (t.name) declared(t.name, where);
     return target;
   };
-  if (!Array.isArray(r.steps) || !r.steps.length || r.steps.length > 40) throw new TypeError(`${connector}: steps must be 1 to 40`);
+  if (!Array.isArray(r.steps) || !r.steps.length || r.steps.length > 50) throw new TypeError(`${connector}: steps must be 1 to 50`);
   const ids = r.steps.map((raw) => (raw as { id?: unknown }).id);
   if (ids.some((id, i) => typeof id !== 'string' || !/^[a-z0-9-]{1,32}$/.test(id) || ids.indexOf(id) !== i)) throw new TypeError(`${connector}: step ids must be unique lowercase words`);
   const steps = r.steps.map((raw, index): SetupStep => {

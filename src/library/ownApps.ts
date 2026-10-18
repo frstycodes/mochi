@@ -56,9 +56,8 @@ function slackManifestUrl(redirectUrl: string) {
 const GOOGLE_SETUP: OwnAppSetup = {
   openUrl: 'https://console.cloud.google.com/projectcreate',
   steps: [
-    'run_setup with connector "google-workspace": Mochi creates a Cloud project for your Mochi app, enables Gmail, Calendar and Drive, sets up the consent screen with you as its test user, and creates a Desktop client, keeping its secret. It asks you to agree to Google\'s policy on its card; follow its next, sign-in included.',
+    'run_setup with connector "google-workspace": Mochi creates a Cloud project for your Mochi app, enables Gmail, Calendar and Drive, sets up the consent screen with you as its test user, publishes it (with Mochi on GitHub as its home page and privacy policy) so sign-ins don\'t expire after 7 days, and creates a Desktop client, keeping its secret. It asks you on its cards to agree to Google\'s policy and to publish; follow its next, sign-in included. If you don\'t want it published, run_setup again with fromStep "client": the app stays in Testing and Google asks you to sign in again every 7 days.',
     'connect_account with connector "google-workspace", an account name and fromSetup: true. On the pages it opens pick your account, approve Mochi\'s own consent page, then Google\'s "unverified app" screen (Advanced, Go to Mochi; it\'s your own app, say so in chat) and Continue. Then list_connectors until it isSignedIn; later Google accounts reuse this client.',
     'A Google Workspace organization can block its members from creating Cloud projects, and run_setup then stops saying so. Tell the user a personal Google account can own the app while their Workspace account signs in through it; ask which personal account (signed in to this browser), then run_setup with params.owner set to it and params.signInEmail set to the Workspace account, and connect_account as usual. Their organization may still block unverified apps at sign-in; if Google says so, only its admin can allow it.',
-    'Your app stays in Testing (publishing needs a home page and privacy policy), so Google asks you to sign in again every 7 days.',
   ],
 };

@@ -113,7 +113,7 @@
     ]
   },
   "google-workspace": {
-    "version": 2,
+    "version": 3,
     "domains": [
       "console.cloud.google.com"
     ],
@@ -135,6 +135,12 @@
         "question": "Agree to Google's API Services User Data Policy for your Mochi app?",
         "options": [
           "I agree"
+        ]
+      },
+      "publish": {
+        "question": "Publish your Mochi app so Google stops asking you to sign in again every 7 days? It stays unverified, and its consent page links to Mochi on GitHub and its privacy policy.",
+        "options": [
+          "Publish it"
         ]
       }
     },
@@ -387,6 +393,103 @@
           "exact": true
         },
         "note": "Saves it"
+      },
+      {
+        "id": "publish",
+        "kind": "ask",
+        "param": "publish",
+        "note": "Publishing your app is yours to decide"
+      },
+      {
+        "id": "branding",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/branding?project=mochi-{suffix}&authuser={owner}",
+        "note": "Publishing needs a home page and privacy policy"
+      },
+      {
+        "id": "home-page",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Application home page"
+        },
+        "value": "https://github.com/frstycodes/mochi",
+        "note": "Mochi on GitHub as the home page"
+      },
+      {
+        "id": "privacy",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Application privacy policy link"
+        },
+        "value": "https://github.com/frstycodes/mochi/blob/main/PRIVACY.md",
+        "note": "Mochi's privacy policy"
+      },
+      {
+        "id": "add-domain",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Add domain",
+          "exact": true
+        },
+        "note": "Opens an authorised domain"
+      },
+      {
+        "id": "domain",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Authorised domain 1"
+        },
+        "value": "github.com",
+        "note": "Allows GitHub links on the consent page"
+      },
+      {
+        "id": "save-branding",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Save",
+          "exact": true
+        },
+        "note": "Saves the branding"
+      },
+      {
+        "id": "to-audience",
+        "kind": "click",
+        "target": {
+          "role": "link",
+          "name": "Audience"
+        },
+        "note": "Back to Audience, without leaving the page mid-save"
+      },
+      {
+        "id": "publish-app",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Publish app",
+          "exact": true
+        },
+        "note": "Publishes the app (enabled once the branding is saved)"
+      },
+      {
+        "id": "confirm-publish",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Confirm",
+          "exact": true
+        },
+        "note": "Confirms"
+      },
+      {
+        "id": "published",
+        "kind": "wait",
+        "text": "In production",
+        "note": "Waits for it: sign-ins no longer expire after 7 days"
       },
       {
         "id": "client",
