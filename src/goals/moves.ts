@@ -66,6 +66,18 @@ function subMove(sub: NonNullable<Verdict['subThread']>): Move | null {
   return null;
 }
 
+/** The agent's own question and buttons for this turn, which replace Mochi's move; null when it wrote none (a limit, an error, no report). */
+export function agentAsk(report: TurnReport | undefined) {
+  if (!report?.next || !report.options?.length) return null;
+  return { question: report.next, options: report.options };
+}
+
+/** Continue answers the agent's own next-move question with yes, so the agent gets the move the card showed; without one, it resumes. */
+export function continuePrompt(report: TurnReport | undefined, hasPlan: boolean) {
+  if (report?.next) return `Yes: ${report.next}`;
+  return hasPlan ? 'Continue the plan from where you stopped.' : 'Continue where you left off.';
+}
+
 /** The question matches the action; only Continue uses the agent's proposed next move. */
 export function questionFor(verdict: Verdict, move: Move | null, report: TurnReport | undefined, agent: string, context: MoveContext = {}): string | null {
   if (!move) return verdict.kind === 'needs-you' ? verdict.reason : null;

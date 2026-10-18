@@ -3,7 +3,7 @@ import { ArrowUp, ChevronRight } from '@/icons';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { authorName, type Thread } from '../../model';
+import { authorName, type NextOption, type Thread } from '../../model';
 import { ComposerCard } from '../../Composer';
 import { Evidence, GapList } from '../../goals/ReportCard';
 import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveRecord, NextMoveSummary, PlanList, useNextMove, type PlanItem } from '../../goals/NextMove';
@@ -16,7 +16,7 @@ export function NextMoveBlock({ rl }: { rl: Thread }) {
   return (
     <Block
       title="Next move"
-      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat until every item is done. When it stops: Mochi's verdict, the agent's summary, Mochi's evidence, one question in the agent's words and the move Mochi picked. Answer it and the card stays as a record of what you chose."
+      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat until every item is done. When it stops: Mochi's verdict, the agent's summary, Mochi's evidence, then the agent's question with its own answers as buttons; each sends the agent's written reply, or fills the message box. Mochi picks a move only when the agent wrote none. Answer it and the card stays as a record of what you chose."
       wide
     >
       <VizThreadProvider value={rl.id}>
@@ -68,8 +68,8 @@ function TurnEndMock({ fixture }: { fixture: NextMoveFixture }) {
 function TurnEndCard({ fixture, onAnswer }: { fixture: NextMoveFixture; onAnswer: (a: Answer) => void }) {
   const next = useNextMove(fixture.thread);
   if (!next) return null;
-  const { verdict, prs, tiles, move } = next;
-  const { alternative } = fixture;
+  const { verdict, prs, tiles } = next;
+  const pick = (o: NextOption) => onAnswer(o.isDraft ? { label: o.label, draft: o.reply } : { label: o.label, reply: o.reply, isMove: true });
   return (
     <NextMoveCard>
       <NextMoveHeader thread={fixture.thread} verdict={verdict} />
@@ -78,7 +78,7 @@ function TurnEndCard({ fixture, onAnswer }: { fixture: NextMoveFixture; onAnswer
         <Evidence thread={fixture.thread} tiles={tiles} prs={prs} />
         {verdict.gaps.length > 0 && <GapList thread={fixture.thread} gaps={verdict.gaps} />}
         <NextMoveAsk question={fixture.question}>
-          {!!move && <NextMoveActions move={move} alternative={alternative?.label} onMove={() => onAnswer({ label: move.label, isMove: true })} onAlternative={() => onAnswer(alternative ?? { label: 'Not yet' })} />}
+          <NextMoveActions labels={fixture.options.map((o) => o.label)} onPick={(i) => pick(fixture.options[i])} />
         </NextMoveAsk>
       </NextMoveContent>
     </NextMoveCard>
@@ -145,8 +145,7 @@ interface NextMoveFixture {
   /** What the agent would write in report_turn. */
   summary: string;
   question: string;
-  /** The agent's own other answer; picking it puts `draft` in the message box for you to finish. */
-  alternative?: { label: string; draft: string };
+  options: NextOption[];
   /** The chat's row before the card, and after it when you take the move. */
   before: string;
   after: string;
@@ -165,6 +164,10 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       thread: { ...done, idle: { ...done.idle!, uncommitted: 2 } },
       summary: 'The session cookie keeps its name through the Better Auth migration, so signed-in people stay signed in. The old cookie is read once and rewritten on the next response.',
       question: 'Commit the cookie fix and its test?',
+      options: [
+        { label: 'Commit', reply: 'Commit the cookie fix and its test.' },
+        { label: 'Show the diff first', reply: 'Show me the diff before you commit.' },
+      ],
       before: 'Edited 2 files, ran pnpm test',
       after: 'Committed 2 files as fix(auth): keep the session cookie name',
     },
@@ -173,6 +176,10 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       thread: done,
       summary: 'Committed as fix(auth): keep the session cookie name. Every criterion passes on the branch.',
       question: 'Open a pull request for the cookie fix?',
+      options: [
+        { label: 'Open pull request', reply: 'Open the pull request for the cookie fix.' },
+        { label: 'Not yet', reply: "Hold the pull request, I'll review the branch first." },
+      ],
       before: 'Committed 2 files',
       after: 'Opened #136 fix(auth): keep the session cookie name',
     },
@@ -181,7 +188,10 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       thread: thread('Gaps · 1 critical, 2 unverified'),
       summary: "PR chips now fall back to your home folder when the thread's worktree is gone, and #135 is open with the fix.",
       question: 'Fix the 5 failing git tests, then check the #133 chip in the app?',
-      alternative: { label: 'Only the tests', draft: "Fix the failing git tests only, I'll check the chip myself." },
+      options: [
+        { label: 'Fix both', reply: 'Fix the 5 failing git tests, then check the #133 chip in the app.' },
+        { label: 'Only the tests', reply: "Fix the failing git tests only, I'll check the chip myself.", isDraft: true },
+      ],
       before: 'Edited 3 files, ran 2 commands',
       after: 'Working on the 3 gaps',
     },
@@ -190,6 +200,10 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       thread: thread('Needs you · asked in prose'),
       summary: 'The checkout test fails about 1 in 20 runs, only on CI. It times out waiting for the payment iframe, which loads slower on the CI runners.',
       question: 'Retry it, or quarantine it and open an issue?',
+      options: [
+        { label: 'Quarantine it', reply: 'Quarantine it and open an issue.' },
+        { label: 'Retry it', reply: 'Wait longer for the payment iframe and retry it.' },
+      ],
       before: 'Ran the e2e suite 20 times',
       after: '',
       reply: 'Quarantine it and open an issue.',
@@ -199,7 +213,10 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       thread: thread('Stalled · stopped mid-plan'),
       summary: "The Devices list reads the registry and shows each computer's icon. Offline ages and the theme check aren't done yet.",
       question: 'Pick up where it stopped: offline ages, then both themes?',
-      alternative: { label: 'Change the plan', draft: 'Before you continue, I want to change the plan:' },
+      options: [
+        { label: 'Continue', reply: 'Continue: offline ages, then check both themes.' },
+        { label: 'Change the plan', reply: 'Before you continue, I want to change the plan:', isDraft: true },
+      ],
       before: 'Edited 4 files',
       after: 'Continuing with offline ages',
     },
@@ -208,6 +225,10 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       thread: thread('Done · merged'),
       summary: '#133 merged into main. Nothing is left open on this goal.',
       question: 'Settle this thread?',
+      options: [
+        { label: 'Settle', reply: 'Settle this thread.' },
+        { label: 'Keep it open', reply: 'Keep this thread open for now.' },
+      ],
       before: 'Merged #133',
       after: 'Settled',
     },
@@ -217,6 +238,11 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       summary:
         'I rewrote the checkout flow so the payment step no longer blocks on the address lookup, moved the retry logic into one helper used by every provider, and split the 1,400 line CheckoutPage into five components with their own tests. Two of the provider sandboxes were down, so their paths are only covered by mocks.',
       question: 'Fix the 5 failing checks, then run the two provider sandboxes again once they are back up before opening the pull request?',
+      options: [
+        { label: 'Fix checks, rerun sandboxes', reply: 'Fix the 5 failing checks, then rerun both provider sandboxes once they are back up, then open the pull request.' },
+        { label: 'Open it with gaps', reply: 'Open the pull request now and list the gaps in its description.' },
+        { label: 'Only the checks', reply: 'Fix the 5 failing checks only.' },
+      ],
       before: 'Edited 23 files, ran 14 commands',
       after: 'Working on the 12 gaps',
     },

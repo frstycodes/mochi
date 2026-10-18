@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Thread } from '../model.ts';
-import { moveFor, questionFor } from './moves.ts';
+import type { Thread, TurnReport } from '../model.ts';
+import { agentAsk, continuePrompt, moveFor, questionFor } from './moves.ts';
 import type { Gap, Verdict } from './verdict.ts';
 
 const thread = (patch: Partial<Thread> = {}) => ({ idle: { at: 0, accepted: [] }, repo: { project: 'app', branch: 'fix/x' }, ...patch }) as Thread;
@@ -69,4 +69,20 @@ test('folderless work offers verification or settling, never a pull request', ()
   assert.equal(move?.kind, 'confirm');
   assert.equal(questionFor(verdict('done'), move, undefined, 'Codex'), 'Verify the completed work against the goal criteria?');
   assert.equal(moveFor({ ...t, idle: { at: 0, accepted: [], isConfirmed: true } }, verdict('done'), [])?.kind, 'settle');
+});
+
+test("Continue sends a yes to the agent's own next move, and only resumes when it proposed none", () => {
+  const report: TurnReport = { at: 0, by: 'claude', decisions: [], left: [], next: 'Rebuild Mochi and start a test task?' };
+  assert.equal(continuePrompt(report, true), 'Yes: Rebuild Mochi and start a test task?');
+  assert.equal(continuePrompt(undefined, true), 'Continue the plan from where you stopped.');
+  assert.equal(continuePrompt(undefined, false), 'Continue where you left off.');
+});
+
+test("the agent's own question and buttons replace Mochi's move; without buttons, Mochi's move stays", () => {
+  const options = [{ label: 'Commit', reply: 'Commit the cookie fix.' }];
+  const report: TurnReport = { at: 0, by: 'claude', decisions: [], left: [], next: 'Commit the cookie fix?', options };
+  assert.deepEqual(agentAsk(report), { question: 'Commit the cookie fix?', options });
+  assert.equal(agentAsk({ ...report, options: undefined }), null);
+  assert.equal(agentAsk({ ...report, next: undefined }), null);
+  assert.equal(agentAsk(undefined), null);
 });

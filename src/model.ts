@@ -53,10 +53,17 @@ export interface TurnReport {
   question?: string;
   /** What changed, in your terms: the next-move card's opening lines. */
   summary?: string;
-  /** The next move as one yes/no question naming the exact thing ("Commit the cookie fix and its test?"); Mochi picks the move itself. */
+  /** The next move as one question naming the exact thing ("Commit the cookie fix and its test?"). */
   next?: string;
-  /** The agent's own other answer to `next`; picking it puts `draft` in the message box for you to finish. */
-  alternative?: { label: string; draft: string };
+  /** The agent's answers to `next`, its pick first: the next-move card's buttons. */
+  options?: NextOption[];
+}
+
+/** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
+export interface NextOption {
+  label: string;
+  reply: string;
+  isDraft?: boolean;
 }
 
 /** A goal the agent wrote after its first look: waiting for your Accept, or applied with an Undo (Settings › Goals and checks). */

@@ -1110,6 +1110,8 @@ test('claim_criterion records evidence; report and get_report give the turn as d
   assert.equal(r.threadId, 'adm');
   const mine = await t.ok('get_report');
   assert.deepEqual([mine.criteria[0].claimed, mine.report.question, mine.report.decisions], ['curl -i shows Retry-After: 30', 'Switch the 429 body to JSON?', ['Kept the old 429 body']]);
+  await t.ok('report_turn', { decisions: [], left: [], next: 'Commit the Retry-After fix?', options: [{ label: ' Commit ', reply: 'Commit it.' }, { label: 'Change the plan', reply: 'First:', isDraft: true }] });
+  assert.deepEqual(t.thread('rl').report?.options, [{ label: 'Commit', reply: 'Commit it.' }, { label: 'Change the plan', reply: 'First:', isDraft: true }], "the agent's own buttons, trimmed");
 });
 
 test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and its checks', async () => {

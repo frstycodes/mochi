@@ -10,7 +10,6 @@ import { SubThreadGuide } from '../../goals/SubThreads';
 import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveSummary } from '../../goals/NextMove';
 import { SummaryGoal, SummaryGoalText } from '../../goals/SummaryGoal';
 import { StatusRing, VerdictIcon } from '../../goals/VerdictChip';
-import type { Move } from '../../goals/moves';
 import type { Verdict } from '../../goals/verdict';
 import { CallList } from '../../WorkLog';
 import { Block } from '../layout';
@@ -237,7 +236,7 @@ function ParentCard({ state, slot }: { state: 'needs-you' | 'done' | 'waiting'; 
         </CallList>
         {ask ? (
           <NextMoveAsk question={ask.question}>
-            <NextMoveActions move={ask.move} alternative={ask.alternative} onMove={() => undefined} onAlternative={() => undefined} />
+            <NextMoveActions labels={ask.labels} onPick={() => undefined} />
           </NextMoveAsk>
         ) : (
           <p className="type-meta text-muted-foreground">Mochi asks when one finishes or needs you.</p>
@@ -255,7 +254,7 @@ const PARENT_STATES = {
     summary: 'I split the rate limiting into three sub-threads. The headers are in review, the load test is running, and the docs need one thing from you.',
     children: FAMILIES[0].children,
     // The move acts on the sub-thread: Close 1 gap sends the gap to Document 429 responses' agent, not this one.
-    ask: { question: 'Document 429 responses has 1 gap: hand it back to its agent?', move: { kind: 'close-gaps', label: 'Close 1 gap' }, alternative: 'Open thread' },
+    ask: { question: 'Document 429 responses has 1 gap: hand it back to its agent?', labels: ['Close 1 gap', 'Open thread'] },
   },
   waiting: {
     title: 'Waiting on 2 sub-threads',
@@ -267,9 +266,9 @@ const PARENT_STATES = {
     title: 'Every sub-thread done',
     summary: 'All three sub-threads are verified and each has a PR into feat/api-rate-limits. Nothing is left on this branch.',
     children: FAMILIES[0].children.map((c, i) => ({ ...c, ...DONE, pr: c.pr ?? { number: 142 + i, status: 'open' as const } })),
-    ask: { question: 'Merge the 3 sub-thread PRs into feat/api-rate-limits?', move: { kind: 'settle', label: 'Merge 3 PRs' }, alternative: 'Review first' },
+    ask: { question: 'Merge the 3 sub-thread PRs into feat/api-rate-limits?', labels: ['Merge 3 PRs', 'Review first'] },
   },
-} satisfies Record<string, { title: string; summary: string; children: RowFixture[]; ask: { question: string; move: Move; alternative: string } | null }>;
+} satisfies Record<string, { title: string; summary: string; children: RowFixture[]; ask: { question: string; labels: string[] } | null }>;
 
 /** A sub-thread's own end-of-turn card: what it's part of, then a PR into the parent's branch, then handing the result back. */
 function ChildCard({ hasPr }: { hasPr: boolean }) {
@@ -286,11 +285,11 @@ function ChildCard({ hasPr }: { hasPr: boolean }) {
         <NextMoveSummary>Every 429 now carries RateLimit-Limit, -Remaining and -Reset, with a test per tier.</NextMoveSummary>
         {hasPr ? (
           <NextMoveAsk question="PR #141 is open into feat/api-rate-limits. Hand the result back to Public API rate limiting?">
-            <NextMoveActions move={{ kind: 'settle', label: 'Hand back' }} alternative="Not yet" onMove={() => undefined} onAlternative={() => undefined} />
+            <NextMoveActions labels={['Hand back', 'Not yet']} onPick={() => undefined} />
           </NextMoveAsk>
         ) : (
           <NextMoveAsk question="Open a pull request into feat/api-rate-limits?">
-            <NextMoveActions move={{ kind: 'open-pr', label: 'Open pull request' }} alternative="Not yet" onMove={() => undefined} onAlternative={() => undefined} />
+            <NextMoveActions labels={['Open pull request', 'Not yet']} onPick={() => undefined} />
           </NextMoveAsk>
         )}
       </NextMoveContent>

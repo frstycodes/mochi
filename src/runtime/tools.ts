@@ -476,8 +476,8 @@ const GOAL_SPECS = {
     run: ({ state, caller, args, dispatch }) => {
       if (!caller.goal && caller.proposal?.state !== 'waiting') throw new Error('This thread has no goal; propose a researched goal before reporting');
       if (isDraftGoal(caller)) throw new Error(DRAFT_REFUSAL);
-      const { summary, next, alternative } = args;
-      dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }), ...(summary?.trim() && { summary: summary.trim() }), ...(next?.trim() && { next: next.trim() }), ...(alternative && { alternative: { label: alternative.label.trim(), draft: alternative.draft.trim() } }) } });
+      const { summary, next, options } = args;
+      dispatch({ type: 'report', threadId: caller.id, report: { by: caller.providers[0], decisions: args.decisions, left: args.left, ...(args.question?.trim() && { question: args.question.trim() }), ...(summary?.trim() && { summary: summary.trim() }), ...(next?.trim() && { next: next.trim() }), ...(options && { options: options.map((o) => ({ label: o.label.trim(), reply: o.reply.trim(), ...(o.isDraft && { isDraft: true }) })) }) } });
       return { changed: 'reported', result: reportOf(target(state(), caller, caller.id)) };
     },
   },

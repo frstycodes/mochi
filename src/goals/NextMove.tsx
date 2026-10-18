@@ -11,20 +11,20 @@ import { Shortcut } from '../Shortcut';
 import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
 import { useHarness } from '../store';
-import { moveContext, moveFor, questionFor, type Move } from './moves';
+import { agentAsk, moveContext, moveFor, questionFor } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { turnReport, verdictHeading, verdictTiles, type Verdict } from './verdict';
 
 /**
  * The end of a turn, in the chat after the agent's last call: Mochi's verdict, the agent's own summary, Mochi's evidence, then
- * one question in the agent's words with the move Mochi picked from the goal's state. Answered, it shrinks to a record of what
- * you chose: the summary, the question, your answer.
+ * the agent's question with its own answers as buttons (Mochi's move only when it wrote none). Answered, it shrinks to a record of
+ * what you chose: the summary, the question, your answer.
  */
 export function NextMoveCard({ className, ...props }: ComponentProps<typeof Card>) {
   return <Card size="sm" role="group" aria-label="Next move" className={className} {...props} />;
 }
 
-/** The verdict, its evidence, the move and the question for a thread that just went idle; null while the agent works. */
+/** The verdict, its evidence, the agent's question and options (else Mochi's move) for a thread that just went idle; null while the agent works. */
 export function useNextMove(thread: Thread) {
   const prs = useThreadPrs(thread);
   const verdict = useIdleVerdict(thread);
@@ -34,8 +34,9 @@ export function useNextMove(thread: Thread) {
   const report = turnReport(thread);
   const context = moveContext(state.threads, thread);
   const move = moveFor(thread, verdict, states.map((s) => s.status), context);
-  const question = questionFor(verdict, move, report, authorName(thread.session?.provider ?? thread.providers[0]), context);
-  return { verdict, prs, report, tiles: verdictTiles(thread, states, verdict), move, question, context };
+  const ask = agentAsk(report);
+  const question = ask?.question ?? questionFor(verdict, move, report, authorName(thread.session?.provider ?? thread.providers[0]), context);
+  return { verdict, prs, report, tiles: verdictTiles(thread, states, verdict), move, ask, question, context };
 }
 
 /** Mochi's verdict as the card's title, in the sidebar chip's icon and tone. */
@@ -96,15 +97,18 @@ export function NextMoveAsk({ question, children }: { question: string; children
   );
 }
 
-/** The one other answer (the agent's own, like "Revise the plan", else Not yet), then the move as the primary with its shortcut. */
-export function NextMoveActions({ move, alternative = 'Not yet', onMove, onAlternative }: { move: Move; alternative?: string; onMove: () => void; onAlternative: () => void }) {
+/** The answers, the first as the primary with its shortcut, the others quieter before it. */
+export function NextMoveActions({ labels, onPick }: { labels: string[]; onPick: (index: number) => void }) {
+  const [primary, ...others] = labels;
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={onAlternative}>
-        {alternative}
-      </Button>
-      <Button size="sm" onClick={onMove} aria-keyshortcuts={IS_MAC ? 'Meta+Enter' : 'Control+Enter'}>
-        {move.label}
+      {others.map((label, i) => (
+        <Button key={label} size="sm" variant="ghost" onClick={() => onPick(i + 1)}>
+          {label}
+        </Button>
+      ))}
+      <Button size="sm" onClick={() => onPick(0)} aria-keyshortcuts={IS_MAC ? 'Meta+Enter' : 'Control+Enter'}>
+        {primary}
         <span aria-hidden className="contents">
           <Shortcut keys={['mod', 'Enter']} className="ml-0.5 opacity-70 [&_[data-slot=kbd]]:bg-primary-foreground/15 [&_[data-slot=kbd]]:text-primary-foreground" />
         </span>
