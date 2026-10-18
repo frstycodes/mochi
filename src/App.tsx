@@ -23,6 +23,7 @@ import { ReviewView } from './review/ReviewView';
 import { useSettingsRoute } from './settings/open';
 import { usePrefs } from './settings/prefs';
 import { SettingsPage } from './settings/SettingsPage';
+import { AgentSettingsProvider } from './settings/AgentSettings';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
@@ -129,7 +130,7 @@ function Shell() {
   const isRemoteOpen = !!useRemoteThreadRoute();
   useSettingsShortcut();
 
-  return (
+  const content = (
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
       {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
       <SidebarInset className="isolate order-last min-h-0 overflow-hidden">
@@ -149,5 +150,5 @@ function Shell() {
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
     </SidebarProvider>
   );
+  return isSettingsOpen ? <AgentSettingsProvider>{content}</AgentSettingsProvider> : content;
 }
-

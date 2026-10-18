@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { parseClaudeAuth, parseCodexAccount, parseVersion } from './parse.ts';
+import { isNewerVersion, parseClaudeAuth, parseCodexAccount, parseVersion } from './parse.ts';
 
 // CLAUDE_LOGGED_OUT and CODEX_PLUS are real output (Claude Code 2.1.296, codex-cli 0.155.1), emails replaced.
 // GAP: the logged-in Claude fixtures are built from the field names in Claude Code 2.1.296's `auth status` source, not captured runs.
@@ -22,6 +22,14 @@ test('versions from both CLIs', () => {
   assert.equal(parseVersion('codex-cli 0.155.1\n'), '0.155.1');
   assert.equal(parseVersion('codex-cli 0.156.0-alpha.2'), '0.156.0-alpha.2');
   assert.equal(parseVersion('command not found'), null);
+});
+
+test('published versions only trigger updates when newer', () => {
+  assert.equal(isNewerVersion('0.159.1', '0.155.1'), true);
+  assert.equal(isNewerVersion('2.1.302', '2.1.302'), false);
+  assert.equal(isNewerVersion('2.1.301', '2.1.302'), false);
+  assert.equal(isNewerVersion('0.156.0', '0.156.0-alpha.2'), true);
+  assert.equal(isNewerVersion(null, '0.155.1'), false);
 });
 
 test('claude auth status', () => {

@@ -134,7 +134,8 @@ export const SETTINGS_SECTIONS = [
     settings: HARNESS_IDS.flatMap((id) => {
       const { name, apiKey } = HARNESSES[id];
       return [
-        { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check' },
+        { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check update upgrade' },
+        { id: `${id}Update`, label: `${name} update`, keywords: 'upgrade latest version' },
         { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
         { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
         { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },

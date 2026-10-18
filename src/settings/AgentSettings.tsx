@@ -4,6 +4,8 @@ import { host } from '../host';
 import type { AccountId, AccountsState, AgentInstall, AgentSettings, AgentSettingsPatch, ApiKeyState } from '../host/types/settings';
 import type { Provider } from '../model';
 import { HARNESS_IDS, HARNESSES } from './harnesses';
+import { defaultAccountId } from './accounts';
+import { isNewerVersion } from './parse';
 
 export type InstallState = AgentInstall | 'checking';
 
@@ -30,6 +32,9 @@ function useAgentSettingsState(isDetecting: boolean) {
   const [settings, setSettings] = useState<AgentSettings>();
   const [accounts, setAccounts] = useState<AccountsState>();
   const [apiKeys, setApiKeys] = useState<Partial<Record<Provider, ApiKeyState>>>({});
+  const [latest, setLatest] = useState<Partial<Record<Provider, string | null>>>({});
+  const [updating, setUpdating] = useState<Provider | null>(null);
+  const [restartNeeded, setRestartNeeded] = useState<Provider[]>([]);
 
   const check = useCallback((id: AccountId) => {
     setInstalls((prev) => ({ ...prev, [id]: 'checking' }));
@@ -38,19 +43,47 @@ function useAgentSettingsState(isDetecting: boolean) {
       (error: Error) => setInstalls((prev) => ({ ...prev, [id]: { provider: 'claude', accountId: id, path: null, version: null, login: { state: 'unknown', reason: ipcMessage(error) } } })),
     );
   }, []);
+  const checkLatest = useCallback((provider: Provider) => {
+    setLatest((prev) => ({ ...prev, [provider]: undefined }));
+    void host.settings.latestVersion(provider).then(
+      (version) => setLatest((prev) => ({ ...prev, [provider]: version })),
+      () => setLatest((prev) => ({ ...prev, [provider]: null })),
+    );
+  }, []);
 
   useEffect(() => {
     // The web build keeps these in memory (the side chat default works there); accounts and keys need the desktop app.
     void host.settings.get().then(setSettings);
     if (!host.isDesktop) return;
+    if (isDetecting) HARNESS_IDS.forEach(checkLatest);
     for (const id of HARNESS_IDS) if (HARNESSES[id].apiKey) void host.settings.apiKey(id).then((state) => setApiKeys((prev) => ({ ...prev, [id]: state })));
     void host.settings.accounts().then((state) => {
       setAccounts(state);
       if (isDetecting) state.accounts.forEach((a) => check(a.id));
     });
-  }, [check, isDetecting]);
+  }, [check, checkLatest, isDetecting]);
 
-  const checkProvider = (provider: Provider) => accounts?.accounts.filter((a) => a.provider === provider).forEach((a) => check(a.id));
+  const checkProvider = (provider: Provider) => {
+    accounts?.accounts.filter((a) => a.provider === provider).forEach((a) => check(a.id));
+    checkLatest(provider);
+  };
+
+  const updateHarness = (provider: Provider) => {
+    setUpdating(provider);
+    void host.settings.updateHarness(provider).then(
+      (install) => {
+        setInstalls((prev) => ({ ...prev, [install.accountId]: install }));
+        setRestartNeeded((prev) => [...new Set([...prev, provider])]);
+        checkProvider(provider);
+        toast.success(`${HARNESSES[provider].name} updated`, { description: 'Restart Mochi to use the new version in running sessions.' });
+      },
+      (error: Error) => toast.error('Update failed', { description: ipcMessage(error) }),
+    ).finally(() => setUpdating(null));
+  };
+  const isUpdateAvailable = (provider: Provider) => {
+    const install = installs[defaultAccountId(provider)];
+    return isNewerVersion(latest[provider] ?? null, install && install !== 'checking' ? install.version : null);
+  };
 
   const update = (patch: AgentSettingsPatch) =>
     host.settings.set(patch).then((next) => {
@@ -75,6 +108,11 @@ function useAgentSettingsState(isDetecting: boolean) {
 
   return {
     installs,
+    latest,
+    updating,
+    restartNeeded,
+    updateHarness,
+    isUpdateAvailable,
     check,
     checkProvider,
     settings,

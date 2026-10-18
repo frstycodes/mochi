@@ -13,6 +13,7 @@ export const HARNESSES = {
     configDirEnv: 'CLAUDE_CONFIG_DIR',
     defaultFolder: '~/.claude',
     install: 'curl -fsSL https://claude.ai/install.sh | bash',
+    package: '@anthropic-ai/claude-code',
     docs: 'https://code.claude.com/docs/en/setup',
     defaultModel: '',
     /** Billing override the harness reads from its environment, stored in the keychain when the user sets one. */
@@ -26,6 +27,7 @@ export const HARNESSES = {
     configDirEnv: 'CODEX_HOME',
     defaultFolder: '~/.codex',
     install: 'npm install -g @openai/codex',
+    package: '@openai/codex',
     docs: 'https://learn.chatgpt.com/docs/codex/cli',
     defaultModel: '',
     apiKey: undefined,
@@ -39,6 +41,7 @@ export interface Harness {
   configDirEnv: string;
   defaultFolder: string;
   install: string;
+  package: string;
   docs: string;
   /** '' runs the account's default model, from the provider's own list. */
   defaultModel: string;

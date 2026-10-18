@@ -4,7 +4,6 @@ import { MachineSettings, SettingsComputerPicker } from '../remote/MachineSettin
 import { SharedSettingsNotice } from '../remote/SharedSettingsNotice';
 import { useMachines } from '../remote/useMachines';
 import { TitleBar } from '../TitleBar';
-import { AgentSettingsProvider } from './AgentSettings';
 import { closeSettings, useSettingsRoute, type SettingsRoute } from './open';
 import { prefersReducedMotion } from './prefs';
 import { SETTINGS_SECTIONS } from './sections';
@@ -20,9 +19,8 @@ export function SettingsPage() {
   useFlashSetting(route);
 
   return (
-    <AgentSettingsProvider>
-      {/* Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track. */}
-      <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+    // Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track.
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
         <TitleBar className="px-4">
           <span className="flex-1" />
           <SettingsComputerPicker value={machine ? machineId : null} onChange={setMachineId} />
@@ -40,8 +38,7 @@ export function SettingsPage() {
             )}
           </div>
         </ScrollArea>
-      </div>
-    </AgentSettingsProvider>
+    </div>
   );
 }
 

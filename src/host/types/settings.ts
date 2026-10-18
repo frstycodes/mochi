@@ -96,6 +96,10 @@ export interface SettingsHost {
   set(patch: AgentSettingsPatch): Promise<AgentSettings>;
   /** The install plus the login it reports for this account's config folder. */
   detect(accountId: AccountId): Promise<AgentInstall>;
+  /** Latest published version, or null when the registry cannot be reached. */
+  latestVersion(provider: Provider): Promise<string | null>;
+  /** Runs the installed harness's own updater and returns the detected install. */
+  updateHarness(provider: Provider): Promise<AgentInstall>;
   accounts(): Promise<AccountsState>;
   /** Creates the account's config folder; the user then signs in with `signInCommand`. */
   addAccount(provider: Provider, name: string): Promise<AccountsState>;
@@ -154,6 +158,8 @@ export const settingsMethods = {
   get: 'invoke',
   set: 'invoke',
   detect: 'invoke',
+  latestVersion: 'invoke',
+  updateHarness: 'invoke',
   accounts: 'invoke',
   addAccount: 'invoke',
   renameAccount: 'invoke',
