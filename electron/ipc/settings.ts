@@ -7,8 +7,9 @@ import { APP_ICONS, type AppIcon } from '../../src/settings/settingOptions.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '../agents/profileConfig.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
-import { detect } from '../settings/detect.ts';
+import { detect, latestVersion, updateHarness } from '../settings/detect.ts';
 import { noteLogin } from '../agents/models.ts';
+import { isNewerVersion } from '../../src/settings/parse.ts';
 import { integer, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 export const settings = {
@@ -23,6 +24,18 @@ export const settings = {
     if (!account) throw new Error('No such account');
     const install = await detect(account);
     noteLogin(account.id, install.login);
+    return install;
+  },
+  async latestVersion(_sender, provider) {
+    return latestVersion(validProvider(provider));
+  },
+  async updateHarness(_sender, provider) {
+    const id = validProvider(provider);
+    await updateHarness(id);
+    const account = accountsState().accounts.find((a) => a.provider === id && !a.configDir)!;
+    const install = await detect(account);
+    const latest = await latestVersion(id);
+    if (isNewerVersion(latest, install.version)) throw new Error(`Update finished, but Mochi still finds ${HARNESSES[id].name} ${install.version ?? 'at an unknown version'} at ${install.path ?? 'the configured path'}. Check that this is the executable your package manager updated.`);
     return install;
   },
   async accounts() {

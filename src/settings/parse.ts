@@ -5,6 +5,17 @@ export function parseVersion(stdout: string): string | null {
   return stdout.match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? null;
 }
 
+export function isNewerVersion(latest: string | null, installed: string | null): boolean {
+  if (!latest || !installed) return false;
+  const a = latest.match(/^(\d+)\.(\d+)\.(\d+)(?:-([\w.-]+))?(?:\+[\w.-]+)?$/);
+  const b = installed.match(/^(\d+)\.(\d+)\.(\d+)(?:-([\w.-]+))?(?:\+[\w.-]+)?$/);
+  if (!a || !b) return false;
+  for (let i = 1; i <= 3; i++) {
+    if (+a[i]! !== +b[i]!) return +a[i]! > +b[i]!;
+  }
+  return !a[4] && !!b[4];
+}
+
 // Values read from Claude Code 2.1.296's `auth status` source; anything newer falls through to the raw name.
 const CLAUDE_METHODS: Record<string, string> = {
   'claude.ai': 'Claude account',

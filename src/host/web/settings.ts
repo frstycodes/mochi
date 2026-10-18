@@ -19,6 +19,8 @@ export const settings: SettingsHost = {
     const provider = DEFAULT_ACCOUNTS.find((a) => a.id === accountId)?.provider ?? 'claude';
     return { provider, accountId, path: null, version: null, login: { state: 'unknown', reason: 'Needs the desktop app' } };
   },
+  latestVersion: desktopOnly,
+  updateHarness: desktopOnly,
   async accounts() {
     return { accounts: DEFAULT_ACCOUNTS, links: {} };
   },
