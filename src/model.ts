@@ -262,6 +262,7 @@ export interface Source {
 /** What the agent reports about its session: what it can reach, not what it used. Fields can arrive separately (Codex lists them after start), so each is optional. */
 export interface AgentInfo {
   model?: string;
+  effort?: string;
   cwd?: string;
   /** In the agent's own terms: Claude's permission mode, Codex's approval policy and sandbox. */
   permissionMode?: string;

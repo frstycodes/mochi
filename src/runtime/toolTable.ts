@@ -64,14 +64,14 @@ export const TOOL_TABLE = {
   create_thread: {
     tier: 'change',
     description:
-      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Leave model and effort out unless the user named them, or the task is clearly simple enough for a cheaper model or lower effort; never pick something more expensive than the default on your own. The user's setting may refuse a choice; relay its reason. As a sub-thread (`criterionId`, or `isSubThread`) it works on one piece of your goal: it nests under this thread, branches from your branch, opens its PR into it, and hands its result back here.",
+      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Honor any model or effort the user explicitly named. Otherwise leave that field out: the new thread inherits the originating session's model and effort when it starts. Do not choose a different model or effort on your own. As a sub-thread (`criterionId`, or `isSubThread`) it works on one piece of your goal: it nests under this thread, branches from your branch, opens its PR into it, and hands its result back here.",
     shape: {
       prompt: z.string(),
       criterionId: z.string().optional().describe('Hand this criterion of your goal (an id from get_goal) to the new thread as a sub-thread; its result claims it when handed back'),
       isSubThread: z.boolean().optional().describe('A sub-thread with no criterion of its own: part of your work, nested under this thread'),
       provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
       model: z.string().optional().describe("A model id the account offers, like \"claude-sonnet-5-5\"; defaults to this thread's"),
-      effort: z.string().optional().describe("low, medium, high, xhigh or max; defaults to this thread's"),
+      effort: z.string().optional().describe("A provider-supported effort id; defaults to the originating session's at start"),
     },
   },
   send_to_thread: {

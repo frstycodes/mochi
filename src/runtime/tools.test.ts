@@ -261,19 +261,53 @@ test('create_thread gives the new thread its own worktree even when your Worktre
   }
 });
 
-test('create_thread takes a model and effort at or below the default, and refuses dearer ones unless the setting allows', async () => {
+test('new tasks and subtasks inherit the running session and honor user-named model and effort independently', async () => {
+  for (const provider of ['claude', 'codex'] as const) {
+    const t = setup();
+    const [model, other] = provider === 'claude' ? ['claude-sonnet-5-5', 'claude-opus-5-5'] : ['gpt-6-luna', 'gpt-6-sol'];
+    t.env.models = async () => [model, other].map((id) => ({ id, name: id, description: '', efforts: ['low', 'high', 'max'], speeds: [], isDefault: id === other }));
+    t.thread('rl').providers = [provider];
+    t.env.dispatch({ type: 'agent', event: { threadId: 'rl', type: 'session', provider, sessionId: 'running' } });
+    t.env.dispatch({ type: 'agent', event: { threadId: 'rl', type: 'info', info: { model, effort: 'low' } } });
+    // These composer choices apply on the next start, not to the running session.
+    t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: other, effort: 'high', speed: '', access: 'Manual' } });
+    for (const isSubThread of [false, true]) {
+      for (const picked of [{}, { model: other }, { effort: 'max' }, { model: other, effort: 'max' }]) {
+        const created = await t.ok('create_thread', { prompt: 'Fix login', isSubThread, ...picked });
+        assert.deepEqual(t.thread(created.id).controls, { model: picked.model ?? model, effort: picked.effort ?? 'low', speed: '', access: 'Manual' });
+        assert.equal(!!t.thread(created.id).parent, isSubThread);
+      }
+    }
+    assert.match(await t.err('create_thread', { prompt: 'x', model: 'unavailable' }), /isn't offered/);
+    assert.match(await t.err('create_thread', { prompt: 'x', effort: 'invalid' }), /effort isn't offered/);
+  }
+});
+
+test('create_thread reads current controls after approval and workspace preparation, not at tool invocation', async () => {
   const t = setup();
-  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', speed: '', access: 'Auto' } });
-  const cheaper = await t.ok('create_thread', { prompt: 'Rename a variable', model: 'claude-haiku-5-5', effort: 'low' });
-  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' });
-  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-opus-5-5' }), /claude-opus-5-5 costs more/);
-  assert.match(await t.err('create_thread', { prompt: 'x', effort: 'max' }), /max effort costs more/);
-  assert.match(await t.err('create_thread', { prompt: 'x', model: 'gpt-9' }), /isn't offered/);
-  t.env.prefs.set({ threadModels: 'any' });
-  await t.ok('create_thread', { prompt: 'x', model: 'claude-opus-5-5', effort: 'max' });
-  t.env.prefs.set({ threadModels: 'default' });
-  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-haiku-5-5' }), /Always the default/);
-  await t.ok('create_thread', { prompt: 'no choice still works' });
+  t.env.prefs.set({ toolPolicies: { create_thread: 'ask' } });
+  const pending = await t.asking('create_thread', { prompt: 'Fix login', isSubThread: true });
+  t.env.git.branches = async () => {
+    t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
+    throw new Error('offline');
+  };
+  decideTool(pending.card.id, { isApproved: true });
+  const result = await pending.result;
+  assert.ok(!result.isError, result.text);
+  assert.deepEqual(t.thread(JSON.parse(result.text).id).controls, { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' });
+});
+
+test('create_thread resolves unset models, isolates provider changes, and passes choices through when no catalog is available', async () => {
+  const t = setup();
+  const inherited = await t.ok('create_thread', { prompt: 'No saved controls' });
+  assert.equal(t.thread(inherited.id).controls?.model, 'claude-opus-5-5');
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
+  t.env.models = async () => [{ id: 'gpt-6-sol', name: 'Sol', description: '', efforts: ['high', 'max'], defaultEffort: 'high', speeds: [], isDefault: true }];
+  const switched = await t.ok('create_thread', { prompt: 'Use Codex', provider: 'codex' });
+  assert.deepEqual(t.thread(switched.id).controls, { model: 'gpt-6-sol', effort: 'high', speed: '', access: 'Auto' });
+  t.env.models = async () => [];
+  const unlisted = await t.ok('create_thread', { prompt: 'Use a user-named model', model: 'custom-model', effort: 'custom-effort' });
+  assert.deepEqual(t.thread(unlisted.id).controls, { model: 'custom-model', effort: 'custom-effort', speed: '', access: 'Auto' });
 });
 
 test('a delete always waits on its widget, and Cancel leaves everything as it was', async () => {
@@ -786,7 +820,7 @@ test('get_settings reads every app setting and your profile’s, with values, al
   assert.equal(byKey(r, 'quietFrom').value, '22');
   assert.deepEqual([byKey(r, 'permissions').section, byKey(r, 'permissions').group], ['general', 'New threads'], 'the page and its titled section');
   assert.deepEqual([byKey(r, 'idleAlert.gaps').section, byKey(r, 'idleAlert.gaps').group], ['notifications', 'Idle threads']);
-  for (const key of ['agentControl', 'permissions', 'threadModels', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
+  for (const key of ['agentControl', 'permissions', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
   assert.equal(byKey(r, 'profile.name').value, 'Latitude');
   assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');
   assert.equal(byKey(r, 'profile.claude.mcp.github').value, 'true');

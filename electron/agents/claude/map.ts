@@ -17,7 +17,7 @@ import type { SaveImage } from '../images.ts';
  * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across
  * messages. `saveImage` keeps images a tool returns as files; without it they're dropped.
  */
-export function createMapper(threadId: string, cwd: string, saveImage?: SaveImage) {
+export function createMapper(threadId: string, cwd: string, saveImage?: SaveImage, effort?: string) {
   const tools = new Map<string, { name: string; input: Record<string, unknown> }>();
   const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
@@ -187,7 +187,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
         if (message.subtype === 'init') {
           servers = (message.mcp_servers ?? []).map((s) => s.name);
           skills = message.skills ?? [];
-          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: infoFromInit(message) }, ...typedSkills()];
+          return [{ threadId, type: 'session', provider: 'claude', sessionId: message.session_id }, { threadId, type: 'info', info: { ...infoFromInit(message), ...(effort && { effort }) } }, ...typedSkills()];
         }
         if (message.subtype === 'commands_changed') return [{ threadId, type: 'info', info: { slashCommands: message.commands.map((c) => c.name), commands: commandsFrom(message.commands) } }];
         if (message.subtype === 'status' || message.subtype === 'compact_boundary') return compaction(message);

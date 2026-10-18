@@ -1,6 +1,6 @@
 import { SEARCH_ENGINES } from '../browser/url.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
-import type { AgentControl, Prefs, ThreadModels } from './prefs.ts';
+import type { AgentControl, Prefs } from './prefs.ts';
 
 export const MOTION = [
   { value: 'system', label: 'System' },
@@ -100,15 +100,6 @@ export const AGENT_CONTROL = {
     { value: 'everything', label: 'Everything, asking before deletes and settings' },
   ],
 } as const satisfies { label: string; options: readonly { value: AgentControl; label: string }[] };
-
-export const THREAD_MODELS = {
-  label: 'Models for threads agents start',
-  options: [
-    { value: 'cheaper', label: 'Default or cheaper' },
-    { value: 'any', label: 'Any model' },
-    { value: 'default', label: 'Always the default' },
-  ],
-} as const satisfies { label: string; options: readonly { value: ThreadModels; label: string }[] };
 
 /** Settings › Appearance › App icon: each value names `build/icons/<value>.svg` and the `.png` main hands the Dock. */
 export const APP_ICONS = [
