@@ -608,7 +608,10 @@
         "kind": "click",
         "target": {
           "role": "link",
-          "name": "Mochi"
+          "name": "Mochi",
+          "within": {
+            "role": "rowheader"
+          }
         },
         "note": "Opens its Desktop client"
       },
@@ -643,7 +646,7 @@
           "name": "Copy to clipboard: GOCSPX-"
         },
         "as": "googleClientSecret",
-        "note": "Copies the new secret into Mochi (label not yet seen live)"
+        "note": "Copies the new secret into Mochi"
       }
     ]
   }
