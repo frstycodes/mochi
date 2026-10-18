@@ -137,6 +137,9 @@ export interface ActivityEntry {
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
+  /** Events only: what kind of action, for its icon (`EventLine`), and the page it happened on, shown as favicon and host. */
+  glyph?: EventGlyph;
+  site?: string;
   /** `subagent` entries: the row in `Thread.subagents` this one shows, where it was started. */
   subagentId?: string;
   /** Wall-clock milliseconds, stamped on live agents' entries; `at` is the app clock's minute. */
@@ -223,6 +226,9 @@ export interface McpWidgetResource {
   html: string;
   meta?: Record<string, unknown>;
 }
+
+/** The icon an action's line in a thread gets; everything else keeps the flag. */
+export type EventGlyph = 'click' | 'type' | 'browse';
 
 export interface WebLink {
   url: string;

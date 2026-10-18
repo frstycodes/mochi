@@ -3,7 +3,7 @@ import { DEVICES, RESPONSIVE } from '../browser/devices.ts';
 import { dialogNote } from '../browser/dialog.ts';
 import { displayUrl, normalizeUrl } from '../browser/url.ts';
 import type { BrowserAct, BrowserSnapshot } from '../host/types/browser.ts';
-import { authorName, type PaneTab } from '../model.ts';
+import { authorName, type EventGlyph, type PaneTab } from '../model.ts';
 import type { ToolContext, ToolSpec } from './tools.ts';
 import type { ToolName } from './toolTable.ts';
 
@@ -44,7 +44,7 @@ export const BROWSER_TOOLS = {
       const { key } = await live(ctx, tab);
       const page = await loaded(ctx, key);
       const isLocal = isLocalUrl(url);
-      return { changed: `opened ${displayUrl(url)}${isLocal ? '' : ' (outside your machine)'}`, isFinal: true, result: pageResult(tab, page) };
+      return { changed: isLocal ? 'opened a page' : 'opened a page outside your machine', glyph: 'browse', site: url, isFinal: true, result: pageResult(tab, page) };
     },
   },
   browser_snapshot: {
@@ -60,7 +60,7 @@ export const BROWSER_TOOLS = {
       const ref = refIn(ctx, ctx.args.ref);
       if (ref.meta.isSubmit && !isLocalUrl(ref.page.url))
         await ctx.confirm({ title: `Submit a form on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to click "${ref.meta.name || ref.meta.role}" on ${displayUrl(ref.page.url)}, which sends the form to that site.` });
-      return act(ctx, { kind: 'click', ref: ctx.args.ref }, `clicked "${ref.meta.name || ref.meta.role}"`);
+      return act(ctx, { kind: 'click', ref: ctx.args.ref }, `clicked "${short(ref.meta.name || ref.meta.role)}"`, 'click');
     },
   },
   browser_type: {
@@ -71,34 +71,34 @@ export const BROWSER_TOOLS = {
       if (!isLocalUrl(ref.page.url))
         await ctx.confirm({ title: `Type into "${label}" on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to type ${shown} on ${displayUrl(ref.page.url)}${ctx.args.submit ? ' and press Enter, which sends it to that site' : ''}.` });
       await act(ctx, { kind: 'type', ref: ctx.args.ref, text: ctx.args.text }, '');
-      return ctx.args.submit ? act(ctx, { kind: 'press', key: 'Enter' }, `typed into "${label}" and pressed Enter`) : { changed: `typed into "${label}"`, isFinal: true, result: { typed: ref.meta.isPassword ? '••••' : ctx.args.text } };
+      return ctx.args.submit ? act(ctx, { kind: 'press', key: 'Enter' }, `typed into "${short(label)}" and pressed Enter`, 'type') : { changed: `typed into "${short(label)}"`, glyph: 'type', site: ref.page.url, isFinal: true, result: { typed: ref.meta.isPassword ? '••••' : ctx.args.text } };
     },
   },
   browser_press: {
     run: async (ctx) => {
       const { page } = await live(ctx, tabFor(ctx));
       if (ctx.args.key === 'Enter' && !isLocalUrl(page.url)) await ctx.confirm({ title: `Press Enter on ${host(page.url)}?`, detail: `That can send a form on ${displayUrl(page.url)} to that site.` });
-      return act(ctx, { kind: 'press', key: ctx.args.key }, `pressed ${ctx.args.key}`);
+      return act(ctx, { kind: 'press', key: ctx.args.key }, `pressed ${ctx.args.key}`, 'type');
     },
   },
   browser_scroll: { run: (ctx) => act(ctx, { kind: 'scroll', ref: ctx.args.ref, dx: ctx.args.dx ?? 0, dy: ctx.args.dy ?? 600 }, '') },
   browser_hover: {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
-      return act(ctx, { kind: 'hover', ref: ctx.args.ref }, `hovered "${ref.meta.name || ref.meta.role}"`);
+      return act(ctx, { kind: 'hover', ref: ctx.args.ref }, `hovered "${short(ref.meta.name || ref.meta.role)}"`, 'click');
     },
   },
   browser_select: {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
-      return act(ctx, { kind: 'select', ref: ctx.args.ref, value: ctx.args.value }, `picked "${ctx.args.value}" in "${ref.meta.name || ref.meta.role}"`);
+      return act(ctx, { kind: 'select', ref: ctx.args.ref, value: ctx.args.value }, `picked "${short(ctx.args.value)}" in "${short(ref.meta.name || ref.meta.role)}"`, 'click');
     },
   },
   browser_drag: {
     run: async (ctx) => {
       const from = refIn(ctx, ctx.args.from);
       const to = refIn(ctx, ctx.args.to);
-      return act(ctx, { kind: 'drag', from: ctx.args.from, to: ctx.args.to }, `dragged "${from.meta.name || from.meta.role}" onto "${to.meta.name || to.meta.role}"`);
+      return act(ctx, { kind: 'drag', from: ctx.args.from, to: ctx.args.to }, `dragged "${short(from.meta.name || from.meta.role)}" onto "${short(to.meta.name || to.meta.role)}"`, 'click');
     },
   },
   browser_upload: {
@@ -273,12 +273,13 @@ function refIn(ctx: Ctx, ref: string) {
   return { meta, page };
 }
 
-async function act(ctx: Ctx, action: BrowserAct, changed: string) {
+async function act(ctx: Ctx, action: BrowserAct, changed: string, glyph?: EventGlyph) {
   const { key, tab, page } = await live(ctx, tabFor(ctx));
   const { note } = await ctx.env.browser.act(page.hostId!, action);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
   const after = await loaded(ctx, key);
-  return { ...(changed && { changed: `${changed} on ${displayUrl(after.url)}` }), isFinal: true, result: { ...pageResult(tab, after), ...(note && { note }) } };
+  // The page shows as its favicon and host on the line (`EventLine`), never its full URL.
+  return { ...(changed && { changed, site: after.url, ...(glyph && { glyph }) }), isFinal: true, result: { ...pageResult(tab, after), ...(note && { note }) } };
 }
 
 async function command(ctx: Ctx, which: 'back' | 'forward' | 'reload', changed: string) {
@@ -286,7 +287,14 @@ async function command(ctx: Ctx, which: 'back' | 'forward' | 'reload', changed: 
   if ((which === 'back' && !page.canGoBack) || (which === 'forward' && !page.canGoForward)) throw new Error(`Nothing to go ${which} to in this tab`);
   await ctx.env.browser.command(page.hostId!, which);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
-  return { changed, isFinal: true, result: pageResult(tab, await loaded(ctx, key)) };
+  const after = await loaded(ctx, key);
+  return { changed, glyph: 'browse' as const, site: after.url, isFinal: true, result: pageResult(tab, after) };
+}
+
+/** An element's name as a line quotes it: accessible names can run long (a whole account card), so the first 40 characters. */
+function short(name: string) {
+  const line = name.replace(/\s+/g, ' ').trim();
+  return line.length > 40 ? `${line.slice(0, 39).trimEnd()}…` : line;
 }
 
 function pageResult(tab: PaneTab, page: Page) {

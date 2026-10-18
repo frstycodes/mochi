@@ -1,12 +1,13 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Flag, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
+import { Cursor, Flag, Globe, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
-import { authorName, settingRef, type ActivityEntry, type QueueItem, type SettingsSuggestion, type Space } from '../model';
+import { authorName, settingRef, type ActivityEntry, type EventGlyph, type QueueItem, type SettingsSuggestion, type Space } from '../model';
+import { Favicon } from '../WebLinks';
 import { host } from '../host';
 import { useProfiles } from '../profiles';
 import { clock } from '../progress';
@@ -27,15 +28,26 @@ export function CardEntry({ entry, card }: { entry: ActivityEntry; card: NonNull
   if (item?.settings) return <SettingsWidget item={item} settings={item.settings} />;
   if (item) return <MochiWidget item={item} />;
   // Open with no card behind it: Mochi quit while it waited, and the call ended with it.
-  return <EventLine text={card.isOpen ? `Not answered before Mochi quit: ${entry.text}` : entry.text} at={entry.at} />;
+  return <EventLine text={card.isOpen ? `Not answered before Mochi quit: ${entry.text}` : entry.text} at={entry.at} glyph={entry.glyph} site={entry.site} />;
 }
 
-export function EventLine({ text, detail, at }: { text: string; detail?: string; at: number }) {
+export function EventLine({ text, detail, at, glyph, site }: { text: string; detail?: string; at: number; glyph?: EventGlyph; site?: string }) {
+  const Icon = glyph ? GLYPHS[glyph] : Flag;
+  const host = site && hostOf(site);
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
-      <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
+      <Icon aria-hidden className="mt-px size-3.5 shrink-0" />
       <p className="min-w-0">
         {text}
+        {!!host && (
+          <>
+            {' on '}
+            <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-foreground" title={site}>
+              <Favicon host={host} fallback={<Globe className="size-3 text-subtle-foreground" />} className="size-3 self-center" />
+              {host}
+            </span>
+          </>
+        )}
         {/* The separator travels with the time, so a wrap never leaves it dangling. */}
         <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(at)}</span>
         {!!detail && <span className="block text-subtle-foreground">{detail}</span>}
@@ -43,6 +55,10 @@ export function EventLine({ text, detail, at }: { text: string; detail?: string;
     </div>
   );
 }
+
+const GLYPHS = { click: Cursor, type: Keyboard, browse: Globe } satisfies Record<EventGlyph, IconComponent>;
+
+const hostOf = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
 
 const KIND = {
   delete: { icon: Trash, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },

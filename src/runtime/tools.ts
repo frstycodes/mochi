@@ -12,7 +12,7 @@ import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type StepStatus, type Subagent, type Thread } from '../model.ts';
 import { draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, pinnedThreads } from '../reorder.ts';
@@ -109,6 +109,9 @@ export interface Outcome {
   isFinal?: boolean;
   /** Puts it back when the store snapshot can't, like stopping and removing a thread the call started. */
   undo?: () => void;
+  /** Its line's icon and the page it acted on (favicon and host), for browser actions. */
+  glyph?: EventGlyph;
+  site?: string;
 }
 
 export type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
@@ -243,9 +246,10 @@ export function card(ctx: ToolContext<unknown>, id: string, kind: QueueItem['kin
 function record(ctx: ToolContext<unknown>, name: ToolName, outcome: Outcome, before: State) {
   const changed = outcome.changed!;
   const asked = ctx.cards.at(-1);
-  if (asked) return ctx.dispatch({ type: 'card-record', queueId: asked, text: capitalize(changed) });
+  const { glyph, site } = outcome;
+  if (asked) return ctx.dispatch({ type: 'card-record', queueId: asked, text: capitalize(changed), ...(glyph && { glyph }), ...(site && { site }) });
   const text = `${authorName(ctx.caller.providers[0])} ${changed}`;
-  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text } });
+  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text, ...(glyph && { glyph }), ...(site && { site }) } });
   if (!isQuiet(name)) ctx.env.toast(text, outcome.isFinal ? undefined : (outcome.undo ?? snapshotUndo(ctx.env, before)));
 }
 

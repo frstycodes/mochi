@@ -9,9 +9,9 @@ import { OAUTH_PROVIDER_IDS, type OAuthProviderId } from '../../src/library/conn
  * and accounts on it bring their own.
  */
 const BAKED = {
-  // "Mochi desktop" in Google Cloud project mochi-511921, used by the local Google Workspace server (googleWorkspace.ts). Its secret
-  // isn't confidential (Google's docs) but GitHub's push protection blocks it, so it's in .env.local too.
-  google: { clientId: '396170665891-1rg13stbmhbo6hhr79rkktc2hd73faap.apps.googleusercontent.com', clientSecret: '' },
+  // None: Mochi's Google app (mochi-511921) is in Testing, open only to its listed test users, so each user brings their own (its
+  // setup recipe). MOCHI_OAUTH_GOOGLE_CLIENT_ID and _CLIENT_SECRET still point a dev build at one.
+  google: { clientId: '', clientSecret: '' },
   // The Mochi OAuth App (frstycodes); device flow, so no secret.
   github: { clientId: 'Ov23liprlzoHyVDFz3Ih', clientSecret: '' },
   // None: Slack's MCP server takes only Marketplace-listed apps and a workspace's own, so each user brings an app of their own (LIBRARY.md).
