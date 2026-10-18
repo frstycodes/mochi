@@ -1,9 +1,10 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Flag, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
+import { Flag, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
 import { authorName, settingRef, type ActivityEntry, type QueueItem, type SettingsSuggestion, type Space } from '../model';
 import { host } from '../host';
@@ -46,12 +47,13 @@ export function EventLine({ text, detail, at }: { text: string; detail?: string;
 const KIND = {
   delete: { icon: Trash, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
   confirm: { icon: ShieldCheck, label: 'Approval', approve: 'Allow', deny: 'Deny' },
+  choose: { icon: MessageQuestion, label: 'Question', approve: 'Continue', deny: 'Cancel' },
 } satisfies Record<string, { icon: IconComponent; label: string; approve: string; deny: string }>;
 
-/** A call waiting on you: a delete or a browser escalation. Enter works on whichever button has focus; Esc anywhere inside says no. */
+/** A call waiting on you: a delete, a browser escalation, or a question with one answer. Enter works on whichever button has focus; Esc anywhere inside says no. */
 function MochiWidget({ item }: { item: QueueItem }) {
   const [options, setOptions] = useState<string[]>([]);
-  const kind = item.tool?.isDestructive ? 'delete' : 'confirm';
+  const kind = item.tool?.isDestructive ? 'delete' : item.tool?.pick === 'one' ? 'choose' : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
   const decide = (isApproved: boolean, chosen?: string[]) => (item.tool ? decideTool(item.tool.callId, { isApproved, options: chosen }) : undefined);
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
@@ -75,7 +77,19 @@ function MochiWidget({ item }: { item: QueueItem }) {
         )}
         {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
         {!!item.code && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
-        {item.tool?.options?.map((o) => (
+        {kind === 'choose' && (
+          <RadioGroup value={options[0] ?? ''} onValueChange={(v) => setOptions([v])} aria-label={item.title} className="gap-2">
+            {item.tool?.options?.map((o) => (
+              <Field key={o.id} orientation="horizontal">
+                <RadioGroupItem id={`${item.id}-${o.id}`} value={o.id} />
+                <FieldLabel htmlFor={`${item.id}-${o.id}`} className="font-normal break-all">
+                  {o.label}
+                </FieldLabel>
+              </Field>
+            ))}
+          </RadioGroup>
+        )}
+        {kind !== 'choose' && item.tool?.options?.map((o) => (
           <Field key={o.id} orientation="horizontal">
             <Checkbox id={`${item.id}-${o.id}`} checked={options.includes(o.id)} onCheckedChange={(on) => toggle(o.id, on === true)} />
             <FieldLabel htmlFor={`${item.id}-${o.id}`} className="font-normal break-all">
@@ -88,7 +102,7 @@ function MochiWidget({ item }: { item: QueueItem }) {
         <Button variant="outline" size="sm" onClick={() => decide(false)}>
           {deny}
         </Button>
-        <Button variant={kind === 'delete' ? 'danger' : 'default'} size="sm" onClick={() => decide(true, options)}>
+        <Button variant={kind === 'delete' ? 'danger' : 'default'} size="sm" disabled={kind === 'choose' && !options.length} onClick={() => decide(true, options)}>
           {approve}
         </Button>
       </CardFooter>

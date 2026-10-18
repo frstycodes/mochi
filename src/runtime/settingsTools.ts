@@ -7,7 +7,7 @@ import { HARNESSES } from '../settings/harnesses.ts';
 import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
 import { IS_MAC } from '../keys.ts';
 import { appProviderFor, CONNECTORS, connectorFor, freeAlias, isSameServer } from '../library/connectors.ts';
-import { SETUP_RECIPES, type SetupResult, type SetupTarget } from '../library/recipes.ts';
+import { BUILT_IN_RECIPES, type SetupResult, type SetupTarget } from '../library/recipes.ts';
 import { openInNewTab, refView, tabView } from './browserTools.ts';
 import { ownAppSetup } from '../library/ownApps.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
@@ -199,12 +199,19 @@ export const SETTINGS_TOOLS = {
   run_setup: {
     run: async (ctx) => {
       const { args, env } = ctx;
-      const recipe = SETUP_RECIPES[args.connector];
+      const recipe = BUILT_IN_RECIPES[args.connector];
       const start = recipe?.steps.find((s) => s.kind === 'goto');
       if (!recipe || !start || start.kind !== 'goto') throw new Error(`Mochi has no setup recipe for ${args.connector}; list_connectors gives its manual steps`);
       const viewId = await tabView(ctx, args.tabId, start.url);
-      const result = await env.library.runSetup(args.connector, viewId, { ...(args.params && { params: args.params }), ...(args.fromStep && { fromStep: args.fromStep }) });
-      return { changed: `ran ${args.connector}'s setup`, isFinal: true, result: { ...result, next: setupNext(args.connector, result) } };
+      let params = args.params ?? {};
+      let fromStep = args.fromStep;
+      // A value only the user knows (which workspace) is asked on Mochi's own card, and the run goes on from that step.
+      for (let asked = 0; ; asked++) {
+        const result = await env.library.runSetup(args.connector, viewId, { params, ...(fromStep && { fromStep }) });
+        if (result.status !== 'needs' || asked === MAX_QUESTIONS) return { changed: `ran ${args.connector}'s setup`, isFinal: true, result: { ...result, next: setupNext(args.connector, result) } };
+        params = { ...params, [result.param]: await ctx.choose({ title: result.question, options: result.options }) };
+        fromStep = result.stepId;
+      }
     },
   },
   update_setup_step: {
@@ -265,6 +272,8 @@ function signInPage(env: ToolContext<unknown>['env'], url: string) {
   const offCode = env.library.onDeviceCode((c) => c.url === url && resolve({ url: c.verificationUri, userCode: c.userCode }));
   return { next, stop: () => (offPage(), offCode()) };
 }
+
+const MAX_QUESTIONS = 3;
 
 /** What the agent does after a setup run, in its words. */
 function setupNext(connector: string, result: SetupResult) {

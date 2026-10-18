@@ -34,7 +34,7 @@ export async function runRecipe(recipe: SetupRecipe, params: Record<string, stri
         const value = values[step.param] ?? (options.length === 1 ? options[0] : undefined);
         if (!value || !options.includes(value)) {
           await ops.close();
-          return { result: { status: 'needs', param: step.param, question: recipe.params[step.param]?.question ?? `Which ${step.param}?`, options } satisfies SetupResult, captured };
+          return { result: { status: 'needs', stepId: step.id, param: step.param, question: recipe.params[step.param]?.question ?? `Which ${step.param}?`, options } satisfies SetupResult, captured };
         }
         await ops.pick(value);
         values[step.param] = value;

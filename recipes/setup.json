@@ -1,0 +1,14 @@
+{
+  "slack": {
+    "version": 1,
+    "domains": ["api.slack.com"],
+    "params": { "workspace": { "question": "Which Slack workspace should Mochi connect to?" } },
+    "steps": [
+      { "id": "open", "kind": "goto", "url": "https://api.slack.com/apps", "note": "Your Apps, where app configuration tokens are made" },
+      { "id": "generate", "kind": "click", "target": { "role": "button", "name": "Generate Token", "exact": true }, "note": "Opens \"Generate Your App Configuration Token\"" },
+      { "id": "workspace", "kind": "choose", "target": { "role": "combobox", "name": "Select a team" }, "param": "workspace", "note": "Picks the workspace" },
+      { "id": "confirm", "kind": "click", "target": { "role": "button", "name": "Generate", "exact": true }, "note": "Generates the token" },
+      { "id": "copy", "kind": "capture", "target": { "role": "button", "name": "Copy access token", "within": { "role": "row", "name": "{workspace}" } }, "as": "slackConfigToken", "note": "Copies the workspace's new access token into Mochi" }
+    ]
+  }
+}

@@ -1,3 +1,5 @@
+import shipped from '../../recipes/setup.json' with { type: 'json' };
+
 /**
  * Setup recipes (LIBRARY.md › Bring your own app): a service's one-time app setup as data, which Mochi runs in main on the
  * agent's browser tab in seconds instead of the agent clicking through it. Steps come from a fixed set and visit only the
@@ -36,24 +38,77 @@ export type CaptureKind = 'slackConfigToken';
 /** What a run ended with; never a captured value. */
 export type SetupResult =
   | { status: 'done'; captured: CaptureKind[] }
-  | { status: 'needs'; param: string; question: string; options: string[] }
+  | { status: 'needs'; stepId: string; param: string; question: string; options: string[] }
   | { status: 'stopped'; stepId: string; note: string; kind: SetupStep['kind']; target?: SetupTarget; nextStepId?: string; reason: string };
 
-export const SETUP_RECIPES: Partial<Record<string, SetupRecipe>> = {
-  // Labels read from api.slack.com/apps on 2026-10-18. The token feeds `apps.manifest.create` (electron/library/slackApp.ts).
-  slack: {
-    version: 1,
-    domains: ['api.slack.com'],
-    params: { workspace: { question: 'Which Slack workspace should Mochi connect to?' } },
-    steps: [
-      { id: 'open', kind: 'goto', url: 'https://api.slack.com/apps', note: 'Your Apps, where app configuration tokens are made' },
-      { id: 'generate', kind: 'click', target: { role: 'button', name: 'Generate Token', exact: true }, note: 'Opens "Generate Your App Configuration Token"' },
-      { id: 'workspace', kind: 'choose', target: { role: 'combobox', name: 'Select a team' }, param: 'workspace', note: 'Picks the workspace' },
-      { id: 'confirm', kind: 'click', target: { role: 'button', name: 'Generate', exact: true }, note: 'Generates the token' },
-      { id: 'copy', kind: 'capture', target: { role: 'button', name: 'Copy access token', within: { role: 'row', name: '{workspace}' } }, as: 'slackConfigToken', note: "Copies the workspace's new access token into Mochi" },
-    ],
-  },
-};
+/**
+ * Sites each connector's recipe may visit. A recipe from the repo (`recipes/setup.json`, fetched by main) must stay within
+ * them, so only an app release can send a recipe somewhere new.
+ */
+export const RECIPE_DOMAINS: Partial<Record<string, string[]>> = { slack: ['api.slack.com'] };
+
+/** Where recipes live; main fetches this path so a fix reaches every install without a release. */
+export const RECIPES_REPO = 'frstycodes/mochi';
+export const RECIPES_PATH = 'recipes/setup.json';
+
+const STEP_KINDS = ['goto', 'click', 'choose', 'capture'] as const;
+const CAPTURE_KINDS = ['slackConfigToken'] as const satisfies CaptureKind[];
+
+/** The recipes this build ships, the fallback when the repo's can't be read. Labels read from api.slack.com/apps on 2026-10-18. */
+export const BUILT_IN_RECIPES = parseRecipes(shipped, false);
+
+/** Every connector's recipe that passes `parseRecipe`; with `lenient`, a bad one is left out rather than failing all. */
+export function parseRecipes(value: unknown, lenient = true): Partial<Record<string, SetupRecipe>> {
+  if (!value || typeof value !== 'object') throw new TypeError('recipes must be an object of connector ids');
+  const recipes: Partial<Record<string, SetupRecipe>> = {};
+  for (const [connector, raw] of Object.entries(value)) {
+    try {
+      recipes[connector] = parseRecipe(connector, raw);
+    } catch (error) {
+      if (!lenient) throw error;
+    }
+  }
+  return recipes;
+}
+
+/** A recipe as data: known step kinds, targets by role and name, every URL and domain within `RECIPE_DOMAINS`. */
+export function parseRecipe(connector: string, value: unknown): SetupRecipe {
+  const allowed = RECIPE_DOMAINS[connector];
+  if (!allowed) throw new TypeError(`${connector} has no allowed domains in this build`);
+  const r = value as Partial<SetupRecipe> | null;
+  if (!r || typeof r !== 'object') throw new TypeError(`${connector}: a recipe must be an object`);
+  if (!Number.isInteger(r.version) || r.version! < 1) throw new TypeError(`${connector}: version must be a positive integer`);
+  if (!Array.isArray(r.domains) || !r.domains.length || r.domains.some((d) => !allowed.includes(d))) throw new TypeError(`${connector}: domains must be within ${allowed.join(', ')}`);
+  const params = Object.fromEntries(Object.entries(r.params ?? {}).map(([k, p]) => [k, { question: shortText((p as { question?: unknown }).question, `${connector}: params.${k}.question`) }]));
+  if (!Array.isArray(r.steps) || !r.steps.length || r.steps.length > 30) throw new TypeError(`${connector}: steps must be 1 to 30`);
+  const ids = new Set<string>();
+  const steps = r.steps.map((raw): SetupStep => {
+    const s = raw as Partial<SetupStep> & Record<string, unknown>;
+    if (typeof s.id !== 'string' || !/^[a-z0-9-]{1,32}$/.test(s.id) || ids.has(s.id)) throw new TypeError(`${connector}: step ids must be unique lowercase words`);
+    ids.add(s.id);
+    const base = { id: s.id, note: shortText(s.note, `${connector}: ${s.id}.note`) };
+    if (!STEP_KINDS.includes(s.kind as (typeof STEP_KINDS)[number])) throw new TypeError(`${connector}: ${s.id} has an unknown kind`);
+    if (s.kind === 'goto') {
+      const url = typeof s.url === 'string' && URL.canParse(s.url) ? new URL(s.url) : null;
+      if (!url || url.protocol !== 'https:' || !r.domains!.some((d) => url.hostname === d || url.hostname.endsWith(`.${d}`))) throw new TypeError(`${connector}: ${s.id} must go to https on ${r.domains!.join(', ')}`);
+      return { ...base, kind: 'goto', url: url.href };
+    }
+    const target = parseTarget(s.target);
+    if (s.kind === 'click') return { ...base, kind: 'click', target };
+    if (s.kind === 'choose') {
+      if (typeof s.param !== 'string' || !(s.param in params)) throw new TypeError(`${connector}: ${s.id} picks an undeclared param`);
+      return { ...base, kind: 'choose', target, param: s.param };
+    }
+    if (!CAPTURE_KINDS.includes(s.as as CaptureKind)) throw new TypeError(`${connector}: ${s.id} captures an unknown kind`);
+    return { ...base, kind: 'capture', target, as: s.as as CaptureKind };
+  });
+  return { version: r.version!, domains: [...r.domains], params, steps };
+}
+
+function shortText(value: unknown, what: string) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 200) throw new TypeError(`${what} must be text up to 200 characters`);
+  return value;
+}
 
 /** The user's overrides for a recipe: step id → target, for the recipe version they were made against. */
 export interface RecipeOverrides {

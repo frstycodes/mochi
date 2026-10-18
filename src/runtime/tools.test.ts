@@ -1006,17 +1006,23 @@ test('run_setup runs the recipe on the agent\'s tab and says what comes next for
   const t = setup();
   assert.match(await t.err('run_setup', { connector: 'linear' }), /no setup recipe for linear/);
   t.setupResults.push(
-    { status: 'needs', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
-    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout' },
+    { status: 'needs', stepId: 'workspace', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
     { status: 'done', captured: ['slackConfigToken'] },
+    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout' },
   );
-  const asked = await t.ok('run_setup', { connector: 'slack' });
-  assert.match(asked.next, /Ask the user in chat: Which Slack workspace\? \(Acme, Myself\)\. Then run_setup again with params\.workspace/);
+  // Several workspaces: Mochi asks on its own card with one-of options, then resumes from the step that asked.
+  const { result, card } = await t.asking('run_setup', { connector: 'slack' });
+  assert.equal(card.title, 'Which Slack workspace?');
+  assert.equal(card.tool!.pick, 'one');
+  assert.deepEqual(card.tool!.options, [{ id: 'Acme', label: 'Acme' }, { id: 'Myself', label: 'Myself' }]);
+  decideTool(card.tool!.callId, { isApproved: true, options: ['Acme'] });
+  const done = JSON.parse((await result).text);
+  assert.match(done.next, /connect_account with connector "slack".*fromSetup: true/);
   assert.equal(t.setupRuns[0].viewId, t.pages.get('rl/tab-1')!.hostId, "the agent's active tab");
+  assert.deepEqual(t.setupRuns[1].options, { params: { workspace: 'Acme' }, fromStep: 'workspace' });
+  assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => e.text === 'Which Slack workspace? Acme'), 'the card records the answer');
   const stopped = await t.ok('run_setup', { connector: 'slack', params: { workspace: 'Acme' } });
   assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace"/);
-  assert.deepEqual(t.setupRuns[1].options, { params: { workspace: 'Acme' } });
-  assert.match((await t.ok('run_setup', { connector: 'slack', fromStep: 'workspace' })).next, /connect_account with connector "slack".*fromSetup: true/);
   const fixed = await t.ok('update_setup_step', { connector: 'slack', stepId: 'generate', target: { role: 'button', name: 'Generate new token' } });
   assert.deepEqual(fixed.after, { role: 'button', name: 'Generate new token' });
   assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => /updated slack's setup step "generate": button "generate" → button "Generate new token"/.test(e.text)));

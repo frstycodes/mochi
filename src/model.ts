@@ -475,6 +475,8 @@ export interface QueueItem {
 export interface ToolWidget {
   callId: string;
   options?: { id: string; label: string }[];
+  /** `options` are radio buttons: one must be picked. */
+  pick?: 'one';
   isDestructive?: boolean;
   /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
   edits?: FileEdit[];

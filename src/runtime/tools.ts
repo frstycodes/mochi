@@ -75,6 +75,8 @@ export interface ToolContext<A = Record<string, unknown>> {
   dispatch: (action: Action) => void;
   /** Asks the user on a widget mid-run (browser escalation); throws when the setting doesn't allow it or they deny. */
   confirm: (approval: Approval) => Promise<string[]>;
+  /** Asks the user to pick one of `options` on a widget, at any agent setting: a question, not a permission. */
+  choose: (question: { title: string; detail?: string; options: string[] }) => Promise<string>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
   /** A config write `ask` previewed: `run` applies exactly these changes, refused if a file changed since (`befores`). */
@@ -86,6 +88,8 @@ export interface Approval {
   title: string;
   detail: string;
   options?: { id: string; label: string }[];
+  /** A question with one answer: `options` become radio buttons, one must be picked, and its id comes back. */
+  pick?: 'one';
   /** Shown whole on the widget, like a script about to run. */
   code?: string;
   /** A delete: the widget's primary is a red Delete. */
@@ -166,7 +170,7 @@ const RUN = Date.now().toString(36);
 export const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
 
 function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): ToolContext<A> {
-  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), cards: [] };
+  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), cards: [] };
   return ctx;
 }
 
@@ -200,20 +204,29 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = cardId('tool', ctx.caller.id);
-  const { options, isDestructive, edits, notes } = approval;
-  const tool = { callId: id, options, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
+  const { options, pick, isDestructive, edits, notes } = approval;
+  const tool = { callId: id, options, pick, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
     const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
     waiting.set(id, (d) => (clearTimeout(timer), resolve(d)));
   });
   waiting.delete(id);
-  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? `Approved: ${approval.title}` : (approval.denied ?? `Denied: ${approval.title}`);
+  const picked = pick && options?.find((o) => o.id === decision?.options?.[0])?.label;
+  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : `Approved: ${approval.title}`) : (approval.denied ?? `Denied: ${approval.title}`);
   ctx.dispatch({ type: 'card-record', queueId: id, text });
   if (!decision) throw new Error(`Nobody answered in ${APPROVAL_TIMEOUT_MS / 60_000} minutes; nothing was done.`);
   if (!decision.isApproved) throw new Error(`The user denied it: ${approval.title} Nothing was done.`);
   ctx.cards.push(id);
   return decision.options ?? [];
+}
+
+async function choose(ctx: ToolContext<unknown>, { title, detail = '', options }: { title: string; detail?: string; options: string[] }) {
+  const [answer] = await ask(ctx, { title, detail, options: options.map((o) => ({ id: o, label: o })), pick: 'one', denied: `No answer to: ${title}` });
+  // An answer isn't an approval: the card keeps its own record, and the call logs what it changed on a line of its own.
+  ctx.cards.pop();
+  if (!answer) throw new Error(`No answer was picked: ${title}`);
+  return answer;
 }
 
 /** A widget joins the queue and the caller's thread, at the point the agent asked. */

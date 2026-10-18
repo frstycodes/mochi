@@ -2,7 +2,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
 import type { Locator, Page } from 'playwright-core';
-import { parseTarget, SETUP_RECIPES, withOverrides, type RecipeOverrides, type SetupTarget } from '../../src/library/recipes.ts';
+import { BUILT_IN_RECIPES, parseRecipes, parseTarget, RECIPES_PATH, RECIPES_REPO, withOverrides, type RecipeOverrides, type SetupRecipe, type SetupTarget } from '../../src/library/recipes.ts';
 import type { RecipeOps } from './runRecipe.ts';
 import { copiedBy } from '../browser/views.ts';
 
@@ -50,11 +50,36 @@ async function readOverrides(): Promise<Record<string, RecipeOverrides>> {
   return readFile(overridesFile(), 'utf8').then((text) => JSON.parse(text) as Record<string, RecipeOverrides>, () => ({}));
 }
 
-/** The shipped recipe with the user's overrides in place. */
+/** The connector's recipe (the repo's when it's at least as new as this build's) with the user's overrides in place. */
 export async function recipeFor(connector: string) {
-  const recipe = SETUP_RECIPES[connector];
+  return withOverrides(await baseRecipe(connector), (await readOverrides())[connector]);
+}
+
+async function baseRecipe(connector: string) {
+  const built = BUILT_IN_RECIPES[connector];
+  const fromRepo = (await repoRecipes())[connector];
+  const recipe = fromRepo && (!built || fromRepo.version >= built.version) ? fromRepo : built;
   if (!recipe) throw new Error(`Mochi has no setup recipe for ${connector}`);
-  return withOverrides(recipe, (await readOverrides())[connector]);
+  return recipe;
+}
+
+// `MOCHI_RECIPES_URL` points dev runs and self-hosters at their own copy.
+const RECIPES_URL = process.env.MOCHI_RECIPES_URL ?? `https://raw.githubusercontent.com/${RECIPES_REPO}/main/${RECIPES_PATH}`;
+const RECIPES_TTL_MS = 6 * 60 * 60_000;
+let fetched: { at: number; recipes: Partial<Record<string, SetupRecipe>> } | undefined;
+
+/**
+ * The repo's recipes, read at most every 6 hours, so a fix reaches every install without a release. Each one passes the
+ * same checks as the built-in ones (`parseRecipe`: fixed step kinds, domains this build allows), and a bad one is left
+ * out; unreachable, the built-in recipes run.
+ */
+async function repoRecipes(): Promise<Partial<Record<string, SetupRecipe>>> {
+  if (fetched && Date.now() - fetched.at < RECIPES_TTL_MS) return fetched.recipes;
+  const recipes = await fetch(RECIPES_URL, { signal: AbortSignal.timeout(5000) })
+    .then((res) => (res.ok ? (res.json() as Promise<unknown>) : {}))
+    .then((json): Partial<Record<string, SetupRecipe>> => parseRecipes(json), () => ({}));
+  fetched = { at: Date.now(), recipes };
+  return recipes;
 }
 
 /** Replaces one step's target in the user's overrides; overrides from an older recipe version are dropped. */
@@ -64,8 +89,8 @@ export async function overrideStep(connector: string, stepId: string, value: unk
   if (!step || !('target' in step)) throw new Error(`${connector} has no step ${stepId} with an element; its steps are ${recipe.steps.filter((s) => 'target' in s).map((s) => s.id).join(', ')}`);
   const after = parseTarget(value);
   const all = await readOverrides();
-  const current = all[connector]?.version === SETUP_RECIPES[connector]!.version ? all[connector]!.targets : {};
-  all[connector] = { version: SETUP_RECIPES[connector]!.version, targets: { ...current, [stepId]: after } };
+  const current = all[connector]?.version === recipe.version ? all[connector]!.targets : {};
+  all[connector] = { version: recipe.version, targets: { ...current, [stepId]: after } };
   const tmp = `${overridesFile()}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(all, null, 2));
   await rename(tmp, overridesFile());
