@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
+import { IconImage } from '../IconImage';
 import { useProfiles } from '../profiles';
 import { timeAgo } from '../progress';
 import { SettingsCard, SettingsRow, SkeletonRows } from '../settings/parts';
@@ -129,14 +130,10 @@ export function LibraryRow({ name, icon, letter, description, meta, notes = [], 
 
 /** A 40px tile like a project's: the item's own image, else its first letter. */
 export function LibraryIcon({ url, letter }: { url: string | null; letter: string }) {
-  const [isBroken, setBroken] = useState(false);
+  const fallback = <span className="type-body font-semibold text-muted-foreground uppercase">{letter.trim()[0] ?? '?'}</span>;
   return (
     <span aria-hidden className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-background">
-      {url && !isBroken ? (
-        <img src={url} alt="" loading="lazy" draggable={false} onError={() => setBroken(true)} className="size-7 rounded-md object-contain" />
-      ) : (
-        <span className="type-body font-semibold text-muted-foreground uppercase">{letter.trim()[0] ?? '?'}</span>
-      )}
+      {url ? <IconImage src={url} fallback={fallback} className="size-7 rounded-md" /> : fallback}
     </span>
   );
 }
