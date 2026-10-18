@@ -16,13 +16,13 @@ import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, 
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
-import { AGENT_CONTROL, THREAD_MODELS } from '../settings/settingOptions.ts';
+import { AGENT_CONTROL } from '../settings/settingOptions.ts';
 import { AGENT_CONTROLS, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { BROWSER_TOOLS } from './browserTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
-import { controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
-import { defaultModelOf, effortRank, modelTier } from './models.ts';
+import { controlsOf, DEFAULT_CONTROLS } from './controls.ts';
+import { resolveRun } from './models.ts';
 import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
 import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
@@ -370,11 +370,11 @@ const THREAD_SPECS = {
       if (!prompt) throw new Error('prompt is required');
       const parent = subThreadLink(caller, args);
       const provider = providerOf(args.provider, caller);
-      const controls = await newThreadControls(env, caller, provider, args);
       const project = projectRef(caller.repo);
       // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
       const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
       const workspace = project ? { ...(await newWorktree(env, project, prompt)), ...(base && { base }) } : undefined;
+      const controls = await newThreadControls(env, caller, provider, args);
       const before = state();
       dispatch({
         type: 'create',
@@ -654,32 +654,18 @@ async function newWorktree(env: ToolEnv, project: string, prompt: string) {
   return { mode: 'worktree' as const, branch, autoBranch: branch };
 }
 
-/** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Mochi access allows them. */
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
-  const inherited = provider === caller.providers[0] ? caller.controls : undefined;
-  if (!picked.model && !picked.effort) return inherited;
-  const rule = env.prefs.get().threadModels;
-  const setting = `"${THREAD_MODELS.label}" is "${THREAD_MODELS.options.find((o) => o.value === rule)!.label}" in Settings › Mochi access`;
-  if (rule === 'default') throw new Error(`${setting}: call again without model and effort, or ask the user to change that setting`);
   const models = await env.models(provider, caller.spaceId);
+  const origin = env.getState().threads.find((t) => t.id === caller.id) ?? caller;
+  const sameProvider = provider === origin.providers[0];
+  const current = sameProvider ? controlsOf(origin) : DEFAULT_CONTROLS[provider];
+  const model = picked.model ?? (sameProvider ? origin.agent?.model ?? current.model : current.model);
+  const effort = picked.effort ?? (sameProvider ? origin.agent?.effort ?? current.effort : current.effort);
   if (picked.model && models.length && !models.some((m) => m.id === picked.model)) throw new Error(`${picked.model} isn't offered; use one of ${models.map((m) => m.id).join(', ')}`);
-  const current = inherited ? controlsOf(caller) : DEFAULT_CONTROLS[provider];
-  const next = { ...current, ...(picked.model && { model: picked.model }), ...(picked.effort && { effort: picked.effort }) };
-  const dearer = dearerPart(current, next, models);
-  if (rule === 'cheaper' && dearer) throw new Error(`${dearer} costs more than this thread's default. ${setting}; ask the user to change it if they want this`);
-  return next;
-}
-
-/** What in `next` costs more than `current`, or null; a model or effort Mochi can't rank counts as more. */
-function dearerPart(current: ThreadControls, next: ThreadControls, models: AgentModel[]) {
-  const defaultModel = current.model || defaultModelOf(models)?.id || '';
-  if (next.model && next.model !== defaultModel) {
-    const [from, to] = [modelTier(defaultModel), modelTier(next.model)];
-    if (from === undefined || to === undefined || to > from) return next.model;
-  }
-  const [from, to] = [effortRank(current.effort), effortRank(next.effort)];
-  if (to < 0 || to > from) return `${next.effort} effort`;
-  return null;
+  const resolved = resolveRun(models, model, effort, current.speed);
+  const offered = models.find((m) => m.id === resolved.model);
+  if (picked.effort && offered && !offered.efforts.includes(picked.effort)) throw new Error(`${picked.effort} effort isn't offered by ${offered.id}; use one of ${offered.efforts.join(', ') || 'the model default'}`);
+  return { ...current, model: resolved.model ?? '', effort: resolved.effort ?? '' };
 }
 
 const count = (threads: Thread[]) => (threads.length === 1 ? `"${threads[0].title}"` : `${threads.length} threads`);

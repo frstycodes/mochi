@@ -67,3 +67,8 @@ test('prefs saved before launch load at startup, rebound shortcuts included; a m
   assert.deepEqual(parsePrefs(JSON.stringify({ keybindings: { palette: 3 } })).keybindings, {});
   assert.deepEqual(parsePrefs(JSON.stringify({ keybindings: ['mod+P'] })).keybindings, {});
 });
+
+test('removed thread model restrictions are discarded from saved preferences', () => {
+  for (const threadModels of ['cheaper', 'default', 'any'])
+    assert.equal(Object.hasOwn(parsePrefs(JSON.stringify({ threadModels })), 'threadModels'), false);
+});
