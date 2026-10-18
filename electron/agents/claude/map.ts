@@ -3,6 +3,7 @@ import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKC
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
+import { ACCOUNT_ARGUMENT } from '../../../src/library/connectors.ts';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, McpWidgetResult, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
@@ -414,9 +415,10 @@ export function toolKind(name: string, input: Record<string, unknown>, servers: 
   const rest = name.slice('mcp__'.length);
   // Longest first: a server whose name runs into another's (`git`, `github`) matches by its own full prefix.
   const server = [...servers].sort((a, b) => b.length - a.length).find((s) => rest.startsWith(`${mcpToolPrefix(s)}__`));
-  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2) } };
+  const account = typeof input[ACCOUNT_ARGUMENT] === 'string' ? { account: input[ACCOUNT_ARGUMENT] } : {};
+  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2), ...account } };
   const split = rest.indexOf('__');
-  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2) } } : {};
+  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2), ...account } } : {};
 }
 
 const VERBS = { Bash: 'Run', Read: 'Read', Edit: 'Edit', MultiEdit: 'Edit', Write: 'Write', NotebookEdit: 'Edit', WebSearch: 'Search', WebFetch: 'Fetch' } as const;

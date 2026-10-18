@@ -39,6 +39,7 @@ import { DeviceApprovalLayer } from './remote/DeviceApproval';
 import { useRemoteThreadRoute } from './remote/open';
 import { RemoteThreadView } from './remote/RemoteThreadView';
 import { MachinesProvider } from './remote/useMachines';
+import { useLibraryNamesLoader } from './library/useLibrary';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
@@ -119,6 +120,7 @@ function Shell() {
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
   useOverlapToasts();
+  useLibraryNamesLoader(useHarness().state.spaceId);
   useResolvedQueueToasts();
   useWorktreeManager();
   useCheckoutRecovery();

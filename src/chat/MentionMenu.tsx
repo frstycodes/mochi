@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Chat, Note, Server, ShieldAlert, Window, X, type IconComponent } from '@/icons';
+import { Chat, Note, ShieldAlert, Window, X } from '@/icons';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -9,6 +9,8 @@ import type { AppWindow, ScreenAccess } from '../host/types/windows';
 import type { AgentCommand, McpServer } from '../model';
 import { openPhotos } from '../photo/photos';
 import { useHarness } from '../store';
+import { useLibraryNames } from '../library/names';
+import { McpServerMark, SkillMark } from './McpIcon';
 import { mentionFor, mentionGroups, mentionOptions, mentionQuery, optionId, withoutQuery, type Mention, type MentionOption } from './mentions';
 
 type MenuItem = MentionOption | { kind: 'permission' };
@@ -49,6 +51,7 @@ export function MentionMenu({ menu }: { menu: ReturnType<typeof useMentionMenu> 
 }
 
 function MentionItem({ item }: { item: MenuItem }) {
+  const names = useLibraryNames();
   if (item.kind === 'permission')
     return (
       <>
@@ -68,16 +71,20 @@ function MentionItem({ item }: { item: MenuItem }) {
   if (item.kind === 'skill')
     return (
       <>
-        <Note className="size-4 shrink-0 text-info" aria-hidden />
-        <span className="shrink-0 font-medium">{item.skill.name}</span>
+        <SkillMark skill={item.skill.name} fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />} />
+        <span className="shrink-0 font-medium" title={item.skill.name}>
+          {names.skill(item.skill.name).title}
+        </span>
         <span className="min-w-0 truncate text-muted-foreground">{item.skill.description}</span>
       </>
     );
   if (item.kind === 'mcp')
     return (
       <>
-        <Server className="size-4 shrink-0 text-info" aria-hidden />
-        <span className="min-w-0 truncate font-medium">{item.server.name}</span>
+        <McpServerMark server={item.server.name} url={item.server.url} />
+        <span className="min-w-0 truncate font-medium" title={item.server.name}>
+          {names.server(item.server.name).title}
+        </span>
         <span className="ml-auto shrink-0 type-caption text-subtle-foreground tabular">{toolCountLabel(item.server)}</span>
       </>
     );
@@ -103,6 +110,7 @@ function WindowIcon({ icon }: { icon?: string }) {
 
 /** The picked references as removable chips inside the composer, above the text. A window chip shows its screenshot. */
 export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu> }) {
+  const names = useLibraryNames();
   if (menu.mentions.length === 0) return null;
   return (
     <ul aria-label="References" className="flex flex-wrap gap-1.5 px-3 pt-3">
@@ -113,10 +121,10 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
               <img src={dataUrl(m.image)} alt="" className="size-full object-cover object-top" />
             </button>
           ) : (
-            <ChipIcon kind={m.kind} />
+            <ChipIcon mention={m} />
           )}
-          <span className={cn('min-w-0 truncate', (m.kind === 'skill' || m.kind === 'mcp') && 'text-info')} title={m.kind === 'skill' ? m.description : undefined}>
-            {m.title}
+          <span className={cn('min-w-0 truncate', (m.kind === 'skill' || m.kind === 'mcp') && 'text-info')} title={m.kind === 'skill' ? m.description : m.kind === 'mcp' ? m.title : undefined}>
+            {m.kind === 'skill' ? names.skill(m.title).title : m.kind === 'mcp' ? names.server(m.title).title : m.title}
           </span>
           {m.kind === 'mcp' && m.toolCount !== undefined && <span className="shrink-0 type-caption text-subtle-foreground tabular">{m.toolCount}</span>}
           <button type="button" aria-label={`Remove ${m.title}`} onClick={() => menu.remove(m.id)} className="grid size-5 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
@@ -128,11 +136,10 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
   );
 }
 
-const CHIP_ICONS = { thread: Chat, skill: Note, mcp: Server } satisfies Record<Exclude<Mention['kind'], 'window'>, IconComponent>;
-
-function ChipIcon({ kind }: { kind: Exclude<Mention['kind'], 'window'> }) {
-  const Icon = CHIP_ICONS[kind];
-  return <Icon className={cn('size-4 shrink-0', kind === 'thread' ? 'text-muted-foreground' : 'text-info')} aria-hidden />;
+function ChipIcon({ mention }: { mention: Exclude<Mention, { kind: 'window' }> }) {
+  if (mention.kind === 'skill') return <SkillMark skill={mention.title} fallback={<Note className="size-4 shrink-0 text-info" aria-hidden />} />;
+  if (mention.kind === 'mcp') return <McpServerMark server={mention.title} />;
+  return <Chat className="size-4 shrink-0 text-muted-foreground" aria-hidden />;
 }
 
 /**

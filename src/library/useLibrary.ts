@@ -2,20 +2,25 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/toast/store';
 import { host } from '../host';
 import type { Provider } from '../model';
+import { setLibraryNames } from './names';
 import type { CatalogPlugin, CatalogSkill, LibraryEntry, Marketplace } from './library';
 
 /** The profile's library entries, and every change to them; a failed change toasts and leaves the list as it was. */
 export function useLibrary(spaceId: string) {
-  const [entries, setEntries] = useState<LibraryEntry[] | null>(null);
+  const [entries, setListed] = useState<LibraryEntry[] | null>(null);
+  const setEntries = useCallback((list: LibraryEntry[]) => {
+    setListed(list);
+    setLibraryNames(list);
+  }, []);
   useEffect(() => {
     let isLive = true;
-    setEntries(null);
+    setListed(null);
     host.library.list(spaceId).then(
       (list) => isLive && setEntries(list),
       (error: Error) => toast.error("Couldn't read the library", { description: error.message }),
     );
     return () => void (isLive = false);
-  }, [spaceId]);
+  }, [spaceId, setEntries]);
   const apply = (failure: string) => (next: Promise<LibraryEntry[]>) =>
     next.then(
       (list) => {
@@ -65,6 +70,13 @@ export function useLibrary(spaceId: string) {
 }
 
 export type Library = ReturnType<typeof useLibrary>;
+
+/** Reads the library once per profile, so threads name its skills, plugins and connectors (`useLibraryNames`). */
+export function useLibraryNamesLoader(spaceId: string | undefined) {
+  useEffect(() => {
+    if (spaceId) host.library.list(spaceId).then(setLibraryNames, () => {});
+  }, [spaceId]);
+}
 
 export type NewConnector = Parameters<typeof host.library.addConnector>[1];
 

@@ -201,6 +201,8 @@ export interface GeneratedImage {
 export interface McpCall {
   server: string;
   tool: string;
+  /** The connector account it acted as, when the profile has several on the server (`__mochi_account`). */
+  account?: string;
 }
 
 /**

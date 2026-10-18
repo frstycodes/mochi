@@ -26,6 +26,7 @@ import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
 import { SetupRow } from './chat/SetupRow';
+import { useLibraryNames } from './library/names';
 import { agentPhase, currentAction, isWorking, pendingWork, type CurrentAction } from './agentPhase';
 import { chatRows, finalReplies, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
@@ -83,6 +84,8 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review' && r.kind !== 'changes');
   const liveWork = liveWorkIndex(rows);
+  // Its label names skills and servers as the library does.
+  useLibraryNames();
   const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
   // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
