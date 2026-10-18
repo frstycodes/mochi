@@ -12,6 +12,9 @@ import { copyText } from '../clipboard';
 import { appInfo, appProviderFor, connectorFor, connectorIcon, freeAlias, isSameServer, OAUTH_PROVIDERS, type AppProviderId, type DeviceCode } from './connectors';
 import { LibraryIcon } from './LibraryParts';
 import type { Library } from './useLibrary';
+import { closeSettings } from '../settings/open';
+import { getPrefs } from '../settings/prefs';
+import { useHarness } from '../store';
 
 /**
  * Adds an account on a remote MCP server: what to call it, then how it signs in. Without a `url` it's a custom server and
@@ -48,7 +51,19 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
   const isTaken = takenAliases.includes(alias);
   // GitHub's device flow needs no secret; the other providers' apps are confidential clients.
   const needsSecret = !!provider && provider !== 'github';
-  const isReady = isUrlValid && !!alias && !isTaken && !isBusy && (method !== 'key' || !!secret.apiKey) && (method !== 'app' || (!!secret.clientId && (!needsSecret || !!secret.clientSecret)));
+  // A service with a known setup (Slack, Google) can have an agent make the user's own app; credentials only when they do it themselves.
+  const hasAgentSetup = AGENT_SETUPS.includes(connectorFor(url)?.id ?? '');
+  const [setup, setSetup] = useState<'agent' | 'manual'>('agent');
+  const byAgent = method === 'app' && hasAgentSetup && setup === 'agent';
+  const isReady = isUrlValid && !!alias && !isTaken && !isBusy && (method !== 'key' || !!secret.apiKey) && (method !== 'app' || byAgent || (!!secret.clientId && (!needsSecret || !!secret.clientSecret)));
+  const { dispatch } = useHarness();
+  const startAgentSetup = () => {
+    const prompt = `Connect my ${name} account named "${alias}" to Mochi, setting up my own ${name} app for it.`;
+    dispatch({ type: 'create', title: prompt, provider: getPrefs().agent, project: null, isLive: host.isDesktop });
+    onConnected();
+    // The new thread opens behind Settings; leave it so the setup shows.
+    closeSettings();
+  };
   const deviceCode = useDeviceCode(isBusy ? url : null);
   const submit = () => {
     setBusy(true);
@@ -66,7 +81,7 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (isReady) submit();
+        if (isReady) (byAgent ? startAgentSetup : submit)();
       }}
     >
       <DialogHeader className="flex-row items-center gap-3">
@@ -109,7 +124,20 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
           <Input id="connect-key" type="password" autoComplete="off" value={secret.apiKey} onChange={(e) => setSecret({ ...secret, apiKey: e.target.value })} />
         </Field>
       )}
-      {method === 'app' && (
+      {method === 'app' && hasAgentSetup && (
+        <RadioGroup value={setup} onValueChange={(v) => setSetup(v as 'agent' | 'manual')} aria-label="How your app is set up" className="gap-2">
+          {(Object.keys(SETUP_CHOICES) as ('agent' | 'manual')[]).map((choice) => (
+            <Field key={choice} orientation="horizontal">
+              <RadioGroupItem id={`connect-setup-${choice}`} value={choice} />
+              <span className="flex flex-col gap-0.5">
+                <FieldLabel htmlFor={`connect-setup-${choice}`}>{SETUP_CHOICES[choice].title}</FieldLabel>
+                <FieldDescription>{SETUP_CHOICES[choice].body(name)}</FieldDescription>
+              </span>
+            </Field>
+          ))}
+        </RadioGroup>
+      )}
+      {method === 'app' && !byAgent && (
         <Field>
           <FieldLabel htmlFor="connect-client">OAuth app</FieldLabel>
           <Input id="connect-client" placeholder="Client ID" value={secret.clientId} onChange={(e) => setSecret({ ...secret, clientId: e.target.value })} />
@@ -128,12 +156,20 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
         </Button>
         <Button type="submit" disabled={!isReady}>
           {isBusy && <Spinner data-icon="inline-start" />}
-          {method === 'key' ? 'Connect' : 'Continue in browser'}
+          {byAgent ? 'Start setup' : method === 'key' ? 'Connect' : 'Continue in browser'}
         </Button>
       </DialogFooter>
     </form>
   );
 }
+
+// The connectors with setup steps an agent can follow (`src/library/ownApps.ts`).
+const AGENT_SETUPS: string[] = ['slack', 'google-workspace'];
+
+const SETUP_CHOICES = {
+  agent: { title: 'An agent sets it up', body: (name: string) => `A new thread makes your ${name} app in its browser and signs you in. It asks you only what it can't decide.` },
+  manual: { title: 'Enter the credentials yourself', body: (name: string) => `The client ID and secret of a ${name} app you made.` },
+};
 
 function signInMethods(name: string, provider: AppProviderId | undefined, hasMochiApp: boolean) {
   const providerName = provider && appInfo(provider).name;
