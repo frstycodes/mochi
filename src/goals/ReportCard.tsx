@@ -15,7 +15,7 @@ import type { ThreadPr } from '../git/useThreadPrs';
 import { isMod } from '../keys';
 import { useHarness } from '../store';
 import { CallList, Expand } from '../WorkLog';
-import { continuePrompt, type Move } from './moves';
+import { continuePrompt, withUnseenGaps, type Move } from './moves';
 import { SubThreadLineage, SubThreadList } from './SubThreads';
 import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveSummary, useNextMove } from './NextMove';
 import { showsVerdictCard } from './report';
@@ -56,10 +56,13 @@ export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isR
   );
 }
 
-/** The card's buttons: the agent's own answers, else Mochi's move and one other answer. */
+/** The card's buttons: the agent's own answers with Close gaps for what it couldn't have seen, else Mochi's move and one other answer. */
 function choicesFor(thread: Thread, next: NonNullable<ReturnType<typeof useNextMove>>, answers: ReturnType<typeof useMoveAnswers>) {
   const { ask, move, question, verdict, report, prs, context } = next;
-  if (ask) return ask.options.map((o) => ({ label: o.label, run: () => answers.option(o, ask.question, report) }));
+  if (ask) {
+    const options = ask.options.map((o) => ({ label: o.label, run: () => answers.option(o, ask.question, report) }));
+    return withUnseenGaps(options, thread, verdict, report, (m) => ({ label: m.label, run: () => answers.move(m, verdict, ask.question, report, []) }));
+  }
   if (!move || !question) return [];
   const other = otherAnswer(thread, verdict, prs);
   return [

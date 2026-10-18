@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Thread, TurnReport } from '../model.ts';
-import { agentAsk, continuePrompt, moveFor, questionFor } from './moves.ts';
+import { agentAsk, continuePrompt, moveFor, questionFor, withUnseenGaps } from './moves.ts';
 import type { Gap, Verdict } from './verdict.ts';
 
 const thread = (patch: Partial<Thread> = {}) => ({ idle: { at: 0, accepted: [] }, repo: { project: 'app', branch: 'fix/x' }, ...patch }) as Thread;
@@ -85,4 +85,18 @@ test("the agent's own question and buttons replace Mochi's move; without buttons
   assert.equal(agentAsk({ ...report, options: undefined }), null);
   assert.equal(agentAsk({ ...report, next: undefined }), null);
   assert.equal(agentAsk(undefined), null);
+});
+
+test("Close gaps joins the agent's buttons for gaps its report predates: first when critical, last when only unverified", () => {
+  const report: TurnReport = { at: 10, by: 'claude', decisions: [], left: [] };
+  const criterion = (id: string, at: number) => ({ id, text: id, command: 'pnpm test', check: { status: 'failed' as const, at } });
+  const t = thread({ criteria: [criterion('old', 5), criterion('new', 12)] });
+  const labels = (gaps: Gap[]) => withUnseenGaps(['Open PR'], t, verdict('gaps', { gaps }), report, (m) => m.label);
+  const failed = (id: string): Gap => ({ ...gap(`check-${id}`), criterionId: id });
+  assert.deepEqual(labels([failed('old')]), ['Open PR'], 'it failed before the report, so the agent knew');
+  assert.deepEqual(labels([failed('new')]), ['Close 1 gap', 'Open PR'], 'it failed after the report');
+  assert.deepEqual(labels([gap('ci-1')]), ['Close 1 gap', 'Open PR'], 'CI comes from GitHub after the report');
+  assert.deepEqual(labels([{ ...gap('unverified-0'), severity: 'unverified' }]), ['Open PR', 'Close 1 gap'], "the audit's unverified claims go last");
+  assert.deepEqual(labels([failed('new'), failed('old')]), ['Close 2 gaps', 'Open PR'], 'Close gaps sends every open gap');
+  assert.deepEqual(labels([{ ...failed('new'), isAccepted: true }]), ['Open PR'], 'an accepted gap is settled');
 });
