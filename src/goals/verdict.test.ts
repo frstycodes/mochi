@@ -167,3 +167,14 @@ test('a sub-thread that needs you, or finished and waits to be handed back, make
   const handedBack = { ...child, parent: { threadId: 't', handedBackAt: 5 } };
   assert.equal(idleVerdict(parent, [], [{ thread: handedBack, verdict: { ...gapsVerdict, kind: 'done', gaps: [] } }])!.kind, 'done', 'once handed back it no longer holds the parent');
 });
+
+
+test('completed criteria cannot hide unfinished plan items or reported work', () => {
+  assert.equal(idleVerdict(thread({ steps: [step('Open the PR', 'ready')] }), [])?.kind, 'stalled');
+  assert.equal(idleVerdict(thread({ report: { at: 1, by: 'codex', decisions: [], left: ['Check the preview'] }, idle: { at: 1, accepted: [] } }), [])?.kind, 'stalled');
+});
+
+test('evidence distinguishes work done from verified criteria', () => {
+  const t = thread({ criteria: [{ id: 'a', text: 'a', claim }, met('b')] });
+  assert.deepEqual(verdictTiles(t, [], idleVerdict(t, [])!)[0].bars, ['info', 'success']);
+});

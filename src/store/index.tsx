@@ -12,6 +12,7 @@ import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
 import { runTool } from '../runtime/tools.ts';
+import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
 import type { ToolUndo } from '../runtime/undo.ts';
 import type { LayoutAction, LayoutState } from './layout.ts';
@@ -32,7 +33,6 @@ import { recordAction } from '../replay/recorder.ts';
 import { tapAction } from '../remote/tap.ts';
 import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
-import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
 import { useIdleChecks } from '../goals/useIdleChecks';
 import { useAutoSimplify } from '../simplify/useSimplify.ts';
 import { usePrSync } from '../git/usePrSync.ts';
@@ -153,7 +153,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
           latest.current = reducer(latest.current, action);
         },
       );
-      void runTool(call, env).then((result) => host.agent.toolResult(call.id, result));
+      void (import.meta.env.DEV && call.threadId === '__dev__' ? runDevTool(call, env) : runTool(call, env)).then((result) => host.agent.toolResult(call.id, result));
     };
     const off = host.agent.onToolCall(onToolCall);
     // Asked only once listening, so a call main sends meanwhile arrives once, by one route or the other.
@@ -169,7 +169,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   useAutoTitles(state.threads, dispatch);
-  useGoalDrafts(state.threads, dispatch);
   useIdleChecks(state.threads, dispatch);
   useAutoSimplify(state.threads, dispatch);
   usePrSync(state.threads, dispatch);

@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron';
+import { startDevMcp } from './mcp/server.ts';
 import { installHooks } from './git/hooks.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
@@ -30,6 +31,7 @@ app.whenReady().then(() => {
   // Before the first window: it watches every window's close.
   startRemote();
   createWindow();
+  void startDevMcp().catch((error: unknown) => console.error('Dev MCP failed', error));
   if (hasTray) startTray(appIconImage());
   // The main window may be hidden rather than closed (remote devices keep its store running).
   app.on('activate', () => BrowserWindow.getAllWindows().some((w) => w.isVisible()) || showMainWindow());

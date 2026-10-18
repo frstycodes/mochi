@@ -21,6 +21,7 @@ import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
+import { runDevTool } from './devTools.ts';
 
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidechatReducer];
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
@@ -1167,3 +1168,49 @@ test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and 
 function connectorEntry(name: string, url: string, alias: string): LibraryEntry {
   return { id: `${name}-${alias}`, kind: 'connector', name, title: name[0].toUpperCase() + name.slice(1), description: '', targets: ['claude', 'codex'], isEnabled: true, profileIds: ['latitude'], source: url, icon: null, contents: null, remotes: [], unsupported: [], isLinked: true, alias, autoUpdate: null, updatedAt: null };
 }
+
+
+test('dev MCP starts tasks from an empty build and exposes paginated evidence and next moves', async () => {
+  const t = setup();
+  const call = (name: string, args: Record<string, unknown>) => runDevTool({ id: 'dev', threadId: '__dev__', name, args }, t.env);
+  t.env.dispatch({ type: 'delete', threadIds: t.state().threads.map((s) => s.id) });
+  assert.deepEqual(JSON.parse((await call('inspect', {})).text).threads, []);
+  const started = await call('start_task', { prompt: 'Explain 2 + 2', provider: 'codex' });
+  assert.ok(!started.isError, started.text);
+  const { id } = JSON.parse(started.text);
+  const first = await call('inspect', { threadId: id, limit: 1 });
+  const detail = JSON.parse(first.text);
+  assert.equal(detail.transcript[0].text, 'Explain 2 + 2');
+  assert.ok('verdict' in detail && 'nextAction' in detail && 'plan' in detail);
+  assert.equal((await call('continue_task', { threadId: id, text: 'Continue' })).isError, true, 'cannot steer a running task');
+  t.env.dispatch({ type: 'agent', event: { threadId: id, type: 'turn-end', status: 'done' } });
+  const sent = await call('continue_task', { threadId: id, text: 'Now explain 3 + 3' });
+  assert.ok(!sent.isError, sent.text);
+  assert.ok(t.thread(id).activity.some((e) => e.text === 'Now explain 3 + 3'));
+  assert.equal((await call('inspect', { threadId: id, offset: -1 })).isError, true);
+  assert.equal((await call('inspect', { threadId: 'missing' })).isError, true);
+  assert.equal((await call('delete_thread', {})).isError, true);
+  assert.equal((await call('accept_goal', { threadId: id })).isError, true);
+  t.env.dispatch({ type: 'goal-propose', threadId: id, goal: 'Explain addition', criteria: [{ text: 'Addition explained' }], by: 'codex', isApplied: false });
+  assert.ok(!(await call('accept_goal', { threadId: id })).isError);
+  assert.equal(t.thread(id).proposal?.state, 'accepted');
+  assert.equal(t.thread(id).criteria?.[0].check, undefined);
+});
+
+
+test('new tasks await a researched working-agent goal and can report while acceptance is pending', async () => {
+  const t = setup();
+  const { id } = await t.ok('create_thread', { prompt: 'Fix the retry bug after investigating the transport' });
+  const empty = await t.ok('get_goal', {}, id);
+  assert.equal(empty.goal, '');
+  assert.deepEqual(empty.criteria, []);
+  assert.match(empty.next, /research.*propose_goal/);
+  await t.ok('propose_goal', { goal: 'Reconnect the transport without duplicate retries', criteria: [{ text: 'Reconnect retries once' }] }, id);
+  assert.equal(t.thread(id).goal, '', 'only the user accepts a waiting proposal');
+  assert.match((await t.ok('get_goal', {}, id)).next, /waiting for acceptance/);
+  await t.ok('report_turn', { summary: 'Fixed duplicate retries', decisions: [], left: [] }, id);
+  t.env.dispatch({ type: 'goal-proposal', threadId: id, decision: 'accept' });
+  const criterion = t.thread(id).criteria![0];
+  await t.ok('claim_criterion', { criterionId: criterion.id, evidence: 'Transport retry check passed' }, id);
+  assert.equal(t.thread(id).goal, 'Reconnect the transport without duplicate retries');
+});

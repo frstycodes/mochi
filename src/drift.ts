@@ -30,7 +30,7 @@ export function isConcrete(text: string) {
   return content.length >= 2 || (content.length === 1 && text.trim().split(/\s+/).length >= 2);
 }
 
-/** Questions and chats have no goal, so nothing to drift from; a task-shaped message gets one drafted (`useGoalDrafts`). */
+/** Drift is measured only after the working agent or user has set a goal. */
 export const hasGoal = (thread: Thread) => !!thread.goal.trim();
 
 /** Clear on-goal cases are settled here; the rest go to the classifier, and only a confident off-goal from it suggests a new thread. */
