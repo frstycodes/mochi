@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Copy } from '@/icons';
+import { ChevronDown, Copy } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -53,7 +55,7 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
   const needsSecret = !!provider && provider !== 'github';
   // A service with a known setup (Slack, Google) can have an agent make the user's own app; credentials only when they do it themselves.
   const hasAgentSetup = AGENT_SETUPS.includes(connectorFor(url)?.id ?? '');
-  const [setup, setSetup] = useState<'agent' | 'manual'>('agent');
+  const [setup, setSetup] = useState<Setup>('agent');
   const byAgent = method === 'app' && hasAgentSetup && setup === 'agent';
   const isReady = isUrlValid && !!alias && !isTaken && !isBusy && (method !== 'key' || !!secret.apiKey) && (method !== 'app' || byAgent || (!!secret.clientId && (!needsSecret || !!secret.clientSecret)));
   const { dispatch } = useHarness();
@@ -124,19 +126,6 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
           <Input id="connect-key" type="password" autoComplete="off" value={secret.apiKey} onChange={(e) => setSecret({ ...secret, apiKey: e.target.value })} />
         </Field>
       )}
-      {method === 'app' && hasAgentSetup && (
-        <RadioGroup value={setup} onValueChange={(v) => setSetup(v as 'agent' | 'manual')} aria-label="How your app is set up" className="gap-2">
-          {(Object.keys(SETUP_CHOICES) as ('agent' | 'manual')[]).map((choice) => (
-            <Field key={choice} orientation="horizontal">
-              <RadioGroupItem id={`connect-setup-${choice}`} value={choice} />
-              <span className="flex flex-col gap-0.5">
-                <FieldLabel htmlFor={`connect-setup-${choice}`}>{SETUP_CHOICES[choice].title}</FieldLabel>
-                <FieldDescription>{SETUP_CHOICES[choice].body(name)}</FieldDescription>
-              </span>
-            </Field>
-          ))}
-        </RadioGroup>
-      )}
       {method === 'app' && !byAgent && (
         <Field>
           <FieldLabel htmlFor="connect-client">OAuth app</FieldLabel>
@@ -154,10 +143,14 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!isReady}>
-          {isBusy && <Spinner data-icon="inline-start" />}
-          {byAgent ? 'Start setup' : method === 'key' ? 'Connect' : 'Continue in browser'}
-        </Button>
+        {method === 'app' && hasAgentSetup ? (
+          <SetupButton name={name} setup={setup} onSetup={setSetup} isReady={isReady} isBusy={isBusy} />
+        ) : (
+          <Button type="submit" disabled={!isReady}>
+            {isBusy && <Spinner data-icon="inline-start" />}
+            {method === 'key' ? 'Connect' : 'Continue in browser'}
+          </Button>
+        )}
       </DialogFooter>
     </form>
   );
@@ -166,10 +159,44 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
 // The connectors with setup steps an agent can follow (`src/library/ownApps.ts`).
 const AGENT_SETUPS: string[] = ['slack', 'google-workspace'];
 
+type Setup = 'agent' | 'manual';
+
 const SETUP_CHOICES = {
-  agent: { title: 'An agent sets it up', body: (name: string) => `A new thread makes your ${name} app in its browser and signs you in. It asks you only what it can't decide.` },
-  manual: { title: 'Enter the credentials yourself', body: (name: string) => `The client ID and secret of a ${name} app you made.` },
-};
+  agent: { action: 'Set up with an agent', title: 'Set up with an agent', body: (name: string) => `A new thread makes your ${name} app in its browser and signs you in, asking you only what it can't decide.` },
+  manual: { action: 'Continue in browser', title: 'Enter credentials myself', body: (name: string) => `Paste the client ID and secret of a ${name} app you made.` },
+} satisfies Record<Setup, { action: string; title: string; body: (name: string) => string }>;
+
+/** GitHub's merge button: the chosen way to set the app up, and a chevron to switch; switching to manual shows the fields. */
+function SetupButton({ name, setup, onSetup, isReady, isBusy }: { name: string; setup: Setup; onSetup: (setup: Setup) => void; isReady: boolean; isBusy: boolean }) {
+  return (
+    <ButtonGroup>
+      <Button type="submit" disabled={!isReady}>
+        {isBusy && <Spinner data-icon="inline-start" />}
+        {SETUP_CHOICES[setup].action}
+      </Button>
+      <ButtonGroupSeparator />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" aria-label="Choose how to set up the app" disabled={isBusy}>
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuRadioGroup value={setup} onValueChange={(v) => onSetup(v as Setup)}>
+            {(Object.keys(SETUP_CHOICES) as Setup[]).map((choice) => (
+              <DropdownMenuRadioItem key={choice} value={choice} className="items-start">
+                <span className="flex flex-col gap-0.5">
+                  <span className="type-body font-medium">{SETUP_CHOICES[choice].title}</span>
+                  <span className="type-meta text-pretty text-muted-foreground">{SETUP_CHOICES[choice].body(name)}</span>
+                </span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </ButtonGroup>
+  );
+}
 
 function signInMethods(name: string, provider: AppProviderId | undefined, hasMochiApp: boolean) {
   const providerName = provider && appInfo(provider).name;
