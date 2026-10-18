@@ -31,6 +31,7 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
   const hooks = registerHooks({
     resolve(specifier, context, next) {
       if (context.parentURL !== serverUrl) return next(specifier, context);
+      if (specifier === 'electron') return { url: 'data:text/javascript,export const app = { isPackaged: true };', shortCircuit: true };
       const source = specifier === '../window.ts' ? windowStub : specifier === '../agents/config.ts' ? 'export const agentSettings = () => ({ imageGen: "off" });' : null;
       return source ? { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true } : next(specifier, context);
     },
