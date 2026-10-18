@@ -14,8 +14,13 @@ test('custom connector icons start at the exact host and fall back once to domai
   assert.equal(faviconFallback(faviconUrl('api.mobbin.com')), faviconUrl('mobbin.com'));
 });
 
-test('base domains, local addresses and direct images have no retry', () => {
-  for (const host of ['mobbin.com', 'localhost', '127.0.0.1', '[::1]']) assert.equal(faviconFallback(faviconUrl(host)), null);
+test('fallback keeps multi-part public suffixes whole', () => {
+  assert.equal(faviconFallback(faviconUrl('mcp.example.co.uk')), faviconUrl('example.co.uk'));
+  assert.equal(faviconFallback(faviconUrl('api.example.com.au')), faviconUrl('example.com.au'));
+});
+
+test('base domains, hosted subdomains, local addresses and direct images have no retry', () => {
+  for (const host of ['mobbin.com', 'example.co.uk', 'my-mcp.vercel.app', 'localhost', '127.0.0.1', '[::1]']) assert.equal(faviconFallback(faviconUrl(host)), null);
   assert.equal(faviconFallback('https://example.com/icon.svg'), null);
   assert.equal(connectorIcon('invalid'), null);
 });
