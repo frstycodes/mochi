@@ -99,7 +99,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      "After your first look at the code, propose this thread's goal: the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. The user accepts it, or Mochi applies it with an undo. Call it again only when what done means has to change; it replaces the whole goal. Keep working while it waits.",
+      "Mochi writes no goal for you. For a task with a checkable outcome, after your first look at the code, propose this thread's goal (skip it for a question, a chat or a small one-step change): the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. The user accepts it, or Mochi applies it with an undo. Call it again only when what done means has to change; it replaces the whole goal. Keep working while it waits.",
     shape: {
       goal: z.string().min(1).max(120).describe('What will be true when this is done, specific to what you found'),
       criteria: z
