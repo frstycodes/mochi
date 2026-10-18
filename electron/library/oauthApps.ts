@@ -16,9 +16,6 @@ const BAKED = {
   github: { clientId: 'Ov23liprlzoHyVDFz3Ih', clientSecret: '' },
   // Slack app A0CAXA24GJU in the "Myself" workspace: Slack's MCP only takes directory-listed apps outside it (LIBRARY.md).
   slack: { clientId: '8325458480016.12371342152640', clientSecret: '' },
-  asana: { clientId: '1219604610749623', clientSecret: '' },
-  // MCP Connector 57544003 in portal 247722501; https redirects only, so it signs in through the relay.
-  hubspot: { clientId: '14020a11-4d32-49fe-a3ac-d27ed717c054', clientSecret: '' },
 } satisfies Record<OAuthProviderId | 'google', { clientId: string; clientSecret: string }>;
 
 export function mochiOAuthApp(provider: OAuthProviderId | 'google'): OAuthClientInformationMixed | undefined {

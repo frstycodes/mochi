@@ -41,13 +41,6 @@ export const CONNECTORS = [
     serverUrl: 'https://mcp.slack.com/mcp',
   },
   {
-    id: 'asana',
-    name: 'Asana',
-    description: 'Read and update tasks and projects.',
-    category: 'Productivity',
-    serverUrl: 'https://mcp.asana.com/v2/mcp',
-  },
-  {
     id: 'linear',
     name: 'Linear',
     description: 'Issues, projects and cycles.',
@@ -112,13 +105,6 @@ export const CONNECTORS = [
     category: 'Business',
     serverUrl: 'https://mcp.stripe.com',
   },
-  {
-    id: 'hubspot',
-    name: 'HubSpot',
-    description: 'Contacts, companies and deals.',
-    category: 'Business',
-    serverUrl: 'https://mcp.hubspot.com',
-  },
 ] as const satisfies Connector[];
 
 type ConnectorId = (typeof CONNECTORS)[number]['id'];
@@ -128,7 +114,6 @@ const CONNECTOR_SITES = {
   'google-workspace': 'https://www.gstatic.com/images/branding/productlogos/googleg/v6/36px.svg',
   notion: 'notion.so',
   slack: 'slack.com',
-  asana: 'asana.com',
   linear: 'linear.app',
   github: 'github.com',
   atlassian: 'atlassian.com',
@@ -139,7 +124,6 @@ const CONNECTOR_SITES = {
   'cloudflare-observability': 'cloudflare.com',
   figma: 'figma.com',
   stripe: 'stripe.com',
-  hubspot: 'hubspot.com',
 } satisfies Record<ConnectorId, string>;
 
 /** A connector's icon: its product icon or vendor favicon (via Google's favicon service), else the server host's favicon. */
@@ -177,8 +161,6 @@ export function connectorKey(serverUrl: string) {
 export const OAUTH_PROVIDERS = {
   github: { name: 'GitHub', hosts: [/^api\.githubcopilot\.com$/], consoleUrl: 'https://github.com/settings/applications/new', authorizationParams: {}, redirect: 'loopback', flow: 'device' },
   slack: { name: 'Slack', hosts: [/^mcp\.slack\.com$/], consoleUrl: 'https://api.slack.com/apps', authorizationParams: {}, redirect: 'relay', flow: 'redirect' },
-  asana: { name: 'Asana', hosts: [/^mcp\.asana\.com$/], consoleUrl: 'https://app.asana.com/0/my-apps', authorizationParams: {}, redirect: 'relay', flow: 'redirect' },
-  hubspot: { name: 'HubSpot', hosts: [/^mcp\.hubspot\.com$/], consoleUrl: 'https://developers.hubspot.com', authorizationParams: {}, redirect: 'relay', flow: 'redirect' },
 } satisfies Record<string, { name: string; hosts: RegExp[]; consoleUrl: string; authorizationParams: Record<string, string>; redirect: 'loopback' | 'relay'; flow: 'redirect' | 'device' }>;
 
 export type OAuthProviderId = keyof typeof OAUTH_PROVIDERS;
