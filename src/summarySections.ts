@@ -1,33 +1,59 @@
-import type { Space, Thread } from './model.ts';
+import type { McpServer, Thread } from './model.ts';
 import type { ThreadSummary } from './summary.ts';
-import { spaceUsage, threadUsage, type Usage } from './usage/model.ts';
+import { hasGoal } from './drift.ts';
 
-export type SummarySectionId = 'outcome' | 'sources' | 'skills' | 'tools' | 'session' | 'usage' | 'space';
-
-/** A section of the summary: `title`, then a count when the body is a list. */
-export interface SummarySection {
-  id: SummarySectionId;
-  title: string;
-  detail?: string;
-}
+export type SummaryCardId = 'goal' | 'environment' | 'sources' | 'connectors' | 'servers' | 'outputs' | 'changes';
 
 export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-export const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
 
-/** The sections with something to show, most useful first; the session's setup sits last. */
-export function summarySections({ thread, summary, threads, space }: { thread: Thread; summary: ThreadSummary; threads: Thread[]; space: Space }): SummarySection[] {
-  const sections: (SummarySection | false)[] = [
-    thread.status === 'settled' && { id: 'outcome', title: 'Outcome' },
-    summary.skills.length > 0 && { id: 'skills', title: 'Skills used', detail: String(summary.skills.length) },
-    summary.toolTotal > 0 && { id: 'tools', title: 'Tools called', detail: String(summary.toolTotal) },
-    thread.sources.length > 0 && { id: 'sources', title: 'Sources', detail: String(thread.sources.length) },
-    hasUsage(threadUsage(thread)) && { id: 'usage', title: 'Thread usage' },
-    hasUsage(spaceUsage(threads, space)) && { id: 'space', title: `${space.name} usage` },
-    !!thread.agent && !!thread.session && { id: 'session', title: 'Session' },
+/** The cards with something to show, in Claude's order: where it runs, what it holds, what it reaches, then what it made. */
+export function summaryCards({
+  thread,
+  summary,
+  portCount,
+  outputCount,
+}: {
+  thread: Thread;
+  summary: ThreadSummary;
+  portCount: number;
+  outputCount: number;
+}): SummaryCardId[] {
+  const cards: (SummaryCardId | false)[] = [
+    hasGoal(thread) && 'goal',
+    'environment',
+    'sources',
+    !!thread.agent?.mcpServers?.length && 'connectors',
+    portCount > 0 && 'servers',
+    outputCount > 0 && 'outputs',
+    (!!thread.repo || summary.files.length > 0 || thread.prs.length > 0) && 'changes',
   ];
-  return sections.filter((s) => s !== false);
+  return cards.filter((c) => c !== false);
 }
 
-function hasUsage(usage: Usage) {
-  return usage.input + usage.output > 0 || usage.costUsd !== null;
+const PLURAL = new Intl.PluralRules('en');
+
+/** The connectors' state in a few words: what needs you first, else how many are up. */
+export function connectorStatus(servers: Pick<McpServer, 'status'>[]) {
+  const broken = servers.filter((s) => s.status === 'needs-auth' || s.status === 'failed').length;
+  if (broken) return { text: `${broken} to reconnect`, needsYou: true };
+  const connected = servers.filter((s) => s.status === 'connected').length;
+  if (connected === servers.length) return { text: `${connected} connected`, needsYou: false };
+  const pending = servers.filter((s) => s.status === 'pending').length;
+  if (pending) return { text: `${pending} connecting`, needsYou: false };
+  return { text: `${connected} of ${servers.length} on`, needsYou: false };
+}
+
+export const fileCount = (n: number) => `${n} ${PLURAL.select(n) === 'one' ? 'file' : 'files'}`;
+
+/** `cards` in the order you dragged them to; a card you never placed keeps its default slot among them. */
+export function orderCards(cards: SummaryCardId[], saved: readonly string[]): SummaryCardId[] {
+  const placed = saved.filter((id): id is SummaryCardId => (cards as string[]).includes(id));
+  const out = [...placed];
+  cards.forEach((id, i) => !placed.includes(id) && out.splice(Math.min(i, out.length), 0, id));
+  return out;
+}
+
+/** The saved order after a drag: the shown cards as dropped, then the hidden ones where they were. */
+export function savedOrder(shown: SummaryCardId[], saved: readonly string[]) {
+  return [...shown, ...saved.filter((id) => !(shown as string[]).includes(id))];
 }
