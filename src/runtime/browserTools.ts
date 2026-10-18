@@ -58,8 +58,9 @@ export const BROWSER_TOOLS = {
   browser_click: {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
-      if (ref.meta.isSubmit && !isLocalUrl(ref.page.url))
-        await ctx.confirm({ title: `Submit a form on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to click "${ref.meta.name || ref.meta.role}" on ${displayUrl(ref.page.url)}, which sends the form to that site.` });
+      const label = ref.meta.name || ref.meta.role;
+      if (!isLocalUrl(ref.page.url) && IRREVERSIBLE.test(label))
+        await askOnSite(ctx, ref.page.url, { title: `Click "${short(label)}" on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to click "${short(label)}" on ${host(ref.page.url)}. It may not be undoable there.` });
       return act(ctx, { kind: 'click', ref: ctx.args.ref }, `clicked "${short(ref.meta.name || ref.meta.role)}"`, 'click');
     },
   },
@@ -67,17 +68,16 @@ export const BROWSER_TOOLS = {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
       const label = ref.meta.name || ref.meta.role;
-      const shown = ref.meta.isPassword ? 'a password' : `"${ctx.args.text.slice(0, 120)}"`;
-      if (!isLocalUrl(ref.page.url))
-        await ctx.confirm({ title: `Type into "${label}" on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to type ${shown} on ${displayUrl(ref.page.url)}${ctx.args.submit ? ' and press Enter, which sends it to that site' : ''}.` });
+      // Only a password leaves with what's typed; other fields are ordinary form filling, which the user watches in the pane.
+      if (ref.meta.isPassword && !isLocalUrl(ref.page.url))
+        await askOnSite(ctx, ref.page.url, { title: `Type a password into "${short(label)}" on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to type a password on ${host(ref.page.url)}${ctx.args.submit ? ' and send it' : ''}.` });
       await act(ctx, { kind: 'type', ref: ctx.args.ref, text: ctx.args.text }, '');
       return ctx.args.submit ? act(ctx, { kind: 'press', key: 'Enter' }, `typed into "${short(label)}" and pressed Enter`, 'type') : { changed: `typed into "${short(label)}"`, glyph: 'type', site: ref.page.url, isFinal: true, result: { typed: ref.meta.isPassword ? '••••' : ctx.args.text } };
     },
   },
   browser_press: {
     run: async (ctx) => {
-      const { page } = await live(ctx, tabFor(ctx));
-      if (ctx.args.key === 'Enter' && !isLocalUrl(page.url)) await ctx.confirm({ title: `Press Enter on ${host(page.url)}?`, detail: `That can send a form on ${displayUrl(page.url)} to that site.` });
+      await live(ctx, tabFor(ctx));
       return act(ctx, { kind: 'press', key: ctx.args.key }, `pressed ${ctx.args.key}`, 'type');
     },
   },
@@ -107,7 +107,7 @@ export const BROWSER_TOOLS = {
       const root = ctx.env.cwdOf(ctx.caller);
       const path = resolvePath(root, ctx.args.path);
       if (!path) throw new Error('A relative path needs a worktree, and this thread has none; pass an absolute path');
-      if (!root || !isInside(root, path)) await ctx.confirm({ title: `Upload a file from outside the worktree to ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to put ${path} into "${ref.meta.name || 'the file field'}" on ${displayUrl(ref.page.url)}.` });
+      if (!root || !isInside(root, path)) await ctx.confirm({ title: `Upload a file from outside the worktree to ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to put ${path} into "${short(ref.meta.name || 'the file field')}" on ${host(ref.page.url)}.` });
       return act(ctx, { kind: 'upload', ref: ctx.args.ref, path }, `put ${path.split('/').pop()} into "${ref.meta.name || 'a file field'}"`);
     },
   },
@@ -124,7 +124,7 @@ export const BROWSER_TOOLS = {
       const { key, tab, page } = await live(ctx, tabFor(ctx));
       const origin = originOf(page.url);
       if (!isLocalUrl(page.url))
-        await ctx.confirm({ title: `Run a script on ${origin}?`, detail: `It runs with your signed-in session on ${origin} (cookies, storage) and can do anything you can do there.`, code: ctx.args.script });
+        await ctx.confirm({ title: `Run a script on ${host(page.url)}?`, detail: `It runs as you on ${host(page.url)}, signed in, and can do anything you can do there.`, code: ctx.args.script });
       const changed = `ran a script on ${origin}: ${preview(ctx.args.script)}`;
       try {
         const { value, isTruncated } = await ctx.env.browser.eval(page.hostId!, ctx.args.script);
@@ -193,6 +193,24 @@ export const pageKey = (threadId: string, tabId: string) => `${threadId}/${tabId
 const lastRefs = new Map<string, { hostId: string; url: string; refs: BrowserSnapshot['refs'] }>();
 
 type Ctx = ToolContext<{ tabId?: string; [arg: string]: unknown }>;
+
+/**
+ * Clicks that may not be undoable on someone else's site ask first: paying, sending, publishing, deleting. Ordinary steps
+ * (Next, Create, Save, Continue, Allow, Sign in) go through; the user watches them in the pane.
+ */
+const IRREVERSIBLE = /\b(pay|buy|purchase|order|checkout|check out|subscribe|send|publish|post|delete|remove|transfer|merge|deploy|withdraw|cancel (my )?(subscription|account)|close (my )?account)\b/i;
+
+// Sites the user said not to ask about again, per thread, for this run of Mochi.
+const trusted = new Map<string, Set<string>>();
+
+/** Asks on a card unless the user already trusted this site for the thread; the card offers that trust. */
+async function askOnSite(ctx: ToolContext<unknown>, url: string, approval: { title: string; detail: string }) {
+  const site = host(url);
+  const thread = ctx.caller.id;
+  if (trusted.get(thread)?.has(site)) return;
+  const options = await ctx.confirm({ ...approval, options: [{ id: 'trust', label: `Don't ask again on ${site} in this thread` }] });
+  if (options.includes('trust')) trusted.set(thread, new Set([...(trusted.get(thread) ?? []), site]));
+}
 
 /** Opens `url` in a new background tab of the caller's pane, loaded, for a tool that hands the agent a page to act on. */
 export async function openInNewTab(ctx: ToolContext<unknown>, url: string) {

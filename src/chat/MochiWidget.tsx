@@ -81,10 +81,10 @@ function MochiWidget({ item }: { item: QueueItem }) {
           <Icon aria-hidden className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="text-pretty">{item.title}</CardTitle>
+        <CardTitle className="text-pretty [overflow-wrap:anywhere]">{item.title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
+        {!!item.detail && <p className="type-body text-muted-foreground text-pretty [overflow-wrap:anywhere]">{item.detail}</p>}
         {!!item.tool?.notes?.length && (
           <ul className="flex flex-col gap-1 type-caption text-muted-foreground">
             {item.tool.notes.map((n) => (

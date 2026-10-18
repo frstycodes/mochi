@@ -79,7 +79,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       capture: async () => 'data:image/png;base64,iVBORw0KGgo=',
       snapshot: async () => ({
         text: '- heading "Dev" [level=1]\n- button "Save" [ref=e1]\n- textbox "Email" [ref=e2]',
-        refs: { e1: { role: 'button', name: 'Save', isSubmit: true, isPassword: false }, e2: { role: 'textbox', name: 'Email', isSubmit: false, isPassword: false } },
+        refs: { e1: { role: 'button', name: 'Save', isSubmit: true, isPassword: false }, e2: { role: 'textbox', name: 'Email', isSubmit: false, isPassword: false }, e3: { role: 'button', name: 'Delete project', isSubmit: false, isPassword: false }, e4: { role: 'textbox', name: 'Password', isSubmit: false, isPassword: true } },
       }),
       act: async (_id, a) => (acts.push(a), a.kind === 'scroll' ? { note: 'Scrolled to 0, 600 of 2000' } : {}),
       logs: async () => [{ level: 'error', message: 'boom', source: 'http://localhost:5173/main.js', line: 3 }],
@@ -644,27 +644,33 @@ test('browser_click needs a snapshot ref, and clicks locally without asking', as
   assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }]);
 });
 
-test('browser_click on a submit button on a non-local origin asks first', async () => {
+test('browser_click asks only before an irreversible click on another site, and not again once the site is trusted', async () => {
   const t = setup({ url: 'https://shop.example.com/' });
   await t.ok('browser_snapshot');
-  const pending = t.call('browser_click', { ref: 'e1' });
+  await t.ok('browser_click', { ref: 'e1' });
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'an ordinary submit (Save) just goes');
+  const pending = t.call('browser_click', { ref: 'e3' });
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(t.card().title, /Submit a form on shop.example.com/);
-  assert.deepEqual(t.acts, [], 'nothing clicked yet');
-  decideTool(t.card().tool!.callId, { isApproved: true });
+  assert.equal(t.card().title, 'Click "Delete project" on shop.example.com?');
+  assert.equal(t.card().detail, 'Claude wants to click "Delete project" on shop.example.com. It may not be undoable there.');
+  assert.deepEqual(t.card().tool!.options, [{ id: 'trust', label: "Don't ask again on shop.example.com in this thread" }]);
+  decideTool(t.card().tool!.callId, { isApproved: true, options: ['trust'] });
   await pending;
-  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }]);
+  await t.ok('browser_snapshot');
+  await t.ok('browser_click', { ref: 'e3' });
+  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }, { kind: 'click', ref: 'e3' }, { kind: 'click', ref: 'e3' }], 'trusted: the second one went without a card');
 });
 
-test('browser_type types locally, asks on other origins, and is blocked there under Changes', async () => {
+test('browser_type fills fields anywhere without asking; only a password on another site asks, which Changes blocks', async () => {
   const t = setup();
   await t.ok('browser_snapshot');
   await t.ok('browser_type', { ref: 'e2', text: 'me@example.com', submit: true });
   assert.deepEqual(t.acts, [{ kind: 'type', ref: 'e2', text: 'me@example.com' }, { kind: 'press', key: 'Enter' }]);
   const remote = setup({ url: 'https://example.com/', control: 'changes' });
   await remote.ok('browser_snapshot');
-  assert.match(await remote.err('browser_type', { ref: 'e2', text: 'x' }), /Everything, asking before deletes and settings/);
-  assert.deepEqual(remote.acts, []);
+  await remote.ok('browser_type', { ref: 'e2', text: 'x' });
+  assert.match(await remote.err('browser_type', { ref: 'e4', text: 'hunter2' }), /Everything, asking before deletes and settings/);
+  assert.deepEqual(remote.acts, [{ kind: 'type', ref: 'e2', text: 'x' }]);
 });
 
 test('browser_press sends the key', async () => {
@@ -760,7 +766,7 @@ test('browser_eval on another origin needs approval and shows the whole script',
   const t = setup({ url: 'https://bank.example.com/' });
   const pending = t.call('browser_eval', { script: 'document.cookie' });
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(t.card().title, /Run a script on https:\/\/bank.example.com\?/);
+  assert.match(t.card().title, /Run a script on bank.example.com\?/);
   assert.equal(t.card().code, 'document.cookie');
   assert.deepEqual(t.evals, [], 'nothing ran while the card waits');
   decideTool(t.card().tool!.callId, { isApproved: false });
