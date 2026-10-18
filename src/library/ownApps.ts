@@ -56,11 +56,8 @@ function slackManifestUrl(redirectUrl: string) {
 const GOOGLE_SETUP: OwnAppSetup = {
   openUrl: 'https://console.cloud.google.com/projectcreate',
   steps: [
-    'browser_open openUrl and create a project named "Mochi". If Google asks the user to sign in or to turn on 2-Step Verification, ask them in chat and wait.',
-    'In that project enable the Gmail API, Google Calendar API and Google Drive API (APIs & Services › Library, Enable on each).',
-    'Google Auth Platform › Get started: app name "Mochi", the user\'s email as support and developer contact, Audience External, agree to the policy (ask the user first in chat), Create.',
-    'Audience: Publish app, so sign-ins don\'t expire after 7 days. Sign-in will show an "unverified app" screen, expected for an app only the user uses.',
-    'Clients › Create client › Desktop app, name "Mochi", Create. In the dialog that follows read the Client ID, take a browser_snapshot and note the Client secret\'s ref (its value shows to you as hidden).',
-    'connect_account with connector "google-workspace", an account name, the Client ID and secretRef. On the pages it opens, pick the account, approve Mochi\'s own consent page, then Advanced › Go to Mochi and Continue (say in chat it\'s the user\'s own app), then list_connectors until it isSignedIn. Later Google accounts reuse this client: connect_account without a Client ID.',
+    'run_setup with connector "google-workspace": Mochi creates a Cloud project for your Mochi app, enables Gmail, Calendar and Drive, sets up the consent screen with you as its test user, and creates a Desktop client, keeping its secret. It asks you to agree to Google\'s policy on its card; follow its next, sign-in included.',
+    'connect_account with connector "google-workspace", an account name and fromSetup: true. On the pages it opens pick your account, approve Mochi\'s own consent page, then Google\'s "unverified app" screen (Advanced, Go to Mochi; it\'s your own app, say so in chat) and Continue. Then list_connectors until it isSignedIn; later Google accounts reuse this client.',
+    'Your app stays in Testing (publishing needs a home page and privacy policy), so Google asks you to sign in again every 7 days.',
   ],
 };

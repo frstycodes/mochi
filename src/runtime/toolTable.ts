@@ -362,7 +362,7 @@ export const TOOL_TABLE = {
       alias: z.string().regex(/^[a-z0-9-]{1,32}$/).optional().describe('The account name, like work or personal; defaults to the first free one'),
       clientId: z.string().min(1).max(200).optional().describe("The Client ID of the user's own app, from the service's setup steps"),
       secretRef: z.string().optional().describe("The ref of the Client Secret on the page, or of its Copy button, from your latest browser_snapshot. Never the secret itself"),
-      fromSetup: z.boolean().optional().describe('Slack only: use the configuration token your last run_setup captured; Mochi creates the app from it, MCP on'),
+      fromSetup: z.boolean().optional().describe("Slack and Google Workspace: use what your last run_setup captured (an existing app's credentials, a token Mochi makes the app from, or Google's new client)"),
       configTokenRef: z.string().optional().describe("Slack only: the ref of a generated app configuration token's Access Token on api.slack.com/apps, or of its Copy button. Mochi creates the app from it, MCP on; no Client ID needed"),
       tabId,
       profileId,

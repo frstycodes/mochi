@@ -111,5 +111,342 @@
         "note": "Copies the app's Client Secret into Mochi (label not yet seen live)"
       }
     ]
+  },
+  "google-workspace": {
+    "version": 1,
+    "domains": [
+      "console.cloud.google.com"
+    ],
+    "params": {
+      "suffix": {
+        "generate": "suffix"
+      },
+      "email": {
+        "question": "Which Google account should Mochi's app belong to?"
+      },
+      "agree": {
+        "question": "Agree to Google's API Services User Data Policy for your Mochi app?",
+        "options": [
+          "I agree"
+        ]
+      }
+    },
+    "steps": [
+      {
+        "id": "open",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/projectcreate",
+        "note": "A new Cloud project for your Mochi app"
+      },
+      {
+        "id": "name",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Project name"
+        },
+        "value": "Mochi",
+        "note": "Names the project Mochi"
+      },
+      {
+        "id": "edit-id",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Edit the project ID."
+        },
+        "note": "Opens the project ID"
+      },
+      {
+        "id": "id",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Project ID"
+        },
+        "value": "mochi-{suffix}",
+        "note": "Sets an ID Mochi can use in every later page"
+      },
+      {
+        "id": "create",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Create",
+          "exact": true
+        },
+        "note": "Creates the project"
+      },
+      {
+        "id": "apis",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/flows/enableapi?apiid=gmail.googleapis.com,calendar-json.googleapis.com,drive.googleapis.com&project=mochi-{suffix}",
+        "note": "Enables Gmail, Calendar and Drive for it"
+      },
+      {
+        "id": "project-ready",
+        "kind": "wait",
+        "text": "You are going to make changes to project mochi-{suffix}",
+        "timeoutMs": 120000,
+        "note": "Waits until the new project can be changed"
+      },
+      {
+        "id": "confirm-project",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Confirms the project"
+      },
+      {
+        "id": "enable",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Enable",
+          "exact": true
+        },
+        "note": "Enables the APIs"
+      },
+      {
+        "id": "enabled",
+        "kind": "wait",
+        "text": "You have successfully enabled",
+        "timeoutMs": 120000,
+        "note": "Waits for the APIs"
+      },
+      {
+        "id": "consent",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/overview/create?project=mochi-{suffix}",
+        "note": "Sets up the consent screen"
+      },
+      {
+        "id": "app-name",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "App name"
+        },
+        "value": "Mochi",
+        "note": "Names the app Mochi"
+      },
+      {
+        "id": "support-email",
+        "kind": "choose",
+        "target": {
+          "role": "combobox"
+        },
+        "param": "email",
+        "note": "Picks your email for support"
+      },
+      {
+        "id": "next-info",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Next"
+      },
+      {
+        "id": "external",
+        "kind": "click",
+        "target": {
+          "role": "radio",
+          "name": "External",
+          "exact": true
+        },
+        "note": "Lets your own Google account use it"
+      },
+      {
+        "id": "next-audience",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Next"
+      },
+      {
+        "id": "contact",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Text field for emails"
+        },
+        "value": "{email}",
+        "submit": true,
+        "note": "Your email for Google's notices"
+      },
+      {
+        "id": "next-contact",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Next",
+          "exact": true
+        },
+        "note": "Next"
+      },
+      {
+        "id": "policy",
+        "kind": "ask",
+        "param": "agree",
+        "note": "Agreeing to Google's policy is yours to decide"
+      },
+      {
+        "id": "agree",
+        "kind": "click",
+        "target": {
+          "role": "checkbox",
+          "name": "I agree to the Google API services user data policy"
+        },
+        "note": "Agrees to the policy"
+      },
+      {
+        "id": "continue",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Continue",
+          "exact": true
+        },
+        "note": "Continue"
+      },
+      {
+        "id": "create-config",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Create",
+          "exact": true
+        },
+        "note": "Creates the consent screen"
+      },
+      {
+        "id": "configured",
+        "kind": "wait",
+        "text": "OAuth configuration created",
+        "note": "Waits for it"
+      },
+      {
+        "id": "audience",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/audience?project=mochi-{suffix}",
+        "note": "Testing allows only listed users: adds you"
+      },
+      {
+        "id": "add-user",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Add users",
+          "exact": true
+        },
+        "note": "Opens Add users"
+      },
+      {
+        "id": "test-user",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Text field for emails"
+        },
+        "value": "{email}",
+        "submit": true,
+        "note": "Adds your email"
+      },
+      {
+        "id": "save-user",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Save",
+          "exact": true
+        },
+        "note": "Saves it"
+      },
+      {
+        "id": "client",
+        "kind": "goto",
+        "url": "https://console.cloud.google.com/auth/clients/create?project=mochi-{suffix}",
+        "note": "Creates the Desktop client Mochi signs in with"
+      },
+      {
+        "id": "type",
+        "kind": "click",
+        "target": {
+          "role": "combobox",
+          "name": "Application type"
+        },
+        "note": "Opens Application type"
+      },
+      {
+        "id": "desktop",
+        "kind": "click",
+        "target": {
+          "role": "option",
+          "name": "Desktop app",
+          "exact": true
+        },
+        "note": "Picks Desktop app"
+      },
+      {
+        "id": "client-name",
+        "kind": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Name",
+          "exact": true
+        },
+        "value": "Mochi",
+        "note": "Names it Mochi"
+      },
+      {
+        "id": "create-client",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Create",
+          "exact": true
+        },
+        "note": "Creates the client"
+      },
+      {
+        "id": "client-id",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": ".apps.googleusercontent.com"
+        },
+        "as": "googleClientId",
+        "note": "Copies its Client ID into Mochi"
+      },
+      {
+        "id": "client-secret",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy to clipboard: GOCSPX-"
+        },
+        "as": "googleClientSecret",
+        "note": "Copies its Client secret into Mochi"
+      },
+      {
+        "id": "done",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "OK",
+          "exact": true
+        },
+        "note": "Closes the dialog"
+      }
+    ]
   }
 }

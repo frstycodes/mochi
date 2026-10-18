@@ -135,3 +135,28 @@ test('a recipe may only jump forward and use params it declares', () => {
   assert.throws(() => parseRecipe('slack', { ...base, steps: [{ id: 'a', kind: 'click', target: { role: 'row', name: '{team}' }, note: 'x' }] }), /undeclared param team/);
   assert.throws(() => parseRecipe('slack', { ...base, steps: [{ id: 'a', kind: 'goto', url: 'https://api.slack.com/{team}', note: 'x' }] }), /undeclared param team/);
 });
+
+test("Google's recipe runs to the Desktop client, stopping once for the user's agreement to the policy", async () => {
+  const google = BUILT_IN_RECIPES['google-workspace']!;
+  const log: string[] = [];
+  const ops: RecipeOps = {
+    url: () => 'https://console.cloud.google.com/auth',
+    goto: async (to) => void log.push(`goto ${to}`),
+    click: async (t) => void log.push(`click ${t.name ?? t.role}`),
+    fill: async (t, value) => void log.push(`fill ${t.name} ${value}`),
+    options: async () => ['me@x.com'],
+    pick: async (o) => void log.push(`pick ${o}`),
+    close: async () => {},
+    waitForText: async (text) => void log.push(`wait ${text}`),
+    isPresent: async () => false,
+    capture: async (t, isValid) => [`${t.name}`.includes('GOCSPX') ? 'GOCSPX-abc' : '1-x.apps.googleusercontent.com'].find(isValid) ?? '',
+  };
+  const asked = await runRecipe(google, {}, ops);
+  assert.equal(asked.result.status === 'needs' && asked.result.stepId, 'policy');
+  assert.equal(asked.params.email, 'me@x.com', 'the only support email');
+  const suffix = asked.params.suffix;
+  assert.ok(log.includes(`fill Project ID mochi-${suffix}`) && log.includes(`wait You are going to make changes to project mochi-${suffix}`));
+  const done = await runRecipe(google, { ...asked.params, agree: 'I agree' }, ops, 'policy');
+  assert.deepEqual(done.result.status === 'done' && done.result.captured, ['googleClientId', 'googleClientSecret']);
+  assert.ok(log.includes('fill Text field for emails me@x.com') && log.includes(`goto https://console.cloud.google.com/auth/clients/create?project=mochi-${suffix}`));
+});
