@@ -5,6 +5,7 @@ import type { BrowserAct } from '../host/types/browser.ts';
 import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '../layout/tree.ts';
 import type { LibraryEntry } from '../library/library.ts';
+import type { SetupResult } from '../library/recipes.ts';
 import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
 import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
@@ -54,6 +55,8 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
   const settings = fakeSettings();
   const connects: { spaceId: string; account: unknown; options: unknown }[] = [];
+  const setupRuns: { connector: string; viewId: string; options: unknown }[] = [];
+  const setupResults: SetupResult[] = [];
   const authorizeListeners = new Set<(page: { url: string; authorizationUrl: string }) => void>();
   const env: ToolEnv = {
     getState: () => state,
@@ -106,6 +109,8 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
       },
       onAuthorize: (listener) => (authorizeListeners.add(listener), () => void authorizeListeners.delete(listener)),
       onDeviceCode: () => () => {},
+      runSetup: async (connector, viewId, options) => (setupRuns.push({ connector, viewId, options }), setupResults.shift()!),
+      updateSetupStep: async (_connector, stepId, target) => ({ before: { role: 'button', name: stepId }, after: target }),
     },
     remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
@@ -136,7 +141,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, connects };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, connects, setupRuns, setupResults };
   return t;
 }
 
@@ -995,6 +1000,27 @@ test('connect_account connects in the agent\'s tab with the secret read by main;
   assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', configTokenRef: 'e1' }), /Slack only/);
   await t.ok('connect_account', { connector: 'slack', alias: 'beta', configTokenRef: 'e1', tabId: 'tab-1' });
   assert.deepEqual(t.connects[1], { spaceId: 'latitude', account: { url: 'https://mcp.slack.com/mcp', alias: 'beta' }, options: { inPane: true, slackTokenFrom: { viewId: t.pages.get('rl/tab-1')!.hostId, ref: 'e1' } } });
+});
+
+test('run_setup runs the recipe on the agent\'s tab and says what comes next for each outcome; update_setup_step logs the change', async () => {
+  const t = setup();
+  assert.match(await t.err('run_setup', { connector: 'linear' }), /no setup recipe for linear/);
+  t.setupResults.push(
+    { status: 'needs', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
+    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout' },
+    { status: 'done', captured: ['slackConfigToken'] },
+  );
+  const asked = await t.ok('run_setup', { connector: 'slack' });
+  assert.match(asked.next, /Ask the user in chat: Which Slack workspace\? \(Acme, Myself\)\. Then run_setup again with params\.workspace/);
+  assert.equal(t.setupRuns[0].viewId, t.pages.get('rl/tab-1')!.hostId, "the agent's active tab");
+  const stopped = await t.ok('run_setup', { connector: 'slack', params: { workspace: 'Acme' } });
+  assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace"/);
+  assert.deepEqual(t.setupRuns[1].options, { params: { workspace: 'Acme' } });
+  assert.match((await t.ok('run_setup', { connector: 'slack', fromStep: 'workspace' })).next, /connect_account with connector "slack".*fromSetup: true/);
+  const fixed = await t.ok('update_setup_step', { connector: 'slack', stepId: 'generate', target: { role: 'button', name: 'Generate new token' } });
+  assert.deepEqual(fixed.after, { role: 'button', name: 'Generate new token' });
+  assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => /updated slack's setup step "generate": button "generate" → button "Generate new token"/.test(e.text)));
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', fromSetup: true }), /Slack only/);
 });
 
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {

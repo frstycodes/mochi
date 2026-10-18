@@ -1,5 +1,6 @@
 import type { AppProviderId, DeviceCode } from '../../library/connectors.ts';
 import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog } from '../../library/library.ts';
+import type { SetupResult, SetupTarget } from '../../library/recipes.ts';
 import type { Provider } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 
@@ -25,9 +26,14 @@ export interface LibraryHost {
    * Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth.
    * For an agent's connect: `inPane` sends the sign-in page to `onAuthorize` instead of the user's browser, and `secretFrom`
    * has main read the client secret from a page element itself, so it never passes through the renderer or the agent;
-   * `slackTokenFrom` is a Slack app configuration token there, from which main creates the app and takes its credentials.
+   * `slackTokenFrom` is a Slack app configuration token there, from which main creates the app and takes its credentials;
+   * `fromSetup` uses what the last `runSetup` for the connector captured instead.
    */
-  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: PageRef; slackTokenFrom?: PageRef }): Promise<LibraryEntry[]>;
+  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: PageRef; slackTokenFrom?: PageRef; fromSetup?: boolean }): Promise<LibraryEntry[]>;
+  /** Runs a connector's setup recipe on a browser tab (LIBRARY.md); secrets it captures stay in main for `fromSetup`. */
+  runSetup(connector: string, viewId: string, options?: { params?: Record<string, string>; fromStep?: string }): Promise<SetupResult>;
+  /** Saves the user's own target for one step of a connector's recipe. */
+  updateSetupStep(connector: string, stepId: string, target: SetupTarget): Promise<{ before: SetupTarget; after: SetupTarget }>;
   /** A sign-in page an `inPane` connect wants opened, for the agent's tab. */
   onAuthorize(listener: (page: { url: string; authorizationUrl: string }) => void): () => void;
   /** The providers accounts can sign in with without bringing an app: Mochi's own, or for Google one the user saved. */
@@ -62,6 +68,8 @@ export const libraryMethods = {
   installPlugin: 'invoke',
   addConnector: 'invoke',
   onAuthorize: 'event',
+  runSetup: 'invoke',
+  updateSetupStep: 'invoke',
   oauthApps: 'invoke',
   ownAppRedirect: 'invoke',
   onDeviceCode: 'event',

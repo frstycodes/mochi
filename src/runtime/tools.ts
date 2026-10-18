@@ -59,7 +59,7 @@ export interface ToolEnv {
   /** Installed color themes and Settings › Remote access, read for `get_settings`. */
   themes: Pick<ThemesHost, 'list'>;
   /** The profile library's connector accounts, read for `list_connectors`; adding one is the user's, on the widget. */
-  library: Pick<LibraryHost, 'list' | 'oauthApps' | 'ownAppRedirect' | 'addConnector' | 'onAuthorize' | 'onDeviceCode'>;
+  library: Pick<LibraryHost, 'list' | 'oauthApps' | 'ownAppRedirect' | 'addConnector' | 'onAuthorize' | 'onDeviceCode' | 'runSetup' | 'updateSetupStep'>;
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */

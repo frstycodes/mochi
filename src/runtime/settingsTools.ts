@@ -7,12 +7,13 @@ import { HARNESSES } from '../settings/harnesses.ts';
 import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
 import { IS_MAC } from '../keys.ts';
 import { appProviderFor, CONNECTORS, connectorFor, freeAlias, isSameServer } from '../library/connectors.ts';
-import { openInNewTab, refView } from './browserTools.ts';
+import { SETUP_RECIPES, type SetupResult, type SetupTarget } from '../library/recipes.ts';
+import { openInNewTab, refView, tabView } from './browserTools.ts';
 import { ownAppSetup } from '../library/ownApps.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
 
-type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'list_connectors' | 'connect_account' | 'remove_mcp_server' | 'remove_profile';
+type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'list_connectors' | 'connect_account' | 'run_setup' | 'update_setup_step' | 'remove_mcp_server' | 'remove_profile';
 
 /**
  * Settings tools (RUNTIME.md › Mochi tools). Reads go through the settings catalog; a suggestion opens one live settings
@@ -169,14 +170,14 @@ export const SETTINGS_TOOLS = {
       const alias = args.alias ?? freeAlias(taken);
       if (taken.includes(alias)) throw new Error(`There is already a ${alias} account on ${name}; list_connectors lists them`);
       if (args.clientId && looksLikeSecret(args.clientId)) throw new Error('That looks like a client secret, not a Client ID. Never pass the secret itself: pass secretRef and Mochi reads it');
-      if (args.configTokenRef && appProviderFor(url) !== 'slack') throw new Error('configTokenRef is for Slack only');
+      if ((args.configTokenRef || args.fromSetup) && appProviderFor(url) !== 'slack') throw new Error('configTokenRef and fromSetup are for Slack only');
       const needsSecret = !!args.clientId && appProviderFor(url) !== 'github';
       if (needsSecret && !args.secretRef) throw new Error('Pass secretRef: the ref of the Client Secret on the page, from browser_snapshot (reveal it first if it is hidden). Mochi reads it itself; you never see it');
       const secretFrom = args.secretRef ? { viewId: refView(ctx, args.secretRef, args.tabId), ref: args.secretRef } : undefined;
       const account = `${name} (${alias})`;
       const page = signInPage(env, url);
       const slackTokenFrom = args.configTokenRef ? { viewId: refView(ctx, args.configTokenRef, args.tabId), ref: args.configTokenRef } : undefined;
-      const connecting = env.library.addConnector(profile.id, { url, alias, ...(args.clientId && { clientId: args.clientId }) }, { inPane: true, ...(secretFrom && { secretFrom }), ...(slackTokenFrom && { slackTokenFrom }) });
+      const connecting = env.library.addConnector(profile.id, { url, alias, ...(args.clientId && { clientId: args.clientId }) }, { inPane: true, ...(secretFrom && { secretFrom }), ...(slackTokenFrom && { slackTokenFrom }), ...(args.fromSetup && { fromSetup: true }) });
       // The sign-in goes on after this call returns, while the agent works the page; its end shows in the thread.
       let isHandedOff = false;
       void connecting.then(
@@ -193,6 +194,25 @@ export const SETTINGS_TOOLS = {
         changed: `opened ${name}'s sign-in page`,
         result: { account: alias, ...tab, ...('userCode' in first && { userCode: first.userCode }), next: 'userCode' in first ? CODE_NEXT : SIGN_IN_NEXT },
       };
+    },
+  },
+  run_setup: {
+    run: async (ctx) => {
+      const { args, env } = ctx;
+      const recipe = SETUP_RECIPES[args.connector];
+      const start = recipe?.steps.find((s) => s.kind === 'goto');
+      if (!recipe || !start || start.kind !== 'goto') throw new Error(`Mochi has no setup recipe for ${args.connector}; list_connectors gives its manual steps`);
+      const viewId = await tabView(ctx, args.tabId, start.url);
+      const result = await env.library.runSetup(args.connector, viewId, { ...(args.params && { params: args.params }), ...(args.fromStep && { fromStep: args.fromStep }) });
+      return { changed: `ran ${args.connector}'s setup`, isFinal: true, result: { ...result, next: setupNext(args.connector, result) } };
+    },
+  },
+  update_setup_step: {
+    run: async (ctx) => {
+      const { connector, stepId, target } = ctx.args;
+      const { before, after } = await ctx.env.library.updateSetupStep(connector, stepId, target);
+      const changed = `updated ${connector}'s setup step "${stepId}": ${describeTarget(before)} → ${describeTarget(after)}`;
+      return { changed, isFinal: true, result: { stepId, before, after } };
     },
   },
   remove_mcp_server: {
@@ -245,6 +265,19 @@ function signInPage(env: ToolContext<unknown>['env'], url: string) {
   const offCode = env.library.onDeviceCode((c) => c.url === url && resolve({ url: c.verificationUri, userCode: c.userCode }));
   return { next, stop: () => (offPage(), offCode()) };
 }
+
+/** What the agent does after a setup run, in its words. */
+function setupNext(connector: string, result: SetupResult) {
+  if (result.status === 'done') return `connect_account with connector "${connector}", an account name and fromSetup: true`;
+  if (result.status === 'needs') return `Ask the user in chat: ${result.question} (${result.options.join(', ')}). Then run_setup again with params.${result.param} set to their answer`;
+  if (result.kind === 'goto' || /left .*sign in/.test(result.reason)) return `${result.reason}. Ask the user to sign in in this tab, then run_setup again`;
+  const fix = `update_setup_step with the role and name of the element that worked`;
+  if (result.kind === 'capture') return `Find the element for "${result.stepId}" (${result.note}) with browser_snapshot, ${fix}, then run_setup with fromStep "${result.stepId}"`;
+  const then = result.nextStepId ? `run_setup with fromStep "${result.nextStepId}"` : `connect_account with fromSetup: true`;
+  return `Do step "${result.stepId}" (${result.note}) yourself in this tab (browser_snapshot, then act), then ${fix}, then ${then}`;
+}
+
+const describeTarget = (t: SetupTarget): string => `${t.role} "${t.name}"${t.within ? ` in ${describeTarget(t.within)}` : ''}`;
 
 function say(ctx: ToolContext<unknown>, text: string) {
   ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text } });

@@ -1,12 +1,15 @@
 import type { WebContents } from 'electron';
-import type { DeviceCode } from '../../src/library/connectors.ts';
+import { connectorKey, type DeviceCode } from '../../src/library/connectors.ts';
+import type { CaptureKind } from '../../src/library/recipes.ts';
 import { libraryEntries, removeItem, setItemEnabled } from '../../src/library/library.ts';
 import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
 import { addMarketplace, importFromAccount, installPlugin, installSkill, marketplaces, readLibrary, removeMarketplace, updateLibrary } from '../library/store.ts';
-import { copiedByRef, readRefValue } from '../browser/views.ts';
+import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
+import { overrideStep, playwrightOps, recipeFor } from '../library/recipeRunner.ts';
+import { runRecipe } from '../library/runRecipe.ts';
 import { addConnectorAccount, forgetAccount, signIn } from '../library/connectors.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { createSlackApp } from '../library/slackApp.ts';
@@ -72,10 +75,11 @@ export const library = {
   },
   async addConnector(sender, spaceId, input, options) {
     const space = spaceIdOf(spaceId);
-    const { inPane, secretFrom, slackTokenFrom } = connectOptions(options);
+    const { inPane, secretFrom, slackTokenFrom, fromSetup } = connectOptions(options);
     const fields = connectorInput(input);
     if (secretFrom) fields.clientSecret = await secretOnPage(sender, secretFrom);
     if (slackTokenFrom) Object.assign(fields, await slackAppFrom(sender, slackTokenFrom));
+    if (fromSetup) Object.assign(fields, await slackAppWith(takeCapture(sender, fields.url)));
     const account = await addConnectorAccount(space, fields);
     const open = inPane ? async (authorizationUrl: string) => void (!sender.isDestroyed() && sender.send('library:onAuthorize', { url: account.url, authorizationUrl })) : undefined;
     await signIn(account, deviceCodeTo(sender), open);
@@ -83,6 +87,18 @@ export const library = {
   },
   async oauthApps() {
     return [...mochiOAuthProviders(), ...((await hasGoogleClient()) ? (['google'] as const) : [])];
+  },
+  async runSetup(sender, connector, viewId, options) {
+    const name = string(connector, 'connector', 64);
+    const view = string(viewId, 'viewId', 32);
+    if (!/^view-\d+$/.test(view)) throw new TypeError('viewId is not a view id');
+    const { params, fromStep } = setupOptions(options);
+    const { result, captured } = await runRecipe(await recipeFor(name), params, playwrightOps(await pageOfView(sender, view)), fromStep);
+    if (Object.keys(captured).length) captures.set(`${sender.id}/${name}`, { values: captured, at: Date.now() });
+    return result;
+  },
+  async updateSetupStep(_sender, connector, stepId, target) {
+    return overrideStep(string(connector, 'connector', 64), string(stepId, 'stepId', 64), target);
   },
   async ownAppRedirect() {
     return `${RELAY_URL}/oauth/callback`;
@@ -110,7 +126,7 @@ const deviceCodeTo = (sender: WebContents) => (code: DeviceCode) => !sender.isDe
 function connectOptions(value: unknown) {
   if (value === undefined) return {};
   const options = record(value, 'options');
-  return { inPane: options.inPane === true, secretFrom: pageRef(options.secretFrom, 'secretFrom'), slackTokenFrom: pageRef(options.slackTokenFrom, 'slackTokenFrom') };
+  return { inPane: options.inPane === true, secretFrom: pageRef(options.secretFrom, 'secretFrom'), slackTokenFrom: pageRef(options.slackTokenFrom, 'slackTokenFrom'), fromSetup: options.fromSetup === true };
 }
 
 function pageRef(value: unknown, name: string): PageRef | undefined {
@@ -125,8 +141,33 @@ function pageRef(value: unknown, name: string): PageRef | undefined {
 async function slackAppFrom(sender: WebContents, at: PageRef) {
   const token = await valueAt(sender, at, (v) => v.startsWith('xoxe'));
   if (!token) throw new Error('No app configuration token there (they start xoxe): Generate Token on api.slack.com/apps, take a new browser_snapshot and pass the ref of the Access Token or its Copy button');
+  return slackAppWith(token);
+}
+
+async function slackAppWith(token: string) {
   const { clientId, clientSecret } = await createSlackApp(token, `${RELAY_URL}/oauth/callback`);
   return { clientId, clientSecret };
+}
+
+/** Secrets the last setup run captured, per window and connector; taken once, and gone after `CAPTURE_TTL_MS`. */
+const captures = new Map<string, { values: Partial<Record<CaptureKind, string>>; at: number }>();
+const CAPTURE_TTL_MS = 15 * 60_000;
+
+function takeCapture(sender: WebContents, url: string) {
+  const key = `${sender.id}/${connectorKey(url)}`;
+  const capture = captures.get(key);
+  captures.delete(key);
+  const token = capture && Date.now() - capture.at < CAPTURE_TTL_MS ? capture.values.slackConfigToken : undefined;
+  if (!token) throw new Error('No token from a setup run: run_setup first (what it captures lasts 15 minutes)');
+  return token;
+}
+
+function setupOptions(value: unknown) {
+  if (value === undefined) return { params: {} };
+  const options = record(value, 'options');
+  const params = options.params === undefined ? {} : record(options.params, 'params');
+  if (Object.keys(params).length > 8) throw new TypeError('params holds at most 8 values');
+  return { params: Object.fromEntries(Object.entries(params).map(([k, v]) => [k, string(v, k, 200)])), fromStep: options.fromStep === undefined ? undefined : string(options.fromStep, 'fromStep', 64) };
 }
 
 /** The client secret where an agent pointed: read in main, so it reaches only the keychain. A masked or empty field is refused. */

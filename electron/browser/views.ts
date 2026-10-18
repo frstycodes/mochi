@@ -368,7 +368,16 @@ export async function readRefValue(owner: WebContents, id: string, ref: string) 
 export async function copiedByRef(owner: WebContents, id: string, ref: string) {
   const entry = get(owner, id);
   const page = await pageFor(entry);
-  const target = await locate(entry, page, ref);
+  return copiedBy(page, await locate(entry, page, ref));
+}
+
+/** The Playwright page behind a view, for main's own scripted steps (setup recipes) on the agent's tab. */
+export function pageOfView(owner: WebContents, id: string) {
+  return pageFor(get(owner, id));
+}
+
+/** What clicking `target` copies, caught as `copiedByRef` describes. */
+export async function copiedBy(page: Page, target: Locator) {
   await page.evaluate(catchCopy);
   try {
     await target.click({ timeout: ACTION_TIMEOUT_MS });
@@ -392,7 +401,14 @@ function catchCopy() {
   if (w.__mochiRelease) return;
   const clipboard = navigator.clipboard as Clipboard | undefined;
   const setData = Object.getOwnPropertyDescriptor(DataTransfer.prototype, 'setData')!;
-  const onCopy = () => void (w.__mochiCopied ??= getSelection()?.toString() || undefined);
+  // A copy through a hidden field (execCommand) selects text that `getSelection` doesn't report in Chromium; cancelling
+  // the event keeps it off the clipboard.
+  const onCopy = (event: Event) => {
+    const field = document.activeElement;
+    const selected = field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement ? field.value.slice(field.selectionStart ?? 0, field.selectionEnd ?? 0) : '';
+    w.__mochiCopied ??= selected || getSelection()?.toString() || undefined;
+    event.preventDefault();
+  };
   if (clipboard) {
     clipboard.writeText = async (text: string) => void (w.__mochiCopied = String(text));
     clipboard.write = async (items: ClipboardItems) => {

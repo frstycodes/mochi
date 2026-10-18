@@ -79,6 +79,8 @@ export const TOOL_GUIDE = {
   add_mcp_server: { group: 'Settings and profiles', label: 'Suggest MCP servers', description: 'Show an MCP server, filled in, for you to add to a profile. Never with secrets.' },
   list_connectors: { group: 'Settings and profiles', label: 'List connectors', description: 'See your connector accounts, whether each is signed in, and the services you can connect.' },
   connect_account: { group: 'Settings and profiles', label: 'Suggest connector accounts', description: 'Show a Connect button for a service, for you to sign in to in your browser.' },
+  run_setup: { group: 'Settings and profiles', label: 'Run service setups', description: 'Run a service\'s known setup steps in its browser tab, like making a Slack token, keeping secrets from the agent.' },
+  update_setup_step: { group: 'Settings and profiles', label: 'Fix setup steps', description: 'Point a setup step at the button that works now, after a site changed.' },
   remove_mcp_server: { group: 'Settings and profiles', label: 'Remove MCP servers', description: "Remove an MCP server from a profile's config, showing you the file change. The file is backed up first." },
   remove_profile: { group: 'Settings and profiles', label: 'Remove profiles', description: 'Remove an empty profile. Its accounts and browser data stay on disk.' },
 } as const satisfies Record<ToolName, { group: ToolGroup; label: string; description: string }>;

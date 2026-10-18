@@ -74,6 +74,12 @@ export const library: LibraryHost = {
   onAuthorize() {
     return () => {};
   },
+  async runSetup() {
+    throw new Error('Setup runs need the desktop app');
+  },
+  async updateSetupStep() {
+    throw new Error('Setup runs need the desktop app');
+  },
   async oauthApps() {
     return [...OAUTH_PROVIDER_IDS, 'google' as const];
   },

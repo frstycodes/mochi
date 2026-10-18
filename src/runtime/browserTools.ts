@@ -203,6 +203,13 @@ export async function openInNewTab(ctx: ToolContext<unknown>, url: string) {
   return pageResult(tab, await loaded(c, key));
 }
 
+/** The view behind one of the caller's browser tabs (`tabId`, else the active one), opening one at `url` when it has none. */
+export async function tabView(ctx: ToolContext<unknown>, tabId: string | undefined, url: string) {
+  const c = ctx as Ctx;
+  const id = tabId ?? activeBrowserTab(c)?.id ?? (await openInNewTab(ctx, url)).tabId;
+  return (await live(c, tabFor({ ...c, args: { tabId: id } }))).page.hostId!;
+}
+
 /** The view behind `ref` from the latest snapshot of one of the caller's tabs, for main to read that element itself. */
 export function refView(ctx: ToolContext<unknown>, ref: string, tabId?: string) {
   return refIn({ ...ctx, args: { tabId } } as Ctx, ref).page.hostId!;
