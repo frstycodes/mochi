@@ -29,6 +29,8 @@ Runs on (This computer / a paired computer) is chosen in the new-thread composer
 ### Appearance
 Mode: Theme (Light / Dark / System, with the user menu's sun, moon and monitor icons), Reduce motion (System / On / Off).
 
+App icon: Graphite (default), Paper, Sleepy, Pixel, Blueprint, Dango, Peek, Sticker, Riso, a grid of the icons themselves (`AppIconPicker`). Kept in main (`appIcon` in agent settings) so it applies at launch: the Dock icon on macOS, window and tray icons elsewhere (`electron/appIcon.ts`). Sources are `build/icons/<id>.svg`, each rendered to the 1024px `.png` that ships in `resources/icons`. GAP: Finder, Launchpad and the Dock while Mochi is closed keep the bundle icon.
+
 Animations: one switch for the sidebar and one for the side pane (on while any of theirs is; flipping it sets them all), each with Choose each animation folded under it: sidebar Show and hide, Peek; side pane First and last pane, Panes beside others, Moving and expanding. All off by default (`animations` pref, `ANIMATIONS` in `src/settings/settingOptions.ts`); CSS reads them from `data-animations` on <html>, Reduce motion still stops them all. The summary panel, sidebar folds and thread reordering always animate. Agents read and suggest them like any setting (`animations.sidebar`, `animation.pane-slide`, …).
 
 VS Code color themes, one per appearance like VS Code's preferred light and dark themes, so System keeps switching (`lightTheme` / `darkTheme` prefs; `mochi` is the built-in). `src/settings/sections/appearance.tsx`, picker in `src/settings/ThemePicker.tsx`. Done.
