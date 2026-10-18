@@ -173,6 +173,9 @@ export const git: GitHost = {
       branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.mochi/worktrees/latitude/adm' : undefined })),
     };
   },
+  async renameAutoBranch(_cwd, _expected, name) {
+    return name;
+  },
   async branchNameError(_root, name) {
     if (!name.trim()) return 'Name the branch';
     if (BAD_REF.test(name)) return `"${name}" isn't a valid branch name`;

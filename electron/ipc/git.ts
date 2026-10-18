@@ -6,7 +6,7 @@ import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, P
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
-import { assertFreeBranch, baseRef, branchNameError, headOf, listBranches, localName, switchBranch } from '../git/branches.ts';
+import { assertFreeBranch, baseRef, branchNameError, headOf, listBranches, localName, renameAutoBranch, switchBranch } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
@@ -154,6 +154,10 @@ export const git = {
     }
   },
 
+  async renameAutoBranch(_sender, cwd, expected, name) {
+    const dir = insideWorktreeRoot(string(cwd, 'cwd'));
+    return renameAutoBranch(dir, string(expected, 'expected', 255), string(name, 'name', 255));
+  },
   async sync(_sender, cwd, chosenBase) {
     const top = await topLevel(string(cwd, 'cwd'));
     const base = chosenBase === undefined ? await baseRef(top) : string(chosenBase, 'base', 255);

@@ -650,7 +650,8 @@ async function parentBase(env: ToolEnv, state: State, caller: Thread, githubUser
 async function newWorktree(env: ToolEnv, project: string, prompt: string) {
   const list = await env.git.branches(project).catch(() => null);
   const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
-  return { mode: 'worktree' as const, branch: uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken) };
+  const branch = uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken);
+  return { mode: 'worktree' as const, branch, autoBranch: branch };
 }
 
 /** The caller's controls (or the provider's defaults), with the agent's model and effort where Settings › Mochi access allows them. */

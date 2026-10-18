@@ -307,6 +307,8 @@ export interface PullRequest {
  * worktree or switched to in the folder, instead of created.
  */
 export interface Repo {
+  /** The initial automatic name, eligible for renaming once the task has a summary. */
+  autoBranch?: string;
   project: string;
   branch: string;
   path?: string;
