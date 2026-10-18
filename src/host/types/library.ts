@@ -24,9 +24,10 @@ export interface LibraryHost {
   /**
    * Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth.
    * For an agent's connect: `inPane` sends the sign-in page to `onAuthorize` instead of the user's browser, and `secretFrom`
-   * has main read the client secret from a page element itself, so it never passes through the renderer or the agent.
+   * has main read the client secret from a page element itself, so it never passes through the renderer or the agent;
+   * `slackTokenFrom` is a Slack app configuration token there, from which main creates the app and takes its credentials.
    */
-  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: { viewId: string; ref: string } }): Promise<LibraryEntry[]>;
+  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: PageRef; slackTokenFrom?: PageRef }): Promise<LibraryEntry[]>;
   /** A sign-in page an `inPane` connect wants opened, for the agent's tab. */
   onAuthorize(listener: (page: { url: string; authorizationUrl: string }) => void): () => void;
   /** The providers accounts can sign in with without bringing an app: Mochi's own, or for Google one the user saved. */
@@ -39,6 +40,12 @@ export interface LibraryHost {
   signIn(spaceId: string, id: string): Promise<LibraryEntry[]>;
   /** Updates a skill or plugin from its source now; `autoUpdate` set leaves it to follow its source (or pins it). */
   update(spaceId: string, id: string, autoUpdate?: boolean): Promise<LibraryEntry[]>;
+}
+
+/** An element on a browser tab's page, by its ref from the latest snapshot. */
+export interface PageRef {
+  viewId: string;
+  ref: string;
 }
 
 export const libraryMethods = {

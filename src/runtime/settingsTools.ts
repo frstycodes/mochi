@@ -169,19 +169,22 @@ export const SETTINGS_TOOLS = {
       const alias = args.alias ?? freeAlias(taken);
       if (taken.includes(alias)) throw new Error(`There is already a ${alias} account on ${name}; list_connectors lists them`);
       if (args.clientId && looksLikeSecret(args.clientId)) throw new Error('That looks like a client secret, not a Client ID. Never pass the secret itself: pass secretRef and Mochi reads it');
+      if (args.configTokenRef && appProviderFor(url) !== 'slack') throw new Error('configTokenRef is for Slack only');
       const needsSecret = !!args.clientId && appProviderFor(url) !== 'github';
       if (needsSecret && !args.secretRef) throw new Error('Pass secretRef: the ref of the Client Secret on the page, from browser_snapshot (reveal it first if it is hidden). Mochi reads it itself; you never see it');
       const secretFrom = args.secretRef ? { viewId: refView(ctx, args.secretRef, args.tabId), ref: args.secretRef } : undefined;
       const account = `${name} (${alias})`;
       const page = signInPage(env, url);
-      const connecting = env.library.addConnector(profile.id, { url, alias, ...(args.clientId && { clientId: args.clientId }) }, { inPane: true, ...(secretFrom && { secretFrom }) });
+      const slackTokenFrom = args.configTokenRef ? { viewId: refView(ctx, args.configTokenRef, args.tabId), ref: args.configTokenRef } : undefined;
+      const connecting = env.library.addConnector(profile.id, { url, alias, ...(args.clientId && { clientId: args.clientId }) }, { inPane: true, ...(secretFrom && { secretFrom }), ...(slackTokenFrom && { slackTokenFrom }) });
       // The sign-in goes on after this call returns, while the agent works the page; its end shows in the thread.
       let isHandedOff = false;
       void connecting.then(
         () => isHandedOff && say(ctx, `Connected ${account}`),
         (error: unknown) => isHandedOff && say(ctx, `Couldn't connect ${account}: ${error instanceof Error ? error.message : String(error)}`),
       );
-      const first = await Promise.race([page.next, connecting.then(() => null), sleep(SIGN_IN_START_MS).then(() => 'slow' as const)]).finally(() => page.stop());
+      const slow = timeout(SIGN_IN_START_MS);
+      const first = await Promise.race([page.next, connecting.then(() => null), slow.done.then(() => 'slow' as const)]).finally(() => (page.stop(), slow.cancel()));
       if (first === null) return { changed: `connected ${account}`, result: { account: alias, isSignedIn: true } };
       isHandedOff = true;
       if (first === 'slow') return { changed: `started connecting ${account}`, result: { account: alias, note: `${name} is still starting; call list_connectors in a minute` } };
@@ -229,7 +232,10 @@ const SIGN_IN_NEXT = "Approve on this page in your tab: pick the account if aske
 const CODE_NEXT = 'Type userCode on this page in your tab and approve, then call list_connectors until the account isSignedIn.';
 // The local Google Workspace server's first start downloads Python and its packages.
 const SIGN_IN_START_MS = 3 * 60_000;
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+function timeout(ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return { done: new Promise((resolve) => (timer = setTimeout(resolve, ms))), cancel: () => clearTimeout(timer) };
+}
 
 /** The first sign-in page (or one-time code) main sends for `url`'s connect; `stop` unsubscribes. */
 function signInPage(env: ToolContext<unknown>['env'], url: string) {

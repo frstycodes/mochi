@@ -362,6 +362,7 @@ export const TOOL_TABLE = {
       alias: z.string().regex(/^[a-z0-9-]{1,32}$/).optional().describe('The account name, like work or personal; defaults to the first free one'),
       clientId: z.string().min(1).max(200).optional().describe("The Client ID of the user's own app, from the service's setup steps"),
       secretRef: z.string().optional().describe("The ref of the Client Secret on the page, from your latest browser_snapshot (reveal it first if it's masked). Never the secret itself"),
+      configTokenRef: z.string().optional().describe("Slack only: the ref of a generated app configuration token's Access Token on api.slack.com/apps. Mochi creates the app from it, MCP on; no Client ID needed"),
       tabId,
       profileId,
     },

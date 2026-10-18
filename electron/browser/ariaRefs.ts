@@ -34,11 +34,11 @@ export function agentSnapshot(yaml: string, generation: number): { text: string;
 }
 
 /**
- * Client secrets an agent sets up an app next to (Google's `GOCSPX-…`, Slack's 32 hex digits) never reach it: Mochi reads
- * them from the page itself (`readRefValue`). GAP: a screenshot still shows them; 32-hex hashes on other pages hide too.
+ * Client secrets and tokens an agent sets up an app next to (Google's `GOCSPX-…`, Slack's 32 hex digits and `xox…-` tokens)
+ * never reach it: Mochi reads them from the page itself (`readRefValue`). GAP: a screenshot still shows them; 32-hex hashes on other pages hide too.
  */
 export function hideSecrets(text: string) {
-  return text.replace(/GOCSPX-[\w-]+/g, '[secret hidden by Mochi]').replace(/\b[0-9a-f]{32}\b/gi, '[secret hidden by Mochi]');
+  return text.replace(/GOCSPX-[\w-]+/g, '[secret hidden by Mochi]').replace(/xox[a-z](?:\.xox[a-z])?-[\w-]+/g, '[secret hidden by Mochi]').replace(/\b[0-9a-f]{32}\b/gi, '[secret hidden by Mochi]');
 }
 
 function label(line: string, generation: number): { line: string; ref?: AriaRef } {

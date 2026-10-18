@@ -976,8 +976,10 @@ test('connect_account connects in the agent\'s tab with the secret read by main;
   assert.equal(byId('linear').needsOwnApp, undefined, 'registers itself');
   assert.equal(byId('github').needsOwnApp, undefined, "Mochi's own app");
   assert.equal(byId('google-workspace').needsOwnApp, true);
-  assert.match(byId('slack').setup.openUrl, /^https:\/\/api\.slack\.com\/apps\?new_app=1&manifest_json=/);
-  assert.deepEqual(JSON.parse(decodeURIComponent(byId('slack').setup.openUrl.split('manifest_json=')[1])).oauth_config.redirect_urls, ['https://relay.test/oauth/callback']);
+  assert.equal(byId('slack').setup.openUrl, 'https://api.slack.com/apps');
+  const fallback = decodeURIComponent(byId('slack').setup.steps.at(-1).match(/manifest_json=(\S+)/)[1]);
+  assert.deepEqual(JSON.parse(fallback).oauth_config.redirect_urls, ['https://relay.test/oauth/callback']);
+  assert.equal(JSON.parse(fallback).settings.is_mcp_enabled, true);
   assert.match(await t.err('connect_account', { connector: 'slack', clientId: 'GOCSPX-abc' }), /looks like a client secret/);
   assert.match(await t.err('connect_account', { connector: 'slack', clientId: '7575573b1c2a4400de6115a61b557acc' }), /looks like a client secret/);
   assert.match(await t.err('connect_account', { connector: 'slack', clientId: '8325458480016.12371342152640' }), /Pass secretRef/);
@@ -990,6 +992,9 @@ test('connect_account connects in the agent\'s tab with the secret read by main;
   assert.equal(r.url, 'https://slack.com/oauth/v2_user/authorize?client_id=x');
   assert.match(r.next, /list_connectors/);
   assert.equal(JSON.stringify(r).includes('secret"'), false, 'no secret in the result');
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', configTokenRef: 'e1' }), /Slack only/);
+  await t.ok('connect_account', { connector: 'slack', alias: 'beta', configTokenRef: 'e1', tabId: 'tab-1' });
+  assert.deepEqual(t.connects[1], { spaceId: 'latitude', account: { url: 'https://mcp.slack.com/mcp', alias: 'beta' }, options: { inPane: true, slackTokenFrom: { viewId: t.pages.get('rl/tab-1')!.hostId, ref: 'e1' } } });
 });
 
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {

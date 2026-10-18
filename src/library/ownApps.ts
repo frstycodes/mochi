@@ -23,22 +23,34 @@ const SLACK_USER_SCOPES = [
   'mpim:history', 'mpim:read', 'reactions:read', 'reactions:write', 'search:read.files', 'search:read.private', 'search:read.public', 'search:read.users', 'users:read', 'users:read.email',
 ];
 
-/** An app made from a manifest (Slack's ?new_app=1&manifest_json=), so creating it is one click in the user's workspace. */
-function slackSetup(redirectUrl: string): OwnAppSetup {
-  const manifest = {
+/** Mochi's Slack app, as a manifest: user scopes, the relay redirect, and Slack's MCP server on for it. */
+export function slackManifest(redirectUrl: string) {
+  return {
     display_information: { name: 'Mochi', description: 'Lets your Mochi agents use Slack as you.' },
     oauth_config: { redirect_urls: [redirectUrl], scopes: { user: SLACK_USER_SCOPES } },
-    settings: { org_deploy_enabled: false, socket_mode_enabled: false, token_rotation_enabled: false },
+    settings: { org_deploy_enabled: false, socket_mode_enabled: false, token_rotation_enabled: false, is_mcp_enabled: true },
   };
+}
+
+/**
+ * Fast: the agent only generates an app configuration token, and Mochi creates the app from the manifest through Slack's
+ * API (`apps.manifest.create`, which returns the credentials), so no console page is clicked through. The manifest link
+ * is the fallback when the API path fails.
+ */
+function slackSetup(redirectUrl: string): OwnAppSetup {
   return {
-    openUrl: `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(manifest))}`,
+    openUrl: 'https://api.slack.com/apps',
     steps: [
-      'browser_open openUrl: Slack shows "Create app from manifest" with Mochi filled in. If it asks to sign in, ask the user to sign in in your tab and wait. Pick the workspace (ask in chat which one if there are several), then Next and Create.',
-      'In the new app: Features › Agents, turn on "Slack Model Context Protocol (MCP) Server" (Slack lets a workspace\'s own apps use it).',
-      'Settings › Basic Information › App Credentials: read the Client ID; click Show next to Client Secret, take a browser_snapshot, and note the secret\'s ref (its value shows to you as hidden).',
-      'connect_account with connector "slack", an account name (the workspace\'s, lowercased), the Client ID and secretRef. On the sign-in page it opens, click Allow, then list_connectors until it isSignedIn.',
+      'browser_open openUrl. If Slack asks to sign in, ask the user to sign in in your tab and wait.',
+      'Under "Your App Configuration Tokens" click Generate Token, pick the workspace (ask in chat which one if there are several) and Generate. Take a browser_snapshot and note the Access Token\'s ref (its value shows to you as hidden).',
+      'connect_account with connector "slack", an account name (the workspace\'s, lowercased) and configTokenRef: Mochi creates the app with its MCP server on, keeps the credentials, and opens the sign-in page. Click Allow there, then list_connectors until it isSignedIn.',
+      `Only if connect_account reports the API refused: browser_open ${slackManifestUrl(redirectUrl)} (Create app from manifest, Mochi filled in), pick the workspace, Next, Create; then Settings › Basic Information › App Credentials: read the Client ID, click Show next to Client Secret, snapshot, and connect_account with the Client ID and secretRef.`,
     ],
   };
+}
+
+function slackManifestUrl(redirectUrl: string) {
+  return `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(slackManifest(redirectUrl)))}`;
 }
 
 const GOOGLE_SETUP: OwnAppSetup = {

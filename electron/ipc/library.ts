@@ -1,7 +1,7 @@
 import type { WebContents } from 'electron';
 import type { DeviceCode } from '../../src/library/connectors.ts';
 import { libraryEntries, removeItem, setItemEnabled } from '../../src/library/library.ts';
-import type { LibraryHost } from '../../src/host/types/library.ts';
+import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
@@ -9,6 +9,7 @@ import { addMarketplace, importFromAccount, installPlugin, installSkill, marketp
 import { readRefValue } from '../browser/views.ts';
 import { addConnectorAccount, forgetAccount, signIn } from '../library/connectors.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
+import { createSlackApp } from '../library/slackApp.ts';
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
 import { RELAY_URL } from '../remote/relayClient.ts';
 import { setAutoUpdate, updateItem } from '../library/updates.ts';
@@ -71,9 +72,10 @@ export const library = {
   },
   async addConnector(sender, spaceId, input, options) {
     const space = spaceIdOf(spaceId);
-    const { inPane, secretFrom } = connectOptions(options);
+    const { inPane, secretFrom, slackTokenFrom } = connectOptions(options);
     const fields = connectorInput(input);
     if (secretFrom) fields.clientSecret = await secretOnPage(sender, secretFrom);
+    if (slackTokenFrom) Object.assign(fields, await slackAppFrom(sender, slackTokenFrom));
     const account = await addConnectorAccount(space, fields);
     const open = inPane ? async (authorizationUrl: string) => void (!sender.isDestroyed() && sender.send('library:onAuthorize', { url: account.url, authorizationUrl })) : undefined;
     await signIn(account, deviceCodeTo(sender), open);
@@ -108,13 +110,27 @@ const deviceCodeTo = (sender: WebContents) => (code: DeviceCode) => !sender.isDe
 function connectOptions(value: unknown) {
   if (value === undefined) return {};
   const options = record(value, 'options');
-  const secretFrom = options.secretFrom === undefined ? undefined : record(options.secretFrom, 'secretFrom');
-  if (secretFrom && !/^view-\d+$/.test(string(secretFrom.viewId, 'viewId', 32))) throw new TypeError('viewId is not a view id');
-  return { inPane: options.inPane === true, secretFrom: secretFrom && { viewId: secretFrom.viewId as string, ref: string(secretFrom.ref, 'ref', 64) } };
+  return { inPane: options.inPane === true, secretFrom: pageRef(options.secretFrom, 'secretFrom'), slackTokenFrom: pageRef(options.slackTokenFrom, 'slackTokenFrom') };
+}
+
+function pageRef(value: unknown, name: string): PageRef | undefined {
+  if (value === undefined) return undefined;
+  const at = record(value, name);
+  const viewId = string(at.viewId, 'viewId', 32);
+  if (!/^view-\d+$/.test(viewId)) throw new TypeError('viewId is not a view id');
+  return { viewId, ref: string(at.ref, 'ref', 64) };
+}
+
+/** Mochi's Slack app, created with the configuration token on the page; the token and the credentials stay in main. */
+async function slackAppFrom(sender: WebContents, at: PageRef) {
+  const token = await readRefValue(sender, at.viewId, at.ref);
+  if (!token.startsWith('xoxe')) throw new Error('That field holds no app configuration token (they start xoxe): Generate Token on api.slack.com/apps, take a new browser_snapshot and pass the Access Token\'s ref');
+  const { clientId, clientSecret } = await createSlackApp(token, `${RELAY_URL}/oauth/callback`);
+  return { clientId, clientSecret };
 }
 
 /** The client secret where an agent pointed: read in main, so it reaches only the keychain. A masked or empty field is refused. */
-async function secretOnPage(sender: WebContents, { viewId, ref }: { viewId: string; ref: string }) {
+async function secretOnPage(sender: WebContents, { viewId, ref }: PageRef) {
   const value = await readRefValue(sender, viewId, ref);
   if (value.length < 8 || /^[•*·●\s]+$/.test(value)) throw new Error('That field reads empty or masked: reveal the secret on the page (its Show button), take a new browser_snapshot and pass the ref again');
   return value;
