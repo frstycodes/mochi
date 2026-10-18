@@ -141,6 +141,10 @@
           "from": "build/icons",
           "to": "icons",
           "filter": ["*.png"]
+        },
+        {
+          "from": "build/native/uv",
+          "to": "uv"
         }
       ]
     },
@@ -164,6 +168,10 @@
           "from": "build/icons",
           "to": "icons",
           "filter": ["*.png"]
+        },
+        {
+          "from": "build/native/uv",
+          "to": "uv"
         }
       ]
     }

@@ -124,7 +124,7 @@ function ConsoleButton({ thread, pageId, page }: { thread: Thread; pageId: strin
           </ul>
         </ScrollArea>
         <div className="flex justify-end p-2">
-          <Button size="sm" onClick={send} className="gap-1.5 rounded-full">
+          <Button size="sm" onClick={send} className="gap-1.5">
             <ProviderMark provider={thread.providers[0]} size={14} />
             Send to {agent}
           </Button>
@@ -308,7 +308,7 @@ export function DriveBar({ thread, pageId, hasTakenOver }: { thread: Thread; pag
     <div role="status" className="mx-2 mb-1.5 flex h-8 shrink-0 items-center gap-2 rounded-lg bg-muted/60 pr-1 pl-2.5 type-meta text-muted-foreground">
       <ProviderMark provider={thread.providers[0]} size={14} />
       <span className="min-w-0 flex-1 truncate">{hasTakenOver ? `You have the browser. ${agent} waits until you give it back.` : `${agent} is driving this browser`}</span>
-      <Button size="xs" variant={hasTakenOver ? 'default' : 'outline'} className="rounded-full" onClick={() => updatePage(pageId, { hasTakenOver: !hasTakenOver })}>
+      <Button size="xs" variant={hasTakenOver ? 'default' : 'outline'} onClick={() => updatePage(pageId, { hasTakenOver: !hasTakenOver })}>
         {hasTakenOver ? `Give back to ${agent}` : 'Take over'}
       </Button>
     </div>

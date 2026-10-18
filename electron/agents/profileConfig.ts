@@ -344,6 +344,6 @@ async function writeAtomic(path: string, text: string) {
   await rename(tmp, path);
 }
 
-const expand = (value: string) => value.replace(/\$\{(\w+)(?::-([^}]*))?\}/g, (_, name: string, fallback?: string) => process.env[name] ?? fallback ?? '');
-const expandAll = (map: Record<string, string> | undefined) => map && Object.fromEntries(Object.entries(map).map(([k, v]) => [k, expand(v)]));
+export const expand = (value: string) => value.replace(/\$\{(\w+)(?::-([^}]*))?\}/g, (_, name: string, fallback?: string) => process.env[name] ?? fallback ?? '');
+export const expandAll = (map: Record<string, string> | undefined) => map && Object.fromEntries(Object.entries(map).map(([k, v]) => [k, expand(v)]));
 const stringEnv = () => Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string'));

@@ -1,4 +1,4 @@
-import { answerText, seedQueue, type QueueItem } from '../model.ts';
+import { answerText, seedQueue, type EventGlyph, type QueueItem } from '../model.ts';
 import type { Action, State } from './index.tsx';
 import { getRestored } from './persist.ts';
 import { showsDemoData } from '../demoData.ts';
@@ -14,7 +14,7 @@ export type QueueAction =
   /** A Mochi widget (a delete, a setting change, a browser escalation, or a setting a blocked call points at) joins the queue. */
   | { type: 'queue-add'; item: QueueItem }
   /** Closes a Mochi widget: the card leaves the queue and its place in the thread becomes the one-line `text`. */
-  | { type: 'card-record'; queueId: string; text: string };
+  | { type: 'card-record'; queueId: string; text: string; glyph?: EventGlyph; site?: string };
 
 export function initialQueue(saved = getRestored(), isDemo = showsDemoData()): QueueState {
   return { queue: [...(isDemo ? seedQueue() : []), ...(saved?.queue ?? [])] };
@@ -32,7 +32,7 @@ export function queueReducer(state: State, action: Action): State {
         ...state,
         queue: state.queue.filter((q) => q.id !== action.queueId),
         threads: state.threads.map((t) =>
-          t.activity.some((a) => a.card?.id === action.queueId) ? { ...t, activity: t.activity.map((a) => (a.card?.id === action.queueId ? { ...a, text: action.text, card: { id: action.queueId, isOpen: false } } : a)) } : t,
+          t.activity.some((a) => a.card?.id === action.queueId) ? { ...t, activity: t.activity.map((a) => (a.card?.id === action.queueId ? { ...a, text: action.text, ...(action.glyph && { glyph: action.glyph }), ...(action.site && { site: action.site }), card: { id: action.queueId, isOpen: false } } : a)) } : t,
         ),
       };
     case 'delete':

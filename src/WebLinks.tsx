@@ -70,10 +70,10 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
 }
 
 /** The page's favicon over `fallback` (a globe) that shows until it loads, and stays when it never does; fixed size, so nothing shifts. */
-export function Favicon({ host, fallback = <Globe className="size-3.5 text-subtle-foreground" /> }: { host: string; fallback?: ReactNode }) {
+export function Favicon({ host, fallback = <Globe className="size-3.5 text-subtle-foreground" />, className }: { host: string; fallback?: ReactNode; className?: string }) {
   const [state, setState] = useState<'loading' | 'shown' | 'failed'>('loading');
   return (
-    <span aria-hidden className="relative flex size-4 shrink-0 items-center justify-center">
+    <span aria-hidden className={cn('relative flex size-4 shrink-0 items-center justify-center', className)}>
       {state !== 'shown' && fallback}
       {state !== 'failed' && (
         <img
@@ -84,7 +84,7 @@ export function Favicon({ host, fallback = <Globe className="size-3.5 text-subtl
           referrerPolicy="no-referrer"
           onLoad={(e) => setState(isDefaultIcon(e.currentTarget) ? 'failed' : 'shown')}
           onError={() => setState('failed')}
-          className={cn('absolute inset-0 size-4 rounded-xs', state === 'loading' && 'opacity-0')}
+          className={cn('absolute inset-0 size-full rounded-xs', state === 'loading' && 'opacity-0')}
         />
       )}
     </span>

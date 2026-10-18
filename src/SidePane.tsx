@@ -1,6 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { Reorder } from 'motion/react';
-import { Plus, X } from '@/icons';
+import { Globe, Plus, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { revealIn } from '@/lib/revealIn';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ import { NoPanes } from './pane/NoPanes';
 import { cancelDrag, endDrag, moveDrag, startDrag } from './layout/drag';
 import { splitTabIds } from './layout/tree';
 import { PreviewContext } from './layout/SplitContext';
+import { pageKey, usePage } from './browser/pages';
 import { useSize } from './browser/PageSurface';
 import { useHarness } from './store';
 import { layoutOf, shownTab } from './store/panes';
@@ -277,6 +278,8 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
             <Reorder.Item
               as="div"
               value={tab.id}
+              // Tabs land in place when opened, closed or reordered: no layout animation, only the drag itself follows the pointer.
+              transition={{ duration: 0 }}
               className={cn('group/tab relative flex h-7 min-w-14 flex-[0_1_10rem] items-center rounded-md', tab.id === shown?.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60')}
             >
               <button
@@ -290,8 +293,9 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
                   e.preventDefault();
                   step(tab.id, e.key === 'ArrowLeft' ? -1 : 1);
                 }}
-                className="flex h-full min-w-0 flex-1 cursor-default items-center pr-0.5 pl-2 type-meta"
+                className="flex h-full min-w-0 flex-1 cursor-default items-center gap-1.5 pr-0.5 pl-2 type-meta"
               >
+                {tab.kind === 'browser' && <TabFavicon threadId={thread.id} tab={tab} />}
                 <span className="truncate">{tabTitle(tab)}</span>
               </button>
               <Button
@@ -314,6 +318,14 @@ function PaneTabs({ thread, pane, kind, shown }: { thread: Thread; pane: Pane; k
       )}
     </PaneTitle>
   );
+}
+
+/** A browser tab's page icon, or a globe while the page names none or it fails to load. */
+function TabFavicon({ threadId, tab }: { threadId: string; tab: PaneTab }) {
+  const { favicon } = usePage(pageKey(threadId, tab.id), tab.url ?? '');
+  const [broken, setBroken] = useState<string | null>(null);
+  if (!favicon || favicon === broken) return <Globe aria-hidden className="size-3.5 shrink-0" />;
+  return <img src={favicon} alt="" aria-hidden onError={() => setBroken(favicon)} className="size-3.5 shrink-0 rounded-xs object-contain" />;
 }
 
 function EmptyPanes({ thread, rect }: { thread: Thread; rect: PaneRect }) {

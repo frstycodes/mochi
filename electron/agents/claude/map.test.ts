@@ -273,6 +273,8 @@ test('a Skill call is a skill load and an mcp__ call names its server and tool, 
   assert.deepEqual(github.type === 'tool' && github.mcp, { server: 'github', tool: 'list_prs' }, 'the longer server name wins over a prefix of it');
   const unknown = call('m3', 'mcp__later__do_it', {})[0];
   assert.deepEqual(unknown.type === 'tool' && unknown.mcp, { server: 'later', tool: 'do_it' }, 'a server init did not list splits at its first __');
+  const account = call('m4', 'mcp__github__list_prs', { __mochi_account: 'work' })[0];
+  assert.deepEqual(account.type === 'tool' && account.mcp, { server: 'github', tool: 'list_prs', account: 'work' }, 'a connector call keeps the account it acted as');
   assert.deepEqual(call('b1', 'Skill', {})[0], { threadId: 't1', type: 'tool', id: 'b1', phase: 'start', text: 'Skill' }, 'no skill name, no skill load');
 });
 

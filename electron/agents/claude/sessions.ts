@@ -3,12 +3,15 @@ import { hooksEnv } from '../../git/hooks.ts';
 import { PR_GUARD } from './prGuard.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
-import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import type { McpWidgetResource } from '../../../src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
+import { toClaude } from '../../../src/settings/agentConfig.ts';
+import { sessionConnectors } from '../../library/connectors.ts';
+import { sessionLibrary } from '../../library/store.ts';
 import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
@@ -186,6 +189,7 @@ async function launch(session: Session) {
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
     const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
+    const [library, connectors] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId)]);
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     const { forkAt, isMissing } = await takeForkAt(session);
@@ -197,12 +201,11 @@ async function launch(session: Session) {
       options: {
         pathToClaudeCodeExecutable: install.path,
         systemPrompt: { type: 'preset', preset: 'claude_code', append: MOCHI_INSTRUCTIONS },
-        settings: { skillOverrides: HIDDEN_CLAUDE_SKILLS },
+        // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
+        settings: { skillOverrides: HIDDEN_CLAUDE_SKILLS, ...(options.speed && { fastMode: true }) },
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
-        // The flag layer is also the Agent SDK's opt-in: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
-        ...(options.speed && { settings: { fastMode: true } }),
         ...permissions,
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
@@ -213,7 +216,12 @@ async function launch(session: Session) {
         enableFileCheckpointing: true,
         abortController: abort,
         canUseTool: approve(threadId),
-        mcpServers: { [SERVER]: claudeServer(threadId, options.spaceId, options.cwd) },
+        plugins: library.pluginDirs.map((path) => ({ type: 'local' as const, path })),
+        mcpServers: {
+          ...Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig])),
+          ...Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }])),
+          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd),
+        },
         hooks: { ...PR_GUARD, ...compactHooks(threadId) },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },

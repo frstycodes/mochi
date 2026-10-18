@@ -4,6 +4,7 @@ import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
 import { setImageDir } from './agents/images.ts';
 import { registerIpc } from './ipc/index.ts';
+import { startLibraryUpdates } from './library/updates.ts';
 import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
 import { startScheduler } from './schedule/scheduler.ts';
@@ -24,6 +25,7 @@ app.whenReady().then(() => {
   registerIpc(isTrustedUrl);
   startWatch();
   void startScheduler();
+  startLibraryUpdates();
   installHooks().catch((error: unknown) => console.warn('Git hooks not installed; agents commit without the message check', error));
   // Before the first window: it watches every window's close.
   startRemote();

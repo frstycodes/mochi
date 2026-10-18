@@ -34,6 +34,8 @@ export interface Prefs {
   permissions: SharedAccess;
   /** Side pane tabs pinned as icons in the thread header, in order. */
   headerPins: PaneTabKind[];
+  /** Sidebar destinations shown, by `SIDEBAR_ITEMS` id (Edit sidebar); the rest sit under More. */
+  sidebarItems: string[];
   /** Off sends every message straight through: no local score, no classifier call. */
   driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
@@ -112,6 +114,7 @@ export const DEFAULT_PREFS: Prefs = {
   agent: 'claude',
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
+  sidebarItems: ['queue', 'board', 'projects'],
   driftGuard: true,
   whileWorking: 'queue',
   simplifyLength: 'short',

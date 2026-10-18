@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { defineConfig, lazyPlugins } from 'vite-plus';
+import { defineConfig, lazyPlugins, loadEnv } from 'vite-plus';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
@@ -28,7 +28,11 @@ export default defineConfig(({ mode }) => ({
         // playwright-core resolves its own package.json and reads files beside it at runtime.
         main: {
           entry: 'electron/main.ts',
-          vite: { build: { rolldownOptions: { external: ['node-pty', /^playwright-core(\/|$)/] } } },
+          vite: {
+            // Mochi's OAuth app secrets (electron/library/oauthApps.ts), from the gitignored .env.local.
+            define: { __MOCHI_OAUTH_ENV__: JSON.stringify(loadEnv(mode, import.meta.dirname, 'MOCHI_OAUTH_')) },
+            build: { rolldownOptions: { external: ['node-pty', /^playwright-core(\/|$)/] } },
+          },
         },
         // A sandboxed preload must be CommonJS; `.cjs` keeps it CJS under the package's `"type": "module"`.
         preload: {

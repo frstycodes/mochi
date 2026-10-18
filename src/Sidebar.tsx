@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
-import { Archive, Chat, Edit, Folder, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from '@/icons';
+import { Archive, Chat, Edit, Eye, Hierarchy, Menu, Search, TaskSquare, Undo } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -13,7 +13,6 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarTrigger,
@@ -35,6 +34,7 @@ import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
 import { activeThreads, dropPin, lastActivityAt, orderBetween, pinnedThreads, pinOrderOf, stepPin } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
+import { NavItem, SidebarNav } from './SidebarNav';
 import { useSettle } from './useSettle';
 import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
@@ -231,11 +231,9 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               }
             />
             <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<BoundShortcut command="go-new" className="hidden md:inline-flex" />} />
-            <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length + remoteQueueCount > 0 ? queue.length + remoteQueueCount : undefined} />
             {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NotificationBell spaceId={spaceId} />
-            <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
-            <NavItem icon={<Folder />} label="Projects" isActive={view.kind === 'projects'} onClick={() => go({ kind: 'projects' })} />
+            <SidebarNav view={view} go={go} queueCount={queue.length + remoteQueueCount} />
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -596,18 +594,6 @@ function slotAt(list: HTMLUListElement | null, draggedId: string, pinnedIds: str
   return { toPinned, index };
 }
 
-function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: ReactNode; label: string; isActive?: boolean; onClick: () => void; trailing?: ReactNode; badge?: number }) {
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton isActive={isActive} onClick={onClick} className="text-xs [&_svg]:size-3.5">
-        {icon}
-        <span>{label}</span>
-        {!!trailing && <span className="ml-auto flex items-center opacity-0 transition-opacity group-hover/menu-item:opacity-100">{trailing}</span>}
-      </SidebarMenuButton>
-      {badge !== undefined && <SidebarMenuBadge className="tabular">{badge}</SidebarMenuBadge>}
-    </SidebarMenuItem>
-  );
-}
 
 /** `machine`: the computer it runs on, for another computer's thread among this one's (Pinned). */
 export function ThreadItem({ thread, machine, isActive, isSelected, onSelect }: { thread: Thread; machine?: FollowedMachine; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {

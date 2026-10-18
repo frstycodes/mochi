@@ -20,7 +20,7 @@ import { installExtension, removeCustomTheme, uninstallPackage, useApplyTheme, u
 import { OverflowIcon, TooltipIconButton } from '../../ui';
 import { CatalogRow } from '../CatalogRow';
 import { useLinkedTab } from '../open';
-import { SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId } from '../parts';
+import { ListIcon, SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId, SkeletonRows } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
 import { ANIMATIONS, type AnimationArea } from '../settingOptions';
 import { ThemePicker, ThemeSwatch, useChosenTheme, useThemeColors } from '../ThemePicker';
@@ -584,7 +584,7 @@ function ExtensionRow({ extension }: { extension: MarketplaceExtension }) {
     <SettingsRow
       label={
         <span ref={ref} className="flex min-w-0 items-center gap-2.5">
-          <ExtensionIcon url={extension.iconUrl} />
+          <ListIcon url={extension.iconUrl} />
           <span className="truncate">{extension.displayName}</span>
         </span>
       }
@@ -666,12 +666,6 @@ function Swatches({
   );
 }
 
-function ExtensionIcon({ url }: { url?: string }) {
-  const [isBroken, setBroken] = useState(false);
-  if (!url || isBroken) return <span aria-hidden className="size-8 shrink-0 rounded-lg bg-muted" />;
-  return <img src={url} alt="" loading="lazy" onError={() => setBroken(true)} className="size-8 shrink-0 rounded-lg object-contain" />;
-}
-
 function SwatchSkeletons({ count }: { count: number }) {
   return (
     <div className="flex items-center gap-1">
@@ -682,18 +676,3 @@ function SwatchSkeletons({ count }: { count: number }) {
   );
 }
 
-const SKELETON_WIDTHS = ['w-40', 'w-28', 'w-48', 'w-32'];
-
-function SkeletonRows({ count }: { count: number }) {
-  return Array.from({ length: count }, (_, i) => (
-    <SettingsRow
-      key={i}
-      label={
-        <span className="flex items-center gap-2.5">
-          <Skeleton className="size-8 rounded-lg" />
-          <Skeleton className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`} />
-        </span>
-      }
-    />
-  ));
-}

@@ -1,4 +1,4 @@
-export type View = { kind: 'queue' } | { kind: 'board' } | { kind: 'projects' } | { kind: 'new' } | { kind: 'thread'; id: string } | { kind: 'tab'; threadId: string; tabId: string };
+export type View = { kind: 'queue' } | { kind: 'board' } | { kind: 'projects' } |  { kind: 'new' } | { kind: 'thread'; id: string } | { kind: 'tab'; threadId: string; tabId: string };
 
 export type Orientation = 'row' | 'column';
 export type Side = 'left' | 'right' | 'top' | 'bottom';

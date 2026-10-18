@@ -42,7 +42,8 @@ import { useAccountLimits } from './usage/useAccountLimits';
 import { currentAction, PHASE_LABELS } from './agentPhase';
 import { summarySections, TOKENS, USD, type SummarySection, type SummarySectionId } from './summarySections';
 import { CoinIcon, PluginIcon, SkillIcon } from './icons/ObjectIcons';
-import { McpServerMark } from './chat/McpIcon';
+import { McpServerMark, PluginMark, SkillMark } from './chat/McpIcon';
+import { useLibraryNames } from './library/names';
 import { BranchName } from './git/BranchLabel';
 
 const LIST_LIMIT = 3;
@@ -207,13 +208,14 @@ function SourceRows({ thread, open }: SectionProps) {
 }
 
 function SkillRows({ thread, summary }: SectionProps) {
+  const names = useLibraryNames();
   return (
     <LimitedList items={summary.skills}>
       {(skill) => (
         <SummaryRow
           key={skill.name}
-          icon={<SkillIcon />}
-          label={skill.name}
+          icon={<SkillMark skill={skill.name} fallback={<SkillIcon />} />}
+          label={<span title={skill.name}>{names.skill(skill.name).title}</span>}
           onClick={() => openProfileConfig(thread.spaceId, 'skills', thread.session?.provider ?? thread.providers[0])}
         >
           <span className="tabular type-caption text-subtle-foreground">
@@ -261,10 +263,12 @@ function ToolIcon({ verb }: { verb: CountedVerb }) {
 
 /** An MCP server's calls: its name, then the tools it ran, muted. */
 function McpServerLabel({ usage }: { usage: ThreadSummary['servers'][number] }) {
+  const names = useLibraryNames();
+  const tools = usage.tools.map((tool) => names.tool(usage.server, tool)).join(', ');
   return (
-    <span title={usage.tools.join(', ')}>
-      {usage.server}
-      <span className="text-subtle-foreground"> · {usage.tools.join(', ')}</span>
+    <span title={`${usage.server}: ${usage.tools.join(', ')}`}>
+      {names.server(usage.server).title}
+      <span className="text-subtle-foreground"> · {tools}</span>
     </span>
   );
 }
@@ -511,6 +515,7 @@ const MCP_STATUS_CLASSES = { connected: '', pending: 'text-subtle-foreground', '
 
 /** What the live agent reported at session start; a list the agent didn't report is left out rather than shown empty. */
 function SessionDetails({ thread }: SectionProps) {
+  const names = useLibraryNames();
   const { agent, session, spaceId } = thread;
   if (!agent || !session) return null;
   const { provider } = session;
@@ -533,7 +538,7 @@ function SessionDetails({ thread }: SectionProps) {
         <Section label={`MCP servers · ${agent.mcpServers.length}`} action={manage('mcp')} empty={agent.mcpServers.length === 0 ? 'No MCP servers configured' : undefined}>
           <LimitedList items={agent.mcpServers}>
             {(server) => (
-              <SummaryRow key={server.name} icon={<McpServerMark server={server.name} url={server.url} />} label={server.name}>
+              <SummaryRow key={server.name} icon={<McpServerMark server={server.name} url={server.url} />} label={<span title={server.name}>{names.server(server.name).title}</span>}>
                 <span className={cn('tabular type-caption', MCP_STATUS_CLASSES[server.status] || 'text-subtle-foreground')}>
                   {MCP_STATUS_LABELS[server.status] || (server.toolCount === undefined ? 'Connected' : `${server.toolCount} tools`)}
                 </span>
@@ -547,7 +552,7 @@ function SessionDetails({ thread }: SectionProps) {
         <Section label={`Plugins · ${plugins.length}`} empty={plugins.length === 0 ? 'No plugins installed' : undefined}>
           <LimitedList items={plugins}>
             {(plugin) => (
-              <SummaryRow key={plugin.name} icon={<PluginIcon />} label={plugin.name}>
+              <SummaryRow key={plugin.name} icon={<PluginMark plugin={plugin.name} fallback={<PluginIcon />} />} label={<span title={plugin.name}>{names.plugin(plugin.name).title}</span>}>
                 {!!plugin.version && <span className="tabular type-caption text-subtle-foreground">{plugin.version}</span>}
               </SummaryRow>
             )}
@@ -555,7 +560,7 @@ function SessionDetails({ thread }: SectionProps) {
         </Section>
       )}
 
-      {!!agent.skills && <ChipSection label="Skills available" items={agent.skills} empty="No skills found" action={manage('skills')} />}
+      {!!agent.skills && <ChipSection label="Skills available" items={agent.skills} labelOf={(skill) => names.skill(skill).title} empty="No skills found" action={manage('skills')} />}
       {!!agent.slashCommands && <ChipSection label="Slash commands" items={agent.slashCommands.map((c) => `/${c}`)} empty="No slash commands" />}
       {!!agent.tools && <ChipSection label="Tools available" items={agent.tools} empty="No tools reported" />}
     </>
@@ -572,7 +577,8 @@ function SessionField({ label, value, className }: { label: string; value?: stri
   );
 }
 
-function ChipSection({ label, items, empty, action }: { label: string; items: string[]; empty: string; action?: ReactNode }) {
+/** `labelOf` names an item for people; the item itself stays in its tooltip. */
+function ChipSection({ label, items, labelOf, empty, action }: { label: string; items: string[]; labelOf?: (item: string) => string; empty: string; action?: ReactNode }) {
   const [isOpen, setOpen] = useState(false);
   const shown = isOpen ? items : items.slice(0, CHIP_LIMIT);
   return (
@@ -580,8 +586,8 @@ function ChipSection({ label, items, empty, action }: { label: string; items: st
       <ul className="flex flex-wrap gap-1 px-2 py-1">
         {shown.map((item) => (
           <li key={item} className="max-w-full">
-            <Badge variant="outline" className="h-auto max-w-full font-normal whitespace-normal text-muted-foreground [overflow-wrap:anywhere]">
-              {item}
+            <Badge variant="outline" title={labelOf && item} className="h-auto max-w-full font-normal whitespace-normal text-muted-foreground [overflow-wrap:anywhere]">
+              {labelOf ? labelOf(item) : item}
             </Badge>
           </li>
         ))}

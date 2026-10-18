@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
@@ -77,6 +77,23 @@ export async function codexUrl(thread: string) {
   return `http://127.0.0.1:${port}/mcp/${SECRET}/${thread}`;
 }
 
+/**
+ * Another route on this loopback server. A private one lives under `/mcp/<secret>/<name>/…` and refuses browser pages,
+ * like Codex's; a public one (an OAuth callback the browser lands on) is `/<name>`. `rest` is the path after the name.
+ */
+export function addLoopbackRoute(name: string, handle: (req: IncomingMessage, res: ServerResponse, rest: string[]) => Promise<void>, isPublic = false) {
+  routes.set(name, { handle, isPublic });
+}
+
+/** The URL of a route added with `addLoopbackRoute`. */
+export async function loopbackUrl(name: string, ...rest: string[]) {
+  const { port } = (await listening()).address() as AddressInfo;
+  const route = routes.get(name);
+  return `http://127.0.0.1:${port}${route?.isPublic ? '' : `/mcp/${SECRET}`}/${[name, ...rest].join('/')}`;
+}
+
+const routes = new Map<string, { handle: (req: IncomingMessage, res: ServerResponse, rest: string[]) => Promise<void>; isPublic: boolean }>();
+
 const SECRET = randomBytes(24).toString('hex');
 const calls = toolCalls(MOCHI_TIMEOUT_MS);
 let http: Promise<Server> | undefined;
@@ -99,6 +116,7 @@ function listening() {
   http ??= new Promise((resolve, reject) => {
     // Stateless: each POST gets a fresh server and transport, so nothing is kept between Codex's calls.
     const server = createServer(async (req, res) => {
+      if (await routed(req, res)) return;
       const match = req.url?.match(/^\/mcp\/(\w+)\/([\w-]+)$/);
       if (!match || match[1] !== SECRET) return void res.writeHead(404).end();
       // Codex sends no Origin; a browser page always does, so this keeps web pages off the port even if they learn the URL.
@@ -114,4 +132,21 @@ function listening() {
     server.listen(0, '127.0.0.1', () => resolve(server));
   });
   return http;
+}
+
+async function routed(req: IncomingMessage, res: ServerResponse) {
+  const [path] = (req.url ?? '').split('?');
+  const parts = path.split('/').filter(Boolean);
+  const isPrivate = parts[0] === 'mcp' && parts[1] === SECRET && parts.length > 3;
+  const [name, ...rest] = isPrivate ? parts.slice(2) : parts;
+  const route = routes.get(name);
+  if (!route || route.isPublic === isPrivate) return false;
+  if (isPrivate && req.headers.origin !== undefined) {
+    res.writeHead(403).end();
+    return true;
+  }
+  await route.handle(req, res, rest).catch((error: Error) => {
+    if (!res.headersSent) res.writeHead(500).end(error.message);
+  });
+  return true;
 }

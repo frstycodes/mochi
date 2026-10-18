@@ -114,7 +114,7 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>
           <PromptInputActionMenu>
-            <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
+            <PromptInputActionMenuTrigger tooltip="Attach">
               <Paperclip className="size-4" />
             </PromptInputActionMenuTrigger>
             <PromptInputActionMenuContent>
@@ -129,11 +129,11 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
         <PromptInputTools>
           {meter}
           {onStop ? (
-            <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent" className="rounded-full">
+            <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent">
               <Stop className="size-4" />
             </PromptInputSubmit>
           ) : (
-            <PromptInputSubmit aria-label={submitLabel} className="rounded-full">
+            <PromptInputSubmit aria-label={submitLabel}>
               <ArrowUp className="size-4" />
             </PromptInputSubmit>
           )}
