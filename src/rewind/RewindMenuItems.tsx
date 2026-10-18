@@ -1,4 +1,4 @@
-import { ArrowSwapHorizontal, Undo } from 'reicon-react';
+import { ArrowLeftRight, Undo } from '@/icons';
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
@@ -31,7 +31,7 @@ export function RewindMenuItems({ thread }: { thread: Thread }) {
         ))}
         {relatives.map((r) => (
           <DropdownMenuItem key={r.id} onSelect={() => openRewind({ kind: 'compare', threadId: thread.id, otherId: r.id })}>
-            <ArrowSwapHorizontal />
+            <ArrowLeftRight />
             <span className="min-w-0 truncate">Compare with {r.title}</span>
           </DropdownMenuItem>
         ))}

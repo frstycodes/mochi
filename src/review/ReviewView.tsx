@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle, MessageEdit, Next, TaskSquare, X } from 'reicon-react';
+import { CheckCircle, MessageEdit, SkipForward, TaskSquare, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -208,7 +208,7 @@ function ReviewActions({ thread, onSkip }: { thread: Thread; onSkip: () => void 
       </Button>
       <Button variant="ghost" size="sm" onClick={onSkip} className="ml-auto text-muted-foreground">
         Skip
-        <Next data-icon="inline-end" />
+        <SkipForward data-icon="inline-end" />
       </Button>
       {dialog}
     </div>

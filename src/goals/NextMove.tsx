@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { CheckCircle } from 'reicon-react';
+import { CheckCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

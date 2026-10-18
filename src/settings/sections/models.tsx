@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { ChevronDown } from 'reicon-react';
+import { ChevronDown } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ModelMenu, ModelPicker, useListedModels, useModels } from '../../ModelControls';
@@ -35,6 +35,9 @@ export function ModelsSection() {
       ))}
       <SettingsGroup title="Side chats">
         <CatalogRow settingKey="sideChatModel" />
+      </SettingsGroup>
+      <SettingsGroup title="Image generation" footer="Claude can't make images, so it asks this harness. Codex threads always use their own.">
+        <CatalogRow settingKey="imageGen" />
       </SettingsGroup>
       <BackgroundModels />
     </div>

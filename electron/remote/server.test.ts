@@ -96,6 +96,17 @@ test('a device without the scope a command needs is refused, and the renderer ne
   await server.close();
 });
 
+test('a viewer’s seen is refused before it reaches the renderer', async () => {
+  const { server, runs } = await serve();
+  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
+  viewer.command('c1', { type: 'seen', threadId: 't1' });
+  const [result] = await viewer.until('result');
+  assert.deepEqual(result, { type: 'result', id: 'c1', isOk: false, error: 'This device can’t seen: it needs the operate scope' });
+  assert.equal(runs.length, 0);
+  await viewer.close();
+  await server.close();
+});
+
 test('a new device can read code but not open a terminal; a viewer can do neither', async () => {
   const { server, runs } = await serve();
   const laptop = await connect(server.addresses[0], { auth: 'laptop' });
@@ -188,4 +199,15 @@ test('only LAN and Tailscale addresses count as this network', () => {
     ['fe80::1', 'IPv6', false],
   ] as const;
   for (const [address, family, expected] of cases) assert.equal(isPrivate(address, family), expected, address);
+});
+
+test('a device without manage can’t clone a project, and the renderer never sees the clone', async () => {
+  const { server, runs } = await serve();
+  const viewer = await connect(server.addresses[0], { auth: 'viewer' });
+  viewer.command('c1', { type: 'clone-project', source: { url: 'https://github.com/a/b.git' } });
+  const [result] = await viewer.until('result');
+  assert.deepEqual(result, { type: 'result', id: 'c1', isOk: false, error: 'This device can’t clone-project: it needs the manage scope' });
+  assert.equal(runs.length, 0);
+  await viewer.close();
+  await server.close();
 });

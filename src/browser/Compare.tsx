@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { toast } from '@/toast/store';
-import { Danger, X } from 'reicon-react';
+import { Danger, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
@@ -165,7 +165,7 @@ function SliderCompare({ thread, pageId, page, base, branch }: { thread: Thread;
       </div>
       <SliderLabel side="left">{base.branch}</SliderLabel>
       <SliderLabel side="right">{branch}</SliderLabel>
-      <Button size="xs" variant="outline" className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border-transparent bg-popover text-foreground shadow-popover dark:bg-popover" onClick={() => setShots(null)}>
+      <Button size="xs" variant="outline" className="absolute bottom-2 left-1/2 -translate-x-1/2 border-transparent bg-popover text-foreground shadow-popover dark:bg-popover" onClick={() => setShots(null)}>
         Capture again
       </Button>
     </div>

@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, motion, useReducedMotionConfig, type MotionProps } from 'motion/react';
-import { Archive, ChatRound, ChevronRight, DiagramTree, Edit, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from 'reicon-react';
+import { motion, type MotionProps } from 'motion/react';
+import { Archive, Chat, DiagramTree, Edit, Eye, Hierarchy, Menu, Search, TaskSquare, Undo } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -13,7 +13,6 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuAction,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarTrigger,
@@ -24,6 +23,8 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
 import { StatusRing, useThreadStatus } from './goals/VerdictChip';
+import { SubThreadGuide } from './goals/SubThreads';
+import { nestWithUndo, unnestWithUndo } from './subThreadActions';
 import { PIN_SLOTS, type Thread } from './model';
 import { useProfiles } from './profiles';
 import { endDrag, moveDrag, startDrag } from './layout/drag';
@@ -33,18 +34,19 @@ import { useIsMultiSplit } from './SidebarToggle';
 import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
 import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
-import { dropAt, dropPin, lastActivityAt, nestBlocker, sidebarGroups, stepPin, type DropAt, type ThreadGroup } from './reorder';
+import { dropAt, dropPin, lastActivityAt, nestBlocker, orderBetween, pinnedThreads, pinOrderOf, sidebarGroups, stepPin, type DropAt, type ThreadGroup } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
+import { NavItem, SidebarNav } from './SidebarNav';
 import { useSettle } from './useSettle';
 import { NextRunBadge } from './schedule/NextRunBadge';
 import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
-import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type View } from './store';
-import { SubThreadGuide } from './goals/SubThreads';
-import { nestWithUndo, unnestWithUndo } from './subThreadActions';
+import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type State, type View } from './store';
+import type { FollowedMachine } from './host/types/remote';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
-import { SpaceIcon, TooltipIconButton } from './ui';
+import { SpaceIcon, TooltipIconButton, UnreadDot } from './ui';
+import { isUnread } from './store/seen';
 import { workingLabel } from './agentPhase';
 import { runningBackground } from './runtime/subagents';
 import { BoundShortcut } from './Shortcut';
@@ -55,6 +57,9 @@ import { DeviceIcon } from './remote/DeviceIcon';
 import { MachinePresence } from './remote/MachinePresence';
 import { RemoteScope, useMachines } from './remote/useMachines';
 import { UserMenu } from './UserMenu';
+import { FoldGroup } from './SidebarFold';
+import { ProjectIcon } from './ProjectIcon';
+import { useProjectAt } from './projects';
 import { HAS_CAPTIONS } from './windowCaptions';
 import { host } from './host';
 
@@ -225,26 +230,25 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
               }
             />
             <NavItem icon={<Edit />} label="New thread" isActive={view.kind === 'new'} onClick={() => go({ kind: 'new' })} trailing={<BoundShortcut command="go-new" className="hidden md:inline-flex" />} />
-            <NavItem icon={<Inbox />} label="Queue" isActive={view.kind === 'queue'} onClick={() => go({ kind: 'queue' })} badge={queue.length + remoteQueueCount > 0 ? queue.length + remoteQueueCount : undefined} />
             {review.count > 0 && <NavItem icon={<TaskSquare />} label="Review" isActive={review.isOpen} onClick={review.open} badge={review.count} />}
             <NotificationBell spaceId={spaceId} />
-            <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
+            <SidebarNav view={view} go={go} queueCount={queue.length + remoteQueueCount} />
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
 
       {/* `contents` keeps the groups' own layout; it only collects Esc and Shift ↑/↓ from every thread row. */}
       <div className="contents" onKeyDown={selection.onKeyDown}>
-        <ThreadList pinned={pinned} active={active} row={row} selectedIds={selection.ids} />
+        <ThreadList pinned={pinned} remotePins={useRemotePins()} active={active} row={row} selectedIds={selection.ids} />
 
         {settled.length > 0 && (
-          <SettledGroup count={settled.length}>
+          <FoldGroup label="Settled" count={settled.length}>
             {settled.map((t) => (
               <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
                 <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
               </ThreadRowMenu>
             ))}
-          </SettledGroup>
+          </FoldGroup>
         )}
       </div>
       <MachineThreads />
@@ -253,42 +257,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
 }
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
-const ACCORDION = { duration: 0.2, ease: EASE_OUT };
 const ROW_LAYOUT = { duration: 0.2, ease: EASE_OUT };
-
-/** Settled threads, folded under a count. */
-function SettledGroup({ count, children }: { count: number; children: ReactNode }) {
-  const [isOpen, setOpen] = useState(false);
-  const reduce = useReducedMotionConfig();
-  const contentId = useId();
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel asChild>
-        <button type="button" aria-expanded={isOpen} aria-controls={contentId} onClick={() => setOpen(!isOpen)} className="hover:text-sidebar-foreground">
-          Settled
-          <span className="ml-1 tabular">{count}</span>
-          <ChevronRight className={cn('ml-auto size-3 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none', isOpen && 'rotate-90')} />
-        </button>
-      </SidebarGroupLabel>
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            id={contentId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={reduce ? { duration: 0 } : ACCORDION}
-            className="overflow-hidden"
-          >
-            <SidebarGroupContent>
-              <SidebarMenu>{children}</SidebarMenu>
-            </SidebarGroupContent>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </SidebarGroup>
-  );
-}
 
 /** Your other computers' threads, each under its computer's name: they run there, and open here to follow and steer. */
 function MachineThreads() {
@@ -324,7 +293,7 @@ function MachineThreads() {
             {active.length === 0 && <li className="px-2 type-caption text-subtle-foreground">No active threads</li>}
           </SidebarMenu>
         </SidebarGroup>
-        {settled.length > 0 && <SettledGroup count={settled.length}>{settled.map(row)}</SettledGroup>}
+        {settled.length > 0 && <FoldGroup label="Settled" count={settled.length}>{settled.map(row)}</FoldGroup>}
       </RemoteScope>
     );
   });
@@ -362,38 +331,47 @@ function useThreadSelection(order: string[], openId: string | undefined) {
 }
 
 /**
- * Pinned threads in your order, then the rest by recent activity, split by the Threads label; sub-threads hang under their parent on
- * an L-shaped guide. Drag a row across the label to pin or unpin, within Pinned to reorder, out onto a split to open it there, or
- * hold it over the middle of another row to nest it there; drag a sub-thread out of its group to make it a thread of its own.
- * Alt ↑/↓ reorders from the keyboard, the row menu nests.
+ * Pinned threads in your order (your other computers' among them), then the rest by recent activity, split by the Threads label;
+ * sub-threads hang under their parent on an L-shaped guide. Drag a row across the label to pin or unpin, within Pinned to reorder,
+ * out onto a split to open it there, or hold it over the middle of another row to nest it there; drag a sub-thread out of its
+ * group to make it a thread of its own. Alt ↑/↓ reorders from the keyboard, the row menu nests.
  */
-function ThreadList({ pinned, active, row, selectedIds }: { pinned: ThreadGroup[]; active: ThreadGroup[]; row: (t: Thread, isSub?: boolean) => ReactNode; selectedIds: string[] }) {
-  const { dispatch } = useHarness();
+function ThreadList({ pinned, remotePins, active, row, selectedIds }: { pinned: ThreadGroup[]; remotePins: RemotePin[]; active: ThreadGroup[]; row: (t: Thread, isSub?: boolean) => ReactNode; selectedIds: string[] }) {
+  const { state, dispatch } = useHarness();
+  const { run } = useMachines();
+  const route = useRemoteThreadRoute();
   const listRef = useRef<HTMLUListElement>(null);
+  const pins = mergePins(pinned, remotePins);
   const pinnedIds = pinned.map((g) => g.thread.id);
   const activeIds = active.map((g) => g.thread.id);
-  const reorder = (lists: { pinned: string[]; unpinned: string[] } | null) => lists && dispatch({ type: 'reorder', ...lists });
-  const drag = useRowDrag(listRef, pinnedIds, reorder);
-  if (pinned.length + active.length === 0) return null;
+  const reorder = (lists: { pinned: string[]; unpinned: string[] } | null) => lists && dispatch({ type: 'reorder', ...lists, at: Date.now() });
+  const drop = (dragged: ListRow, slot: NonNullable<RowDragState['slot']>) => {
+    if (!dragged.remote && !slot.toPinned) return reorder(dropPin(pinnedIds, activeIds, dragged.thread.id, false, slot.index));
+    const others = pins.filter((p) => p.rowId !== dragged.rowId);
+    const order = orderBetween(others[slot.index - 1] && pinOrderOf(others[slot.index - 1].thread), others[slot.index] && pinOrderOf(others[slot.index].thread), Date.now());
+    if (!dragged.remote) return dispatch({ type: 'pin-at', threadId: dragged.thread.id, order });
+    void run(dragged.remote.machine.id, slot.toPinned ? { type: 'pin', threadId: dragged.thread.id, isPinned: true, order } : { type: 'pin', threadId: dragged.thread.id, isPinned: false });
+  };
+  const nest = (dragged: ListRow, parentId: string) => nestWithUndo(dispatch, state.threads, dragged.thread, parentId);
+  const drag = useRowDrag(listRef, pinnedIds, drop, nest);
+  if (pins.length + active.length === 0) return null;
 
-  const all = [...pinned, ...active].flatMap((g) => [g.thread, ...g.subs]);
-  const dragged = drag.state && all.find((t) => t.id === drag.state!.id);
+  const rows = [...pins, ...active.map(localRow)];
+  const dragged = drag.state && [...rows, ...rows.flatMap((r) => (r.subs ?? []).map((s) => localRow({ thread: s, subs: [], settledSubs: 0 })))].find((r) => r.rowId === drag.state!.id);
   const step = (id: string, by: 1 | -1) => {
     reorder(stepPin(pinnedIds, activeIds, id, by));
     // Moving a focused node in the DOM can drop its focus; put it back on the row.
     requestAnimationFrame(() => listRef.current?.querySelector<HTMLElement>(`[data-row-id="${id}"] [data-sidebar=menu-button]`)?.focus());
   };
-  const item = (t: Thread, isPinned: boolean, pinNumber: number | undefined, sub?: { parentId: string; isLast: boolean }) => (
+  const item = (t: Thread, pinNumber: number | undefined, rowProps: object, sub?: { parentId: string; isLast: boolean }) => (
     <ThreadPeek key={t.id} thread={t} pinNumber={pinNumber} isDisabled={!!drag.state}>
       <ThreadRowMenu threadId={t.id} selectedIds={selectedIds}>
         <SidebarMenuItem
           asChild
-          data-row-id={t.id}
+          {...rowProps}
           data-thread-row={t.id}
-          data-pinned={isPinned || undefined}
           data-sub-of={sub?.parentId}
           data-nest-target={drag.state?.nestUnder === t.id || undefined}
-          onPointerDown={(e) => drag.onPointerDown(e, t)}
           onKeyDown={(e) => {
             if (sub || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
             e.preventDefault();
@@ -410,32 +388,43 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: ThreadGroup[
       </ThreadRowMenu>
     </ThreadPeek>
   );
-  const section = (groups: ThreadGroup[], isPinned: boolean) => {
-    // A dragged parent takes its sub-threads with it; a dragged sub-thread leaves its group's guide.
-    const rows = groups
-      .filter((g) => g.thread.id !== drag.state?.id)
-      .map((g, i) => {
-        const subs = g.subs.filter((s) => s.id !== drag.state?.id);
+  const section = (rows: ListRow[], isPinned: boolean) => {
+    const items = rows.filter((r) => r.rowId !== drag.state?.id).map((r) => {
+      const t = r.thread;
+      const rowProps = { 'data-row-id': r.rowId, 'data-pinned': isPinned || undefined, onPointerDown: (e: React.PointerEvent<HTMLLIElement>) => drag.onPointerDown(e, r) } as const;
+      const subs = (r.subs ?? []).filter((s) => s.id !== drag.state?.id);
+      if (r.remote)
         return (
-          <Fragment key={g.thread.id}>
-            {item(g.thread, isPinned, isPinned ? i + 1 : undefined)}
-            {subs.map((s, j) => item(s, isPinned, undefined, { parentId: g.thread.id, isLast: j === subs.length - 1 && g.settledSubs === 0 }))}
-            {g.settledSubs > 0 && <SettledSubs count={g.settledSubs} glide={glide} />}
-          </Fragment>
+          <SidebarMenuItem key={r.rowId} asChild {...rowProps} data-remote-thread-row={t.id}>
+            <motion.li {...glide}>
+              <RemoteScope machine={r.remote.machine} state={r.remote.state}>
+                <ThreadItem thread={t} machine={r.remote.machine} isActive={route?.machineId === r.remote.machine.id && route.threadId === t.id} onSelect={() => openRemoteThread({ machineId: r.remote!.machine.id, threadId: t.id })} />
+              </RemoteScope>
+            </motion.li>
+          </SidebarMenuItem>
         );
-      });
+      // The number is this computer's Orbit slot: another computer's pins have their own there.
+      const pinNumber = isPinned ? pinnedIds.indexOf(t.id) + 1 : undefined;
+      // A dragged parent takes its sub-threads with it; a dragged sub-thread leaves its group's guide.
+      return (
+        <Fragment key={r.rowId}>
+          {item(t, pinNumber, rowProps)}
+          {subs.map((s, j) => item(s, undefined, { 'data-row-id': s.id, 'data-pinned': isPinned || undefined, onPointerDown: (e: React.PointerEvent<HTMLLIElement>) => drag.onPointerDown(e, localRow({ thread: s, subs: [], settledSubs: 0 })) }, { parentId: t.id, isLast: j === subs.length - 1 && !r.settledSubs }))}
+          {!!r.settledSubs && <SettledSubs count={r.settledSubs} glide={glide} />}
+        </Fragment>
+      );
+    });
     const slot = drag.state?.slot;
-    const isTop = !!dragged && !dragged.parent;
     // Threads sort by recency, so a row dropped there lands where its last activity puts it, not where the pointer is.
-    const at = slot && !isPinned && isTop ? groups.filter((g) => g.thread.id !== dragged.id && lastActivityAt(g.thread) > lastActivityAt(dragged)).length : slot?.index;
-    if (slot && slot.toPinned === isPinned) rows.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} isHidden={!!drag.state!.nestUnder} glide={glide} />);
-    return rows;
+    const at = slot && !isPinned && dragged && !dragged.thread.parent ? rows.filter((r) => r.rowId !== dragged.rowId && lastActivityAt(r.thread) > lastActivityAt(dragged.thread)).length : slot?.index;
+    if (slot && slot.toPinned === isPinned) items.splice(at!, 0, <DropPlaceholder key="placeholder" height={drag.state!.height} isHidden={!!drag.state!.nestUnder} glide={glide} />);
+    return items;
   };
-  const showPinned = pinned.length > 0 || !!drag.state;
+  const showPinned = pins.length > 0 || !!drag.state;
   // Rows only re-measure when the order or the drop slot changes, so ticks, scrolling and space swipes never animate them.
-  const glide = { layout: 'position', layoutDependency: rowOrderKey(all.map((t) => t.id), drag.state), transition: ROW_LAYOUT } as const;
-  const isPinnedEmpty = pinned.filter((g) => g.thread.id !== drag.state?.id).length === 0 && drag.state?.slot?.toPinned !== true;
-  const target = drag.state?.nestUnder && all.find((t) => t.id === drag.state!.nestUnder);
+  const glide = { layout: 'position', layoutDependency: rowOrderKey(rows.flatMap((r) => [r.rowId, ...(r.subs ?? []).map((s) => s.id)]), activeIds, drag.state), transition: ROW_LAYOUT } as const;
+  const isPinnedEmpty = pins.filter((p) => p.rowId !== drag.state?.id).length === 0 && drag.state?.slot?.toPinned !== true;
+  const target = drag.state?.nestUnder && state.threads.find((t) => t.id === drag.state!.nestUnder);
 
   return (
     <SidebarGroup>
@@ -445,7 +434,7 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: ThreadGroup[
             <SidebarGroupLabel>Pinned</SidebarGroupLabel>
           </motion.li>
         )}
-        {section(pinned, true)}
+        {section(pins, true)}
         {!!drag.state && isPinnedEmpty && (
           <motion.li {...glide} aria-hidden className="mx-2 flex h-9 items-center justify-center rounded-md border border-dashed type-caption text-subtle-foreground">
             Drop here to pin
@@ -454,15 +443,33 @@ function ThreadList({ pinned, active, row, selectedIds }: { pinned: ThreadGroup[
         <motion.li {...glide} data-threads-label className="mt-3">
           <SidebarGroupLabel>Threads</SidebarGroupLabel>
         </motion.li>
-        {section(active, false)}
+        {section(active.map(localRow), false)}
       </SidebarMenu>
       <p role="status" className="sr-only">
         {target ? `Drop to make it a sub-thread of ${target.title}` : ''}
       </p>
-      {!!drag.state && !!dragged && <RowGhost thread={dragged} drag={drag.state} />}
+      {!!drag.state && !!dragged && <RowGhost thread={dragged.thread} drag={drag.state} />}
     </SidebarGroup>
   );
 }
+
+/** Another computer's pinned thread, shown in this computer's Pinned list. */
+interface RemotePin {
+  machine: FollowedMachine;
+  state: State;
+  thread: Thread;
+}
+
+/** A row of the thread list; another computer's carries where it runs, and a row id that can't clash with a thread here. A row here carries its sub-threads. */
+interface ListRow {
+  rowId: string;
+  thread: Thread;
+  remote?: RemotePin;
+  subs?: Thread[];
+  settledSubs?: number;
+}
+
+const localRow = (group: ThreadGroup): ListRow => ({ rowId: group.thread.id, ...group });
 
 // The nest target's inside hairline: on a pseudo-element, so no row changes size while you drag over it.
 const NEST_TARGET =
@@ -481,9 +488,20 @@ function SettledSubs({ count, glide }: { count: number; glide: MotionProps }) {
   );
 }
 
-function rowOrderKey(ids: string[], drag: RowDragState | null) {
+/** Every computer's pins as one list, by pin order (`pinOrderOf`); this computer's first among equal keys. */
+function mergePins(pinned: ThreadGroup[], remotePins: RemotePin[]): ListRow[] {
+  const rows = [...pinned.map(localRow), ...remotePins.map((remote) => ({ rowId: `${remote.machine.id}:${remote.thread.id}`, thread: remote.thread, remote }))];
+  return rows.map((row, i) => ({ row, i })).sort((a, b) => pinOrderOf(a.row.thread) - pinOrderOf(b.row.thread) || a.i - b.i).map(({ row }) => row);
+}
+
+/** Your other computers' pinned threads, from what each last streamed. */
+function useRemotePins(): RemotePin[] {
+  return useMachines().machines.flatMap(({ machine, state }) => (state ? pinnedThreads(state.threads, state.spaceId).map((thread) => ({ machine, state, thread })) : []));
+}
+
+function rowOrderKey(pinnedIds: string[], activeIds: string[], drag: RowDragState | null) {
   const slot = drag?.slot ? `${drag.slot.toPinned ? 'p' : 'u'}${drag.slot.index}` : '';
-  return `${ids.join(',')}|${drag?.id ?? ''}|${slot}`;
+  return `${pinnedIds.join(',')}|${activeIds.join(',')}|${drag?.id ?? ''}|${slot}`;
 }
 
 /** Holds the dragged row's space at its slot; hidden, not removed, while a nest target is held, so nothing shifts under the pointer. */
@@ -527,17 +545,23 @@ const LIST_SLACK_PX = 24;
 const NEST_HOLD_MS = 400;
 
 /**
- * Pointer drag for sidebar rows: placeholder slot from live row positions, nesting after a hold over a row's middle, edge
- * auto-scroll, and a hand-off to the split drop zones once the pointer leaves the sidebar.
+ * Pointer drag for sidebar rows: placeholder slot from live row positions, nesting after a hold over a row's middle (this
+ * computer's rows only), edge auto-scroll, and a hand-off to the split drop zones once the pointer leaves the sidebar.
  */
-function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds: string[], onReorder: (lists: ReturnType<typeof dropPin>) => void) {
+function useRowDrag(
+  listRef: React.RefObject<HTMLUListElement | null>,
+  pinnedIds: string[],
+  onDrop: (row: ListRow, slot: NonNullable<RowDragState['slot']>) => void,
+  onNest: (row: ListRow, parentId: string) => void,
+) {
   const { state, dispatch } = useHarness();
   const { isMobile } = useSidebar();
   const [drag, setDrag] = useState<RowDragState | null>(null);
-  const latest = useRef({ pinnedIds, state, onReorder });
-  latest.current = { pinnedIds, state, onReorder };
+  const latest = useRef({ pinnedIds, onDrop, onNest, state });
+  latest.current = { pinnedIds, onDrop, onNest, state };
 
-  const onPointerDown = (e: React.PointerEvent<HTMLLIElement>, thread: Thread) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLLIElement>, row: ListRow) => {
+    const { thread } = row;
     if (e.button !== 0 || isMobile || (e.target as HTMLElement).closest('[data-sidebar=menu-action]')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const start = { x: e.clientX, y: e.clientY };
@@ -571,18 +595,19 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
       pointerY = ev.clientY;
       if (!current) {
         if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < DRAG_THRESHOLD) return;
-        startDrag({ kind: 'thread', id: thread.id }, thread.title, ev.clientX, ev.clientY, { hasOwnGhost: true });
+        // Another computer's thread opens over the app, never in one of this computer's splits.
+        if (!row.remote) startDrag({ kind: 'thread', id: thread.id }, thread.title, ev.clientX, ev.clientY, { hasOwnGhost: true });
         document.documentElement.style.userSelect = 'none';
         window.getSelection()?.removeAllRanges();
         frame = requestAnimationFrame(autoScroll);
       }
-      moveDrag(ev.clientX, ev.clientY);
-      const at = dropOver(listRef.current, thread, latest.current.pinnedIds, latest.current.state.threads, ev.clientX, ev.clientY);
+      if (!row.remote) moveDrag(ev.clientX, ev.clientY);
+      const at = dropOver(listRef.current, row, latest.current.pinnedIds, latest.current.state.threads, ev.clientX, ev.clientY);
       hold(at?.nestUnder ?? null);
       // While a nest target is held the slot stays where it was, so the rows don't move under the pointer.
       const slot = at?.nestUnder ? (current?.slot ?? null) : (at?.slot ?? null);
       const nestUnder = at?.nestUnder && current?.nestUnder === at.nestUnder ? at.nestUnder : null;
-      update({ id: thread.id, x: ev.clientX, y: ev.clientY, width: rect.width, height: rect.height, grabX: start.x - rect.left, grabY: start.y - rect.top, slot, nestUnder });
+      update({ id: row.rowId, x: ev.clientX, y: ev.clientY, width: rect.width, height: rect.height, grabX: start.x - rect.left, grabY: start.y - rect.top, slot, nestUnder });
     };
     const finish = (isCancel: boolean) => {
       window.removeEventListener('pointermove', onMove);
@@ -598,17 +623,15 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
       const swallow = (c: MouseEvent) => c.stopPropagation();
       window.addEventListener('click', swallow, { capture: true, once: true });
       setTimeout(() => window.removeEventListener('click', swallow, { capture: true }));
-      const landed = endDrag();
+      const landed = row.remote ? null : endDrag();
       const { slot, nestUnder } = current;
       setDrag(null);
       if (isCancel) return;
       if (landed) return dispatch({ type: 'layout-drop', leafId: landed.leafId, zone: landed.zone, view: landed.view });
-      const { state: s, onReorder: reorder } = latest.current;
-      if (nestUnder) return nestWithUndo(dispatch, s.threads, thread, nestUnder);
+      if (nestUnder) return latest.current.onNest(row, nestUnder);
       if (!slot) return;
-      if (thread.parent) unnestWithUndo(dispatch, s.threads, thread);
-      const { pinned, active } = sidebarGroups(s.threads, s.spaceId);
-      reorder(dropPin(pinned.map((g) => g.thread.id), active.map((g) => g.thread.id), thread.id, slot.toPinned, slot.index));
+      if (thread.parent) unnestWithUndo(dispatch, latest.current.state.threads, thread);
+      latest.current.onDrop(row, slot);
     };
     const onUp = () => finish(false);
     // Released outside the window (or the OS took the pointer): no pointerup ever comes, so the drag would stay stuck.
@@ -632,33 +655,26 @@ function useRowDrag(listRef: React.RefObject<HTMLUListElement | null>, pinnedIds
 /**
  * Where the dragged row would go, from the rows as rendered (the placeholder included), so moving the placeholder never flips the
  * answer back. Positions come from `offsetTop` within the (relative) list, not `getBoundingClientRect`: rows gliding to their new
- * place carry a transform that would flip the slot mid-animation. Null when the pointer is off the list.
+ * place carry a transform that would flip the slot mid-animation. Another computer's row only reorders, and counts only its own
+ * five pins, so its machine decides. Null when the pointer is off the list.
  */
-function dropOver(list: HTMLUListElement | null, dragged: Thread, pinnedIds: string[], threads: Thread[], x: number, y: number): DropAt | null {
+function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string[], threads: Thread[], x: number, y: number): DropAt | null {
   if (!list) return null;
   const box = list.getBoundingClientRect();
   if (x < box.left - LIST_SLACK_PX || x > box.right + LIST_SLACK_PX) return null;
   const label = list.querySelector<HTMLElement>('[data-threads-label]')!;
   const rows = [...list.querySelectorAll<HTMLElement>('[data-row-id]')].map((el) => ({ id: el.dataset.rowId!, top: el.offsetTop, height: el.offsetHeight, isPinned: el.dataset.pinned !== undefined, ...(el.dataset.subOf && { parentId: el.dataset.subOf }) }));
-  const isFull = pinnedIds.filter((id) => id !== dragged.id).length >= PIN_SLOTS.length;
-  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: dragged.id, ...(dragged.parent && { parentId: dragged.parent.threadId }) }, y - box.top, isFull, (parentId) => !nestBlocker(threads, dragged.id, parentId));
+  const isFull = !row.remote && pinnedIds.filter((id) => id !== row.rowId).length >= PIN_SLOTS.length;
+  const canNest = (parentId: string) => !row.remote && threads.some((t) => t.id === parentId) && !nestBlocker(threads, row.thread.id, parentId);
+  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: row.rowId, ...(row.thread.parent && { parentId: row.thread.parent.threadId }) }, y - box.top, isFull, canNest);
 }
 
-function NavItem({ icon, label, isActive, onClick, trailing, badge }: { icon: ReactNode; label: string; isActive?: boolean; onClick: () => void; trailing?: ReactNode; badge?: number }) {
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton isActive={isActive} onClick={onClick} className="text-xs [&_svg]:size-3.5">
-        {icon}
-        <span>{label}</span>
-        {!!trailing && <span className="ml-auto flex items-center opacity-0 transition-opacity group-hover/menu-item:opacity-100">{trailing}</span>}
-      </SidebarMenuButton>
-      {badge !== undefined && <SidebarMenuBadge className="tabular">{badge}</SidebarMenuBadge>}
-    </SidebarMenuItem>
-  );
-}
-
-/** A thread's sidebar row. `isSub`: a sub-thread under its parent, one line unless it asks for you. */
-export function ThreadItem({ thread, isSub, isActive, isSelected, onSelect }: { thread: Thread; isSub?: boolean; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
+/**
+ * A thread's sidebar row: its one status ring and title, then the project, what it's doing or why it stopped, and its badges.
+ * `isSub`: a sub-thread under its parent, one line unless it asks for you. `machine`: the computer it runs on, for another
+ * computer's thread among this one's (Pinned).
+ */
+export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSelect }: { thread: Thread; isSub?: boolean; machine?: FollowedMachine; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
   const asks = row.tone === 'warning' || row.tone === 'destructive';
@@ -674,7 +690,8 @@ export function ThreadItem({ thread, isSub, isActive, isSelected, onSelect }: { 
       >
         <span className="flex min-w-0 items-center gap-2">
           <StatusRing met={row.progress.met} total={row.progress.total} tone={row.tone} isWorking={row.isWorking} slot={thread.line} label={row.status} />
-          <span className={cn('min-w-0 flex-1 truncate', isActive && 'text-foreground')}>{thread.title}</span>
+          <span className={cn('min-w-0 flex-1 truncate', (isActive || row.isUnread) && 'text-foreground')}>{thread.title}</span>
+          {row.isUnread && !isActive && <UnreadDot className="shrink-0" />}
           {isSub && <PrStack thread={thread} />}
           {/* Room for the Settle / Reactivate chip while it shows, so the title truncates before the chip instead of under it. */}
           <span aria-hidden className={cn('shrink-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')} />
@@ -682,7 +699,7 @@ export function ThreadItem({ thread, isSub, isActive, isSelected, onSelect }: { 
         {isSub ? (
           asks && <span className={cn('truncate pl-6 type-caption', row.tone === 'destructive' ? 'text-destructive' : 'text-warning')}>{row.detail}</span>
         ) : (
-          <RowDetail thread={thread} row={row} />
+          <RowDetail thread={thread} row={row} machine={machine} />
         )}
       </SidebarMenuButton>
       <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] px-1.5 type-caption [&>svg]:size-3.5">
@@ -693,13 +710,20 @@ export function ThreadItem({ thread, isSub, isActive, isSelected, onSelect }: { 
   );
 }
 
-/** A top-level row's second line: project icon, what it's doing or why it stopped, and its badges. */
-function RowDetail({ thread, row }: { thread: Thread; row: ReturnType<typeof useThreadRow> }) {
+/** A top-level row's second line: where it runs (another computer's), the project's icon, what it's doing or why it stopped, its badges. */
+function RowDetail({ thread, row, machine }: { thread: Thread; row: ReturnType<typeof useThreadRow>; machine?: FollowedMachine }) {
+  const project = useProjectAt(thread.spaceId, thread.repo?.path);
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
   return (
     <span className="flex min-w-0 items-center gap-1.5 overflow-visible! pl-6 type-caption text-subtle-foreground">
+      {!!machine && (
+        <>
+          <DeviceIcon kind={machine.kind} className="size-3.5 shrink-0" />
+          <span className="sr-only">On {machine.name}</span>
+        </>
+      )}
       <span className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]" title={thread.repo?.project ?? 'No project'}>
-        {thread.repo ? <ProjectAvatar name={thread.repo.project} /> : <ChatRound aria-label="No project" className="size-4 shrink-0" />}
+        {thread.repo ? <ProjectIcon name={thread.repo.project} icon={project?.icon} /> : <Chat aria-label="No project" className="size-4 shrink-0" />}
       </span>
       {row.isWorking ? <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer> : <span className="min-w-0 flex-1 truncate">{row.detail}</span>}
       {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
@@ -708,10 +732,6 @@ function RowDetail({ thread, row }: { thread: Thread; row: ReturnType<typeof use
       <NextRunBadge threadId={thread.id} />
     </span>
   );
-}
-
-export function ProjectAvatar({ name }: { name: string }) {
-  return <span aria-hidden className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[0.625rem] font-semibold text-foreground uppercase">{name[0]}</span>;
 }
 
 /** How many background agents the thread has running; nothing when none do. */
@@ -729,15 +749,12 @@ function AgentsBadge({ thread }: { thread: Thread }) {
 
 const AGENTS_LABEL = new Intl.PluralRules('en');
 
-/**
- * A thread row's one status: the ring's tone from the idle verdict (live threads) or needs-you (demo threads, which have no
- * agent), and the line under the title: what the agent does while it works, else the verdict's reason or what it waits on.
- */
+/** A row's one status (`useThreadStatus`) and the line under its title: the verdict's reason when idle, else the step in flight or what it waits for. */
 function useThreadRow(thread: Thread) {
   const { state } = useHarness();
   const status = useThreadStatus(thread);
   const detail = !status.isWorking && status.verdict ? status.verdict.reason : threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { ...status, detail, isWatched: state.watched.includes(thread.id) };
+  return { ...status, detail, isUnread: isUnread(thread), isWatched: state.watched.includes(thread.id) };
 }
 
 export function threadDetail(thread: Thread, question?: string) {

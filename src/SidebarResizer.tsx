@@ -33,11 +33,12 @@ function clampWidth(px: number) {
 }
 
 /**
- * Drag handle on the sidebar's right edge. While dragging it writes --sidebar-width straight to the wrapper
- * (no React render per move) and commits on release; double-click resets.
+ * Drag handle on the sidebar's right edge. While dragging it writes the width straight onto the sidebar's gap and container
+ * (no React render per move) and commits on release; double-click resets. Not `--sidebar-width` on the wrapper: a custom property
+ * there restyles every node of the app per move (~37ms with a long chat open, against ~1ms for the two widths).
  */
 export function SidebarResizer({ width, onCommit }: { width: number; onCommit: (px: number) => void }) {
-  const drag = useRef<{ x: number; w: number; wrapper: HTMLElement } | null>(null);
+  const drag = useRef<{ x: number; w: number; wrapper: HTMLElement; sized: HTMLElement[] } | null>(null);
   const live = useRef(width);
 
   return (
@@ -51,9 +52,11 @@ export function SidebarResizer({ width, onCommit }: { width: number; onCommit: (
       tabIndex={0}
       onPointerDown={(e) => {
         const wrapper = e.currentTarget.closest<HTMLElement>('[data-slot=sidebar-wrapper]');
-        if (!wrapper) return;
+        const sidebar = e.currentTarget.closest<HTMLElement>('[data-slot=sidebar]');
+        if (!wrapper || !sidebar) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        drag.current = { x: e.clientX, w: width, wrapper };
+        const sized = [...sidebar.querySelectorAll<HTMLElement>('[data-slot=sidebar-gap], [data-slot=sidebar-container]')];
+        drag.current = { x: e.clientX, w: width, wrapper, sized };
         live.current = width;
         wrapper.setAttribute('data-sidebar-resizing', '');
       }}
@@ -61,13 +64,15 @@ export function SidebarResizer({ width, onCommit }: { width: number; onCommit: (
         const d = drag.current;
         if (!d) return;
         live.current = clampWidth(d.w + e.clientX - d.x);
-        d.wrapper.style.setProperty('--sidebar-width', `${live.current}px`);
+        for (const el of d.sized) el.style.width = `${live.current}px`;
       }}
       onPointerUp={() => {
         const d = drag.current;
         if (!d) return;
         d.wrapper.removeAttribute('data-sidebar-resizing');
         drag.current = null;
+        // Same event as the commit, so React's re-render lands in the same frame as the inline widths clearing.
+        for (const el of d.sized) el.style.width = '';
         onCommit(live.current);
       }}
       onDoubleClick={() => onCommit(SIDEBAR_DEFAULT_PX)}

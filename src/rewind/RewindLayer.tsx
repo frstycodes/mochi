@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { Danger, History, StopCircle } from 'reicon-react';
+import { Danger, History, StopCircle } from '@/icons';
 import { ForkIcon } from '../ui';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {

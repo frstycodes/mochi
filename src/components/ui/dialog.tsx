@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
-import { X as XIcon } from 'reicon-react'
+import { X as XIcon } from '@/icons'
 
 function Dialog({
   ...props

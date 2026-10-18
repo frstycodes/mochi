@@ -75,3 +75,12 @@ test('maps an agent ref back to its aria-ref selector only for the current gener
   assert.equal(ariaSelector('g31-e12', 3), null);
   assert.equal(ariaSelector('e12', 3), null);
 });
+
+test('hides client secrets from the snapshot text and ref names, keeping the refs', () => {
+  const yaml = ['- textbox "Client secret" [ref=e1]: GOCSPX-FxS67JACQ3V8Bftlr0MIzCo', '- generic [ref=e2]: 7575573b1c2a4400de6115a61b557acc', '- button "Copy 7575573b1c2a4400de6115a61b557acc" [ref=e3]', '- generic [ref=e4]: 8325458480016.12371342152640', '- textbox "Access Token" [ref=e5]: xoxe.xoxp-1-Mi0yLTgzMjU'].join('\n');
+  const { text, refs } = agentSnapshot(yaml, 1);
+  assert.doesNotMatch(text, /GOCSPX|7575573b|xoxe/);
+  assert.match(text, /8325458480016\.12371342152640/, 'a client ID stays');
+  assert.deepEqual(refs.map((r) => r.ref), ['g1-e1', 'g1-e2', 'g1-e3', 'g1-e4', 'g1-e5']);
+  assert.equal(refs[2].name, 'Copy [secret hidden by Mochi]');
+});

@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { Check, Copy3, InfoCircle, Refresh, TickCircle, Warning } from 'reicon-react';
+import { Check, CopyStack, Info, Refresh, CheckBadge, WarningAlt } from '@/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from '@/toast/store';
@@ -95,7 +96,7 @@ export function LoginBadge({ install }: { install: InstallState | undefined }) {
 }
 
 function StatusBadge({ tone, children }: { tone: 'success' | 'warning'; children: ReactNode }) {
-  const Icon = tone === 'success' ? TickCircle : Warning;
+  const Icon = tone === 'success' ? CheckBadge : WarningAlt;
   return (
     <Badge variant="outline">
       <Icon data-icon="inline-start" className={tone === 'success' ? 'text-success' : 'text-warning'} />
@@ -133,7 +134,7 @@ export function CommandLine({ command }: { command: string }) {
         {command}
       </code>
       <TooltipIconButton label={isCopied ? 'Copied' : 'Copy command'} hint="Paste it into a terminal" onClick={copy}>
-        <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <Copy3 />}</IconSwap>
+        <IconSwap id={isCopied ? 'copied' : 'copy'}>{isCopied ? <Check /> : <CopyStack />}</IconSwap>
       </TooltipIconButton>
     </div>
   );
@@ -181,7 +182,7 @@ export function DesktopOnly({ what, children }: { what: ReactNode; children: Rea
 export function DesktopOnlyNotice({ what }: { what: ReactNode }) {
   return (
     <Alert>
-      <InfoCircle />
+      <Info />
       <AlertTitle>Needs the desktop app</AlertTitle>
       <AlertDescription>{what} Here, threads run on the demo agents, so everything else keeps working.</AlertDescription>
     </Alert>
@@ -248,4 +249,27 @@ export function NumberInput({ id, value, min, max, step, onCommit }: { id: strin
       className="w-24 tabular"
     />
   );
+}
+
+/** A list row's 32px image (a package's icon from its marketplace); `fallback` (else a muted tile) when it has none or it fails to load. */
+export function ListIcon({ url, fallback }: { url?: string | null; fallback?: ReactNode }) {
+  const [isBroken, setBroken] = useState(false);
+  if (!url || isBroken) return fallback ?? <span aria-hidden className="size-8 shrink-0 rounded-lg bg-muted" />;
+  return <img src={url} alt="" loading="lazy" onError={() => setBroken(true)} className="size-8 shrink-0 rounded-lg object-contain" />;
+}
+
+const SKELETON_WIDTHS = ['w-40', 'w-28', 'w-48', 'w-32'];
+
+export function SkeletonRows({ count }: { count: number }) {
+  return Array.from({ length: count }, (_, i) => (
+    <SettingsRow
+      key={i}
+      label={
+        <span className="flex items-center gap-2.5">
+          <Skeleton className="size-8 rounded-lg" />
+          <Skeleton className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`} />
+        </span>
+      }
+    />
+  ));
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, Folder, FolderOpen } from 'reicon-react';
+import { ChevronRight, Folder, FolderOpen } from '@/icons';
 import { cn } from '@/lib/utils';
 import { FileContextMenu } from './FileContextMenu';
 import { Highlighted } from './Highlighted';

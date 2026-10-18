@@ -1,4 +1,10 @@
+import { MAX_IMAGE_BYTES, MAX_IMAGES } from '../../src/chat/images.ts';
+import { isCloneUrl } from '../../src/git/origin.ts';
+import type { CloneSource } from '../../src/host/types/projects.ts';
 import type { ChangeTarget } from '../../src/host/types/git.ts';
+import type { SentImage } from '../../src/model.ts';
+import { ACCESS } from '../../src/runtime/access.ts';
+import type { ThreadControls } from '../../src/runtime/controls.ts';
 import {
   DEVICE_KINDS,
   SCOPES,
@@ -12,11 +18,13 @@ import {
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 
 /** Bumped on any frame change; a device on another version is refused rather than misread. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Every command declares the scope it needs; the server refuses it on a device without that scope. */
 export const COMMAND_SCOPES = {
   catalog: 'read',
+  settings: 'read',
+  projects: 'read',
   send: 'operate',
   resolve: 'operate',
   interrupt: 'operate',
@@ -24,6 +32,7 @@ export const COMMAND_SCOPES = {
   handoff: 'operate',
   rewind: 'operate',
   'side-chat': 'operate',
+  seen: 'operate',
   create: 'manage',
   rename: 'manage',
   'edit-goal': 'manage',
@@ -35,6 +44,8 @@ export const COMMAND_SCOPES = {
   'open-pr': 'manage',
   delete: 'manage',
   setting: 'manage',
+  'add-project': 'manage',
+  'clone-project': 'manage',
   diff: 'code',
   'checkpoint-diff': 'code',
   change: 'code',
@@ -53,6 +64,8 @@ export interface HelloFrame {
   type: 'hello';
   version: number;
   resume?: { epoch: string; seq: number };
+  /** The device's membership records, unchecked here: `members.ts` parses and weighs them. */
+  members?: unknown;
 }
 
 export interface CommandFrame {
@@ -64,8 +77,11 @@ export interface CommandFrame {
 
 export type ServerFrame =
   /** `addresses`: where the machine listens on its LAN or Tailscale, so the device tries those before the relay next time. */
-  | { type: 'welcome'; version: number; deviceId: string; machineName: string; machineKind: DeviceKind; scopes: Scope[]; addresses: string[] }
+  /** `members`: the machine's membership records, so each side learns the other's computers over a direct link too. */
+  | { type: 'welcome'; version: number; deviceId: string; machineName: string; machineKind: DeviceKind; scopes: Scope[]; addresses: string[]; members?: unknown }
   | { type: 'refused'; reason: string }
+  /** The machine's membership records changed (a computer joined or was removed). */
+  | { type: 'members'; members: unknown }
   | StreamFrame
   | ({ type: 'result'; id: string } & CommandResult);
 
@@ -80,6 +96,7 @@ export function resultFrame(id: string, result: CommandResult): ServerFrame {
 }
 
 const MAX_ID = 128;
+const MAX_SEEN = 500;
 const MAX_TEXT = 256 * 1024;
 
 /** Device frames are untrusted: anything off-shape becomes an error string, never a half-read command. */
@@ -88,9 +105,10 @@ export function parseHello(raw: string): HelloFrame | string {
   if (frame?.type !== 'hello') return 'The first frame must be hello';
   if (frame.version !== PROTOCOL_VERSION) return `This machine speaks protocol ${PROTOCOL_VERSION}; update Mochi on both sides`;
   const resume = frame.resume as Record<string, unknown> | undefined;
-  if (resume === undefined) return { type: 'hello', version: PROTOCOL_VERSION };
+  const members = frame.members !== undefined && { members: frame.members };
+  if (resume === undefined) return { type: 'hello', version: PROTOCOL_VERSION, ...members };
   if (!isString(resume?.epoch, MAX_ID) || !resume.epoch || !Number.isSafeInteger(resume.seq) || (resume.seq as number) < 0) return 'resume must be { epoch, seq }';
-  return { type: 'hello', version: PROTOCOL_VERSION, resume: { epoch: resume.epoch, seq: resume.seq as number } };
+  return { type: 'hello', version: PROTOCOL_VERSION, resume: { epoch: resume.epoch, seq: resume.seq as number }, ...members };
 }
 
 /** This computer's kind, from its OS. */
@@ -105,7 +123,7 @@ export function parseServerFrame(raw: string): ServerFrame | null {
   return SERVER_FRAMES.includes(frame?.type as never) ? (frame as unknown as ServerFrame) : null;
 }
 
-const SERVER_FRAMES = ['welcome', 'refused', 'snapshot', 'action', 'result'] satisfies ServerFrame['type'][];
+const SERVER_FRAMES = ['welcome', 'refused', 'members', 'snapshot', 'action', 'result'] satisfies ServerFrame['type'][];
 
 export function parseCommand(raw: string): CommandFrame | string {
   const frame = parseJson(raw);
@@ -142,23 +160,40 @@ function parseRemoteCommand(value: unknown): RemoteCommand | string {
       return isString(c.threadId, MAX_ID) && isText(c.text, MAX_TEXT)
         ? { type: 'side-chat', threadId: c.threadId, text: c.text }
         : 'side-chat needs threadId and text';
+    case 'seen': {
+      const hasThread = c.threadId !== undefined;
+      const hasQueue = c.queueIds !== undefined;
+      if ((!hasThread && !hasQueue) || (hasThread && !isString(c.threadId, MAX_ID)) || (hasQueue && !isIds(c.queueIds))) return `seen needs threadId, queueIds (up to ${MAX_SEEN} ids) or both`;
+      return { type: 'seen', ...(hasThread && { threadId: c.threadId as string }), ...(hasQueue && { queueIds: c.queueIds as string[] }) };
+    }
     case 'catalog':
       return { type: 'catalog' };
-    case 'create':
-      if (
-        !isText(c.title, MAX_TEXT) ||
-        !isProvider(c.provider) ||
-        !(c.project === null || isString(c.project, MAX_PATH)) ||
-        !(c.model === undefined || isString(c.model, MAX_ID))
-      )
-        return 'create needs title, provider, project (or null) and an optional model';
-      return { type: 'create', title: c.title.trim(), provider: c.provider, project: c.project, ...(c.model !== undefined && { model: c.model }) };
+    case 'settings':
+      return { type: 'settings' };
+    case 'projects':
+      return { type: 'projects' };
+    case 'add-project':
+      if (!isString(c.name, MAX_TITLE) || !PROJECT_NAME.test(c.name) || !(c.publish === undefined || VISIBILITIES.includes(c.publish as never)))
+        return 'add-project needs a name (letters, digits, “.”, “-”, “_”) and an optional publish: private or public';
+      return { type: 'add-project', name: c.name, ...(c.publish !== undefined && { publish: c.publish as (typeof VISIBILITIES)[number] }) };
+    case 'clone-project': {
+      const source = parseCloneSource(c.source);
+      return source ? { type: 'clone-project', source } : 'clone-project needs a source: { url } with a git URL, or { github: owner/repo }';
+    }
+    case 'create': {
+      const controls = c.controls === undefined ? undefined : parseControls(c.controls);
+      const images = c.images === undefined ? undefined : parseImages(c.images);
+      if (!isText(c.title, MAX_TEXT) || !isProvider(c.provider) || !(c.project === null || isString(c.project, MAX_ID)) || controls === null || images === null)
+        return 'create needs title, provider, project (or null), and optional controls and images';
+      return { type: 'create', title: c.title.trim(), provider: c.provider, project: c.project, ...(controls && { controls }), ...(images && { images }) };
+    }
     case 'rename':
       return isString(c.threadId, MAX_ID) && isText(c.title, MAX_TITLE) ? { type: 'rename', threadId: c.threadId, title: c.title.trim() } : 'rename needs threadId and title';
     case 'edit-goal':
       return isString(c.threadId, MAX_ID) && isText(c.goal, MAX_TEXT) ? { type: 'edit-goal', threadId: c.threadId, goal: c.goal.trim() } : 'edit-goal needs threadId and goal';
     case 'pin':
-      return isString(c.threadId, MAX_ID) && typeof c.isPinned === 'boolean' ? { type: 'pin', threadId: c.threadId, isPinned: c.isPinned } : 'pin needs threadId and isPinned';
+      if (!isString(c.threadId, MAX_ID) || typeof c.isPinned !== 'boolean' || !(c.order === undefined || Number.isFinite(c.order))) return 'pin needs threadId, isPinned and an optional order';
+      return { type: 'pin', threadId: c.threadId, isPinned: c.isPinned, ...(c.order !== undefined && { order: c.order as number }) };
     case 'settle':
       return isString(c.threadId, MAX_ID) && typeof c.isSettled === 'boolean' ? { type: 'settle', threadId: c.threadId, isSettled: c.isSettled } : 'settle needs threadId and isSettled';
     case 'schedule':
@@ -240,7 +275,9 @@ interface SavedShape {
  */
 export function visibleSnapshot<T extends SavedShape>(saved: T, scopes: readonly Scope[]): T {
   if (scopes.includes('code')) return saved;
-  return { ...saved, threads: saved.threads.map((t) => ({ ...t, activity: t.activity.map(({ patch: _patch, ...entry }) => entry) })), checkpoints: {} };
+  // Side chats quote diffs and files.
+  const { sidechats: _sidechats, ...rest } = saved as T & { sidechats?: unknown };
+  return { ...rest, threads: saved.threads.map((t) => ({ ...t, activity: t.activity.map(({ patch: _patch, ...entry }) => entry) })), checkpoints: {} } as T;
 }
 
 /**
@@ -250,6 +287,8 @@ export function visibleSnapshot<T extends SavedShape>(saved: T, scopes: readonly
 export function visibleAction(action: unknown, scopes: readonly Scope[]): unknown {
   if (scopes.includes('code')) return action;
   const a = action as { type?: string; event?: { type?: string; patch?: string } };
+  // Its number still arrives, so the device's sequence has no gap; no reducer knows this type.
+  if (a?.type?.startsWith('sidechat-')) return { type: 'hidden' };
   if (a?.type === 'agent' && a.event?.type === 'tool' && a.event.patch !== undefined) {
     const { patch: _patch, ...event } = a.event;
     return { ...a, event };
@@ -286,6 +325,24 @@ const isSize = (value: unknown): value is number => Number.isSafeInteger(value) 
 export const isRelativePath = (value: unknown): value is string =>
   isText(value, MAX_PATH) && !value.includes('\\') && !value.includes('\0') && !/^([a-zA-Z]:|\/)/.test(value) && !value.split('/').includes('..');
 
+function parseControls(value: unknown): ThreadControls | null {
+  const c = value as Record<string, unknown> | null;
+  if (!isString(c?.model, MAX_ID) || !isString(c.effort, MAX_ID) || !isString(c.speed, MAX_ID) || !ACCESS.includes(c.access as never)) return null;
+  return { model: c.model, effort: c.effort, speed: c.speed, access: c.access as ThreadControls['access'] };
+}
+
+/** At most what the composer attaches: `MAX_IMAGES` of `MAX_IMAGE_BYTES` each, as base64, with a small thumbnail. */
+function parseImages(value: unknown): SentImage[] | null {
+  if (!Array.isArray(value) || value.length > MAX_IMAGES) return null;
+  const images = value.map((v: Record<string, unknown> | null) =>
+    IMAGE_TYPES.includes(v?.mediaType as never) && isString(v?.data, Math.ceil((MAX_IMAGE_BYTES * 4) / 3)) && isString(v?.thumb, MAX_THUMB) ? { mediaType: v.mediaType as SentImage['mediaType'], data: v.data, thumb: v.thumb } : null,
+  );
+  return images.every((i) => i !== null) ? images : null;
+}
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] satisfies SentImage['mediaType'][];
+const MAX_THUMB = 512 * 1024;
+
 function parsePoint(value: unknown): ThreadPoint | null {
   const p = value as Record<string, unknown> | null;
   if (p?.kind === 'message' && isIndex(p.index)) return { kind: 'message', index: p.index };
@@ -306,7 +363,20 @@ function parseTarget(value: unknown): ChangeTarget | null {
   };
 }
 const MAX_TITLE = 256;
+const VISIBILITIES = ['private', 'public'] as const;
+const PROJECT_NAME = /^(?!\.\.?$)[\w.-]+$/;
+const OWNER_REPO = /^[\w.-]+\/(?!\.\.?$)[\w.-]+$/;
+
+/** A device names what to clone, never where: the machine picks the folder. */
+function parseCloneSource(value: unknown): CloneSource | null {
+  const s = value as Record<string, unknown> | null;
+  if (isString(s?.url, MAX_PATH) && isCloneUrl(s.url) && s.github === undefined) return { url: s.url };
+  if (isString(s?.github, MAX_TITLE) && OWNER_REPO.test(s.github) && s.url === undefined) return { github: s.github };
+  return null;
+}
 const MAX_PATH = 4096;
 
 const isAnswers = (value: unknown): value is string[][] =>
   Array.isArray(value) && value.length <= 64 && value.every((a) => Array.isArray(a) && a.length <= 64 && a.every((s) => isString(s, 16 * 1024)));
+
+const isIds = (value: unknown): value is string[] => Array.isArray(value) && value.length <= MAX_SEEN && value.every((id) => isString(id, MAX_ID) && !!id);

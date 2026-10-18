@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUp, CheckCircle, InfoCircle, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, Warning } from 'reicon-react';
+import { EventLine } from '../chat/MochiWidget';
+import { ArrowUp, CheckCircle, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from '@/toast/store';
@@ -34,6 +35,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import type { DeviceKind } from '../host/types/remote';
 import { DeviceIcon } from '../remote/DeviceIcon';
+import { CoinIcon, McpServerIcon, PluginIcon, SkillIcon } from '../icons/ObjectIcons';
 import { MachinesProvider } from '../remote/useMachines';
 import { BoardView } from '../BoardView';
 import { seedQueue, type LineSlot, type QueueItem, type Thread } from '../model';
@@ -167,7 +169,7 @@ function Overview() {
     <section className="flex flex-col gap-3">
       <h1 className="type-display">Mochi design system</h1>
       <p className="max-w-[62ch] type-prose text-muted-foreground">
-        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and reicon, themed from DESIGN.md. Dark first, cool neutrals,
+        Tokens, components and recipes for the agent harness. Built from shadcn/ui, AI Elements and Solar icons, themed from DESIGN.md. Dark first, cool neutrals,
         squircle corners, hairline separation.
       </p>
       <p className="flex flex-wrap items-center gap-1.5 type-caption text-subtle-foreground">
@@ -458,6 +460,12 @@ function Actions() {
 }
 
 const DEVICE_SPECIMENS = ['mac', 'windows', 'linux', 'phone', undefined] satisfies (DeviceKind | undefined)[];
+const OBJECT_ICONS = [
+  ['Skill', SkillIcon],
+  ['Plugin', PluginIcon],
+  ['MCP server', McpServerIcon],
+  ['Spend', CoinIcon],
+] as const;
 
 function Display() {
   return (
@@ -500,6 +508,23 @@ function Display() {
                 <span key={kind ?? 'unknown'} className="flex items-center gap-1.5">
                   <DeviceIcon kind={kind} />
                   {kind ?? 'unknown'}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Block>
+        <Block title="Object icons" use="Mochi's own concepts (skills, plugins, MCP servers, spend), lit like Mochi; the same in both themes.">
+          <div data-design="object-icons" className="flex flex-col gap-4">
+            <div className="flex items-end gap-6">
+              {OBJECT_ICONS.map(([label, Icon]) => (
+                <Icon key={label} className="size-12" />
+              ))}
+            </div>
+            <div className="flex items-center gap-6 type-meta text-muted-foreground">
+              {OBJECT_ICONS.map(([label, Icon]) => (
+                <span key={label} className="flex items-center gap-1.5">
+                  <Icon />
+                  {label}
                 </span>
               ))}
             </div>
@@ -576,12 +601,12 @@ function Feedback() {
         <Block title="Alert" use="Inline explanations. Status colour always comes with an icon.">
           <div className="flex flex-col gap-2">
             <Alert>
-              <InfoCircle />
+              <Info />
               <AlertTitle>Overlap caught before any duplicate work</AlertTitle>
               <AlertDescription>Two threads want to add a Redis client. Decide in the Queue.</AlertDescription>
             </Alert>
             <Alert variant="destructive">
-              <Warning />
+              <WarningAlt />
               <AlertTitle>Setup script failed in feat/admin-usage</AlertTitle>
               <AlertDescription>pnpm install exited with code 1. The agent is paused until it passes.</AlertDescription>
             </Alert>
@@ -666,6 +691,13 @@ function Conversation() {
             {SETUP_SAMPLES.map((setup) => (
               <SetupRow key={setup.status} thread={adm} setup={setup} />
             ))}
+          </div>
+        </Block>
+        <Block title="Action lines" use="An agent's browser actions in a thread: an icon for the kind of action and the page as its favicon and host, never the full URL.">
+          <div className="flex flex-col gap-2">
+            <EventLine text='Claude clicked "Sandesh Pandey sandesh@withp…"' glyph="click" site="https://accounts.google.com/signin/oauth/error?authError=x" at={Date.now()} />
+            <EventLine text='Claude typed into "Text field for emails" and pressed Enter' glyph="type" site="https://console.cloud.google.com/auth/audience" at={Date.now()} />
+            <EventLine text="Claude opened a page outside your machine" glyph="browse" site="https://api.slack.com/apps" at={Date.now()} />
           </div>
         </Block>
         <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, handoffs.">
@@ -857,7 +889,7 @@ function Rules() {
         </Pair>
         <Pair rule="Status needs an icon or a word, not colour alone.">
           <span className="flex items-center gap-2 type-meta">
-            <Warning className="size-4 text-warning" />
+            <WarningAlt className="size-4 text-warning" />
             Needs you: answer the Stripe question
           </span>
           <span className="flex items-center gap-2 type-meta">

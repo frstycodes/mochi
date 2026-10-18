@@ -11,6 +11,8 @@ export function commandFor(action: Action): RemoteCommand | { type: 'open'; thre
       return { type: 'resolve', queueId: action.queueId, ...(action.answers && { answers: action.answers }) };
     case 'interrupt':
       return { type: 'interrupt', threadId: action.threadId };
+    case 'seen':
+      return { type: 'seen', ...(action.threadId && { threadId: action.threadId }), ...(action.queueIds && { queueIds: action.queueIds }) };
     case 'rename':
       return { type: 'rename', threadId: action.threadId, title: action.title };
     case 'settle':
@@ -26,6 +28,8 @@ export function commandFor(action: Action): RemoteCommand | { type: 'open'; thre
       return { type: 'rewind', threadId: action.threadId, point: { kind: 'message', index: action.index }, mode: action.mode ?? 'files' };
     case 'edit-goal':
       return { type: 'edit-goal', threadId: action.threadId, goal: action.draft.goal };
+    case 'pin-at':
+      return { type: 'pin', threadId: action.threadId, isPinned: true, order: action.order };
     case 'delete':
       return action.threadIds.length === 1 ? { type: 'delete', threadId: action.threadIds[0] } : null;
     case 'go':

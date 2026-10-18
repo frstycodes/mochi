@@ -9,9 +9,10 @@ import type { BrowserHost } from '../host/types/browser.ts';
 import type { BranchList, CheckRun } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
+import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, PIN_SLOTS, type Provider, type QueueItem, type Space, type Subagent, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Subagent, type Thread } from '../model.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
@@ -56,6 +57,8 @@ export interface ToolEnv {
   settings: Pick<SettingsHost, 'get' | 'accounts' | 'detect' | 'agentConfig' | 'previewConfig' | 'applyConfig' | 'testMcp'>;
   /** Installed color themes and Settings › Remote access, read for `get_settings`. */
   themes: Pick<ThemesHost, 'list'>;
+  /** The profile library's connector accounts, read for `list_connectors`; adding one is the user's, on the widget. */
+  library: Pick<LibraryHost, 'list' | 'oauthApps' | 'ownAppRedirect' | 'addConnector' | 'onAuthorize' | 'onDeviceCode' | 'runSetup' | 'updateSetupStep'>;
   remote: Pick<RemoteHost, 'status'>;
   isDesktop: boolean;
   /** Push and open a PR as the profile's GitHub account (the Ship bar's calls). */
@@ -71,6 +74,8 @@ export interface ToolContext<A = Record<string, unknown>> {
   dispatch: (action: Action) => void;
   /** Asks the user on a widget mid-run (browser escalation); throws when the setting doesn't allow it or they deny. */
   confirm: (approval: Approval) => Promise<string[]>;
+  /** Asks the user to pick one of `options` on a widget, at any agent setting: a question, not a permission. */
+  choose: (question: { title: string; detail?: string; options: string[] }) => Promise<string>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
   /** A config write `ask` previewed: `run` applies exactly these changes, refused if a file changed since (`befores`). */
@@ -82,6 +87,8 @@ export interface Approval {
   title: string;
   detail: string;
   options?: { id: string; label: string }[];
+  /** A question with one answer: `options` become radio buttons, one must be picked, and its id comes back. */
+  pick?: 'one';
   /** Shown whole on the widget, like a script about to run. */
   code?: string;
   /** A delete: the widget's primary is a red Delete. */
@@ -101,6 +108,9 @@ export interface Outcome {
   isFinal?: boolean;
   /** Puts it back when the store snapshot can't, like stopping and removing a thread the call started. */
   undo?: () => void;
+  /** Its line's icon and the page it acted on (favicon and host), for browser actions. */
+  glyph?: EventGlyph;
+  site?: string;
 }
 
 export type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K]['shape']>>;
@@ -162,7 +172,7 @@ const RUN = Date.now().toString(36);
 export const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
 
 function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): ToolContext<A> {
-  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), cards: [] };
+  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), cards: [] };
   return ctx;
 }
 
@@ -196,20 +206,29 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = cardId('tool', ctx.caller.id);
-  const { options, isDestructive, edits, notes } = approval;
-  const tool = { callId: id, options, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
+  const { options, pick, isDestructive, edits, notes } = approval;
+  const tool = { callId: id, options, pick, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
     const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
     waiting.set(id, (d) => (clearTimeout(timer), resolve(d)));
   });
   waiting.delete(id);
-  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? `Approved: ${approval.title}` : (approval.denied ?? `Denied: ${approval.title}`);
+  const picked = pick && options?.find((o) => o.id === decision?.options?.[0])?.label;
+  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : `Approved: ${approval.title}`) : (approval.denied ?? `Denied: ${approval.title}`);
   ctx.dispatch({ type: 'card-record', queueId: id, text });
   if (!decision) throw new Error(`Nobody answered in ${APPROVAL_TIMEOUT_MS / 60_000} minutes; nothing was done.`);
   if (!decision.isApproved) throw new Error(`The user denied it: ${approval.title} Nothing was done.`);
   ctx.cards.push(id);
   return decision.options ?? [];
+}
+
+async function choose(ctx: ToolContext<unknown>, { title, detail = '', options }: { title: string; detail?: string; options: string[] }) {
+  const [answer] = await ask(ctx, { title, detail, options: options.map((o) => ({ id: o, label: o })), pick: 'one', denied: `No answer to: ${title}` });
+  // An answer isn't an approval: the card keeps its own record, and the call logs what it changed on a line of its own.
+  ctx.cards.pop();
+  if (!answer) throw new Error(`No answer was picked: ${title}`);
+  return answer;
 }
 
 /** A widget joins the queue and the caller's thread, at the point the agent asked. */
@@ -226,9 +245,10 @@ export function card(ctx: ToolContext<unknown>, id: string, kind: QueueItem['kin
 function record(ctx: ToolContext<unknown>, name: ToolName, outcome: Outcome, before: State) {
   const changed = outcome.changed!;
   const asked = ctx.cards.at(-1);
-  if (asked) return ctx.dispatch({ type: 'card-record', queueId: asked, text: capitalize(changed) });
+  const { glyph, site } = outcome;
+  if (asked) return ctx.dispatch({ type: 'card-record', queueId: asked, text: capitalize(changed), ...(glyph && { glyph }), ...(site && { site }) });
   const text = `${authorName(ctx.caller.providers[0])} ${changed}`;
-  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text } });
+  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text, ...(glyph && { glyph }), ...(site && { site }) } });
   if (!isQuiet(name)) ctx.env.toast(text, outcome.isFinal ? undefined : (outcome.undo ?? snapshotUndo(ctx.env, before)));
 }
 
@@ -302,7 +322,7 @@ const THREAD_SPECS = {
       const pinned = [...lists.pinned, ...threads.map((t) => t.id)];
       if (pinned.length > PIN_SLOTS.length) throw new Error(`Only ${PIN_SLOTS.length} threads can be pinned and ${lists.pinned.length} already are; unpin one first`);
       if (threads.some((t) => t.status === 'settled')) throw new Error('Settled threads can’t be pinned; reactivate_thread first');
-      dispatch({ type: 'reorder', pinned, unpinned: lists.unpinned.filter((id) => !pinned.includes(id)) });
+      dispatch({ type: 'reorder', pinned, unpinned: lists.unpinned.filter((id) => !pinned.includes(id)), at: Date.now() });
       return { changed: `pinned ${count(threads)}`, result: { pinned: sidebar(state(), caller).pinned } };
     },
   },
@@ -311,7 +331,7 @@ const THREAD_SPECS = {
       const threads = targets(state(), caller, args.threadIds).filter(isPinned);
       const lists = sidebar(state(), caller);
       const ids = threads.map((t) => t.id);
-      dispatch({ type: 'reorder', pinned: lists.pinned.filter((id) => !ids.includes(id)), unpinned: [...ids, ...lists.unpinned] });
+      dispatch({ type: 'reorder', pinned: lists.pinned.filter((id) => !ids.includes(id)), unpinned: [...ids, ...lists.unpinned], at: Date.now() });
       return { changed: `unpinned ${count(threads)}`, result: { pinned: sidebar(state(), caller).pinned } };
     },
   },
@@ -320,7 +340,7 @@ const THREAD_SPECS = {
       const lists = sidebar(state(), caller);
       if (args.pinnedOrder) {
         const order = targets(state(), caller, args.pinnedOrder).map((t) => t.id);
-        dispatch({ type: 'reorder', pinned: order, unpinned: [...lists.pinned.filter((id) => !order.includes(id)), ...lists.unpinned.filter((id) => !order.includes(id))] });
+        dispatch({ type: 'reorder', pinned: order, unpinned: [...lists.pinned.filter((id) => !order.includes(id)), ...lists.unpinned.filter((id) => !order.includes(id))], at: Date.now() });
         return { changed: 'reordered the pinned threads', result: sidebar(state(), caller) };
       }
       const anchorId = args.before ?? args.after;
@@ -333,7 +353,7 @@ const THREAD_SPECS = {
       if (!list.includes(anchor.id)) throw new Error(`"${anchor.title}" isn't in the sidebar's active list`);
       const next = dropPin(lists.pinned, lists.unpinned, moving.id, toPinned, list.indexOf(anchor.id) + (args.after ? 1 : 0));
       if (!next) throw new Error(`Pinned is full (${PIN_SLOTS.length}); unpin one first`);
-      dispatch({ type: 'reorder', ...next });
+      dispatch({ type: 'reorder', ...next, at: Date.now() });
       return { changed: `moved "${moving.title}" ${args.after ? 'below' : 'above'} "${anchor.title}"`, result: sidebar(state(), caller) };
     },
   },

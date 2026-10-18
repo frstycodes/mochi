@@ -2,14 +2,16 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
 import { saveImage } from '../images.ts';
+import type { GeneratedImage } from '../../../src/model.ts';
 import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, childEvents, generatedImage, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
 import { CODEX_BROWSER_FEATURES_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
 import { killTree, spawnable } from '../../platform.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { CHEAP_MODELS } from '../../../src/utility/prompts.ts';
 
 interface Live {
   codexId: string;
@@ -64,6 +66,9 @@ const ASK_THREAD = {
   approvalPolicy: 'never',
   config: Object.fromEntries(['shell_tool', 'unified_exec', 'apps', 'plugins', 'multi_agent', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'goals'].map((f) => [`features.${f}`, false])),
 };
+/** Claude's `generate_image`: the side chat's lockdown with image generation back on, so the turn can only make the image. */
+const IMAGE_THREAD = { ...ASK_THREAD, config: { ...ASK_THREAD.config, 'features.image_generation': true } };
+const IMAGE_INSTRUCTIONS = 'Generate exactly one image for the prompt with your image generation tool, then reply with one short line. Do nothing else.';
 /**
  * Mirrors Claude's `AUTO_ALLOWED` (`electron/mcp/server.ts`): Mochi asks with its own card, so Codex never prompts, and a
  * call may wait on that card as long as main does. `tool_timeout_sec` read in 0.155.1's binary; the approval key was verified against its config schema.
@@ -93,15 +98,17 @@ export class CodexAdapter {
   private accountFor: AccountFor;
   private findCodex: FindCodex;
   private toolsUrl?: (threadId: string) => Promise<string>;
+  private libraryConfig?: (spaceId: string) => Promise<Record<string, unknown>>;
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
-  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. */
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string) => Promise<string>) {
+  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library as config overrides. */
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string) => Promise<string>, libraryConfig?: (spaceId: string) => Promise<Record<string, unknown>>) {
     this.emit = emit;
     this.accountFor = accountFor;
     this.findCodex = findCodex;
     this.toolsUrl = toolsUrl;
+    this.libraryConfig = libraryConfig;
   }
 
   owns(threadId: string) {
@@ -261,6 +268,39 @@ export class CodexAdapter {
     }
   }
 
+  /**
+   * One image on the profile's Codex account, for Claude's `generate_image` (`electron/mcp/imageGen.ts`): an ephemeral
+   * thread with nothing on but image generation. Resolves to its `imageGeneration` item as the card shows it; throws a
+   * message the calling agent can relay.
+   */
+  async generateImage(spaceId: string, prompt: string, signal: AbortSignal): Promise<GeneratedImage> {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    // Never the user's config default: it can name a model their login doesn't serve (an API-only id on a ChatGPT account).
+    const model = imageModel(await this.models(spaceId));
+    const result = await rpc.request('thread/start', { ...IMAGE_THREAD, cwd: os.tmpdir(), model, developerInstructions: IMAGE_INSTRUCTIONS }, THREAD_TIMEOUT_MS);
+    const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
+    if (typeof codexId !== 'string') throw new Error('codex thread/start returned no thread id');
+    const inbox = new Inbox();
+    server.asks.set(codexId, inbox);
+    let turnId: string | undefined;
+    const stop = () => turnId && void rpc.request('turn/interrupt', { threadId: codexId, turnId }).catch(() => {});
+    signal.addEventListener('abort', stop, { once: true });
+    try {
+      const turn = await rpc.request('turn/start', { threadId: codexId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
+      turnId = turnIdOf(turn) as string | undefined;
+      for await (const _ of inbox.drain(signal));
+      if (signal.aborted) throw new Error('Image generation was stopped');
+      if (!inbox.image) throw new Error('Codex finished without generating an image.');
+      return generatedImage(inbox.image, 'end', { saveImage });
+    } finally {
+      signal.removeEventListener('abort', stop);
+      server.asks.delete(codexId);
+      void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
+    }
+  }
+
   /** The profile's account's full `account/rateLimits/read` snapshot. Throws when logged out. */
   async readLimits(spaceId: string) {
     const server = this.server(await this.accountFor(spaceId, 'codex'));
@@ -309,7 +349,8 @@ export class CodexAdapter {
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
-    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: MOCHI_INSTRUCTIONS, config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const library = await this.libraryConfig?.(options.spaceId);
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: MOCHI_INSTRUCTIONS, config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...library, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume
@@ -544,8 +585,9 @@ class CodexServer {
   }
 }
 
-/** One side chat answer: its thread's notifications in, text chunks out, ending at `turn/completed`. */
+/** One side chat answer: its thread's notifications in, text chunks out, ending at `turn/completed`. `image`: the turn's last finished `imageGeneration` item. */
 class Inbox {
+  image?: Record<string, unknown>;
   private chunks: string[] = [];
   private streamed = new Set<string>();
   private end?: { error?: string };
@@ -559,6 +601,7 @@ class Inbox {
     }
     // A message that never streamed arrives whole.
     if (method === 'item/completed' && p.item?.type === 'agentMessage' && typeof p.item.text === 'string' && !this.streamed.has(String(p.item.id))) this.chunks.push(p.item.text);
+    if (method === 'item/completed' && p.item?.type === 'imageGeneration') this.image = p.item;
     if (method === 'turn/completed') {
       const error = p.turn?.error?.message;
       this.end = p.turn?.status === 'failed' ? { error: typeof error === 'string' ? apiMessage(error) : 'Codex stopped without an answer' } : {};
@@ -580,6 +623,11 @@ class Inbox {
       else await Promise.race([new Promise<void>((resolve) => (this.wake = resolve)), aborted]);
     }
   }
+}
+
+/** The image thread's model from the account's own list: the cheap one (it only calls the image tool), else the account's default. Null leaves it to Codex. */
+export function imageModel(models: AgentModel[]) {
+  return (models.find((m) => m.id === CHEAP_MODELS.codex) ?? models.find((m) => m.isDefault) ?? models[0])?.id ?? null;
 }
 
 const turnIdOf = (result: unknown) => (result as { turn?: { id?: unknown } } | null)?.turn?.id;

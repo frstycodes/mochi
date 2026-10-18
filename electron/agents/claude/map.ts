@@ -3,9 +3,12 @@ import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKC
 import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
+import { ACCOUNT_ARGUMENT } from '../../../src/library/connectors.ts';
 import type { AgentCommand, AgentInfo, McpCall, McpServer, McpWidgetResult, WebLink } from '../../../src/model.ts';
 import { describeApproval } from '../../../src/summary.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
+import { IMAGE_TOOL, imageCard } from '../../../src/runtime/imageTool.ts';
+import { MOCHI_SERVER } from '../../../src/runtime/toolTable.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
 import type { SaveImage } from '../images.ts';
@@ -57,6 +60,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
       const { description, prompt, model, run_in_background } = input as Partial<AgentInput>;
       return [subagent(id, 'start', { toolId: id, name: description || 'Agent', ...(prompt && { prompt }), ...(model && { model }), isBackground: run_in_background === true })];
     }
+    if (name === IMAGE_CALL) return [{ threadId, type: 'tool', id, phase: 'start', text: 'Generate image', generated: imageCard(input) }];
     const description = callDescription(name, input);
     const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) };
     if (name === 'TodoWrite') return [start, { threadId, type: 'plan', items: planFromTodos(input) }];
@@ -74,6 +78,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     if (!tool) return [];
     tools.delete(block.tool_use_id);
     if (AGENT_TOOLS.has(tool.name)) return agentEnd(block, result);
+    if (tool.name === IMAGE_CALL) return [{ threadId, type: 'tool', id: block.tool_use_id, phase: 'end', text: 'Generate image', generated: imageCard(tool.input, { text: resultText(block), isError: block.is_error }) }];
     const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block, result) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
     if (links) end.links = links;
@@ -414,10 +419,14 @@ export function toolKind(name: string, input: Record<string, unknown>, servers: 
   const rest = name.slice('mcp__'.length);
   // Longest first: a server whose name runs into another's (`git`, `github`) matches by its own full prefix.
   const server = [...servers].sort((a, b) => b.length - a.length).find((s) => rest.startsWith(`${mcpToolPrefix(s)}__`));
-  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2) } };
+  const account = typeof input[ACCOUNT_ARGUMENT] === 'string' ? { account: input[ACCOUNT_ARGUMENT] } : {};
+  if (server) return { mcp: { server, tool: rest.slice(mcpToolPrefix(server).length + 2), ...account } };
   const split = rest.indexOf('__');
-  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2) } } : {};
+  return split > 0 ? { mcp: { server: rest.slice(0, split), tool: rest.slice(split + 2), ...account } } : {};
 }
+
+/** Mochi's `generate_image`, shown as the same image card a Codex image gets rather than an MCP row. */
+const IMAGE_CALL = `mcp__${MOCHI_SERVER}__${IMAGE_TOOL}`;
 
 const VERBS = { Bash: 'Run', Read: 'Read', Edit: 'Edit', MultiEdit: 'Edit', Write: 'Write', NotebookEdit: 'Edit', WebSearch: 'Search', WebFetch: 'Fetch' } as const;
 

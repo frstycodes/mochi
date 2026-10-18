@@ -22,6 +22,10 @@ export interface FollowOptions {
   onFrame: (frame: StreamFrame) => void;
   /** What it said about itself, to remember for the next launch. */
   onWelcome: (welcome: { addresses: string[]; kind?: DeviceKind }) => void;
+  /** This computer's membership records, sent in each hello. */
+  members?: () => unknown;
+  /** The machine's records, from its welcome or a later `members` frame. */
+  onMembers?: (members: unknown) => void;
 }
 
 export interface MachineFollower {
@@ -35,6 +39,8 @@ export interface MachineFollower {
 const LAN_TIMEOUT_MS = 2000;
 const MAX_BACKOFF_MS = 30_000;
 const COMMAND_TIMEOUT_MS = 60_000;
+/** A clone runs as long as the repository takes to download. */
+const LONG_COMMAND_TIMEOUT_MS = { 'clone-project': 15 * 60_000, 'add-project': 2 * 60_000 } satisfies Partial<Record<RemoteCommand['type'], number>>;
 
 /**
  * This computer's connection to one machine it paired with, as a device: kept open with backoff, resuming the stream where
@@ -78,7 +84,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
       if (run !== generation || state.status === 'refused') return;
       offline(state.error ?? 'The connection dropped', state.status === 'online' ? Date.now() : state.lastSeenAt);
     });
-    opened.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...(resume && { resume }) }));
+    opened.send(JSON.stringify({ type: 'hello', version: PROTOCOL_VERSION, ...(resume && { resume }), ...(options.members && { members: options.members() }) }));
   }
 
   function onFrame(text: string, route: Route['kind']) {
@@ -88,7 +94,10 @@ export function followMachine(options: FollowOptions): MachineFollower {
         attempt = 0;
         const kind = asKind(frame.machineKind) ?? state.kind;
         options.onWelcome({ addresses: Array.isArray(frame.addresses) ? frame.addresses.filter((a) => typeof a === 'string') : [], kind });
+        if (frame.members !== undefined) options.onMembers?.(frame.members);
         return set({ status: 'online', route, name: frame.machineName, kind, scopes: frame.scopes, error: undefined, lastSeenAt: Date.now() });
+      case 'members':
+        return options.onMembers?.(frame.members);
       case 'refused':
         // The machine couldn't serve the stream this time (it says to reconnect); the close that follows retries.
         return set({ error: frame.reason });
@@ -120,7 +129,7 @@ export function followMachine(options: FollowOptions): MachineFollower {
         const timer = setTimeout(() => {
           pending.delete(id);
           resolve({ isOk: false, error: `${state.name} didn’t answer; check the thread before trying again` });
-        }, COMMAND_TIMEOUT_MS);
+        }, LONG_COMMAND_TIMEOUT_MS[command.type as keyof typeof LONG_COMMAND_TIMEOUT_MS] ?? COMMAND_TIMEOUT_MS);
         pending.set(id, (result) => {
           clearTimeout(timer);
           resolve(result);

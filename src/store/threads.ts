@@ -9,7 +9,7 @@ import { sourcePrompt } from '../sources.ts';
 import { KEEPS_TO_MUTE, type DriftKind } from '../drift.ts';
 import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { goalProgress } from '../progress.ts';
-import { nestBlocker, reorderThreads, subThreadsOf } from '../reorder.ts';
+import { nestBlocker, pinAt, reorderThreads, subThreadsOf } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
@@ -25,6 +25,7 @@ import { recordPrs } from '../git/prs.ts';
 import { branchName, repoWorkspace, withHead, type WorkspaceDraft } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './index.tsx';
 import { getRestored } from './persist.ts';
+import { markSeen, type SeenAction } from './seen.ts';
 import { showsDemoData } from '../demoData.ts';
 import type { TriggerDraft } from '../schedule/calls.ts';
 import { describeTrigger } from '../schedule/describe.ts';
@@ -42,6 +43,7 @@ export interface ThreadsState {
 
 export type ThreadsAction =
   | { type: 'tick' }
+  | SeenAction
   /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
   | { type: 'agent'; event: SeqAgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
@@ -106,7 +108,10 @@ export type ThreadsAction =
   | { type: 'idle-update'; threadId: string; patch: Partial<Omit<IdleCheck, 'at'>> }
   /** You answered the turn's next-move card, or wrote instead: it's kept in the chat as a record and the card goes. */
   | { type: 'next-move-record'; threadId: string; record: NonNullable<ActivityEntry['nextMove']> }
-  | { type: 'reorder'; pinned: string[]; unpinned: string[] }
+  /** `at`: epoch ms, the order key a new pin at the end takes (`reorderThreads`). */
+  | { type: 'reorder'; pinned: string[]; unpinned: string[]; at: number }
+  /** Pins or moves a pin to order key `order` among all your computers' pins (`pinAt`). */
+  | { type: 'pin-at'; threadId: string; order: number }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
   | { type: 'rewind'; threadId: string; n: number; mode?: RewindMode; forkAt?: string | null }
@@ -124,7 +129,8 @@ export type ThreadsAction =
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
 export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
-  const demo = isDemo ? seedThreads() : [];
+  // Demo threads start read, as a restored save does.
+  const demo = isDemo ? seedThreads().map((t) => ({ ...t, seenActivity: t.activity.length })) : [];
   let checkpointSeq = saved?.checkpointSeq ?? 0;
   const checkpoints = Object.fromEntries(
     demo.map((t) => {
@@ -153,6 +159,8 @@ function reduce(state: State, action: Action): State {
   switch (action.type) {
     case 'tick':
       return tick(state);
+    case 'seen':
+      return markSeen(state, action);
     case 'agent':
       return stampNew(state, withEventSeq(applyAgentEvent(state, action.event), action.event), action.event.threadId, action.ms);
     case 'agent-starting':
@@ -275,7 +283,11 @@ function reduce(state: State, action: Action): State {
     case 'edit-goal':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now, action.by)) };
     case 'reorder':
-      return { ...state, threads: reorderThreads(state.threads, action.pinned, action.unpinned) };
+      return { ...state, threads: reorderThreads(state.threads, action.pinned, action.unpinned, action.at) };
+    case 'pin-at': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      return { ...state, threads: (thread && pinAt(state.threads, thread.spaceId, thread.id, action.order)) ?? state.threads };
+    }
     case 'say':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => log(t, { ...action.entry, at: state.now })) };
     case 'restore':

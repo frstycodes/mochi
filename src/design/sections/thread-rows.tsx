@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
-import { ChatRound } from 'reicon-react';
+import { Chat } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { isMet, type Thread } from '../../model';
 import { AgentLoader } from '../../AgentLoader';
 import { PrStack } from '../../git/PrStack';
-import { ProjectAvatar } from '../../Sidebar';
+import { ProjectIcon } from '../../ProjectIcon';
 import { StatusRing, useIdleVerdict, VerdictChip, VerdictIcon } from '../../goals/VerdictChip';
 import type { Verdict } from '../../goals/verdict';
 import { lineColor } from '../../ui';
@@ -66,7 +66,7 @@ function RowShell({ isActive, className, children }: { isActive: boolean; classN
 }
 
 function ProjectMark({ thread }: { thread: Thread }) {
-  return thread.repo ? <ProjectAvatar name={thread.repo.project} /> : <ChatRound aria-label="No project" className="size-4 shrink-0 text-subtle-foreground" />;
+  return thread.repo ? <ProjectIcon name={thread.repo.project} /> : <Chat aria-label="No project" className="size-4 shrink-0 text-subtle-foreground" />;
 }
 
 function TitleLine({ thread, ago, isActive, lead }: { thread: Thread; ago: string; isActive: boolean; lead: ReactNode }) {

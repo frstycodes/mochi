@@ -1,5 +1,5 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
-import { Folder, Search, SidebarLeft } from 'reicon-react';
+import { Folder, Search, SidebarLeft } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

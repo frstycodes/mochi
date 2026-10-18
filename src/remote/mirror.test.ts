@@ -46,3 +46,9 @@ test('an action before any snapshot, from another epoch or already applied is sk
   const rename = m.act({ type: 'rename', threadId, title: 'Later' });
   assert.equal(applyFrame(mirror, { ...rename, epoch: 'e2' }), mirror);
 });
+
+test('a snapshot carries the machine’s side chats, so one asked before this computer connected still shows', () => {
+  const saved = { version: 1, now: 900, seq: 1, threads: [], queue: [], checkpoints: {}, checkpointSeq: 0, forks: {}, sidechats: { t1: { remote: { messages: [{ id: 'a', role: 'assistant', text: 'Because.' }] } } } };
+  const mirror = applyFrame(undefined, { type: 'snapshot', epoch: 'e1', seq: 0, saved });
+  assert.equal(mirror?.state.sidechats.t1?.remote?.messages[0].text, 'Because.');
+});

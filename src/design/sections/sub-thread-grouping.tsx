@@ -1,5 +1,5 @@
 import { useState, type DragEvent, type ReactNode } from 'react';
-import { CloseSquare, Copy3, DiagramTree } from 'reicon-react';
+import { XSquare, CopyStack, DiagramTree } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Thread } from '../../model';
@@ -66,7 +66,7 @@ function SimilarSuggestions() {
 function SimilarRow({ relation, title, status, detail, children }: { relation: string; title: string; status: string; detail?: string; children?: ReactNode }) {
   return (
     <li className="flex items-center gap-2 rounded-lg bg-muted/40 py-1 pr-1 pl-2.5">
-      <Copy3 aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <CopyStack aria-hidden className="size-3.5 shrink-0 text-warning" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate type-meta">
           <span className="text-muted-foreground">{relation}</span>
@@ -80,7 +80,7 @@ function SimilarRow({ relation, title, status, detail, children }: { relation: s
         Open
       </Button>
       <TooltipIconButton label="Dismiss" hint="Not the same work; stop showing it here">
-        <CloseSquare />
+        <XSquare />
       </TooltipIconButton>
     </li>
   );

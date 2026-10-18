@@ -1,4 +1,4 @@
-import { Trash3 } from 'reicon-react';
+import { Trash } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { replaceAddressHistory, useAddressHistory } from '../../browser/pages';
@@ -22,7 +22,7 @@ export function BrowserSection() {
           description={history.length ? `${history.length} ${PAGES.select(history.length) === 'one' ? 'page' : 'pages'} suggested as you type` : 'Empty'}
           control={
             <Button id={settingControlId('addressHistory')} variant="outline" size="sm" disabled={!history.length} onClick={clearHistory}>
-              <Trash3 data-icon="inline-start" />
+              <Trash data-icon="inline-start" />
               Clear history
             </Button>
           }

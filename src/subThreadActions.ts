@@ -1,6 +1,6 @@
 import type { Dispatch } from 'react';
 import type { Thread } from './model';
-import { nestBlocker, pinnedThreads } from './reorder';
+import { nestBlocker, pinOrderOf } from './reorder';
 import type { Action } from './store';
 import { toast } from './toast/store';
 
@@ -9,7 +9,7 @@ export function nestWithUndo(dispatch: Dispatch<Action>, threads: Thread[], thre
   const parent = threads.find((t) => t.id === parentId);
   if (!parent || nestBlocker(threads, thread.id, parentId)) return;
   const before = thread.parent;
-  const pinned = thread.orbitSlot === undefined ? null : pinnedThreads(threads, thread.spaceId).map((t) => t.id);
+  const pinOrder = thread.orbitSlot === undefined ? null : pinOrderOf(thread);
   dispatch({ type: 'nest', threadId: thread.id, parentId });
   toast(`Now a sub-thread of “${parent.title}”`, {
     description: thread.title,
@@ -18,7 +18,7 @@ export function nestWithUndo(dispatch: Dispatch<Action>, threads: Thread[], thre
       onClick: () => {
         dispatch(before ? { type: 'nest', threadId: thread.id, parentId: before.threadId, criterionId: before.criterionId } : { type: 'unnest', threadId: thread.id });
         // Nesting unpinned it; its pin comes back in the place it had.
-        if (pinned) dispatch({ type: 'reorder', pinned, unpinned: [] });
+        if (pinOrder !== null) dispatch({ type: 'pin-at', threadId: thread.id, order: pinOrder });
       },
     },
   });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentProps, type FormEvent } from 'react';
-import { ArrowUp, Copy3, RotateLeft, Stop, Trash3, X } from 'reicon-react';
+import { ArrowUp, CopyStack, RotateLeft, Stop, Trash, X } from '@/icons';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -31,6 +31,10 @@ import { MachinePresence } from './MachinePresence';
 import { REMOTE_PANES, RemotePane, type RemotePaneKind } from './RemotePanes';
 import { machineStatus } from './status';
 import { RemoteScope, useMachines } from './useMachines';
+import { Seen } from '../notify/useSeen';
+import { RemoteFilesContext } from '../files/useWorktreeFiles';
+import type { FileTarget } from '../files/FileFinder';
+import type { Action, State } from '../store';
 
 /** Another computer's thread over the app: its transcript as that computer streams it, steered by commands sent there. */
 export function RemoteThreadView() {
@@ -41,35 +45,69 @@ export function RemoteThreadView() {
   if (!followed) return <Missing title="Not paired anymore" description="This computer no longer follows the one this thread runs on." />;
   if (!followed.state) return <Missing machine={followed.machine} title={followed.machine.status === 'connecting' ? `Connecting to ${followed.machine.name}…` : `${followed.machine.name} is offline`} description={machineStatus(followed.machine) ?? 'Its threads show here once it sends them.'} isLoading={followed.machine.status === 'connecting'} />;
   if (!thread) return <Missing machine={followed.machine} title="This thread is gone" description={`It isn’t on ${followed.machine.name} anymore.`} />;
+  return <RemoteThread machine={followed.machine} state={followed.state} thread={thread} />;
+}
+
+/** The chat column, and beside it the panes you opened, each reading from that computer, stacked like the machine's own. */
+function RemoteThread({ machine, state, thread }: { machine: FollowedMachine; state: State; thread: Thread }) {
+  const [panes, setPanes] = useState<RemotePaneKind[]>([]);
+  const open = (kind: RemotePaneKind) => setPanes((all) => (all.includes(kind) ? all : [...all, kind]));
+  const toggle = (kind: RemotePaneKind) => setPanes((all) => (all.includes(kind) ? all.filter((k) => k !== kind) : [...all, kind]));
+  const [file, setFile] = useState<FileTarget>();
+  const files = useRemoteFileSet(machine, thread);
+  // A link in the transcript: a file opens in the Files pane here, a web page in your browser.
+  const openTab = (action: Extract<Action, { type: 'pane-open-tab' }>) => {
+    if (action.kind === 'files' && action.file && can(machine, 'code')) {
+      setFile(action.file);
+      return open('files');
+    }
+    if (action.url) window.open(action.url, '_blank', 'noreferrer');
+  };
   return (
-    <RemoteScope machine={followed.machine} state={followed.state}>
-      <RemoteThread machine={followed.machine} thread={thread} />
+    <RemoteScope machine={machine} state={state} onOpenTab={openTab}>
+      <Seen threadId={thread.id} when="open-and-leave" />
+      <RemoteFilesContext.Provider value={files}>
+        <div className="flex h-full min-h-0">
+          <div className="@container flex min-h-0 min-w-[420px] flex-1 flex-col">
+            <RemoteHeader machine={machine} thread={thread} panes={panes} onPane={toggle} />
+            <SplitContext.Provider value={SPLIT}>
+              {/* Read-only, so nothing in it acts on this computer: links and the message bar act on that one. */}
+              <PreviewContext.Provider value>
+                <ChatView thread={thread} isReadOnly messageBar={RemoteMessageBar} />
+              </PreviewContext.Provider>
+            </SplitContext.Provider>
+            <RemoteComposer machine={machine} thread={thread} />
+          </div>
+          {panes.length > 0 && (
+            <div className="flex w-[45%] max-w-[720px] min-w-[320px] flex-col gap-2 py-2 pr-2">
+              {panes.map((kind) => (
+                <RemotePane key={kind} kind={kind} machine={machine} thread={thread} file={file} onClose={() => toggle(kind)} />
+              ))}
+            </div>
+          )}
+        </div>
+      </RemoteFilesContext.Provider>
     </RemoteScope>
   );
 }
 
-/** The chat column, and beside it one pane reading from that computer, like the machine's own thread view. */
-function RemoteThread({ machine, thread }: { machine: FollowedMachine; thread: Thread }) {
-  const [pane, setPane] = useState<RemotePaneKind | null>(null);
-  return (
-    <div className="flex h-full min-h-0">
-      <div className="@container flex min-h-0 min-w-[420px] flex-1 flex-col">
-        <RemoteHeader machine={machine} thread={thread} pane={pane} onPane={(kind) => setPane(kind === pane ? null : kind)} />
-        <SplitContext.Provider value={SPLIT}>
-          {/* Links and the per-message actions that would act on this computer stay off; the bar below acts on that one. */}
-          <PreviewContext.Provider value>
-            <ChatView thread={thread} isReadOnly messageBar={RemoteMessageBar} />
-          </PreviewContext.Provider>
-        </SplitContext.Provider>
-        <RemoteComposer machine={machine} thread={thread} />
-      </div>
-      {!!pane && (
-        <div className="flex w-[45%] max-w-[720px] min-w-[320px] flex-col py-2 pr-2">
-          <RemotePane kind={pane} machine={machine} thread={thread} onClose={() => setPane(null)} />
-        </div>
-      )}
-    </div>
-  );
+/** The thread's files on that computer, read once when it opens with `code`, so paths in its transcript become links. */
+function useRemoteFileSet(machine: FollowedMachine, thread: Thread) {
+  const { ask } = useMachines();
+  const [files, setFiles] = useState<ReadonlySet<string> | null>(null);
+  const canRead = can(machine, 'code') && (!!thread.repo || !!thread.live?.cwd);
+  useEffect(() => {
+    if (!canRead) return;
+    let isCurrent = true;
+    ask(machine.id, { type: 'files', threadId: thread.id }).then(
+      (list) => isCurrent && setFiles(new Set(list.paths)),
+      () => {},
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [ask, machine.id, thread.id, canRead]);
+  return files;
 }
 
 const SPLIT: SplitInfo = { leafId: 'remote', isFocused: true, isMulti: false, isZoomed: false, isFirst: true, isWide: true };
@@ -96,12 +134,12 @@ const can = (machine: FollowedMachine, scope: Scope) => machine.status === 'onli
 function RemoteHeader({
   machine,
   thread,
-  pane,
+  panes,
   onPane,
 }: {
   machine: FollowedMachine;
   thread: Thread;
-  pane: RemotePaneKind | null;
+  panes: RemotePaneKind[];
   onPane: (kind: RemotePaneKind) => void;
 }) {
   const { run } = useMachines();
@@ -117,14 +155,14 @@ function RemoteHeader({
       <MachinePresence machine={machine} />
       <span className="flex-1" />
       {!!thread.live?.isWorking && (
-        <Button variant="outline" size="sm" className="rounded-full" disabled={!can(machine, 'operate')} onClick={() => void run(machine.id, { type: 'interrupt', threadId: thread.id })}>
+        <Button variant="outline" size="sm" disabled={!can(machine, 'operate')} onClick={() => void run(machine.id, { type: 'interrupt', threadId: thread.id })}>
           <Stop data-icon="inline-start" />
           Stop
         </Button>
       )}
       <span className="hidden items-center gap-0.5 @md:flex">
         {PANE_KINDS.filter((kind) => hasFolder || !REMOTE_PANES[kind].needsFolder).map((kind) => (
-          <PaneToggle key={kind} kind={kind} machine={machine} isOpen={pane === kind} onToggle={() => onPane(kind)} />
+          <PaneToggle key={kind} kind={kind} machine={machine} isOpen={panes.includes(kind)} onToggle={() => onPane(kind)} />
         ))}
       </span>
       <DropdownMenu>
@@ -137,6 +175,14 @@ function RemoteHeader({
           <DropdownMenuItem disabled={!canManage} onSelect={() => void run(machine.id, { type: 'settle', threadId: thread.id, isSettled: !isSettled })}>
             {isSettled ? 'Reactivate' : 'Settle'}
           </DropdownMenuItem>
+          {!isSettled && (
+            <DropdownMenuItem
+              disabled={!canManage}
+              onSelect={() => void run(machine.id, { type: 'pin', threadId: thread.id, isPinned: thread.orbitSlot === undefined })}
+            >
+              {thread.orbitSlot === undefined ? 'Pin' : 'Unpin'}
+            </DropdownMenuItem>
+          )}
           {!!thread.repo && (
             <>
               <DropdownMenuSeparator />
@@ -153,7 +199,7 @@ function RemoteHeader({
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" disabled={!canManage} onSelect={() => setIsDeleting(true)}>
-            <Trash3 />
+            <Trash />
             Delete thread…
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -237,7 +283,7 @@ function RemoteMessageBar({ thread, index, align }: ComponentProps<MessageBar>) 
       )}
     >
       <TooltipIconButton label="Copy" onClick={() => copyText(entry.text, 'Copied')} className={BAR_BUTTON}>
-        <Copy3 />
+        <CopyStack />
       </TooltipIconButton>
       {entry.who === 'you' && (
         <DropdownMenu>
@@ -395,7 +441,7 @@ function RemoteComposer({ machine, thread }: { machine: FollowedMachine; thread:
             rows={1}
             className="max-h-60 min-h-10 resize-none border-0 bg-transparent! px-2 type-prose shadow-none focus-visible:ring-0 max-md:text-base"
           />
-          <TooltipIconButton label="Send" hint={`Runs on ${machine.name}`} type="submit" variant="default" className="shrink-0 rounded-full" disabled={!canSend || !text.trim()}>
+          <TooltipIconButton label="Send" hint={`Runs on ${machine.name}`} type="submit" variant="default" className="shrink-0" disabled={!canSend || !text.trim()}>
             <ArrowUp />
           </TooltipIconButton>
         </form>

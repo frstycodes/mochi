@@ -1,4 +1,4 @@
-import { Check, DiagramTree, Pause, Warning } from 'reicon-react';
+import { Check, DiagramTree, Pause, WarningAlt } from '@/icons';
 import { REF_CHIP_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import { useThreadPrs } from '../git/useThreadPrs';
@@ -45,7 +45,7 @@ export function VerdictChip({ verdict, className }: { verdict: Verdict; classNam
 
 export function VerdictIcon({ kind, className = 'size-3' }: { kind: VerdictKind; className?: string }) {
   if (kind === 'done') return <Check aria-hidden className={className} />;
-  if (kind === 'gaps') return <Warning aria-hidden className={className} />;
+  if (kind === 'gaps') return <WarningAlt aria-hidden className={className} />;
   if (kind === 'stalled') return <Pause aria-hidden className={className} />;
   if (kind === 'needs-you') return <span aria-hidden className="size-1.5 rounded-full bg-current" />;
   if (kind === 'waiting') return <DiagramTree aria-hidden className={className} />;

@@ -5,8 +5,10 @@ import { data as desktopData } from './desktop/data.ts';
 import { browser as desktopBrowser } from './desktop/browser.ts';
 import { fs as desktopFs } from './desktop/fs.ts';
 import { git as desktopGit } from './desktop/git.ts';
+import { library as desktopLibrary } from './desktop/library.ts';
 import { notify as desktopNotify } from './desktop/notify.ts';
 import { ports as desktopPorts } from './desktop/ports.ts';
+import { projects as desktopProjects } from './desktop/projects.ts';
 import { pty as desktopPty } from './desktop/pty.ts';
 import { remote as desktopRemote } from './desktop/remote.ts';
 import { schedule as desktopSchedule } from './desktop/schedule.ts';
@@ -22,8 +24,10 @@ import { data as webData } from './web/data.ts';
 import { browser as webBrowser } from './web/browser.ts';
 import { fs as webFs } from './web/fs.ts';
 import { git as webGit } from './web/git.ts';
+import { library as webLibrary } from './web/library.ts';
 import { notify as webNotify } from './web/notify.ts';
 import { ports as webPorts } from './web/ports.ts';
+import { projects as webProjects } from './web/projects.ts';
 import { pty as webPty } from './web/pty.ts';
 import { remote as webRemote } from './web/remote.ts';
 import { schedule as webSchedule } from './web/schedule.ts';
@@ -55,6 +59,8 @@ export const registry: Registry = {
   remote: { web: webRemote, desktop: desktopRemote },
   account: { web: webAccount, desktop: desktopAccount },
   updates: { web: webUpdates, desktop: desktopUpdates },
+  projects: { web: webProjects, desktop: desktopProjects },
+  library: { web: webLibrary, desktop: desktopLibrary },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -79,4 +85,6 @@ export const host = {
   remote: pick('remote'),
   account: pick('account'),
   updates: pick('updates'),
+  projects: pick('projects'),
+  library: pick('library'),
 } satisfies HostBridge & { isDesktop: boolean };

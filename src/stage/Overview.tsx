@@ -1,5 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
-import { Grid, X } from 'reicon-react';
+import { Grid, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Kbd } from '@/components/ui/kbd';

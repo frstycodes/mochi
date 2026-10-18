@@ -37,8 +37,9 @@ function machineSide(keys: DeviceKeys, answer: boolean, known: PairedDevice[] = 
   const side: MachineSide = {
     keys,
     find: (id) => [...known, ...added].find((d) => d.id === id),
+    refresh: async () => {},
     approve: async (request) => (asked.push(request), answer),
-    add: (d) => {
+    add: async (d) => {
       const paired = { ...d, scopes: DEFAULT_SCOPES, pairedAt: 1 };
       added.push(paired);
       return paired;
@@ -80,8 +81,20 @@ test('a device returning on its own after being removed is refused through the r
   const ends = pipe();
   const [machineResult, deviceResult] = await Promise.allSettled([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, keypair(), machineKeys.publicKey, 'Laptop', true)]);
   assert.deepEqual(machine.asked, []);
-  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'That computer removed this one; pair again' });
+  assert.deepEqual(machineResult.status === 'fulfilled' && machineResult.value, { refusal: 'That computer doesn’t trust this one; join again' });
   assert.ok(deviceResult.status === 'rejected' && deviceResult.reason instanceof PairingRefused);
+});
+
+test('a device another computer let join is found by fetching the records, and connects with no prompt', async () => {
+  const machineKeys = keypair();
+  const device = keypair();
+  const machine = machineSide(machineKeys, false);
+  machine.side.refresh = async () => void machine.added.push({ id: deviceId(device.publicKey), name: 'Laptop', publicKey: '', scopes: DEFAULT_SCOPES, pairedAt: 1 });
+  const ends = pipe();
+  const [machineResult, deviceResult] = await Promise.allSettled([secureAsMachine(ends.machine, 'relay', machine.side), secureAsDevice(ends.device, device, machineKeys.publicKey, 'Laptop', true)]);
+  assert.equal(deviceResult.status, 'fulfilled');
+  assert.ok(machineResult.status === 'fulfilled' && 'link' in machineResult.value);
+  assert.deepEqual(machine.asked, []);
 });
 
 test('No on the machine refuses the device and trusts nothing', async () => {
@@ -98,7 +111,7 @@ test('an unknown device on the LAN is refused without asking; a paired one conne
   const device = keypair();
   const stranger = machineSide(machineKeys, true);
   const refused = await pairOver('lan', stranger, machineKeys, device);
-  assert.equal(refused.deviceResult.status === 'rejected' && (refused.deviceResult.reason as Error).message, 'Pair this device through your Mochi account first');
+  assert.equal(refused.deviceResult.status === 'rejected' && (refused.deviceResult.reason as Error).message, 'Join your computers through your Mochi account first');
   assert.deepEqual(stranger.asked, []);
 
   const known = machineSide(machineKeys, false, [{ id: deviceId(device.publicKey), name: 'Laptop', publicKey: '', scopes: ['read'], pairedAt: 1 }]);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, CloseCircle, Hierarchy2, MessageText, TickCircle, Warning } from 'reicon-react';
+import { ChevronRight, XCircle, Hierarchy2, MessageText, CheckBadge, WarningAlt } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { GitMergeIcon, GitPullRequestIcon, REF_CHIP_CLASS, REF_TONE_CLASS } from '@/icons/github';
@@ -183,7 +183,7 @@ function FactIcon({ thread, tile }: { thread: Thread; tile: Tile }) {
   return <Icon aria-hidden className={className} />;
 }
 
-const FACT_ICONS = { criteria: TickCircle, checks: TerminalIcon, git: Hierarchy2, agent: MessageText } satisfies Record<Exclude<Tile['id'], 'pr'>, unknown>;
+const FACT_ICONS = { criteria: CheckBadge, checks: TerminalIcon, git: Hierarchy2, agent: MessageText } satisfies Record<Exclude<Tile['id'], 'pr'>, unknown>;
 
 function factTone(bars: TileTone[]): RefTone {
   if (bars.includes('destructive')) return 'destructive';
@@ -247,9 +247,9 @@ function GapRow({ thread, gap, onJump }: { thread: Thread; gap: Gap; onJump?: (q
 }
 
 function GapIcon({ gap }: { gap: Gap }) {
-  if (gap.isAccepted) return <TickCircle aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
-  if (gap.severity === 'critical') return <CloseCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />;
-  return <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />;
+  if (gap.isAccepted) return <CheckBadge aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
+  if (gap.severity === 'critical') return <XCircle aria-hidden className="size-3.5 shrink-0 text-destructive" />;
+  return <WarningAlt aria-hidden className="size-3.5 shrink-0 text-warning" />;
 }
 
 function GapQuote({ quote, onJump }: { quote: string; onJump?: (quote: string) => void }) {

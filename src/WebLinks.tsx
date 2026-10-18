@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowUpRight, Copy3, Global } from 'reicon-react';
+import { useState, type ReactNode } from 'react';
+import { ArrowUpRight, CopyStack, Globe } from '@/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { hostname } from './agentPhase';
@@ -52,7 +52,7 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
       </ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         <ContextMenuItem onSelect={() => openUrl(link.url)}>
-          <Global />
+          <Globe />
           Open in browser tab
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => window.open(link.url, '_blank', 'noopener')}>
@@ -61,7 +61,7 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => copyText(link.url, 'Link copied')}>
-          <Copy3 />
+          <CopyStack />
           Copy link
         </ContextMenuItem>
       </ContextMenuContent>
@@ -69,12 +69,12 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
   );
 }
 
-/** The page's favicon over a globe that shows until it loads, and stays when it never does; fixed size, so nothing shifts. */
-export function Favicon({ host }: { host: string }) {
+/** The page's favicon over `fallback` (a globe) that shows until it loads, and stays when it never does; fixed size, so nothing shifts. */
+export function Favicon({ host, fallback = <Globe className="size-3.5 text-subtle-foreground" />, className }: { host: string; fallback?: ReactNode; className?: string }) {
   const [state, setState] = useState<'loading' | 'shown' | 'failed'>('loading');
   return (
-    <span aria-hidden className="relative flex size-4 shrink-0 items-center justify-center">
-      {state !== 'shown' && <Global className="size-3.5 text-subtle-foreground" />}
+    <span aria-hidden className={cn('relative flex size-4 shrink-0 items-center justify-center', className)}>
+      {state !== 'shown' && fallback}
       {state !== 'failed' && (
         <img
           src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`}
@@ -84,7 +84,7 @@ export function Favicon({ host }: { host: string }) {
           referrerPolicy="no-referrer"
           onLoad={(e) => setState(isDefaultIcon(e.currentTarget) ? 'failed' : 'shown')}
           onError={() => setState('failed')}
-          className={cn('absolute inset-0 size-4 rounded-xs', state === 'loading' && 'opacity-0')}
+          className={cn('absolute inset-0 size-full rounded-xs', state === 'loading' && 'opacity-0')}
         />
       )}
     </span>

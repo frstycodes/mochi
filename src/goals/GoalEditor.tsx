@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
-import { Add, Trash3 } from 'reicon-react';
+import { Plus, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -70,13 +70,13 @@ export function GoalEditor({ thread, onClose }: { thread: Thread; onClose: () =>
                 <Input value={c.text} onChange={(e) => setCriterion(i, { text: e.target.value })} aria-label={`Criterion ${i + 1}`} className="h-7 min-w-0 flex-1" />
                 <Input value={c.command ?? ''} onChange={(e) => setCriterion(i, { command: e.target.value })} placeholder="Check command" aria-label={`Criterion ${i + 1} check command`} className="h-7 w-40 font-mono type-caption" />
                 <TooltipIconButton label="Remove criterion" hint="Done no longer needs this" onClick={() => removeCriterion(i)}>
-                  <Trash3 />
+                  <Trash />
                 </TooltipIconButton>
               </li>
             ))}
           </ul>
           <Button variant="ghost" size="sm" className="self-start" onClick={addCriterion}>
-            <Add data-icon="inline-start" />
+            <Plus data-icon="inline-start" />
             Add criterion
           </Button>
         </section>

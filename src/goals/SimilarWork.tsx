@@ -1,4 +1,4 @@
-import { CloseSquare, Copy3 } from 'reicon-react';
+import { XSquare, CopyStack } from '@/icons';
 import { Button } from '@/components/ui/button';
 import type { Similar, Thread } from '../model';
 import { nestBlocker } from '../reorder';
@@ -30,7 +30,7 @@ function SimilarRow({ thread, similar, other }: { thread: Thread; similar: Simil
   const canNest = similar.relation === 'related' && other.status !== 'settled' && !thread.parent && !nestBlocker(state.threads, thread.id, other.id);
   return (
     <li className="flex items-center gap-2 rounded-lg bg-muted/40 py-1 pr-1 pl-2.5">
-      <Copy3 aria-hidden className="size-3.5 shrink-0 text-warning" />
+      <CopyStack aria-hidden className="size-3.5 shrink-0 text-warning" />
       <span className="min-w-0 flex-1 truncate type-meta">
         <span className="text-muted-foreground">{similar.relation === 'same' ? 'Already in ' : 'Related: '}</span>
         <span className="text-foreground">{other.title}</span>
@@ -45,7 +45,7 @@ function SimilarRow({ thread, similar, other }: { thread: Thread; similar: Simil
         Open
       </Button>
       <TooltipIconButton label="Dismiss" hint="Not the same work; stop showing it here" onClick={() => dispatch({ type: 'similar-dismiss', threadId: thread.id, otherId: other.id })}>
-        <CloseSquare />
+        <XSquare />
       </TooltipIconButton>
     </li>
   );

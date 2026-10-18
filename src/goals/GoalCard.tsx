@@ -1,4 +1,4 @@
-import { Edit, Flag } from 'reicon-react';
+import { Edit, Flag } from '@/icons';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Thread } from '../model';
 import { TooltipIconButton } from '../ui';

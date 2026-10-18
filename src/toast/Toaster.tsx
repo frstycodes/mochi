@@ -9,7 +9,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
-import { ArrowDown2, ArrowUp2 } from 'reicon-react';
+import { ChevronDownSmall, ChevronUpSmall } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ToastIdContext } from './context';
@@ -251,7 +251,7 @@ function ToastItem({ toast, slot, frontHeight, height, isExpanded, isOpen, isPau
                   onClick={onOpen}
                 >
                   {summary}
-                  <ArrowDown2 aria-hidden className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+                  <ChevronDownSmall aria-hidden className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
                 </button>
               ) : (
                 summary
@@ -317,7 +317,7 @@ function ToastWidget({ ref, onCollapse, children }: { ref: RefObject<HTMLDivElem
     <div ref={ref} tabIndex={-1} className="max-h-[calc(100dvh-68px)] cursor-auto overflow-y-auto p-1.5 outline-none select-text">
       <div className="sticky top-0 z-10 flex h-0 justify-end">
         <Button variant="ghost" size="icon-xs" aria-label="Collapse" className="mt-2 mr-2 text-muted-foreground" onClick={onCollapse}>
-          <ArrowUp2 />
+          <ChevronUpSmall />
         </Button>
       </div>
       {children}

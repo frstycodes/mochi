@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type KeyboardEvent } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronLeft, ChevronRight, Code, Copy, Document, Download, Eye, SidebarRight, X } from 'reicon-react';
+import { ChevronLeft, ChevronRight, Code, Copy, File, Download, Eye, SidebarRight, X } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -167,7 +167,7 @@ function CantPreviewState({ file, content, reason }: { file: ViewerFile; content
     <Empty className="h-full">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Document />
+          <File />
         </EmptyMedia>
         <EmptyTitle>Can't preview {viewerName(file)}</EmptyTitle>
         <EmptyDescription>{reason}</EmptyDescription>

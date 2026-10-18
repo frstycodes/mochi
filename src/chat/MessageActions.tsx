@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Copy3, PinTack, RotateLeft, Stars, type IconProps } from 'reicon-react';
+import { CopyStack, Pushpin, RotateLeft, Stars, type IconProps } from '@/icons';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
@@ -36,7 +36,7 @@ export function useMessageActions(thread: Thread, index: number): MessageAction[
   const entry = thread.activity[index];
   if (!entry) return [];
   const isPinned = isMessagePinned(pins, index);
-  const copy: MessageAction = { id: 'copy', label: 'Copy', icon: Copy3, run: () => copyText(entry.text) };
+  const copy: MessageAction = { id: 'copy', label: 'Copy', icon: CopyStack, run: () => copyText(entry.text) };
   const disabledReason = rewindBlockedReason(thread);
   // Chat-only rewinds run at once (Undo brings it back); a files rewind first shows which files change.
   const rewinds = REWIND_MODE_ORDER.map((mode): MessageAction => ({
@@ -81,7 +81,7 @@ export function MessageActions({ thread, index, align }: { thread: Thread; index
         if (a.id.startsWith('rewind-')) return a === rewinds[0] && <RewindModeMenu key="rewind" actions={rewinds} />;
         return (
           <TooltipIconButton key={a.id} label={a.label} hint={a.disabledReason ?? a.hint} disabled={!!a.disabledReason && !a.id.startsWith('rewind-')} aria-pressed={a.id === 'pin' || a.id === 'simplify' ? !!a.isActive : undefined} onClick={a.run} className={cn(BAR_BUTTON, a.isActive && 'text-foreground')}>
-            <a.icon weight={a.isActive ? 'Filled' : 'Outline'} />
+            <a.icon filled={a.isActive} />
           </TooltipIconButton>
         );
       })}
@@ -124,9 +124,9 @@ function RewindModeMenu({ actions }: { actions: MessageAction[] }) {
   );
 }
 
-/** reicon's upright pushpin, tilted like a pin stuck into the page. */
+/** The upright pushpin, tilted like a pin stuck into the page. */
 function TiltedPin(props: IconProps) {
-  return <PinTack {...props} className={cn('rotate-45', props.className)} />;
+  return <Pushpin {...props} className={cn('rotate-45', props.className)} />;
 }
 
 async function copyText(text: string) {

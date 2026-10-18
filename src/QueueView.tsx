@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardCheck, Clock, CopyStack, MessageQuestion, Send, Settings, ShieldCheck, TaskSquare, type IconComponent } from '@/icons';
 import { useContainingToastId } from '@/toast/context';
 import { toast } from '@/toast/store';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
@@ -36,16 +36,19 @@ import { useSendCiLog } from './notify/useSendCiLog';
 import { DeviceIcon } from './remote/DeviceIcon';
 import { remoteDecisions } from './remote/mirror';
 import { RemoteScope, useMachines } from './remote/useMachines';
+import { Seen, useSeen } from './notify/useSeen';
+import { isQueueUnread } from './store/seen';
+import { UnreadDot } from './ui';
 import { isCommand } from './keymap';
 
 const KIND = {
   approval: { icon: ShieldCheck, label: 'Approval' },
   question: { icon: MessageQuestion, label: 'Question' },
-  review: { icon: ClipboardTick, label: 'Ready for review' },
+  review: { icon: ClipboardCheck, label: 'Ready for review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
-  collision: { icon: Copy3, label: 'Same files' },
+  collision: { icon: CopyStack, label: 'Same files' },
   run: { icon: Clock, label: 'Scheduled run' },
-  setting: { icon: Setting2, label: 'Setting' },
+  setting: { icon: Settings, label: 'Setting' },
 } satisfies Record<QueueKind, { icon: IconComponent; label: string }>;
 
 export function QueueView() {
@@ -55,6 +58,7 @@ export function QueueView() {
   const { state } = useHarness();
   const review = useReviewEntry(state.spaceId);
   const [selected, setSelected] = useState(0);
+  useSeen({ queueIds: items.map((q) => q.id) }, 'leave');
   const index = Math.min(selected, Math.max(0, items.length - 1));
   useListKeys(items.length, index, setSelected);
 
@@ -104,6 +108,7 @@ export function QueueView() {
               On {machine.name}
             </h2>
             <RemoteScope machine={machine} state={state}>
+              <Seen queueIds={waiting.map((q) => q.id)} when="leave" />
               <ol className="flex flex-col gap-3">
                 {waiting.map((item) => (
                   <li key={item.id}>
@@ -153,7 +158,10 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
           )}
         </CardDescription>
         <CardTitle>{item.title}</CardTitle>
-        <CardAction className="tabular type-caption text-subtle-foreground">{age < 1 ? 'just now' : `${duration(age)} ago`}</CardAction>
+        <CardAction className="flex items-center gap-1.5 tabular type-caption text-subtle-foreground">
+          {isQueueUnread(item) && <UnreadDot />}
+          {age < 1 ? 'just now' : `${duration(age)} ago`}
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
@@ -321,7 +329,7 @@ function CiActions({ item }: { item: QueueItem }) {
     <>
       {!!item.ci?.check?.link && (
         <Button onClick={send} disabled={isSending}>
-          <Send2 data-icon="inline-start" />
+          <Send data-icon="inline-start" />
           {isSending ? 'Fetching log…' : 'Send failing log to agent'}
         </Button>
       )}

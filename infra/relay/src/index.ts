@@ -1,6 +1,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { userFromRequest } from './auth.ts';
+import { oauthBounce } from './oauth.ts';
 import { HEARTBEAT, isId } from './protocol.ts';
+import type { StoredRecord } from './protocol.ts';
 import { Relay, type Attachment, type MachineRecord, type Room } from './relay.ts';
 
 interface Env {
@@ -12,18 +14,23 @@ interface Env {
 }
 
 /**
- * Mochi's relay (DEVICES.md › Transport): reach a machine from anywhere. Every route needs the account's Clerk token in
+ * Mochi's relay (DEVICES.md › Transport): reach a machine from anywhere. Every route but /oauth/callback needs the account's Clerk token in
  * `Authorization` (never in the URL), and each account gets its own Durable Object, so accounts never share state.
  *
  * GET    /v1/machines          the account's machines: id, name, public key, online
  * DELETE /v1/machines/:id      forget a machine
+ * GET    /v1/members           the account's signed membership records
+ * POST   /v1/members           add records (JSON array); online machines hear `{ type: 'members' }`
+ * GET    /oauth/callback       public: a connector sign-in returning, sent on to Mochi at 127.0.0.1 (`oauth.ts`)
  * GET    /v1/connect           WebSocket. `role=machine&machine=<id>`, or `role=device&machine=<id>&device=<id>`
  */
 export default {
   async fetch(request, env): Promise<Response> {
+    const url = new URL(request.url);
+    // The browser lands here with no Clerk token: the one public route, a redirect to 127.0.0.1 only.
+    if (url.pathname === '/oauth/callback' && request.method === 'GET') return oauthBounce(url);
     const user = await userFromRequest(request, env.CLERK_ISSUER, env.CLERK_CLIENT_ID);
     if (!user) return new Response('Sign in to Mochi first', { status: 401 });
-    const url = new URL(request.url);
     if (!url.pathname.startsWith('/v1/')) return new Response('Not found', { status: 404 });
     // The user id rides in a header the Worker sets itself; the Durable Object is reachable only through this Worker.
     const headers = new Headers(request.headers);
@@ -49,6 +56,13 @@ export class AccountRelay extends DurableObject<Env> {
     if (machinePath && request.method === 'DELETE') {
       if (!isId(machinePath[1])) return new Response('Bad machine id', { status: 400 });
       await this.relay.remove(machinePath[1]);
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname === '/v1/members' && request.method === 'GET') return Response.json(await this.relay.members());
+    if (url.pathname === '/v1/members' && request.method === 'POST') {
+      const body = await request.json().catch(() => null);
+      if (!Array.isArray(body)) return new Response('Expected an array of records', { status: 400 });
+      await this.relay.addMembers(body);
       return new Response(null, { status: 204 });
     }
     if (url.pathname === '/v1/connect') return this.upgrade(request, url.searchParams);
@@ -92,6 +106,8 @@ export class AccountRelay extends DurableObject<Env> {
       close: (socket, code, reason) => socket.close(code, reason),
       machines: async () => (await storage.get<Record<string, MachineRecord>>('machines')) ?? {},
       saveMachines: (machines) => storage.put('machines', machines),
+      records: async () => (await storage.get<Record<string, StoredRecord>>('members')) ?? {},
+      saveRecords: (records) => storage.put('members', records),
     };
   }
 }

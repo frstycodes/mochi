@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { Pin } from 'reicon-react';
+import { Pin } from '@/icons';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 

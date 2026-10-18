@@ -1,11 +1,13 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Flag, Setting2, ShieldCheck, Trash3, type IconComponent } from 'reicon-react';
+import { Cursor, Flag, Globe, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
-import { authorName, settingRef, type ActivityEntry, type QueueItem, type SettingsSuggestion, type Space } from '../model';
+import { authorName, settingRef, type ActivityEntry, type EventGlyph, type QueueItem, type SettingsSuggestion, type Space } from '../model';
+import { Favicon } from '../WebLinks';
 import { host } from '../host';
 import { useProfiles } from '../profiles';
 import { clock } from '../progress';
@@ -26,15 +28,27 @@ export function CardEntry({ entry, card }: { entry: ActivityEntry; card: NonNull
   if (item?.settings) return <SettingsWidget item={item} settings={item.settings} />;
   if (item) return <MochiWidget item={item} />;
   // Open with no card behind it: Mochi quit while it waited, and the call ended with it.
-  return <EventLine text={card.isOpen ? `Not answered before Mochi quit: ${entry.text}` : entry.text} at={entry.at} />;
+  return <EventLine text={card.isOpen ? `Not answered before Mochi quit: ${entry.text}` : entry.text} at={entry.at} glyph={entry.glyph} site={entry.site} />;
 }
 
-export function EventLine({ text, detail, at }: { text: string; detail?: string; at: number }) {
+export function EventLine({ text, detail, at, glyph, site }: { text: string; detail?: string; at: number; glyph?: EventGlyph; site?: string }) {
+  const Icon = glyph ? GLYPHS[glyph] : Flag;
+  const host = site && hostOf(site);
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
-      <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
-      <p className="min-w-0">
+      <Icon aria-hidden className="mt-px size-3.5 shrink-0" />
+      {/* Anything unbroken (a long name, a host) wraps inside the chat's width instead of pushing past it. */}
+      <p className="min-w-0 [overflow-wrap:anywhere]">
         {text}
+        {!!host && (
+          <>
+            {' on '}
+            <span className="text-foreground" title={site}>
+              <Favicon host={host} fallback={<Globe className="size-3 text-subtle-foreground" />} className="mr-1 inline-flex size-3 align-[-2px]" />
+              {host}
+            </span>
+          </>
+        )}
         {/* The separator travels with the time, so a wrap never leaves it dangling. */}
         <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(at)}</span>
         {!!detail && <span className="block text-subtle-foreground">{detail}</span>}
@@ -43,15 +57,20 @@ export function EventLine({ text, detail, at }: { text: string; detail?: string;
   );
 }
 
+const GLYPHS = { click: Cursor, type: Keyboard, browse: Globe } satisfies Record<EventGlyph, IconComponent>;
+
+const hostOf = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
+
 const KIND = {
-  delete: { icon: Trash3, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
+  delete: { icon: Trash, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
   confirm: { icon: ShieldCheck, label: 'Approval', approve: 'Allow', deny: 'Deny' },
+  choose: { icon: MessageQuestion, label: 'Question', approve: 'Continue', deny: 'Cancel' },
 } satisfies Record<string, { icon: IconComponent; label: string; approve: string; deny: string }>;
 
-/** A call waiting on you: a delete or a browser escalation. Enter works on whichever button has focus; Esc anywhere inside says no. */
+/** A call waiting on you: a delete, a browser escalation, or a question with one answer. Enter works on whichever button has focus; Esc anywhere inside says no. */
 function MochiWidget({ item }: { item: QueueItem }) {
   const [options, setOptions] = useState<string[]>([]);
-  const kind = item.tool?.isDestructive ? 'delete' : 'confirm';
+  const kind = item.tool?.isDestructive ? 'delete' : item.tool?.pick === 'one' ? 'choose' : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
   const decide = (isApproved: boolean, chosen?: string[]) => (item.tool ? decideTool(item.tool.callId, { isApproved, options: chosen }) : undefined);
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
@@ -62,10 +81,10 @@ function MochiWidget({ item }: { item: QueueItem }) {
           <Icon aria-hidden className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="text-pretty">{item.title}</CardTitle>
+        <CardTitle className="text-pretty [overflow-wrap:anywhere]">{item.title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
+        {!!item.detail && <p className="type-body text-muted-foreground text-pretty [overflow-wrap:anywhere]">{item.detail}</p>}
         {!!item.tool?.notes?.length && (
           <ul className="flex flex-col gap-1 type-caption text-muted-foreground">
             {item.tool.notes.map((n) => (
@@ -75,7 +94,19 @@ function MochiWidget({ item }: { item: QueueItem }) {
         )}
         {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
         {!!item.code && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
-        {item.tool?.options?.map((o) => (
+        {kind === 'choose' && (
+          <RadioGroup value={options[0] ?? ''} onValueChange={(v) => setOptions([v])} aria-label={item.title} className="gap-2">
+            {item.tool?.options?.map((o) => (
+              <Field key={o.id} orientation="horizontal">
+                <RadioGroupItem id={`${item.id}-${o.id}`} value={o.id} />
+                <FieldLabel htmlFor={`${item.id}-${o.id}`} className="font-normal break-all">
+                  {o.label}
+                </FieldLabel>
+              </Field>
+            ))}
+          </RadioGroup>
+        )}
+        {kind !== 'choose' && item.tool?.options?.map((o) => (
           <Field key={o.id} orientation="horizontal">
             <Checkbox id={`${item.id}-${o.id}`} checked={options.includes(o.id)} onCheckedChange={(on) => toggle(o.id, on === true)} />
             <FieldLabel htmlFor={`${item.id}-${o.id}`} className="font-normal break-all">
@@ -88,7 +119,7 @@ function MochiWidget({ item }: { item: QueueItem }) {
         <Button variant="outline" size="sm" onClick={() => decide(false)}>
           {deny}
         </Button>
-        <Button variant={kind === 'delete' ? 'danger' : 'default'} size="sm" onClick={() => decide(true, options)}>
+        <Button variant={kind === 'delete' ? 'danger' : 'default'} size="sm" disabled={kind === 'choose' && !options.length} onClick={() => decide(true, options)}>
           {approve}
         </Button>
       </CardFooter>
@@ -127,7 +158,7 @@ function SettingsWidget({ item, settings }: { item: QueueItem; settings: Setting
       <WidgetCard item={item} onEscape={() => void close()}>
         <CardHeader>
           <CardDescription className="flex items-center gap-1 type-caption font-medium text-foreground">
-            <Setting2 aria-hidden className="size-3.5" />
+            <Settings aria-hidden className="size-3.5" />
             Settings
           </CardDescription>
           <CardTitle className="text-pretty">{item.title}</CardTitle>

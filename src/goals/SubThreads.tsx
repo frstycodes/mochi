@@ -1,4 +1,4 @@
-import { ChevronRight, DiagramTree } from 'reicon-react';
+import { ChevronRight, DiagramTree } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { GitPullRequestIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';

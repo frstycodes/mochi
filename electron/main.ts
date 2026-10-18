@@ -4,10 +4,12 @@ import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
 import { setImageDir } from './agents/images.ts';
 import { registerIpc } from './ipc/index.ts';
+import { startLibraryUpdates } from './library/updates.ts';
 import { startRemote } from './remote/index.ts';
 import { startWatch } from './notify/watch.ts';
 import { startScheduler } from './schedule/scheduler.ts';
 import { startTray } from './tray.ts';
+import { appIconImage, startAppIcon } from './appIcon.ts';
 import { createWindow, isTrustedUrl, showMainWindow } from './window.ts';
 
 // Dev runs can keep their data apart (one Mochi per session or test) without touching the real profile.
@@ -19,16 +21,16 @@ const hasTray = process.platform !== 'darwin';
 if (hasTray && !app.requestSingleInstanceLock()) app.exit();
 
 app.whenReady().then(() => {
-  // Packaged builds get the icon from the bundle (`build/icon.icns`); dev runs inside Electron.app.
-  if (!app.isPackaged) app.dock?.setIcon(path.join(import.meta.dirname, '../build/icon.png'));
+  startAppIcon();
   registerIpc(isTrustedUrl);
   startWatch();
   void startScheduler();
+  startLibraryUpdates();
   installHooks().catch((error: unknown) => console.warn('Git hooks not installed; agents commit without the message check', error));
   // Before the first window: it watches every window's close.
   startRemote();
   createWindow();
-  if (hasTray) startTray();
+  if (hasTray) startTray(appIconImage());
   // The main window may be hidden rather than closed (remote devices keep its store running).
   app.on('activate', () => BrowserWindow.getAllWindows().some((w) => w.isVisible()) || showMainWindow());
 });

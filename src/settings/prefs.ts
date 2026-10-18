@@ -11,8 +11,8 @@ import type { ToolPolicies } from '../runtime/toolPolicy.ts';
  */
 export interface Prefs {
   reduceMotion: 'system' | 'on' | 'off';
-  /** Off: the sidebar stays solid instead of showing the window's vibrancy (macOS) or Mica (Windows 11). */
-  translucentSidebar: boolean;
+  /** Sidebar and side pane animations that run (`ANIMATIONS`); none by default. Reduce motion still stops them all. */
+  animations: string[];
   /** Color theme ids (`src/themes/model.ts`) for light and dark appearance, like VS Code's preferred themes; `mochi` is the built-in. */
   lightTheme: string;
   darkTheme: string;
@@ -34,6 +34,8 @@ export interface Prefs {
   permissions: SharedAccess;
   /** Side pane tabs pinned as icons in the thread header, in order. */
   headerPins: PaneTabKind[];
+  /** Sidebar destinations shown, by `SIDEBAR_ITEMS` id (Edit sidebar); the rest sit under More. */
+  sidebarItems: string[];
   /** Off sends every message straight through: no local score, no classifier call. */
   driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
@@ -93,7 +95,7 @@ export const toggleStar = (starred: string[], id: string) => (starred.includes(i
 
 export const DEFAULT_PREFS: Prefs = {
   reduceMotion: 'system',
-  translucentSidebar: true,
+  animations: [],
   lightTheme: 'mochi',
   darkTheme: 'mochi',
   projectsFolder: '~/dev',
@@ -112,6 +114,7 @@ export const DEFAULT_PREFS: Prefs = {
   agent: 'claude',
   permissions: 'Auto',
   headerPins: ['browser', 'terminal'],
+  sidebarItems: ['queue', 'board', 'projects'],
   driftGuard: true,
   whileWorking: 'queue',
   simplifyLength: 'short',

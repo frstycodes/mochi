@@ -1,4 +1,4 @@
-import { CloseCircle, Play, TickCircle } from 'reicon-react';
+import { XCircle, Play, CheckBadge } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { isMet, type Criterion, type Thread } from '../model';
@@ -21,7 +21,7 @@ export function CriteriaList({ thread, className }: { thread: Thread; className?
 
 function CriterionRow({ thread, criterion: c }: { thread: Thread; criterion: Criterion }) {
   const isFailed = c.check?.status === 'failed';
-  const Icon = isFailed ? CloseCircle : TickCircle;
+  const Icon = isFailed ? XCircle : CheckBadge;
   return (
     <li className="flex gap-2 type-meta text-muted-foreground">
       <Icon aria-label={isFailed ? 'Check failed' : isMet(c) ? 'Done' : 'Open'} className={cn('mt-0.5 size-3.5 shrink-0', isFailed ? 'text-destructive' : isMet(c) ? 'text-success' : 'text-subtle-foreground')} />

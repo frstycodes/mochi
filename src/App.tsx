@@ -25,7 +25,7 @@ import { usePrefs } from './settings/prefs';
 import { SettingsPage } from './settings/SettingsPage';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
-import { HarnessProvider } from './store';
+import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
@@ -38,6 +38,7 @@ import { DeviceApprovalLayer } from './remote/DeviceApproval';
 import { useRemoteThreadRoute } from './remote/open';
 import { RemoteThreadView } from './remote/RemoteThreadView';
 import { MachinesProvider } from './remote/useMachines';
+import { useLibraryNamesLoader } from './library/useLibrary';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
@@ -45,7 +46,6 @@ const embeddedReplay = readEmbeddedReplay();
 export function App() {
   const route = useHashRoute();
   useIdleScrollbars();
-  useSolidSidebar();
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ColorThemeController />
@@ -86,24 +86,22 @@ function AppZoomChip() {
   return <ZoomChip zoom={zoom} onReset={() => void host.windows.resetZoom()} className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag" />;
 }
 
-/** Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
+/**
+ * Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css).
+ * Its Animations go to CSS as `data-animations`.
+ */
 function ReducedMotion({ children }: { children: React.ReactNode }) {
-  const { reduceMotion } = usePrefs();
+  const { reduceMotion, animations } = usePrefs();
   useEffect(() => {
     document.documentElement.dataset.reduceMotion = reduceMotion;
   }, [reduceMotion]);
+  useEffect(() => {
+    document.documentElement.dataset.animations = animations.join(' ');
+  }, [animations]);
   return <MotionConfig reducedMotion={MOTION_CONFIG[reduceMotion]}>{children}</MotionConfig>;
 }
 
 const MOTION_CONFIG = { system: 'user', on: 'always', off: 'never' } as const;
-
-/** Settings › Appearance's Translucent sidebar off: `data-solid-sidebar` turns off the material rules in index.css. */
-function useSolidSidebar() {
-  const { translucentSidebar } = usePrefs();
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-solid-sidebar', !translucentSidebar);
-  }, [translucentSidebar]);
-}
 
 function useHashRoute() {
   const [hash, setHash] = useState(() => location.hash.slice(1));
@@ -120,6 +118,7 @@ function Shell() {
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
+  useLibraryNamesLoader(useHarness().state.spaceId);
   useResolvedQueueToasts();
   useWorktreeManager();
   useCheckoutRecovery();

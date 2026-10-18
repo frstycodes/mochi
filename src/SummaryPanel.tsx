@@ -1,7 +1,6 @@
 import { isValidElement, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { limitStatus } from './chat/LimitCard';
-import { Add, Code, Coins, Document, DollarCircle, Edit, Global, GlobalSearch, Hourglass, Link, Note, Pin, PinOff, PuzzlePiece, Server, Setting, TriangleWarning, type IconComponent } from 'reicon-react';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Plus, Code, File, Edit, Globe, GlobeSearch, Hourglass, Link, Pin, PinOff, SettingsGear, Warning, type IconComponent } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -42,14 +41,26 @@ import { spaceUsage, threadUsage, type Usage } from './usage/model';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { isCollapsible, openSectionIds, rememberOpen, summarySections, TOKENS, USD, useRememberedOpen, type SummarySection, type SummarySectionId } from './summarySections';
+import { summarySections, TOKENS, USD, type SummarySection, type SummarySectionId } from './summarySections';
+import { CoinIcon, PluginIcon, SkillIcon } from './icons/ObjectIcons';
+import { McpServerMark, PluginMark, SkillMark } from './chat/McpIcon';
+import { useLibraryNames } from './library/names';
 import { BranchName } from './git/BranchLabel';
 
 const LIST_LIMIT = 3;
 
-const TOOL_ICONS = { Read: Document, Edit: Edit, Write: Edit, Run: Code, Browser: Global, Search: GlobalSearch, Fetch: Global } satisfies Record<CountedVerb, IconComponent>;
+const TOOL_ICONS = { Read: File, Edit: Edit, Write: Edit, Run: Code, Browser: Globe, Search: GlobeSearch, Fetch: Globe } satisfies Record<CountedVerb, IconComponent>;
+const TOOL_TONES = {
+  Read: 'text-chart-1',
+  Edit: 'text-chart-2',
+  Write: 'text-chart-2',
+  Run: 'text-chart-3',
+  Browser: 'text-chart-5',
+  Search: 'text-chart-5',
+  Fetch: 'text-chart-5',
+} satisfies Record<CountedVerb, string>;
 const TOOL_LABELS = { Read: 'Read files', Edit: 'Edited files', Write: 'Wrote files', Run: 'Ran commands', Browser: 'Used the browser', Search: 'Searched the web', Fetch: 'Read web pages' } satisfies Record<CountedVerb, string>;
-const SOURCE_ICONS = { link: Link, mcp: Setting, file: Document } satisfies Record<Source['kind'], IconComponent>;
+
 
 /** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. */
 export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thread; className?: string; onPaneOpened?: () => void }) {
@@ -62,7 +73,7 @@ export function SummaryPanel({ thread, className, onPaneOpened }: { thread: Thre
   );
 }
 
-/** The base panel says where the thread stands, what needs you and what shipped; the rest sits in sections below, most of them collapsed. */
+/** Where the thread stands, what needs you and what shipped, then the rest in sections, nothing folded away. */
 function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
   const summary = summarize(thread.activity);
   const sections = useSummarySections(thread, summary);
@@ -83,7 +94,9 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
       <RateLimitWarning thread={thread} />
       <ChangesRow {...props} />
       <PullRequests thread={thread} prs={thread.prs} onOpen={open.url} />
-      {sections.length > 0 && <SummarySections sections={sections} {...props} />}
+      {sections.map((section) => (
+        <SummarySectionBlock key={section.id} section={section} {...props} />
+      ))}
     </div>
   );
 }
@@ -109,41 +122,11 @@ const SECTION_BODIES = {
   space: SpaceUsageRows,
 } satisfies Record<SummarySectionId, unknown>;
 
-function SummarySections({ sections, ...props }: SectionProps & { sections: SummarySection[] }) {
-  const remembered = useRememberedOpen();
-  return (
-    <Accordion
-      type="multiple"
-      value={openSectionIds(sections, remembered, props.thread.status === 'settled')}
-      onValueChange={(ids) => rememberOpen(sections, ids)}
-      className="gap-0.5 pt-2"
-    >
-      {sections.map((section) =>
-        isCollapsible(section) ? <CollapsibleSection key={section.id} section={section} {...props} /> : <ShownSection key={section.id} section={section} {...props} />,
-      )}
-    </Accordion>
-  );
-}
-
-function CollapsibleSection({ section, ...props }: SectionProps & { section: SummarySection }) {
+function SummarySectionBlock({ section, ...props }: SectionProps & { section: SummarySection }) {
   const Body = SECTION_BODIES[section.id];
   return (
-    <AccordionItem value={section.id} className="not-last:border-b-0">
-      <AccordionTrigger className="h-7 min-w-0 items-center gap-2 px-2 py-0 font-normal text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground hover:no-underline aria-expanded:text-foreground **:data-[slot=accordion-trigger-icon]:size-3.5">
-        <SectionHeading section={section} />
-      </AccordionTrigger>
-      <AccordionContent className="flex flex-col gap-0.5 pt-0.5 pb-2">
-        <Body {...props} />
-      </AccordionContent>
-    </AccordionItem>
-  );
-}
-
-function ShownSection({ section, ...props }: SectionProps & { section: SummarySection }) {
-  const Body = SECTION_BODIES[section.id];
-  return (
-    <section className="flex flex-col text-sm">
-      <h3 className="flex h-7 items-center border border-transparent px-2">
+    <section className="flex flex-col pt-2 text-sm">
+      <h3 className="flex h-7 items-center px-2 text-muted-foreground">
         <SectionHeading section={section} />
       </h3>
       <div className="flex flex-col gap-0.5 pt-0.5 pb-2">
@@ -153,7 +136,6 @@ function ShownSection({ section, ...props }: SectionProps & { section: SummarySe
   );
 }
 
-/** The title keeps its place; the detail gives way, truncated, so the row's end (a chevron) stays in view. */
 function SectionHeading({ section }: { section: SummarySection }) {
   return (
     <span className="flex min-w-0 flex-1">
@@ -222,19 +204,20 @@ function PullRequests({ thread, prs, onOpen }: { thread: Thread; prs: PullReques
 function SourceRows({ thread, open }: SectionProps) {
   return (
     <LimitedList items={thread.sources}>
-      {(source) => <SummaryRow key={source.label} icon={SOURCE_ICONS[source.kind]} label={source.label} onClick={open.source(source) ?? undefined} />}
+      {(source) => <SummaryRow key={source.label} icon={<SourceIcon thread={thread} source={source} />} label={source.label} onClick={open.source(source) ?? undefined} />}
     </LimitedList>
   );
 }
 
 function SkillRows({ thread, summary }: SectionProps) {
+  const names = useLibraryNames();
   return (
     <LimitedList items={summary.skills}>
       {(skill) => (
         <SummaryRow
           key={skill.name}
-          icon={Note}
-          label={skill.name}
+          icon={<SkillMark skill={skill.name} fallback={<SkillIcon />} />}
+          label={<span title={skill.name}>{names.skill(skill.name).title}</span>}
           onClick={() => openProfileConfig(thread.spaceId, 'skills', thread.session?.provider ?? thread.providers[0])}
         >
           <span className="tabular type-caption text-subtle-foreground">
@@ -246,16 +229,16 @@ function SkillRows({ thread, summary }: SectionProps) {
   );
 }
 
-function ToolRows({ summary }: SectionProps) {
+function ToolRows({ thread, summary }: SectionProps) {
   return (
     <>
       {summary.tools.map((t) => (
-        <SummaryRow key={t.verb} icon={TOOL_ICONS[t.verb]} label={TOOL_LABELS[t.verb]}>
+        <SummaryRow key={t.verb} icon={<ToolIcon verb={t.verb} />} label={TOOL_LABELS[t.verb]}>
           <span className="tabular type-caption text-subtle-foreground">{t.count}</span>
         </SummaryRow>
       ))}
       {summary.servers.map((s) => (
-        <SummaryRow key={s.server} icon={Server} label={<McpServerLabel usage={s} />}>
+        <SummaryRow key={s.server} icon={<McpServerMark server={s.server} url={serverUrl(thread, s.server)} />} label={<McpServerLabel usage={s} />}>
           <span className="tabular type-caption text-subtle-foreground">{s.calls}</span>
         </SummaryRow>
       ))}
@@ -263,12 +246,31 @@ function ToolRows({ summary }: SectionProps) {
   );
 }
 
+function SourceIcon({ thread, source }: { thread: Thread; source: Source }) {
+  if (source.kind === 'link') return <Link className="size-4 text-chart-1" />;
+  if (source.kind === 'file') return <File className="size-4 text-chart-4" />;
+  // An MCP source's label leads with its server ("Linear · LAT-198 Rate limits"); the model doesn't carry the server itself.
+  const server = source.label.split(' · ')[0].toLowerCase();
+  return <McpServerMark server={server} url={serverUrl(thread, server)} />;
+}
+
+function serverUrl(thread: Thread, server: string) {
+  return thread.agent?.mcpServers?.find((s) => s.name.toLowerCase() === server.toLowerCase())?.url;
+}
+
+function ToolIcon({ verb }: { verb: CountedVerb }) {
+  const Icon = TOOL_ICONS[verb];
+  return <Icon className={cn('size-4', TOOL_TONES[verb])} />;
+}
+
 /** An MCP server's calls: its name, then the tools it ran, muted. */
 function McpServerLabel({ usage }: { usage: ThreadSummary['servers'][number] }) {
+  const names = useLibraryNames();
+  const tools = usage.tools.map((tool) => names.tool(usage.server, tool)).join(', ');
   return (
-    <span title={usage.tools.join(', ')}>
-      {usage.server}
-      <span className="text-subtle-foreground"> · {usage.tools.join(', ')}</span>
+    <span title={`${usage.server}: ${usage.tools.join(', ')}`}>
+      {names.server(usage.server).title}
+      <span className="text-subtle-foreground"> · {tools}</span>
     </span>
   );
 }
@@ -300,7 +302,7 @@ function PanelHeader({ thread }: { thread: Thread }) {
           <DropdownMenuContent align="end" onCloseAutoFocus={(e) => isAdding && e.preventDefault()}>
             <DropdownMenuGroup>
               <DropdownMenuItem onSelect={() => setAdding(true)}>
-                <Add />
+                <Plus />
                 Add a source…
               </DropdownMenuItem>
               {repo && (
@@ -447,7 +449,7 @@ function Section({ label, action, empty, children }: { label: string; action?: R
   );
 }
 
-/** `icon`: a reicon drawn muted, or an element that brings its own colour (a PR's state icon). */
+/** `icon`: an icon drawn muted, or an element that brings its own colour (a PR's state icon). */
 function SummaryRow({ icon: Icon, label, onClick, children }: { icon: IconComponent | ReactElement; label: ReactNode; onClick?: () => void; children?: ReactNode }) {
   const content = (
     <>
@@ -515,13 +517,14 @@ const MCP_STATUS_CLASSES = { connected: '', pending: 'text-subtle-foreground', '
 
 /** What the live agent reported at session start; a list the agent didn't report is left out rather than shown empty. */
 function SessionDetails({ thread }: SectionProps) {
+  const names = useLibraryNames();
   const { agent, session, spaceId } = thread;
   if (!agent || !session) return null;
   const { provider } = session;
   const plugins = agent.plugins ?? [];
   const manage = (part: 'mcp' | 'skills') => (
     <TooltipIconButton label={part === 'mcp' ? 'Manage MCP servers' : 'Manage skills'} hint="Opens this profile's settings" className="size-6" onClick={() => openProfileConfig(spaceId, part, provider)}>
-      <Setting className="size-3.5" />
+      <SettingsGear className="size-3.5" />
     </TooltipIconButton>
   );
   return (
@@ -537,7 +540,7 @@ function SessionDetails({ thread }: SectionProps) {
         <Section label={`MCP servers · ${agent.mcpServers.length}`} action={manage('mcp')} empty={agent.mcpServers.length === 0 ? 'No MCP servers configured' : undefined}>
           <LimitedList items={agent.mcpServers}>
             {(server) => (
-              <SummaryRow key={server.name} icon={Server} label={server.name}>
+              <SummaryRow key={server.name} icon={<McpServerMark server={server.name} url={server.url} />} label={<span title={server.name}>{names.server(server.name).title}</span>}>
                 <span className={cn('tabular type-caption', MCP_STATUS_CLASSES[server.status] || 'text-subtle-foreground')}>
                   {MCP_STATUS_LABELS[server.status] || (server.toolCount === undefined ? 'Connected' : `${server.toolCount} tools`)}
                 </span>
@@ -551,7 +554,7 @@ function SessionDetails({ thread }: SectionProps) {
         <Section label={`Plugins · ${plugins.length}`} empty={plugins.length === 0 ? 'No plugins installed' : undefined}>
           <LimitedList items={plugins}>
             {(plugin) => (
-              <SummaryRow key={plugin.name} icon={PuzzlePiece} label={plugin.name}>
+              <SummaryRow key={plugin.name} icon={<PluginMark plugin={plugin.name} fallback={<PluginIcon />} />} label={<span title={plugin.name}>{names.plugin(plugin.name).title}</span>}>
                 {!!plugin.version && <span className="tabular type-caption text-subtle-foreground">{plugin.version}</span>}
               </SummaryRow>
             )}
@@ -559,7 +562,7 @@ function SessionDetails({ thread }: SectionProps) {
         </Section>
       )}
 
-      {!!agent.skills && <ChipSection label="Skills available" items={agent.skills} empty="No skills found" action={manage('skills')} />}
+      {!!agent.skills && <ChipSection label="Skills available" items={agent.skills} labelOf={(skill) => names.skill(skill).title} empty="No skills found" action={manage('skills')} />}
       {!!agent.slashCommands && <ChipSection label="Slash commands" items={agent.slashCommands.map((c) => `/${c}`)} empty="No slash commands" />}
       {!!agent.tools && <ChipSection label="Tools available" items={agent.tools} empty="No tools reported" />}
     </>
@@ -576,7 +579,8 @@ function SessionField({ label, value, className }: { label: string; value?: stri
   );
 }
 
-function ChipSection({ label, items, empty, action }: { label: string; items: string[]; empty: string; action?: ReactNode }) {
+/** `labelOf` names an item for people; the item itself stays in its tooltip. */
+function ChipSection({ label, items, labelOf, empty, action }: { label: string; items: string[]; labelOf?: (item: string) => string; empty: string; action?: ReactNode }) {
   const [isOpen, setOpen] = useState(false);
   const shown = isOpen ? items : items.slice(0, CHIP_LIMIT);
   return (
@@ -584,8 +588,8 @@ function ChipSection({ label, items, empty, action }: { label: string; items: st
       <ul className="flex flex-wrap gap-1 px-2 py-1">
         {shown.map((item) => (
           <li key={item} className="max-w-full">
-            <Badge variant="outline" className="h-auto max-w-full font-normal whitespace-normal text-muted-foreground [overflow-wrap:anywhere]">
-              {item}
+            <Badge variant="outline" title={labelOf && item} className="h-auto max-w-full font-normal whitespace-normal text-muted-foreground [overflow-wrap:anywhere]">
+              {labelOf ? labelOf(item) : item}
             </Badge>
           </li>
         ))}
@@ -614,20 +618,14 @@ function SpaceUsageRows({ thread }: SectionProps) {
   return <UsageRows usage={spaceUsage(state.threads, profileById(thread.spaceId))} />;
 }
 
+/** Spend leads in gold when the agent reports it; tokens in and out follow, muted. */
 function UsageRows({ usage }: { usage: Usage }) {
   return (
-    <>
-      <SummaryRow icon={Coins} label="Tokens">
-        <span className="tabular type-caption text-subtle-foreground">
-          {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)} out
-        </span>
-      </SummaryRow>
-      {usage.costUsd !== null && (
-        <SummaryRow icon={DollarCircle} label="Cost">
-          <span className="tabular type-caption text-subtle-foreground">{USD.format(usage.costUsd)}</span>
-        </SummaryRow>
-      )}
-    </>
+    <SummaryRow icon={<CoinIcon />} label={usage.costUsd === null ? 'Tokens' : <span className="tabular font-medium">{USD.format(usage.costUsd)}</span>}>
+      <span className="tabular type-caption text-subtle-foreground">
+        {TOKENS.format(usage.input)} in · {TOKENS.format(usage.output)} out
+      </span>
+    </SummaryRow>
   );
 }
 
@@ -649,7 +647,7 @@ function RateLimitWarning({ thread }: { thread: Thread }) {
   const resets = tight.resetsAt ? `, resets in ${untilLabel(Date.parse(tight.resetsAt) - Date.now())}` : '';
   return (
     <p role="status" className="flex items-start gap-2.5 px-2 py-1 type-caption text-warning">
-      <TriangleWarning className="size-4 shrink-0" aria-hidden />
+      <Warning className="size-4 shrink-0" aria-hidden />
       {tight.usedPct >= 100 ? `${name} reached; this agent stalls until it resets${resets}.` : `${name} at ${Math.round(tight.usedPct)}%${resets}.`}
     </p>
   );

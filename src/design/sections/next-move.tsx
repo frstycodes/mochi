@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowUp, ChevronRight } from 'reicon-react';
+import { ArrowUp, ChevronRight } from '@/icons';
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

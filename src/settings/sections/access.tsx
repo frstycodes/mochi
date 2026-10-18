@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, SearchNormal } from 'reicon-react';
+import { ChevronDown, SearchAlt } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
@@ -30,7 +30,7 @@ export function AccessSection() {
       <SettingsSection title="Tools" footer="Allow runs a tool without asking: a line in the thread, and an Undo where it can be put back. Ask first waits on a card in the thread showing exactly what it was given. Deletes always ask, and settings are only ever suggested.">
         <InputGroup>
           <InputGroupAddon>
-            <SearchNormal />
+            <SearchAlt />
           </InputGroupAddon>
           <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter tools" aria-label="Filter tools" />
         </InputGroup>

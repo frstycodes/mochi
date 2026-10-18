@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowDown, Broom, Copy } from 'reicon-react';
+import { ArrowDown, Broom, Copy } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';

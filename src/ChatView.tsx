@@ -7,7 +7,7 @@ import { threadUsage } from './usage/model';
 import { motion, useReducedMotionConfig } from 'motion/react';
 import type { EditorView } from '@codemirror/view';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
-import { ChevronDown, ChevronUp, Hourglass, Stars } from 'reicon-react';
+import { ChevronDown, ChevronUp, Hourglass, Stars } from '@/icons';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { PromptInputProvider, usePromptInputController } from '@/components/ai-elements/prompt-input';
@@ -26,6 +26,7 @@ import { useSplit } from './layout/SplitContext';
 import { ThreadMinimap, type OutlineItem } from './ThreadMinimap';
 import { ChatMochi, WorkLog } from './WorkLog';
 import { SetupRow } from './chat/SetupRow';
+import { useLibraryNames } from './library/names';
 import { agentPhase, currentAction, isWorking, pendingWork, type CurrentAction } from './agentPhase';
 import { chatRows, finalReplies, liveWorkIndex, type ChatRow } from './chat/rows';
 import { SecondOpinionRow } from './secondOpinion/SecondOpinionRow';
@@ -85,6 +86,8 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   // A second opinion runs beside the agent: the agent's own newest row stays the live one.
   const liveIndex = rows.findLastIndex((r) => r.kind !== 'review' && r.kind !== 'changes');
   const liveWork = liveWorkIndex(rows);
+  // Its label names skills and servers as the library does.
+  useLibraryNames();
   const action = currentAction(thread);
   // Mochi's own widgets sit in the transcript where the agent asked; the tray keeps the agent's questions and approvals.
   // Ready for review is a state of the thread, not a question: it stays out of the tray so the composer remains a prompt.
@@ -190,7 +193,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   if (row.kind === 'event' && row.entry.nextMove) return <NextMoveRecord record={row.entry.nextMove} />;
   if (row.kind === 'event' && row.entry.subThread) return <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />;
   if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
-  if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} />;
+  if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} glyph={row.entry.glyph} site={row.entry.site} />;
 
   const { entry } = row;
   const Bar = isReadOnly ? messageBar : MessageActions;

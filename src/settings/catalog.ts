@@ -7,7 +7,7 @@ import { effortName } from '../runtime/models.ts';
 import type { RemoteSettings } from '../host/types/remote.ts';
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from '../themes/model.ts';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../utility/prompts.ts';
-import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ModelChoice, type ProfileConfig } from '../host/types/settings.ts';
+import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ImageGenHarness, type ModelChoice, type ProfileConfig } from '../host/types/settings.ts';
 import { linkedAccountId } from './accounts.ts';
 import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
@@ -15,7 +15,7 @@ import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type C
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, ANIMATIONS, APP_ICONS, type AnimationArea, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, THREAD_MODELS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -45,7 +45,8 @@ export interface Setting {
 type Option = { readonly value: string; readonly label: string; readonly tone?: 'warning' };
 
 export type Control =
-  | { type: 'choice' | 'select'; options: readonly Option[] }
+  /** `appIcon` draws its options as the icons themselves (`AppIconPicker`). */
+  | { type: 'choice' | 'select' | 'appIcon'; options: readonly Option[] }
   | { type: 'switch' }
   | { type: 'number'; min: number; max: number; step: number }
   /** `fallback` is what an emptied field saves; without it, empty is a value of its own ("use $SHELL"). */
@@ -97,12 +98,49 @@ export function findSetting(catalog: Setting[], key: string) {
   return catalog.find((s) => s.key === key);
 }
 
+/**
+ * Settings that follow you across your computers: how Mochi behaves for you, not how this computer is set up. A change to
+ * one is written to each paired computer too, and a computer that missed one is offered this computer's values
+ * (`src/remote/sharedSettings.ts`). Paths, shell, keys, appearance, access and Devices stay with each computer.
+ */
+export const isSharedSetting = (key: string) => SHARED_KEYS.has(key) || SHARED_PREFIXES.some((prefix) => key.startsWith(prefix));
+
+const SHARED_KEYS = new Set([
+  'agent',
+  'whileWorking',
+  'watchedToasts',
+  'dockBadge',
+  'quietHours',
+  'quietFrom',
+  'quietUntil',
+  'sideChatModel',
+  'imageGen',
+  'effort',
+  'speed',
+  'starredModels',
+  'claude.model',
+  'claude.secondOpinionModel',
+  'codex.model',
+  'codex.secondOpinionModel',
+  'driftGuard',
+  'branchFrom',
+  'proposedGoals',
+  'idleChecks',
+  'prGaps',
+  'prDrafts',
+  'branchPrefix',
+  'workspaceMode',
+  'worktreeCleanup',
+  'diffStyle',
+]);
+const SHARED_PREFIXES = ['alert.', 'idleAlert.', 'utility.', 'simplify'];
+
 /** A value as the user reads it: an option's label, On / Off, or the value itself. */
 export function valueLabel(setting: Setting, value: string | undefined) {
   if (value === undefined) return '…';
   const { control } = setting;
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return value === 'true' ? 'On' : 'Off';
-  if (control.type === 'choice' || control.type === 'select') return control.options.find((o) => o.value === value)?.label ?? value;
+  if ('options' in control) return control.options.find((o) => o.value === value)?.label ?? value;
   if (control.type === 'instructions') return `${value.trimEnd().split('\n').length} lines`;
   if (control.type === 'shortcut') return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
   // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
@@ -127,6 +165,11 @@ const SWITCH = { type: 'switch' } as const;
 
 const choice = (options: readonly Option[]) => ({ type: 'choice', options }) as const;
 const select = (options: readonly Option[]) => ({ type: 'select', options }) as const;
+
+const IMAGE_GEN_OPTIONS = [
+  { value: 'codex', label: 'Codex' },
+  { value: 'off', label: 'Off' },
+] as const satisfies readonly { value: ImageGenHarness; label: string }[];
 
 const THEMES = [
   { value: 'light', label: 'Light' },
@@ -165,7 +208,7 @@ function pref(key: PrefKey, label: string, section: SettingSection, control: Con
 }
 
 /** A host (main-process) setting at the top level of `AgentSettings`. */
-function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
+function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude' | 'imageGen' | 'appIcon', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
   return {
     key,
     label,
@@ -183,7 +226,7 @@ function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' 
 /** The control's typed value for `value`, or null when the control can't take it. */
 function parseValue(control: Control, value: string): string | number | boolean | null {
   if (control.type === 'switch') return value === 'true' ? true : value === 'false' ? false : null;
-  if (control.type === 'choice' || control.type === 'select') return control.options.some((o) => o.value === value) ? value : null;
+  if ('options' in control) return control.options.some((o) => o.value === value) ? value : null;
   if (control.type === 'number') {
     const n = Number(value);
     return Number.isInteger(n) && n >= control.min && n <= control.max ? n : null;
@@ -219,7 +262,7 @@ function colorTheme(slot: ThemeSlot): Setting {
   };
 }
 
-const REMOTE_KEYS = { isEnabled: 'remoteEnabled', allowsNetwork: 'remoteNetwork', reachesAnywhere: 'remoteAnywhere', machineName: 'machineName' } satisfies Record<keyof RemoteSettings, string>;
+const REMOTE_KEYS = { isEnabled: 'remoteEnabled', allowsNetwork: 'remoteNetwork', reachesAnywhere: 'remoteAnywhere', machineName: 'machineName', keepsAwake: 'keepAwake' } satisfies Record<keyof RemoteSettings, string>;
 
 function remoteSetting(key: keyof RemoteSettings, label: string, control: Control, extra: Partial<Setting> = {}): Setting {
   return {
@@ -278,8 +321,9 @@ const APP_SETTINGS: Setting[] = [
   colorTheme('light'),
   colorTheme('dark'),
   pref('reduceMotion', 'Reduce motion', 'appearance', choice(MOTION), { group: 'Mode', description: 'System follows your OS setting' }),
-  pref('translucentSidebar', 'Translucent sidebar', 'appearance', SWITCH, { group: 'Mode', description: 'The sidebar shows your desktop through the window material' }),
-  pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }, { group: 'Folders', description: 'Where Open folder starts in the project picker' }),
+  ...(Object.keys(ANIMATIONS) as AnimationArea[]).flatMap(animationSettings),
+  hostSetting('appIcon', 'App icon', 'appearance', { type: 'appIcon', options: APP_ICONS }, { group: 'App icon', description: 'While Mochi is open; Finder keeps the default' }),
+  pref('projectsFolder', 'Projects folder', 'general', { type: 'text', placeholder: DEFAULT_PREFS.projectsFolder, fallback: DEFAULT_PREFS.projectsFolder, isPath: true }, { group: 'Folders', description: 'Where Open folder starts, and where clones and new projects go' }),
   pref('restoreLayout', 'Restore layout on launch', 'general', SWITCH, { group: 'Startup', description: 'Off, each space opens on its default view' }),
   ...Object.entries(ALERT_KINDS).map(
     ([kind, label]): Setting => ({
@@ -332,6 +376,7 @@ const APP_SETTINGS: Setting[] = [
   remoteSetting('isEnabled', 'Let devices control this computer', SWITCH, { locked: REMOTE_REACH, description: 'Your other devices can follow and steer threads running here' }),
   remoteSetting('allowsNetwork', 'Allow devices on this network', SWITCH, { locked: REMOTE_REACH, description: 'Devices on your local network or Tailscale can connect' }),
   remoteSetting('reachesAnywhere', 'Reach this computer from anywhere', SWITCH, { locked: REMOTE_REACH, description: 'Through Mochi’s encrypted relay, off this network' }),
+  remoteSetting('keepsAwake', 'Keep this computer awake', SWITCH, { description: 'While a thread works or a device is connected' }),
   remoteSetting('machineName', 'Computer name', { type: 'text', placeholder: 'This computer’s host name' }, { description: 'How your devices list this computer; empty uses the host name' }),
   pref('agent', 'Agent', 'general', choice(AGENTS), { group: 'New threads', description: 'The harness a new thread starts on' }),
   pref('permissions', 'Permissions', 'general', choice(SHARED_ACCESS.map((a) => ({ value: a, label: a, ...(a === 'Full access' && { tone: 'warning' as const }) }))), { locked: AGENT_REACH, group: 'New threads', description: 'What a new thread’s agent may do without asking' }),
@@ -348,6 +393,7 @@ const APP_SETTINGS: Setting[] = [
       return sideChatModel && { to: 'host', patch: { sideChatModel } };
     },
   },
+  hostSetting('imageGen', 'Image generation', 'models', select(IMAGE_GEN_OPTIONS), { group: 'Image generation', description: 'Claude makes images through this harness, on this profile’s account' }),
   pref('whileWorking', 'While the agent is working, new messages', 'general', select(WHILE_WORKING), { group: 'New threads', description: 'Queued messages go out one per turn, in order' }),
   pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS), { group: 'Style', description: 'A few short sentences, or more of the detail' }),
   pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH, { group: 'Style', description: 'Lead with questions and decisions waiting on you' }),
@@ -534,5 +580,23 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
         }),
       ),
     ]),
+  ];
+}
+
+/** One area's switch (on while any of its animations is; setting it sets them all), then one switch per animation. */
+function animationSettings(area: AnimationArea): Setting[] {
+  const { label, description, items } = ANIMATIONS[area];
+  const ids: string[] = items.map((item) => item.value);
+  const base = { section: 'appearance', group: 'Animations', control: SWITCH } as const;
+  const write = (only: string[]) => (value: string, { prefs }: SettingSources): SettingWrite | null => {
+    const isOn = parseValue(SWITCH, value);
+    if (isOn === null) return null;
+    return { to: 'prefs', patch: { animations: isOn ? [...new Set([...prefs.animations, ...only])] : prefs.animations.filter((id) => !only.includes(id)) } };
+  };
+  return [
+    { ...base, key: `animations.${area}`, label, description, read: ({ prefs }) => String(ids.some((id) => prefs.animations.includes(id))), write: write(ids) },
+    ...items.map(
+      (item): Setting => ({ ...base, key: `animation.${item.value}`, label: item.label, description: item.description, context: label, read: ({ prefs }) => String(prefs.animations.includes(item.value)), write: write([item.value]) }),
+    ),
   ];
 }

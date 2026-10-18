@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClipboardTick, Clock, Copy3, Inbox, MessageQuestion as MessageCircleQuestion, Route, Setting2, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from 'reicon-react';
+import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { goalProgress, progressLabel } from './progress';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
@@ -25,11 +25,11 @@ type OrbitItem =
 const QUEUE_ICONS = {
   approval: ShieldCheck,
   question: MessageCircleQuestion,
-  review: ClipboardTick,
+  review: ClipboardCheck,
   ci: GitPullRequestIcon,
-  collision: Copy3,
+  collision: CopyStack,
   run: Clock,
-  setting: Setting2,
+  setting: Settings,
 } satisfies Record<QueueKind, LucideIcon>;
 
 export function Orbit() {

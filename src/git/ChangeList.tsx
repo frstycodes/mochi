@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { useDiffTheme } from '../themes/highlight';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, Folder, MessageText, Minus, Plus, Undo } from 'reicon-react';
+import { ChevronRight, Folder, MessageText, Minus, PlusBold, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Item, ItemActions, ItemContent, ItemMedia } from '@/components/ui/item';
 import { Textarea } from '@/components/ui/textarea';
@@ -106,7 +106,7 @@ function FileEntry({ file, isNested, isOpen, onToggle, actions }: { file: DiffFi
           {actions.canStage && (
             <span className="flex gap-0.5 opacity-0 group-hover/item:opacity-100 focus-within:opacity-100">
               {!file.staged && <IconAction label="Revert file" icon={Undo} onClick={() => actions.revert(target)} />}
-              {file.staged ? <IconAction label="Unstage file" icon={Minus} onClick={() => actions.unstage(target)} /> : <IconAction label="Stage file" icon={Plus} onClick={() => actions.stage(target)} />}
+              {file.staged ? <IconAction label="Unstage file" icon={Minus} onClick={() => actions.unstage(target)} /> : <IconAction label="Stage file" icon={PlusBold} onClick={() => actions.stage(target)} />}
             </span>
           )}
           <DiffStat added={file.added} removed={file.removed} />
@@ -134,7 +134,7 @@ function KindLetter({ kind }: { kind: ChangeKind }) {
   );
 }
 
-function IconAction({ label, icon: Icon, onClick }: { label: string; icon: typeof Plus; onClick: () => void }) {
+function IconAction({ label, icon: Icon, onClick }: { label: string; icon: typeof PlusBold; onClick: () => void }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>

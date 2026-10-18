@@ -133,6 +133,9 @@ export interface ActivityEntry {
   /** Events only: a Mochi widget asked here (`src/runtime/tools.ts`). Open, the queue item `id` renders in its place; closed, `text` is its one-line record. */
   card?: { id: string; isOpen: boolean };
   links?: WebLink[];
+  /** Events only: what kind of action, for its icon (`EventLine`), and the page it happened on, shown as favicon and host. */
+  glyph?: EventGlyph;
+  site?: string;
   /** `subagent` entries: the row in `Thread.subagents` this one shows, where it was started. */
   subagentId?: string;
   /** Wall-clock milliseconds, stamped on live agents' entries; `at` is the app clock's minute. */
@@ -206,6 +209,8 @@ export interface GeneratedImage {
 export interface McpCall {
   server: string;
   tool: string;
+  /** The connector account it acted as, when the profile has several on the server (`__mochi_account`). */
+  account?: string;
 }
 
 /**
@@ -231,6 +236,9 @@ export interface McpWidgetResource {
   html: string;
   meta?: Record<string, unknown>;
 }
+
+/** The icon an action's line in a thread gets; everything else keeps the flag. */
+export type EventGlyph = 'click' | 'type' | 'browse';
 
 export interface WebLink {
   url: string;
@@ -344,6 +352,8 @@ export interface Thread {
   sources: Source[];
   context: { used: number; max: number };
   orbitSlot?: number;
+  /** Where its pin sorts among all your computers' pins (`pinOrderOf`); unset while unpinned. */
+  pinOrder?: number;
   settledAt?: number;
   /** `keeps`: drift suggestions you answered with Keep here; at `KEEPS_TO_MUTE` the guard mutes itself for the thread. */
   drift?: { isMuted: boolean; keeps?: number };
@@ -363,6 +373,8 @@ export interface Thread {
   queued?: QueuedMessage[];
   /** Why the queue stopped sending; cleared by your next send or Resume. */
   queuePause?: QueuePause;
+  /** How many `activity` entries you had seen when you last had it open, on any device; more now is unread. */
+  seenActivity?: number;
 }
 
 /** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
@@ -427,6 +439,8 @@ export interface SubagentStep {
 
 export interface LiveRun {
   isWorking: boolean;
+  /** How the last turn ended, for an alert on another computer that only sees it stop working. */
+  turnEnd?: 'done' | 'interrupted' | 'failed';
   /** Mochi launched this agent and it hasn't reported anything yet. */
   starting?: Provider;
   /** The folder the agent first started in; restarts reuse it, since Claude Code files a session's transcript under its folder. Unset for a folderless chat. */
@@ -470,12 +484,16 @@ export interface QueueItem {
   /** A `ci` card: the PR and the first failed check, whose log "Send failing log to agent" fetches. */
   ci?: { pr: number; url: string; check?: { name: string; link?: string } };
   createdAt: number;
+  /** You looked at it, on any device. */
+  isSeen?: boolean;
 }
 
 /** What a Mochi widget asks and waits on: a delete naming exactly what goes, or a browser escalation. */
 export interface ToolWidget {
   callId: string;
   options?: { id: string; label: string }[];
+  /** `options` are radio buttons: one must be picked. */
+  pick?: 'one';
   isDestructive?: boolean;
   /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
   edits?: FileEdit[];

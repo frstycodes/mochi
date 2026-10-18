@@ -108,6 +108,7 @@
   --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.2 0.02 285 / 0.08), 0 4px 10px -2px oklch(0.2 0.02 285 / 0.08), 0 16px 40px -8px oklch(0.2 0.02 285 / 0.22);
   --elev-lift: 0 24px 56px -12px oklch(0.2 0.02 285 / 0.22), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-kbd: inset 0 -1px 0 oklch(0.25 0.02 285 / 0.16), inset 0 0 0 0.5px oklch(0.25 0.02 285 / 0.08);
   --elev-composer: 0 8px 24px -12px oklch(0.2 0.02 285 / 0.14);
   --corner-scale: 1;
   --radius: calc(0.75rem * var(--corner-scale));
@@ -154,6 +155,7 @@
     --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
     --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
     --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+    --elev-kbd: inset 0 1px 0 oklch(1 0 0 / 0.07), inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
     --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
     color-scheme: dark;
   }
@@ -199,6 +201,7 @@
   --elev-overlay: 0 0 0 1px var(--glass-edge), 0 1px 2px oklch(0.05 0.01 285 / 0.4), 0 6px 14px -4px oklch(0.05 0.01 285 / 0.4), 0 24px 56px -12px oklch(0.05 0.01 285 / 0.7);
   --elev-lift: 0 28px 64px -12px oklch(0.05 0.01 285 / 0.7), 0 8px 20px -8px oklch(0.05 0.01 285 / 0.5);
   --elev-float: 0 0 0 1px var(--border), var(--elev-lift);
+  --elev-kbd: inset 0 1px 0 oklch(1 0 0 / 0.07), inset 0 -1px 0 oklch(0.05 0.01 285 / 0.55);
   --elev-composer: 0 12px 28px -14px oklch(0.05 0.01 285 / 0.45);
   color-scheme: dark;
 }
@@ -260,6 +263,7 @@
   --shadow-float: var(--elev-float);
   /* The float shadow without its hairline, for surfaces that draw their own `border` (squircle-safe, and never two edges). */
   --shadow-lift: var(--elev-lift);
+  --shadow-kbd: var(--elev-kbd);
   --shadow-composer: var(--elev-composer);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -373,19 +377,6 @@
 /* Windows' caption buttons (`useCaptionInset`) cover the top-right corner; unlayered so it beats the header's own `px-*`. The env() pair is the strip left of them; the fallback is three 46px buttons. */
 :root[data-captions] [data-under-captions] {
   padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px / var(--app-zoom, 1))) + 0.5rem);
-}
-
-/* The shell window's native material (vibrancy / Mica, electron/window.ts) shows through the docked sidebar only, unless Settings › Appearance › Translucent sidebar is off; the page beside it stays opaque. */
-:root[data-material]:not([data-solid-sidebar]) body {
-  background: transparent;
-}
-/* The wash sits on the container, not the inner panel, so it covers the border too: raw material under the 1px border read as a dark line. */
-:root[data-material]:not([data-solid-sidebar]) [data-slot='sidebar-container'] {
-  background: color-mix(in oklab, var(--sidebar) 60%, transparent);
-  border-color: color-mix(in oklab, var(--sidebar-border) 50%, transparent);
-}
-:root[data-material]:not([data-solid-sidebar]) [data-slot='sidebar-inner'] {
-  background: transparent;
 }
 
 /* Unlayered on purpose: the Artifact host wraps the page in its own skeleton, and its unlayered body colour beats `@layer base`, so text without a colour class turned light-theme dark on the dark theme. */
@@ -793,6 +784,22 @@
 }
 :root[data-reduce-motion='on'] .pane-layout-animating :is(.pane-card, .pane-chat) {
   transition: none;
+}
+
+/* Settings › Appearance › Animations: each one runs only while its id is a word in `data-animations` on <html>. */
+:root:not([data-animations~='sidebar-toggle']) :is([data-slot='sidebar-gap'], [data-slot='sidebar-container']),
+:root:not([data-animations~='sidebar-peek']) [data-sidebar-peek],
+:root:not([data-animations~='pane-slide']) .pane-layout-animating[data-motion='slide'] :is(.pane-card, .pane-chat),
+:root:not([data-animations~='pane-layout']) .pane-layout-animating:not([data-motion='slide']) :is(.pane-card, .pane-chat) {
+  transition: none;
+}
+:root:not([data-animations~='pane-slide']) .pane-card-entering[data-motion='slide'],
+:root:not([data-animations~='pane-pop']) .pane-card-entering:not([data-motion='slide']) {
+  animation: none;
+}
+:root:not([data-animations~='pane-slide']) .pane-card-leaving[data-motion='slide'],
+:root:not([data-animations~='pane-pop']) .pane-card-leaving:not([data-motion='slide']) {
+  display: none;
 }
 
 /* The toast countdown runs on an invisible element: `animationend` dismisses it, so pausing the animation pauses the timer. */

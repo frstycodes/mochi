@@ -1,4 +1,4 @@
-import { ChevronRight, CloseCircle, TickCircle } from 'reicon-react';
+import { ChevronRight, XCircle, CheckBadge } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Shimmer } from '@/components/ai-elements/shimmer';
@@ -113,7 +113,7 @@ const DIFF_TONE = { '+': 'text-success', '−': 'text-destructive', '~': 'text-s
 
 function CriterionEventRow({ criterion: c, kind }: { criterion: Criterion; kind: 'claim' | 'check' }) {
   const event = kind === 'claim' ? claimEvent(c) : checkEvent(c);
-  const Icon = event.isFailed ? CloseCircle : TickCircle;
+  const Icon = event.isFailed ? XCircle : CheckBadge;
   return (
     <div className="flex min-w-0 items-start gap-2 px-1 py-1 type-meta">
       <Icon aria-hidden className={cn('mt-0.5 size-3.5 shrink-0', event.isFailed ? 'text-destructive' : kind === 'check' ? 'text-success' : 'text-subtle-foreground')} />

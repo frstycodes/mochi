@@ -74,6 +74,6 @@ function pinFocused(s: State, dispatch: ReturnType<typeof useHarness>['dispatch'
   if (!thread || thread.status === 'settled') return;
   const lists = togglePin(s.threads, s.spaceId, thread.id);
   if (!lists) return toast('Pinned is full', { description: 'Orbit has five pin slots. Unpin a thread first.' });
-  dispatch({ type: 'reorder', ...lists });
+  dispatch({ type: 'reorder', ...lists, at: Date.now() });
   toast(lists.pinned.includes(thread.id) ? `Pinned ${thread.title}` : `Unpinned ${thread.title}`);
 }

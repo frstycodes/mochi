@@ -5,19 +5,20 @@ import { draftFrom } from '../goals/edit.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { host } from '../host/index.ts';
 import type { CommandResult, MachineCatalog, RemoteCommand } from '../host/types/remote.ts';
+import type { Project } from '../host/types/projects.ts';
 import type { Thread } from '../model.ts';
 import { reviewNote } from '../git/files.ts';
 import { getProfiles } from '../profiles.ts';
-import { projectName, projectRef, savedProjects } from '../projects.ts';
+import { byRecentUse, cloneProject, createProject, loadProjects } from '../projects.ts';
 import { rewindThread } from '../rewind/run.ts';
-import { initialControls, sideChatChoice } from '../runtime/controls.ts';
-import { findSetting, settingsCatalog, type SettingSources } from '../settings/catalog.ts';
+import { sideChatChoice } from '../runtime/controls.ts';
+import { findSetting, settingsCatalog, type SettingSources, type SettingWrite } from '../settings/catalog.ts';
 import { HARNESS_IDS } from '../settings/harnesses.ts';
 import { getPrefs, setPrefs } from '../settings/prefs.ts';
 import { askSideChat } from '../sidechat/ask.ts';
 import { chatFor } from '../store/sidechat.ts';
 import { closeShell, openShell, readShell, shellOf } from './terminals.ts';
-import { pinnedThreads, togglePin } from '../reorder.ts';
+import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
 import { handoffSummary } from '../rewind/handoff.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
@@ -42,8 +43,12 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
   const { state, dispatch } = env;
   if (command.type === 'resolve') return resolve(command, env);
   if (command.type === 'catalog') return { isOk: true, data: await catalog(state) };
+  if (command.type === 'settings') return { isOk: true, data: writableValues(await machineSources(state)) };
+  if (command.type === 'projects') return { isOk: true, data: (await projectsHere(state)).map(withSmallIcon) };
+  if (command.type === 'add-project' || command.type === 'clone-project') return addProject(command, state);
   if (command.type === 'create') return create(command, env);
   if (command.type === 'setting') return setting(command, env);
+  if (command.type === 'seen') return seen(command, env);
   const thread = state.threads.find((t) => t.id === command.threadId);
   if (!thread) return fail('No such thread on this machine');
   switch (command.type) {
@@ -67,7 +72,7 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
       dispatch({ type: 'edit-goal', threadId: thread.id, draft: { ...draftFrom(thread), goal: command.goal } });
       return ok;
     case 'pin':
-      return pin(thread, command.isPinned, env);
+      return pin(thread, command, env);
     case 'settle':
       if ((thread.status === 'settled') !== command.isSettled) dispatch({ type: command.isSettled ? 'settle' : 'unsettle', threadId: thread.id });
       return ok;
@@ -147,37 +152,75 @@ function terminal(thread: Thread, cwd: string, command: TerminalCommand): Promis
   }
 }
 
-/** Where a new thread can start here: this profile's projects as the picker lists them, and each harness's models. */
+/** Where a new thread can start here: this profile's projects as the picker lists them, by id, and each harness's models. */
 async function catalog(state: State): Promise<MachineCatalog> {
   const settings = await host.settings.get();
   const models = await Promise.all(HARNESS_IDS.map(async (h) => [h, await host.agent.models(h, state.spaceId).catch(() => [])] as const));
   return {
-    projects: machineProjects(state).map((ref) => ({ ref, name: projectName(ref) })),
+    projects: (await projectsHere(state)).filter((p) => !p.isMissing).map((p) => ({ ref: p.id, name: p.name })),
     models: Object.fromEntries(models),
     defaults: { claude: settings.harnesses.claude.model, codex: settings.harnesses.codex.model },
   };
 }
 
-/** `useRecentProjects` outside React: saved folders first, then those of the profile's threads, newest first. */
-function machineProjects(state: State) {
-  const threads = state.threads.filter((t) => t.spaceId === state.spaceId).sort((a, b) => b.startedAt - a.startedAt);
-  return [...new Set([...savedProjects(state.spaceId), ...threads.flatMap((t) => (t.repo ? [projectRef(t.repo)!] : []))])];
+/** `useProjects` outside React: the registry, most recently used first. */
+async function projectsHere(state: State) {
+  const threads = state.threads.filter((t) => t.spaceId === state.spaceId);
+  return byRecentUse(await loadProjects(state.spaceId, threads), threads);
 }
 
-/** The new-thread page's start, in the background. A project has to be one `catalog` listed: a device never names a folder. */
-function create(command: Extract<RemoteCommand, { type: 'create' }>, { state, dispatch }: CommandEnv): CommandResult {
-  if (command.project !== null && !machineProjects(state).includes(command.project)) return fail('That project isn’t on this machine');
-  const controls = command.model === undefined ? undefined : initialControls(command.provider, command.model);
+/** A favicon past this stays home: a list of projects shouldn't cost a device megabytes. */
+const MAX_REMOTE_ICON_CHARS = 64 * 1024;
+const withSmallIcon = (project: Project): Project => (project.icon && project.icon.url.length > MAX_REMOTE_ICON_CHARS ? { ...project, icon: null } : project);
+
+/** Add project's own calls, into this computer's projects folder as this profile's GitHub login. */
+async function addProject(command: Extract<RemoteCommand, { type: 'add-project' | 'clone-project' }>, state: State): Promise<CommandResult> {
+  try {
+    const project = command.type === 'clone-project' ? await cloneProject(state.spaceId, command.source) : await createProject(state.spaceId, command.name, command.publish);
+    return { isOk: true, data: { ref: project.id, name: project.name } };
+  } catch (error) {
+    return fail((error as Error).message);
+  }
+}
+
+/** The new-thread page's start, in the background. A project has to be one `catalog` listed, by id: a device never names a folder. */
+async function create(command: Extract<RemoteCommand, { type: 'create' }>, { state, dispatch }: CommandEnv): Promise<CommandResult> {
+  const project = command.project === null ? null : (await projectsHere(state)).find((p) => p.id === command.project && !p.isMissing);
+  if (project === undefined) return fail('That project isn’t on this machine');
   dispatch({
     type: 'create',
     title: command.title,
     provider: command.provider,
-    project: command.project,
-    ...(controls && { controls }),
+    project: project?.path ?? null,
+    ...(command.controls && { controls: command.controls }),
+    ...(command.images && { images: command.images }),
     isLive: host.isDesktop,
     isBackground: true,
   });
   return ok;
+}
+
+/**
+ * What a device may change: prefs, quiet hours and main's settings. Devices, accounts, profiles and the theme change on this
+ * computer only, and the demo switch reloads the app.
+ */
+const isRemoteWrite = (write: SettingWrite): write is Extract<SettingWrite, { to: 'prefs' | 'quiet' | 'host' }> =>
+  (write.to === 'prefs' && !('demoData' in write.patch)) || write.to === 'quiet' || write.to === 'host';
+
+/** Each row a device may change, with its value here: a row's value written back shows where it would land. */
+function writableValues(sources: SettingSources) {
+  return Object.fromEntries(
+    settingsCatalog().flatMap((row) => {
+      const value = row.read(sources);
+      const write = value === undefined ? null : row.write(value, sources);
+      return value !== undefined && write && isRemoteWrite(write) ? [[row.key, value]] : [];
+    }),
+  );
+}
+
+/** What this machine's settings read from, as far as a device can change them. */
+async function machineSources(state: State): Promise<SettingSources> {
+  return { prefs: getPrefs(), theme: '', quiet: state.notifications.quiet, host: await host.settings.get() };
 }
 
 /** Side chats a device asks live in their own tab here, beside the thread's own. */
@@ -191,20 +234,16 @@ async function sideChat(thread: Thread, text: string, { state, dispatch }: Comma
   return ok;
 }
 
-/**
- * A Settings row's value, written where Settings writes it. Only what stays on this machine: Devices, accounts, profiles and
- * the theme are changed here only, and the demo switch reloads the app.
- */
+/** A Settings row's value, written where Settings writes it, when it's one a device may change (`isRemoteWrite`). */
 async function setting({ key, value }: Extract<RemoteCommand, { type: 'setting' }>, { state, dispatch }: CommandEnv): Promise<CommandResult> {
   const row = findSetting(settingsCatalog(), key);
   if (!row) return fail(`No setting ${key}`);
-  const sources: SettingSources = { prefs: getPrefs(), theme: '', quiet: state.notifications.quiet, host: await host.settings.get() };
+  const sources = await machineSources(state);
   const write = row.write(value, sources);
   if (!write) return fail(`“${value}” isn’t a value of ${row.label}`);
-  const refused = fail(`${row.label} can only be changed on that computer`);
+  if (!isRemoteWrite(write)) return fail(`${row.label} can only be changed on that computer`);
   switch (write.to) {
     case 'prefs':
-      if ('demoData' in write.patch) return refused;
       setPrefs(write.patch);
       return ok;
     case 'quiet':
@@ -213,8 +252,6 @@ async function setting({ key, value }: Extract<RemoteCommand, { type: 'setting' 
     case 'host':
       await host.settings.set(write.patch);
       return ok;
-    default:
-      return refused;
   }
 }
 
@@ -241,12 +278,17 @@ function send(thread: Thread, text: string, { state, dispatch, whileWorking }: C
 }
 
 /** The sidebar's pin toggle (mod Shift P), only when it changes something. */
-function pin(thread: Thread, isPinned: boolean, { state, dispatch }: CommandEnv): CommandResult {
+function pin(thread: Thread, { isPinned, order }: Extract<RemoteCommand, { type: 'pin' }>, { state, dispatch }: CommandEnv): CommandResult {
+  if (isPinned && order !== undefined) {
+    if (!pinAt(state.threads, thread.spaceId, thread.id, order)) return fail('Pinned is full; unpin a thread first');
+    dispatch({ type: 'pin-at', threadId: thread.id, order });
+    return ok;
+  }
   const isPinnedNow = pinnedThreads(state.threads, thread.spaceId).some((t) => t.id === thread.id);
   if (isPinnedNow === isPinned) return ok;
   const lists = togglePin(state.threads, thread.spaceId, thread.id);
   if (!lists) return fail('Pinned is full; unpin a thread first');
-  dispatch({ type: 'reorder', ...lists });
+  dispatch({ type: 'reorder', ...lists, at: Date.now() });
   return ok;
 }
 
@@ -273,4 +315,11 @@ async function ship(thread: Thread, command: Extract<RemoteCommand, { type: 'com
   const opened = openedPr(url, command.title);
   if (opened) dispatch({ type: 'prs-seen', threadId: thread.id, prs: [opened] });
   return { isOk: true, detail: url };
+}
+
+/** Queue cards answered meanwhile are skipped, not refused: the device looked at them all the same. */
+function seen(command: Extract<RemoteCommand, { type: 'seen' }>, { state, dispatch }: CommandEnv): CommandResult {
+  if (command.threadId && !state.threads.some((t) => t.id === command.threadId)) return fail('No such thread on this machine');
+  dispatch({ type: 'seen', threadId: command.threadId, queueIds: command.queueIds });
+  return ok;
 }

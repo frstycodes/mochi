@@ -8,7 +8,8 @@
  */
 export type MachineFrame = { type: 'register'; name: string; publicKey: string } | { type: 'close'; channel: number };
 
-export type RelayToMachine = { type: 'open'; channel: number; deviceId: string } | { type: 'close'; channel: number };
+/** `members`: the account's signed membership records changed; fetch them again (`GET /v1/members`). */
+export type RelayToMachine = { type: 'open'; channel: number; deviceId: string } | { type: 'close'; channel: number } | { type: 'members' };
 
 /** Text frames either side may send to keep a socket provably alive; the relay's runtime answers them itself. */
 export const HEARTBEAT = { ping: 'ping', pong: 'pong' } as const;
@@ -66,3 +67,27 @@ function base64Length(text: string): number {
     return -1;
   }
 }
+
+/**
+ * A signed membership record as the relay keeps it (`electron/remote/members.ts`). The relay holds no key and checks no
+ * signature: it keeps the newest record per kind, subject and signer, and each computer decides what a record is worth.
+ */
+export type StoredRecord = { type: 'member' | 'removal'; deviceId: string; signer: string; at: number; record: Record<string, unknown> };
+
+const MAX_RECORD_CHARS = 2048;
+export const MAX_RECORDS = 1000;
+
+/** A `POST /v1/members` body: an array of records. Off-shape entries are dropped, never stored. */
+export function parseRecords(value: unknown): StoredRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_RECORDS).flatMap((raw) => {
+    const r = raw as Record<string, unknown>;
+    if (!r || typeof r !== 'object' || JSON.stringify(r).length > MAX_RECORD_CHARS || !isId(r.deviceId)) return [];
+    const signer = r.type === 'member' ? r.addedBy : r.type === 'removal' ? r.removedBy : undefined;
+    const at = r.type === 'member' ? r.addedAt : r.removedAt;
+    if (!isId(signer) || !Number.isSafeInteger(at) || typeof r.signature !== 'string') return [];
+    return [{ type: r.type as StoredRecord['type'], deviceId: r.deviceId, signer, at: at as number, record: r }];
+  });
+}
+
+export const storedKey = (r: Pick<StoredRecord, 'type' | 'deviceId' | 'signer'>) => `${r.type}:${r.deviceId}:${r.signer}`;

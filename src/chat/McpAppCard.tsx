@@ -1,10 +1,11 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { Warning } from 'reicon-react';
+import { WarningAlt } from '@/icons';
 import { AppBridge, buildAllowAttribute, PostMessageTransport, type McpUiHostContext, type McpUiResourceCsp, type McpUiResourcePermissions } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { withCsp } from './mcpApps';
 import { Skeleton } from '@/components/ui/skeleton';
 import { openExternally } from '../browser/systemBrowser';
 import { host } from '../host';
+import { namesNow, useLibraryNames } from '../library/names';
 import type { McpWidget, McpWidgetResource } from '../model';
 import type { ThemeSlot } from '../themes/model';
 import { useColorTheme } from '../themes/store';
@@ -70,17 +71,18 @@ export function McpAppFrame({ widget, resource }: { widget: McpWidget; resource:
 
   useEffect(() => bridge.current?.setHostContext(hostContext(mode)), [mode]);
 
-  return <iframe ref={frame} title={`${widget.server} view`} sandbox="allow-scripts allow-forms" allow={buildAllowAttribute(ui?.permissions)} srcDoc={withCsp(resource.html, ui?.csp)} style={{ height }} className="block w-full" />;
+  return <iframe ref={frame} title={`${namesNow().server(widget.server).title} view`} sandbox="allow-scripts allow-forms" allow={buildAllowAttribute(ui?.permissions)} srcDoc={withCsp(resource.html, ui?.csp)} style={{ height }} className="block w-full" />;
 }
 
 const hostContext = (theme: ThemeSlot): McpUiHostContext => ({ theme, displayMode: 'inline', availableDisplayModes: ['inline'], platform: 'desktop', locale: navigator.language, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
 
 function WidgetError({ server, error }: { server: string; error: string }) {
+  const { title } = useLibraryNames().server(server);
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
-      <Warning aria-hidden className="mt-px size-3.5 shrink-0" />
+      <WarningAlt aria-hidden className="mt-px size-3.5 shrink-0" />
       <p className="min-w-0">
-        Couldn't open {server}'s view
+        Couldn't open {title}'s view
         <span className="block text-subtle-foreground">{error}</span>
       </p>
     </div>

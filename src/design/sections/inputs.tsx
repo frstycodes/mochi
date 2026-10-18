@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowUp, Search } from 'reicon-react';
+import { ArrowUp, Search } from '@/icons';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox';

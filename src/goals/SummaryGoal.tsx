@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { ChevronRight, CloseCircle, Edit, Maximize, TickCircle } from 'reicon-react';
+import { ChevronRight, XCircle, Edit, Maximize, CheckBadge } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { authorName, isMet, type Criterion, type Thread } from '../model';
@@ -50,7 +50,7 @@ export function SummaryGoalHeader({ thread, onEdit, onOpen }: { thread: Thread; 
 export function SummaryGoalStatus({ thread, verdict, step }: { thread: Thread; verdict: Verdict | null; step?: string }) {
   const working = isWorking(thread);
   if (!working && (!verdict || verdict.kind === 'idle') && thread.status !== 'settled') return null;
-  if (thread.status === 'settled') return <StatusLine icon={<TickCircle className="size-3.5 text-subtle-foreground" />}>Settled</StatusLine>;
+  if (thread.status === 'settled') return <StatusLine icon={<CheckBadge className="size-3.5 text-subtle-foreground" />}>Settled</StatusLine>;
   if (verdict && !working) return <StatusLine icon={<span className={cn('flex size-3.5 items-center justify-center', TONE_CLASS[verdict.tone])}><VerdictIcon kind={verdict.kind} className="size-3.5" /></span>}>{verdictHeading(verdict, thread).title}</StatusLine>;
   return (
     <StatusLine icon={<ProgressRing met={0} total={1} slot={thread.line} size={14} isWorking />}>
@@ -107,9 +107,9 @@ function SummaryCriterion({ thread, criterion: c }: { thread: Thread; criterion:
 
 function CriterionIcon({ state }: { state: CriterionState }) {
   const label = STATE_LABEL[state];
-  if (state === 'failed') return <CloseCircle aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-destructive" />;
-  if (state === 'verified') return <TickCircle aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-success" />;
-  if (state === 'claimed') return <TickCircle aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground" />;
+  if (state === 'failed') return <XCircle aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-destructive" />;
+  if (state === 'verified') return <CheckBadge aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-success" />;
+  if (state === 'claimed') return <CheckBadge aria-label={label} className="mt-0.5 size-3.5 shrink-0 text-subtle-foreground" />;
   return <span role="img" aria-label={label} className={cn('mt-[3px] ml-px size-3 shrink-0 rounded-full border border-dashed border-subtle-foreground', state === 'running' && 'animate-spin border-solid border-t-transparent motion-reduce:animate-none')} />;
 }
 

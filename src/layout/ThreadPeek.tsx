@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Eye, EyeOff } from 'reicon-react';
+import { Eye, EyeOff } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';

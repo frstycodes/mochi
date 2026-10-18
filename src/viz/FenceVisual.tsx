@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { CodeBlock, defaultRehypePlugins, type Components, type CustomRendererProps, type PluginConfig, type StreamdownProps } from 'streamdown';
-import { Warning } from 'reicon-react';
+import { WarningAlt } from '@/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHarness } from '../store';
 import { ChartVisual } from './ChartVisual';
@@ -121,7 +121,7 @@ function BrokenVisual({ language, code, message }: { language: VizLanguage; code
   return (
     <Placeholder>
       <span role="alert" className="flex items-center gap-1.5 type-caption text-muted-foreground">
-        <Warning aria-hidden className="size-3.5 shrink-0 text-warning" />
+        <WarningAlt aria-hidden className="size-3.5 shrink-0 text-warning" />
         Couldn't render this {language.replace('harness-', '')}: {message}
       </span>
       <CodeBlock code={code} language={SOURCES[language](code).ext} />

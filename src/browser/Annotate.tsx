@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState, type PointerEvent } from 'react';
-import { ArrowUpRight, Pen, Redo, Stop, TextTool, Undo } from 'reicon-react';
+import { ArrowUpRight, Pen, Redo, Stop, TextTool, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -133,10 +133,10 @@ export function Annotator({ thread, pageId, image, name }: { thread: Thread; pag
           <Redo />
         </TooltipIconButton>
         <div className="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="rounded-full" onClick={cancel}>
+          <Button variant="ghost" size="sm" onClick={cancel}>
             Cancel
           </Button>
-          <Button size="sm" className="rounded-full" disabled={!natural || isSending} onClick={send}>
+          <Button size="sm" disabled={!natural || isSending} onClick={send}>
             Add to composer
           </Button>
         </div>

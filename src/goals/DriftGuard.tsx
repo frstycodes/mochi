@@ -1,6 +1,6 @@
 import { useId, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Compass } from 'reicon-react';
+import { Compass } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';

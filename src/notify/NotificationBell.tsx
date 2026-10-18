@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, Hourglass, Clock, BellOff, CheckCircle, CloseCircle, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, Hourglass, Clock, BellOff, CheckCircle, XCircle, Settings, Warning, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { UnreadDot } from '../ui';
 import { host } from '../host';
 import type { NotifyPermission } from '../host/types/notify';
 import { duration } from '../progress';
@@ -22,7 +23,7 @@ const KIND_ICONS = {
   'needs-you': { icon: AlertCircle, className: 'text-warning' },
   limit: { icon: Hourglass, className: 'text-warning' },
   'step-done': { icon: CheckCircle, className: 'text-success' },
-  ci: { icon: CloseCircle, className: 'text-destructive' },
+  ci: { icon: XCircle, className: 'text-destructive' },
   'pr-review': { icon: GitPullRequestIcon, className: 'text-muted-foreground' },
   run: { icon: Clock, className: 'text-muted-foreground' },
   idle: { icon: CheckCircle, className: 'text-success' },
@@ -30,7 +31,7 @@ const KIND_ICONS = {
 
 /** An idle notice takes its verdict's look; done keeps the `idle` default. */
 const VERDICT_ICONS = {
-  gaps: { icon: TriangleWarning, className: 'text-warning' },
+  gaps: { icon: Warning, className: 'text-warning' },
   'needs-you': { icon: AlertCircle, className: 'text-warning' },
   stalled: { icon: Hourglass, className: 'text-destructive' },
 } satisfies Partial<Record<VerdictKind, { icon: IconComponent; className: string }>>;
@@ -59,7 +60,7 @@ export function NotificationBell({ spaceId }: { spaceId: string }) {
               Mark all read
             </Button>
             <Button variant="ghost" size="icon-xs" aria-label="Clear notifications" disabled={notices.length === 0} onClick={() => dispatch({ type: 'notify-clear' })}>
-              <Trash3 />
+              <Trash />
             </Button>
           </div>
           {bursts.length === 0 ? (
@@ -118,7 +119,7 @@ function BurstRow({ burst, onJump }: { burst: Burst; onJump: () => void }) {
       </ItemContent>
       <ItemActions className="relative z-10 gap-1 self-center">
         <span className="tabular type-caption text-subtle-foreground group-hover/notice:hidden">{state.now - head.at < 1 ? 'now' : duration(state.now - head.at)}</span>
-        {isUnread && <span aria-label="Unread" className="size-1.5 rounded-full bg-foreground group-hover/notice:hidden" />}
+        {isUnread && <UnreadDot className="group-hover/notice:hidden" />}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -164,7 +165,7 @@ function NotifyFooter({ onOpenSettings }: { onOpenSettings: () => void }) {
       <div className="flex items-center gap-2">
         <p className="flex-1 truncate type-caption text-muted-foreground">{status || 'Alerts arrive while Mochi is in the background.'}</p>
         <Button variant="ghost" size="xs" onClick={onOpenSettings}>
-          <Setting2 data-icon="inline-start" />
+          <Settings data-icon="inline-start" />
           Settings
         </Button>
       </div>

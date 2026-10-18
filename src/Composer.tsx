@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { useReducedMotionConfig } from 'motion/react';
 import { toast } from '@/toast/store';
-import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from 'reicon-react';
+import { ArrowUp, ClipboardList, Hand, Paperclip, ShieldAlert, ShieldCheck, Stop } from '@/icons';
 import { Attachment, AttachmentInfo, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments';
 import { openFiles, type ViewerFile } from './files/viewer';
 import { BranchIcon, BranchName } from './git/BranchLabel';
@@ -87,8 +87,6 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   /** Set while the agent works: the send button becomes Stop. */
   onStop?: () => void;
   submitLabel?: string;
-  /** No attachments: a thread another computer starts can't take images from here yet. */
-  hasNoAttachments?: boolean;
   /** Beside send: the context ring. */
   meter?: ReactNode;
   /** Where the unsent text and attachments are kept (`threadDraftKey`, `newThreadDraftKey`); sending clears it. */
@@ -97,7 +95,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', hasNoAttachments, meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
   const catalog = useModels(useSpace().id);
   const model = optionFor(catalog[provider], controls.model, provider);
   const defaults = useNewThreadDefaults(catalog, model);
@@ -115,17 +113,15 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
       </PromptInputBody>
       <PromptInputFooter className="px-2 pb-2">
         <PromptInputTools>
-          {!hasNoAttachments && (
-            <PromptInputActionMenu>
-              <PromptInputActionMenuTrigger tooltip="Attach" className="rounded-full">
-                <Paperclip className="size-4" />
-              </PromptInputActionMenuTrigger>
-              <PromptInputActionMenuContent>
-                <PromptInputActionAddAttachments />
-                <PromptInputActionAddScreenshot />
-              </PromptInputActionMenuContent>
-            </PromptInputActionMenu>
-          )}
+          <PromptInputActionMenu>
+            <PromptInputActionMenuTrigger tooltip="Attach">
+              <Paperclip className="size-4" />
+            </PromptInputActionMenuTrigger>
+            <PromptInputActionMenuContent>
+              <PromptInputActionAddAttachments />
+              <PromptInputActionAddScreenshot />
+            </PromptInputActionMenuContent>
+          </PromptInputActionMenu>
           <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} defaults={defaults.model} />
           <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />
           <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />
@@ -133,11 +129,11 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
         <PromptInputTools>
           {meter}
           {onStop ? (
-            <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent" className="rounded-full">
+            <PromptInputSubmit status="streaming" onStop={onStop} aria-label="Stop the agent">
               <Stop className="size-4" />
             </PromptInputSubmit>
           ) : (
-            <PromptInputSubmit aria-label={submitLabel} className="rounded-full">
+            <PromptInputSubmit aria-label={submitLabel}>
               <ArrowUp className="size-4" />
             </PromptInputSubmit>
           )}

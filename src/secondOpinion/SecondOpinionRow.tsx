@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, CloseCircle, Refresh, Send2, ShieldCross, ShieldTick, Warning } from 'reicon-react';
+import { ChevronRight, XCircle, Refresh, Send, ShieldX, ShieldTick, WarningAlt } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -62,8 +62,8 @@ function stepLabel(step: string) {
 
 const VERDICT = {
   approve: { label: 'Approve', icon: ShieldTick, className: 'bg-success/10 text-success' },
-  concerns: { label: 'Concerns', icon: Warning, className: 'bg-warning/8 text-warning' },
-  block: { label: 'Block', icon: ShieldCross, className: 'bg-destructive/10 text-destructive' },
+  concerns: { label: 'Concerns', icon: WarningAlt, className: 'bg-warning/8 text-warning' },
+  block: { label: 'Block', icon: ShieldX, className: 'bg-destructive/10 text-destructive' },
 } satisfies Record<VerdictKind, unknown>;
 
 function VerdictBadge({ verdict }: { verdict: VerdictKind }) {
@@ -104,7 +104,7 @@ function VerdictCard({ thread, review }: { thread: Thread; review: Review }) {
         </Button>
         {result.findings.length > 0 && (
           <Button variant="secondary" size="sm" disabled={review.isSent} onClick={() => sendFindings(thread, review, dispatch)}>
-            <Send2 aria-hidden />
+            <Send aria-hidden />
             {review.isSent ? `Sent to ${primary}` : `Send findings to ${primary}`}
           </Button>
         )}
@@ -166,7 +166,7 @@ function ReviewFailed({ thread, review }: { thread: Thread; review: Review }) {
   return (
     <div role="status" className="flex flex-col gap-2 rounded-xl border bg-card p-4">
       <p className="flex items-center gap-2 type-body font-medium text-foreground">
-        <CloseCircle aria-hidden className="size-4 shrink-0 text-destructive" />
+        <XCircle aria-hidden className="size-4 shrink-0 text-destructive" />
         {name} couldn't give a second opinion
       </p>
       <p className="type-meta text-pretty break-words text-muted-foreground">{review.error}</p>

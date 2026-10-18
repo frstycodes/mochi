@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CloseCircle, Keyboard, SearchNormal } from 'reicon-react';
+import { XCircle, Keyboard, SearchAlt } from '@/icons';
 import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
@@ -35,7 +35,7 @@ export function KeyboardSection() {
         <div className="flex flex-wrap items-center gap-2">
           <InputGroup className="min-w-56 flex-1">
             <InputGroupAddon>
-              <SearchNormal />
+              <SearchAlt />
             </InputGroupAddon>
             {filter.chord ? (
               <span className="flex flex-1 items-center gap-1.5 px-1.5 type-body">
@@ -48,7 +48,7 @@ export function KeyboardSection() {
             <InputGroupAddon align="inline-end">
               {filter.chord ? (
                 <InputGroupButton aria-label="Clear the shortcut" onClick={() => setFilter((f) => ({ ...f, chord: null }))}>
-                  <CloseCircle />
+                  <XCircle />
                 </InputGroupButton>
               ) : (
                 <InputGroupButton aria-pressed={isListening} onClick={() => setListening((on) => !on)}>

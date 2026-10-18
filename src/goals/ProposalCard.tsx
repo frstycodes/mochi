@@ -1,4 +1,4 @@
-import { Eye, Undo } from 'reicon-react';
+import { Eye, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { TerminalIcon } from '@/icons/panes';

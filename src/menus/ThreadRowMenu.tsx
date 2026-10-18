@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { DiagramTree } from 'reicon-react';
+import { DiagramTree } from '@/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { nestBlocker, parentOf, sidebarGroups } from '../reorder';
 import { useHarness } from '../store';

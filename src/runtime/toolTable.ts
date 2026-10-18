@@ -327,6 +327,50 @@ export const TOOL_TABLE = {
       reason,
     },
   },
+  list_connectors: {
+    tier: 'read',
+    description:
+      "List connectors (remote MCP services in Mochi's library): each account with its service, its name (agents pick it by this), whether it's signed in and whether the profile has it; and the directory of services you can connect with connect_account. A service with needsOwnApp signs in through an app of the user's own: do its setup steps yourself in your browser tab (browser_open, browser_snapshot, browser_click), then connect_account with the Client ID and secretRef. Ask the user in chat only for what you can't decide or clear yourself (signing in to a site, 2-step verification, which workspace or account); don't end your turn until the account is signed in or you've hit a blocker, which you report.",
+    shape: { profileId },
+  },
+  connect_account: {
+    tier: 'change',
+    description:
+      "Connect an account on a service (a directory id from list_connectors, or a remote MCP server's https URL) and open its sign-in page in a new tab of your browser, returned here: approve it there yourself, then call list_connectors until the account isSignedIn. With the user's own app, pass its Client ID and secretRef: Mochi reads the secret from the page itself and keeps it in the keychain; you never see it. New threads in the profile get the account's tools.",
+    shape: {
+      connector: z.string().min(1).describe('A directory id from list_connectors, or an https MCP server URL'),
+      alias: z.string().regex(/^[a-z0-9-]{1,32}$/).optional().describe('The account name, like work or personal; defaults to the first free one'),
+      clientId: z.string().min(1).max(200).optional().describe("The Client ID of the user's own app, from the service's setup steps"),
+      secretRef: z.string().optional().describe("The ref of the Client Secret on the page, or of its Copy button, from your latest browser_snapshot. Never the secret itself"),
+      fromSetup: z.boolean().optional().describe("Slack and Google Workspace: use what your last run_setup captured (an existing app's credentials, a token Mochi makes the app from, or Google's new client)"),
+      configTokenRef: z.string().optional().describe("Slack only: the ref of a generated app configuration token's Access Token on api.slack.com/apps, or of its Copy button. Mochi creates the app from it, MCP on; no Client ID needed"),
+      tabId,
+      profileId,
+    },
+  },
+  run_setup: {
+    tier: 'change',
+    description:
+      "Run a service's setup recipe in your browser tab in seconds: Mochi does the known steps itself (for Slack: generates an app configuration token and keeps it, never showing it to you). Its result's next says what to do: connect_account with fromSetup when done; ask the user and pass params when it needs a value; do a step yourself and fix it with update_setup_step when a page changed.",
+    shape: {
+      connector: z.string().min(1).describe('A directory id with a recipe, like slack'),
+      params: z.record(z.string(), z.string()).optional().describe('Answers to what an earlier run asked, like { "workspace": "Acme" }'),
+      fromStep: z.string().optional().describe('Resume from this step id, after doing earlier steps yourself'),
+      tabId,
+    },
+  },
+  update_setup_step: {
+    tier: 'change',
+    description:
+      "Fix one step of a service's setup recipe for this user after its element changed: the ARIA role and accessible name of the element that worked when you did the step yourself (from browser_snapshot). Only the element changes; the step's kind, URLs and allowed sites never do. The change shows in your thread.",
+    shape: {
+      connector: z.string().min(1),
+      stepId: z.string().min(1).describe('The step id a run stopped at'),
+      target: z
+        .object({ role: z.string(), name: z.string(), exact: z.boolean().optional(), within: z.object({ role: z.string(), name: z.string(), exact: z.boolean().optional() }).optional() })
+        .describe('The element: role like button, name its accessible name; within an enclosing element like a row'),
+    },
+  },
   remove_mcp_server: {
     tier: 'destructive',
     description: "Remove an MCP server from a profile's account config. The user approves on a delete card showing the file diff; the file is backed up first.",

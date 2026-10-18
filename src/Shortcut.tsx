@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Command, createIcon, type IconComponent } from 'reicon-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Command, Control, Option, Return, Shift, type IconComponent } from '@/icons';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { IS_MAC, keyName, orderKeys, shortcutText, type Key } from './keys';
 import { bindingOf, type CommandId } from './keymap';
@@ -31,19 +31,5 @@ function KeyCap({ name }: { name: Key }) {
   return <Kbd aria-hidden>{Icon ? <Icon /> : keyName(name)}</Kbd>;
 }
 
-// reicon ships Command but not the other macOS modifier glyphs; these are drawn on its 24px grid at its 1.5 stroke.
-const ShiftKey = createIcon('ShiftKey', {
-  O: `<path d="M12 3.75 3.75 12.25h4.5v7.5h7.5v-7.5h4.5L12 3.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`,
-});
-const OptionKey = createIcon('OptionKey', {
-  O: `<path d="M3.75 6.75h4.5l7.5 10.5h4.5M14.25 6.75h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
-});
-const ControlKey = createIcon('ControlKey', {
-  O: `<path d="m6.75 13.5 5.25-5.25 5.25 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
-});
-const ReturnKey = createIcon('ReturnKey', {
-  O: `<path d="M18.75 5.25v6a3 3 0 0 1-3 3h-10.5m0 0 3.75-3.75M5.25 14.25 9 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
-});
-
-const MAC_ICONS = { mod: Command, shift: ShiftKey, alt: OptionKey, nav: ControlKey, Enter: ReturnKey } satisfies Record<string, IconComponent>;
+const MAC_ICONS = { mod: Command, shift: Shift, alt: Option, nav: Control, Enter: Return } satisfies Record<string, IconComponent>;
 const ARROW_ICONS = { up: ArrowUp, down: ArrowDown, left: ArrowLeft, right: ArrowRight } satisfies Record<string, IconComponent>;

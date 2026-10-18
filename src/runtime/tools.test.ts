@@ -4,6 +4,8 @@ import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '../layout/tree.ts';
+import type { LibraryEntry } from '../library/library.ts';
+import type { SetupResult } from '../library/recipes.ts';
 import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
 import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
@@ -52,6 +54,10 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
   const settings = fakeSettings();
+  const connects: { spaceId: string; account: unknown; options: unknown }[] = [];
+  const setupRuns: { connector: string; viewId: string; options: unknown }[] = [];
+  const setupResults: SetupResult[] = [];
+  const authorizeListeners = new Set<(page: { url: string; authorizationUrl: string }) => void>();
   const env: ToolEnv = {
     getState: () => state,
     dispatch: (a) => void (state = reduce(state, a)),
@@ -59,14 +65,21 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
     removeWorktree: async (id) => void removed.push(id),
-    pages: { get: (k) => pages.get(k), update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }), open: (k) => void opened.push(k) },
+    pages: {
+      get: (k) => pages.get(k),
+      update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }),
+      open: (k, url) => {
+        opened.push(k);
+        if (!pages.has(k)) pages.set(k, { hostId: `view-${++nextView}`, url, title: '', isLoading: false, canGoBack: false, canGoForward: false, error: null } as Page);
+      },
+    },
     browser: {
       navigate: async (_id, to) => void pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, url: to }),
       command: async (_id, c) => void commands.push(c),
       capture: async () => 'data:image/png;base64,iVBORw0KGgo=',
       snapshot: async () => ({
         text: '- heading "Dev" [level=1]\n- button "Save" [ref=e1]\n- textbox "Email" [ref=e2]',
-        refs: { e1: { role: 'button', name: 'Save', isSubmit: true, isPassword: false }, e2: { role: 'textbox', name: 'Email', isSubmit: false, isPassword: false } },
+        refs: { e1: { role: 'button', name: 'Save', isSubmit: true, isPassword: false }, e2: { role: 'textbox', name: 'Email', isSubmit: false, isPassword: false }, e3: { role: 'button', name: 'Delete project', isSubmit: false, isPassword: false }, e4: { role: 'textbox', name: 'Password', isSubmit: false, isPassword: true } },
       }),
       act: async (_id, a) => (acts.push(a), a.kind === 'scroll' ? { note: 'Scrolled to 0, 600 of 2000' } : {}),
       logs: async () => [{ level: 'error', message: 'boom', source: 'http://localhost:5173/main.js', line: 3 }],
@@ -84,7 +97,22 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     theme: () => 'system',
     settings: settings.host,
     themes: { list: async () => [] },
-    remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false }, hostName: 'mac', addresses: [], devices: [], pairedDevices: [], relay: { status: 'off' } }) },
+    library: {
+      list: async () => [connectorEntry('linear', 'https://mcp.linear.app/mcp', 'work')],
+      oauthApps: async () => ['github'],
+      ownAppRedirect: async () => 'https://relay.test/oauth/callback',
+      // Main sends the sign-in page, then keeps waiting for the agent to approve it.
+      addConnector: (spaceId, account, options) => {
+        connects.push({ spaceId, account, options });
+        queueMicrotask(() => authorizeListeners.forEach((l) => l({ url: account.url, authorizationUrl: 'https://slack.com/oauth/v2_user/authorize?client_id=x' })));
+        return new Promise(() => {});
+      },
+      onAuthorize: (listener) => (authorizeListeners.add(listener), () => void authorizeListeners.delete(listener)),
+      onDeviceCode: () => () => {},
+      runSetup: async (connector, viewId, options) => (setupRuns.push({ connector, viewId, options }), setupResults.shift()!),
+      updateSetupStep: async (_connector, stepId, target) => ({ before: { role: 'button', name: stepId }, after: target }),
+    },
+    remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
     git: {
       branches: async () => (gitBranches ? { current: gitCurrent, defaultBranch: 'main', isDirty: false, branches: gitBranches.map((name) => ({ name, isRemote: false })) } : Promise.reject(new Error('not a git repo'))) as never,
@@ -113,7 +141,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, connects, setupRuns, setupResults };
   return t;
 }
 
@@ -548,14 +576,13 @@ test('browser_tabs lists only the caller’s browser tabs', async () => {
   assert.deepEqual(await t.ok('browser_tabs', {}, 'adm'), [], 'adm has no tabs in this setup');
 });
 
-test('browser_open navigates the active tab; a non-local origin is logged and toasted', async () => {
+test('browser_open navigates the active tab; a non-local origin is logged, never toasted', async () => {
   const t = setup();
   const r = await t.ok('browser_open', { url: 'localhost:5173/settings' });
   assert.equal(r.url, 'http://localhost:5173/settings');
-  assert.equal(t.toasts.length, 0, 'local: no toast');
   const out = await t.ok('browser_open', { url: 'example.com' });
   assert.match(out.changed, /outside your machine/);
-  assert.match(t.toasts.at(-1)!.text, /opened example.com/);
+  assert.equal(t.toasts.length, 0);
 });
 
 test('browser tools drive an off-screen thread without moving the user', async () => {
@@ -579,27 +606,33 @@ test('browser_click needs a snapshot ref, and clicks locally without asking', as
   assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }]);
 });
 
-test('browser_click on a submit button on a non-local origin asks first', async () => {
+test('browser_click asks only before an irreversible click on another site, and not again once the site is trusted', async () => {
   const t = setup({ url: 'https://shop.example.com/' });
   await t.ok('browser_snapshot');
-  const pending = t.call('browser_click', { ref: 'e1' });
+  await t.ok('browser_click', { ref: 'e1' });
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'an ordinary submit (Save) just goes');
+  const pending = t.call('browser_click', { ref: 'e3' });
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(t.card().title, /Submit a form on shop.example.com/);
-  assert.deepEqual(t.acts, [], 'nothing clicked yet');
-  decideTool(t.card().tool!.callId, { isApproved: true });
+  assert.equal(t.card().title, 'Click "Delete project" on shop.example.com?');
+  assert.equal(t.card().detail, 'Claude wants to click "Delete project" on shop.example.com. It may not be undoable there.');
+  assert.deepEqual(t.card().tool!.options, [{ id: 'trust', label: "Don't ask again on shop.example.com in this thread" }]);
+  decideTool(t.card().tool!.callId, { isApproved: true, options: ['trust'] });
   await pending;
-  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }]);
+  await t.ok('browser_snapshot');
+  await t.ok('browser_click', { ref: 'e3' });
+  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }, { kind: 'click', ref: 'e3' }, { kind: 'click', ref: 'e3' }], 'trusted: the second one went without a card');
 });
 
-test('browser_type types locally, asks on other origins, and is blocked there under Changes', async () => {
+test('browser_type fills fields anywhere without asking; only a password on another site asks, which Changes blocks', async () => {
   const t = setup();
   await t.ok('browser_snapshot');
   await t.ok('browser_type', { ref: 'e2', text: 'me@example.com', submit: true });
   assert.deepEqual(t.acts, [{ kind: 'type', ref: 'e2', text: 'me@example.com' }, { kind: 'press', key: 'Enter' }]);
   const remote = setup({ url: 'https://example.com/', control: 'changes' });
   await remote.ok('browser_snapshot');
-  assert.match(await remote.err('browser_type', { ref: 'e2', text: 'x' }), /Everything, asking before deletes and settings/);
-  assert.deepEqual(remote.acts, []);
+  await remote.ok('browser_type', { ref: 'e2', text: 'x' });
+  assert.match(await remote.err('browser_type', { ref: 'e4', text: 'hunter2' }), /Everything, asking before deletes and settings/);
+  assert.deepEqual(remote.acts, [{ kind: 'type', ref: 'e2', text: 'x' }]);
 });
 
 test('browser_press sends the key', async () => {
@@ -695,7 +728,7 @@ test('browser_eval on another origin needs approval and shows the whole script',
   const t = setup({ url: 'https://bank.example.com/' });
   const pending = t.call('browser_eval', { script: 'document.cookie' });
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(t.card().title, /Run a script on https:\/\/bank.example.com\?/);
+  assert.match(t.card().title, /Run a script on bank.example.com\?/);
   assert.equal(t.card().code, 'document.cookie');
   assert.deepEqual(t.evals, [], 'nothing ran while the card waits');
   decideTool(t.card().tool!.callId, { isApproved: false });
@@ -908,6 +941,62 @@ test('add_mcp_server fills the server into a live widget, refusing anything that
   assert.equal(t.settings.config.claude.servers.length, 2, 'nothing added');
 });
 
+test('connect_account connects in the agent\'s tab with the secret read by main; list_connectors reads accounts and the directory', async () => {
+  const t = setup();
+  const list = await t.ok('list_connectors');
+  assert.deepEqual(list.accounts, [{ service: 'Linear', url: 'https://mcp.linear.app/mcp', account: 'work', isSignedIn: true, isOnProfile: true }]);
+  const byId = (id: string) => list.directory.find((c: { id: string }) => c.id === id);
+  assert.equal(byId('linear').needsOwnApp, undefined, 'registers itself');
+  assert.equal(byId('github').needsOwnApp, undefined, "Mochi's own app");
+  assert.equal(byId('google-workspace').needsOwnApp, true);
+  assert.equal(byId('slack').setup.openUrl, 'https://api.slack.com/apps');
+  const fallback = decodeURIComponent(byId('slack').setup.steps.at(-1).match(/manifest_json=(\S+)/)[1]);
+  assert.deepEqual(JSON.parse(fallback).oauth_config.redirect_urls, ['https://relay.test/oauth/callback']);
+  assert.equal(JSON.parse(fallback).settings.is_mcp_enabled, true);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: 'GOCSPX-abc' }), /looks like a client secret/);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '7575573b1c2a4400de6115a61b557acc' }), /looks like a client secret/);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '8325458480016.12371342152640' }), /Pass secretRef/);
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'work' }), /already a work account on Linear/);
+  assert.match(await t.err('connect_account', { connector: 'http://evil.example/mcp' }), /neither a directory id/);
+  assert.equal(t.connects.length, 0);
+  await t.ok('browser_snapshot');
+  const r = await t.ok('connect_account', { connector: 'slack', alias: 'acme', clientId: '8325458480016.12371342152640', secretRef: 'e2' });
+  assert.deepEqual(t.connects[0], { spaceId: 'latitude', account: { url: 'https://mcp.slack.com/mcp', alias: 'acme', clientId: '8325458480016.12371342152640' }, options: { inPane: true, secretFrom: { viewId: t.pages.get('rl/tab-1')!.hostId, ref: 'e2' } } });
+  assert.equal(r.url, 'https://slack.com/oauth/v2_user/authorize?client_id=x');
+  assert.match(r.next, /list_connectors/);
+  assert.equal(JSON.stringify(r).includes('secret"'), false, 'no secret in the result');
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', configTokenRef: 'e1' }), /Slack only/);
+  await t.ok('connect_account', { connector: 'slack', alias: 'beta', configTokenRef: 'e1', tabId: 'tab-1' });
+  assert.deepEqual(t.connects[1], { spaceId: 'latitude', account: { url: 'https://mcp.slack.com/mcp', alias: 'beta' }, options: { inPane: true, slackTokenFrom: { viewId: t.pages.get('rl/tab-1')!.hostId, ref: 'e1' } } });
+});
+
+test('run_setup runs the recipe on the agent\'s tab and says what comes next for each outcome; update_setup_step logs the change', async () => {
+  const t = setup();
+  assert.match(await t.err('run_setup', { connector: 'linear' }), /no setup recipe for linear/);
+  t.setupResults.push(
+    { status: 'needs', stepId: 'workspace', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
+    { status: 'done', captured: ['slackConfigToken'], params: { workspace: 'Acme' } },
+    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout' },
+  );
+  // Several workspaces: Mochi asks on its own card with one-of options, then resumes from the step that asked.
+  const { result, card } = await t.asking('run_setup', { connector: 'slack' });
+  assert.equal(card.title, 'Which Slack workspace?');
+  assert.equal(card.tool!.pick, 'one');
+  assert.deepEqual(card.tool!.options, [{ id: 'Acme', label: 'Acme' }, { id: 'Myself', label: 'Myself' }]);
+  decideTool(card.tool!.callId, { isApproved: true, options: ['Acme'] });
+  const done = JSON.parse((await result).text);
+  assert.match(done.next, /connect_account with connector "slack".*fromSetup: true/);
+  assert.equal(t.setupRuns[0].viewId, t.pages.get('rl/tab-1')!.hostId, "the agent's active tab");
+  assert.deepEqual(t.setupRuns[1].options, { params: { workspace: 'Acme' }, fromStep: 'workspace' });
+  assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => e.text === 'Which Slack workspace? Acme'), 'the card records the answer');
+  const stopped = await t.ok('run_setup', { connector: 'slack', params: { workspace: 'Acme' } });
+  assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace"/);
+  const fixed = await t.ok('update_setup_step', { connector: 'slack', stepId: 'generate', target: { role: 'button', name: 'Generate new token' } });
+  assert.deepEqual(fixed.after, { role: 'button', name: 'Generate new token' });
+  assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => /updated slack's setup step "generate": button "generate" → button "Generate new token"/.test(e.text)));
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', fromSetup: true }), /for Slack and Google Workspace only/);
+});
+
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {
   const t = setup();
   const denied = await t.asking('remove_mcp_server', { name: 'linear' });
@@ -1067,3 +1156,7 @@ test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and 
   t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: draftFrom(t.thread('rl')) });
   assert.equal((await t.ok('get_goal')).isDraft, undefined, 'a goal you wrote is never a draft');
 });
+
+function connectorEntry(name: string, url: string, alias: string): LibraryEntry {
+  return { id: `${name}-${alias}`, kind: 'connector', name, title: name[0].toUpperCase() + name.slice(1), description: '', targets: ['claude', 'codex'], isEnabled: true, profileIds: ['latitude'], source: url, icon: null, contents: null, remotes: [], unsupported: [], isLinked: true, alias, autoUpdate: null, updatedAt: null };
+}

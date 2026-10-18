@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
-import { ChevronRight, DiagramTree, TickCircle } from 'reicon-react';
+import { ChevronRight, DiagramTree, CheckBadge } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { GitPullRequestIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import type { LineSlot, Thread } from '../../model';
-import { ProjectAvatar } from '../../Sidebar';
+import { ProjectIcon } from '../../ProjectIcon';
 import { SubThreadGuide } from '../../goals/SubThreads';
 import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveSummary } from '../../goals/NextMove';
 import { SummaryGoal, SummaryGoalText } from '../../goals/SummaryGoal';
@@ -163,7 +163,7 @@ export function ParentRow({ row, rl }: { row: RowFixture; rl: Thread }) {
       <TitleLine row={row} rl={rl} />
       <span className="flex min-w-0 items-center gap-1.5 pl-6 type-caption text-subtle-foreground">
         <span className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]">
-          <ProjectAvatar name="latitude" />
+          <ProjectIcon name="latitude" />
         </span>
         <Reason row={row} />
         {!!row.pr && <PrMark pr={row.pr} />}
@@ -320,7 +320,7 @@ function SummaryWithHandoffs({ slot }: { slot: LineSlot }) {
 function OwnCriterion({ text, proof }: { text: string; proof: string }) {
   return (
     <li className="flex gap-2 type-meta">
-      <TickCircle aria-label="Verified" className="mt-0.5 size-3.5 shrink-0 text-success" />
+      <CheckBadge aria-label="Verified" className="mt-0.5 size-3.5 shrink-0 text-success" />
       <span className="flex min-w-0 flex-1 flex-col text-pretty">
         <span>{text}</span>
         <span className="type-caption text-subtle-foreground">{proof}</span>
