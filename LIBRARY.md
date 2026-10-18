@@ -1,0 +1,93 @@
+# Library: skills, connectors and plugins per profile
+
+Mochi becomes the harness manager: each profile gets its own skills, connectors (MCP accounts, several per service) and plugins, installed from marketplaces and kept up to date, with no dependency on Claude's plugin system or claude.ai connectors. Liane (`~/liane/hub`) was the first attempt as a cloud board; its logic moves into Mochi and Liane retires. Read with [RUNTIME.md](RUNTIME.md) (Auth, accounts per profile) and [SETTINGS.md](SETTINGS.md) (Profiles).
+
+Status labels as in RUNTIME.md: **verified** = read in this repo, `~/liane` or `node_modules`; **not verified** = check before building on it; **decision** = ours, made here.
+
+## Decisions
+
+1. **Local-first, in Mochi.** The library lives in Electron main and on disk. No Worker, no D1, no board sign-in, no API keys. Liane's cloud pieces (Better Auth, its OAuth server for agents, machines, usage, the `liane` CLI) are dropped.
+2. **Claude's formats throughout.** Skills are `SKILL.md` folders, connectors are MCP server entries, plugins are `.claude-plugin/plugin.json` listed by a `.claude-plugin/marketplace.json` repo. Liane already parses all three, plus Codex's (verified: `src/catalog.ts`, `src/shared/plugin-bundle.ts`).
+3. **Plugins are unpacked when installed and never reach the agent as plugins.** Their parts (skills, subagents, hooks, stdio servers) join the library. Their remote MCP servers become connectors you sign in to. This is Liane's model (verified: `src/plugin-install.ts`, `plugins.remotes`).
+4. **Injected per session, never written into the account's config.** At session start, Mochi passes the profile's library through the Agent SDK's `plugins: [{ type: 'local', path }]` and `mcpServers` (verified: `sdk.d.ts` `Options.plugins`). Codex gets it through `thread/start` `config` (verified for MCP: the adapter already sets `mcp_servers.mochi.url` per thread, `electron/agents/codex/adapter.ts:311`). Why: one account can be linked to several profiles (RUNTIME.md Auth), so writing into `~/.claude` would leak one profile's library into another. The user's own `~/.claude` keeps loading and stays the "On this account" rows in Settings.
+5. **One MCP server per connector, with a `__mochi_account` argument, proxied by Mochi.** Mochi's loopback HTTP server, which already serves Codex behind a per-launch secret (verified: `electron/mcp/server.ts` `codexUrl`), gets a route per connector: `/mcp/<secret>/connector/<connectorId>`. It lists the upstream's tools once under their own names, adds a required `__mochi_account` enum of the profile's aliases (`"work" | "personal"`) to each, and sends each call to that account with a fresh token. With one account the argument is left out and the tools look native. Tokens stay in main (`safeStorage`) and refresh in the proxy; neither the agent nor a config file ever holds one.
+   - Not one server per account: every tool's schema would repeat per account. Tool search defers them by default (verified: `sdk.d.ts` `alwaysLoad`), but a search still loads every copy, and Codex may list them all up front (not verified).
+   - Not Liane's meta-tools (`list_accounts`, `search_tools`, `call_tool`): untyped arguments, an extra round trip per call, per-tool permission rules and approvals collapse into `call_tool`, and MCP App views lose their tool.
+   - The tool list comes from the first linked account; a tool another account lacks fails on call with a clear error (accepted).
+   - MCP App resources are proxied too: resource lists and reads go to the first account, whose tool list (and so whose `ui://` URIs) the session sees, so views keep working.
+6. **Profiles own membership.** The library holds each item once. A profile is the set of item ids it turned on, keyed by the profile id, which never changes (`src/profiles.ts`).
+
+## Port map from Liane
+
+| Liane | Mochi | Notes |
+|---|---|---|
+| `src/shared/skill-md.ts`, `src/shared/plugin-bundle.ts` | `src/library/` | Pure. `scripts/check-plugin-bundle.ts` becomes `plugin-bundle.test.ts` (`pnpm test`). |
+| `src/catalog.ts` (GitHub tarball, `readTar`, marketplace reader) | `electron/library/catalog.ts` | Node has web streams, so `readTar` ports as is. Replace the Cache API with a disk cache in `userData`, cached for an hour. |
+| `src/plugin-install.ts` | `electron/library/install.ts` | Writes to the local store instead of D1. Reinstall replaces parts and keeps the id. |
+| `src/upstream.ts` (MCP OAuth client, `authorizeIfNeeded`) | `electron/library/connectors.ts` | `@modelcontextprotocol/sdk` is already a dependency. Redirect to a loopback port. The `CfWorkerJsonSchemaValidator` workaround is Workers-only, so it is dropped. |
+| `src/shared/oauth-providers.ts`, `app/lib/connectors.ts` | `src/library/` | Curated directory and per-provider OAuth apps. |
+| D1 tables (`skills`, `local_servers`, `plugins`, `subagents`, `hooks`, `marketplaces`, `connections`, `profile_resources`) | `userData/library.json` + `~/.mochi/library/items/` | One JSON index (atomic write, like `agent-settings.json`), with item files on disk. Secrets (server env, tokens) are sealed with `safeStorage`. |
+| `app/pages/discover.tsx`, `library.tsx`, `accounts.tsx` | Settings › Profiles › Library | Rebuilt with Mochi's components. Liane's are a reference for layout, not copied. |
+
+## Phase 1: library store and session injection (built)
+
+- `src/library/library.ts` (pure, `library.test.ts`): items (`skill`, `server`), per-profile membership, the per-harness layout, Codex config overrides.
+- `electron/library/store.ts`: the index in `userData/library.json` (writes serialized, atomic), and the profile's plugin folders under `userData/library/<profileId>/<plugin>-<hash>/`. A new hash is a new folder, so a running session never sees files change under it.
+- `host.library` (`list`, `setEnabled`, `remove`, `importFromAccount`). The web build holds no library.
+- Claude sessions get `plugins` (the folders) and `mcpServers` (the library's servers, `${VAR}` filled in, Mochi's own server last so it can't be shadowed). Codex threads get the servers as `mcp_servers.<name>.*` overrides.
+- Standalone skills load as `mochi:<skill>`: Claude names a local plugin's skills `<plugin>:<skill>` (verified with the SDK's `initializationResult()`, which listed `lib:hello-probe`). Servers passed through `mcpServers` keep their own names (verified, same run).
+- Codex skills: 0.155.1's `skills.config` only toggles skills it already found (verified in the binary's strings), so Codex threads get servers only for now.
+- Not yet: pruning folders of old hashes.
+
+## Phase 1b: connectors (built)
+
+- `src/library/connectors.ts`: the curated directory (from Liane), `connectorKey` (directory id, else the host as a slug), providers that can't register clients, `ACCOUNT_ARGUMENT`.
+- A connector account is a library item (`kind: 'connector'`: key, url, alias, `isLinked`), so profiles turn it on like anything else. Its key, OAuth app, tokens, client registration and PKCE verifier are sealed with `safeStorage` in `userData/connector-secrets.json` (`electron/library/connectors.ts`) and never reach the renderer or a session.
+- Sign-in: a key if one was given; else OAuth when the server publishes metadata (dynamic registration, PKCE, the browser opened with `shell.openExternal`, the code arriving on the loopback server's public `/oauth-callback` route). A server needing neither just connects. The loopback port changes per launch, so a registered client is re-registered when its redirect no longer matches; the user's own OAuth app is kept.
+- Which servers can't register a client (probed 2026-10-18 through each server's protected-resource and authorization-server metadata; all 17 directory servers publish both and take PKCE): **Gmail, Google Calendar, Google Drive** (`accounts.google.com`), **Slack** (`mcp.slack.com`), **Asana** (`app.asana.com`), **GitHub** (`github.com/login/oauth`), **HubSpot** (`mcp.hubspot.com`). The other ten (Notion, Linear, Atlassian, Sentry, Vercel, Supabase, both Cloudflare servers, Figma, Stripe) offer dynamic registration; Notion, Linear, Atlassian and Sentry also take client ID metadata documents.
+- Mochi's own OAuth apps for those five providers (`electron/library/oauthApps.ts`): a client id, and the secret a provider insists on (no secret once it ships, as GitHub's CLI ships its own), baked into the build and overridable with `MOCHI_OAUTH_<PROVIDER>_CLIENT_ID` / `_CLIENT_SECRET`. An account on such a server signs in with the user's own app when it has one, else Mochi's; with neither, sign-in stops with a message saying so, and the connect dialog doesn't offer browser sign-in. Checked: a sign-in with an app made ahead of time (the SDK demo server, client registered out of band) used it and made no registration call.
+- Redirects: `loopback` providers (Google's desktop clients, GitHub) come straight back to `http://127.0.0.1:<port>/oauth-callback`; `relay` providers (Slack, Asana, HubSpot) come back to `<relay>/oauth/callback`, a public route on the relay (`infra/relay/src/oauth.ts`, tested) that redirects only to 127.0.0.1 at the port the state starts with. Not verified per provider: which accept loopback redirects; set `redirect` in `OAUTH_PROVIDERS` once each app is registered.
+- Registered so far: **GitHub**, the "Mochi" OAuth App under frstycodes (client id `Ov23liprlzoHyVDFz3Ih`) with device flow, so GitHub accounts sign in with a one-time code (`deviceSignIn`, RFC 8628; the connect dialog shows the code) and no secret ships. Checked: GitHub's device endpoint issues a code for this client and polling answers `authorization_pending`; a full sign-in and a tool call through `api.githubcopilot.com` haven't run yet. GAP: the app has token expiration on, and refreshing needs a client secret Mochi doesn't have, so a GitHub account signs in again after 8 hours until expiration is opted out (Optional features) or the app gets a secret.
+- Registered 2026-10-18 (all under sandeshpandeywork@gmail.com / frstycodes, each with Mochi's icon, `build/icon.png`):
+  - **Google**: "Mochi desktop" Desktop client in Cloud project `mochi-511921` (Gmail, Calendar, Drive and their MCP APIs on). Consent screen External, in Testing: only listed test users can sign in, and refresh tokens expire after 7 days. GAP: publishing needs Google's verification of the restricted Gmail/Drive scopes.
+  - **Slack**: app `A0CAXA24GJU` in the "Myself" workspace, 20 user scopes, relay redirect, MCP toggle on. GAP: Slack's MCP only takes directory-listed or internal apps, so other workspaces need a Marketplace listing. Not verified: the SDK finds Slack's `oauth/v2_user/authorize` and `oauth.v2.user.access` from its metadata.
+  - **Asana**: MCP app `1219604610749623`, redirects `http://127.0.0.1/oauth-callback` and the relay; MCP apps get full access, no scopes. Not verified: whether Asana matches the loopback redirect without its port, so it stays on `relay`.
+  - **HubSpot**: MCP Connector `57544003` in portal 247722501, relay redirect only (a loopback redirect didn't save).
+- GAP: the relay route isn't deployed, so Slack, Asana and HubSpot can't sign in yet. No real sign-in has run on any provider app.
+- `electron/library/proxy.ts` (no Electron, `proxy.test.ts`): one MCP server per connector over the profile's signed-in accounts, at the loopback server's private `/mcp/<secret>/connector/<profile>/<key>` route (`addLoopbackRoute` in `electron/mcp/server.ts`). Upstream clients are kept per account; a refresh that fails marks the account signed out.
+- Claude sessions get each as `{ type: 'http', url }` in `mcpServers`; Codex threads as `mcp_servers.<key>.url`.
+- Checked end to end outside the app, with Electron stubbed: two key accounts on one local server reach a real Claude Code session as one connected server whose tool takes `__mochi_account: ["work","personal"]`, each call hitting its own key. Then a full OAuth sign-in against the MCP SDK's demo authorization server: registration, the redirect landing on `/oauth-callback`, token exchange, account linked, a proxied call carrying the token.
+
+## Phase 2: storefront (built)
+
+- Ported from Liane: `src/library/skillMd.ts`, `src/library/pluginBundle.ts` (its check script became `pluginBundle.test.ts`), `src/library/tar.ts` (with a test), and `electron/library/catalog.ts` (disk cache in `userData/library-cache`, one hour). Checked against GitHub: `anthropics/skills` lists 20 skills, `anthropics/claude-plugins-official` 315 plugins, and `agent-sdk-dev` unpacks into 1 skill and 2 agents.
+- A skill keeps its SKILL.md as written. A plugin item stores its bundle and loads as its own Claude plugin folder, rebuilt from its parts. Files Claude would load on its own (`.mcp.json`, `hooks/hooks.json`, `agents/*.md`, `commands/*.md`, `.lsp.json`, output styles…) are left out, so remote servers can't slip past connectors.
+- Codex gets a plugin's stdio servers, except ones that run the plugin's own files (`${CLAUDE_PLUGIN_ROOT}`), since Codex has no folder for them.
+- `mochi` is reserved: no plugin installs under the name standalone skills use.
+- **Settings › Customize › Skills, Plugins, Connectors** (`src/library/SkillsView.tsx`, `PluginsView.tsx`, `ConnectorsView.tsx` on the shared `LibraryPage`). Everything is installed once for the whole app and handed to profiles item by item, and connector accounts account by account: each installed item and each account has a profiles button (its profiles' icons, "All profiles", or "No profiles") opening a checkbox per profile (`ProfilesMenu`, `LibraryEntry.profileIds`). A new install goes to the profile you're in. Each page has **Library | Discover** tabs and a search on the right that, typed into, shows matches from both halves at once. Every item leads with a 40px icon tile: a connector's product icon or vendor favicon (`connectorIcon`), a plugin's or skill's GitHub owner avatar (a Codex skill's own icon first), else its letter.
+  - **Library**: profiles, ⋯ › Update now / Update automatically / Remove, notes (a plugin's connector to add, parts left out, in no profile yet). Connectors group accounts by service in an `Accordion`, each account with its sign-in, profiles and ⋯, and "Add a <service> account" last.
+  - **Discover**: Skills from `anthropics/skills`, `openai/skills/skills/.curated` or any GitHub repo; Plugins from a marketplace (featured `claude-plugins-official`) with category chips, 50 at a time; Connectors from the directory with category chips, plus servers installed plugins need.
+  - **Header actions** open dialogs: Skills › Import (desktop: the profile's own Claude Code or Codex skills and servers), Plugins › Add marketplace, Connectors › Add custom server (URL, then name and sign-in). Connecting any account is the same `ConnectAccountDialog` (`ConnectDialog.tsx`): account name (starting on a free one), then browser sign-in, a key, or your own OAuth app.
+- **Sidebar shortcuts**: the main sidebar is editable (`src/SidebarNav.tsx`, pref `sidebarItems`): Queue, Board, Projects shown by default; Skills, Plugins, Connectors and Scheduled under More until you add them with Edit sidebar…; theirs open the Settings page. Icons: `Skill` (Solar lightbulb), `Plugin` and `Connector` (stroke versions of the puzzle piece and wrench in `ObjectIcons.tsx`).
+- The web build browses fixture catalogs with real names and owner avatars (`src/host/web/libraryFixtures.ts`) and installs into memory, seeded with a little of everything in the demo's first profile.
+
+## Phase 3: auto-update (built)
+
+- `electron/library/updates.ts`: a minute after launch and every 6 hours, every skill from GitHub and every plugin from a marketplace is re-read from its source (skipping the catalog cache) and replaced when its content changed, keeping its id, profiles and targets; `updatedAt` records when. `autoUpdate: false` pins an item. ⋯ › Update now and Update automatically per item.
+- Simpler than tracking commit SHAs: the content comparison needs no GitHub API (60 requests an hour without a token), and the archive download is the same one browsing does.
+- New threads load an update. Running Claude sessions keep the folder they started with: the new content is a new folder (by hash), which `reloadPlugins` wouldn't see.
+- Folders of older hashes are removed before a profile's first session of each app run (`prune` in `store.ts`), when nothing can still be reading them.
+
+## Not verified yet
+
+- Codex: a per-thread skill folder. Until one exists, Codex skills would go into the account's `CODEX_HOME/skills`, with a record of what Mochi owns there, as Liane's `state.json` did.
+- Whether hooks from a `--plugin-dir` plugin need a trust prompt under the SDK.
+- Real providers' OAuth (Linear, Notion, …) and the user's own OAuth app for Google or GitHub with a loopback redirect on any port (RFC 8252; believed, not run). Only the SDK's demo authorization server was run.
+- The Electron app itself: the IPC handlers and the renderer against main. The pieces under them ran (unit tests, the e2e scripts above), and the UI ran in the browser on the web build's in-memory library.
+- Provider OAuth apps in a desktop app: Google, GitHub, Slack, Asana and HubSpot don't support dynamic registration (Liane `README.md`). Each needs a native or desktop client that uses PKCE without a confidential secret. Check per provider before shipping.
+
+## Later
+
+- Library sync across machines (Mochi's relay, `infra/relay`). Add when a second machine needs the same library.
+- Writing the library into an account's own config, so a terminal `claude` sees it, through the existing diff review. Add when someone asks for it outside Mochi.
+- Importing an existing Liane board. Add only if a deployed board holds data worth keeping.

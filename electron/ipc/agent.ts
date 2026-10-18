@@ -28,6 +28,9 @@ import { killThreadSessions } from '../pty/sessions.ts';
 import { stopCompare } from '../browser/compare.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
 import { topLevel } from '../git/run.ts';
+import { codexServerConfig } from '../../src/library/library.ts';
+import { sessionConnectors } from '../library/connectors.ts';
+import { sessionLibrary } from '../library/store.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -85,6 +88,10 @@ const codex = new CodexAdapter(
   undefined,
   undefined,
   codexUrl,
+  async (spaceId) => {
+    const [{ servers }, connectors] = await Promise.all([sessionLibrary(spaceId, 'codex'), sessionConnectors(spaceId)]);
+    return { ...codexServerConfig(servers), ...Object.fromEntries(connectors.map(([name, url]) => [`mcp_servers.${name}.url`, url])) };
+  },
 );
 codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
 app.on('will-quit', () => codex.dispose());

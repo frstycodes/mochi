@@ -74,6 +74,8 @@ One tab per profile (its icon and name), opening on the profile you're in, or th
 
 Per profile, Instructions / MCP servers / Skills / Import rows (`src/settings/ProfileAgentConfig.tsx`) read and write the linked accounts' own files, so the tools load them natively: Claude `CLAUDE.md`, `.claude.json` `mcpServers` (`~/.claude.json` for the default account), `settings.json` `deniedMcpServers` / `skillOverrides`; Codex `AGENTS.md`, `config.toml` `[mcp_servers.*]` `enabled` and `[[skills.config]]` (formats in `src/settings/agentConfig.ts`). Every write is a diff to review, backed up to `~/.harness/backups/<time>/` and refused if the file changed since. Import copies from the other harness or another profile; secret-looking env, header, arg and URL values become `${VAR}` and the row shows "Needs VAR". An account shared by several profiles shares its config. GAP: project `.mcp.json` servers are listed read-only, Codex project config isn't read.
 
+Per profile, a **Skills, plugins and connectors** row says how many this profile has and opens Settings › Customize › Skills, Plugins or Connectors, where everything is installed once and handed to profiles (design in [LIBRARY.md](LIBRARY.md)). The library is Mochi's own, held in `userData/library.json` and loaded into each new thread of the profiles that turn items on, never written into the accounts' files.
+
 ## Agents
 
 ### Harnesses

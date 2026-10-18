@@ -1,0 +1,53 @@
+import type { DeviceCode, OAuthProviderId } from '../../library/connectors.ts';
+import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog } from '../../library/library.ts';
+import type { Provider } from '../../model.ts';
+import type { Manifest } from './manifest.ts';
+
+/** The profile library (LIBRARY.md), held by main; every change returns the profile's entries as they are after it. */
+export interface LibraryHost {
+  list(spaceId: string): Promise<LibraryEntry[]>;
+  setEnabled(spaceId: string, id: string, isEnabled: boolean): Promise<LibraryEntry[]>;
+  /** Out of the library and every profile. */
+  remove(spaceId: string, id: string): Promise<LibraryEntry[]>;
+  /** Copies the profile's account's own skills and servers in, turned on for the profile; `notes` says what was skipped or stripped. */
+  importFromAccount(spaceId: string, provider: Provider, parts: ('skills' | 'mcp')[]): Promise<{ entries: LibraryEntry[]; notes: string[] }>;
+  /** Every SKILL.md folder in a public GitHub repo or path (`owner/repo`, `owner/repo/dir`, or a github.com URL). */
+  discoverSkills(source: string): Promise<CatalogSkill[]>;
+  /** Installs, or reinstalls keeping its profiles, and turns it on for this profile. */
+  installSkill(spaceId: string, source: string, name: string): Promise<LibraryEntry[]>;
+  /** The featured marketplaces, then the user's. */
+  marketplaces(): Promise<Marketplace[]>;
+  addMarketplace(source: string): Promise<Marketplace[]>;
+  removeMarketplace(name: string): Promise<Marketplace[]>;
+  marketplaceCatalog(name: string): Promise<MarketplaceCatalog>;
+  installPlugin(spaceId: string, marketplace: string, name: string): Promise<LibraryEntry[]>;
+  /** Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth. */
+  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }): Promise<LibraryEntry[]>;
+  /** The providers this build of Mochi has its own OAuth app for (servers that can't register one). */
+  oauthApps(): Promise<OAuthProviderId[]>;
+  /** A device sign-in's one-time code, for the connect dialog to show while main waits for approval. */
+  onDeviceCode(listener: (code: DeviceCode) => void): () => void;
+  /** Signs a connector account in again. */
+  signIn(spaceId: string, id: string): Promise<LibraryEntry[]>;
+  /** Updates a skill or plugin from its source now; `autoUpdate` set leaves it to follow its source (or pins it). */
+  update(spaceId: string, id: string, autoUpdate?: boolean): Promise<LibraryEntry[]>;
+}
+
+export const libraryMethods = {
+  list: 'invoke',
+  setEnabled: 'invoke',
+  remove: 'invoke',
+  importFromAccount: 'invoke',
+  discoverSkills: 'invoke',
+  installSkill: 'invoke',
+  marketplaces: 'invoke',
+  addMarketplace: 'invoke',
+  removeMarketplace: 'invoke',
+  marketplaceCatalog: 'invoke',
+  installPlugin: 'invoke',
+  addConnector: 'invoke',
+  oauthApps: 'invoke',
+  onDeviceCode: 'event',
+  signIn: 'invoke',
+  update: 'invoke',
+} satisfies Manifest<LibraryHost>;

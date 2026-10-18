@@ -6,3 +6,5 @@ dist-electron
 release
 build/native
 .wrangler
+
+.env*.local

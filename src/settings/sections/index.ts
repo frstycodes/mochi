@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Brush, Clock, Compass, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
+import { Brush, Clock, Connector, Compass, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -7,6 +7,9 @@ import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
 import { IDLE_ALERTS } from '../settingOptions';
 import { AboutSection } from './about';
+import { ConnectorsView } from '../../library/ConnectorsView';
+import { PluginsView } from '../../library/PluginsView';
+import { SkillsView } from '../../library/SkillsView';
 import { AccessSection, toolRowId } from './access';
 import { TOOL_NAMES } from '../../runtime/toolTable';
 import { TOOL_GUIDE } from '../toolGuide';
@@ -27,7 +30,7 @@ import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
 import { ANIMATIONS } from '../settingOptions';
 
-export const SECTION_GROUPS = ['Mochi', 'Agents', 'Workspace', 'System'] as const;
+export const SECTION_GROUPS = ['Mochi', 'Agents', 'Customize', 'Workspace', 'System'] as const;
 
 export interface SettingsSection {
   id: string;
@@ -207,6 +210,30 @@ export const SETTINGS_SECTIONS = [
     icon: Clock,
     component: SchedulesSection,
     settings: [{ id: 'schedules', label: 'Scheduled and background threads', keywords: 'cron nightly trigger pull request pause resume run' }],
+  },
+  {
+    id: 'skills',
+    group: 'Customize',
+    title: 'Skills',
+    icon: Skill,
+    component: SkillsView,
+    settings: [{ id: 'skillsLibrary', label: 'Installed skills and their profiles', keywords: 'skill install github anthropics openai discover library profile' }],
+  },
+  {
+    id: 'plugins',
+    group: 'Customize',
+    title: 'Plugins',
+    icon: Plugin,
+    component: PluginsView,
+    settings: [{ id: 'pluginsLibrary', label: 'Installed plugins and their profiles', keywords: 'plugin marketplace install discover library profile' }],
+  },
+  {
+    id: 'connectors',
+    group: 'Customize',
+    title: 'Connectors',
+    icon: Connector,
+    component: ConnectorsView,
+    settings: [{ id: 'connectorsLibrary', label: 'Connected accounts and their profiles', keywords: 'connector account mcp server sign in oauth custom gmail linear github discover library profile' }],
   },
   {
     id: 'git',

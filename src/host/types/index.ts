@@ -4,6 +4,7 @@ import { dataMethods, type DataHost } from './data.ts';
 import { browserMethods, type BrowserHost } from './browser.ts';
 import { fsMethods, type FsHost } from './fs.ts';
 import { gitMethods, type GitHost } from './git.ts';
+import { libraryMethods, type LibraryHost } from './library.ts';
 import type { Manifest } from './manifest.ts';
 import { notifyMethods, type NotifyHost } from './notify.ts';
 import { portsMethods, type PortsHost } from './ports.ts';
@@ -35,6 +36,7 @@ export interface HostBridge {
   account: AccountHost;
   updates: UpdatesHost;
   projects: ProjectsHost;
+  library: LibraryHost;
 }
 
 export type Namespace = keyof HostBridge;
@@ -58,4 +60,5 @@ export const manifest = {
   account: accountMethods,
   updates: updatesMethods,
   projects: projectsMethods,
+  library: libraryMethods,
 } satisfies { [K in Namespace]: Manifest<HostBridge[K]> };
