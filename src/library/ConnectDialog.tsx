@@ -9,7 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { toast } from '@/toast/store';
 import { host } from '../host';
 import { copyText } from '../clipboard';
-import { connectorFor, connectorIcon, isSameServer, OAUTH_PROVIDERS, oauthProviderFor, type DeviceCode, type OAuthProviderId } from './connectors';
+import { appInfo, appProviderFor, connectorFor, connectorIcon, isSameServer, OAUTH_PROVIDERS, type AppProviderId, type DeviceCode } from './connectors';
 import type { Space } from '../model';
 import { ListIcon, SettingsRow } from '../settings/parts';
 import { LibraryIcon } from './LibraryParts';
@@ -19,18 +19,18 @@ import { useLibrary, type Library } from './useLibrary';
  * Adds an account on a remote MCP server: what to call it, then how it signs in. Without a `url` it's a custom server and
  * asks for the URL first. Stays open, waiting, while a browser sign-in runs.
  */
-export function ConnectAccountDialog({ open, onOpenChange, url, alias, library }: { open: boolean; onOpenChange: (open: boolean) => void; url?: string; alias?: string; library: Library }) {
+export function ConnectAccountDialog({ open, onOpenChange, url, alias, clientId, library }: { open: boolean; onOpenChange: (open: boolean) => void; url?: string; alias?: string; clientId?: string; library: Library }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <ConnectAccountForm fixedUrl={url} initialAlias={alias} library={library} onCancel={() => onOpenChange(false)} onConnected={() => onOpenChange(false)} />
+        <ConnectAccountForm fixedUrl={url} initialAlias={alias} initialClientId={clientId} library={library} onCancel={() => onOpenChange(false)} onConnected={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   );
 }
 
 /** An account an agent suggested (`connect_account`), on its settings widget: Connect opens the dialog, filled in. */
-export function SuggestedConnectorRow({ profile, url, alias }: { profile: Space; url: string; alias?: string }) {
+export function SuggestedConnectorRow({ profile, url, alias, clientId }: { profile: Space; url: string; alias?: string; clientId?: string }) {
   const library = useLibrary(profile.id);
   const [isOpen, setOpen] = useState(false);
   const name = connectorFor(url)?.name ?? new URL(url).hostname;
@@ -43,7 +43,7 @@ export function SuggestedConnectorRow({ profile, url, alias }: { profile: Space;
           Connect {name}
         </span>
       }
-      description={`${alias ?? 'A new account'}, ${profile.name}`}
+      description={`${alias ?? 'A new account'}, ${profile.name}${clientId ? ', with your own app: paste its secret' : ''}`}
       control={
         isConnected ? (
           <span className="type-meta text-muted-foreground">Connected</span>
@@ -54,7 +54,7 @@ export function SuggestedConnectorRow({ profile, url, alias }: { profile: Space;
         )
       }
     >
-      <ConnectAccountDialog open={isOpen} onOpenChange={setOpen} url={url} alias={alias} library={library} />
+      <ConnectAccountDialog open={isOpen} onOpenChange={setOpen} url={url} alias={alias} clientId={clientId} library={library} />
     </SettingsRow>
   );
 }
@@ -62,23 +62,25 @@ export function SuggestedConnectorRow({ profile, url, alias }: { profile: Space;
 type SignInMethod = 'oauth' | 'key' | 'app';
 
 // Lives inside the dialog's content, which unmounts when it closes, so every opening starts fresh.
-function ConnectAccountForm({ fixedUrl, initialAlias, library, onCancel, onConnected }: { fixedUrl?: string; initialAlias?: string; library: Library; onCancel: () => void; onConnected: () => void }) {
+function ConnectAccountForm({ fixedUrl, initialAlias, initialClientId, library, onCancel, onConnected }: { fixedUrl?: string; initialAlias?: string; initialClientId?: string; library: Library; onCancel: () => void; onConnected: () => void }) {
   const [typedUrl, setTypedUrl] = useState('');
   const url = fixedUrl ?? typedUrl.trim();
   const isUrlValid = URL.canParse(url) && /^https?:\/\//.test(url);
   const name = connectorFor(url)?.name ?? (isUrlValid ? new URL(url).hostname : 'a server');
-  const provider = oauthProviderFor(url);
+  const provider = appProviderFor(url);
   const mochiApps = useMochiOAuthApps();
   const hasMochiApp = !!provider && !!mochiApps?.includes(provider);
   const takenAliases = (library.entries ?? []).flatMap((e) => (e.kind === 'connector' && e.alias && !!e.source && isUrlValid && isSameServer(e.source, url) ? [e.alias] : []));
   const [alias, setAlias] = useState(() => initialAlias ?? freeAlias(takenAliases));
-  const [chosenMethod, setMethod] = useState<SignInMethod>('oauth');
+  const [chosenMethod, setMethod] = useState<SignInMethod>(initialClientId ? 'app' : 'oauth');
   // Without Mochi's own app, a provider that can't register one can't sign in in the browser: its own app is the default.
   const method = provider && !hasMochiApp && chosenMethod === 'oauth' ? 'app' : chosenMethod;
-  const [secret, setSecret] = useState({ apiKey: '', clientId: '', clientSecret: '' });
+  const [secret, setSecret] = useState({ apiKey: '', clientId: initialClientId ?? '', clientSecret: '' });
   const [isBusy, setBusy] = useState(false);
   const isTaken = takenAliases.includes(alias);
-  const isReady = isUrlValid && !!alias && !isTaken && !isBusy && (method !== 'key' || !!secret.apiKey) && (method !== 'app' || !!secret.clientId);
+  // GitHub's device flow needs no secret; the other providers' apps are confidential clients.
+  const needsSecret = !!provider && provider !== 'github';
+  const isReady = isUrlValid && !!alias && !isTaken && !isBusy && (method !== 'key' || !!secret.apiKey) && (method !== 'app' || (!!secret.clientId && (!needsSecret || !!secret.clientSecret)));
   const deviceCode = useDeviceCode(isBusy ? url : null);
   const submit = () => {
     setBusy(true);
@@ -143,19 +145,11 @@ function ConnectAccountForm({ fixedUrl, initialAlias, library, onCancel, onConne
         <Field>
           <FieldLabel htmlFor="connect-client">OAuth app</FieldLabel>
           <Input id="connect-client" placeholder="Client ID" value={secret.clientId} onChange={(e) => setSecret({ ...secret, clientId: e.target.value })} />
-          <Input type="password" autoComplete="off" aria-label="Client secret" placeholder="Client secret, if it has one" value={secret.clientSecret} onChange={(e) => setSecret({ ...secret, clientSecret: e.target.value })} />
+          <Input type="password" autoComplete="off" aria-label="Client secret" autoFocus={!!initialClientId} placeholder={needsSecret ? 'Client secret' : 'Client secret, if it has one'} value={secret.clientSecret} onChange={(e) => setSecret({ ...secret, clientSecret: e.target.value })} />
           <FieldDescription>
-            A desktop client that allows a loopback redirect (http://127.0.0.1, any port)
-            {!!provider && (
-              <>
-                {', from '}
-                <a href={OAUTH_PROVIDERS[provider].consoleUrl} target="_blank" rel="noreferrer">
-                  {OAUTH_PROVIDERS[provider].name}’s console
-                </a>
-              </>
-            )}
-            .
+            <OwnAppHint provider={provider} />
           </FieldDescription>
+          <FieldDescription>Only Mochi sees the secret: it goes to this computer’s keychain, never to an agent.</FieldDescription>
         </Field>
       )}
       {!!deviceCode && <DeviceCodePanel code={deviceCode} />}
@@ -173,13 +167,13 @@ function ConnectAccountForm({ fixedUrl, initialAlias, library, onCancel, onConne
   );
 }
 
-function signInMethods(name: string, provider: ReturnType<typeof oauthProviderFor>, hasMochiApp: boolean) {
-  const providerName = provider && OAUTH_PROVIDERS[provider].name;
-  const isDevice = !!provider && OAUTH_PROVIDERS[provider].flow === 'device';
+function signInMethods(name: string, provider: AppProviderId | undefined, hasMochiApp: boolean) {
+  const providerName = provider && appInfo(provider).name;
+  const isDevice = !!provider && provider !== 'google' && OAUTH_PROVIDERS[provider].flow === 'device';
   const browserBody = !providerName
     ? `Opens ${name}’s sign-in page. Works for most services.`
     : !hasMochiApp
-      ? `${providerName} doesn’t let apps register themselves, and this build has no Mochi app for it yet, so it needs your own.`
+      ? `This build of Mochi has no ${providerName} app, so it signs in through one of your own. An agent can set it up with you.`
       : isDevice
         ? `Opens ${providerName} and shows a one-time code to enter there, through Mochi’s own ${providerName} app.`
         : `Opens ${providerName}’s sign-in page, through Mochi’s own ${providerName} app.`;
@@ -188,6 +182,30 @@ function signInMethods(name: string, provider: ReturnType<typeof oauthProviderFo
     key: { title: 'API key or token', body: 'Sent with every call. For services that hand out keys.', isDisabled: false },
     app: { title: 'Your own OAuth app', body: 'A client ID from an app you registered with the service.', isDisabled: false },
   } satisfies Record<SignInMethod, { title: string; body: string; isDisabled: boolean }>;
+}
+
+/** Where the user's own app comes from and what to register in it: Google's is a Desktop client, Slack's redirects through Mochi's relay. */
+function OwnAppHint({ provider }: { provider: AppProviderId | undefined }) {
+  const redirect = useOwnAppRedirect();
+  const consoleLink = !!provider && (
+    <a href={appInfo(provider).consoleUrl} target="_blank" rel="noreferrer">
+      {appInfo(provider).name}’s console
+    </a>
+  );
+  if (provider === 'google') return <>A Desktop app client from your Google Cloud project, in {consoleLink}. One client serves every Google account.</>;
+  if (provider && provider !== 'github' && OAUTH_PROVIDERS[provider].redirect === 'relay')
+    return (
+      <>
+        Add the redirect URL <code className="break-all">{redirect ?? '…'}</code> to the app, in {consoleLink}.
+      </>
+    );
+  return <>A desktop client that allows a loopback redirect (http://127.0.0.1, any port){consoleLink && <>, from {consoleLink}</>}.</>;
+}
+
+function useOwnAppRedirect() {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => void host.library.ownAppRedirect().then(setUrl, () => undefined), []);
+  return url;
 }
 
 /** The one-time code a device sign-in for `url` is waiting on; null until main sends one, or when nothing is signing in. */
@@ -215,20 +233,12 @@ function DeviceCodePanel({ code }: { code: DeviceCode }) {
   );
 }
 
-/** Which providers Mochi has its own app for; null until main answers. Read once per app run. */
+/** Which providers accounts can sign in with without bringing an app; null until main answers. Read per dialog: saving a Google client changes it. */
 function useMochiOAuthApps() {
-  const [apps, setApps] = useState<OAuthProviderId[] | null>(mochiApps);
-  useEffect(() => {
-    if (apps) return;
-    void host.library.oauthApps().then((list) => {
-      mochiApps = list;
-      setApps(list);
-    }, () => setApps([]));
-  }, [apps]);
+  const [apps, setApps] = useState<AppProviderId[] | null>(null);
+  useEffect(() => void host.library.oauthApps().then(setApps, () => setApps([])), []);
   return apps;
 }
-
-let mochiApps: OAuthProviderId[] | null = null;
 
 const ALIAS_SUGGESTIONS = ['personal', 'work', 'client', 'team'];
 

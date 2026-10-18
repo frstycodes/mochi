@@ -72,7 +72,10 @@ export const library: LibraryHost = {
     return () => {};
   },
   async oauthApps() {
-    return OAUTH_PROVIDER_IDS;
+    return [...OAUTH_PROVIDER_IDS, 'google' as const];
+  },
+  async ownAppRedirect() {
+    return 'https://mochi-relay.example.workers.dev/oauth/callback';
   },
   async signIn(spaceId, id) {
     await pause();

@@ -1,4 +1,4 @@
-import type { DeviceCode, OAuthProviderId } from '../../library/connectors.ts';
+import type { AppProviderId, DeviceCode } from '../../library/connectors.ts';
 import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog } from '../../library/library.ts';
 import type { Provider } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
@@ -23,8 +23,10 @@ export interface LibraryHost {
   installPlugin(spaceId: string, marketplace: string, name: string): Promise<LibraryEntry[]>;
   /** Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth. */
   addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }): Promise<LibraryEntry[]>;
-  /** The providers this build of Mochi has its own OAuth app for (servers that can't register one). */
-  oauthApps(): Promise<OAuthProviderId[]>;
+  /** The providers accounts can sign in with without bringing an app: Mochi's own, or for Google one the user saved. */
+  oauthApps(): Promise<AppProviderId[]>;
+  /** The redirect URL to register in an app the user brings for a provider that only takes https redirects (Mochi's relay). */
+  ownAppRedirect(): Promise<string>;
   /** A device sign-in's one-time code, for the connect dialog to show while main waits for approval. */
   onDeviceCode(listener: (code: DeviceCode) => void): () => void;
   /** Signs a connector account in again. */
@@ -47,6 +49,7 @@ export const libraryMethods = {
   installPlugin: 'invoke',
   addConnector: 'invoke',
   oauthApps: 'invoke',
+  ownAppRedirect: 'invoke',
   onDeviceCode: 'event',
   signIn: 'invoke',
   update: 'invoke',

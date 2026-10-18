@@ -7,10 +7,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { connectorFor, connectorKey, OAUTH_PROVIDERS, oauthProviderFor, relayState, type DeviceCode, type OAuthProviderId } from '../../src/library/connectors.ts';
+import { connectorFor, connectorKey, GOOGLE_WORKSPACE_URL, isSameServer, OAUTH_PROVIDERS, oauthProviderFor, relayState, type DeviceCode, type OAuthProviderId } from '../../src/library/connectors.ts';
 import { RELAY_URL } from '../remote/relayClient.ts';
 import { mochiOAuthApp } from './oauthApps.ts';
-import { ensureLocalServer } from './googleWorkspace.ts';
+import { ensureLocalServer, saveGoogleClient } from './googleWorkspace.ts';
 import { profileConnectors, type LibraryConnector } from '../../src/library/library.ts';
 import { addLoopbackRoute, loopbackUrl } from '../mcp/server.ts';
 import { connectorServer } from './proxy.ts';
@@ -75,7 +75,11 @@ export async function addConnectorAccount(spaceId: string, input: NewConnectorAc
   if (index.items.some((item) => item.kind === 'connector' && item.key === key && item.alias === input.alias)) throw new Error(`There is already a ${input.alias} account on ${key}`);
   const account: LibraryConnector = { kind: 'connector', id: randomUUID(), key, title: connectorFor(input.url)?.name ?? new URL(input.url).hostname, url: input.url, alias: input.alias, isLinked: false, targets: ['claude', 'codex'], addedAt: Date.now() };
   if (input.apiKey) await saveApiKey(account.id, input.apiKey);
-  if (input.clientId) await saveOwnClient(account.id, input.clientId, input.clientSecret);
+  // Google Workspace's accounts register with the local server; a client brought for it is the server's, for every account.
+  const isGoogle = isSameServer(input.url, GOOGLE_WORKSPACE_URL);
+  if (input.clientId && isGoogle && !input.clientSecret) throw new Error('A Google client needs its secret too');
+  if (input.clientId && isGoogle) await saveGoogleClient(input.clientId, input.clientSecret!);
+  else if (input.clientId) await saveOwnClient(account.id, input.clientId, input.clientSecret);
   await updateLibrary((current) => ({ ...current, items: [...current.items, account], profiles: { ...current.profiles, [spaceId]: [...(current.profiles[spaceId] ?? []), account.id] } }));
   return account;
 }
@@ -94,9 +98,9 @@ export async function signIn(account: LibraryConnector, onDeviceCode: (code: Dev
     await (await connect(account, new AccountAuth(account, await loopbackUrl(CALLBACK)))).close();
     return setLinked(account.id, true);
   }
-  const { redirectUrl, port } = await redirectFor(usesMochiApp ? oauthProvider : undefined);
+  const { redirectUrl, port } = await redirectFor(oauthProvider);
   if (secrets.clientInformation && !secrets.isOwnClient && secrets.registeredFor !== redirectUrl) await saveSecrets(account.id, { clientInformation: undefined });
-  const provider = new AccountAuth(account, redirectUrl, usesMochiApp && OAUTH_PROVIDERS[oauthProvider].redirect === 'relay' ? port : undefined);
+  const provider = new AccountAuth(account, redirectUrl, oauthProvider && OAUTH_PROVIDERS[oauthProvider].redirect === 'relay' ? port : undefined);
   // Some servers (Google's) answer the handshake without a token and only refuse tool calls, so an account with no token
   // signs in up front whenever its server publishes OAuth metadata.
   const metadata = !secrets.apiKey && !secrets.tokens ? await discoverOAuthProtectedResourceMetadata(account.url).catch(() => undefined) : undefined;
@@ -151,11 +155,11 @@ async function postForm(url: string, body: Record<string, string>) {
   return res.json() as Promise<unknown>;
 }
 
-/** Mochi's loopback callback, or for a provider that only takes https redirects (with Mochi's own app) the relay's bounce. */
-async function redirectFor(mochiAppProvider: OAuthProviderId | undefined) {
+/** Mochi's loopback callback, or for a provider that only takes https redirects the relay's bounce, whoever's app it is. */
+async function redirectFor(provider: OAuthProviderId | undefined) {
   const loopback = await loopbackUrl(CALLBACK);
   const port = Number(new URL(loopback).port);
-  const isRelayed = !!mochiAppProvider && OAUTH_PROVIDERS[mochiAppProvider].redirect === 'relay';
+  const isRelayed = !!provider && OAUTH_PROVIDERS[provider].redirect === 'relay';
   return { redirectUrl: isRelayed ? `${RELAY_URL}/oauth/callback` : loopback, port };
 }
 

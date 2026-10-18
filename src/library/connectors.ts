@@ -107,7 +107,7 @@ export const CONNECTORS = [
   },
 ] as const satisfies Connector[];
 
-type ConnectorId = (typeof CONNECTORS)[number]['id'];
+export type ConnectorId = (typeof CONNECTORS)[number]['id'];
 
 // The vendor's own site, for its favicon: MCP endpoints (`mcp.linear.app`) serve none. Google Workspace's is Google's G.
 const CONNECTOR_SITES = {
@@ -166,6 +166,20 @@ export const OAUTH_PROVIDERS = {
 export type OAuthProviderId = keyof typeof OAUTH_PROVIDERS;
 
 export const OAUTH_PROVIDER_IDS = Object.keys(OAUTH_PROVIDERS) as OAuthProviderId[];
+
+/** A provider whose app signs accounts in: the ones above, and Google for the local Google Workspace server. */
+export type AppProviderId = OAuthProviderId | 'google';
+
+export const GOOGLE_APP = { name: 'Google', consoleUrl: 'https://console.cloud.google.com/auth/clients' };
+
+/** Whose app a connector's accounts sign in with, if not one the server registers itself. */
+export function appProviderFor(serverUrl: string): AppProviderId | undefined {
+  return isSameServer(serverUrl, GOOGLE_WORKSPACE_URL) ? 'google' : oauthProviderFor(serverUrl);
+}
+
+export function appInfo(provider: AppProviderId) {
+  return provider === 'google' ? GOOGLE_APP : OAUTH_PROVIDERS[provider];
+}
 
 export function oauthProviderFor(serverUrl: string): OAuthProviderId | undefined {
   if (!URL.canParse(serverUrl)) return undefined;

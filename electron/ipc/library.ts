@@ -7,7 +7,9 @@ import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
 import { addMarketplace, importFromAccount, installPlugin, installSkill, marketplaces, readLibrary, removeMarketplace, updateLibrary } from '../library/store.ts';
 import { addConnectorAccount, forgetAccount, signIn } from '../library/connectors.ts';
+import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
+import { RELAY_URL } from '../remote/relayClient.ts';
 import { setAutoUpdate, updateItem } from '../library/updates.ts';
 import { record, string, type Handlers } from './handlers.ts';
 
@@ -73,7 +75,10 @@ export const library = {
     return libraryEntries(await readLibrary(), space);
   },
   async oauthApps() {
-    return mochiOAuthProviders();
+    return [...mochiOAuthProviders(), ...((await hasGoogleClient()) ? (['google'] as const) : [])];
+  },
+  async ownAppRedirect() {
+    return `${RELAY_URL}/oauth/callback`;
   },
   async signIn(sender, spaceId, id) {
     const space = spaceIdOf(spaceId);

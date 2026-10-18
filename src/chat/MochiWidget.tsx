@@ -202,7 +202,7 @@ function SuggestedConnector({ connector, readers }: { connector: NonNullable<Set
     return added ? [`connected ${added.title} (${added.alias})`] : [];
   });
   if (!profile) return <SettingsRow label="That profile was removed" />;
-  return <SuggestedConnectorRow profile={profile} url={connector.url} alias={connector.alias} />;
+  return <SuggestedConnectorRow profile={profile} url={connector.url} alias={connector.alias} clientId={connector.clientId} />;
 }
 
 /** Opens the widget's thread, then scrolls the widget into view and focuses it, so Esc and Tab act on it straight away. */

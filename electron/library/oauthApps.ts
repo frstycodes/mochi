@@ -14,8 +14,8 @@ const BAKED = {
   google: { clientId: '396170665891-1rg13stbmhbo6hhr79rkktc2hd73faap.apps.googleusercontent.com', clientSecret: '' },
   // The Mochi OAuth App (frstycodes); device flow, so no secret.
   github: { clientId: 'Ov23liprlzoHyVDFz3Ih', clientSecret: '' },
-  // Slack app A0CAXA24GJU in the "Myself" workspace: Slack's MCP only takes directory-listed apps outside it (LIBRARY.md).
-  slack: { clientId: '8325458480016.12371342152640', clientSecret: '' },
+  // None: Slack's MCP server takes only Marketplace-listed apps and a workspace's own, so each user brings an app of their own (LIBRARY.md).
+  slack: { clientId: '', clientSecret: '' },
 } satisfies Record<OAuthProviderId | 'google', { clientId: string; clientSecret: string }>;
 
 export function mochiOAuthApp(provider: OAuthProviderId | 'google'): OAuthClientInformationMixed | undefined {

@@ -85,7 +85,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     theme: () => 'system',
     settings: settings.host,
     themes: { list: async () => [] },
-    library: { list: async () => [connectorEntry('linear', 'https://mcp.linear.app/mcp', 'work')] },
+    library: { list: async () => [connectorEntry('linear', 'https://mcp.linear.app/mcp', 'work')], oauthApps: async () => ['github'], ownAppRedirect: async () => 'https://relay.test/oauth/callback' },
     remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
     git: {
@@ -952,13 +952,22 @@ test('connect_account puts a Connect button for the service in a widget; list_co
   const t = setup();
   const list = await t.ok('list_connectors');
   assert.deepEqual(list.accounts, [{ service: 'Linear', url: 'https://mcp.linear.app/mcp', account: 'work', isSignedIn: true, isOnProfile: true }]);
-  assert.ok(list.directory.some((c: { id: string }) => c.id === 'google-workspace'));
+  const byId = (id: string) => list.directory.find((c: { id: string }) => c.id === id);
+  assert.equal(byId('linear').needsOwnApp, undefined, 'registers itself');
+  assert.equal(byId('github').needsOwnApp, undefined, "Mochi's own app");
+  assert.equal(byId('google-workspace').needsOwnApp, true);
+  assert.match(byId('slack').setup.openUrl, /^https:\/\/api\.slack\.com\/apps\?new_app=1&manifest_json=/);
+  assert.deepEqual(JSON.parse(decodeURIComponent(byId('slack').setup.openUrl.split('manifest_json=')[1])).oauth_config.redirect_urls, ['https://relay.test/oauth/callback']);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: 'GOCSPX-abc', reason: 'x' }), /looks like a client secret/);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '7575573b1c2a4400de6115a61b557acc', reason: 'x' }), /looks like a client secret/);
   assert.match(await t.err('connect_account', { connector: 'linear', alias: 'work', reason: 'x' }), /already a work account on Linear/);
   assert.match(await t.err('connect_account', { connector: 'http://evil.example/mcp', reason: 'x' }), /neither a directory id/);
   assert.equal(t.state().queue.length, 0);
   const r = await t.ok('connect_account', { connector: 'google-workspace', alias: 'personal', reason: 'To read your calendar' });
   assert.deepEqual(r.shown, ['Google Workspace account']);
   assert.deepEqual(widget(t).settings!.addConnector, { profileId: 'latitude', url: 'http://localhost:47821/mcp', alias: 'personal' });
+  await t.ok('connect_account', { connector: 'slack', alias: 'acme', clientId: '8325458480016.12371342152640', reason: 'x' });
+  assert.equal(t.state().queue.filter((q) => q.settings).at(-1)!.settings!.addConnector!.clientId, '8325458480016.12371342152640');
 });
 
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {

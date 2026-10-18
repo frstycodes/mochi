@@ -6,7 +6,8 @@ import { findSetting, recordValue, settingsCatalog, valueLabel, type Setting, ty
 import { HARNESSES } from '../settings/harnesses.ts';
 import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
 import { IS_MAC } from '../keys.ts';
-import { CONNECTORS, connectorFor, isSameServer } from '../library/connectors.ts';
+import { appProviderFor, CONNECTORS, connectorFor, isSameServer } from '../library/connectors.ts';
+import { ownAppSetup } from '../library/ownApps.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
 
@@ -143,11 +144,16 @@ export const SETTINGS_TOOLS = {
   list_connectors: {
     run: async (ctx) => {
       const profile = profileNamed(ctx, ctx.args.profileId);
-      const entries = await ctx.env.library.list(profile.id);
+      const [entries, apps, redirectUrl] = await Promise.all([ctx.env.library.list(profile.id), ctx.env.library.oauthApps(), ctx.env.library.ownAppRedirect()]);
+      const directory = CONNECTORS.map(({ id, name, description, serverUrl }) => {
+        const provider = appProviderFor(serverUrl);
+        const needsOwnApp = !!provider && !apps.includes(provider);
+        return { id, name, description, ...(needsOwnApp && { needsOwnApp, setup: ownAppSetup(id, redirectUrl) }) };
+      });
       return {
         result: {
           accounts: entries.flatMap((e) => (e.kind === 'connector' ? [{ service: e.title, url: e.source, account: e.alias, isSignedIn: e.isLinked, isOnProfile: e.isEnabled }] : [])),
-          directory: CONNECTORS.map(({ id, name, description }) => ({ id, name, description })),
+          directory,
         },
       };
     },
@@ -159,11 +165,12 @@ export const SETTINGS_TOOLS = {
       const url = connectorUrl(args.connector);
       const name = connectorFor(url)?.name ?? new URL(url).hostname;
       const entries = await ctx.env.library.list(profile.id);
+      if (args.clientId && looksLikeSecret(args.clientId)) throw new Error('That looks like a client secret, not a Client ID. Never pass the secret: the user pastes it on the card');
       if (args.alias && entries.some((e) => e.kind === 'connector' && e.alias === args.alias && !!e.source && isSameServer(e.source, url)))
         throw new Error(`There is already a ${args.alias} account on ${name}; list_connectors lists them`);
       const by = caller.providers[0];
       const title = `${authorName(by)} suggests connecting ${name}${args.alias ? ` (${args.alias})` : ''}${profile.id === caller.spaceId ? '' : ` in ${profile.name}`}`;
-      open(ctx, card(ctx, cardId('setting', caller.id), 'setting', { title, detail: args.reason, settings: { by, reason: args.reason, changes: [], addConnector: { profileId: profile.id, url, ...(args.alias && { alias: args.alias }) }, before: {} } }));
+      open(ctx, card(ctx, cardId('setting', caller.id), 'setting', { title, detail: args.reason, settings: { by, reason: args.reason, changes: [], addConnector: { profileId: profile.id, url, ...(args.alias && { alias: args.alias }), ...(args.clientId && { clientId: args.clientId }) }, before: {} } }));
       return { result: { shown: [`${name} account`], note: CONNECT_NOTE } };
     },
   },
@@ -203,6 +210,9 @@ const SHOWN_NOTE = "The user sees these as live settings in your thread and chan
 const CONNECT_NOTE = "The user sees a Connect button in your thread and signs in in their browser there. You won't get their answer; list_connectors shows the account once it's connected.";
 
 type Ctx<K extends SettingsToolName> = ToolContext<Args<K>>;
+
+// Google's secrets start GOCSPX-, Slack's are 32 hex digits; their client IDs look like neither.
+const looksLikeSecret = (value: string) => value.startsWith('GOCSPX-') || /^[0-9a-f]{32}$/i.test(value);
 
 /** A directory id's server, else an https URL as given. */
 function connectorUrl(connector: string) {

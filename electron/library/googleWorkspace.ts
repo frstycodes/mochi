@@ -6,6 +6,7 @@ import path from 'node:path';
 import { app } from 'electron';
 import { GOOGLE_WORKSPACE_PORT, GOOGLE_WORKSPACE_URL, isSameServer } from '../../src/library/connectors.ts';
 import { userPath } from '../shellPath.ts';
+import { readSecrets, saveSecrets } from './connectors.ts';
 import { mochiOAuthApp } from './oauthApps.ts';
 
 /**
@@ -40,8 +41,8 @@ app.on('will-quit', () => child?.kill());
 
 async function start() {
   if (await isUp()) return;
-  const google = mochiOAuthApp('google');
-  if (!google?.client_secret) throw new Error('This build of Mochi has no Google app, so Google Workspace can’t sign in.');
+  const google = await googleClient();
+  if (!google?.client_secret) throw new Error('Google Workspace needs a Google Cloud client: connect it with your own app.');
   const home = path.join(app.getPath('userData'), 'google-workspace');
   await mkdir(path.join(home, 'logs'), { recursive: true });
   const log = createWriteStream(path.join(home, 'logs', 'workspace-mcp.log'), { flags: 'a' });
@@ -75,6 +76,31 @@ async function start() {
   });
   await Promise.race([waitUntilUp(), exited]);
 }
+
+/** A Desktop client from the user's own Google Cloud project, saved once for every Google account; else Mochi's, when the build has one. */
+async function googleClient() {
+  return (await readSecrets(OWN_CLIENT)).clientInformation ?? mochiOAuthApp('google');
+}
+
+export async function hasGoogleClient() {
+  return !!(await googleClient())?.client_secret;
+}
+
+/**
+ * Saves the user's own Google client and stops the server, so the next sign-in starts it on that client.
+ * GAP: accounts signed in through the previous client sign in again; a server left running by an earlier Mochi run isn't ours to stop.
+ */
+export async function saveGoogleClient(clientId: string, clientSecret: string) {
+  await saveSecrets(OWN_CLIENT, { clientInformation: { client_id: clientId, client_secret: clientSecret }, isOwnClient: true });
+  starting = undefined;
+  const running = child;
+  if (!running) return;
+  const exited = new Promise((resolve) => running.once('exit', resolve));
+  running.kill();
+  await exited;
+}
+
+const OWN_CLIENT = 'app:google';
 
 /** The packaged app's uv (electron-builder `extraResources`), else the one on the user's PATH in development. */
 function uvBinary() {

@@ -350,7 +350,7 @@ export const TOOL_TABLE = {
   list_connectors: {
     tier: 'read',
     description:
-      "List connectors (remote MCP services in Mochi's library): each account with its service, its name (agents pick it by this), whether it's signed in and whether the profile has it; and the directory of services you can suggest with connect_account.",
+      "List connectors (remote MCP services in Mochi's library): each account with its service, its name (agents pick it by this), whether it's signed in and whether the profile has it; and the directory of services you can suggest with connect_account. A service with needsOwnApp signs in through an app of the user's own: follow its setup steps in the user's browser first, then pass the Client ID to connect_account.",
     shape: { profileId },
   },
   connect_account: {
@@ -360,6 +360,7 @@ export const TOOL_TABLE = {
     shape: {
       connector: z.string().min(1).describe('A directory id from list_connectors, or an https MCP server URL'),
       alias: z.string().regex(/^[a-z0-9-]{1,32}$/).optional().describe('The account name, like work or personal; defaults to the first free one'),
+      clientId: z.string().min(1).max(200).optional().describe("The Client ID of the user's own app (from a service's setup steps). Never the secret: the user pastes that on the card"),
       profileId,
       reason,
     },
