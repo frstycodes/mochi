@@ -6,7 +6,7 @@ import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
 import { addMarketplace, importFromAccount, installPlugin, installSkill, marketplaces, readLibrary, removeMarketplace, updateLibrary } from '../library/store.ts';
-import { readRefValue } from '../browser/views.ts';
+import { copiedByRef, readRefValue } from '../browser/views.ts';
 import { addConnectorAccount, forgetAccount, signIn } from '../library/connectors.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { createSlackApp } from '../library/slackApp.ts';
@@ -123,17 +123,25 @@ function pageRef(value: unknown, name: string): PageRef | undefined {
 
 /** Mochi's Slack app, created with the configuration token on the page; the token and the credentials stay in main. */
 async function slackAppFrom(sender: WebContents, at: PageRef) {
-  const token = await readRefValue(sender, at.viewId, at.ref);
-  if (!token.startsWith('xoxe')) throw new Error('That field holds no app configuration token (they start xoxe): Generate Token on api.slack.com/apps, take a new browser_snapshot and pass the Access Token\'s ref');
+  const token = await valueAt(sender, at, (v) => v.startsWith('xoxe'));
+  if (!token) throw new Error('No app configuration token there (they start xoxe): Generate Token on api.slack.com/apps, take a new browser_snapshot and pass the ref of the Access Token or its Copy button');
   const { clientId, clientSecret } = await createSlackApp(token, `${RELAY_URL}/oauth/callback`);
   return { clientId, clientSecret };
 }
 
 /** The client secret where an agent pointed: read in main, so it reaches only the keychain. A masked or empty field is refused. */
-async function secretOnPage(sender: WebContents, { viewId, ref }: PageRef) {
-  const value = await readRefValue(sender, viewId, ref);
-  if (value.length < 8 || /^[•*·●\s]+$/.test(value)) throw new Error('That field reads empty or masked: reveal the secret on the page (its Show button), take a new browser_snapshot and pass the ref again');
+async function secretOnPage(sender: WebContents, at: PageRef) {
+  const value = await valueAt(sender, at, (v) => v.length >= 8 && !/^[•*·●\s]+$/.test(v));
+  if (!value) throw new Error('That field reads empty or masked: reveal the secret on the page (its Show button) or pass the ref of its Copy button, from a new browser_snapshot');
   return value;
+}
+
+/** An element's value or text when `isValid`, else what clicking it copies (a Copy button); '' when neither is. */
+async function valueAt(sender: WebContents, { viewId, ref }: PageRef, isValid: (value: string) => boolean) {
+  const value = await readRefValue(sender, viewId, ref);
+  if (isValid(value)) return value;
+  const copied = await copiedByRef(sender, viewId, ref);
+  return isValid(copied) ? copied : '';
 }
 
 const ALIAS = /^[a-z0-9][a-z0-9-]{0,31}$/;

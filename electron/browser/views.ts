@@ -360,6 +360,65 @@ export async function readRefValue(owner: WebContents, id: string, ref: string) 
   return value.trim();
 }
 
+/**
+ * What clicking `ref` (a Copy button) copies, caught in the page for main alone, like `readRefValue`: some sites (Slack's
+ * configuration tokens) never put a secret in the page, only behind Copy. For the one click the async clipboard API and
+ * copy events are wrapped to keep the text instead of writing it, so it never lands on the user's clipboard either.
+ */
+export async function copiedByRef(owner: WebContents, id: string, ref: string) {
+  const entry = get(owner, id);
+  const page = await pageFor(entry);
+  const target = await locate(entry, page, ref);
+  await page.evaluate(catchCopy);
+  try {
+    await target.click({ timeout: ACTION_TIMEOUT_MS });
+    for (const deadline = Date.now() + COPY_WAIT_MS; Date.now() < deadline; await new Promise((r) => setTimeout(r, 100))) {
+      const text = await page.evaluate(() => (window as CopyCatcher).__mochiCopied);
+      if (text) return text.trim();
+    }
+    return '';
+  } finally {
+    await page.evaluate(releaseCopy).catch(() => {});
+  }
+}
+
+const COPY_WAIT_MS = 2000;
+
+type CopyCatcher = Window & { __mochiCopied?: string; __mochiRelease?: () => void };
+
+// Runs in the page, so it can only use what's in its own body.
+function catchCopy() {
+  const w = window as CopyCatcher;
+  if (w.__mochiRelease) return;
+  const clipboard = navigator.clipboard as Clipboard | undefined;
+  const setData = DataTransfer.prototype.setData;
+  const onCopy = () => void (w.__mochiCopied ??= getSelection()?.toString() || undefined);
+  if (clipboard) {
+    clipboard.writeText = async (text: string) => void (w.__mochiCopied = String(text));
+    clipboard.write = async (items: ClipboardItems) => {
+      for (const item of items) if (item.types.includes('text/plain')) w.__mochiCopied = await (await item.getType('text/plain')).text();
+    };
+  }
+  DataTransfer.prototype.setData = function (type: string, data: string) {
+    if (type === 'text/plain' || type === 'text') w.__mochiCopied = String(data);
+  };
+  addEventListener('copy', onCopy, true);
+  w.__mochiCopied = undefined;
+  w.__mochiRelease = () => {
+    // Own properties shadowed the prototype's methods; deleting them brings those back.
+    delete (clipboard as Partial<Clipboard> | undefined)?.writeText;
+    delete (clipboard as Partial<Clipboard> | undefined)?.write;
+    DataTransfer.prototype.setData = setData;
+    removeEventListener('copy', onCopy, true);
+    w.__mochiCopied = undefined;
+    w.__mochiRelease = undefined;
+  };
+}
+
+function releaseCopy() {
+  (window as CopyCatcher).__mochiRelease?.();
+}
+
 /** Whether clicking the element sends its form, and whether it takes a password: the agent asks or masks before acting. */
 function formFlags(target: Locator) {
   return target

@@ -42,7 +42,7 @@ function slackSetup(redirectUrl: string): OwnAppSetup {
     openUrl: 'https://api.slack.com/apps',
     steps: [
       'browser_open openUrl. If Slack asks to sign in, ask the user to sign in in your tab and wait.',
-      'Under "Your App Configuration Tokens" click Generate Token, pick the workspace (ask in chat which one if there are several) and Generate. Take a browser_snapshot and note the Access Token\'s ref (its value shows to you as hidden).',
+      'Under "Your App Configuration Tokens" click Generate Token, pick the workspace (ask in chat which one if there are several) and Generate. Take a browser_snapshot and note the ref of the new token\'s Access Token, or of its Copy button when the token isn\'t shown (Mochi clicks it and keeps what it copies).',
       'connect_account with connector "slack", an account name (the workspace\'s, lowercased) and configTokenRef: Mochi creates the app with its MCP server on, keeps the credentials, and opens the sign-in page. Click Allow there, then list_connectors until it isSignedIn.',
       `Only if connect_account reports the API refused: browser_open ${slackManifestUrl(redirectUrl)} (Create app from manifest, Mochi filled in), pick the workspace, Next, Create; then Settings › Basic Information › App Credentials: read the Client ID, click Show next to Client Secret, snapshot, and connect_account with the Client ID and secretRef.`,
     ],
