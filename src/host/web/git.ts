@@ -2,7 +2,7 @@ import { parseDiff } from '../../git/parse.ts';
 import { bareState, refKey, type RefState } from '../../chat/refs.ts';
 import type { GitHost } from '../types/git.ts';
 
-// Fixture paths match the `adm` thread's step footprints, so the per-step filter has something to show.
+// Fixture paths match the `adm` thread's demo work, so the Changes pane has something to show.
 const STAGED = [
   'diff --git a/apps/api/routes/admin/usage.ts b/apps/api/routes/admin/usage.ts',
   'new file mode 100644',

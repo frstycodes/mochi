@@ -105,7 +105,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.
       const thread = state.threads.find((t) => t.id === action.threadId);
-      if (action.stepId || !thread?.live || thread.providers[0] === action.to) return [];
+      if (!thread?.live || thread.providers[0] === action.to) return [];
       // No model: the adapter picks the Settings default (Claude) or the harness's own (Codex).
       return [...(thread.live.isDetached ? [] : [{ method: 'stop' as const, threadId: thread.id }]), ...start(thread, action.to, DEFAULT_CONTROLS[action.to], action.summary, { model: undefined })];
     }

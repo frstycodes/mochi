@@ -32,8 +32,10 @@ async function gather(t: Thread, dispatch: Dispatch<Action>) {
 /** One at a time: two test suites at once in one worktree fight over ports and temp files. */
 async function runChecks(t: Thread, dispatch: Dispatch<Action>) {
   const when = getPrefs().idleChecks;
-  // Only a turn that could have changed files can have changed a check's result; one after a plain question keeps the last results.
-  if (!t.goal || when === 'off' || (when === 'edited' && !mayHaveEdited(t.activity))) return;
+  // Only a turn that could have changed files can have changed a check's result; one after a plain question keeps the last
+  // results, unless a check has never run: a criterion with a command isn't met until it has.
+  const isUnchecked = (t.criteria ?? []).some((c) => c.command && !c.check);
+  if (!t.goal || when === 'off' || (when === 'edited' && !mayHaveEdited(t.activity) && !isUnchecked)) return;
   for (const c of t.criteria ?? []) if (c.command) await runCriterionCheck(dispatch, t, c);
 }
 

@@ -11,7 +11,7 @@ import { isAddressed, isAlertKind, isQuiet, type Notice, type NoticeKind } from 
 import { saveNotifySettings } from './slice';
 
 /** For watched threads main shows these itself (`electron/notify/watch.ts`), so the renderer doesn't alert them twice. */
-const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'review', 'ci'];
+const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'ci'];
 
 /** Side effects of the notification center: OS notifications while the window is in the background, toasts for watched threads while it's focused, main's watch config (OS alerts, CI, dock badge), and click-to-jump. */
 export function useNotifications() {

@@ -1,17 +1,17 @@
 import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type StepStatus, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
 import { sourcePrompt } from '../sources.ts';
-import { KEEPS_TO_MUTE, stepTitleFrom, type DriftKind } from '../drift.ts';
+import { KEEPS_TO_MUTE, type DriftKind } from '../drift.ts';
 import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { goalProgress } from '../progress.ts';
-import { reorderThreads } from '../reorder.ts';
+import { nestBlocker, reorderThreads, subThreadsOf } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
-import { demoEvents, overlapEvents } from '../runtime/demo.ts';
+import { demoEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
 import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, turnUndo, undoRewind, type Checkpoint, type RewindMode, type RewindUndo } from '../rewind/checkpoints.ts';
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
@@ -29,8 +29,6 @@ import { showsDemoData } from '../demoData.ts';
 import type { TriggerDraft } from '../schedule/calls.ts';
 import { describeTrigger } from '../schedule/describe.ts';
 
-export type OverlapMode = 'link' | 'extract' | 'race' | 'related';
-
 export interface ThreadsState {
   now: number;
   threads: Thread[];
@@ -47,8 +45,6 @@ export type ThreadsAction =
   /** `ms`: wall-clock arrival, stamped on the entries the event logs so a live turn can say how long it took to the second. */
   | { type: 'agent'; event: SeqAgentEvent; ms?: number }
   | { type: 'agent-starting'; threadId: string; provider: Provider }
-  | { type: 'overlap'; queueId: string; mode: OverlapMode }
-  | { type: 'trigger-overlap' }
   | { type: 'settle'; threadId: string }
   | { type: 'unsettle'; threadId: string }
   | { type: 'rename'; threadId: string; title: string }
@@ -56,7 +52,12 @@ export type ThreadsAction =
   | { type: 'title-generated'; threadId: string; title: string }
   /** For good: every slice drops what it keeps for these threads; `agentCalls` stops their agents. */
   | { type: 'delete'; threadIds: string[] }
-  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; dependOn?: { threadId: string; stepId: string }; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[] }
+  | { type: 'create'; title: string; provider: Provider; /** A project ref (`src/projects.ts`); null for a folderless chat. */ project: string | null; branchFrom?: string; controls?: ThreadControls; isLive?: boolean; /** Opened by an agent: you stay on the view you're on. */ isBackground?: boolean; /** Waits for its first scheduled run instead of starting now. */ schedule?: TriggerDraft; /** Unset: a new worktree from the default branch, or a project folder when that's your Settings default. */ workspace?: WorkspaceDraft; /** What the agent starts on when it isn't the title as typed (`withReferences`). */ prompt?: string; skills?: string[]; /** Sent with the first prompt. */ images?: SentImage[]; /** Screenshots of `@` windows: sent with the first prompt, not shown in the transcript. */ referenceImages?: AgentImage[]; /** Started as a sub-thread of another thread. */ parent?: SubThreadLink }
+  /** Make `threadId` a sub-thread of `parentId` (a drag, the Similar row, the row menu); it leaves Pinned, sub-threads aren't pinned. */
+  | { type: 'nest'; threadId: string; parentId: string; criterionId?: string }
+  | { type: 'unnest'; threadId: string }
+  /** A sub-thread's result goes back to its parent: a row in the parent's chat, and the criterion it covers claimed with `evidence`. */
+  | { type: 'subthread-handback'; threadId: string; evidence: string }
   /** What the thread's checkout really has (`useWorktreeRecovery`); `worktree`: its own worktree, found on disk. */
   | { type: 'repo-head'; threadId: string; head: Head; worktree?: string }
   /** Before a thread's folder is set up (`isUnstarted`): a different workspace for it. */
@@ -103,7 +104,8 @@ export type ThreadsAction =
   | { type: 'goal-proposal'; threadId: string; decision: 'accept' | 'keep' | 'undo' }
   | { type: 'idle-start'; threadId: string }
   | { type: 'idle-update'; threadId: string; patch: Partial<Omit<IdleCheck, 'at'>> }
-  | { type: 'step-status'; threadId: string; stepId: string; status: StepStatus; by: Author }
+  /** You answered the turn's next-move card, or wrote instead: it's kept in the chat as a record and the card goes. */
+  | { type: 'next-move-record'; threadId: string; record: NonNullable<ActivityEntry['nextMove']> }
   | { type: 'reorder'; pinned: string[]; unpinned: string[] }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
@@ -114,7 +116,7 @@ export type ThreadsAction =
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
   | { type: 'fork-keep'; keepId: string; dropId: string }
-  | { type: 'handoff'; threadId: string; stepId?: string; to: Provider; summary: string }
+  | { type: 'handoff'; threadId: string; to: Provider; summary: string }
   /** A Mochi background agent for the thread (`start_background_agent`); `agentCalls` starts its session. */
   | { type: 'bg-start'; threadId: string; agent: BackgroundStart }
   /** Stops a subagent: a Mochi one ends here, a native one when its harness reports it stopped. */
@@ -151,23 +153,29 @@ function reduce(state: State, action: Action): State {
   switch (action.type) {
     case 'tick':
       return tick(state);
-    case 'overlap':
-      return resolveOverlap(state, action.queueId, action.mode);
     case 'agent':
       return stampNew(state, withEventSeq(applyAgentEvent(state, action.event), action.event), action.event.threadId, action.ms);
     case 'agent-starting':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
-    case 'trigger-overlap':
-      return triggerOverlap(state);
-    case 'settle':
+    case 'settle': {
+      // A parent settles with its open sub-threads: they were parts of its goal.
+      const ids = new Set([action.threadId, ...subThreadsOf(state.threads, action.threadId).filter((t) => t.status !== 'settled').map((t) => t.id)]);
       return {
         ...state,
         // Settling stops the agent process; the next message after reactivating starts it again with `resume`.
-        threads: mapThread(state.threads, action.threadId, (t) => pauseQueue({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true, limit: undefined } }) }, 'interrupted')),
-        queue: state.queue.filter((q) => q.threadId !== action.threadId),
+        threads: state.threads.map((t) => (ids.has(t.id) ? pauseQueue({ ...t, status: 'settled', settledAt: state.now, ...(t.live && { live: { ...t.live, isWorking: false, isDetached: true, limit: undefined } }) }, 'interrupted') : t)),
+        queue: state.queue.filter((q) => !ids.has(q.threadId)),
       };
+    }
+    case 'nest':
+      if (nestBlocker(state.threads, action.threadId, action.parentId)) return state;
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, parent: { threadId: action.parentId, ...(action.criterionId && { criterionId: action.criterionId }) }, orbitSlot: undefined })) };
+    case 'unnest':
+      return { ...state, threads: mapThread(state.threads, action.threadId, ({ parent: _, ...t }) => t) };
+    case 'subthread-handback':
+      return handBack(state, action);
     case 'unsettle':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: hasOpenWork(t) ? 'running' : 'review' })) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, status: 'running' })) };
     case 'rename':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, title: action.title, isTitleRenamed: true })) };
     case 'title-generated':
@@ -176,7 +184,8 @@ function reduce(state: State, action: Action): State {
       const gone = (id: string) => action.threadIds.includes(id);
       return {
         ...state,
-        threads: state.threads.filter((t) => !gone(t.id)),
+        // A deleted parent's sub-threads become threads of their own.
+        threads: state.threads.filter((t) => !gone(t.id)).map((t) => (t.parent && gone(t.parent.threadId) ? (({ parent: _, ...rest }) => rest)(t) : t)),
         checkpoints: Object.fromEntries(Object.entries(state.checkpoints).filter(([id]) => !gone(id))),
         forks: Object.fromEntries(Object.entries(state.forks).filter(([id]) => !gone(id))),
       };
@@ -251,6 +260,8 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => decideProposal(t, action.decision, state.now)) };
     case 'idle-start':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, idle: { at: state.now, accepted: [], isGathering: true } })) };
+    case 'next-move-record':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => log({ ...t, idle: { ...(t.idle ?? { at: state.now, accepted: [] }), isMoveAnswered: true } }, { at: state.now, who: 'harness', kind: 'event', text: action.record.question, nextMove: action.record })) };
     case 'idle-update':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.idle ? { ...t, idle: { ...t.idle, ...action.patch } } : t)) };
     case 'report':
@@ -263,8 +274,6 @@ function reduce(state: State, action: Action): State {
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => removeGoal(t, state.now)) };
     case 'edit-goal':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => applyDraft(t, action.draft, state.now, action.by)) };
-    case 'step-status':
-      return setStepStatus(state, action);
     case 'reorder':
       return { ...state, threads: reorderThreads(state.threads, action.pinned, action.unpinned) };
     case 'say':
@@ -298,7 +307,7 @@ function reduce(state: State, action: Action): State {
       return applyAgentEvent(state, { threadId: action.threadId, type: 'subagent', id: subagent.id, phase: 'end', status: 'stopped' });
     }
     case 'handoff':
-      return handoffLive(handoff(state, action.threadId, action.stepId, action.to, action.summary), action);
+      return handoffLive(handoff(state, action.threadId, action.to, action.summary), action);
     default:
       return state;
   }
@@ -345,10 +354,6 @@ export function log(thread: Thread, entry: ActivityEntry): Thread {
   return { ...thread, activity: [...thread.activity, entry] };
 }
 
-export function hasOpenWork(t: Thread) {
-  return t.steps.some((s) => s.status !== 'done' && s.status !== 'dropped');
-}
-
 /** One simulated minute: the clock moves and every demo thread (no live session) reports what it did. */
 function tick(state: State): State {
   let next: State = { ...state, now: state.now + 1 };
@@ -359,128 +364,12 @@ function tick(state: State): State {
   return next;
 }
 
+/** A plan item the agent finished, logged as it does it. */
 export function completeStep(threads: Thread[], threadId: string, stepId: string, now: number): Thread[] {
-  const source = threads.find((t) => t.id === threadId)!;
-  const step = source.steps.find((s) => s.id === stepId)!;
-  let next = mapThread(threads, threadId, (t) =>
-    checkAcceptance(
-      log(
-        mapStep(t, stepId, (s) => ({ ...s, status: 'done', progress: 1, doneAt: now })),
-        { at: now, who: step.owner ?? t.providers[0], kind: 'event', text: `Finished "${step.title}"` },
-      ),
-      step,
-      now,
-    ),
-  );
-
-  for (const t of next) {
-    for (const s of t.steps) {
-      const link = s.link;
-      if (!link || s.status === 'done' || s.status === 'dropped') continue;
-      if (link.mode === 'provided-by' && link.threadId === threadId && link.stepId === stepId) {
-        next = mapThread(next, t.id, (x) =>
-          log(
-            mapStep(x, s.id, (y) => ({ ...y, status: 'done', progress: 1, startedAt: y.startedAt ?? now, doneAt: now, note: `Brought in from "${source.title}", 2 commits cherry-picked` })),
-            { at: now, who: 'harness', kind: 'event', text: `"${s.title}" arrived from "${source.title}"` },
-          ),
-        );
-      }
-      if (link.mode === 'race' && link.threadId === threadId && link.stepId === stepId) {
-        next = mapThread(next, t.id, (x) =>
-          log(
-            mapStep(x, s.id, (y) => ({ ...y, status: 'dropped', droppedAt: now, note: `Superseded: "${source.title}" finished first` })),
-            { at: now, who: 'harness', kind: 'event', text: `Race lost to "${source.title}", its version was brought in` },
-          ),
-        );
-      }
-    }
-  }
-  return next;
-}
-
-function triggerOverlap(state: State): State {
-  const adm = state.threads.find((t) => t.id === 'adm');
-  if (!adm || adm.steps.some((s) => s.title === 'Add Redis client')) return state;
-  return applyAgentEvents(state, overlapEvents(adm));
-}
-
-function resolveOverlap(state: State, queueId: string, mode: OverlapMode): State {
-  const item = state.queue.find((q) => q.id === queueId);
-  if (!item?.overlap) return state;
-  const { threadId, stepId, otherThreadId, otherStepId } = item.overlap;
-  const now = state.now;
-  const owner = state.threads.find((t) => t.id === otherThreadId)!;
-  const ownerStep = owner.steps.find((s) => s.id === otherStepId)!;
-  const asker = state.threads.find((t) => t.id === threadId)!;
-  const queue = state.queue.filter((q) => q.id !== queueId);
-  const key = `shared-${otherStepId}`;
-  let threads = state.threads;
-
-  if (ownerStep.status === 'done' && (mode === 'link' || mode === 'extract')) {
-    threads = mapThread(threads, threadId, (t) =>
-      log(mapStep(t, stepId, (s) => ({ ...s, status: 'done', progress: 1, startedAt: now, doneAt: now, sharedKey: key, note: `Brought in from "${owner.title}", 2 commits cherry-picked`, link: { mode: 'provided-by', threadId: otherThreadId, stepId: otherStepId } })), {
-        at: now,
-        who: 'harness',
-        kind: 'event',
-        text: `"${ownerStep.title}" already landed in "${owner.title}", brought it in`,
-      }),
-    );
-    threads = mapThread(threads, otherThreadId, (t) => mapStep(t, otherStepId, (s) => ({ ...s, sharedKey: key, link: { mode: 'provides-for', threadIds: [threadId] } })));
-    return { ...state, threads, queue, seq: state.seq + 1 };
-  }
-
-  if (mode === 'link') {
-    threads = mapThread(threads, threadId, (t) =>
-      log(mapStep(t, stepId, (s) => ({ ...s, status: 'waiting', sharedKey: key, note: `Provided by "${owner.title}"`, link: { mode: 'provided-by', threadId: otherThreadId, stepId: otherStepId } })), {
-        at: now,
-        who: 'harness',
-        kind: 'event',
-        text: `Linked: waits on "${ownerStep.title}" from "${owner.title}" and keeps working on other steps`,
-      }),
-    );
-    threads = mapThread(threads, otherThreadId, (t) =>
-      log(mapStep(t, otherStepId, (s) => ({ ...s, sharedKey: key, link: { mode: 'provides-for', threadIds: [threadId] } })), { at: now, who: 'harness', kind: 'event', text: `"${asker.title}" now depends on this step` }),
-    );
-  }
-
-  if (mode === 'extract') {
-    const shared: Thread = {
-      id: `shared-${state.seq}`,
-      spaceId: owner.spaceId,
-      repo: owner.repo && { ...owner.repo, branch: 'feat/cache-redis-client' },
-      title: 'Redis client (shared)',
-      goal: `One Redis client both "${owner.title}" and "${asker.title}" build on.`,
-      providers: ['claude'],
-      status: 'running',
-      line: freeLine(state.threads.filter((t) => t.spaceId === owner.spaceId)),
-      startedAt: now,
-      revisions: [{ n: 1, at: now, label: 'Extracted from 2 threads', by: 'harness' }],
-      sources: owner.sources.filter((src) => src.kind === 'link'),
-      context: { used: 12_000, max: 200_000 },
-      steps: [{ ...ownerStep, id: `${ownerStep.id}-x`, addedAt: now, startedAt: now, addedBy: 'harness', revision: 1, sharedKey: key, link: { mode: 'provides-for', threadIds: [otherThreadId, threadId] }, note: undefined }],
-      activity: [
-        { at: now, who: 'harness', kind: 'event', text: `Extracted from "${owner.title}" and "${asker.title}". Kept Claude's work so far.` },
-      ],
-      prs: [],
-    };
-    const providedBy = { mode: 'provided-by' as const, threadId: shared.id, stepId: shared.steps[0].id };
-    threads = mapThread(threads, otherThreadId, (t) => mapStep(t, otherStepId, (s) => ({ ...s, status: 'waiting', sharedKey: key, link: providedBy, note: 'Moved to "Redis client (shared)"' })));
-    threads = mapThread(threads, threadId, (t) => mapStep(t, stepId, (s) => ({ ...s, status: 'waiting', sharedKey: key, link: providedBy, note: 'Provided by "Redis client (shared)"' })));
-    const ownerIndex = threads.findIndex((t) => t.id === otherThreadId);
-    threads = [...threads.slice(0, ownerIndex + 1), shared, ...threads.slice(ownerIndex + 1)];
-  }
-
-  if (mode === 'race') {
-    threads = mapThread(threads, threadId, (t) => mapStep(t, stepId, (s) => ({ ...s, status: 'running', startedAt: now, sharedKey: key, note: `Racing "${owner.title}"`, link: { mode: 'race', threadId: otherThreadId, stepId: otherStepId } })));
-    threads = mapThread(threads, otherThreadId, (t) => mapStep(t, otherStepId, (s) => ({ ...s, sharedKey: key, link: { mode: 'race', threadId, stepId } })));
-  }
-
-  if (mode === 'related') {
-    threads = mapThread(threads, threadId, (t) => mapStep(t, stepId, (s) => ({ ...s, status: 'ready', note: `Related to "${owner.title}"`, link: { mode: 'related', threadId: otherThreadId, stepId: otherStepId } })));
-    threads = mapThread(threads, otherThreadId, (t) => mapStep(t, otherStepId, (s) => ({ ...s, link: { mode: 'related', threadId, stepId } })));
-  }
-
-  return { ...state, threads, queue, seq: state.seq + 1 };
+  return mapThread(threads, threadId, (t) => {
+    const step = t.steps.find((s) => s.id === stepId);
+    return step ? log(mapStep(t, stepId, (s) => ({ ...s, status: 'done', doneAt: now })), { at: now, who: t.providers[0], kind: 'event', text: `Finished "${step.title}"` }) : t;
+  });
 }
 
 export function freeLine(threads: Thread[]): LineSlot {
@@ -491,17 +380,10 @@ export function freeLine(threads: Thread[]): LineSlot {
 function create(state: State, action: Extract<Action, { type: 'create' }>): State {
   const now = state.now;
   const id = `new-${state.seq}`;
-  const dep = action.dependOn && state.threads.find((t) => t.id === action.dependOn!.threadId);
-  const depStep = dep?.steps.find((s) => s.id === action.dependOn!.stepId);
-  const base = (sid: string, title: string, size: 1 | 2 | 3): Step => ({ id: sid, title, size, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: action.provider, revision: 1 });
+  const base = (sid: string, title: string): Step => ({ id: sid, title, status: 'ready', addedAt: now, addedBy: action.provider });
   const isLive = !!action.isLive;
   // A live thread's own steps come from its agent's plan; the placeholders are for the demo adapter.
-  const steps: Step[] = [
-    ...(dep && depStep
-      ? [{ ...base(`${id}-dep`, depStep.title, depStep.size), status: 'waiting' as const, sharedKey: `shared-${depStep.id}`, note: `Provided by "${dep.title}"`, link: { mode: 'provided-by' as const, threadId: dep.id, stepId: depStep.id } }]
-      : []),
-    ...(isLive ? [] : [base(`${id}-1`, 'Read the code involved', 1), base(`${id}-2`, 'Make the change', 2), base(`${id}-3`, 'Add tests', 1)]),
-  ];
+  const steps = isLive ? [] : [base(`${id}-1`, 'Read the code involved'), base(`${id}-2`, 'Make the change'), base(`${id}-3`, 'Add tests')];
   const thread: Thread = {
     id,
     spaceId: state.spaceId,
@@ -522,6 +404,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     sources: [],
     context: { used: isLive ? 0 : 4_000, max: contextMax(action.provider) },
     controls: action.controls,
+    ...(action.parent && { parent: action.parent }),
   };
   if (isLive) thread.live = { isWorking: true, cwd: threadCwd(thread) ?? undefined };
   // Detached: a message before the first run starts the agent the way a restored thread does.
@@ -529,12 +412,7 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
     thread.live = { ...thread.live!, isWorking: false, isDetached: true };
     thread.activity.push({ at: now, who: 'harness', kind: 'event', text: `Scheduled: ${describeTrigger(action.schedule.when)}` });
   }
-  let threads = [...state.threads, thread];
-  if (dep && depStep) {
-    threads = mapThread(threads, dep.id, (t) =>
-      mapStep(t, depStep.id, (s) => ({ ...s, sharedKey: `shared-${depStep.id}`, link: { mode: 'provides-for', threadIds: [...(s.link?.mode === 'provides-for' ? s.link.threadIds : []), id] } })),
-    );
-  }
+  const threads = [...state.threads, thread];
   return { ...state, threads, seq: state.seq + 1, views: action.isBackground ? state.views : { ...state.views, [state.spaceId]: { kind: 'thread', id } } };
 }
 
@@ -542,27 +420,6 @@ function create(state: State, action: Extract<Action, { type: 'create' }>): Stat
 function withWorkspace(repo: NonNullable<Thread['repo']>, draft: WorkspaceDraft, fallback: string): NonNullable<Thread['repo']> {
   const { project, path } = repo;
   return { project, ...(path && { path }), branch: draft.branch || fallback, ...repoWorkspace(draft) };
-}
-
-/** Done goes through `completeStep`, so links and acceptance resolve the same as when a plan finishes it. */
-function setStepStatus(state: State, action: Extract<Action, { type: 'step-status' }>): State {
-  const { threadId, stepId, status, by } = action;
-  const now = state.now;
-  const step = state.threads.find((t) => t.id === threadId)?.steps.find((s) => s.id === stepId);
-  if (!step || step.status === status) return state;
-  if (status === 'done') return { ...state, threads: completeStep(state.threads, threadId, stepId, now) };
-  const changes: Partial<Step> = status === 'dropped' ? { droppedAt: now } : status === 'running' ? { startedAt: step.startedAt ?? now, doneAt: undefined } : { doneAt: undefined };
-  return {
-    ...state,
-    threads: mapThread(state.threads, threadId, (t) => log(mapStep(t, stepId, (s) => ({ ...s, status, ...changes })), { at: now, who: by, kind: 'event', text: `"${step.title}" is now ${status}` })),
-  };
-}
-
-// GAP: simulated. The real agent runs the command in the thread's worktree and fails the step on a non-zero exit.
-function checkAcceptance(thread: Thread, step: Step, now: number) {
-  if (!step.acceptance) return thread;
-  const what = step.acceptance.command ? `\`${step.acceptance.command}\` passed` : `"${step.acceptance.text}" met`;
-  return log(thread, { at: now, who: thread.providers[0], kind: 'event', text: `Checked "${step.title}": ${what}` });
 }
 
 function send(state: State, action: Extract<Action, { type: 'send' }>): State {
@@ -577,7 +434,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
       const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
       const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.thumbs?.length && { images: action.thumbs }), ...(from && { from }) });
-      return action.drift ? applyDrift(said, action.text, action.drift, action.reason, now) : said;
+      return action.drift ? applyDrift(said, action.drift, action.reason, now) : said;
     }),
   };
 }
@@ -629,6 +486,21 @@ function checkCriterion(t: Thread, action: Extract<Action, { type: 'criterion-ch
   return log(checked, { at: now, who: 'harness', kind: 'event', text: `Check ${check.status}: ${criterion.text}`, detail: `\`${criterion.command}\`` });
 }
 
+function handBack(state: State, action: Extract<Action, { type: 'subthread-handback' }>): State {
+  const sub = state.threads.find((t) => t.id === action.threadId);
+  if (!sub?.parent || sub.parent.handedBackAt !== undefined) return state;
+  const { threadId: parentId, criterionId } = sub.parent;
+  const by = sub.providers[0];
+  const now = state.now;
+  const threads = state.threads.map((t) => {
+    if (t.id === sub.id) return { ...t, parent: { ...sub.parent!, handedBackAt: now } };
+    if (t.id !== parentId) return t;
+    const claimed = criterionId ? claimCriterion(t, { type: 'criterion-claim', threadId: t.id, criterionId, evidence: action.evidence, by }, now) : t;
+    return log(claimed, { at: now, who: 'harness', kind: 'event', text: `${sub.title} handed back`, subThread: { threadId: sub.id, title: sub.title, text: action.evidence } });
+  });
+  return { ...state, threads };
+}
+
 function claimCriterion(t: Thread, action: Extract<Action, { type: 'criterion-claim' }>, now: number): Thread {
   const criterion = t.criteria?.find((c) => c.id === action.criterionId);
   if (!criterion) return t;
@@ -653,15 +525,11 @@ function tagSent(t: Thread, action: Extract<Action, { type: 'drift-verdict' }>, 
   const i = t.activity.findLastIndex((e) => e.who === 'you' && e.kind === 'message' && !e.drift && e.text === action.text);
   if (i < 0) return t;
   const activity = t.activity.map((e, j) => (j === i ? { ...e, drift: action.drift } : e));
-  return applyDrift({ ...t, activity }, action.text, action.drift, action.reason, now);
+  return applyDrift({ ...t, activity }, action.drift, action.reason, now);
 }
 
-function applyDrift(t: Thread, text: string, drift: DriftKind, reason: string, now: number): Thread {
-  if (drift === 'off-goal') return log(t, { at: now, who: 'harness', kind: 'event', text: 'Sent off-goal · not counted', detail: reason });
-  if (drift === 'on-goal') return t;
-  const title = stepTitleFrom(text);
-  const added: Step = { id: `${t.id}-d${t.steps.length}`, title, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: now, addedBy: 'you', revision: t.revisions.at(-1)?.n ?? 1 };
-  return log({ ...t, steps: [...t.steps, added] }, { at: now, who: 'harness', kind: 'event', text: `Plan: +1 step "${title}"`, detail: reason });
+function applyDrift(t: Thread, drift: DriftKind, reason: string, now: number): Thread {
+  return drift === 'off-goal' ? log(t, { at: now, who: 'harness', kind: 'event', text: 'Sent off-goal · not counted', detail: reason }) : t;
 }
 
 /** Off-goal prompt to a new thread. A finished goal is settled first: its review stays queued while a PR is open, otherwise it resolves. */
@@ -688,12 +556,12 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   return create(next, { type: 'create', title: action.prompt, provider: source.providers[0], project: projectRef(source.repo), branchFrom: source.repo ? branchFrom : undefined, controls: source.controls, isLive: !!source.live, workspace });
 }
 
-/** A whole-thread handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */
+/** A handoff of a live thread restarts it on the other provider: the old session and its limit don't carry over. */
 function handoffLive(state: State, action: Extract<Action, { type: 'handoff' }>): State {
   return {
     ...state,
     threads: mapThread(state.threads, action.threadId, (t) =>
-      t.live && !action.stepId ? { ...t, status: 'running', session: undefined, controls: undefined, live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: undefined, isDetached: undefined } } : t,
+      t.live ? { ...t, status: 'running', session: undefined, controls: undefined, live: { ...t.live, isWorking: true, limit: undefined, isOnApiKey: undefined, isDetached: undefined } } : t,
     ),
   };
 }

@@ -90,7 +90,8 @@ export const git = {
     const pr = record(value, 'pr');
     const title = string(pr.title, 'pr.title', 256).trim();
     if (!title) throw new Error('PR title is empty');
-    const args = ['pr', 'create', '--title', title, '--body', string(pr.body, 'pr.body', 65_536), ...(prDrafts() ? ['--draft'] : [])];
+    const base = pr.base === undefined ? [] : ['--base', string(pr.base, 'pr.base', 256)];
+    const args = ['pr', 'create', '--title', title, '--body', string(pr.body, 'pr.body', 65_536), ...base, ...(prDrafts() ? ['--draft'] : [])];
     return (await runGh(top, args, githubAccount(user))).trim();
   },
 

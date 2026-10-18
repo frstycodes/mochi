@@ -53,10 +53,10 @@ export function judgeLocally(prompt: string, thread: Thread): DriftVerdict | nul
   return null;
 }
 
-/** Overlap with everything the thread is about: goal, title, every live step and its files, and the last few messages. */
+/** Overlap with everything the thread is about: goal, title, the agent's live plan items, and the last few messages. */
 export function scoreDrift(prompt: string, thread: Thread) {
   const steps = thread.steps.filter((s) => s.status !== 'dropped');
-  const targets = [thread.goal, thread.title, ...steps.map((s) => s.title), ...steps.flatMap((s) => s.footprint), ...recentMessages(thread).map((m) => m.text)];
+  const targets = [thread.goal, thread.title, ...steps.map((s) => s.title), ...recentMessages(thread).map((m) => m.text)];
   let score = 0;
   let best = thread.title;
   for (const target of targets) {
@@ -96,10 +96,10 @@ export const localClassifier: DriftClassifier = (prompt, thread) => {
 export const CLASSIFY_PROMPT =
   'Classify the newest message a user sent to a coding agent, given the thread so far. on-goal: works toward the goal, follows up, asks about, corrects or steers the work, answers the agent, or is a small related fix. scope-add: extends the same goal (same feature or area) with something the plan does not cover yet. off-goal: would start a separate piece of work: a different bug, feature, area or chore, even in the same codebase. confidence: high only when a reasonable engineer would agree without hesitation; otherwise low. Reply with only a JSON object {"verdict": "on-goal" | "scope-add" | "off-goal", "confidence": "high" | "low", "reason": "<one short sentence>"}, nothing else.';
 
-/** What the model sees: goal, plan with files, and the recent conversation. */
+/** What the model sees: goal, the agent's plan, and the recent conversation. */
 export function classifyInput(prompt: string, thread: Thread) {
   const steps = thread.steps.filter((s) => s.status !== 'dropped');
-  const plan = steps.map((s) => `- [${s.status}] ${s.title}${s.footprint.length ? ` (${s.footprint.join(', ')})` : ''}`).join('\n') || '- none yet';
+  const plan = steps.map((s) => `- [${s.status}] ${s.title}`).join('\n') || '- none yet';
   const talk = recentMessages(thread).map((m) => `${m.who === 'you' ? 'User' : 'Agent'}: ${m.text.slice(0, 400)}`).join('\n') || '(none)';
   return `Goal: ${thread.goal}\nTitle: ${thread.title}\nPlan:\n${plan}\n\nRecent conversation:\n${talk}\n\nNewest message: ${prompt}`;
 }

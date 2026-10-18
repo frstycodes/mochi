@@ -41,6 +41,9 @@ const OptionKey = createIcon('OptionKey', {
 const ControlKey = createIcon('ControlKey', {
   O: `<path d="m6.75 13.5 5.25-5.25 5.25 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
 });
+const ReturnKey = createIcon('ReturnKey', {
+  O: `<path d="M18.75 5.25v6a3 3 0 0 1-3 3h-10.5m0 0 3.75-3.75M5.25 14.25 9 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+});
 
-const MAC_ICONS = { mod: Command, shift: ShiftKey, alt: OptionKey, nav: ControlKey } satisfies Record<string, IconComponent>;
+const MAC_ICONS = { mod: Command, shift: ShiftKey, alt: OptionKey, nav: ControlKey, Enter: ReturnKey } satisfies Record<string, IconComponent>;
 const ARROW_ICONS = { up: ArrowUp, down: ArrowDown, left: ArrowLeft, right: ArrowRight } satisfies Record<string, IconComponent>;

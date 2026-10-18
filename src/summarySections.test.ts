@@ -57,11 +57,11 @@ test('a settled thread leads with its outcome, open until you close it', () => {
   const settled = thread({
     status: 'settled',
     settledAt: 38,
-    steps: [{ status: 'done' }, { status: 'dropped' }] as Thread['steps'],
+    criteria: [{ id: 'a', text: 'a', command: 'pnpm test', check: { status: 'passed' } }, { id: 'b', text: 'b', claim: { evidence: 'said so' } }] as Thread['criteria'],
     revisions: [{ n: 1 }] as Thread['revisions'],
   });
   const sections = summarySections({ thread: settled, summary: summarize([]), threads: [settled], space });
-  assert.deepEqual(headers(settled), ['Outcome · 38m · 1 step done']);
+  assert.deepEqual(headers(settled), ['Outcome · 38m · 1 of 2 verified']);
   assert.deepEqual(openSectionIds(sections, {}, true), ['outcome']);
   assert.deepEqual(openSectionIds(sections, { outcome: false }, true), []);
   assert.deepEqual(openSectionIds(sections, {}, false), []);

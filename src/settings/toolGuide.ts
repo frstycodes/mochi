@@ -11,7 +11,7 @@ export type ToolGroup = (typeof TOOL_GROUPS)[number];
  */
 export const TOOL_GUIDE = {
   list_threads: { group: 'Threads', label: 'List threads', description: 'See the threads in this profile: titles, status, project and which are pinned.' },
-  get_thread: { group: 'Threads', label: 'Read a thread', description: "See one thread's goal, steps, recent activity, pull requests and what it's waiting on you for." },
+  get_thread: { group: 'Threads', label: 'Read a thread', description: "See one thread's goal, its agent's plan, recent activity, pull requests and what it's waiting on you for." },
   rename_thread: { group: 'Threads', label: 'Rename threads', description: 'Give a thread a new title. You get an Undo toast.' },
   settle_thread: { group: 'Threads', label: 'Settle threads', description: 'Move finished or abandoned threads out of the active list and stop their agents. Never its own thread.' },
   reactivate_thread: { group: 'Threads', label: 'Reactivate threads', description: 'Bring settled threads back to the active list.' },
@@ -23,18 +23,13 @@ export const TOOL_GUIDE = {
   send_to_thread: { group: 'Threads', label: 'Message other threads', description: "Send a message to another thread's agent, as if you typed it in that thread." },
   delete_thread: { group: 'Threads', label: 'Delete threads', description: 'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.' },
 
-  get_goal: { group: 'Goals and progress', label: 'Read goals', description: "See a thread's goal, what done means, and its steps." },
-  set_step_status: { group: 'Goals and progress', label: 'Update step status', description: 'Mark goal steps running or done, so you can see progress.' },
-  add_step: { group: 'Goals and progress', label: 'Add steps', description: "Add a step to a thread's plan." },
-  edit_goal: { group: 'Goals and progress', label: 'Edit goals', description: "Rewrite a thread's goal or a step's acceptance criteria, as a new revision." },
-  reorder_steps: { group: 'Goals and progress', label: 'Reorder steps', description: "Change the order of a goal's steps." },
-  drop_step: { group: 'Goals and progress', label: 'Drop steps', description: "Remove a step that's no longer needed. Done steps stay." },
+  get_goal: { group: 'Goals and progress', label: 'Read goals', description: "See a thread's goal and what done means, with each criterion's claim and check." },
   open_pr: { group: 'Goals and progress', label: 'Open pull requests', description: 'Push its branch and open the pull request, with the description written from the goal and its report.' },
-  propose_goal: { group: 'Goals and progress', label: 'Propose goals', description: 'Propose a thread’s goal and its criteria after a first look at the code. How it lands is under Goals and checks.' },
+  propose_goal: { group: 'Goals and progress', label: 'Propose goals', description: 'Propose a thread’s goal and its criteria after a first look at the code, and again when what done means changes. How it lands is under Goals and checks.' },
   claim_criterion: { group: 'Goals and progress', label: 'Claim criteria', description: 'Say a criterion is met, with evidence you can check. Mochi still checks it itself.' },
-  report_turn: { group: 'Goals and progress', label: 'Report turns', description: 'Sum up a turn for you: decisions made, what’s left, and at most one question.' },
+  report_turn: { group: 'Goals and progress', label: 'Report turns', description: 'Sum up a turn for you: what changed, decisions made, what’s left, at most one question, and the next move to offer you.' },
   get_report: { group: 'Goals and progress', label: 'Read reports', description: "Read another thread's latest report, to coordinate without reading its transcript." },
-  settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Drop a goal's open steps with a reason and settle its thread. Never its own thread." },
+  settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Close out a goal with a reason and settle its thread. Never its own thread." },
 
   start_background_agent: { group: 'Background agents', label: 'Start background agents', description: 'Start an agent that works alongside it, in the same worktree or a fresh one, on this profile’s account.' },
   list_background_agents: { group: 'Background agents', label: 'List background agents', description: 'See its background agents and subagents, their status, cost so far and results.' },

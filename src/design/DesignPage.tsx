@@ -41,6 +41,7 @@ import { queueToast, useResolvedQueueToasts } from '../QueueToast';
 import { Orbit } from '../Orbit';
 import { QueueDecision } from '../QueueView';
 import { ReportCard } from '../goals/ReportCard';
+import { PromptInputProvider } from '@/components/ai-elements/prompt-input';
 import { VizThreadProvider } from '../viz/WidgetVisual';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { turnChanges } from '../chat/turnChanges';
@@ -48,6 +49,11 @@ import { PipLayer } from '../Browser';
 import { SidePane } from '../SidePane';
 import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
+import { NextMoveBlock } from './sections/next-move';
+import { SummaryGoalBlock } from './sections/summary-goal';
+import { ThreadRowVariantsBlock } from './sections/thread-rows';
+import { SubThreadsBlock } from './sections/sub-threads';
+import { SubThreadGroupingBlock } from './sections/sub-thread-grouping';
 import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
@@ -324,7 +330,7 @@ function Foundations() {
             <ProviderMark provider="claude" size={20} />
             <ProviderMark provider="codex" size={20} />
             <Separator orientation="vertical" className="h-6" />
-            {(['running', 'blocked', 'waiting', 'ready', 'done', 'dropped'] as const).map((s) => (
+            {(['running', 'blocked', 'ready', 'done', 'dropped'] as const).map((s) => (
               <span key={s} className="flex items-center gap-1.5 type-caption text-muted-foreground">
                 <StepStatusIcon status={s} />
                 {stepLabel(s)}
@@ -605,7 +611,7 @@ function Feedback() {
                 <CheckCircle />
               </EmptyMedia>
               <EmptyTitle>Nothing needs you</EmptyTitle>
-              <EmptyDescription>Questions, approvals and overlaps show up here, most blocking first.</EmptyDescription>
+              <EmptyDescription>Questions and approvals show up here, most blocking first.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         </Block>
@@ -662,9 +668,9 @@ function Conversation() {
             ))}
           </div>
         </Block>
-        <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, overlaps.">
+        <Block title="Event marker" use="Mochi events you would scroll back to: finished steps, goal revisions, handoffs.">
           <Marker variant="separator">
-            <MarkerContent className="type-caption">Goal v2: +1 step "Per-key overrides"</MarkerContent>
+            <MarkerContent className="type-caption">Goal v2: + Done when: Every 429 carries Retry-After</MarkerContent>
           </Marker>
         </Block>
       </Grid>
@@ -716,10 +722,17 @@ function Recipes() {
             <ProposalCard thread={{ ...rl, proposal: proposalFixture(rl.activity.at(-1)?.at ?? 0, 'applied') }} />
           </div>
         </Block>
+        <NextMoveBlock rl={rl} />
+        <SummaryGoalBlock rl={rl} />
+        <ThreadRowVariantsBlock rl={rl} />
+        <SubThreadsBlock rl={rl} />
+        <SubThreadGroupingBlock rl={rl} />
         {verdictFixtures(rl).map(({ label, thread }) => (
-          <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, one line of evidence (goal ring, status icons, a badge only where it needs you, the PR chip), gaps as call rows, one primary." wide>
+          <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, the agent's summary, one line of evidence, gaps as call rows, then one question with the move as the primary with its shortcut, and one other answer." wide>
             <VizThreadProvider value={rl.id}>
-              <ReportCard thread={thread} />
+              <PromptInputProvider>
+                <ReportCard thread={thread} />
+              </PromptInputProvider>
             </VizThreadProvider>
           </Block>
         ))}
@@ -729,7 +742,9 @@ function Recipes() {
           wide
         >
           <VizThreadProvider value={rl.id}>
-            <ReportCard thread={reportFixture(rl)} />
+            <PromptInputProvider>
+              <ReportCard thread={reportFixture(rl)} />
+            </PromptInputProvider>
           </VizThreadProvider>
         </Block>
         <Block
@@ -738,7 +753,9 @@ function Recipes() {
           wide
         >
           <VizThreadProvider value={rl.id}>
-            <ReportCard thread={metReportFixture(rl)} />
+            <PromptInputProvider>
+              <ReportCard thread={metReportFixture(rl)} />
+            </PromptInputProvider>
           </VizThreadProvider>
         </Block>
         <Block
@@ -793,7 +810,7 @@ function Recipes() {
             )}
           </div>
         </Block>
-        <Block title="Metro board" use="Threads as lines, steps as stations, shared steps as interchanges." wide>
+        <Block title="Metro board" use="Threads as lines, each agent's plan items as stations." wide>
           <div className="h-[460px] overflow-hidden rounded-xl border">
             <BoardView />
           </div>

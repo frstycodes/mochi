@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
-import { toast } from '@/toast/store';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/toast/Toaster';
-import { queueToast, useResolvedQueueToasts } from './QueueToast';
+import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
@@ -26,7 +25,7 @@ import { usePrefs } from './settings/prefs';
 import { SettingsPage } from './settings/SettingsPage';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
-import { HarnessProvider, useHarness } from './store';
+import { HarnessProvider } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
@@ -121,7 +120,6 @@ function Shell() {
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
-  useOverlapToasts();
   useResolvedQueueToasts();
   useWorktreeManager();
   useCheckoutRecovery();
@@ -154,15 +152,3 @@ function Shell() {
   );
 }
 
-function useOverlapToasts() {
-  const { state } = useHarness();
-  const seen = useRef(new Set(state.queue.map((q) => q.id)));
-  useEffect(() => {
-    for (const q of state.queue) {
-      if (seen.current.has(q.id)) continue;
-      seen.current.add(q.id);
-      if (q.kind !== 'overlap') continue;
-      toast('Overlap caught before any duplicate work', { description: q.title, ...queueToast(q.id) });
-    }
-  }, [state.queue]);
-}

@@ -77,7 +77,7 @@ Today: one pane per kind (Preview, Changes, Terminal, Files, Simulator, Ports, S
 ### Diffs (Changes)
 - [x] Real git diff of the worktree vs base, file tree with `+/−`
 - [x] Unified / split view toggle, word-level highlighting (already on `@pierre/diffs`)
-- [x] Per-step diff: filter changes by the step that made them (uses `Step.footprint`)
+- [ ] ~~Per-step diff: filter changes by the step that made them~~ (removed 2026-10-18: steps mirror the agent's own plan and carry no files)
 - [x] Stage / unstage / revert per file and per hunk
 - [x] Comment on a line → goes to the agent as a review note
 - [x] Commit, push, open PR from the tab; PR checks inline (push and PR ask first; not yet run against a real remote)
@@ -152,15 +152,21 @@ Always on, no mode and no extra chrome: pinned threads sit side by side and the 
 
 ## 4. Goal features (everything that exists, so nothing gets lost)
 
-Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the ETA, title-based overlap and the version bump per step go away as §10 lands.
+Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the ETA, title-based overlap and the version bump per step go away as §10 lands. Done 2026-10-18: steps are a read-only mirror of the agent's own to-do list (`applyPlan`), what done means lives in the goal's criteria, and the items marked removed below are gone.
 
 ### Goal model
 - [x] Each thread has a one-sentence goal and a list of steps
-- [x] Step: title, size (1–3), status (done / running / ready / waiting / blocked / dropped), progress, footprint (files it touches), who added it, which revision
+- [x] Step: title, status (done / running / ready / blocked / dropped), who added it (size, progress, footprint, revision and the waiting status removed 2026-10-18)
 - [x] Goal revisions (v1, v2 …) with label, author and time; scope added mid-flight bumps the version and logs a harness event
 - [x] Dropped steps keep a reason ("Dropped: tiers decision limits API keys only")
 - [x] Steps start automatically in order; the next ready step runs when one finishes
 - [x] Thread line color (chart-1…5) as identity for the goal across every view
+
+### Sub-threads
+- [x] A thread can have sub-threads (2026-10-18): one level deep, each covering one of the parent's criteria when started by the agent (`create_thread` with `criterionId`), or nested by hand (drag, the row menu, the goal card's Similar row) with no criterion. A sub-thread branches from the parent's branch and opens its PR into it (`open_pr` pushes the parent's branch, then `gh pr create --base`)
+- [x] The parent waits quietly while sub-threads work (verdict `waiting`, no notice); one that needs you, or is finished and waits to be handed back, makes the parent need you, and the move acts on the sub-thread (Close N gaps goes to its agent, Hand back claims the parent's criterion and posts a result row in the parent's chat); once all are back, Merge N PRs asks the parent's agent to merge them (`src/goals/verdict.ts`, `src/goals/moves.ts`, `src/store/threads.ts`)
+- [x] Sidebar tree: sub-threads under their parent on an L-shaped guide, one line each unless one asks for you; one drag reorders on a row's edges and nests after a 400ms hold over its middle; a sub-thread dragged out of its group stands alone again; Undo toasts (`dropAt` in `src/reorder.ts`, `useRowDrag` in `src/Sidebar.tsx`)
+- [ ] GAP: nesting by hand links no criterion; the hand-back result row is the only trace in the parent until a matcher picks the criterion
 
 ### Progress and pace
 - [x] Progress % from size-weighted steps (`progressAt`)
@@ -171,24 +177,24 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
 - [x] Context usage meter per thread
 
 ### Cross-thread goals
-- [x] Overlap detection between threads' steps (title similarity + shared footprint files) → overlap item in the Queue
-- [x] Four resolutions: link (depend on the other thread), extract (new shared thread both depend on), race (both try, first wins), related (just note it)
-- [x] Dependencies: `provided-by` / `provides-for`; when the provider finishes, the dependent step completes with cherry-picked commits
-- [x] Race: loser's step auto-drops as "Superseded"
-- [x] Already-landed shortcut: if the other step is done, bring it in immediately
-- [x] New thread can declare a dependency on another thread's step at creation
-- [x] Metro board: one line per thread, stations per step, shared steps as interchanges, pending overlap as a dashed curve
+- [ ] ~~Overlap detection between threads' steps (title similarity + shared footprint files) → overlap item in the Queue~~ (removed 2026-10-18)
+- [ ] ~~Four resolutions: link, extract, race, related~~ (removed 2026-10-18)
+- [ ] ~~Dependencies: `provided-by` / `provides-for`~~ (removed 2026-10-18: it reported commits cherry-picked that never were)
+- [ ] ~~Race: loser's step auto-drops as "Superseded"~~ (removed 2026-10-18)
+- [ ] ~~Already-landed shortcut~~ (removed 2026-10-18)
+- [ ] ~~New thread can declare a dependency on another thread's step at creation~~ (removed 2026-10-18)
+- [x] Metro board: one line per thread, stations per step (shared-step interchanges and overlap curves removed 2026-10-18)
 
 ### Attention and lifecycle
-- [x] Needs-you status and amber dot; Queue ranks items by how many steps and threads they block (overlaps weigh more)
-- [x] All steps done → review item in the Queue, thread goes to `review`
+- [x] Needs-you status and amber dot; Queue ranks items by how many steps and threads they block
+- [ ] ~~All steps done → thread goes to `review`~~ (removed 2026-10-18: ready for review is the idle verdict reading done, `isGoalMet`)
 - [x] Settle / Reactivate a thread
 - [x] Orbit: needs-you inner ring, pinned threads on fixed outer slots
-- [x] Goal editing UI: rename goal, add / remove / reorder / resize steps by hand (each save is one revision)
-- [x] Step-level approval gates ("pause before this step" → approval item in the Queue when reached)
-- [x] Goal templates (e.g. "API endpoint", "migration") per space (fixtures, applied from the goal editor)
+- [x] Goal editing UI: the outcome and its criteria, each save one revision (editing steps by hand removed 2026-10-18: the agent plans)
+- [ ] ~~Step-level approval gates~~ (removed 2026-10-18: only the demo agent ever honoured them)
+- [ ] ~~Goal templates of steps~~ (removed 2026-10-18)
 - [x] Goal history diff: what changed between v2 and v3
-- [x] Acceptance criteria per step, checked by the agent (tests named, command to run); the check is simulated until the agent runtime exists
+- [ ] ~~Acceptance criteria per step~~ (removed 2026-10-18: its check was simulated and logged as passed; criteria live on the goal, checked by Mochi)
 - [ ] Settled-goal archive with outcome summary, PRs, time spent, cost (outcome summary, PRs, time spent and cost done in the summary panel: cost is what Claude reports, Codex shows tokens since it reports no spend; a dedicated archive view open)
 
 ## 5. Drift guard (prompt deviates from the goal)
@@ -197,7 +203,7 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
   - Cheap first pass: reuse `similarity()` in `src/progress.ts` (token overlap) against goal and step titles and footprint paths
   - Ambiguous scores escalate to a small-model classifier: `on-goal` / `scope-add` / `off-goal`, with a one-line reason
 - [x] `on-goal` → send as normal
-- [x] `scope-add` → send and add a step (existing revision flow), show "Goal v3: +1 step" event
+- [x] `scope-add` → send as normal; the agent plans it (adding a step removed 2026-10-18). Add to goal on the off-goal card opens the goal editor
 - [x] `off-goal` → inline card above the composer, not a modal:
   - "This looks unrelated to *Public API rate limiting*." Buttons: **New thread** (primary), **Continue here**, and **Add to goal**
   - New thread: prefilled with the prompt, same project, branch off the current one or base (choice remembered)
@@ -211,7 +217,7 @@ Being replaced by §10 (decided 2026-10-13): step sizes, weighted progress, the 
 
 Ranked by how much they help running many agents at once.
 
-- [x] **Notifications center + OS notifications** for needs-you, CI fail, PR review, race lost — with "jump to" and quiet hours. Derived in the `notifications` slice from store transitions (`src/notify/model.ts`); bell in the sidebar, OS notifications while the window is in the background, dock badge with the needs-you count in Electron. GAP: PR review requests come from new open PRs in the simulation, the real source is GitHub's review_requested event.
+- [x] **Notifications center + OS notifications** for needs-you, CI fail, PR review, idle verdicts — with "jump to" and quiet hours. Derived in the `notifications` slice from store transitions (`src/notify/model.ts`); bell in the sidebar, OS notifications while the window is in the background, dock badge with the needs-you count in Electron. GAP: PR review requests come from new open PRs in the simulation, the real source is GitHub's review_requested event.
 - [x] **Cost and usage per thread / space** next to context usage: tokens, $, plan limits remaining, rate-limit warnings before an agent stalls. Estimated from the simulation's activity log (`src/usage/model.ts`); GAP: real numbers come from `host.agent` and provider usage APIs, and `MODEL_PRICES` / `PLAN_LIMITS` are unverified placeholders.
 - [x] **Checkpoints / rewind**: restore files and transcript to any step boundary (the timeline scrubber already picks the moment). A checkpoint per finished step (transcript and steps in the threads slice, files under `refs/harness/checkpoints/<thread>/<n>` once the thread has its own worktree); rewind from the scrubber, a step row or the thread menu, confirmed, one undo. GAP: seeded threads and threads in the project folder rewind the transcript only; files are saved just after the boundary until the agent runtime checkpoints itself.
 - [x] **Turn changes card** like Claude Code's: under each finished turn that changed files (Claude and Codex), "Edited N files" with Undo and the total +/−, a row per file (file-type icon, dimmed directory, name opening the Files tab, +/− with the change bar) whose chevron opens its diff inline, the first 3 then "Show N more" (`src/chat/TurnChangesCard.tsx`, data from the work log's edits in `src/chat/turnChanges.ts`; Codex file changes now carry a per-file patch). Undo puts back only that turn's files from the checkpoint saved before its message (`git.restoreFiles`, transcript untouched), asks first when a later turn or you edited the same files, toasts with Undo, and is disabled while the agent works; a goal turn with a report lists its files in the report card instead. GAP: Bash-made edits aren't listed (like Claude's checkpoints); turns from before this shipped, seeded threads and project-folder threads can't undo; the agent isn't told its files went back
@@ -273,7 +279,7 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 
 ### Overlap
 - [ ] Duplicate work, checked when the goal is drafted (before the agent starts): the new outcome and criteria against active goals and settled records, word overlap to shortlist, the background model to judge same work / related / different. The goal card shows "Similar: <title>, settled 3 days ago, PR #61 merged" with Open / Continue there / Link / Ignore
-- [ ] Collision, from real edits: two active threads editing the same file → overlap item in the Queue (existing link / extract / race / related). Replaces step-title matching in `holdOverlap`
+- [x] Collision, from real edits: two active threads editing the same file → a Same files item in the Queue that never pauses either agent (`src/runtime/collisions.ts`); step-title matching in `holdOverlap` and its link / extract / race / related choices removed 2026-10-18
 
 ### Report card
 - [ ] When a goal thread ends a turn after doing work, a report card replaces reading the reply: criteria with status and evidence, "Needs you" (the one line that asks for anything), files changed with +/−, PR and its state; the agent's reply collapsed under "Full reply". Chats get none
@@ -281,6 +287,7 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 - [ ] Mochi runs checkable criteria itself in the thread's worktree when the agent claims one or goes idle; judged criteria read "claimed" until you accept them. All criteria green → Ready for review
 - [ ] The sidebar card's detail line is the report's headline (Ready for review, Needs you: …, Docs not done)
 - [ ] `get_report` for coordinator threads: criteria, files, open question as data
+- [x] Next move (2026-10-18): the card ends with one question and Mochi's pick of move (mark done, close gaps, continue, commit, open PR, settle; a proposed goal is accepted on its own card, the end-of-turn card only asks) plus one other answer (the agent's own, filling the composer, else Open anyway / Not yet); ⌘↵ takes the move from an empty composer. The agent writes the summary, the question and the other answer in `report_turn`, so no extra model call. Answering, or writing instead, leaves a record in the chat. The summary panel shows a waiting question as one row that scrolls to the card (`src/goals/ReportCard.tsx`, `src/goals/NextMove.tsx`, `src/goals/moves.ts`)
 - [ ] Ready for review is a state, not a question: shown on the report card, the sidebar card's detail and the ring phase; no `review` item in the composer's questionnaire tray (`endTurn` in `src/runtime/apply.ts` stops queueing one), so the composer stays a normal prompt and your next message just continues the thread
 - [ ] One honest primary action, "Mark done" (settles). A merge, when offered, is a separate "Merge #N" that runs `gh pr merge` as the profile's GitHub account, always confirmed (PR and merge method), destructive tier. PR state is never flipped locally (today `answer()` in `src/store/queue.ts` marks open PRs merged with no git call, and the button reads "Approve and merge")
 - [ ] No "Open thread" inside the thread itself; only in the Queue (`ReviewActions` in `src/QueueView.tsx`, `src/Orbit.tsx`, `src/review/ReviewView.tsx`)
@@ -288,7 +295,7 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 
 ### Progress
 - [ ] The ring shows phase plus criteria met, not a percentage: Planning → Building → Verifying → Ready for review → Settled, Needs you / Blocked over any phase; derived from events Mochi sees, not the agent's self-report. Card text "Building · 1/3"
-- [ ] The plan is a mirror of the agent's own checklist (shows what it's doing), with no sizes, weights or versions
+- [x] The plan is a mirror of the agent's own checklist (shows what it's doing), with no sizes, weights or versions: read-only from its plan events, listed at the bottom of the chat until every item is done, never in the summary (2026-10-18)
 - [ ] Remove step sizes (S/M/L), weighted progress, the ETA and the plan burn-up; the burn-up becomes a criteria timeline
 
 ### PRs

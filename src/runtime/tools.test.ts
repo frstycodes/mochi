@@ -347,10 +347,9 @@ test('changes log in the caller, toast with Undo, and Undo puts back only what s
 
 test('quiet tools log but never toast', async () => {
   const t = setup();
-  const step = t.thread('rl').steps.find((s) => s.status === 'ready')!;
-  await t.ok('set_step_status', { stepId: step.id, status: 'running' });
+  await t.ok('report_turn', { decisions: ['Kept the cookie name'], left: [] });
   assert.equal(t.toasts.length, 0);
-  assert.equal(lastLog(t.thread('rl')), `Claude marked "${step.title}" running`);
+  assert.equal(lastLog(t.thread('rl')), 'Claude reported');
 });
 
 test('another profile is out of reach and bad args are errors, not throws', async () => {
@@ -371,10 +370,11 @@ test('list_threads filters by status, pinned and project inside the profile', as
   assert.equal((await t.ok('list_threads', { project: 'nope' })).length, 0);
 });
 
-test('get_thread returns goal, steps, last activity, PRs and what waits on you', async () => {
+test("get_thread returns goal, its agent's plan, last activity, PRs and what waits on you", async () => {
   const r = await setup().ok('get_thread', { threadId: 'e2e' });
   assert.equal(r.id, 'e2e');
-  assert.ok(r.steps.length && r.lastActivity.length <= 5 && Array.isArray(r.pullRequests) && Array.isArray(r.waitingOnUser));
+  assert.ok(r.plan.length && r.lastActivity.length <= 5 && Array.isArray(r.pullRequests) && Array.isArray(r.waitingOnUser));
+  assert.deepEqual(Object.keys(r.plan[0]), ['title', 'status']);
 });
 
 test('rename_thread renames and says from what', async () => {
@@ -472,56 +472,18 @@ test('delete_thread with approval removes the thread everywhere, and the worktre
 
 // {GOALS}
 
-test('get_goal returns step ids', async () => {
+test("get_goal returns the goal and what done means, not the agent's plan", async () => {
   const r = await setup().ok('get_goal');
   assert.equal(r.threadId, 'rl');
-  assert.ok(r.steps.some((s: { id: string }) => s.id === 'rl5'));
+  assert.ok(r.goal && Array.isArray(r.criteria));
+  assert.equal(r.steps, undefined);
 });
 
-test('set_step_status sets the status as the agent and rejects unknown steps', async () => {
-  const t = setup();
-  await t.ok('set_step_status', { stepId: 'rl5', status: 'done' });
-  assert.equal(t.thread('rl').steps.find((s) => s.id === 'rl5')!.status, 'done');
-  assert.match(await t.err('set_step_status', { stepId: 'nope', status: 'done' }), /No step nope/);
-});
-
-test('add_step lands as a plan step by the agent, not a goal revision', async () => {
-  const t = setup();
-  const before = t.thread('rl').revisions.length;
-  await t.ok('add_step', { title: 'Document the limits' });
-  const added = t.thread('rl').steps.find((s) => s.title === 'Document the limits')!;
-  assert.deepEqual([added.addedBy, t.thread('rl').revisions.length], ['claude', before]);
-});
-
-test('edit_goal changes the goal text and criteria as one revision', async () => {
-  const t = setup();
-  const before = t.thread('rl').revisions.length;
-  await t.ok('edit_goal', { goal: 'Rate limits on every public route', criteria: [{ stepId: 'rl6', text: 'Returns 429', command: 'pnpm test' }] });
-  assert.equal(t.thread('rl').goal, 'Rate limits on every public route');
-  assert.deepEqual(t.thread('rl').steps.find((s) => s.id === 'rl6')!.acceptance, { text: 'Returns 429', command: 'pnpm test' });
-  assert.equal(t.thread('rl').revisions.length, before + 1);
-  assert.match(await t.err('edit_goal', { goal: 'Rate limits on every public route' }), /Nothing changed/);
-});
-
-test('reorder_steps puts listed steps first', async () => {
-  const t = setup();
-  await t.ok('reorder_steps', { order: ['rl9', 'rl8'] });
-  const open = t.thread('rl').steps.filter((s) => s.status === 'ready').map((s) => s.id);
-  assert.deepEqual(open.slice(0, 2), ['rl9', 'rl8']);
-});
-
-test('drop_step drops an open step and refuses a done one', async () => {
-  const t = setup();
-  await t.ok('drop_step', { stepId: 'rl9', reason: 'out of scope' });
-  assert.equal(t.thread('rl').steps.find((s) => s.id === 'rl9')!.status, 'dropped');
-  assert.match(await t.err('drop_step', { stepId: 'rl1' }), /done steps stay/);
-});
-
-test('settle_goal drops the open steps and settles the thread', async () => {
+test('settle_goal settles the thread with the reason', async () => {
   const t = setup();
   await t.ok('settle_goal', { threadId: 'adm', reason: 'Shipped elsewhere' });
   assert.equal(t.thread('adm').status, 'settled');
-  assert.ok(t.thread('adm').steps.filter((s) => s.id !== 'ad1').every((s) => s.status === 'dropped'));
+  assert.ok(t.thread('adm').activity.some((a) => a.text === 'Goal settled by Claude: Shipped elsewhere'));
 });
 
 // {LAYOUT}
@@ -1070,7 +1032,9 @@ test('propose_goal waits for Accept by default; Keep leaves the draft; Apply wit
       ['Chip #133 shows its state in the app', undefined],
     ],
   );
-  assert.match(await t.err('propose_goal', proposal), /already has the goal you proposed/);
+  // What done means can change later: a new proposal waits for you again, the accepted goal stands meanwhile.
+  assert.match((await t.ok('propose_goal', { ...proposal, goal: 'Only the home folder reads PR state' })).status, /Waiting for the user/);
+  assert.deepEqual([t.thread('rl').goal, t.thread('rl').proposal?.goal], [proposal.goal, 'Only the home folder reads PR state']);
 
   const kept = setup();
   await kept.ok('propose_goal', proposal);

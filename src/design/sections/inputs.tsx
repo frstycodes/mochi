@@ -202,16 +202,15 @@ function ChecksBlock() {
 function RadioBlock() {
   return (
     <Block title="Radio group" use="One choice from a few visible options. Always true circles.">
-      <RadioGroup defaultValue="link" aria-label="Overlap default">
+      <RadioGroup defaultValue="ask" aria-label="When an agent proposes a goal">
         {[
-          ['link', 'Link', 'Wait for the other thread’s step'],
-          ['extract', 'Extract', 'Move it into its own thread'],
-          ['race', 'Race', 'Both build it, first one wins'],
+          ['ask', 'Ask first', 'The goal changes when you accept it'],
+          ['apply', 'Apply with undo', 'It changes now; Undo puts the old goal back'],
         ].map(([value, title, desc]) => (
           <Field key={value} orientation="horizontal">
-            <RadioGroupItem value={value} id={`overlap-${value}`} />
+            <RadioGroupItem value={value} id={`proposed-${value}`} />
             <FieldContent>
-              <FieldLabel htmlFor={`overlap-${value}`}>
+              <FieldLabel htmlFor={`proposed-${value}`}>
                 <FieldTitle>{title}</FieldTitle>
               </FieldLabel>
               <FieldDescription>{desc}</FieldDescription>

@@ -373,7 +373,7 @@ const APP_SETTINGS: Setting[] = [
   pref('driftGuard', 'Drift guard', 'goals', SWITCH, { group: 'Drift', description: 'Suggest a new thread when a message starts separate work' }),
   pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM), { group: 'Drift' }),
   pref('proposedGoals', 'Agent-proposed goals', 'goals', select(PROPOSED_GOALS), { group: 'Writing goals', description: 'Written after the agent’s first look at the code' }),
-  pref('idleChecks', 'Run criterion checks', 'goals', select(IDLE_CHECKS), { group: 'When a thread goes idle', description: 'Mochi checks the goal itself, never from the agent’s report' }),
+  pref('idleChecks', 'Run criterion checks', 'goals', select(IDLE_CHECKS), { group: 'When a thread goes idle', description: 'A criterion with a command counts as met only once its check passes; the agent saying so isn’t enough' }),
   pref('prGaps', 'Gaps when opening a pull request', 'goals', select(PR_GAPS), { group: 'Before a pull request', description: 'Critical: failing checks, failing CI, merge conflicts' }),
   ...IDLE_ALERTS.map(
     ({ value, label }): Setting => ({

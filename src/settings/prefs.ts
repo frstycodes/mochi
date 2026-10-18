@@ -102,7 +102,7 @@ export const DEFAULT_PREFS: Prefs = {
   proposedGoals: 'ask',
   prGaps: 'block',
   idleAlerts: ['gaps', 'needs-you', 'stalled'],
-  alertKinds: ['needs-you', 'review', 'done', 'failed', 'limit', 'ci', 'pr-review', 'overlap', 'race-lost', 'run'],
+  alertKinds: ['needs-you', 'done', 'failed', 'limit', 'ci', 'pr-review', 'run'],
   watchedToasts: true,
   dockBadge: true,
   starredModels: ['claude-opus-5-5', 'claude-sonnet-5-5'],

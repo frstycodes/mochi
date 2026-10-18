@@ -3,15 +3,14 @@ import { test } from 'node:test';
 import type { QueueItem, Step, Thread } from '../model.ts';
 import { diffNotices, groupBursts, isAddressed, isQuiet, type Notice } from './model.ts';
 
-const step = (rest: Partial<Step> = {}): Step => ({ id: 's1', title: 'Wire gateway', size: 1, status: 'running', progress: 0.5, footprint: [], addedAt: 0, addedBy: 'you', revision: 1, ...rest });
+const step = (rest: Partial<Step> = {}): Step => ({ id: 's1', title: 'Wire gateway', status: 'running', addedAt: 0, addedBy: 'you', ...rest });
 const thread = (rest: Partial<Thread> = {}): Thread =>
   ({ id: 't', spaceId: 'x', repo: null, title: 'Rate limits', goal: '', providers: ['claude'], status: 'running', line: 1, startedAt: 0, steps: [step()], revisions: [], activity: [], prs: [], skills: [], sources: [], context: { used: 0, max: 1 }, ...rest }) as Thread;
 const item = (rest: Partial<QueueItem>): QueueItem => ({ id: 'q1', kind: 'ci', threadId: 't', title: 'CI failed', detail: 'lint', blocks: { steps: 0, threads: 1 }, createdAt: 0, ...rest });
 const diff = (prev: Thread, next: Thread, queue: { prev?: QueueItem[]; next?: QueueItem[] } = {}) => diffNotices({ threads: [prev], queue: queue.prev ?? [] }, { threads: [next], queue: queue.next ?? [] }, 10).map((n) => n.kind);
 
-test('status transitions become needs-you and review notices', () => {
+test('turning needs-you becomes a notice', () => {
   assert.deepEqual(diff(thread(), thread({ status: 'needs-you' })), ['needs-you']);
-  assert.deepEqual(diff(thread(), thread({ status: 'review' })), ['review']);
   assert.deepEqual(diff(thread({ status: 'needs-you' }), thread({ status: 'needs-you', title: 'renamed' })), []);
 });
 
@@ -25,18 +24,16 @@ test("a needs-you notice carries the thread's newest question or approval, so it
   assert.equal(notice([]).body, 'Waiting on your answer');
 });
 
-test('step done and race lost come from step transitions', () => {
+test('a plan item finishing notifies; one dropped does not', () => {
   assert.deepEqual(diff(thread(), thread({ steps: [step({ status: 'done' })] })), ['step-done']);
-  assert.deepEqual(diff(thread(), thread({ steps: [step({ status: 'dropped', link: { mode: 'race', threadId: 'o', stepId: 'o1' } })] })), ['race-lost']);
   assert.deepEqual(diff(thread(), thread({ steps: [step({ status: 'dropped' })] })), []);
 });
 
-test('new CI and overlap queue items notify, old ones and other kinds do not', () => {
+test('new CI queue items notify, old ones and other kinds do not', () => {
   const ci = item({});
-  const overlap = item({ id: 'q2', kind: 'overlap' });
   const question = item({ id: 'q3', kind: 'question' });
   const t = thread();
-  assert.deepEqual(diff(t, t, { next: [ci, overlap, question] }), ['ci', 'overlap']);
+  assert.deepEqual(diff(t, t, { next: [ci, question] }), ['ci']);
   assert.deepEqual(diff(t, t, { prev: [ci], next: [ci] }), []);
 });
 
@@ -98,12 +95,10 @@ test('a notice is addressed by what its kind waits for: looking, acting, or the 
   assert.equal(isAddressed({ kind: 'needs-you' }, acted), true);
   assert.equal(isAddressed({ kind: 'needs-you' }, { thread: thread({ status: 'running' }) }), true, 'answered from the OS notification');
   assert.equal(isAddressed({ kind: 'needs-you' }, { thread: thread({ status: 'needs-you' }) }), false);
-  assert.equal(isAddressed({ kind: 'review' }, viewed), true);
   assert.equal(isAddressed({ kind: 'done' }, viewed), true);
   assert.equal(isAddressed({ kind: 'failed' }, viewed), false, 'an error waits for you to act');
   assert.equal(isAddressed({ kind: 'idle', verdict: 'stalled' }, viewed), false);
   assert.equal(isAddressed({ kind: 'idle', verdict: 'done' }, viewed), true);
-  assert.equal(isAddressed({ kind: 'overlap', queueId: 'q1' }, { ...viewed, ...acted, queue: [item({ kind: 'overlap' })] }), false, 'only the Queue settles an overlap');
   assert.equal(isAddressed({ kind: 'ci', queueId: 'q1' }, { queue: [] }), true, 'settled in the Queue');
   assert.equal(isAddressed({ kind: 'pr-review', prNumber: 4 }, { thread: thread({ prs: [{ number: 4, state: 'merged', title: 'x' }] }) }), true);
   assert.equal(isAddressed({ kind: 'step-done' }, {}), false, 'no signal, no change');

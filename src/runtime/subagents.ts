@@ -54,7 +54,6 @@ export function applySubagent(state: State, thread: Thread, event: AgentSubagent
   let after = update((t) => ({
     ...t,
     subagents: t.subagents!.map((s) => (s.id === event.id ? next : s)),
-    steps: withFootprint(t, event.step?.files),
   }));
   if (event.phase === 'end' && next.origin === 'mochi') after = reportBack(after, thread.id, next);
   return after;
@@ -250,12 +249,6 @@ function withStep(steps: SubagentStep[], step: NonNullable<AgentSubagentEvent['s
   if (step.phase === 'start') return steps.some((s) => s.id === step.id) ? steps : [...steps, started];
   if (!steps.some((s) => s.id === step.id)) return [...steps, { id: step.id, text: step.text, isDone: true, ...done }];
   return steps.map((s) => (s.id === step.id ? { ...s, text: step.text, isDone: true, ...done } : s));
-}
-
-/** Files a subagent edits count toward the parent's running step, so overlap detection sees them. */
-function withFootprint(t: Thread, files?: string[]) {
-  if (!files?.length) return t.steps;
-  return t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...files])] } : s));
 }
 
 /** A finished background agent tells its thread: a line in the chat now, and a note its agent gets with your next message. */

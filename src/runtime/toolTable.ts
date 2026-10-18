@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { STEP_STATUSES } from '../host/types/agent.ts';
 import { SETTING_SECTIONS } from '../settings/settingSections.ts';
 
 /**
@@ -16,7 +15,6 @@ export const ASKING_TIERS = ['destructive', 'setting'] as const satisfies Tier[]
 const threadId = z.string().optional().describe('A thread in this profile (ids come from list_threads); defaults to your own thread');
 const otherThread = z.string().describe('A thread in this profile; ids come from list_threads');
 const threadIds = z.array(z.string()).min(1).describe('Threads in this profile; ids come from list_threads');
-const stepId = z.string().describe('A step id from get_goal');
 const tabId = z.string().optional().describe("One of your thread's browser tabs from browser_tabs; defaults to the active one");
 const ref = z.string().describe('An element ref like "g3-e12" from the latest browser_snapshot');
 const profileId = z.string().optional().describe('A profile id from list_profiles; defaults to your own');
@@ -39,7 +37,7 @@ export const TOOL_TABLE = {
   },
   get_thread: {
     tier: 'read',
-    description: "Read one thread in detail: goal, steps with status, its last activity, pull requests, and anything it's waiting on you for.",
+    description: "Read one thread in detail: goal, its agent's plan (title and status of each item), its last activity, pull requests, and anything it's waiting on you for.",
     shape: { threadId },
   },
   rename_thread: { tier: 'change', description: "Rename a thread. Shows the user an Undo toast.", shape: { threadId, title: z.string().min(1).max(120) } },
@@ -66,9 +64,11 @@ export const TOOL_TABLE = {
   create_thread: {
     tier: 'change',
     description:
-      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Leave model and effort out unless the user named them, or the task is clearly simple enough for a cheaper model or lower effort; never pick something more expensive than the default on your own. The user's setting may refuse a choice; relay its reason.",
+      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Leave model and effort out unless the user named them, or the task is clearly simple enough for a cheaper model or lower effort; never pick something more expensive than the default on your own. The user's setting may refuse a choice; relay its reason. As a sub-thread (`criterionId`, or `isSubThread`) it works on one piece of your goal: it nests under this thread, branches from your branch, opens its PR into it, and hands its result back here.",
     shape: {
       prompt: z.string(),
+      criterionId: z.string().optional().describe('Hand this criterion of your goal (an id from get_goal) to the new thread as a sub-thread; its result claims it when handed back'),
+      isSubThread: z.boolean().optional().describe('A sub-thread with no criterion of its own: part of your work, nested under this thread'),
       provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
       model: z.string().optional().describe("A model id the account offers, like \"claude-sonnet-5-5\"; defaults to this thread's"),
       effort: z.string().optional().describe("low, medium, high, xhigh or max; defaults to this thread's"),
@@ -85,32 +85,7 @@ export const TOOL_TABLE = {
     shape: { threadIds },
   },
   // {GOALS}
-  get_goal: { tier: 'read', description: "Read a thread's goal (empty for a question or chat), what done means (criteria), and its steps with each step's id, status, size and acceptance criteria.", shape: { threadId } },
-  set_step_status: {
-    tier: 'change',
-    quiet: true,
-    description: "Set a goal step's status. Mark steps running when you start them and done when finished, so the user sees progress.",
-    shape: { stepId, status: z.enum(STEP_STATUSES), threadId },
-  },
-  add_step: {
-    tier: 'change',
-    quiet: true,
-    description: "Add a step to a thread's plan. Plan changes don't change the goal's version.",
-    shape: { title: z.string(), threadId },
-  },
-  edit_goal: {
-    tier: 'change',
-    description: "Change a thread's goal text and/or steps' acceptance criteria, as one new goal revision.",
-    shape: {
-      threadId,
-      goal: z.string().optional().describe('The new goal text'),
-      criteria: z
-        .array(z.object({ stepId, text: z.string().describe('What done means; empty removes it'), command: z.string().optional().describe('A command that checks it, like "pnpm test"') }))
-        .optional(),
-    },
-  },
-  reorder_steps: { tier: 'change', description: 'Reorder goal steps. List step ids top first; steps left out keep their place after them.', shape: { threadId, order: z.array(z.string()).min(1) } },
-  drop_step: { tier: 'change', description: "Drop a step that's no longer needed. Done steps can't be dropped.", shape: { threadId, stepId, reason: z.string().optional() } },
+  get_goal: { tier: 'read', description: "Read a thread's goal (empty for a question or chat) and what done means: its criteria, each with its id, its check command when Mochi runs one, your claim and Mochi's check result.", shape: { threadId } },
   open_pr: {
     tier: 'change',
     description:
@@ -124,7 +99,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      "After your first look at the code, propose this thread's goal: the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. Once per task; the user accepts it, or Mochi applies it with an undo. Keep working while it waits.",
+      "After your first look at the code, propose this thread's goal: the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. The user accepts it, or Mochi applies it with an undo. Call it again only when what done means has to change; it replaces the whole goal. Keep working while it waits.",
     shape: {
       goal: z.string().min(1).max(120).describe('What will be true when this is done, specific to what you found'),
       criteria: z
@@ -144,11 +119,16 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'At the end of a turn where you changed anything for a goal, report once so the user can skip reading your reply: decisions you made, what is left, and at most one question that needs them. Short lines, no prose.',
+      'At the end of a turn where you changed anything for a goal, report once so the user can skip reading your reply: what changed, decisions you made, what is left, at most one question that needs them, and the next move as a yes/no question. Short lines, no prose.',
     shape: {
+      summary: z.string().max(360).optional().describe('What changed, in the user\'s terms, 1 to 3 sentences'),
       decisions: z.array(z.string().max(160)).max(5).describe('Choices you made that the user should know about'),
       left: z.array(z.string().max(160)).max(5).describe('What is still not done'),
       question: z.string().max(240).optional().describe('The one thing you need from the user, if anything'),
+      next: z.string().max(160).optional().describe('The next move as one yes/no question naming the exact thing, like "Commit the cookie fix and its test?"'),
+      alternative: z
+        .object({ label: z.string().min(1).max(32).describe('The other answer, like "Revise the plan"'), draft: z.string().min(1).max(200).describe('What it puts in the message box for the user to finish, like "Before building, I want to change the plan:"') })
+        .optional(),
     },
   },
   get_report: {
@@ -158,7 +138,7 @@ export const TOOL_TABLE = {
   },
   settle_goal: {
     tier: 'change',
-    description: 'Close out a goal: drops every open step with your reason and settles the thread. Use when the goal is met or no longer wanted. Not your own thread.',
+    description: 'Close out a goal and settle the thread, with your reason. Use when the goal is met or no longer wanted. Not your own thread.',
     shape: { threadId: otherThread, reason: z.string().min(1) },
   },
   // {AGENTS}

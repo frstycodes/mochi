@@ -143,7 +143,8 @@ export interface GitHost {
   /** With `githubUser`, pushes over HTTPS as that account (the profile's GitHub account); without, with your own git credentials. */
   push(cwd: string, githubUser?: string): Promise<void>;
   /** `githubUser` (`login` on github.com, `host/login` elsewhere) runs gh as the profile's GitHub account; omitted, gh's active account. */
-  createPr(cwd: string, pr: { title: string; body: string }, githubUser?: string): Promise<string>;
+  /** `base`: the branch it merges into; unset, GitHub's default branch. */
+  createPr(cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string): Promise<string>;
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
   /**
    * The open, draft and merged PRs from the branch each of `worktrees` (one repo's) has checked out now, which the agent may have

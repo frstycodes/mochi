@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Book, Briefcase, ClipboardTick, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, Hand, Link as Link2, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
+import { Book, Briefcase, ClipboardTick, Code, Coffee, Home, Layers, MoreH, Rocket, Star, RecordCircle as Circle, CheckCircle as CircleCheck, Forbidden as CircleSlash, Hand, createIcon, MessageQuestion as MessageCircleQuestion, type IconComponent as LucideIcon, type IconProps } from 'reicon-react';
 import type { LineSlot, Provider, Space, SpaceIconName, StepStatus, ThreadStatus } from './model';
 
 export function lineColor(slot: LineSlot) {
@@ -68,7 +68,6 @@ export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
 const STEP_ICONS = {
   done: CircleCheck,
   ready: Circle,
-  waiting: Link2,
   blocked: Hand,
   dropped: CircleSlash,
 } satisfies Record<Exclude<StepStatus, 'running'>, LucideIcon>;
@@ -77,7 +76,6 @@ const STEP_LABELS = {
   done: 'Done',
   running: 'Running',
   ready: 'Up next',
-  waiting: 'Waiting on another thread',
   blocked: 'Needs you',
   dropped: 'Dropped',
 } satisfies Record<StepStatus, string>;
@@ -96,7 +94,6 @@ const STEP_COLORS = {
   done: 'var(--success)',
   running: 'var(--chart-1)',
   ready: 'var(--muted-foreground)',
-  waiting: 'var(--chart-5)',
   blocked: 'var(--warning)',
   dropped: 'var(--subtle-foreground)',
 } satisfies Record<StepStatus, string>;

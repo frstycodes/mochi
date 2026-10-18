@@ -38,7 +38,6 @@ import { useAutoSimplify } from '../simplify/useSimplify.ts';
 import { usePrSync } from '../git/usePrSync.ts';
 
 export type { View } from './layout.ts';
-export type { OverlapMode } from './threads.ts';
 export { rankQueue };
 export { mirrorState, reducer } from './root.ts';
 

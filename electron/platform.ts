@@ -43,7 +43,7 @@ export function killTree(child: ChildProcess) {
   }
 }
 
-/** A relative path with `/` separators, the form the renderer, git and overlap detection compare on every platform. */
+/** A relative path with `/` separators, the form the renderer, git and file-collision checks compare on every platform. */
 export const posixPath = (relative: string) => relative.split(path.sep).join('/');
 
 // Quotes for cmd.exe's own parsing only: `%VAR%` still expands inside quotes, so callers pass paths and fixed flags, never user text.

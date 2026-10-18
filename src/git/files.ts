@@ -1,15 +1,4 @@
 import type { DiffFile } from '../host/types/git.ts';
-import type { Step } from '../model.ts';
-
-/** A footprint entry is a file, or a directory when it ends in `/`. */
-export function touchesFootprint(path: string, footprint: string[]) {
-  return footprint.some((fp) => (fp.endsWith('/') ? path.startsWith(fp) : path === fp));
-}
-
-export function filesForStep(files: DiffFile[], step: Step | undefined) {
-  if (!step) return files;
-  return files.filter((f) => touchesFootprint(f.path, step.footprint) || (!!f.oldPath && touchesFootprint(f.oldPath, step.footprint)));
-}
 
 export interface DirGroup {
   dir: string;

@@ -26,6 +26,10 @@ export function verdictFixtures(rl: Thread): { label: string; thread: Thread }[]
     { label: 'Needs you · goal to accept', thread: { ...base, title: 'fix this', proposal: proposalFixture(at, 'waiting') } },
     { label: 'Stalled · usage limit', thread: { ...base, title: 'Usage export to CSV', live: { isWorking: false, limit: { label: 'Weekly', resetsAt: new Date(Date.now() + 4 * 3_600_000).toISOString() } }, criteria: [met[0], met[1], open('c3', 'CSV opens in Numbers'), open('c4', 'Large exports stream')], idle: idle({ uncommitted: 5, audit: undefined }) } },
     { label: 'Stalled · the agent exited', thread: { ...base, title: 'Migrate auth to Better Auth', queuePause: 'failed', activity: [...rl.activity, { at, who: 'harness' as const, kind: 'event' as const, text: 'Turn failed: Claude Code exited with code 1' }], idle: idle({ uncommitted: 3, audit: undefined }) } },
+    {
+      label: 'Your call · a lookup with no folder',
+      thread: { ...base, title: 'BenQ monitor delivery', repo: null, steps: [], activity: [], criteria: [open('c1', 'The BenQ order is found in your inbox'), open('c2', 'Where the monitor is now is reported'), open('c3', 'The expected delivery date is given')], idle: idle({ uncommitted: undefined, audit: undefined }) },
+    },
     { label: 'Stalled · stopped mid-plan', thread: { ...base, title: 'Devices section in settings', criteria: [met[0], met[1], open('c3', 'Devices list reads the registry'), open('c4', 'Offline devices show their age'), open('c5', 'Both themes checked')] } },
     {
       label: 'Worst case · 12 gaps, long everything',

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, Hierarchy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
+import { Archive, ArrowRight, ArrowUpRight, CheckCircle, ClipboardTick, Clock, Copy3, MessageQuestion, Send2, Setting2, ShieldCheck, TaskSquare, type IconComponent } from 'reicon-react';
 import { useContainingToastId } from '@/toast/context';
 import { toast } from '@/toast/store';
 import { Confirmation, ConfirmationAction, ConfirmationActions, ConfirmationRequest, ConfirmationTitle } from '@/components/ai-elements/confirmation';
@@ -12,7 +12,6 @@ import {
   Questionnaire,
   QuestionnaireActions,
   QuestionnaireChoice,
-  QuestionnaireChoiceDescription,
   QuestionnaireChoices,
   QuestionnaireDescription,
   QuestionnaireError,
@@ -30,7 +29,7 @@ import { cn } from '@/lib/utils';
 import { answerText, isMochiCard, type QueueItem, type QueueKind, type Thread } from './model';
 import { duration } from './progress';
 import { useReviewEntry } from './review/useReviewMode';
-import { snapshot, useHarness, useSpaceQueue, useSpaceThreads, type OverlapMode } from './store';
+import { snapshot, useHarness, useSpaceQueue, useSpaceThreads } from './store';
 import { ProviderMarks, lineColor } from './ui';
 import { useShowCard } from './chat/MochiWidget';
 import { useSendCiLog } from './notify/useSendCiLog';
@@ -44,7 +43,6 @@ const KIND = {
   question: { icon: MessageQuestion, label: 'Question' },
   review: { icon: ClipboardTick, label: 'Ready for review' },
   ci: { icon: GitPullRequestIcon, label: 'CI failed' },
-  overlap: { icon: Hierarchy3, label: 'Overlap' },
   collision: { icon: Copy3, label: 'Same files' },
   run: { icon: Clock, label: 'Scheduled run' },
   setting: { icon: Setting2, label: 'Setting' },
@@ -142,7 +140,7 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
     <Card size="sm" className={cn(isSelected && 'ring-ring', className)}>
       <CardHeader>
         <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 type-caption">
-          <span className={cn('flex items-center gap-1 font-medium', item.kind === 'overlap' ? 'text-warning' : 'text-foreground')}>
+          <span className={'flex items-center gap-1 font-medium text-foreground'}>
             <Icon className="size-3.5" />
             {label}
           </span>
@@ -162,7 +160,6 @@ export function QueueDecision({ item, isSelected, showThread, className }: { ite
         {isMochiCard(item) && <ShowCard item={item} />}
         {item.kind === 'approval' && !item.tool && <ApprovalRequest item={item} canOpenThread={!!showThread} />}
         {item.kind === 'question' && <QuestionChoices item={item} />}
-        {item.kind === 'overlap' && <OverlapChoices item={item} />}
         {!!item.collision && <SharedFiles files={item.collision.files} />}
       </CardContent>
       {item.kind === 'review' && (
@@ -342,11 +339,6 @@ function CiActions({ item }: { item: QueueItem }) {
   );
 }
 
-function choiceFrom(e: FormEvent<HTMLFormElement>) {
-  e.preventDefault();
-  return new FormData(e.currentTarget).get('choice')?.toString();
-}
-
 function QuestionChoices({ item }: { item: QueueItem }) {
   const { dispatch } = useHarness();
   const withUndo = useUndoable();
@@ -389,53 +381,6 @@ function answersFrom(form: FormData, count: number) {
   return Array.from({ length: count }, (_, i) => [...new Set(form.getAll(`q${i}`).map((v) => v.toString().trim()).filter(Boolean))]);
 }
 
-const OVERLAP_CHOICES = [
-  { mode: 'link', title: 'Link', body: 'Claude keeps building it. This thread waits for that step and carries on with its other steps.', toast: 'Linked. The Redis client arrives here when it lands.' },
-  { mode: 'extract', title: 'Extract', body: 'Move it into its own small thread with a fresh agent. Both threads depend on it.', toast: 'Extracted into "Redis client (shared)". Claude\'s progress carried over.' },
-  { mode: 'race', title: 'Race', body: 'Both build it. The first to finish wins, the other is dropped as superseded.', toast: 'Racing. The loser is dropped automatically.' },
-  { mode: 'related', title: 'Keep both', body: 'They are different enough. Mark them related and let merge rehearsal watch the shared file.', toast: 'Marked related. Both keep their own step.' },
-] satisfies { mode: OverlapMode; title: string; body: string; toast: string }[];
-
-function OverlapChoices({ item }: { item: QueueItem }) {
-  const { dispatch } = useHarness();
-  const withUndo = useUndoable();
-  const submit = (e: FormEvent<HTMLFormElement>) => {
-    const picked = OVERLAP_CHOICES.find((c) => c.mode === choiceFrom(e));
-    if (!picked) return;
-    withUndo(picked.toast, () => dispatch({ type: 'overlap', queueId: item.id, mode: picked.mode }));
-  };
-  return (
-    <Questionnaire
-      items={[{ name: 'choice', required: true, choices: OVERLAP_CHOICES.map((c) => ({ value: c.mode })) }]}
-      defaultItem="choice"
-      shortcuts="numbers"
-      onSubmit={submit}
-    >
-      <QuestionnaireItem name="choice" required>
-        {!!item.overlap && (
-          <p className="type-caption text-subtle-foreground">
-            Both touch <code className="rounded-sm bg-muted px-1 font-mono text-muted-foreground">{item.overlap.sharedFiles.join(', ')}</code>
-          </p>
-        )}
-        <QuestionnaireChoices>
-          {OVERLAP_CHOICES.map((c, i) => (
-            <QuestionnaireChoice key={c.mode} value={c.mode}>
-              <span className="font-medium">
-                {c.title}
-                {i === 0 && <span className="ml-2 type-caption font-normal text-subtle-foreground">Suggested</span>}
-              </span>
-              <QuestionnaireChoiceDescription>{c.body}</QuestionnaireChoiceDescription>
-            </QuestionnaireChoice>
-          ))}
-        </QuestionnaireChoices>
-      </QuestionnaireItem>
-      <QuestionnaireActions>
-        <QuestionnaireSubmit size="sm">Apply</QuestionnaireSubmit>
-      </QuestionnaireActions>
-    </Questionnaire>
-  );
-}
-
 function EmptyQueue({ isWorking }: { isWorking: boolean }) {
   return (
     <Empty className="border border-dashed">
@@ -444,7 +389,7 @@ function EmptyQueue({ isWorking }: { isWorking: boolean }) {
           <CheckCircle />
         </EmptyMedia>
         <EmptyTitle>Nothing needs you</EmptyTitle>
-        <EmptyDescription>{isWorking ? 'Your agents are working. ' : ''}Questions, approvals and overlaps from your threads show up here, most blocking first.</EmptyDescription>
+        <EmptyDescription>{isWorking ? 'Your agents are working. ' : ''}Questions and approvals from your threads show up here, most blocking first.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

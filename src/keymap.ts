@@ -91,7 +91,7 @@ export const FIXED_KEYS: { keys: Key[]; what: string }[] = [
   { keys: ['mod', 'Z'], what: 'Undo while annotating a page (Shift for redo)' },
   { keys: ['left', 'right'], what: 'Step through files, photos and replays' },
   { keys: ['1'], what: 'Answer a drift card (1 to 3)' },
-  { keys: ['mod', 'Enter'], what: 'Send a review comment or a note on a change' },
+  { keys: ['mod', 'Enter'], what: 'Take the next move from an empty composer; send a review comment or a note on a change' },
   { keys: ['mod', 'C'], what: 'Text editing, and every key inside a terminal or the simulator' },
 ];
 

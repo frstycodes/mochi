@@ -44,7 +44,6 @@ const RECORDED = [
   'criterion-check',
   'report',
   'similar-dismiss',
-  'step-status',
   'drift-verdict',
   'drift-keep',
   'controls',

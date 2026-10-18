@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Bell, Hourglass, Clock, BellOff, CheckCircle, CloseCircle, Eye, Flash, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
+import { AlertCircle, Bell, Hourglass, Clock, BellOff, CheckCircle, CloseCircle, Setting2, TriangleWarning, Trash3, type IconComponent } from 'reicon-react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -22,11 +22,8 @@ const KIND_ICONS = {
   'needs-you': { icon: AlertCircle, className: 'text-warning' },
   limit: { icon: Hourglass, className: 'text-warning' },
   'step-done': { icon: CheckCircle, className: 'text-success' },
-  review: { icon: Eye, className: 'text-muted-foreground' },
   ci: { icon: CloseCircle, className: 'text-destructive' },
   'pr-review': { icon: GitPullRequestIcon, className: 'text-muted-foreground' },
-  overlap: { icon: TriangleWarning, className: 'text-warning' },
-  'race-lost': { icon: Flash, className: 'text-muted-foreground' },
   run: { icon: Clock, className: 'text-muted-foreground' },
   idle: { icon: CheckCircle, className: 'text-success' },
 } satisfies Record<NoticeKind, { icon: IconComponent; className: string }>;
@@ -151,7 +148,7 @@ function NoNotices() {
           <Bell />
         </EmptyMedia>
         <EmptyTitle className="type-title">All caught up</EmptyTitle>
-        <EmptyDescription className="type-caption">Threads that need you, reviews, CI failures and overlaps show up here.</EmptyDescription>
+        <EmptyDescription className="type-caption">Threads that need you, PR reviews and CI failures show up here.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

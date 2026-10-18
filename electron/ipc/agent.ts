@@ -272,7 +272,6 @@ export const agent = {
       const step = record(s, 'step');
       string(step.title, 'step.title');
       string(step.status, 'step.status', 32);
-      if (!Array.isArray(step.footprint) || step.footprint.some((f) => typeof f !== 'string')) throw new TypeError('step.footprint must be strings');
     }
     if (!Array.isArray(t.activity)) throw new TypeError('thread.activity must be an array');
     string(t.spaceId, 'thread.spaceId', 256);

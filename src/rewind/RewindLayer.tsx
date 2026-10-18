@@ -46,7 +46,7 @@ export function RewindLayer({ thread }: { thread: Thread }) {
   if (request.kind === 'rewind' && request.message !== undefined) return <RewindConfirm thread={thread} target={{ kind: 'message', index: request.message }} initialMode={request.mode} onClose={close} />;
   if (request.kind === 'rewind') return <PointDialog thread={thread} mode="rewind" onClose={close} />;
   if (request.kind === 'fork') return <PointDialog thread={thread} mode="fork" initial={request.point} onClose={close} />;
-  if (request.kind === 'handoff') return <HandoffDialog thread={thread} stepId={request.stepId} onClose={close} />;
+  if (request.kind === 'handoff') return <HandoffDialog thread={thread} onClose={close} />;
   return <CompareForks thread={thread} otherId={request.otherId} onClose={close} />;
 }
 

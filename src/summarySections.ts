@@ -19,7 +19,6 @@ export interface SummarySection {
 
 export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 export const USD = new Intl.NumberFormat('en', { style: 'currency', currency: 'USD' });
-const PLURAL = new Intl.PluralRules('en');
 
 /** The sections with something to show, in reading order. */
 export function summarySections({ thread, summary, threads, space }: { thread: Thread; summary: ThreadSummary; threads: Thread[]; space: Space }): SummarySection[] {
@@ -40,7 +39,7 @@ function outcomeSection(thread: Thread): SummarySection {
   return {
     id: 'outcome',
     title: 'Outcome',
-    detail: `${duration(outcome.minutes)} · ${outcome.done} ${PLURAL.select(outcome.done) === 'one' ? 'step' : 'steps'} done`,
+    detail: outcome.total ? `${duration(outcome.minutes)} · ${outcome.verified} of ${outcome.total} verified` : duration(outcome.minutes),
   };
 }
 

@@ -44,7 +44,7 @@ test('every setting reads its default and takes that value back', () => {
 test('writes land where the setting lives, and a value outside the control is refused', () => {
   const catalog = settingsCatalog({ profile: DEFAULT_SPACES[0], config });
   const write = (key: string, value: string) => catalog.find((s) => s.key === key)!.write(value, sources);
-  assert.deepEqual(write('alert.review', 'false'), { to: 'prefs', patch: { alertKinds: DEFAULT_PREFS.alertKinds.filter((k) => k !== 'review') } });
+  assert.deepEqual(write('alert.ci', 'false'), { to: 'prefs', patch: { alertKinds: DEFAULT_PREFS.alertKinds.filter((k) => k !== 'ci') } });
   assert.deepEqual(write('dockBadge', 'off'), { to: 'prefs', patch: { dockBadge: false } });
   assert.deepEqual(write('concurrency', '8'), { to: 'host', patch: { concurrency: 8 } });
   assert.deepEqual(write('projectsFolder', ' '), { to: 'prefs', patch: { projectsFolder: DEFAULT_PREFS.projectsFolder } }, 'emptied falls back');
