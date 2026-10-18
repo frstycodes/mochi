@@ -37,13 +37,14 @@ export function EventLine({ text, detail, at, glyph, site }: { text: string; det
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
       <Icon aria-hidden className="mt-px size-3.5 shrink-0" />
-      <p className="min-w-0">
+      {/* Anything unbroken (a long name, a host) wraps inside the chat's width instead of pushing past it. */}
+      <p className="min-w-0 [overflow-wrap:anywhere]">
         {text}
         {!!host && (
           <>
             {' on '}
-            <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-foreground" title={site}>
-              <Favicon host={host} fallback={<Globe className="size-3 text-subtle-foreground" />} className="size-3 self-center" />
+            <span className="text-foreground" title={site}>
+              <Favicon host={host} fallback={<Globe className="size-3 text-subtle-foreground" />} className="mr-1 inline-flex size-3 align-[-2px]" />
               {host}
             </span>
           </>
