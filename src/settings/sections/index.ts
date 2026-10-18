@@ -66,6 +66,7 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
+      { id: 'appIcon', label: 'App icon', keywords: 'dock icon logo variant' },
       ...Object.entries(ANIMATIONS).flatMap(([area, { label, items }]) => [
         { id: `animations${area[0]!.toUpperCase()}${area.slice(1)}`, label, keywords: 'animation motion transition slide' },
         ...items.map((item) => ({ id: `animation-${item.value}`, label: item.label, keywords: `${label} animation motion` })),

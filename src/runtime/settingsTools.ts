@@ -217,7 +217,7 @@ async function settingView(ctx: ToolContext<unknown>, setting: Setting, sources:
     ...(setting.group && { group: setting.group }),
     type: control.type,
     value: value === undefined ? null : control.type === 'instructions' ? redactSecrets(value) : value,
-    ...((control.type === 'choice' || control.type === 'select') && { allowed: control.options.map((o) => o.value) }),
+    ...('options' in control && { allowed: control.options.map((o) => o.value) }),
     ...(control.type === 'number' && { min: control.min, max: control.max }),
     ...(control.type === 'colorTheme' && { allowed: [MOCHI_THEME_ID, ...(sources.colorThemes ?? []).filter((t) => slotOf(t.kind) === control.slot).map((t) => t.id)] }),
     ...((control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') && { allowed: ['true', 'false'] }),
@@ -253,7 +253,7 @@ async function toolCount(ctx: ToolContext<unknown>, spaceId: string, provider: P
 
 const allowedHint = (setting: Setting) => {
   const { control } = setting;
-  if (control.type === 'choice' || control.type === 'select') return `; allowed: ${control.options.map((o) => o.value).join(', ')}`;
+  if ('options' in control) return `; allowed: ${control.options.map((o) => o.value).join(', ')}`;
   if (control.type === 'number') return `; a whole number from ${control.min} to ${control.max}`;
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return '; "true" or "false"';
   return '';

@@ -109,3 +109,18 @@ export const THREAD_MODELS = {
     { value: 'default', label: 'Always the default' },
   ],
 } as const satisfies { label: string; options: readonly { value: ThreadModels; label: string }[] };
+
+/** Settings › Appearance › App icon: each value names `build/icons/<value>.svg` and the `.png` main hands the Dock. */
+export const APP_ICONS = [
+  { value: 'graphite', label: 'Graphite' },
+  { value: 'paper', label: 'Paper' },
+  { value: 'sleepy', label: 'Sleepy' },
+  { value: 'pixel', label: 'Pixel' },
+  { value: 'blueprint', label: 'Blueprint' },
+  { value: 'dango', label: 'Dango' },
+  { value: 'peek', label: 'Peek' },
+  { value: 'sticker', label: 'Sticker' },
+  { value: 'riso', label: 'Riso' },
+] as const;
+
+export type AppIcon = (typeof APP_ICONS)[number]['value'];
