@@ -391,7 +391,7 @@ function catchCopy() {
   const w = window as CopyCatcher;
   if (w.__mochiRelease) return;
   const clipboard = navigator.clipboard as Clipboard | undefined;
-  const setData = DataTransfer.prototype.setData;
+  const setData = Object.getOwnPropertyDescriptor(DataTransfer.prototype, 'setData')!;
   const onCopy = () => void (w.__mochiCopied ??= getSelection()?.toString() || undefined);
   if (clipboard) {
     clipboard.writeText = async (text: string) => void (w.__mochiCopied = String(text));
@@ -408,7 +408,7 @@ function catchCopy() {
     // Own properties shadowed the prototype's methods; deleting them brings those back.
     delete (clipboard as Partial<Clipboard> | undefined)?.writeText;
     delete (clipboard as Partial<Clipboard> | undefined)?.write;
-    DataTransfer.prototype.setData = setData;
+    Object.defineProperty(DataTransfer.prototype, 'setData', setData);
     removeEventListener('copy', onCopy, true);
     w.__mochiCopied = undefined;
     w.__mochiRelease = undefined;
