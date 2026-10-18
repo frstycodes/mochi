@@ -44,12 +44,15 @@ export type SetupStep = { id: string; note: string } & (
   | { kind: 'choose'; target: SetupTarget; param: string }
   /** A decision only the user makes, like agreeing to a policy: the run stops to ask unless `param` is answered. */
   | { kind: 'ask'; param: string }
-  /** Waits for text to show, for a slow page (creating a project, enabling APIs). */
-  | { kind: 'wait'; text: string; timeoutMs?: number }
+  /** Waits for text to show, for a slow page (creating a project, enabling APIs); stops with `reason` at once if `stopText` shows first. */
+  | { kind: 'wait'; text: string; timeoutMs?: number; stopText?: string; reason?: string }
   /** Goes on at step `to` when the element shows within a few seconds, like an app that already exists. */
   | { kind: 'jumpIfPresent'; target: SetupTarget; to: string }
-  /** Reads a secret into main, from the element's value or what clicking it copies. */
+  /** Reads the first of the elements' texts that `pattern` matches (its first group) into `param` and goes on at `to`; with none, goes on. Never a secret. */
+  | { kind: 'read'; target: SetupTarget; pattern: string; param: string; to: string }
+  /** Reads a secret into main, from the element's value or what clicking it copies, or from the page's URL by `urlPattern`'s first group. */
   | { kind: 'capture'; target: SetupTarget; as: CaptureKind }
+  | { kind: 'capture'; urlPattern: string; as: CaptureKind }
   /** Ends the run here, done; for the branch before a jump's target. */
   | { kind: 'end' }
   /** Stops the run with `reason` (said to the agent, which tells the user) when the element shows within a few seconds, like a permission error. */
@@ -62,7 +65,7 @@ export type CaptureKind = 'slackConfigToken' | 'slackClientId' | 'slackClientSec
 export type SetupResult =
   | { status: 'done'; captured: CaptureKind[]; params: Record<string, string> }
   | { status: 'needs'; stepId: string; param: string; question: string; options: string[] }
-  | { status: 'stopped'; stepId: string; note: string; kind: SetupStep['kind']; target?: SetupTarget; nextStepId?: string; reason: string };
+  | { status: 'stopped'; stepId: string; note: string; kind: SetupStep['kind']; target?: SetupTarget; nextStepId?: string; reason: string; params: Record<string, string>; /** The recipe's own reason (a `stopIf`, a `wait`'s `stopText`), not a step that failed. */ isExpected?: true };
 
 /**
  * Sites each connector's recipe may visit. A recipe from the repo (`recipes/setup.json`, fetched by main) must stay within
@@ -74,7 +77,7 @@ export const RECIPE_DOMAINS: Partial<Record<string, string[]>> = { slack: ['api.
 export const RECIPES_REPO = 'frstycodes/mochi';
 export const RECIPES_PATH = 'recipes/setup.json';
 
-const STEP_KINDS = ['goto', 'click', 'fill', 'choose', 'ask', 'wait', 'jumpIfPresent', 'capture', 'end', 'stopIf'] as const;
+const STEP_KINDS = ['goto', 'click', 'fill', 'choose', 'ask', 'wait', 'jumpIfPresent', 'read', 'capture', 'end', 'stopIf'] as const;
 const CAPTURE_KINDS = ['slackConfigToken', 'slackClientId', 'slackClientSecret', 'googleClientId', 'googleClientSecret'] as const satisfies CaptureKind[];
 
 /** The recipes this build ships, the fallback when the repo's can't be read. Labels read from api.slack.com/apps on 2026-10-18. */
@@ -112,7 +115,7 @@ export function parseRecipe(connector: string, value: unknown): SetupRecipe {
     for (let t: SetupTarget | undefined = target; t; t = t.within) if (t.name) declared(t.name, where);
     return target;
   };
-  if (!Array.isArray(r.steps) || !r.steps.length || r.steps.length > 50) throw new TypeError(`${connector}: steps must be 1 to 50`);
+  if (!Array.isArray(r.steps) || !r.steps.length || r.steps.length > 60) throw new TypeError(`${connector}: steps must be 1 to 60`);
   const ids = r.steps.map((raw) => (raw as { id?: unknown }).id);
   if (ids.some((id, i) => typeof id !== 'string' || !/^[a-z0-9-]{1,32}$/.test(id) || ids.indexOf(id) !== i)) throw new TypeError(`${connector}: step ids must be unique lowercase words`);
   const steps = r.steps.map((raw, index): SetupStep => {
@@ -138,15 +141,22 @@ export function parseRecipe(connector: string, value: unknown): SetupRecipe {
       case 'wait': {
         const timeoutMs = s.timeoutMs === undefined ? undefined : Number(s.timeoutMs);
         if (timeoutMs !== undefined && !(timeoutMs > 0 && timeoutMs <= 120_000)) throw new TypeError(`${connector}: ${s.id} waits up to 120000 ms`);
-        return { ...base, kind: 'wait', text: declared(shortText(s.text, `${connector}: ${s.id}.text`), where), ...(timeoutMs && { timeoutMs }) };
+        if ((s.stopText === undefined) !== (s.reason === undefined)) throw new TypeError(`${connector}: ${s.id} needs both stopText and reason, or neither`);
+        const stop = s.stopText !== undefined && { stopText: shortText(s.stopText, `${connector}: ${s.id}.stopText`), reason: declared(shortText(s.reason, `${connector}: ${s.id}.reason`), where) };
+        return { ...base, kind: 'wait', text: declared(shortText(s.text, `${connector}: ${s.id}.text`), where), ...(timeoutMs && { timeoutMs }), ...stop };
       }
       case 'jumpIfPresent':
         if (typeof s.to !== 'string' || ids.indexOf(s.to) <= index) throw new TypeError(`${connector}: ${s.id} jumps to a later step`);
         return { ...base, kind: 'jumpIfPresent', target: targetOf(s.target, where), to: s.to };
       case 'stopIf':
         return { ...base, kind: 'stopIf', target: targetOf(s.target, where), reason: shortText(s.reason, `${connector}: ${s.id}.reason`) };
+      case 'read':
+        if (typeof s.param !== 'string' || !(s.param in params)) throw new TypeError(`${connector}: ${s.id} uses an undeclared param`);
+        if (typeof s.to !== 'string' || ids.indexOf(s.to) <= index) throw new TypeError(`${connector}: ${s.id} jumps to a later step`);
+        return { ...base, kind: 'read', target: targetOf(s.target, where), pattern: patternOf(s.pattern, `${connector}: ${s.id}.pattern`), param: s.param, to: s.to };
       case 'capture':
         if (!CAPTURE_KINDS.includes(s.as as CaptureKind)) throw new TypeError(`${connector}: ${s.id} captures an unknown kind`);
+        if (s.urlPattern !== undefined) return { ...base, kind: 'capture', urlPattern: patternOf(s.urlPattern, `${connector}: ${s.id}.urlPattern`), as: s.as as CaptureKind };
         return { ...base, kind: 'capture', target: targetOf(s.target, where), as: s.as as CaptureKind };
       default:
         return { ...base, kind: 'end' };
@@ -167,6 +177,17 @@ function parseParam(connector: string, key: string, raw: unknown): RecipeParam {
     ...(options && { options: options as string[] }),
     ...(p.generate === 'suffix' && { generate: 'suffix' as const }),
   };
+}
+
+/** A regex with a group to read, checked here so a bad one fails the recipe, not a run. */
+function patternOf(value: unknown, what: string) {
+  const text = shortText(value, what);
+  try {
+    if (new RegExp(`${text}|`).exec('')!.length < 2) throw new TypeError(`${what} needs a group`);
+  } catch (error) {
+    throw error instanceof TypeError ? error : new TypeError(`${what} must be a regular expression`);
+  }
+  return text;
 }
 
 function shortText(value: unknown, what: string) {

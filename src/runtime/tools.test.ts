@@ -1015,7 +1015,9 @@ test('run_setup runs the recipe on the agent\'s tab and says what comes next for
   t.setupResults.push(
     { status: 'needs', stepId: 'workspace', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
     { status: 'done', captured: ['slackConfigToken'], params: { workspace: 'Acme' } },
-    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout' },
+    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout', params: { workspace: 'Acme' } },
+    { status: 'stopped', stepId: 'project-ready', note: 'Waits', kind: 'wait', nextStepId: 'next', reason: 'Google shows no project mochi-123456.', params: { suffix: '123456' }, isExpected: true },
+    { status: 'needs', stepId: 'owner', param: 'owner', question: 'Which Google account should own your Mochi app?', options: [] },
   );
   // Several workspaces: Mochi asks on its own card with one-of options, then resumes from the step that asked.
   const { result, card } = await t.asking('run_setup', { connector: 'slack' });
@@ -1029,7 +1031,11 @@ test('run_setup runs the recipe on the agent\'s tab and says what comes next for
   assert.deepEqual(t.setupRuns[1].options, { params: { workspace: 'Acme' }, fromStep: 'workspace' });
   assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => e.text === 'Which Slack workspace? Acme'), 'the card records the answer');
   const stopped = await t.ok('run_setup', { connector: 'slack', params: { workspace: 'Acme' } });
-  assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace"/);
+  assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace".*params \{"workspace":"Acme"\}/);
+  const expected = await t.ok('run_setup', { connector: 'slack' });
+  assert.match(expected.next, /^Google shows no project mochi-123456\. Tell the user.*params \{"suffix":"123456"\} each time/, "the recipe's own reason, said as is");
+  const owner = await t.ok('run_setup', { connector: 'slack' });
+  assert.match(owner.next, /^Ask the user in chat: Which Google account should own your Mochi app\?\. Then run_setup again with params\.owner/, 'nothing to pick from: the agent asks, no card');
   const fixed = await t.ok('update_setup_step', { connector: 'slack', stepId: 'generate', target: { role: 'button', name: 'Generate new token' } });
   assert.deepEqual(fixed.after, { role: 'button', name: 'Generate new token' });
   assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => /updated slack's setup step "generate": button "generate" → button "Generate new token"/.test(e.text)));

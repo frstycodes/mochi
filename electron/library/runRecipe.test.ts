@@ -23,6 +23,7 @@ function fakePage({ workspaces = ['Myself'], url = 'https://api.slack.com/apps',
     close: async () => void log.push('close'),
     waitForText: async (text) => void log.push(`wait ${text}`),
     isPresent: async (t) => apps.includes(t.name ?? ''),
+    texts: async () => [],
     capture: async (t, isValid) => {
       log.push(`capture ${t.name}${t.within ? ` in ${t.within.name}` : ''}`);
       const value = t.name === 'Client ID' ? '1.2' : t.name === 'Copy client secret' ? 'a'.repeat(32) : copies;
@@ -149,10 +150,12 @@ test("Google's recipe runs to the Desktop client, stopping once for the user's a
     close: async () => {},
     waitForText: async (text) => void log.push(`wait ${text}`),
     isPresent: async () => false,
+    texts: async () => ['Mochi recipe test', 'mochi-recipe-48213'],
     capture: async (t, isValid) => [`${t.name}`.includes('GOCSPX') ? 'GOCSPX-abc' : '1-x.apps.googleusercontent.com'].find(isValid) ?? '',
   };
-  const asked = await runRecipe(google, {}, ops);
+  const asked = await runRecipe(google, { owner: 'me@x.com' }, ops);
   assert.equal(asked.result.status === 'needs' && asked.result.stepId, 'policy');
+  assert.ok(log.includes('goto https://console.cloud.google.com/projectcreate?authuser=me@x.com'), 'no mochi-<digits> project to reuse, so it makes one');
   assert.equal(asked.params.email, 'me@x.com', 'the only support email');
   const suffix = asked.params.suffix;
   assert.ok(log.includes(`fill Project ID mochi-${suffix}`) && log.includes(`wait You are going to make changes to project mochi-${suffix}`));
@@ -160,7 +163,8 @@ test("Google's recipe runs to the Desktop client, stopping once for the user's a
   assert.equal(publishing.result.status === 'needs' && publishing.result.stepId, 'publish', 'publishing is the user\'s call too');
   const done = await runRecipe(google, { ...publishing.params, publish: 'Publish it' }, ops, 'publish');
   assert.deepEqual(done.result.status === 'done' && done.result.captured, ['googleClientId', 'googleClientSecret']);
-  assert.ok(log.includes('fill Text field for emails me@x.com') && log.includes(`goto https://console.cloud.google.com/auth/clients/create?project=mochi-${suffix}&authuser=0`));
+  assert.equal(log.filter((l) => l === 'fill Text field for emails me@x.com').length, 2, 'contact and test user: the sign-in email defaults to the chosen one');
+  assert.ok(log.includes(`goto https://console.cloud.google.com/auth/clients/create?project=mochi-${suffix}&authuser=me@x.com`));
   assert.ok(log.includes('fill Authorised domain 1 github.com') && log.includes('click Publish app') && log.includes('wait In production'));
 });
 
@@ -177,15 +181,79 @@ test('an org that blocks new projects stops the run at once with what to do, and
     close: async () => {},
     waitForText: async () => {},
     isPresent: async (t) => t.name === 'Permission Required',
+    texts: async () => [],
     capture: async () => '',
   };
-  const blocked = await runRecipe(google, {}, ops);
+  const unnamed = await runRecipe(google, {}, ops);
+  assert.deepEqual(unnamed.result.status === 'needs' && [unnamed.result.param, unnamed.result.options], ['owner', []], 'never a default account: the agent asks which');
+  assert.equal(log.length, 0, 'nothing opened before the owner is known');
+  const blocked = await runRecipe(google, { owner: 'sam@acme.com' }, ops);
   assert.equal(blocked.result.status === 'stopped' && blocked.result.stepId, 'org-blocked');
   assert.match(blocked.result.status === 'stopped' ? blocked.result.reason : '', /can't create Cloud projects.*params\.owner/);
-  assert.match(log[0], /projectcreate\?authuser=0$/, 'the default account until one is named');
+  assert.equal(blocked.result.status === 'stopped' && blocked.result.isExpected, true);
   log.length = 0;
   const owned = await runRecipe(google, { owner: 'me@personal.com', signInEmail: 'sam@acme.com', agree: 'I agree', publish: 'Publish it' }, { ...ops, isPresent: async () => false });
   assert.ok(log.every((l) => !l.startsWith('goto') || l.endsWith('authuser=me@personal.com')));
   assert.ok(log.includes('fill Text field for emails me@personal.com') && log.includes('fill Text field for emails sam@acme.com'), 'the owner is the contact, the Workspace account the test user');
   assert.equal(owned.result.status === 'stopped' && owned.result.stepId, 'client-id', 'runs to the capture (nothing to copy here)');
+});
+
+test("Google's recipe reuses the owner's mochi-<digits> project: its Desktop client's ID from the address, and a new secret", async () => {
+  const google = BUILT_IN_RECIPES['google-workspace']!;
+  const log: string[] = [];
+  let at = 'https://console.cloud.google.com/cloud-resource-manager';
+  const ops: RecipeOps = {
+    url: () => at,
+    goto: async (to) => void log.push(`goto ${(at = to)}`),
+    click: async (t) => {
+      log.push(`click ${t.name}`);
+      if (t.name === 'Mochi') at = 'https://console.cloud.google.com/auth/clients/396-abc.apps.googleusercontent.com?authuser=1&project=mochi-196846';
+    },
+    fill: async () => {},
+    options: async () => [],
+    pick: async () => {},
+    close: async () => {},
+    waitForText: async (text) => void log.push(`wait ${text}`),
+    isPresent: async () => false,
+    texts: async (t) => (t.role === 'gridcell' ? ['Mochi recipe test', 'mochi-recipe-48213', 'Mochi', 'mochi-196846'] : []),
+    capture: async (_, isValid) => ['GOCSPX-new'].find(isValid) ?? '',
+  };
+  const run = await runRecipe(google, { owner: 'me@x.com' }, ops);
+  assert.deepEqual(run.result.status === 'done' && run.result.captured, ['googleClientId', 'googleClientSecret']);
+  assert.deepEqual(run.captured, { googleClientId: '396-abc.apps.googleusercontent.com', googleClientSecret: 'GOCSPX-new' });
+  assert.equal(run.params.suffix, '196846', 'the existing project, not mochi-recipe-48213');
+  assert.ok(log.includes('goto https://console.cloud.google.com/auth/clients?project=mochi-196846&authuser=me@x.com') && log.includes('click Add client secret'));
+  assert.ok(!log.some((l) => l.includes('projectcreate')), 'no second project');
+});
+
+test("a project Google can't find stops the run at once, handing back the params to rerun with", async () => {
+  const google = BUILT_IN_RECIPES['google-workspace']!;
+  const ops: RecipeOps = {
+    url: () => 'https://console.cloud.google.com/apis/enableflow',
+    goto: async () => {},
+    click: async () => {},
+    fill: async () => {},
+    options: async () => [],
+    pick: async () => {},
+    close: async () => {},
+    waitForText: (text) => (text === 'Failed to load.' ? Promise.resolve() : new Promise(() => {})),
+    isPresent: async () => false,
+    texts: async () => [],
+    capture: async () => '',
+  };
+  const run = await runRecipe(google, { owner: 'me@gmail.com' }, ops);
+  assert.ok(run.result.status === 'stopped');
+  assert.equal(run.result.stepId, 'project-ready');
+  assert.equal(run.result.isExpected, true);
+  assert.match(run.result.reason, new RegExp(`no project mochi-${run.params.suffix} .*fromStep "apis"`));
+  assert.equal(run.result.params.owner, 'me@gmail.com');
+  assert.match(run.result.params.suffix, /^\d{6}$/);
+});
+
+test('a recipe read needs a regex with a group and a later step', () => {
+  const base = { version: 1, domains: ['console.cloud.google.com'], params: { id: {} } };
+  const read = (extra: object) => parseRecipe('google-workspace', { ...base, steps: [{ id: 'a', kind: 'read', target: { role: 'gridcell' }, param: 'id', to: 'b', note: 'x', ...extra }, { id: 'b', kind: 'end', note: 'x' }] });
+  assert.throws(() => read({ pattern: 'mochi-\\d+' }), /needs a group/);
+  assert.throws(() => read({ pattern: '(' }), /regular expression/);
+  assert.equal(read({ pattern: '^mochi-(\\d+)$' }).steps[0].kind, 'read');
 });
