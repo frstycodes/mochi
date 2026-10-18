@@ -7,7 +7,7 @@ import { effortName } from '../runtime/models.ts';
 import type { RemoteSettings } from '../host/types/remote.ts';
 import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from '../themes/model.ts';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../utility/prompts.ts';
-import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ModelChoice, type ProfileConfig } from '../host/types/settings.ts';
+import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ImageGenHarness, type ModelChoice, type ProfileConfig } from '../host/types/settings.ts';
 import { linkedAccountId } from './accounts.ts';
 import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
@@ -114,6 +114,7 @@ const SHARED_KEYS = new Set([
   'quietFrom',
   'quietUntil',
   'sideChatModel',
+  'imageGen',
   'effort',
   'speed',
   'starredModels',
@@ -165,6 +166,11 @@ const SWITCH = { type: 'switch' } as const;
 const choice = (options: readonly Option[]) => ({ type: 'choice', options }) as const;
 const select = (options: readonly Option[]) => ({ type: 'select', options }) as const;
 
+const IMAGE_GEN_OPTIONS = [
+  { value: 'codex', label: 'Codex' },
+  { value: 'off', label: 'Off' },
+] as const satisfies readonly { value: ImageGenHarness; label: string }[];
+
 const THEMES = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -202,7 +208,7 @@ function pref(key: PrefKey, label: string, section: SettingSection, control: Con
 }
 
 /** A host (main-process) setting at the top level of `AgentSettings`. */
-function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude' | 'appIcon', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
+function hostSetting(key: 'concurrency' | 'worktreeRoot' | 'shell' | 'prDrafts' | 'prepareWorktrees' | 'worktreeInclude' | 'imageGen' | 'appIcon', label: string, section: SettingSection, control: Control, extra: Partial<Setting> = {}): Setting {
   return {
     key,
     label,
@@ -387,6 +393,7 @@ const APP_SETTINGS: Setting[] = [
       return sideChatModel && { to: 'host', patch: { sideChatModel } };
     },
   },
+  hostSetting('imageGen', 'Image generation', 'models', select(IMAGE_GEN_OPTIONS), { group: 'Image generation', description: 'Claude makes images through this harness, on this profile’s account' }),
   pref('whileWorking', 'While the agent is working, new messages', 'general', select(WHILE_WORKING), { group: 'New threads', description: 'Queued messages go out one per turn, in order' }),
   pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS), { group: 'Style', description: 'A few short sentences, or more of the detail' }),
   pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH, { group: 'Style', description: 'Lead with questions and decisions waiting on you' }),

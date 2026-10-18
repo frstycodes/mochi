@@ -220,7 +220,7 @@ async function launch(session: Session) {
         mcpServers: {
           ...Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig])),
           ...Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }])),
-          [SERVER]: claudeServer(threadId),
+          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd),
         },
         hooks: { ...PR_GUARD, ...compactHooks(threadId) },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],

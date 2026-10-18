@@ -17,7 +17,7 @@ import { VERDICT_SCHEMA } from '../../src/secondOpinion/verdict.ts';
 import { ask as askAgent, utility } from '../agents/ask.ts';
 import { models } from '../agents/models.ts';
 import { resolveRun } from '../../src/runtime/models.ts';
-import { codexUrl, resolveToolCall, undeliveredToolCalls } from '../mcp/server.ts';
+import { codexUrl, resolveToolCall, setImageGenerator, undeliveredToolCalls } from '../mcp/server.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { emitAgentEvent, eventsSince, forgetEvents, isBusy, markBusy, markIdle } from '../agents/events.ts';
 import { createWorktree } from './git.ts';
@@ -96,6 +96,7 @@ const codex = new CodexAdapter(
 codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
+setImageGenerator('codex', codex.generateImage.bind(codex));
 const starts = new Starts();
 // A Mochi background agent's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
 const isBackgroundSession = (threadId: string) => threadId.includes('--');
