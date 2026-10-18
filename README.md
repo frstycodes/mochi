@@ -62,3 +62,24 @@ src/goals/    goal editing, templates, drift guard
 - [RUNTIME.md](RUNTIME.md): how threads run real Claude Code and Codex agents
 - [CHECKLIST.md](CHECKLIST.md): what's built and what's left
 - [SESSIONS.md](SESSIONS.md): how the build is split across parallel sessions
+
+## Dev MCP
+
+Opt in when launching a desktop dev build. Use a separate data directory to keep test tasks apart from your daily workspace:
+
+```bash
+MOCHI_DEV_MCP=1 MOCHI_USER_DATA=/tmp/mochi-dev pnpm electron:dev
+```
+
+The app writes `/tmp/mochi-dev/dev-mcp.json` with its MCP URL and process id. Configure an external MCP client's HTTP server with that URL, or use the included client:
+
+```bash
+node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json inspect '{}'
+node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json start_task '{"provider":"codex","prompt":"Explain why 2 + 2 is 4"}'
+node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json inspect '{"threadId":"new-1","limit":50}'
+node scripts/dev-mcp.mjs /tmp/mochi-dev/dev-mcp.json continue_task '{"threadId":"new-1","text":"Explain 3 + 3 next"}'
+```
+
+Use the returned task id in subsequent calls. Goals start empty; the working agent proposes one after research. `accept_goal` accepts that researched proposal for a test task without verifying its criteria. `start_task` accepts an optional absolute `project` folder and uses the selected profile's account and permission defaults. `inspect` exposes paginated transcript entries, goal criteria, proposals, todos, turn reports, pending questions, verdicts and next actions. PR state is the last recorded state. Continue only idle tasks; running and settled tasks are refused.
+
+This endpoint is disabled in packaged builds, binds only to loopback, rejects browser origins and uses a new secret URL each launch. The discovery file is owner-readable only and is removed on normal exit. A fresh data directory needs an account connected through Settings before real agent tasks can run.

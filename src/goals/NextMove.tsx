@@ -118,11 +118,12 @@ export interface PlanItem {
   status: 'done' | 'running' | 'pending';
 }
 
-/** The agent's own to-do list, read-only, the last thing in the chat until every item is done; then it goes. */
+/** The agent's own to-do list, kept visible after completion. */
 export function PlanList({ items, slot }: { items: PlanItem[]; slot: LineSlot }) {
-  if (items.every((i) => i.status === 'done')) return null;
+  if (!items.length) return null;
   return (
     <CallList aria-label="Plan">
+      <li className="px-3 py-2 type-meta font-medium">Plan</li>
       {items.map((item) => (
         <PlanRow key={item.title} item={item} slot={slot} />
       ))}

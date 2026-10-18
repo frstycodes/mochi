@@ -6,7 +6,6 @@ import {
   Plus,
   Code,
   Chart,
-  Cpu,
   File,
   Folder,
   Grip,
@@ -56,7 +55,7 @@ import { useHarness } from './store';
 import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { OverflowIcon } from './ui';
+import { OverflowIcon, ProviderMark } from './ui';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
 import { connectorStatus, fileCount, orderCards, savedOrder, summaryCards, type SummaryCardId } from './summarySections';
@@ -286,7 +285,7 @@ function EnvironmentCard({ thread }: CardProps) {
             onClick={repo.isDetached ? undefined : () => copyText(repo.branch, 'Branch name copied')}
           />
         )}
-        {!!agent?.model && <SummaryRow icon={Cpu} label={agent.model} />}
+        {!!agent?.model && <SummaryRow icon={<ProviderMark provider={thread.session?.provider ?? thread.providers[0]} />} label={agent.model} />}
         {!!agent?.permissionMode && (
           <SummaryRow
             icon={fullAccess ? <ShieldAlert className="size-4 text-warning" /> : ShieldCheck}
@@ -469,23 +468,20 @@ function ChangesBody({
   const canOpenPr = hasChanges && prs.length === 0 && !!thread.repo;
   return (
     <>
-      <CardHeader
-        title="Changes"
-        meta={
-          hasChanges && (
-            <span>
-              <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span>
-            </span>
-          )
-        }
-      />
+      <CardHeader title="Changes" />
       <CardBody>
         {!!files && (
           <SummaryRow
             icon={DiffIcon}
             label={hasChanges ? fileCount(files.length) : thread.status === 'settled' ? 'No changes' : 'No changes yet'}
             onClick={open.changes}
-          />
+          >
+            {hasChanges && (
+              <span className="tabular type-caption">
+                <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span>
+              </span>
+            )}
+          </SummaryRow>
         )}
         {prs.map((item) => (
           <PullRequestRow key={item.pr.number} item={item} onOpen={open.url} />

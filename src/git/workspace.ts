@@ -5,7 +5,7 @@ import type { Repo, Thread } from '../model.ts';
 export type WorkspaceMode = 'worktree' | 'folder';
 
 /** The workspace part of a new thread's repo, as the pickers chose it; unset fields take the defaults (`create` in the store). */
-export type WorkspaceDraft = Pick<Repo, 'base' | 'isExisting'> & { mode: WorkspaceMode; branch?: string };
+export type WorkspaceDraft = Pick<Repo, 'base' | 'isExisting' | 'autoBranch'> & { mode: WorkspaceMode; branch?: string };
 
 export const workspaceMode = (repo: Repo): WorkspaceMode => repo.mode ?? 'worktree';
 

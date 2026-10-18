@@ -36,11 +36,19 @@ export function moveContext(threads: Thread[], thread: Thread): MoveContext {
 export function moveFor(thread: Thread, verdict: Verdict, prStates: RefStatus[], context: MoveContext = {}): Move | null {
   const open = verdict.gaps.filter((g) => !g.isAccepted).length;
   if (verdict.subThread) return subMove(verdict.subThread);
-  if (verdict.chip === YOUR_CALL) return { kind: 'confirm', label: 'Mark done' };
+  if (verdict.chip === YOUR_CALL) {
+    if (thread.repo && thread.idle?.uncommitted) return { kind: 'commit', label: 'Commit' };
+    if (thread.repo && nextStep(prStates) === 'open-pr') return { kind: 'open-pr', label: 'Open pull request' };
+    return { kind: 'confirm', label: 'Verify outcome' };
+  }
   if (verdict.kind === 'needs-you') return null;
   if (verdict.kind === 'gaps') return { kind: 'close-gaps', label: `Close ${open} ${open === 1 ? 'gap' : 'gaps'}` };
   if (verdict.kind === 'stalled') return verdict.chip === 'Stopped' ? { kind: 'continue', label: 'Continue' } : null;
   if (verdict.kind !== 'done') return null;
+  if (!thread.repo) {
+    if (!thread.idle?.isConfirmed && thread.criteria?.some((c) => !c.command)) return { kind: 'confirm', label: 'Verify outcome' };
+    return { kind: 'settle', label: 'Settle thread' };
+  }
   if (thread.idle?.uncommitted) return { kind: 'commit', label: 'Commit' };
   const subPrs = context.subPrs ?? [];
   if (subPrs.length) return { kind: 'merge-subs', label: `Merge ${subPrs.length} ${subPrs.length === 1 ? 'PR' : 'PRs'}` };
@@ -58,11 +66,7 @@ function subMove(sub: NonNullable<Verdict['subThread']>): Move | null {
   return null;
 }
 
-/**
- * The card's question. The agent's own words (`report.next`) for a turn that's done or stopped, where it knows the work best;
- * Mochi's for gaps and for what only Mochi can name, so the question never promises a different move than the button makes.
- * Null when there's nothing to ask: a limit, an error, a PR in review, still checking.
- */
+/** The question matches the action; only Continue uses the agent's proposed next move. */
 export function questionFor(verdict: Verdict, move: Move | null, report: TurnReport | undefined, agent: string, context: MoveContext = {}): string | null {
   if (!move) return verdict.kind === 'needs-you' ? verdict.reason : null;
   const open = verdict.gaps.filter((g) => !g.isAccepted).length;
@@ -71,20 +75,20 @@ export function questionFor(verdict: Verdict, move: Move | null, report: TurnRep
   if (sub && move.kind === 'hand-back') return `${sub.title} is finished. Hand its result back to this thread?`;
   switch (move.kind) {
     case 'confirm':
-      return verdict.reason;
+      return verdict.kind === 'done' ? 'Verify the completed work against the goal criteria?' : verdict.reason;
     case 'close-gaps':
       return `Hand the ${open === 1 ? 'gap' : `${open} gaps`} back to ${agent}?`;
     case 'continue':
       return report?.next ?? `Pick up where ${agent} stopped?`;
     case 'commit':
-      return report?.next ?? 'Commit these changes?';
+      return 'Commit these changes?';
     case 'open-pr':
-      return context.parent?.repo ? `Open a pull request into ${context.parent.repo.branch}?` : (report?.next ?? 'Open a pull request for this?');
+      return context.parent?.repo ? `Open a pull request into ${context.parent.repo.branch}?` : 'Open a pull request for this?';
     case 'hand-back':
       return `Hand the result back to ${context.parent?.title ?? 'its parent thread'}?`;
     case 'merge-subs':
       return `Merge the ${context.subPrs?.length === 1 ? 'sub-thread PR' : `${context.subPrs?.length} sub-thread PRs`} into this branch?`;
     case 'settle':
-      return report?.next ?? 'Settle this thread?';
+      return 'Settle this thread?';
   }
 }

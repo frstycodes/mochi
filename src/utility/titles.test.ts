@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { titleRequest } from './titles.ts';
+import { automaticBranchTitle, titleRequest } from './titles.ts';
 
 const demoState = () => ({ ...initialThreads(null, true), ...initialQueue(null, true), spaceId: 'personal', views: {} }) as unknown as State;
 const run = (s: State, action: Action) => threadsReducer(s, action);
@@ -31,4 +31,19 @@ test('a thread started with "hi" waits for a real goal before it is named', () =
   let s = run(demoState(), { type: 'create', title: 'hi', provider: 'claude', project: null, isLive: true });
   const t = s.threads.at(-1)!;
   assert.equal(titleRequest({ ...t, live: { isWorking: false }, activity: [...t.activity, { at: 1, who: 'claude', kind: 'message', text: 'Hello! What are we building?' }] }), null);
+});
+
+test('a summary names only a branch created automatically for this thread, preserving its prefix and change type', () => {
+  const s = run(demoState(), { type: 'create', title: 'I still have issues with the login redirect', provider: 'claude', project: '/app', isLive: true, workspace: { mode: 'worktree' } });
+  const t = s.threads.at(-1)!;
+  assert.equal(t.repo!.autoBranch, t.repo!.branch);
+  assert.equal(automaticBranchTitle(t, 'Login redirect keeps next'), 'feat/login-redirect-keeps-next');
+  const repo = { ...t.repo!, branch: 'me/fix/i-still-have-issues', autoBranch: 'me/fix/i-still-have-issues' };
+  assert.equal(automaticBranchTitle({ ...t, repo }, 'Fix login redirect'), 'me/fix/login-redirect');
+  assert.equal(automaticBranchTitle({ ...t, repo }, '???'), null);
+  for (const change of [{ autoBranch: undefined }, { branch: 'my-branch' }, { mode: 'folder' as const }, { isExisting: true }, { isDetached: true }]) {
+    assert.equal(automaticBranchTitle({ ...t, repo: { ...repo, ...change } }, 'Login redirect'), null);
+  }
+  const named = run(demoState(), { type: 'create', title: 'Fix login', provider: 'claude', project: '/app', workspace: { mode: 'worktree', branch: 'my-name' } }).threads.at(-1)!;
+  assert.equal(named.repo!.autoBranch, undefined);
 });

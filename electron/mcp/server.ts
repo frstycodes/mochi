@@ -1,5 +1,7 @@
+import { app } from 'electron';
+import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
@@ -10,7 +12,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ImageGenHarness } from '../../src/host/types/settings.ts';
 import type { GeneratedImage } from '../../src/model.ts';
 import { IMAGE_SIZES, IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, imageResultText, type ImageSize } from '../../src/runtime/imageTool.ts';
-import { MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE, type ToolName } from '../../src/runtime/toolTable.ts';
+import { MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
 import { agentSettings } from '../agents/config.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
@@ -25,7 +27,7 @@ const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
 
 /** Shown to the model as the server's instructions (MCP `initialize`); the same for every thread, so it reads its own goal. */
 export const INSTRUCTIONS =
-  "Mochi runs this thread and shows the user its goal. Call get_goal at the start of a task. A question or chat has no goal: then ignore the rest. A task starts with Mochi's draft goal (get_goal says isDraft): after your first look at the code, call propose_goal with the concrete outcome and checkable criteria, before claiming or reporting anything; propose again only if what done means has to change. With a goal: keep your plan current in your own task tools; call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (what changed in the user's terms, decisions, what's left, at most one question for the user, and the next move as one yes/no question). To split a goal, start one sub-thread per independent piece with create_thread and that piece's criterionId (pieces that touch different files); a sub-thread works only on its piece and opens its PR into its parent's branch with open_pr, and its result comes back to the parent.";
+  "Mochi runs this thread and shows the user its goal. Call get_goal at the start. For a task, research the code and the user's request first, then call propose_goal with the concrete outcome and checkable criteria. Mochi does not draft a goal from the first prompt. A question or chat needs no goal. Older threads may have a draft (isDraft): replace it after research. Propose again only if what done means has to change. While a proposal awaits acceptance, keep working and report progress; claim criteria once accepted. With a goal: keep your plan current in your own task tools; call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (what changed in the user's terms, decisions, what's left, at most one question for the user, and the next move as one yes/no question). To split a goal, start one sub-thread per independent piece with create_thread and that piece's criterionId (pieces that touch different files); a sub-thread works only on its piece and opens its PR into its parent's branch with open_pr, and its result comes back to the parent.";
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
 export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SERVER}__${name}`);
@@ -104,7 +106,7 @@ export const resolveToolCall = calls.resolve;
 /** The calls a window reload took from `renderer`'s page, for the reloaded page to run again. */
 export const undeliveredToolCalls = calls.undelivered;
 
-async function callMochi(thread: string, name: ToolName, args: Record<string, unknown>): Promise<CallToolResult> {
+async function callMochi(thread: string, name: string, args: Record<string, unknown>): Promise<CallToolResult> {
   const win = mainWindow();
   if (!win) return { content: [{ type: 'text', text: 'Mochi has no window open' }], isError: true };
   const result = await calls.call(win.webContents, { threadId: thread, name, args });
@@ -121,8 +123,10 @@ function listening() {
       if (!match || match[1] !== SECRET) return void res.writeHead(404).end();
       // Codex sends no Origin; a browser page always does, so this keeps web pages off the port even if they learn the URL.
       if (req.headers.origin !== undefined) return void res.writeHead(403).end();
-      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: INSTRUCTIONS });
-      for (const t of TOOLS) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
+      const isDev = !app.isPackaged && process.env.MOCHI_DEV_MCP === '1' && match[2] === '__dev__';
+      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: isDev ? 'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.' : INSTRUCTIONS });
+      if (isDev) registerDevTools(mcp);
+      else for (const t of TOOLS) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => void transport.close().then(() => mcp.close()));
       await mcp.connect(transport);
@@ -149,4 +153,34 @@ async function routed(req: IncomingMessage, res: ServerResponse) {
     if (!res.headersSent) res.writeHead(500).end(error.message);
   });
   return true;
+}
+
+/** Explicit opt-in: a per-launch URL readable only by the local user, never a LAN listener. */
+export async function startDevMcp() {
+  if (app.isPackaged || process.env.MOCHI_DEV_MCP !== '1') return;
+  const url = await codexUrl('__dev__');
+  const file = resolve(app.getPath('userData'), 'dev-mcp.json');
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify({ url, pid: process.pid }, null, 2), { mode: 0o600 });
+  app.once('will-quit', () => { void rm(file, { force: true }); });
+  console.info(`Dev MCP connection written to ${file}`);
+}
+
+function registerDevTools(mcp: McpServer) {
+  mcp.registerTool('inspect', {
+    description: 'Inspect this dev build. Omit threadId to list threads; supply it for paginated transcript, goal, criteria, plan, report, verdict and next action. PR state is the last recorded state, not a fresh GitHub fetch.',
+    inputSchema: { threadId: z.string().optional(), offset: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(200).optional() },
+  }, (args: Record<string, unknown>) => callMochi('__dev__', 'inspect', args));
+  mcp.registerTool('start_task', {
+    description: 'Start a real task in the dev build’s selected profile, with its normal account and permission defaults. project is an optional absolute project folder; omit for a folderless task. Returns the thread id to inspect.',
+    inputSchema: { prompt: z.string().trim().min(1).max(20000), provider: z.enum(['claude', 'codex']), project: z.string().min(1).optional() },
+  }, (args: Record<string, unknown>) => callMochi('__dev__', 'start_task', args));
+  mcp.registerTool('accept_goal', {
+    description: 'Accept a test task’s researched goal in this opted-in dev build, as through its proposal card. This does not verify any criteria; it only makes them available for progress reporting.',
+    inputSchema: { threadId: z.string().min(1) },
+  }, (args: Record<string, unknown>) => callMochi('__dev__', 'accept_goal', args));
+  mcp.registerTool('continue_task', {
+    description: 'Send the next prompt to an idle dev task, as through its composer. Inspect its transcript, criteria and next action first. Refuses running or settled tasks.',
+    inputSchema: { threadId: z.string().min(1), text: z.string().trim().min(1).max(20000) },
+  }, (args: Record<string, unknown>) => callMochi('__dev__', 'continue_task', args));
 }
