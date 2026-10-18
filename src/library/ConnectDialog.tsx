@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Copy } from '@/icons';
+import { ChevronDown, Copy, Key, Sparkles, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -161,17 +162,25 @@ const AGENT_SETUPS: string[] = ['slack', 'google-workspace'];
 
 type Setup = 'agent' | 'manual';
 
+// The agent's sparkles twinkle on hover: a small turn and lift, settling back; still for reduced motion.
+const TWINKLE = '[&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-[cubic-bezier(0.23,1,0.32,1)] motion-safe:hover:[&_svg]:scale-115 motion-safe:hover:[&_svg]:-rotate-12';
+
+function ChoiceIcon({ icon: Icon }: { icon: IconComponent }) {
+  return <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />;
+}
+
 const SETUP_CHOICES = {
-  agent: { action: 'Set up with an agent', title: 'Set up with an agent', body: (name: string) => `A new thread makes your ${name} app in its browser and signs you in, asking you only what it can't decide.` },
-  manual: { action: 'Continue in browser', title: 'Enter credentials myself', body: (name: string) => `Paste the client ID and secret of a ${name} app you made.` },
-} satisfies Record<Setup, { action: string; title: string; body: (name: string) => string }>;
+  agent: { icon: Sparkles, action: 'Set up with an agent', title: 'Set up with an agent', body: (name: string) => `A new thread makes your ${name} app in its browser and signs you in, asking you only what it can't decide.` },
+  manual: { icon: Key, action: 'Continue in browser', title: 'Enter credentials myself', body: (name: string) => `Paste the client ID and secret of a ${name} app you made.` },
+} satisfies Record<Setup, { icon: IconComponent; action: string; title: string; body: (name: string) => string }>;
 
 /** GitHub's merge button: the chosen way to set the app up, and a chevron to switch; switching to manual shows the fields. */
 function SetupButton({ name, setup, onSetup, isReady, isBusy }: { name: string; setup: Setup; onSetup: (setup: Setup) => void; isReady: boolean; isBusy: boolean }) {
+  const Icon = SETUP_CHOICES[setup].icon;
   return (
     <ButtonGroup>
-      <Button type="submit" disabled={!isReady}>
-        {isBusy && <Spinner data-icon="inline-start" />}
+      <Button type="submit" disabled={!isReady} className={cn(setup === 'agent' && TWINKLE)}>
+        {isBusy ? <Spinner data-icon="inline-start" /> : <Icon data-icon="inline-start" />}
         {SETUP_CHOICES[setup].action}
       </Button>
       <ButtonGroupSeparator />
@@ -184,7 +193,8 @@ function SetupButton({ name, setup, onSetup, isReady, isBusy }: { name: string; 
         <DropdownMenuContent align="end" className="w-72">
           <DropdownMenuRadioGroup value={setup} onValueChange={(v) => onSetup(v as Setup)}>
             {(Object.keys(SETUP_CHOICES) as Setup[]).map((choice) => (
-              <DropdownMenuRadioItem key={choice} value={choice} className="items-start">
+              <DropdownMenuRadioItem key={choice} value={choice} className={cn('items-start', choice === 'agent' && TWINKLE)}>
+                <ChoiceIcon icon={SETUP_CHOICES[choice].icon} />
                 <span className="flex flex-col gap-0.5">
                   <span className="type-body font-medium">{SETUP_CHOICES[choice].title}</span>
                   <span className="type-meta text-pretty text-muted-foreground">{SETUP_CHOICES[choice].body(name)}</span>

@@ -94,6 +94,7 @@ export const Inbox = solar(Linear.InboxIcon, Bold.InboxIcon);
 export const InboxIn = solar(Linear.InboxInIcon, Bold.InboxInIcon);
 export const InboxOut = solar(Linear.InboxOutIcon, Bold.InboxOutIcon);
 export const Info = solar(Linear.InfoCircleIcon, Bold.InfoCircleIcon);
+export const Key = solar(Linear.KeyIcon, Bold.KeyIcon);
 export const Keyboard = solar(Linear.KeyboardIcon, Bold.KeyboardIcon);
 export const Layers = solar(Linear.LayersIcon, Bold.LayersIcon);
 export const Layout = solar(Linear.Widget2Icon, Bold.Widget2Icon);
