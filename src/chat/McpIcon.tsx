@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import mochiIcon from '../../build/icon.svg';
+import { hostname } from '../agentPhase';
 import { IconImage } from '../IconImage';
 import { McpServerIcon } from '../icons/ObjectIcons';
 import { useLibraryNames } from '../library/names';
@@ -25,7 +26,7 @@ export function McpServerMark({ server, url, className }: { server: string; url?
   if (server === MOCHI_SERVER) return <img src={mochiIcon} alt="" aria-hidden className={cn('size-4 shrink-0 rounded-[22%]', className)} />;
   if (name.image) return <LibraryImage src={name.image} fallback={<McpServerIcon className={className} />} className={className} />;
   const site = name.url ?? url;
-  if (site) return <Favicon host={URL.canParse(site) ? new URL(site).hostname : site} fallback={<McpServerIcon className={className} />} />;
+  if (site) return <Favicon host={hostname(site)} fallback={<McpServerIcon className={className} />} />;
   return <McpServerIcon className={className} />;
 }
 
