@@ -2,7 +2,7 @@ import type { RefStatus } from '../chat/refs.ts';
 import type { Thread, TurnReport } from '../model.ts';
 import { parentOf, subThreadsOf } from '../reorder.ts';
 import { nextStep } from './report.ts';
-import { YOUR_CALL, type Verdict } from './verdict.ts';
+import { YOUR_CALL, type Gap, type Verdict } from './verdict.ts';
 
 export type MoveKind = 'confirm' | 'close-gaps' | 'continue' | 'commit' | 'open-pr' | 'hand-back' | 'merge-subs' | 'settle';
 
@@ -42,7 +42,7 @@ export function moveFor(thread: Thread, verdict: Verdict, prStates: RefStatus[],
     return { kind: 'confirm', label: 'Verify outcome' };
   }
   if (verdict.kind === 'needs-you') return null;
-  if (verdict.kind === 'gaps') return { kind: 'close-gaps', label: `Close ${open} ${open === 1 ? 'gap' : 'gaps'}` };
+  if (verdict.kind === 'gaps') return closeGaps(open);
   if (verdict.kind === 'stalled') return verdict.chip === 'Stopped' ? { kind: 'continue', label: 'Continue' } : null;
   if (verdict.kind !== 'done') return null;
   if (!thread.repo) {
@@ -64,6 +64,38 @@ function subMove(sub: NonNullable<Verdict['subThread']>): Move | null {
   if (sub.kind === 'gaps') return { kind: 'close-gaps', label: `Close ${sub.openGaps} ${sub.openGaps === 1 ? 'gap' : 'gaps'}`, threadId: sub.id };
   if (sub.kind === 'done' || sub.kind === 'idle') return { kind: 'hand-back', label: 'Hand back', threadId: sub.id };
   return null;
+}
+
+const closeGaps = (count: number): Move => ({ kind: 'close-gaps', label: `Close ${count} ${count === 1 ? 'gap' : 'gaps'}` });
+
+/**
+ * The agent's own answers, plus Close gaps for open gaps its report predates: first when one is critical, last when all are unverified.
+ * The agent wrote its options before Mochi saw these, so they can't cover them.
+ */
+export function withUnseenGaps<T>(options: T[], thread: Thread, verdict: Verdict, report: TurnReport | undefined, toChoice: (move: Move) => T): T[] {
+  const unseen = verdict.gaps.filter((g) => !g.isAccepted && isUnseen(thread, g, report));
+  if (!unseen.length) return options;
+  const close = toChoice(closeGaps(verdict.gaps.filter((g) => !g.isAccepted).length));
+  return unseen.some((g) => g.severity === 'critical') ? [close, ...options] : [...options, close];
+}
+
+/** CI, conflicts and Mochi's transcript audit come after the report; a criterion's gap counts when its check failed after it. */
+function isUnseen(thread: Thread, gap: Gap, report: TurnReport | undefined) {
+  if (!report || !gap.criterionId) return true;
+  const check = thread.criteria?.find((c) => c.id === gap.criterionId)?.check;
+  return !!check && check.at >= report.at;
+}
+
+/** The agent's own question and buttons for this turn, which replace Mochi's move; null when it wrote none (a limit, an error, no report). */
+export function agentAsk(report: TurnReport | undefined) {
+  if (!report?.next || !report.options?.length) return null;
+  return { question: report.next, options: report.options };
+}
+
+/** Continue answers the agent's own next-move question with yes, so the agent gets the move the card showed; without one, it resumes. */
+export function continuePrompt(report: TurnReport | undefined, hasPlan: boolean) {
+  if (report?.next) return `Yes: ${report.next}`;
+  return hasPlan ? 'Continue the plan from where you stopped.' : 'Continue where you left off.';
 }
 
 /** The question matches the action; only Continue uses the agent's proposed next move. */

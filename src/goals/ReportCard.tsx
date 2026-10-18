@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { GitMergeIcon, GitPullRequestIcon, REF_CHIP_CLASS, REF_TONE_CLASS } from '@/icons/github';
 import { TerminalIcon } from '@/icons/panes';
 import { cn } from '@/lib/utils';
-import { authorName, isMet, type Thread, type TurnReport } from '../model';
+import { authorName, isMet, type NextOption, type Thread, type TurnReport } from '../model';
 import { ProgressRing } from '../ui';
 import { RefChip } from '../chat/ChatLink';
 import type { RefTone } from '../chat/refs';
@@ -15,16 +15,16 @@ import type { ThreadPr } from '../git/useThreadPrs';
 import { isMod } from '../keys';
 import { useHarness } from '../store';
 import { CallList, Expand } from '../WorkLog';
-import type { Move } from './moves';
+import { continuePrompt, withUnseenGaps, type Move } from './moves';
 import { SubThreadLineage, SubThreadList } from './SubThreads';
 import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveSummary, useNextMove } from './NextMove';
 import { showsVerdictCard } from './report';
 import { bareStates, idleVerdict, turnReport, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
 
 /**
- * The end of a turn, in the chat: Mochi's verdict, the agent's summary, Mochi's evidence and gaps, then one question with the
- * move Mochi picked from the goal's state. Answering it, or writing instead, keeps it in the chat as a record
- * (`next-move-record`); ⌘↵ takes the move while the message box is empty. Read-only (a replay, another computer's thread) shows the
+ * The end of a turn, in the chat: Mochi's verdict, the agent's summary, Mochi's evidence and gaps, then the agent's question with
+ * its own answers as buttons, or Mochi's move when it wrote none. Answering it, or writing instead, keeps it in the chat as a
+ * record (`next-move-record`); ⌘↵ takes the first answer while the message box is empty. Read-only (a replay, another computer's thread) shows the
  * question without answers: they would act on this computer's store. `onJump` scrolls to the agent's quoted words.
  */
 export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isReadOnly?: boolean; onJump?: (quote: string) => void }) {
@@ -32,12 +32,11 @@ export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isR
   const answers = useMoveAnswers(thread);
   const { textInput } = usePromptInputController();
   const isShown = !!next && showsVerdictCard(thread);
-  const take = () => next?.move && next.question && answers.move(next.move, next.verdict, next.question, next.report, next.context.subPrs ?? []);
-  const card = useMoveShortcut(isShown && !isReadOnly && !!next.move && !!next.question && !textInput.value.trim(), take);
+  const choices = isShown && !isReadOnly ? choicesFor(thread, next, answers) : [];
+  const card = useMoveShortcut(choices.length > 0 && !textInput.value.trim(), () => choices[0].run());
   if (!isShown) return null;
-  const { verdict, prs, tiles, move, question, report } = next;
+  const { verdict, prs, tiles, question, report } = next;
   const changes = openTurn(thread.activity);
-  const other = otherAnswer(thread, verdict, report, prs);
   return (
     <NextMoveCard ref={card} data-next-move={thread.id}>
       <NextMoveHeader thread={thread} verdict={verdict} />
@@ -50,35 +49,37 @@ export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isR
         {!!changes && <TurnChangesCard thread={thread} turn={changes} />}
         {verdict.kind === 'waiting' && <p className="type-meta text-muted-foreground">Mochi asks when one finishes or needs you.</p>}
         {!!question && (
-          <NextMoveAsk question={question}>
-            {!!move && !isReadOnly && (
-              <NextMoveActions
-                move={move}
-                alternative={other.label}
-                onMove={take}
-                onAlternative={() => {
-                  answers.other(other, question, report);
-                  if (other.draft) textInput.setInput(other.draft);
-                }}
-              />
-            )}
-          </NextMoveAsk>
+          <NextMoveAsk question={question}>{choices.length > 0 && <NextMoveActions labels={choices.map((c) => c.label)} onPick={(i) => choices[i].run()} />}</NextMoveAsk>
         )}
       </NextMoveContent>
     </NextMoveCard>
   );
 }
 
+/** The card's buttons: the agent's own answers with Close gaps for what it couldn't have seen, else Mochi's move and one other answer. */
+function choicesFor(thread: Thread, next: NonNullable<ReturnType<typeof useNextMove>>, answers: ReturnType<typeof useMoveAnswers>) {
+  const { ask, move, question, verdict, report, prs, context } = next;
+  if (ask) {
+    const options = ask.options.map((o) => ({ label: o.label, run: () => answers.option(o, ask.question, report) }));
+    return withUnseenGaps(options, thread, verdict, report, (m) => ({ label: m.label, run: () => answers.move(m, verdict, ask.question, report, []) }));
+  }
+  if (!move || !question) return [];
+  const other = otherAnswer(thread, verdict, prs);
+  return [
+    { label: move.label, run: () => answers.move(move, verdict, question, report, context.subPrs ?? []) },
+    { label: other.label, run: () => answers.other(other, question, report) },
+  ];
+}
+
 interface OtherAnswer {
   label: string;
-  /** The agent's suggested message for its own answer; it fills the message box for you to send or change. */
-  draft?: string;
   isOpenAnyway?: boolean;
 }
 
 /** What each answer does. The record goes first so it sits above the message a move sends. */
 function useMoveAnswers(thread: Thread) {
   const { state, dispatch } = useHarness();
+  const { textInput } = usePromptInputController();
   const agent = authorName(thread.session?.provider ?? thread.providers[0]);
   const send = (text: string, reason: string, threadId = thread.id) => dispatch({ type: 'send', threadId, text, reason });
   const record = (question: string, report: TurnReport | undefined, answer: string) =>
@@ -94,11 +95,16 @@ function useMoveAnswers(thread: Thread) {
       'close-gaps': () => send(closeGapsPrompt(gaps.filter((g) => !g.isAccepted)), 'Close gaps from the next move', target.id),
       'hand-back': () => dispatch({ type: 'subthread-handback', threadId: target.id, evidence: handBackEvidence(target) }),
       'merge-subs': () => send(`Merge these sub-thread pull requests into this branch with gh pr merge, then pull them in: ${subPrs.map((n) => `#${n}`).join(', ')}.`, 'Merge sub-thread PRs from the next move'),
-      continue: () => send(hasPlan ? 'Continue the plan from where you stopped.' : 'Continue where you left off.', `Continue with ${agent} from the next move`),
+      continue: () => send(continuePrompt(report, hasPlan), `Continue with ${agent} from the next move`),
       commit: () => send('Commit these changes on this branch with a Conventional Commits message.', 'Commit from the next move'),
       'open-pr': () => send('Open the pull request for this work with open_pr.', 'Open pull request from the next move'),
       settle: () => dispatch({ type: 'settle', threadId: thread.id }),
     })[m.kind]();
+  };
+  const option = (o: NextOption, question: string, report: TurnReport | undefined) => {
+    record(question, report, o.label);
+    if (o.isDraft) return textInput.setInput(o.reply);
+    send(o.reply, `${o.label} from the next move`);
   };
   const other = (answer: OtherAnswer, question: string, report: TurnReport | undefined) => {
     record(question, report, answer.label);
@@ -106,7 +112,7 @@ function useMoveAnswers(thread: Thread) {
     dispatch({ type: 'idle-update', threadId: thread.id, patch: { canOpenPr: true } });
     send('Open the pull request with open_pr. I chose Open anyway: the gaps go in its description.', 'Open anyway from the next move');
   };
-  return { move, other };
+  return { option, move, other };
 }
 
 /** What a sub-thread hands back: its own summary of the work, and the PR it opened into the parent's branch. */
@@ -115,9 +121,8 @@ function handBackEvidence(sub: Thread) {
   return [turnReport(sub)?.summary ?? `${sub.title} is finished`, ...prs].join(' · ');
 }
 
-/** The agent's own other answer; else Open anyway past critical gaps with no PR yet; else Not yet. */
-function otherAnswer(thread: Thread, verdict: Verdict, report: TurnReport | undefined, prs: ThreadPr[]): OtherAnswer {
-  if (report?.alternative) return report.alternative;
+/** Open anyway past critical gaps with no PR yet; else Not yet. */
+function otherAnswer(thread: Thread, verdict: Verdict, prs: ThreadPr[]): OtherAnswer {
   const hasPr = prs.some((p) => p.state.status === 'open' || p.state.status === 'draft' || p.state.status === 'merged');
   const isBlocked = verdict.gaps.some((g) => !g.isAccepted && g.severity === 'critical') && !!thread.repo && !hasPr;
   if (isBlocked) return { label: 'Open anyway', isOpenAnyway: true };

@@ -691,6 +691,31 @@
       "env": {
         "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness--claude-worktrees-stoic-germain-f38599/058fe85c-748c-4e34-acf0-2cbc744065fe/scratchpad/mochi-userdata"
       }
+    },
+    {
+      "name": "mochi-library",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "5751",
+        "--strictPort"
+      ],
+      "port": 5751
+    },
+    {
+      "name": "mochi-library-electron",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "electron:dev",
+        "--port",
+        "5753",
+        "--strictPort"
+      ],
+      "port": 5753,
+      "env": {
+        "MOCHI_USER_DATA": "/private/tmp/claude-501/-Users-frsty-dev-harness/eef2dc46-5abc-4e44-9106-30b01a0e936b/scratchpad/mochi-userdata"
+      }
     }
   ]
 }
