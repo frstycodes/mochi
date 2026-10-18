@@ -7,12 +7,10 @@ import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
 import { resolveToken, typedSkills } from './chat/slash';
 import { withReferences, type Mention } from './chat/mentions';
 import { PromptInputProvider, usePromptInputController, type PromptInputMessage } from '@/components/ai-elements/prompt-input';
-import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
-import { ProjectPicker, type PickerProject } from './ProjectPicker';
-import { ProjectIcon } from './ProjectIcon';
+import { ProjectChooser, ProjectPicker, type PickerProject } from './ProjectPicker';
 import { projectName, takeRequestedProject, useProjects, useRequestedProject } from './projects';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
@@ -27,8 +25,6 @@ import { WorkspaceControls, WorkspaceNotes, useWorkspace, type Workspace } from 
 import type { WorkspaceDraft } from './git/workspace';
 import { RunsOnMenu } from './remote/RunsOnMenu';
 import { useMachineCatalog, useMachines } from './remote/useMachines';
-
-const MAX_SHORTCUTS = 3;
 
 /** The new-thread page's picks, kept with its draft. */
 interface NewThreadPicks {
@@ -68,6 +64,8 @@ function NewThread() {
     setPicked(next);
   };
   const projects = useProjectRows(spaceId);
+  // Projects first, then the composer, so a thread starts without the mouse; a kept draft already has its project.
+  const [step, setStep] = useState<'project' | 'compose'>(saved ? 'compose' : 'project');
   // Unset until you pick: the most recently used project, once the list has loaded.
   const [chosenProject, setProject] = useState<string | null | undefined>(saved?.project);
   const project = chosenProject === undefined ? (projects.find((p) => !p.isMissing)?.ref ?? null) : chosenProject;
@@ -119,7 +117,14 @@ function NewThread() {
     if (!ref) return;
     changeRunsOn(null);
     changeProject(ref);
+    setStep('compose');
   }, [requestedProject]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const chooseFirst = (next: string | null) => {
+    if (remote) changeRunsOn(null);
+    changeProject(next);
+    setStep('compose');
+  };
 
   const start = async ({ text, files }: PromptInputMessage) => {
     const title = text.trim();
@@ -170,55 +175,68 @@ function NewThread() {
 
       {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. */}
       <motion.div layoutId={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
-        <div className="relative">
-          <SlashMenu menu={slash} />
-          <MentionMenu menu={mention} />
+        {step === 'project' && (
           <ComposerCard>
-            <MentionChips menu={mention} />
-            <MachineModelsContext.Provider value={remote ? (catalog ?? NO_CATALOG) : null}>
-              <ComposerInput
-                autoFocus
-                draftKey={draftKey}
-                draftExtra={draftExtra}
-                controls={controls}
-                provider={provider}
-                onControlsChange={setControls}
-                slashItems={slashItems}
-                {...menuProps}
-                onKeyDown={(e, view) => {
-                  mention.editorProps.onKeyDown(e);
-                  if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
-                }}
-                onSend={start}
-                submitLabel={remote ? `Start on ${remote.name}` : 'Start thread'}
-                meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
-                placeholder={placeholder(remote?.name, remote ? (catalog?.projects.find((p) => p.ref === remoteProject)?.name ?? null) : (projects.find((p) => p.ref === project)?.name ?? (project && projectName(project))))}
-              />
-            </MachineModelsContext.Provider>
+            {/* Keyed so the highlight starts on the latest project once the list loads. */}
+            <ProjectChooser key={project} value={project} projects={projects} placeholder="Start a thread in…" onChoose={chooseFirst} />
           </ComposerCard>
-        </div>
-        <ComposerMeta>
-          <RunsOnMenu value={runsOn} onChange={changeRunsOn} />
-          {!!remote && (
-            <>
-              <ProjectPicker value={remoteProject} onChange={setRemoteProject} projects={catalog?.projects ?? NO_PROJECTS} machine={remote} onAdded={reloadCatalog} />
-              {!!remoteProject && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
-            </>
-          )}
-          {!remote && (
-            <>
-              <ProjectPicker value={project} onChange={changeProject} projects={projects} />
-              {!!project && <WorkspaceControls workspace={workspace} />}
-              {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
-            </>
-          )}
-        </ComposerMeta>
+        )}
+        {step === 'compose' && (
+          <>
+            <div className="relative">
+              <SlashMenu menu={slash} />
+              <MentionMenu menu={mention} />
+              <ComposerCard>
+                <MentionChips menu={mention} />
+                <MachineModelsContext.Provider value={remote ? (catalog ?? NO_CATALOG) : null}>
+                  <ComposerInput
+                    autoFocus
+                    draftKey={draftKey}
+                    draftExtra={draftExtra}
+                    controls={controls}
+                    provider={provider}
+                    onControlsChange={setControls}
+                    slashItems={slashItems}
+                    {...menuProps}
+                    onKeyDown={(e, view) => {
+                      mention.editorProps.onKeyDown(e);
+                      if (!e.defaultPrevented) slash.editorProps.onKeyDown(e, view);
+                      if (e.defaultPrevented || e.key !== 'Escape' || hasDraft) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setStep('project');
+                    }}
+                    onSend={start}
+                    submitLabel={remote ? `Start on ${remote.name}` : 'Start thread'}
+                    meter={!remote && <ContextRing provider={provider} spaceId={spaceId} context={{ used: 0, max: contextMax(provider) }} />}
+                    placeholder={placeholder(remote?.name, remote ? (catalog?.projects.find((p) => p.ref === remoteProject)?.name ?? null) : (projects.find((p) => p.ref === project)?.name ?? (project && projectName(project))))}
+                  />
+                </MachineModelsContext.Provider>
+              </ComposerCard>
+            </div>
+            <ComposerMeta>
+              <RunsOnMenu value={runsOn} onChange={changeRunsOn} />
+              {!!remote && (
+                <>
+                  <ProjectPicker value={remoteProject} onChange={setRemoteProject} projects={catalog?.projects ?? NO_PROJECTS} machine={remote} onAdded={reloadCatalog} />
+                  {!!remoteProject && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+                </>
+              )}
+              {!remote && (
+                <>
+                  <ProjectPicker value={project} onChange={changeProject} projects={projects} />
+                  {!!project && <WorkspaceControls workspace={workspace} />}
+                  {!!project && <PermissionsMenu threadId={layoutId} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
+                </>
+              )}
+            </ComposerMeta>
+          </>
+        )}
       </motion.div>
 
       {/* In the bottom row, so a note coming or going never re-centres the composer. */}
       <div className="flex flex-col gap-5 pt-4 pb-16">
-        {!remote && !!project && <WorkspaceNotes workspace={workspace} />}
-        {!remote && projects.length > 1 && <ProjectShortcuts projects={projects.filter((p) => !p.isMissing).slice(0, MAX_SHORTCUTS)} value={project} onChange={changeProject} />}
+        {step === 'compose' && !remote && !!project && <WorkspaceNotes workspace={workspace} />}
       </div>
     </div>
   );
@@ -249,25 +267,3 @@ function greeting(now: Date) {
   if (hour >= 12 && hour < 18) return 'Good afternoon';
   return 'Good evening';
 }
-
-/** The latest projects one click away; the picker in the meta row holds the rest. */
-function ProjectShortcuts({ projects, value, onChange }: { projects: PickerProject[]; value: string | null; onChange: (project: string) => void }) {
-  return (
-    <div role="group" aria-label="Recent projects" className="flex flex-wrap justify-center gap-2">
-      {projects.map((p) => (
-        <Button
-          key={p.ref}
-          variant="outline"
-          size="sm"
-          aria-pressed={p.ref === value}
-          onClick={() => onChange(p.ref)}
-          className="rounded-full font-normal text-muted-foreground aria-pressed:border-foreground/40 aria-pressed:bg-muted aria-pressed:text-foreground dark:aria-pressed:bg-input"
-        >
-          <ProjectIcon name={p.name} icon={p.icon} />
-          {p.name}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
