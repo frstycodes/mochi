@@ -109,7 +109,7 @@ export function NavigationSection() {
               <MenubarContent>
                 <MenubarGroup>
                   <MenubarItem onSelect={() => toast('New thread')}>
-                    New thread <MenubarShortcut>N</MenubarShortcut>
+                    New thread <MenubarShortcut>⌘N</MenubarShortcut>
                   </MenubarItem>
                   <MenubarItem>Second opinion</MenubarItem>
                   <MenubarSeparator />
