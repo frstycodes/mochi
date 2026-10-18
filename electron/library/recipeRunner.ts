@@ -10,12 +10,19 @@ const STEP_TIMEOUT_MS = 10_000;
 
 /** Steps on the agent's tab: elements by role and name, the first match. */
 export function playwrightOps(page: Page): RecipeOps {
-  const find = (t: SetupTarget): Locator => (t.within ? find(t.within) : page).getByRole(t.role as Parameters<Page['getByRole']>[0], { name: t.name, exact: t.exact }).first();
+  const find = (t: SetupTarget): Locator => (t.within ? find(t.within) : page).getByRole(t.role as Parameters<Page['getByRole']>[0], t.name ? { name: t.name, exact: t.exact } : {}).first();
   let select: Locator | null = null;
   return {
     url: () => page.url(),
     goto: async (url) => void (await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 })),
     click: (t) => find(t).click({ timeout: STEP_TIMEOUT_MS }),
+    fill: async (t, value, submit) => {
+      const target = find(t);
+      await target.fill(value, { timeout: STEP_TIMEOUT_MS });
+      if (submit) await target.press('Enter');
+    },
+    waitForText: (text, timeoutMs) => page.getByText(text).first().waitFor({ timeout: timeoutMs }),
+    isPresent: (t, timeoutMs) => find(t).waitFor({ timeout: timeoutMs }).then(() => true, () => false),
     options: async (t) => {
       const target = find(t);
       await target.waitFor({ timeout: STEP_TIMEOUT_MS });
@@ -23,8 +30,10 @@ export function playwrightOps(page: Page): RecipeOps {
       select = isSelect ? target : null;
       if (isSelect) return target.evaluate((el) => [...(el as HTMLSelectElement).options].map((o) => o.label.trim()).filter(Boolean));
       await target.click({ timeout: STEP_TIMEOUT_MS });
-      await page.getByRole('option').first().waitFor({ timeout: STEP_TIMEOUT_MS });
-      return (await page.getByRole('option').allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+      // A list can hold a disabled placeholder (Google's "No groups"): only the options one can pick count.
+      const enabled = page.getByRole('option', { disabled: false });
+      await enabled.first().waitFor({ timeout: STEP_TIMEOUT_MS });
+      return (await enabled.allInnerTexts()).map((t) => t.trim()).filter(Boolean);
     },
     pick: async (option) => {
       if (select) await select.selectOption({ label: option });

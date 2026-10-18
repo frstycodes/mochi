@@ -170,7 +170,8 @@ export const SETTINGS_TOOLS = {
       const alias = args.alias ?? freeAlias(taken);
       if (taken.includes(alias)) throw new Error(`There is already a ${alias} account on ${name}; list_connectors lists them`);
       if (args.clientId && looksLikeSecret(args.clientId)) throw new Error('That looks like a client secret, not a Client ID. Never pass the secret itself: pass secretRef and Mochi reads it');
-      if ((args.configTokenRef || args.fromSetup) && appProviderFor(url) !== 'slack') throw new Error('configTokenRef and fromSetup are for Slack only');
+      if (args.configTokenRef && appProviderFor(url) !== 'slack') throw new Error('configTokenRef is for Slack only');
+      if (args.fromSetup && !['slack', 'google'].includes(appProviderFor(url) ?? '')) throw new Error('fromSetup is for Slack and Google Workspace only');
       const needsSecret = !!args.clientId && appProviderFor(url) !== 'github';
       if (needsSecret && !args.secretRef) throw new Error('Pass secretRef: the ref of the Client Secret on the page, from browser_snapshot (reveal it first if it is hidden). Mochi reads it itself; you never see it');
       const secretFrom = args.secretRef ? { viewId: refView(ctx, args.secretRef, args.tabId), ref: args.secretRef } : undefined;

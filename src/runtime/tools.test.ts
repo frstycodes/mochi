@@ -1007,7 +1007,7 @@ test('run_setup runs the recipe on the agent\'s tab and says what comes next for
   assert.match(await t.err('run_setup', { connector: 'linear' }), /no setup recipe for linear/);
   t.setupResults.push(
     { status: 'needs', stepId: 'workspace', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
-    { status: 'done', captured: ['slackConfigToken'] },
+    { status: 'done', captured: ['slackConfigToken'], params: { workspace: 'Acme' } },
     { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout' },
   );
   // Several workspaces: Mochi asks on its own card with one-of options, then resumes from the step that asked.
@@ -1026,7 +1026,7 @@ test('run_setup runs the recipe on the agent\'s tab and says what comes next for
   const fixed = await t.ok('update_setup_step', { connector: 'slack', stepId: 'generate', target: { role: 'button', name: 'Generate new token' } });
   assert.deepEqual(fixed.after, { role: 'button', name: 'Generate new token' });
   assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => /updated slack's setup step "generate": button "generate" → button "Generate new token"/.test(e.text)));
-  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', fromSetup: true }), /Slack only/);
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', fromSetup: true }), /for Slack and Google Workspace only/);
 });
 
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {

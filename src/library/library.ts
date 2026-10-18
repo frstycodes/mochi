@@ -52,6 +52,8 @@ export interface LibraryConnector extends ItemBase {
   /** Tells accounts on one server apart, and is the `__mochi_account` value. */
   alias: string;
   isLinked: boolean;
+  /** Who it signed in as, when the service says (`electron/library/identity.ts`): two names for one account are caught. */
+  identity?: { id: string; label: string };
 }
 
 /** A plugin marketplace: GitHub `owner/repo`, a git URL, or a URL to its marketplace.json. */

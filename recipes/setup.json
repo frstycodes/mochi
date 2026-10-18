@@ -1,14 +1,115 @@
 {
   "slack": {
-    "version": 1,
-    "domains": ["api.slack.com"],
-    "params": { "workspace": { "question": "Which Slack workspace should Mochi connect to?" } },
+    "version": 2,
+    "domains": [
+      "api.slack.com",
+      "app.slack.com"
+    ],
+    "params": {
+      "workspace": {
+        "question": "Which Slack workspace should Mochi connect to?"
+      }
+    },
     "steps": [
-      { "id": "open", "kind": "goto", "url": "https://api.slack.com/apps", "note": "Your Apps, where app configuration tokens are made" },
-      { "id": "generate", "kind": "click", "target": { "role": "button", "name": "Generate Token", "exact": true }, "note": "Opens \"Generate Your App Configuration Token\"" },
-      { "id": "workspace", "kind": "choose", "target": { "role": "combobox", "name": "Select a team" }, "param": "workspace", "note": "Picks the workspace" },
-      { "id": "confirm", "kind": "click", "target": { "role": "button", "name": "Generate", "exact": true }, "note": "Generates the token" },
-      { "id": "copy", "kind": "capture", "target": { "role": "button", "name": "Copy access token", "within": { "role": "row", "name": "{workspace}" } }, "as": "slackConfigToken", "note": "Copies the workspace's new access token into Mochi" }
+      {
+        "id": "open",
+        "kind": "goto",
+        "url": "https://api.slack.com/apps",
+        "note": "Your Apps, where app configuration tokens are made"
+      },
+      {
+        "id": "generate",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Generate Token",
+          "exact": true
+        },
+        "note": "Opens \"Generate Your App Configuration Token\""
+      },
+      {
+        "id": "workspace",
+        "kind": "choose",
+        "target": {
+          "role": "combobox",
+          "name": "Select a team"
+        },
+        "param": "workspace",
+        "note": "Picks the workspace"
+      },
+      {
+        "id": "confirm",
+        "kind": "click",
+        "target": {
+          "role": "button",
+          "name": "Generate",
+          "exact": true
+        },
+        "note": "Generates the token"
+      },
+      {
+        "id": "copy",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy access token",
+          "within": {
+            "role": "row",
+            "name": "{workspace}"
+          }
+        },
+        "as": "slackConfigToken",
+        "note": "Copies the workspace's new access token into Mochi"
+      },
+      {
+        "id": "existing",
+        "kind": "jumpIfPresent",
+        "target": {
+          "role": "row",
+          "name": "Mochi {workspace}"
+        },
+        "to": "open-existing",
+        "note": "A Mochi app already in this workspace is reused, not made again"
+      },
+      {
+        "id": "new",
+        "kind": "end",
+        "note": "No Mochi app here yet: Mochi creates one from the token"
+      },
+      {
+        "id": "open-existing",
+        "kind": "click",
+        "target": {
+          "role": "link",
+          "name": "Mochi",
+          "exact": true,
+          "within": {
+            "role": "row",
+            "name": "Mochi {workspace}"
+          }
+        },
+        "note": "Opens the workspace's Mochi app"
+      },
+      {
+        "id": "client-id",
+        "kind": "capture",
+        "target": {
+          "role": "textbox",
+          "name": "Client ID"
+        },
+        "as": "slackClientId",
+        "note": "Reads the app's Client ID"
+      },
+      {
+        "id": "client-secret",
+        "kind": "capture",
+        "target": {
+          "role": "button",
+          "name": "Copy client secret"
+        },
+        "as": "slackClientSecret",
+        "note": "Copies the app's Client Secret into Mochi (label not yet seen live)"
+      }
     ]
   }
 }

@@ -1,7 +1,6 @@
 import type { WebContents } from 'electron';
 import { connectorKey, type DeviceCode } from '../../src/library/connectors.ts';
-import type { CaptureKind } from '../../src/library/recipes.ts';
-import { libraryEntries, removeItem, setItemEnabled } from '../../src/library/library.ts';
+import { libraryEntries, removeItem, setItemEnabled, type LibraryConnector } from '../../src/library/library.ts';
 import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
@@ -10,9 +9,11 @@ import { addMarketplace, importFromAccount, installPlugin, installSkill, marketp
 import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
 import { overrideStep, playwrightOps, recipeFor } from '../library/recipeRunner.ts';
 import { runRecipe } from '../library/runRecipe.ts';
-import { addConnectorAccount, forgetAccount, signIn } from '../library/connectors.ts';
+import { addConnectorAccount, forgetAccount, readSecrets, recordIdentity, saveSecrets, signIn } from '../library/connectors.ts';
+import { sameAccount } from '../library/identity.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { createSlackApp } from '../library/slackApp.ts';
+import { googleClientFrom, slackClientFrom, type SetupCapture, type SlackApps } from '../library/ownApp.ts';
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
 import { RELAY_URL } from '../remote/relayClient.ts';
 import { setAutoUpdate, updateItem } from '../library/updates.ts';
@@ -79,10 +80,11 @@ export const library = {
     const fields = connectorInput(input);
     if (secretFrom) fields.clientSecret = await secretOnPage(sender, secretFrom);
     if (slackTokenFrom) Object.assign(fields, await slackAppFrom(sender, slackTokenFrom));
-    if (fromSetup) Object.assign(fields, await slackAppWith(takeCapture(sender, fields.url)));
+    if (fromSetup) Object.assign(fields, await clientFromSetup(fields.url, takeCapture(sender, fields.url)));
     const account = await addConnectorAccount(space, fields);
     const open = inPane ? async (authorizationUrl: string) => void (!sender.isDestroyed() && sender.send('library:onAuthorize', { url: account.url, authorizationUrl })) : undefined;
     await signIn(account, deviceCodeTo(sender), open);
+    await keepOneAccount(space, await recordIdentity(account));
     return libraryEntries(await readLibrary(), space);
   },
   async oauthApps() {
@@ -93,8 +95,8 @@ export const library = {
     const view = string(viewId, 'viewId', 32);
     if (!/^view-\d+$/.test(view)) throw new TypeError('viewId is not a view id');
     const { params, fromStep } = setupOptions(options);
-    const { result, captured } = await runRecipe(await recipeFor(name), params, playwrightOps(await pageOfView(sender, view)), fromStep);
-    if (Object.keys(captured).length) captures.set(`${sender.id}/${name}`, { values: captured, at: Date.now() });
+    const { result, captured, params: own } = await runRecipe(await recipeFor(name), params, playwrightOps(await pageOfView(sender, view)), fromStep);
+    if (Object.keys(captured).length) captures.set(`${sender.id}/${name}`, { values: captured, params: own, at: Date.now() });
     return result;
   },
   async updateSetupStep(_sender, connector, stepId, target) {
@@ -141,25 +143,49 @@ function pageRef(value: unknown, name: string): PageRef | undefined {
 async function slackAppFrom(sender: WebContents, at: PageRef) {
   const token = await valueAt(sender, at, (v) => v.startsWith('xoxe'));
   if (!token) throw new Error('No app configuration token there (they start xoxe): Generate Token on api.slack.com/apps, take a new browser_snapshot and pass the ref of the Access Token or its Copy button');
-  return slackAppWith(token);
-}
-
-async function slackAppWith(token: string) {
   const { clientId, clientSecret } = await createSlackApp(token, `${RELAY_URL}/oauth/callback`);
   return { clientId, clientSecret };
 }
 
+/**
+ * A second name for an account that's already connected (same service, same person signed in): the new one goes, and the
+ * one already there is turned on for this profile. Thrown, so the dialog and the agent both say what happened.
+ */
+async function keepOneAccount(spaceId: string, account: LibraryConnector) {
+  const index = await readLibrary();
+  const existing = sameAccount(index.items, account);
+  if (!existing) return;
+  await forgetAccount(account.id);
+  await updateLibrary((current) => setItemEnabled(removeItem(current, account.id), spaceId, existing.id, true));
+  throw new Error(`${account.identity!.label} is already connected as ${existing.title} (${existing.alias}): it's on for this profile now, and ${account.alias} wasn't added`);
+}
+
 /** Secrets the last setup run captured, per window and connector; taken once, and gone after `CAPTURE_TTL_MS`. */
-const captures = new Map<string, { values: Partial<Record<CaptureKind, string>>; at: number }>();
+const captures = new Map<string, SetupCapture & { at: number }>();
 const CAPTURE_TTL_MS = 15 * 60_000;
 
-function takeCapture(sender: WebContents, url: string) {
+function takeCapture(sender: WebContents, url: string): SetupCapture {
   const key = `${sender.id}/${connectorKey(url)}`;
   const capture = captures.get(key);
   captures.delete(key);
-  const token = capture && Date.now() - capture.at < CAPTURE_TTL_MS ? capture.values.slackConfigToken : undefined;
-  if (!token) throw new Error('No token from a setup run: run_setup first (what it captures lasts 15 minutes)');
-  return token;
+  if (!capture || Date.now() - capture.at >= CAPTURE_TTL_MS) throw new Error('Nothing from a setup run: run_setup first (what it captures lasts 15 minutes)');
+  return capture;
+}
+
+const SLACK_APPS: SlackApps = {
+  read: async (key) => {
+    const known = (await readSecrets(key)).clientInformation;
+    return known?.client_secret ? { clientId: known.client_id, clientSecret: known.client_secret } : undefined;
+  },
+  save: (key, { clientId, clientSecret }) => saveSecrets(key, { clientInformation: { client_id: clientId, client_secret: clientSecret }, isOwnClient: true }),
+  create: (token) => createSlackApp(token, `${RELAY_URL}/oauth/callback`),
+};
+
+function clientFromSetup(url: string, capture: SetupCapture) {
+  const key = connectorKey(url);
+  if (key === 'slack') return slackClientFrom(capture, SLACK_APPS);
+  if (key === 'google-workspace') return googleClientFrom(capture);
+  throw new Error(`fromSetup is for Slack and Google Workspace, not ${key}`);
 }
 
 function setupOptions(value: unknown) {

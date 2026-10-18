@@ -13,6 +13,7 @@ import { mochiOAuthApp } from './oauthApps.ts';
 import { ensureLocalServer, saveGoogleClient } from './googleWorkspace.ts';
 import { profileConnectors, type LibraryConnector } from '../../src/library/library.ts';
 import { addLoopbackRoute, loopbackUrl } from '../mcp/server.ts';
+import { identityOf } from './identity.ts';
 import { connectorServer } from './proxy.ts';
 import { readLibrary, updateLibrary } from './store.ts';
 
@@ -174,6 +175,16 @@ async function finish(provider: AccountAuth, account: LibraryConnector, open: Op
   const code = waitForCode(provider.pendingState);
   await open(provider.authorizationUrl.toString());
   await auth(provider, { serverUrl: account.url, authorizationCode: await code });
+}
+
+/** Asks the service who the account signed in as and keeps it on the account; quiet when the service won't say. */
+export async function recordIdentity(account: LibraryConnector) {
+  const { apiKey, tokens } = await readSecrets(account.id);
+  const token = apiKey ?? tokens?.access_token;
+  const identity = token ? await identityOf(account.url, token).catch(() => undefined) : undefined;
+  if (!identity) return account;
+  await updateLibrary((index) => ({ ...index, items: index.items.map((item) => (item.id === account.id && item.kind === 'connector' ? { ...item, identity } : item)) }));
+  return { ...account, identity };
 }
 
 export async function setLinked(id: string, isLinked: boolean) {

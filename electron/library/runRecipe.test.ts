@@ -6,10 +6,10 @@ import { runRecipe, type RecipeOps } from './runRecipe.ts';
 const slack = BUILT_IN_RECIPES.slack!;
 
 /** A Slack apps page as `RecipeOps`: what it has, and a log of what the run did. */
-function fakePage({ workspaces = ['Myself'], url = 'https://api.slack.com/apps', missing = [] as string[], copies = 'xoxe.xoxp-1-abc' } = {}) {
+function fakePage({ workspaces = ['Myself'], url = 'https://api.slack.com/apps', missing = [] as string[], copies = 'xoxe.xoxp-1-abc', apps = [] as string[] } = {}) {
   const log: string[] = [];
   let at = url;
-  const has = (t: SetupTarget) => !missing.includes(t.name);
+  const has = (t: SetupTarget) => !missing.includes(t.name ?? '');
   const ops: RecipeOps = {
     url: () => at,
     goto: async (to) => void (log.push(`goto ${to}`), (at = url === to ? to : url)),
@@ -17,10 +17,17 @@ function fakePage({ workspaces = ['Myself'], url = 'https://api.slack.com/apps',
       if (!has(t)) throw new Error(`locator.click: Timeout 10000ms exceeded waiting for ${t.role} "${t.name}"`);
       log.push(`click ${t.name}`);
     },
+    fill: async (t, value, submit) => void log.push(`fill ${t.name} ${value}${submit ? ' ⏎' : ''}`),
     options: async (t) => (log.push(`open ${t.name}`), workspaces),
     pick: async (o) => void log.push(`pick ${o}`),
     close: async () => void log.push('close'),
-    capture: async (t, isValid) => (log.push(`capture ${t.name} in ${t.within?.name}`), isValid(copies) ? copies : ''),
+    waitForText: async (text) => void log.push(`wait ${text}`),
+    isPresent: async (t) => apps.includes(t.name ?? ''),
+    capture: async (t, isValid) => {
+      log.push(`capture ${t.name}${t.within ? ` in ${t.within.name}` : ''}`);
+      const value = t.name === 'Client ID' ? '1.2' : t.name === 'Copy client secret' ? 'a'.repeat(32) : copies;
+      return isValid(value) ? value : '';
+    },
   };
   return { ops, log };
 }
@@ -28,7 +35,7 @@ function fakePage({ workspaces = ['Myself'], url = 'https://api.slack.com/apps',
 test('runs the Slack recipe to the token, picking the only workspace and keeping the token out of the result', async () => {
   const { ops, log } = fakePage();
   const { result, captured } = await runRecipe(slack, {}, ops);
-  assert.deepEqual(result, { status: 'done', captured: ['slackConfigToken'] });
+  assert.deepEqual(result, { status: 'done', captured: ['slackConfigToken'], params: { workspace: 'Myself' } });
   assert.equal(captured.slackConfigToken, 'xoxe.xoxp-1-abc');
   assert.deepEqual(log, ['goto https://api.slack.com/apps', 'click Generate Token', 'open Select a team', 'pick Myself', 'click Generate', 'capture Copy access token in Myself']);
 });
@@ -58,7 +65,7 @@ test('stops when the page leaves the recipe\'s domains, and when the capture hol
   const signIn = fakePage({ url: 'https://slack.com/signin?redir=%2Fapps' });
   const left = await runRecipe(slack, {}, signIn.ops);
   assert.equal(left.result.status === 'stopped' && left.result.stepId, 'open');
-  assert.match(left.result.status === 'stopped' ? left.result.reason : '', /left api\.slack\.com \(now slack\.com\).*sign in/);
+  assert.match(left.result.status === 'stopped' ? left.result.reason : '', /left api\.slack\.com, app\.slack\.com \(now slack\.com\).*sign in/);
   const empty = await runRecipe(slack, {}, fakePage({ copies: 'Copied!' }).ops);
   assert.equal(empty.result.status === 'stopped' && empty.result.stepId, 'copy');
   assert.deepEqual(empty.captured, {});
@@ -90,4 +97,41 @@ test("a recipe from the repo passes only with known kinds and this build's domai
   assert.throws(() => parseRecipe('slack', { ...structuredClone(slack), steps: [{ id: 'run', kind: 'eval', note: 'x' }] }), /unknown kind/);
   assert.throws(() => parseRecipe('notion', good), /no allowed domains/);
   assert.deepEqual(Object.keys(parseRecipes({ slack: good, notion: good, bad: 1 })), ['slack']);
+});
+
+test("reuses a Mochi app already in the workspace: opens it and captures its credentials instead of ending for a new one", async () => {
+  const { ops, log } = fakePage({ apps: ['Mochi Myself'] });
+  const { result, captured } = await runRecipe(slack, {}, ops);
+  assert.deepEqual(result, { status: 'done', captured: ['slackConfigToken', 'slackClientId', 'slackClientSecret'], params: { workspace: 'Myself' } });
+  assert.deepEqual(log.slice(-3), ['click Mochi', 'capture Client ID', 'capture Copy client secret']);
+  assert.equal(captured.slackClientId, '1.2');
+});
+
+test('fills generated params, asks for a decision only the user makes, fills fields and waits for text', async () => {
+  const recipe = parseRecipe('google-workspace', {
+    version: 1,
+    domains: ['console.cloud.google.com'],
+    params: { suffix: { generate: 'suffix' }, agree: { question: 'Agree to the policy?', options: ['I agree'] } },
+    steps: [
+      { id: 'open', kind: 'goto', url: 'https://console.cloud.google.com/projectcreate', note: 'x' },
+      { id: 'id', kind: 'fill', target: { role: 'textbox', name: 'Project ID' }, value: 'mochi-{suffix}', note: 'x' },
+      { id: 'consent', kind: 'ask', param: 'agree', note: 'x' },
+      { id: 'enabled', kind: 'wait', text: 'You have successfully enabled', note: 'x' },
+      { id: 'email', kind: 'fill', target: { role: 'textbox', name: 'Text field for emails' }, value: 'me@x.com', submit: true, note: 'x' },
+    ],
+  });
+  const page = fakePage({ url: 'https://console.cloud.google.com/projectcreate' });
+  const asked = await runRecipe(recipe, {}, page.ops);
+  assert.equal(asked.result.status === 'needs' && asked.result.options.join(), 'I agree');
+  assert.match(page.log[1], /^fill Project ID mochi-\d{6}$/);
+  const suffix = asked.params.suffix;
+  const done = await runRecipe(recipe, { suffix, agree: 'I agree' }, fakePage({ url: 'https://console.cloud.google.com/projectcreate' }).ops, 'consent');
+  assert.deepEqual(done.result, { status: 'done', captured: [], params: { suffix, agree: 'I agree' } });
+});
+
+test('a recipe may only jump forward and use params it declares', () => {
+  const base = { version: 1, domains: ['api.slack.com'], params: { workspace: {} } };
+  assert.throws(() => parseRecipe('slack', { ...base, steps: [{ id: 'a', kind: 'end', note: 'x' }, { id: 'b', kind: 'jumpIfPresent', target: { role: 'row' }, to: 'a', note: 'x' }] }), /jumps to a later step/);
+  assert.throws(() => parseRecipe('slack', { ...base, steps: [{ id: 'a', kind: 'click', target: { role: 'row', name: '{team}' }, note: 'x' }] }), /undeclared param team/);
+  assert.throws(() => parseRecipe('slack', { ...base, steps: [{ id: 'a', kind: 'goto', url: 'https://api.slack.com/{team}', note: 'x' }] }), /undeclared param team/);
 });
