@@ -395,7 +395,7 @@ const APP_SETTINGS: Setting[] = [
     },
   },
   hostSetting('imageGen', 'Image generation', 'models', select(IMAGE_GEN_OPTIONS), { group: 'Image generation', description: 'Claude makes images through this harness, on this profile’s account' }),
-  pref('whileWorking', 'While the agent is working, new messages', 'general', select(WHILE_WORKING), { group: 'New threads', description: 'Queued messages go out one per turn, in order' }),
+  pref('whileWorking', 'While the agent is working, new messages', 'general', select(WHILE_WORKING), { group: 'New threads', description: 'Steering joins the turn at its next step; queued messages go out one per turn, in order' }),
   pref('simplifyLength', 'Length', 'simplify', choice(SIMPLIFY_LENGTHS), { group: 'Style', description: 'A few short sentences, or more of the detail' }),
   pref('simplifyNeedsFirst', 'Put what needs you first', 'simplify', SWITCH, { group: 'Style', description: 'Lead with questions and decisions waiting on you' }),
   pref('simplifyRules', 'Your rules', 'simplify', { type: 'text', placeholder: 'Keep numbers, no jargon, one line per file', isMultiline: true }, { group: 'Style', description: 'Followed in every simplified reply' }),

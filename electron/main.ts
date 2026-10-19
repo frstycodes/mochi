@@ -1,6 +1,5 @@
 import { app, BrowserWindow } from 'electron';
 import { startDevMcp } from './mcp/server.ts';
-import { installHooks } from './git/hooks.ts';
 import path from 'node:path';
 import { stopAllCompares } from './browser/compare.ts';
 import { setImageDir } from './agents/images.ts';
@@ -27,7 +26,6 @@ app.whenReady().then(() => {
   startWatch();
   void startScheduler();
   startLibraryUpdates();
-  installHooks().catch((error: unknown) => console.warn('Git hooks not installed; agents commit without the message check', error));
   // Before the first window: it watches every window's close.
   startRemote();
   createWindow();

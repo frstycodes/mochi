@@ -89,7 +89,7 @@ export const TOOL_TABLE = {
   open_pr: {
     tier: 'change',
     description:
-      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first. Use this instead of `gh pr create`.',
+      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first.',
     shape: {
       title: z.string().min(1).max(72).describe('Conventional Commits style, like "fix(auth): keep the session cookie"'),
       why: z.string().min(1).max(300).describe('One sentence: why this change'),

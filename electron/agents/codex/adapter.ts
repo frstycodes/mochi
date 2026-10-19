@@ -1,5 +1,4 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
 import { saveImage } from '../images.ts';
 import type { GeneratedImage } from '../../../src/model.ts';
@@ -546,7 +545,7 @@ class CodexServer {
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
     const target = spawnable(install.path, ['app-server']);
-    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: hooksEnv(accountEnv(this.account, install.env)), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
+    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: accountEnv(this.account, install.env), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
     const gen = ++this.gen;
     this.child = child;
     this.stderr = '';
