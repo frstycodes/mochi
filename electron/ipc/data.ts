@@ -1,7 +1,9 @@
 import { app, BrowserWindow, dialog } from 'electron';
 import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../../src/chat/images.ts';
 import { MAX_REPLAY_BYTES, type DataHost } from '../../src/host/types/data.ts';
+import { saveImage } from '../agents/images.ts';
 import { embedReplay, isSelfContained, replayFileName } from '../../src/replay/page.ts';
 import { indexHtml } from '../window.ts';
 import { record, string, type Handlers } from './handlers.ts';
@@ -82,6 +84,10 @@ export const data = {
     if (canceled || !filePath) return null;
     await writeFile(filePath, embedReplay(html, parsed, name));
     return filePath;
+  },
+  async saveImage(_sender, mediaType, base64) {
+    if (!(IMAGE_TYPES as readonly unknown[]).includes(mediaType)) throw new TypeError(`mediaType must be one of ${IMAGE_TYPES.join(', ')}`);
+    return saveImage(mediaType as string, string(base64, 'base64', Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4));
   },
 } satisfies Handlers<DataHost>;
 

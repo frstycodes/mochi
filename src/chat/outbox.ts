@@ -4,7 +4,7 @@ import { judgeDrift, type DriftVerdict } from '../drift.ts';
 import type { QueuedMessage, QueuePause, Thread } from '../model.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
-import { agentImage } from './images.ts';
+import { agentImage, shownImage } from './images.ts';
 import { withReferences } from './mentions.ts';
 
 type WhileWorking = Prefs['whileWorking'];
@@ -68,7 +68,7 @@ export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'thre
   setDriftPending(thread.id, null);
   const verdict = judgeDrift(text, thread);
   const isSettled = !(verdict instanceof Promise);
-  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, images: [...references.images, ...images.map(agentImage)], thumbs: images.map((i) => i.thumb), ...extra });
+  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, images: [...references.images, ...images.map(agentImage)], shownImages: images.map(shownImage), ...extra });
   void Promise.resolve(verdict).then((v) => {
     if (v.kind === 'off-goal') return setDriftPending(thread.id, { text, verdict: v });
     if (!isSettled) dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift: v.kind, reason: v.reason });

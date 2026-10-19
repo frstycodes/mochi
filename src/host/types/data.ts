@@ -1,3 +1,4 @@
+import type { AgentImage } from './agent.ts';
 import type { Manifest } from './manifest.ts';
 
 /** The desktop app's saved threads: one JSON document in main's userData, shaped and parsed by the renderer (`src/store/persist.ts`). */
@@ -14,6 +15,8 @@ export interface DataHost {
   clearReplays(threadIds?: string[]): Promise<void>;
   /** Inlines `payload` (a `ReplayExport` as JSON) into the app's own single-file page and asks where to save it: the path, or null when cancelled. */
   exportReplay(payload: string, title: string): Promise<string | null>;
+  /** Keeps an image you sent at full size: its file path (main's `userData/images`), or in the web build its data URL. */
+  saveImage(mediaType: AgentImage['mediaType'], base64: string): Promise<string>;
 }
 
 /** Per thread; main refuses appends past it and writes one `capped` line. */
@@ -27,4 +30,5 @@ export const dataMethods = {
   replayUsage: 'invoke',
   clearReplays: 'invoke',
   exportReplay: 'invoke',
+  saveImage: 'invoke',
 } satisfies Manifest<DataHost>;
