@@ -5,14 +5,13 @@ import test from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { MOCHI_INSTRUCTIONS } from '../agents/instructions.ts';
+import { CODEX_BROWSER_PLUGINS_OFF, MOCHI_INSTRUCTIONS } from '../agents/instructions.ts';
 import { TOOL_NAMES } from '../../src/runtime/toolTable.ts';
 
-test('browser instructions route directly to Mochi even when cua reports no browser', () => {
+test('browser instructions route to Mochi, and Codex loses the cua_repl browser it reached for instead', () => {
   assert.match(MOCHI_INSTRUCTIONS, /mcp__mochi__browser_open/);
   assert.match(MOCHI_INSTRUCTIONS, /mcp__mochi__browser_snapshot/);
-  assert.match(MOCHI_INSTRUCTIONS, /Mochi.*not.*cua/);
-  assert.match(MOCHI_INSTRUCTIONS, /No browser is available.*Mochi/);
+  assert.equal(CODEX_BROWSER_PLUGINS_OFF['plugins.unified-computer-use@openai-bundled.enabled'], false);
 });
 
 test('Codex HTTP exposes the same browser tools as Claude and dispatches to the caller thread', async (t) => {
