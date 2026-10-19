@@ -789,6 +789,35 @@ test('browser_eval passes the page error back and still logs the run', async () 
   assert.match(lastLog(t.thread('rl')), /\(threw\)$/);
 });
 
+test('browser_batch runs its steps in order as their own calls, logged in the thread, and stops at the first failure', async () => {
+  const t = setup();
+  const r = await t.ok('browser_batch', { actions: [{ name: 'browser_snapshot' }, { name: 'browser_click', input: { ref: 'e1' } }, { name: 'browser_screenshot' }] });
+  assert.deepEqual(r.steps.map((s: { name: string }) => s.name), ['browser_snapshot', 'browser_click', 'browser_screenshot']);
+  assert.deepEqual(r.image, { data: 'iVBORw0KGgo=', mimeType: 'image/png' });
+  assert.equal(lastLog(t.thread('rl')), 'Claude clicked "Save"');
+  const failed = JSON.parse(await t.err('browser_batch', { actions: [{ name: 'browser_press', input: { key: 'Tab' } }, { name: 'browser_forward' }, { name: 'browser_press', input: { key: 'Enter' } }] }));
+  assert.deepEqual([failed.steps.length, failed.failed], [1, { step: 2, name: 'browser_forward', error: 'Nothing to go forward to in this tab' }]);
+  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }, { kind: 'press', key: 'Tab' }], 'Enter never ran');
+});
+
+test('browser_batch steps ask where they would alone; a denial stops the batch', async () => {
+  const t = setup({ url: 'https://store.example.org/' });
+  await t.ok('browser_snapshot');
+  const pending = t.call('browser_batch', { actions: [{ name: 'browser_click', input: { ref: 'e3' } }, { name: 'browser_press', input: { key: 'Enter' } }] });
+  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  assert.equal(t.card().title, 'Click "Delete project" on store.example.org?');
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  const result = await pending;
+  assert.equal(result.isError, true);
+  assert.match(JSON.parse(result.text).failed.error, /denied/);
+  assert.deepEqual(t.acts, [], 'neither the click nor Enter ran');
+});
+
+test('browser_batch refuses nesting and non-browser tools before running them', async () => {
+  const t = setup();
+  for (const name of ['browser_batch', 'settle_thread']) assert.match(JSON.parse(await t.err('browser_batch', { actions: [{ name, input: {} }] })).failed.error, /browser_\* tools other than browser_batch/);
+});
+
 test('names in the table are verb_noun', () => {
   for (const name of TOOL_NAMES) assert.match(name, /^[a-z]+(_[a-z]+)+$/, name satisfies ToolName);
 });

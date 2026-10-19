@@ -78,6 +78,8 @@ export interface ToolContext<A = Record<string, unknown>> {
   choose: (question: { title: string; detail?: string; options: string[] }) => Promise<string>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
+  /** When waiting on the user must end; a batch's steps share their batch's, so it never outlasts the harness's timeout. */
+  deadline: number;
   /** A config write `ask` previewed: `run` applies exactly these changes, refused if a file changed since (`befores`). */
   write?: { spaceId: string; changes: ConfigChange[]; befores: Record<string, string> };
 }
@@ -129,14 +131,14 @@ const levelLabel = (control: AgentControl) => AGENT_CONTROL.options.find((o) => 
  * Runs a Mochi tool an agent called (RUNTIME.md › Mochi tools): checks scope and the level the setting allows, asks on
  * a widget in the thread for deletes and settings, runs the handler on the store, logs it, and toasts with Undo.
  */
-export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentToolResult> {
+export async function runTool(call: AgentToolCall, env: ToolEnv, deadline = Date.now() + APPROVAL_TIMEOUT_MS): Promise<AgentToolResult> {
   const caller = env.getState().threads.find((t) => t.id === call.threadId);
   if (!caller) return fail(`No thread ${call.threadId}`);
   if (!Object.hasOwn(TOOL_TABLE, call.name)) return fail(`No Mochi tool ${call.name}`);
   const name = call.name as ToolName;
   const parsed = z.object(TOOL_TABLE[name].shape).safeParse(call.args);
   if (!parsed.success) return fail(parsed.error.issues.map((i) => `${i.path.join('.') || 'args'}: ${i.message}`).join('; '));
-  const ctx = context(env, caller, parsed.data, name);
+  const ctx = context(env, caller, parsed.data, name, deadline);
   const spec = SPECS[name] as ToolSpec<ToolName>;
   const tier = tierOf(name);
   const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);
@@ -171,8 +173,8 @@ let nextCard = 0;
 const RUN = Date.now().toString(36);
 export const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
 
-function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): ToolContext<A> {
-  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), cards: [] };
+function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName, deadline: number): ToolContext<A> {
+  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), cards: [], deadline };
   return ctx;
 }
 
@@ -210,14 +212,14 @@ async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<strin
   const tool = { callId: id, options, pick, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
-    const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
+    const timer = setTimeout(() => resolve(null), Math.max(0, ctx.deadline - Date.now()));
     waiting.set(id, (d) => (clearTimeout(timer), resolve(d)));
   });
   waiting.delete(id);
   const picked = pick && options?.find((o) => o.id === decision?.options?.[0])?.label;
   const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : `Approved: ${approval.title}`) : (approval.denied ?? `Denied: ${approval.title}`);
   ctx.dispatch({ type: 'card-record', queueId: id, text });
-  if (!decision) throw new Error(`Nobody answered in ${APPROVAL_TIMEOUT_MS / 60_000} minutes; nothing was done.`);
+  if (!decision) throw new Error('Nobody answered in time; nothing was done.');
   if (!decision.isApproved) throw new Error(`The user denied it: ${approval.title} Nothing was done.`);
   ctx.cards.push(id);
   return decision.options ?? [];
@@ -587,7 +589,23 @@ const AGENT_SPECS = {
   },
 } satisfies Partial<Specs>;
 
-const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, ...SETTINGS_TOOLS } satisfies Specs;
+const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, browser_batch: { run: runBatch }, ...SETTINGS_TOOLS } satisfies Specs;
+
+/** Each step runs as its own call: its policy, its approvals and its line in the thread, until one fails. */
+async function runBatch(ctx: ToolContext<Args<'browser_batch'>>): Promise<Outcome> {
+  const steps: { name: string; result: unknown }[] = [];
+  let image: Outcome['image'];
+  for (const [i, { name, input = {} }] of ctx.args.actions.entries()) {
+    const stop = (error: string) => new Error(JSON.stringify({ steps, failed: { step: i + 1, name, error } }));
+    if (!name.startsWith('browser_') || name === 'browser_batch') throw stop('A batch runs browser_* tools other than browser_batch');
+    if (Date.now() >= ctx.deadline) throw stop('The batch ran out of time; this step and the rest did not run');
+    const result = await runTool({ id: `${ctx.caller.id}-batch-${i}`, threadId: ctx.caller.id, name, args: input }, ctx.env, ctx.deadline);
+    if (result.isError) throw stop(result.text);
+    image = result.image ?? image;
+    steps.push({ name, result: JSON.parse(result.text) });
+  }
+  return { result: { steps }, ...(image && { image }) };
+}
 
 // {HELPERS}
 

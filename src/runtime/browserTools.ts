@@ -15,7 +15,8 @@ const POLL_MS = 100;
 // Claude rejects images over 5 MB; base64 runs 4/3 of that (same cap as `electron/ipc/agent.ts`).
 const MAX_IMAGE_CHARS = 6_900_000;
 
-type BrowserToolName = Extract<ToolName, `browser_${string}`>;
+// browser_batch runs these through `runTool`, so it lives beside it (`tools.ts`).
+type BrowserToolName = Exclude<Extract<ToolName, `browser_${string}`>, 'browser_batch'>;
 
 /** The in-app browser tools: only the caller's own pane tabs, through `env.browser` (main's native views). */
 export const BROWSER_TOOLS = {

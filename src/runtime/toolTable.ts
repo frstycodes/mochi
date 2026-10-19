@@ -250,6 +250,17 @@ export const TOOL_TABLE = {
     description: 'Emulate a device size: responsive (fills the pane), iphone-se, iphone-16, iphone-16-pro-max, pixel-9, ipad-mini, ipad-pro, laptop.',
     shape: { tabId, device: z.string(), rotated: z.boolean().optional() },
   },
+  browser_batch: {
+    tier: 'read',
+    description:
+      "Run several browser tool calls in one round trip, in order, stopping at the first that fails. Each step is {name, input}, with input exactly as that tool takes it, and runs as if called on its own: it asks the user where that tool would, and shows in the thread. Refs come from the snapshot before the batch, so batch the steps you can predict (open, type, press Enter, screenshot) and snapshot again once the page changes. Only the last screenshot comes back as an image.",
+    shape: {
+      actions: z
+        .array(z.object({ name: z.string().describe('A browser_* tool, not browser_batch'), input: z.record(z.string(), z.unknown()).optional() }))
+        .min(1)
+        .max(20),
+    },
+  },
   // {LAYOUT}
   open_pane_tab: {
     tier: 'change',
