@@ -1,4 +1,5 @@
 import type { AgentImage, AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
+import type { AutofixEvent } from './git/autofix.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -165,6 +166,8 @@ export interface ActivityEntry {
   nextMove?: { summary?: string; question: string; answer?: string };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
   from?: ThreadRef;
+  /** Messages: an Auto-fix event Mochi sent the agent about one of the thread's PRs; `text` is the event, the row shows `title`. */
+  autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
   /** Events only: a sub-thread handed its result back here. */
   subThread?: { threadId: string; title: string; text: string };
   /** Tool entries: the message this `send_to_thread` call delivered. */
@@ -319,6 +322,8 @@ export interface PullRequest {
   title: string;
   /** Live PRs from `gh`; the demo fixtures have none, so their rows don't open anything. */
   url?: string;
+  /** Auto-fix is on (`src/git/autofix.ts`) since this epoch ms. */
+  autofixSince?: number;
 }
 
 /**

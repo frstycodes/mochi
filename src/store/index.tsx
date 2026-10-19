@@ -137,6 +137,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
       if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
+      if (event.type === 'autofix') return apply({ type: 'autofix', threadId: event.threadId, event: event.event });
       apply(event.type === 'ci' ? { type: 'ci-result', event } : { type: 'schedule-run', event });
     };
     const off = host.schedule.onEvent(onSchedule);

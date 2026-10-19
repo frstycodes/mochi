@@ -8,6 +8,7 @@ import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
 import { startTitleRequest } from '../utility/titles.ts';
 import type { Action, State } from '../store/index.tsx';
+import { autofixSend } from '../schedule/slice.ts';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { backgroundPrompt, backgroundSession, isRunning, reportOf, withNotes } from './subagents.ts';
 
@@ -52,6 +53,16 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     }
     case 'compact':
       return hasAgent(state, action.threadId) ? [{ method: 'compact', threadId: action.threadId, focus: action.focus }] : [];
+    case 'autofix':
+    case 'autofix-set': {
+      // Only what the reducer turned into a message (an event while Auto-fix is on, or turning it on) goes to the agent.
+      const before = state.threads.find((t) => t.id === action.threadId);
+      const said = next().threads.find((t) => t.id === action.threadId)?.activity.at(-1);
+      if (!before || !said?.autofix || said === before.activity.at(-1)) return [];
+      const event = action.type === 'autofix' ? action.event : { kind: 'enabled' as const, pr: action.pr, url: before.prs.find((p) => p.number === action.pr)?.url };
+      const sent = event.kind !== 'stopped' && autofixSend(state, action.threadId, event);
+      return sent ? agentCalls(state, sent, next) : [];
+    }
     case 'source-add': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (thread?.sources.some((s) => s.label === action.source.label)) return [];
