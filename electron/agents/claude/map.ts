@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentPlanItem, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { ACCOUNT_ARGUMENT } from '../../../src/library/connectors.ts';
@@ -14,12 +14,11 @@ import { posixPath } from '../../platform.ts';
 import type { SaveImage } from '../images.ts';
 
 /**
- * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs, tasks and usage totals carry across
+ * Turns one thread's Claude Agent SDK stream into `AgentEvent`s. Stateful: tool inputs and usage totals carry across
  * messages. `saveImage` keeps images a tool returns as files; without it they're dropped.
  */
 export function createMapper(threadId: string, cwd: string, saveImage?: SaveImage, effort?: string) {
   const tools = new Map<string, { name: string; input: Record<string, unknown> }>();
-  const tasks: { id: string; title: string; status: AgentPlanItem['status'] }[] = [];
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
   const agents = new Map<string, { taskId?: string }>();
   const reported = { input: 0, output: 0, cached: 0, costUsd: 0 };
@@ -49,8 +48,6 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     });
   }
 
-  const planFromTasks = (): AgentEvent => ({ threadId, type: 'plan', items: tasks.map(({ title, status }) => ({ title, status })) });
-
   const subagent = (id: string, phase: AgentSubagentEvent['phase'], fields: Omit<AgentSubagentEvent, 'threadId' | 'type' | 'id' | 'phase'> = {}): AgentSubagentEvent => ({ threadId, type: 'subagent', id, phase, ...fields });
 
   function toolStart(id: string, name: string, input: Record<string, unknown>): AgentEvent[] {
@@ -62,15 +59,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     }
     if (name === IMAGE_CALL) return [{ threadId, type: 'tool', id, phase: 'start', text: 'Generate image', generated: imageCard(input) }];
     const description = callDescription(name, input);
-    const start: AgentEvent = { threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) };
-    if (name === 'TodoWrite') return [start, { threadId, type: 'plan', items: planFromTodos(input) }];
-    if (name !== 'TaskUpdate') return [start];
-    const task = tasks.find((t) => t.id === input.taskId);
-    if (!task) return [start];
-    if (input.status === 'deleted') tasks.splice(tasks.indexOf(task), 1);
-    else if (typeof input.status === 'string') task.status = STATUS[input.status as keyof typeof STATUS] ?? task.status;
-    if (typeof input.subject === 'string') task.title = input.subject;
-    return [start, planFromTasks()];
+    return [{ threadId, type: 'tool', id, phase: 'start', text: describeTool(name, input, servers, cwd), ...toolKind(name, input, servers), ...(description && { description }) }];
   }
 
   function toolEnd(block: ToolResultBlock, result: unknown): AgentEvent[] {
@@ -87,10 +76,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     if (images.length) end.images = images;
     const widget = widgets.get(tool.name);
     if (widget && !block.is_error) end.widget = { ...widget, input: tool.input, result: widgetResult(block, result) };
-    const task = (result as { task?: { id?: unknown } } | undefined)?.task;
-    if (tool.name !== 'TaskCreate' || typeof task?.id !== 'string') return [end];
-    tasks.push({ id: task.id, title: String(tool.input.subject ?? ''), status: 'pending' });
-    return [end, planFromTasks()];
+    return [end];
   }
 
   /** What a finished call reports, the thread's own or a subagent's: its line, edited files, a command's exit code and output tail, an edit's patch. */
@@ -359,17 +345,9 @@ const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 // `Task` is the Agent tool's name in Claude Code before 2.1.
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const TASK_STATUS = { completed: 'done', failed: 'failed', stopped: 'stopped' } as const;
-const STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
 
-/** Claude Code ships no plan tool under the SDK unless asked, and without TaskCreate/TaskUpdate a live thread never gets steps. */
-export function withPlanTools(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return { ...env, CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
-}
-
-export function planFromTodos(input: Record<string, unknown>): AgentPlanItem[] {
-  const todos = Array.isArray(input.todos) ? (input.todos as { content?: unknown; status?: unknown }[]) : [];
-  return todos.flatMap((t) => (typeof t.content === 'string' ? [{ title: t.content, status: STATUS[t.status as keyof typeof STATUS] ?? 'pending' }] : []));
-}
+/** Mochi's update_plan is the plan; Claude Code's own task list would be a second one nobody sees. */
+export const HIDDEN_PLAN_TOOLS = ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite'];
 
 /**
  * One line for the work log: the command for Bash, the path for file tools (relative to `cwd` when inside it), the tool name otherwise.

@@ -31,6 +31,7 @@ export const TOOL_GUIDE = {
   get_report: { group: 'Goals and progress', label: 'Read reports', description: "Read another thread's latest report, to coordinate without reading its transcript." },
   settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Close out a goal with a reason and settle its thread. Never its own thread." },
 
+  update_plan: { group: 'Goals and progress', label: 'Keep a plan', description: 'Show its plan under its latest message and tick steps off as it works.' },
   start_background_agent: { group: 'Background agents', label: 'Start background agents', description: 'Start an agent that works alongside it, in the same worktree or a fresh one, on this profile’s account.' },
   list_background_agents: { group: 'Background agents', label: 'List background agents', description: 'See its background agents and subagents, their status, cost so far and results.' },
   stop_background_agent: { group: 'Background agents', label: 'Stop background agents', description: 'Stop one of its background agents. Partial work stays in the worktree.' },

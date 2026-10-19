@@ -24,6 +24,7 @@ export const MOCHI_CALLS = {
   report_turn: ['Reporting progress', 'Reported progress'],
   get_report: ['Reading the progress report', 'Read the progress report'],
   settle_goal: ['Settling the goal', 'Settled the goal'],
+  update_plan: ['Updating the plan', 'Updated the plan'],
   start_background_agent: ['Starting a background agent', 'Started a background agent'],
   list_background_agents: ['Checking the background agents', 'Checked the background agents'],
   stop_background_agent: ['Stopping a background agent', 'Stopped a background agent'],
