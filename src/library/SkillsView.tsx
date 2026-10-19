@@ -3,20 +3,18 @@ import { CheckBadge, Download, ExternalLink, Import, Plus } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from '@/toast/store';
 import { host } from '../host';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
 import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
 import { ProviderMark } from '../ui';
 import { AddSkillsDialog } from './AddSkillsDialog';
-import { FEATURED_SKILL_SOURCES } from './library';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { CatalogErrorRow, EmptyRow, filterBy, InstalledList, LibraryRow, PAGE } from './LibraryParts';
 import { SKILLS_SH } from './skillsSh';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
 
-/** Settings › Skills: the skills installed, which profiles get each, and skills in GitHub repos to add. */
+/** Settings › Skills: the skills installed, which profiles get each, and skills.sh or any GitHub repo to add from. */
 export function SkillsView() {
   return (
     <LibraryPage
@@ -31,7 +29,7 @@ export function SkillsView() {
         </>
       )}
       library={InstalledSkills}
-      discover={SkillCatalog}
+      discover={SkillsShCatalog}
     />
   );
 }
@@ -59,15 +57,6 @@ function InstalledSkills({ library, query, showDiscover }: Parameters<PagePart>[
   );
 }
 
-function SkillCatalog(props: Parameters<PagePart>[0]) {
-  return (
-    <div className="flex flex-col gap-10">
-      <SkillsShCatalog {...props} />
-      <FeaturedRepos {...props} />
-    </div>
-  );
-}
-
 const PREVIEW_ROWS = 20;
 const INSTALLS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
@@ -91,7 +80,7 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
           </a>
         </Button>
       }
-      footer={!query && 'The skills CLI’s directory, ranked by installs. Anyone can list a skill: Install shows its files first.'}
+      footer={!query && 'The skills CLI’s directory, ranked by installs. Anyone can list a skill: Install shows its files first. Add from GitHub takes any repository.'}
     >
       <SettingsCard>
         {state.status === 'loading' && <SkeletonRows count={4} />}
@@ -122,45 +111,6 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
             </Button>
           </div>
         )}
-      </SettingsCard>
-      <AddSkillsDialog source={adding} onClose={() => setAdding(null)} library={library} />
-    </SettingsSection>
-  );
-}
-
-function FeaturedRepos({ library, query }: Parameters<PagePart>[0]) {
-  const [source, setSource] = useState(FEATURED_SKILL_SOURCES[0]);
-  const [adding, setAdding] = useState<string | null>(null);
-  const { state, retry } = useLoaded(source, () => host.library.discoverSkills(source));
-  const shown = state.status === 'done' ? filterBy(state.value, query, (s) => [s.name, s.description]) : [];
-  return (
-    <SettingsSection
-      title="From GitHub"
-      action={
-        <ToggleGroup type="single" size="sm" variant="outline" value={source} onValueChange={(v) => v && setSource(v)}>
-          {FEATURED_SKILL_SOURCES.map((s) => (
-            <ToggleGroupItem key={s} value={s}>
-              {s.split('/')[0]}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      }
-      footer={!query && 'Every SKILL.md in the repository, found as npx skills add finds them. Add from GitHub takes any other repository.'}
-    >
-      <SettingsCard>
-        {state.status === 'loading' && <SkeletonRows count={4} />}
-        {state.status === 'error' && <CatalogErrorRow what={source} message={state.message} onRetry={retry} />}
-        {state.status === 'done' && !shown.length && <EmptyRow text={query ? `No skill in ${source} matches “${query}”` : `${source} has no skills`} />}
-        {shown.map((skill) => (
-          <LibraryRow
-            key={skill.source}
-            name={skill.name}
-            icon={skill.icon}
-            description={skill.description}
-            meta={skill.source}
-            actions={<AddControl isInstalled={!!installedEntry(library.entries, 'skill', skill.name)} name={skill.name} onAdd={() => setAdding(skill.source)} />}
-          />
-        ))}
       </SettingsCard>
       <AddSkillsDialog source={adding} onClose={() => setAdding(null)} library={library} />
     </SettingsSection>

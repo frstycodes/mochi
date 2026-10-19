@@ -169,7 +169,8 @@ export const EMPTY_LIBRARY: LibraryIndex = { items: [], profiles: {}, marketplac
 /** Claude names a plugin's skills `<plugin>:<skill>` (verified with the SDK), so standalone skills read `mochi:<skill>`; no installed plugin may take the name. */
 export const STANDALONE_PLUGIN = 'mochi';
 
-export const FEATURED_SKILL_SOURCES = ['anthropics/skills', 'openai/skills/skills/.curated'];
+/** Owners whose skills install without a warning over their files; everyone else's are read first. */
+export const TRUSTED_SKILL_OWNERS = ['anthropics', 'openai'];
 export const FEATURED_MARKETPLACES: Marketplace[] = [{ name: 'claude-plugins-official', source: 'anthropics/claude-plugins-official' }];
 
 export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEntry[] {

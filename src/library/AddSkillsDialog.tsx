@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Link, ShieldAlert } from '@/icons';
+import { Code, Download, FileText, Link, ShieldAlert } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -7,7 +7,6 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Spinner } from '@/components/ui/spinner';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
 import { toast } from '@/toast/store';
 import { host } from '../host';
@@ -17,7 +16,7 @@ import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
 import { SkeletonRows } from '../settings/parts';
 import { useHarness, useSpaceThreads } from '../store';
 import { ProviderMark } from '../ui';
-import { FEATURED_SKILL_SOURCES, type CatalogSkill, type SkillDestination } from './library';
+import { TRUSTED_SKILL_OWNERS, type CatalogSkill, type SkillDestination } from './library';
 import { CatalogErrorRow, countOf, EmptyRow } from './LibraryParts';
 import { parseSkillSource } from './skillSource';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
@@ -29,13 +28,11 @@ import { installedEntry, useLoaded, type Library } from './useLibrary';
 export function AddSkillsDialog({ source, onClose, library }: { source: string | null; onClose: () => void; library: Library }) {
   return (
     <Dialog open={source !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">{source !== null && <AddSkillsForm initialSource={source} library={library} onDone={onClose} />}</DialogContent>
+      <DialogContent className="h-[calc(100dvh-2rem)] grid-rows-[minmax(0,1fr)] sm:h-[min(880px,calc(100dvh-4rem))] sm:max-w-[min(1200px,calc(100vw-4rem))]">{source !== null && <AddSkillsForm initialSource={source} library={library} onDone={onClose} />}</DialogContent>
     </Dialog>
   );
 }
 
-// Owners of the featured repos; anything else shows its files under a warning before it installs.
-const TRUSTED_OWNERS = FEATURED_SKILL_SOURCES.map((s) => s.split('/')[0]);
 
 type Scope = SkillDestination['scope'];
 
@@ -53,7 +50,7 @@ function AddSkillsForm({ initialSource, library, onDone }: { initialSource: stri
   const [destination, setDestination] = useDestination();
   const [isInstalling, setInstalling] = useState(false);
   const owner = parseSkillSource(source)?.owner;
-  const isTrusted = !!owner && TRUSTED_OWNERS.includes(owner);
+  const isTrusted = !!owner && TRUSTED_SKILL_OWNERS.includes(owner);
   const isReady = !!picked.length && !isInstalling && destination.isValid;
   const install = async () => {
     setInstalling(true);
@@ -71,7 +68,7 @@ function AddSkillsForm({ initialSource, library, onDone }: { initialSource: stri
   };
   return (
     <form
-      className="flex min-w-0 flex-col gap-4"
+      className="-mx-4 flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0"
       onSubmit={(e) => {
         e.preventDefault();
         if (isReady) void install();
@@ -101,8 +98,8 @@ function AddSkillsForm({ initialSource, library, onDone }: { initialSource: stri
         />
       </InputGroup>
       {!!source && (
-        <div className="grid min-h-0 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <div className="flex max-h-72 min-w-0 flex-col overflow-y-auto rounded-xl border">
+        <div className="grid shrink-0 gap-3 sm:min-h-0 sm:flex-1 sm:shrink sm:grid-cols-[18rem_minmax(0,1fr)]">
+          <div className="flex max-h-60 min-h-0 min-w-0 flex-col overflow-y-auto rounded-xl border sm:max-h-none">
             {state.status === 'loading' && <SkeletonRows count={3} />}
             {state.status === 'error' && <CatalogErrorRow what={source} message={state.message} onRetry={retry} />}
             {state.status === 'done' && !found.length && <EmptyRow text={`No SKILL.md in ${source}`} />}
@@ -142,7 +139,10 @@ function FoundSkillRow({ skill, isPicked, isShown, isInstalled, onToggle, onShow
   );
 }
 
-/** The skill's files as text, SKILL.md first: what an agent will read and may run, read here before it installs. */
+/**
+ * The skill's files as text, SKILL.md first: what an agent will read and may run, read here before it installs. Files on
+ * the left, the open one filling the rest; what to watch for sits under it.
+ */
 function SkillFiles({ source, skill, isTrusted, owner }: { source: string; skill: CatalogSkill; isTrusted: boolean; owner: string }) {
   const { state, retry } = useLoaded(`${source}:${skill.name}`, () => host.library.skillFiles(source, skill.name));
   const files = state.status === 'done' ? state.value : {};
@@ -150,28 +150,33 @@ function SkillFiles({ source, skill, isTrusted, owner }: { source: string; skill
   const [path, setPath] = useState('SKILL.md');
   const scripts = paths.filter(isScript);
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className="flex min-h-0 min-w-0 flex-col gap-2">
+      <div className="grid h-96 min-h-0 overflow-hidden rounded-xl border sm:h-auto sm:flex-1 sm:grid-cols-[13rem_minmax(0,1fr)]">
+        <nav aria-label={`${skill.name}’s files`} className="flex max-h-32 min-w-0 flex-col gap-px overflow-y-auto border-b p-1.5 sm:max-h-none sm:border-r sm:border-b-0">
+          {state.status === 'loading' && <SkeletonRows count={3} />}
+          {paths.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPath(p)}
+              aria-current={p === path || undefined}
+              className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground aria-current:bg-accent aria-current:text-foreground"
+            >
+              {isScript(p) ? <Code aria-hidden className="size-3.5 shrink-0" /> : <FileText aria-hidden className="size-3.5 shrink-0" />}
+              <span className="truncate">{p}</span>
+            </button>
+          ))}
+        </nav>
+        <pre className="min-h-0 min-w-0 overflow-auto bg-muted/40 p-4 font-mono text-xs/5 break-words whitespace-pre-wrap text-foreground" aria-label={`${path} of ${skill.name}`}>
+          {files[path] ?? files['SKILL.md']}
+        </pre>
+      </div>
+      {state.status === 'error' && <CatalogErrorRow what={skill.name} message={state.message} onRetry={retry} />}
       {!isTrusted && (
         <p className="flex items-start gap-1.5 type-caption text-warning">
           <ShieldAlert aria-hidden className="mt-px size-3.5 shrink-0" />
           {owner} isn’t a source Mochi knows. Read SKILL.md{scripts.length ? ` and its ${countOf(scripts.length, 'script')}` : ''} first: agents follow it, and may run what it ships. Nothing runs when it installs.
         </p>
-      )}
-      {state.status === 'loading' && <SkeletonRows count={2} />}
-      {state.status === 'error' && <CatalogErrorRow what={skill.name} message={state.message} onRetry={retry} />}
-      {paths.length > 1 && (
-        <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={path} onValueChange={(v) => v && setPath(v)} className="flex-wrap" aria-label={`${skill.name}’s files`}>
-          {paths.map((p) => (
-            <ToggleGroupItem key={p} value={p} className="max-w-full font-mono">
-              <span className="truncate">{p}</span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      )}
-      {state.status === 'done' && (
-        <pre className="max-h-56 min-w-0 overflow-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs/5 break-words whitespace-pre-wrap text-foreground" aria-label={`${path} of ${skill.name}`}>
-          {files[path] ?? files['SKILL.md']}
-        </pre>
       )}
     </div>
   );
