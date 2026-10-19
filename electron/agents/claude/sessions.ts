@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { hooksEnv } from '../../git/hooks.ts';
 import { PR_GUARD } from './prGuard.ts';
+import { goalNudge } from './goalNudge.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -222,7 +223,7 @@ async function launch(session: Session) {
           ...Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }])),
           [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, options.isGoalsOff),
         },
-        hooks: { ...PR_GUARD, ...compactHooks(threadId) },
+        hooks: { ...compactHooks(threadId), PreToolUse: [...PR_GUARD, ...(options.isGoalsOff ? [] : [goalNudge(threadId)])] },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },
     });

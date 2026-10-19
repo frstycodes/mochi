@@ -1,4 +1,4 @@
-import type { HookCallbackMatcher, HookEvent, HookInput } from '@anthropic-ai/claude-agent-sdk';
+import type { HookCallbackMatcher, HookInput } from '@anthropic-ai/claude-agent-sdk';
 
 const PR_CREATE = /\bgh\s+pr\s+create\b/;
 
@@ -15,4 +15,5 @@ export async function denyPrCreate(input: HookInput) {
   };
 }
 
-export const PR_GUARD: Partial<Record<HookEvent, HookCallbackMatcher[]>> = { PreToolUse: [{ matcher: 'Bash', hooks: [denyPrCreate] }] };
+/** PreToolUse matchers. */
+export const PR_GUARD: HookCallbackMatcher[] = [{ matcher: 'Bash', hooks: [denyPrCreate] }];
