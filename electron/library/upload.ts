@@ -76,7 +76,7 @@ async function readTarball(bytes: Uint8Array, isGzip: boolean): Promise<Entry[]>
   };
   try {
     const accept = (_path: string, size: number) => (spend(size), true);
-    for await (const { path, body } of readTar(stream, accept, (path, target, type) => onLink(path, target, type === 'hardlink'))) entries.push({ path, body });
+    for await (const { path, body } of readTar(stream, accept, { onLink: (path, target, type) => onLink(path, target, type === 'hardlink') })) entries.push({ path, body });
   } catch (error) {
     if (error instanceof UploadError) throw error;
     throw new UploadError(`The archive is damaged: ${(error as Error).message}`);

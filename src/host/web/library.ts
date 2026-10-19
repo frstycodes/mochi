@@ -1,8 +1,9 @@
 import { connectorName } from '../../library/connectorTools.ts';
 import { connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
-import { FEATURED_MARKETPLACES, libraryEntries, removeItem, setItemEnabled, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
+import { FEATURED_MARKETPLACES, libraryEntries, removeItem, setItemEnabled, skillPlacementDir, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
+import { parseSkillSource } from '../../library/skillSource.ts';
 import type { LibraryHost } from '../types/library.ts';
-import { CONNECTOR_TOOLS, fixtureParts, MARKETPLACE_CATALOGS, SKILL_CATALOGS, UPLOAD_REVIEW } from './libraryFixtures.ts';
+import { CONNECTOR_TOOLS, fixtureParts, fixtureSkillFiles, MARKETPLACE_CATALOGS, SKILL_CATALOGS, SKILLS_SH_POPULAR, UPLOAD_REVIEW } from './libraryFixtures.ts';
 
 // The web build has no agents to load a library into: it browses fixed catalogs and installs into memory, starting
 // with a few items in the demo's first profile, so every state of the Library page can be seen and tried.
@@ -33,15 +34,32 @@ export const library: LibraryHost = {
   },
   async discoverSkills(source) {
     await pause();
-    const skills = SKILL_CATALOGS[source];
-    if (!skills) throw new Error(`The web preview only browses ${Object.keys(SKILL_CATALOGS).join(' and ')}`);
-    return skills;
+    return fixtureSkills(source);
   },
-  async installSkill(spaceId, source, name) {
+  async skillFiles(source, name) {
     await pause();
-    const skill = SKILL_CATALOGS[source]?.find((s) => s.name === name);
+    const skill = fixtureSkills(source).find((s) => s.name === name);
     if (!skill) throw new Error(`${name} isn't in ${source}`);
-    return install(spaceId, { kind: 'skill', id: `skill-${name}`, name, description: skill.description, files: {}, source: skill.source, icon: skill.icon, targets: ['claude', 'codex'], addedAt: Date.now() });
+    return fixtureSkillFiles(skill.name, skill.description);
+  },
+  async installSkill(spaceId, source, name, destination = { scope: 'library' }) {
+    await pause();
+    const skill = fixtureSkills(source).find((s) => s.name === name);
+    if (!skill) throw new Error(`${name} isn't in ${source}`);
+    const placements = destination.scope === 'library' ? [] : destination.providers.map((provider) => ({ provider, scope: destination.scope, dir: skillPlacementDir(provider, destination.scope, name, { home: '~', claudeDir: '~/.claude', project: destination.scope === 'project' ? destination.project : undefined }) }));
+    const item: LibraryItem = { kind: 'skill', id: `skill-${name}`, name, description: skill.description, files: {}, source: skill.source, commit: skill.commit, placements, icon: skill.icon, targets: ['claude', 'codex'], addedAt: Date.now() };
+    if (destination.scope === 'library') return install(spaceId, item);
+    index = { ...index, items: [...index.items.filter((i) => i.id !== item.id), item] };
+    return libraryEntries(index, spaceId);
+  },
+  async searchSkillsSh(query) {
+    await pause();
+    const q = query.trim().toLowerCase();
+    return q.length < 2 ? [] : SKILLS_SH_POPULAR.filter((s) => s.id.includes(q));
+  },
+  async popularSkillsSh() {
+    await pause();
+    return SKILLS_SH_POPULAR;
   },
   async marketplaces() {
     return [...FEATURED_MARKETPLACES, ...index.marketplaces];
@@ -140,6 +158,18 @@ export const library: LibraryHost = {
 };
 
 const pause = () => new Promise((resolve) => setTimeout(resolve, 400));
+
+// The web build reads its fixture repos the way main reads GitHub: `owner/repo`, a path in it, or `owner/repo@skill`.
+function fixtureSkills(source: string) {
+  const parsed = parseSkillSource(source);
+  const repo = parsed && `${parsed.owner}/${parsed.repo}`;
+  const key = parsed && [repo, parsed.path].filter(Boolean).join('/');
+  const skills = parsed && key && repo ? (SKILL_CATALOGS[key] ?? SKILL_CATALOGS[repo]?.filter((s) => s.source.startsWith(key))) : undefined;
+  if (!parsed || !skills?.length) throw new Error(`The web preview only browses ${Object.keys(SKILL_CATALOGS).join(', ')}`);
+  const picked = parsed.skill ? skills.filter((s) => s.name === parsed.skill) : skills;
+  if (!picked.length) throw new Error(`No skill named ${parsed.skill} in ${repo}`);
+  return picked;
+}
 
 function pluginItem(marketplace: string, name: string): LibraryItem {
   const plugin = MARKETPLACE_CATALOGS[marketplace].plugins.find((p) => p.name === name)!;

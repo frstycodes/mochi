@@ -1,12 +1,16 @@
 import type { WebContents } from 'electron';
+import { statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { connectorKey, type DeviceCode } from '../../src/library/connectors.ts';
 import { libraryEntries, removeItem, setItemEnabled, type LibraryConnector } from '../../src/library/library.ts';
 import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
-import { addMarketplace, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
+import { addMarketplace, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, removePlacements, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
+import { popularSkillsSh, searchSkillsSh } from '../library/skillsSh.ts';
 import { UPLOAD_LIMITS } from '../library/upload.ts';
+import type { SkillDestination } from '../../src/library/library.ts';
 import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
 import { overrideStep, playwrightOps, recipeFor } from '../library/recipeRunner.ts';
 import { runRecipe } from '../library/runRecipe.ts';
@@ -37,6 +41,7 @@ export const library = {
     const itemId = string(id, 'id', 64);
     const item = (await readLibrary()).items.find((i) => i.id === itemId);
     if (item?.kind === 'connector') await forgetAccount(itemId);
+    await removePlacements(item);
     return libraryEntries(await updateLibrary((index) => removeItem(index, itemId)), space);
   },
   async importFromAccount(_sender, spaceId, provider, parts) {
@@ -48,12 +53,23 @@ export const library = {
   },
   async discoverSkills(_sender, source) {
     const skills = await discoverSkills(string(source, 'source', 512));
-    return skills.map(({ name, description, source: from, files, icon }) => ({ name, description, source: from, fileCount: Object.keys(files).length, icon }));
+    return skills.map(({ name, description, source: from, files, icon, commit }) => ({ name, description, source: from, fileCount: Object.keys(files).length, icon, commit }));
   },
-  async installSkill(_sender, spaceId, source, name) {
+  async skillFiles(_sender, source, name) {
+    const skill = (await discoverSkills(string(source, 'source', 512))).find((s) => s.name === string(name, 'name', 128));
+    if (!skill) throw new Error(`${name as string} isn't in ${source as string}`);
+    return skill.files;
+  },
+  async installSkill(_sender, spaceId, source, name, destination) {
     const space = spaceIdOf(spaceId);
-    await installSkill(space, string(source, 'source', 512), string(name, 'name', 128));
+    await installSkill(space, string(source, 'source', 512), string(name, 'name', 128), skillDestination(destination));
     return libraryEntries(await readLibrary(), space);
+  },
+  async searchSkillsSh(_sender, query) {
+    return searchSkillsSh(string(query, 'query', 200));
+  },
+  async popularSkillsSh() {
+    return popularSkillsSh();
   },
   async marketplaces() {
     return marketplaces();
@@ -284,4 +300,18 @@ function spaceIdOf(value: unknown) {
   const id = string(value, 'spaceId', 128);
   if (!/^[a-z0-9-]+$/.test(id)) throw new TypeError('spaceId must be a profile id');
   return id;
+}
+
+// GAP: a project path is checked to be an absolute folder, not that it is one of the profile's projects.
+function skillDestination(value: unknown): SkillDestination | undefined {
+  if (value === undefined) return undefined;
+  const input = record(value, 'destination');
+  if (input.scope === 'library') return { scope: 'library' };
+  if (input.scope !== 'user' && input.scope !== 'project') throw new TypeError('destination.scope must be library, user or project');
+  const providers = input.providers;
+  if (!Array.isArray(providers) || !providers.length || !providers.every((p) => HARNESS_IDS.includes(p as Provider))) throw new TypeError(`destination.providers must list ${HARNESS_IDS.join(' and/or ')}`);
+  if (input.scope === 'user') return { scope: 'user', providers: [...new Set(providers as Provider[])] };
+  const project = string(input.project, 'destination.project', 1024);
+  if (!isAbsolute(project) || !statSync(project, { throwIfNoEntry: false })?.isDirectory()) throw new TypeError('destination.project must be a project folder');
+  return { scope: 'project', providers: [...new Set(providers as Provider[])], project };
 }

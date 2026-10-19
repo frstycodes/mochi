@@ -23,3 +23,17 @@ test('readTar reads regular files, long pax paths, and skips what accept rejects
   assert.equal(files.get(`repo/${long}`), 'long one');
   assert.ok(!files.has('repo/big.bin'));
 });
+
+test('readTar hands over the commit git archive writes in the global header', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'mochi-tar-git-'));
+  writeFileSync(join(root, 'SKILL.md'), 'x');
+  const git = (...args: string[]) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args]).toString().trim();
+  git('init', '-q');
+  git('add', '.');
+  git('commit', '-qm', 'init', '--no-verify');
+  const archive = gzipSync(execFileSync('git', ['-C', root, 'archive', '--format=tar', '--prefix=repo-HEAD/', 'HEAD']));
+  let commit = '';
+  const stream = new Blob([archive]).stream().pipeThrough(new DecompressionStream('gzip'));
+  for await (const entry of readTar(stream, () => true, { onComment: (c) => (commit = c) })) assert.equal(entry.path, 'repo-HEAD/SKILL.md');
+  assert.equal(commit, git('rev-parse', 'HEAD'));
+});

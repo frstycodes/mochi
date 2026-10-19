@@ -55,7 +55,7 @@ export function EntryActions({ entry, library }: { entry: LibraryEntry; library:
           Sign in
         </Button>
       )}
-      <ProfilesMenu entry={entry} library={library} />
+      {(!entry.placements.length || !!entry.profileIds.length) && <ProfilesMenu entry={entry} library={library} />}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={`${entry.title} actions`}>
@@ -88,15 +88,19 @@ export function EntryActions({ entry, library }: { entry: LibraryEntry; library:
 function entryMeta(entry: LibraryEntry) {
   const updated = entry.updatedAt && `updated ${timeAgo((Date.now() - entry.updatedAt) / 60_000)}`;
   const pinned = entry.autoUpdate === false && 'pinned';
-  const name = entry.kind === 'skill' && `/${STANDALONE_PLUGIN}:${entry.name}`;
-  return [KIND_LABELS[entry.kind], name, entry.contents, entry.source, updated, pinned].filter(Boolean).join(' · ');
+  // A skill written to an agent's own folders loads by its bare name there, not through the library's plugin.
+  const name = entry.kind === 'skill' && (entry.placements.length ? entry.placements.map((p) => tildePath(p.dir)).join(', ') : `/${STANDALONE_PLUGIN}:${entry.name}`);
+  const source = entry.source && (entry.commit ? `${entry.source} @ ${entry.commit.slice(0, 7)}` : entry.source);
+  return [KIND_LABELS[entry.kind], name, entry.contents, source, updated, pinned].filter(Boolean).join(' · ');
 }
+
+const tildePath = (dir: string) => dir.replace(/^\/(Users|home)\/[^/]+/, '~');
 
 function entryNotes(entry: LibraryEntry, entries: LibraryEntry[]) {
   const missing = entry.remotes.filter((remote) => !entries.some((e) => e.kind === 'connector' && !!e.source && isSameServer(e.source, remote.url)));
   return [
     ...(entry.isLinked === false ? ['Signed out: its tools are left out of threads until you sign in'] : []),
-    ...(!entry.profileIds.length ? ['In no profile yet: pick which profiles get it'] : []),
+    ...(!entry.profileIds.length && !entry.placements.length ? ['In no profile yet: pick which profiles get it'] : []),
     ...(missing.length ? [`Connect ${LIST.format(missing.map((r) => r.name))} under Connectors for its tools`] : []),
     ...(entry.unsupported.length ? [`Left out: ${LIST.format(entry.unsupported)}`] : []),
     ...(entry.kind === 'plugin' && !entry.contents && !entry.remotes.length ? ['Nothing in it loads into threads'] : []),
