@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../toast/store.ts';
 import { host } from '../host/index.ts';
-import type { DiffScope } from '../host/types/git.ts';
+import type { BranchList, DiffScope } from '../host/types/git.ts';
 
 const DIFF_POLL_MS = 4000;
 const PR_POLL_MS = 30_000;
@@ -9,6 +9,20 @@ const PR_POLL_MS = 30_000;
 /** The worktree's diff (against `base`, the thread's chosen base), re-read on an interval and on window focus while the agent keeps editing. */
 export function useGitDiff(cwd: string, scope: DiffScope, base?: string) {
   return usePolled(useCallback(() => host.git.diff(cwd, scope, base), [cwd, scope, base]), DIFF_POLL_MS);
+}
+
+/** The project's branches, read once per root; `refresh` re-reads them. */
+export function useBranches(root: string) {
+  const [state, setState] = useState<{ root: string; list?: BranchList; error?: string }>({ root });
+  const refresh = useCallback(() => {
+    if (!root) return;
+    host.git.branches(root).then(
+      (list) => setState({ root, list }),
+      (error: Error) => setState({ root, error: error.message }),
+    );
+  }, [root]);
+  useEffect(refresh, [refresh]);
+  return state.root === root ? { list: state.list, error: state.error, refresh } : { refresh };
 }
 
 /** `githubUser` is the thread's profile GitHub account; gh's active account when undefined. */
