@@ -224,12 +224,12 @@ function PaneCard({
       hidden={rect.isHidden}
       onPointerDownCapture={focus}
       onFocusCapture={focus}
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      // Expanded, the card drops its chrome and sits flush with the thread area's edges instead of the layout's inset rect.
+      style={isExpanded ? { left: 0, top: 0, width: '100%', height: '100%' } : { left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       className={cn(
-        'pane-card absolute flex flex-col overflow-hidden rounded-lg border bg-card outline-none',
+        'pane-card absolute flex flex-col overflow-hidden bg-card outline-none',
         !!entering && 'pane-card-entering',
-        showFocus && isFocused ? 'border-foreground/20' : 'border-border',
-        isExpanded && 'z-20',
+        isExpanded ? 'z-20' : cn('rounded-lg border', showFocus && isFocused ? 'border-foreground/20' : 'border-border'),
         isMoving && 'opacity-60',
       )}
     >
