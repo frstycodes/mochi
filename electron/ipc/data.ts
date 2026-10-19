@@ -3,7 +3,7 @@ import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } fro
 import { join } from 'node:path';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from '../../src/chat/images.ts';
 import { MAX_REPLAY_BYTES, type DataHost } from '../../src/host/types/data.ts';
-import { saveImage } from '../agents/images.ts';
+import { imageDir, saveImage, sweepImages } from '../agents/images.ts';
 import { embedReplay, isSelfContained, replayFileName } from '../../src/replay/page.ts';
 import { indexHtml } from '../window.ts';
 import { record, string, type Handlers } from './handlers.ts';
@@ -22,11 +22,18 @@ let writing: Promise<void> = Promise.resolve();
 // Appends too, so two flushes can't interleave their lines or both pass the cap check.
 let appending: Promise<unknown> = Promise.resolve();
 const capped = new Set<string>();
+// Every window loads; the first load of a launch sweeps.
+let hasSwept = false;
 
 export const data = {
   async load() {
     await writing;
-    return readFile(file(), 'utf8').catch(orNull);
+    const text = await readFile(file(), 'utf8').catch(orNull);
+    if (text !== null && !hasSwept) {
+      hasSwept = true;
+      void sweepUnreferenced(text).catch((error: unknown) => console.error('Image sweep failed', error));
+    }
+    return text;
   },
   async save(_sender, json) {
     const text = string(json, 'json', MAX_CHARS);
@@ -90,6 +97,16 @@ export const data = {
     return saveImage(mediaType as string, string(base64, 'base64', Math.ceil((MAX_IMAGE_BYTES * 4) / 3) + 4));
   },
 } satisfies Handlers<DataHost>;
+
+// Replays can name an image the thread itself no longer shows (after a rewind), so they count as references too.
+async function sweepUnreferenced(threads: string) {
+  const dir = imageDir();
+  if (!dir) return;
+  const startedAt = Date.now();
+  const names = (await readdir(replays()).catch(() => [] as string[])).filter((n) => n.endsWith('.jsonl'));
+  const recordings = await Promise.all(names.map((n) => readFile(join(replays(), n), 'utf8').catch(() => '')));
+  await sweepImages(dir, [threads, ...recordings], startedAt);
+}
 
 function orNull(error: NodeJS.ErrnoException) {
   if (error.code === 'ENOENT') return null;
