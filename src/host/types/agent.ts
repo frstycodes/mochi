@@ -27,6 +27,8 @@ export interface AgentStartOptions {
   forkAt?: string;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
+  /** Settings › Goals and checks › Goals is off: the session gets no goal instructions, tools or nudge. Read at session start. */
+  isGoalsOff?: boolean;
 }
 
 export type SeqAgentEvent = AgentEvent & { seq?: number };

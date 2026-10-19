@@ -7,7 +7,7 @@ import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
 import { apiMessage, childEvents, generatedImage, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
-import { CODEX_BROWSER_FEATURES_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
+import { CODEX_BROWSER_FEATURES_OFF, mochiInstructions } from '../instructions.ts';
 import { killTree, spawnable } from '../../platform.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
 import { CHEAP_MODELS } from '../../../src/utility/prompts.ts';
@@ -96,13 +96,13 @@ export class CodexAdapter {
   private emit: (event: AgentEvent) => void;
   private accountFor: AccountFor;
   private findCodex: FindCodex;
-  private toolsUrl?: (threadId: string) => Promise<string>;
+  private toolsUrl?: (threadId: string, isGoalsOff?: boolean) => Promise<string>;
   private libraryConfig?: (spaceId: string) => Promise<Record<string, unknown>>;
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
   /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library as config overrides. */
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string) => Promise<string>, libraryConfig?: (spaceId: string) => Promise<Record<string, unknown>>) {
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, isGoalsOff?: boolean) => Promise<string>, libraryConfig?: (spaceId: string) => Promise<Record<string, unknown>>) {
     this.emit = emit;
     this.accountFor = accountFor;
     this.findCodex = findCodex;
@@ -347,9 +347,9 @@ export class CodexAdapter {
     const prior = this.threads.get(threadId);
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
-    const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
+    const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId, options.isGoalsOff) };
     const library = await this.libraryConfig?.(options.spaceId);
-    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: MOCHI_INSTRUCTIONS, config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...library, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: mochiInstructions(options.isGoalsOff), config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...library, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume

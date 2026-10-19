@@ -400,6 +400,11 @@ export type ToolName = keyof typeof TOOL_TABLE;
 
 export const TOOL_NAMES = Object.keys(TOOL_TABLE) as ToolName[];
 
+/** Only served while goals are on (Settings › Goals and checks › Goals); off, agents never see them. */
+export const GOAL_TOOLS = ['get_goal', 'propose_goal', 'claim_criterion', 'report_turn', 'get_report', 'settle_goal'] as const satisfies ToolName[];
+
+export const isGoalTool = (name: string) => (GOAL_TOOLS as readonly string[]).includes(name);
+
 export const tierOf = (name: ToolName): Tier => TOOL_TABLE[name].tier;
 
 export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];

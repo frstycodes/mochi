@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { goalNudge } from './goalNudge.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -14,7 +15,7 @@ import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
-import { HIDDEN_CLAUDE_SKILLS, MOCHI_INSTRUCTIONS } from '../instructions.ts';
+import { HIDDEN_CLAUDE_SKILLS, mochiInstructions } from '../instructions.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -198,7 +199,7 @@ async function launch(session: Session) {
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: MOCHI_INSTRUCTIONS },
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: mochiInstructions(options.isGoalsOff) },
         // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
         settings: { skillOverrides: HIDDEN_CLAUDE_SKILLS, ...(options.speed && { fastMode: true }) },
         cwd: options.cwd,
@@ -218,9 +219,9 @@ async function launch(session: Session) {
         mcpServers: {
           ...Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig])),
           ...Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }])),
-          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd),
+          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, options.isGoalsOff),
         },
-        hooks: compactHooks(threadId),
+        hooks: { ...compactHooks(threadId), PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)] },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },
     });
