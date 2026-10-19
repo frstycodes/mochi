@@ -131,7 +131,7 @@ function RingFor({ thread, verdict }: { thread: Thread; verdict: Verdict | null 
   const criteria = thread.criteria ?? [];
   const isWorking = !!thread.live?.isWorking;
   const shown = !isWorking && verdict && verdict.kind !== 'idle' ? verdict : null;
-  return <StatusRing met={criteria.filter(isMet).length} total={criteria.length} tone={shown?.tone ?? null} isWorking={isWorking} slot={thread.line} label={isWorking ? 'Working' : (shown?.chip ?? 'Idle')} />;
+  return <StatusRing met={criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length} total={criteria.length} tone={shown?.tone ?? null} isWorking={isWorking} slot={thread.line} label={isWorking ? 'Working' : (shown?.chip ?? 'Idle')} />;
 }
 
 // C · Mochi is the status

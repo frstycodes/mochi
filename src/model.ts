@@ -40,8 +40,8 @@ export interface Criterion {
   check?: { status: 'running' | 'passed' | 'failed'; at: number; ms?: number; output?: string };
 }
 
-/** Met when its check passed. One with a command counts only then; one you judge also counts once the agent claims it. */
-export const isMet = (c: Criterion) => c.check?.status === 'passed' || (!c.command && !!c.claim);
+/** Met when its check passed. One with a command counts only then; one you judge also counts once the agent claims it or you confirm it. */
+export const isMet = (c: Criterion, isConfirmed = false) => c.check?.status === 'passed' || (!c.command && (!!c.claim || isConfirmed));
 
 /** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
 export interface TurnReport {

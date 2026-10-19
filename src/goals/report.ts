@@ -9,7 +9,7 @@ export function currentReport(t: Thread) {
   const lastYou = t.activity.findLast((e) => e.who === 'you' && e.kind === 'message');
   if (lastYou && lastYou.at > report.at) return null;
   const criteria = t.criteria ?? [];
-  const met = criteria.filter(isMet).length;
+  const met = criteria.filter((c) => isMet(c, t.idle?.isConfirmed)).length;
   return { report, criteria, met, isReady: criteria.length > 0 && met === criteria.length, changes: openTurn(t.activity) };
 }
 
