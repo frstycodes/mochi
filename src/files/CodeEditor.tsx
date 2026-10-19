@@ -9,12 +9,14 @@ import { markdown } from '@codemirror/lang-markdown';
 import { python } from '@codemirror/lang-python';
 import { rust } from '@codemirror/lang-rust';
 import { yaml } from '@codemirror/lang-yaml';
-import { HighlightStyle, syntaxHighlighting, type LanguageSupport } from '@codemirror/language';
+import { HighlightStyle, LanguageSupport, StreamLanguage, syntaxHighlighting } from '@codemirror/language';
+import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
 
-export default function CodeEditor({ path, value, line, column, readOnly, onChange }: { path: string; value: string; line?: number; column?: [number, number]; readOnly?: boolean; onChange?: (text: string) => void }) {
+/** `isWrapped` folds long lines instead of scrolling sideways, for reading prose-heavy files in a narrow pane. */
+export default function CodeEditor({ path, value, line, column, readOnly, isWrapped, onChange }: { path: string; value: string; line?: number; column?: [number, number]; readOnly?: boolean; isWrapped?: boolean; onChange?: (text: string) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
   const onChangeRef = useRef(onChange);
@@ -32,6 +34,7 @@ export default function CodeEditor({ path, value, line, column, readOnly, onChan
           syntaxHighlighting(highlightStyle),
           lang ? lang() : [],
           readOnly ? [EditorState.readOnly.of(true), EditorView.editable.of(false)] : [],
+          isWrapped ? EditorView.lineWrapping : [],
           EditorView.updateListener.of((update) => update.docChanged && onChangeRef.current?.(update.state.doc.toString())),
         ],
       }),
@@ -68,6 +71,7 @@ const LANGUAGES: [RegExp, () => LanguageSupport][] = [
   [/\.rs$/i, rust],
   [/\.go$/i, go],
   [/\.ya?ml$/i, yaml],
+  [/\.(sh|bash|zsh)$/i, () => new LanguageSupport(StreamLanguage.define(shell))],
 ];
 
 function languageFor(path: string) {

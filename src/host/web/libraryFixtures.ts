@@ -128,7 +128,9 @@ export const SKILLS_SH_POPULAR: SkillsShSkill[] = (
 export function fixtureSkillFiles(name: string, description: string): Record<string, string> {
   return {
     'SKILL.md': `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n# ${name}\n\n${description}\n\n## Steps\n\n1. Read the task and the files it names.\n2. Run \`scripts/check.sh\` before you finish.\n`,
-    'scripts/check.sh': '#!/bin/sh\nset -e\nnpm test --silent\n',
+    'scripts/check.sh': '#!/bin/sh\nset -e\n# Fails the turn when a test fails.\nif ! npm test --silent; then\n  echo "tests failed" >&2\n  exit 1\nfi\n',
+    'scripts/extract.py': 'import json\nimport sys\n\n\ndef main(path: str) -> None:\n    """Print the TODOs in a file as JSON."""\n    with open(path) as f:\n        todos = [line.strip() for line in f if "TODO" in line]\n    json.dump({"file": path, "todos": todos}, sys.stdout, indent=2)\n\n\nif __name__ == "__main__":\n    main(sys.argv[1])\n',
+    'reference.md': `# ${name} reference\n\n| Flag | Meaning |\n| --- | --- |\n| \`--fix\` | Apply the changes |\n| \`--dry-run\` | Only print them |\n\n\`\`\`bash\nscripts/check.sh --fix\n\`\`\`\n`,
   };
 }
 

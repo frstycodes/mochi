@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { ChevronDown, Code, Download, FileText, Folder, Link, ShieldAlert, Skill, UserCircle, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
@@ -9,8 +9,10 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from '@/toast/store';
+import { MarkdownView } from '../files/MarkdownView';
 import { host } from '../host';
 import type { Provider } from '../model';
 import { useProjects } from '../projects';
@@ -36,6 +38,9 @@ export function AddSkillsDialog({ source, onClose, library }: { source: string |
     </Dialog>
   );
 }
+
+// Lazy so CodeMirror parses only when a file that isn't markdown is opened.
+const CodeEditor = lazy(() => import('../files/CodeEditor'));
 
 // Inside the dialog's content, which unmounts on close, so each opening starts fresh.
 function AddSkillsForm({ initialSource, library, onDone }: { initialSource: string; library: Library; onDone: () => void }) {
@@ -175,6 +180,7 @@ function SkillFiles({ source, skill, owner }: { source: string; skill: CatalogSk
   const files = state.status === 'done' ? state.value : {};
   const paths = Object.keys(files).sort((a, b) => Number(b === 'SKILL.md') - Number(a === 'SKILL.md') || a.localeCompare(b));
   const [path, setPath] = useState('SKILL.md');
+  const shownPath = files[path] === undefined ? 'SKILL.md' : path;
   const scripts = paths.filter(isScript);
   const isTrusted = TRUSTED_SKILL_OWNERS.includes(owner);
   return (
@@ -183,33 +189,25 @@ function SkillFiles({ source, skill, owner }: { source: string; skill: CatalogSk
         <h3 className="type-title">{skill.name}</h3>
         <p className="truncate type-caption text-muted-foreground">{skill.source}</p>
       </div>
-      <ScrollArea className="shrink-0 border-b">
-        <div role="tablist" aria-label="Files" className="flex gap-1 px-4">
-          {state.status === 'loading' && <Skeleton className="my-2 h-5 w-40" />}
+      <Tabs value={shownPath} onValueChange={setPath} className="shrink-0 gap-0">
+        <TabsList variant="line" aria-label="Files" className="w-full justify-start overflow-x-auto px-4">
+          {state.status === 'loading' && <Skeleton className="h-4 w-40" />}
           {paths.map((p) => (
-            <button
-              key={p}
-              type="button"
-              role="tab"
-              aria-selected={p === path}
-              onClick={() => setPath(p)}
-              className="-mb-px flex shrink-0 items-center gap-1.5 border-b border-transparent px-2 py-2 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground aria-selected:border-foreground aria-selected:text-foreground"
-            >
+            <TabsTrigger key={p} value={p} className="flex-none px-2 font-mono text-xs">
               <FileIcon path={p} />
               {p}
-            </button>
+            </TabsTrigger>
           ))}
-        </div>
-      </ScrollArea>
-      <ScrollArea className="min-h-0 flex-1 bg-muted/30">
-        {state.status === 'error' ? (
+        </TabsList>
+      </Tabs>
+      <div className="min-h-0 flex-1">
+        {state.status === 'error' && (
           <div className="p-4">
             <CatalogErrorRow what={skill.name} message={state.message} onRetry={retry} />
           </div>
-        ) : (
-          <pre className="p-5 font-mono text-xs/5 break-words whitespace-pre-wrap text-foreground">{files[path] ?? files['SKILL.md']}</pre>
         )}
-      </ScrollArea>
+        {state.status === 'done' && <FileBody key={shownPath} path={shownPath} text={files[shownPath] ?? ''} />}
+      </div>
       <p className={cn('flex items-start gap-2 border-t px-5 py-2.5 type-caption', isTrusted ? 'text-muted-foreground' : 'text-warning')}>
         <ShieldAlert aria-hidden className="mt-px size-3.5 shrink-0" />
         {isTrusted
@@ -217,6 +215,16 @@ function SkillFiles({ source, skill, owner }: { source: string; skill: CatalogSk
           : `${owner} isn’t a source Mochi knows. Read SKILL.md${scripts.length ? ` and its ${countOf(scripts.length, 'script')}` : ''} first: agents follow it and may run what it ships. Nothing runs when it installs.`}
       </p>
     </section>
+  );
+}
+
+/** Markdown rendered (its source a hover toggle away); everything else as highlighted, read-only code. */
+function FileBody({ path, text }: { path: string; text: string }) {
+  if (/\.(md|mdx|markdown)$/i.test(path)) return <MarkdownView path={path} text={text} />;
+  return (
+    <Suspense>
+      <CodeEditor readOnly isWrapped path={path} value={text} />
+    </Suspense>
   );
 }
 
