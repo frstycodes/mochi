@@ -1,5 +1,6 @@
 // Regular files from a ustar stream, with pax `path` records for names over 100 bytes. Bodies `accept` rejects are skipped unread.
-export async function* readTar(stream: ReadableStream<Uint8Array>, accept: (path: string, size: number) => boolean) {
+// `onComment` gets the global header's `comment`, where `git archive` (and so GitHub's codeload) puts the commit SHA.
+export async function* readTar(stream: ReadableStream<Uint8Array>, accept: (path: string, size: number) => boolean, onComment?: (comment: string) => void) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = new Uint8Array(0);
@@ -39,6 +40,12 @@ export async function* readTar(stream: ReadableStream<Uint8Array>, accept: (path
     const type = field(156, 1);
     const prefix = field(345, 155);
     const padding = Math.ceil(size / 512) * 512 - size;
+    if (type === 'g') {
+      const comment = decoder.decode(await take(size)).match(/^\d+ comment=(.*)$/m)?.[1];
+      if (comment) onComment?.(comment);
+      await skip(padding);
+      continue;
+    }
     if (type === 'x') {
       paxPath = decoder.decode(await take(size)).match(/^\d+ path=(.*)$/m)?.[1];
       await skip(padding);

@@ -1,12 +1,15 @@
 import { app } from 'electron';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { CatalogPlugin, MarketplaceCatalog } from '../../src/library/library.ts';
 import { parsePluginBundle } from '../../src/library/pluginBundle.ts';
 import { parseSkillMd } from '../../src/library/skillMd.ts';
+import { findSkillDirs, parseSkillSource } from '../../src/library/skillSource.ts';
 import { readTar } from '../../src/library/tar.ts';
+import { run } from '../git/run.ts';
 
 /** Skills and plugins from public GitHub repos and marketplace.json files (Claude's and Codex's formats). */
 export class CatalogError extends Error {}
@@ -29,15 +32,10 @@ interface GitHubTarget {
   path: string;
 }
 
-// Accepts owner/repo, owner/repo/sub/dir, and github.com URLs including /tree/<ref>/<dir>.
+// The skills CLI's forms (`skillSource.ts`); a marketplace ignores `@skill`.
 export function parseGitHubSource(source: string): GitHubTarget | null {
-  const match = source
-    .trim()
-    .replace(/\/+$/, '')
-    .match(/^(?:https:\/\/github\.com\/)?([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/tree\/([^/]+))?(?:\/(.+))?$/);
-  if (!match) return null;
-  const [, owner, repo, ref = 'HEAD', path = ''] = match;
-  return { owner, repo, ref, path };
+  const parsed = parseSkillSource(source);
+  return parsed && { owner: parsed.owner, repo: parsed.repo, ref: parsed.ref, path: parsed.path };
 }
 
 // Stores the short form agents' own marketplace config expects when there is no sub-path.
@@ -75,7 +73,7 @@ export async function fetchPluginBundle(marketplaceSource: string, pluginName: s
   if (!entry) throw new CatalogError(`${pluginName} isn't listed in ${marketplaceSource}`);
   const pluginTarget = resolvePluginTarget(entry, file, target);
   const scope = pluginTarget.path ? `${pluginTarget.path}/` : '';
-  const repoFiles = await fetchRepoTextFiles(pluginTarget, (path) => path.startsWith(scope));
+  const { files: repoFiles } = await fetchRepoTextFiles(pluginTarget, (path) => path.startsWith(scope));
   const files = new Map([...repoFiles].map(([path, content]) => [path.slice(scope.length), content]));
   if (!files.size) throw new CatalogError(`${pluginName} has no files Mochi can read`);
   const size = [...files.values()].reduce((total, content) => total + content.length, 0);
@@ -215,7 +213,7 @@ async function fetchCodexManifests(target: GitHubTarget, plugins: MarketplacePlu
     if (path) dirs.set(joinPath(target.path, path), plugin.name);
   }
   const wanted = new Set([...dirs.keys()].map((dir) => joinPath(dir, '.codex-plugin/plugin.json')));
-  const files = await fetchRepoTextFiles(target, (path) => wanted.has(path));
+  const { files } = await fetchRepoTextFiles(target, (path) => wanted.has(path));
   const manifests = new Map<string, CodexManifest>();
   for (const [dir, name] of dirs) {
     const parsed = codexManifestSchema.safeParse(parseJson(files.get(joinPath(dir, '.codex-plugin/plugin.json'))));
@@ -224,36 +222,52 @@ async function fetchCodexManifests(target: GitHubTarget, plugins: MarketplacePlu
   return manifests;
 }
 
-// Every folder holding a SKILL.md under the target path becomes one skill, with its text files alongside.
-/** `isFresh` skips the cache (an update check) and refills it. */
+/**
+ * The skills in a GitHub source, found as the skills CLI finds them (`findSkillDirs`), each with its text files and the
+ * commit they were read at; `owner/repo@skill` keeps only that one. `isFresh` skips the cache (an update check) and refills it.
+ */
 export function discoverSkills(source: string, { isFresh = false } = {}) {
   return cached(`skills:${source}`, () => loadSkills(source), isFresh);
 }
 
 async function loadSkills(source: string) {
-  const target = parseGitHubSource(source);
-  if (!target) throw new CatalogError('Use a GitHub owner/repo or a github.com URL');
+  const target = parseSkillSource(source);
+  if (!target) throw new CatalogError('Use a GitHub owner/repo, owner/repo@skill, or a github.com URL');
   const scope = target.path ? `${target.path}/` : '';
-  const files = await fetchRepoTextFiles(target, (path) => path.startsWith(scope));
-  const skillDirs = [...files.keys()]
-    .filter((path) => path === 'SKILL.md' || path.endsWith('/SKILL.md'))
-    .map((path) => path.slice(0, -'SKILL.md'.length).replace(/\/$/, ''));
-  if (!skillDirs.length) throw new CatalogError(`No SKILL.md found in ${source}`);
-
-  return skillDirs.map((dir) => {
+  const { files, commit } = await fetchRepoTextFiles(target, (path) => path.startsWith(scope));
+  const seen = new Set<string>();
+  const skills = findSkillDirs(files.keys(), target.path).flatMap((dir) => {
     const prefix = dir ? `${dir}/` : '';
     // SKILL.md is kept as written: its frontmatter carries more than name and description (allowed-tools, argument-hint…).
     const folder = [...files].filter(([path]) => path.startsWith(prefix));
     const iconPath = codexSkillIcon(files.get(`${prefix}agents/openai.yaml`));
-    return {
-      ...parseSkillMd(files.get(`${prefix}SKILL.md`)!, dir.split('/').pop() || target.repo),
-      files: Object.fromEntries(folder.map(([path, content]) => [path.slice(prefix.length), content])),
-      source: [`${target.owner}/${target.repo}`, dir].filter(Boolean).join('/'),
-      // A skill without its own icon wears its repo owner's avatar, so a catalog reads as who made what.
-      icon: iconPath ? rawUrl(target, joinPath(dir, iconPath)) : githubAvatar(target.owner),
-    };
+    const folderName = dir.split('/').pop() || target.repo;
+    const meta = parseSkillMd(files.get(`${prefix}SKILL.md`)!, folderName);
+    // The CLI keeps the first skill of a name.
+    if (seen.has(meta.name)) return [];
+    seen.add(meta.name);
+    return [
+      {
+        ...meta,
+        folderName,
+        files: Object.fromEntries(folder.map(([path, content]) => [path.slice(prefix.length), content])),
+        source: [`${target.owner}/${target.repo}`, dir].filter(Boolean).join('/') + (target.ref === 'HEAD' ? '' : `#${target.ref}`),
+        commit,
+        // A skill without its own icon wears its repo owner's avatar, so a catalog reads as who made what.
+        icon: iconPath ? rawUrl(target, joinPath(dir, iconPath)) : githubAvatar(target.owner),
+      },
+    ];
   });
+  if (!skills.length) throw new CatalogError(`No SKILL.md found in ${source}`);
+  if (!target.skill) return skills;
+  const wanted = skillSlug(target.skill);
+  const picked = skills.filter((skill) => skill.name === wanted || skillSlug(skill.folderName) === wanted);
+  if (!picked.length) throw new CatalogError(`No skill named ${target.skill} in ${target.owner}/${target.repo}`);
+  return picked;
 }
+
+// skills.sh ids and `@skill` filters are slugs of the skill's name or its folder.
+const skillSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
 
 // Codex skills declare `interface.icon_large` / `icon_small` in agents/openai.yaml; the large one is the app-style tile.
 function codexSkillIcon(yaml: string | undefined) {
@@ -263,26 +277,43 @@ function codexSkillIcon(yaml: string | undefined) {
 
 // One codeload request instead of a tree walk: the GitHub API's 60/hour anonymous limit runs out in a page view.
 // The archive is streamed, so only the small text files `keep` accepts are held in memory.
-async function fetchRepoTextFiles({ owner, repo, ref }: GitHubTarget, keep: (path: string) => boolean) {
-  const response = await fetch(`https://codeload.github.com/${owner}/${repo}/tar.gz/${ref}`, { headers: GITHUB_HEADERS });
-  if (!response.ok || !response.body) throw new CatalogError(`Couldn't download ${owner}/${repo} (HTTP ${response.status}). Public repositories only.`);
+async function fetchRepoTextFiles(target: GitHubTarget, keep: (path: string) => boolean) {
+  const response = await downloadArchive(target);
   const files = new Map<string, string>();
+  let commit: string | null = null;
   const decoder = new TextDecoder();
   // GitHub prefixes every path with "<repo>-<ref>/"
   const repoPath = (path: string) => path.slice(path.indexOf('/') + 1);
   const accept = (path: string, size: number) => size <= MAX_FILE_BYTES && keep(repoPath(path));
-  for await (const entry of readTar(response.body.pipeThrough(new DecompressionStream('gzip')), accept)) {
+  for await (const entry of readTar(response.body!.pipeThrough(new DecompressionStream('gzip')), accept, (comment) => (commit = comment))) {
     if (!entry.body.includes(0)) files.set(repoPath(entry.path), decoder.decode(entry.body));
   }
-  return files;
+  return { files, commit };
 }
 
-// Repos change rarely and a browse downloads a whole archive, so catalogs are kept on disk for an hour.
-async function cached<T>(key: string, load: () => Promise<T>, isFresh = false): Promise<T> {
+// Anonymous first; a private (or missing) repo answers 404, and then gh's own login is tried, its token kept in main.
+async function downloadArchive({ owner, repo, ref }: GitHubTarget) {
+  const anonymous = await fetch(`https://codeload.github.com/${owner}/${repo}/tar.gz/${ref}`, { headers: GITHUB_HEADERS });
+  if (anonymous.ok && anonymous.body) return anonymous;
+  const token = anonymous.status === 404 ? await ghToken() : null;
+  if (!token) throw new CatalogError(`Couldn't download ${owner}/${repo} (HTTP ${anonymous.status}). Private repositories need gh signed in.`);
+  const signedIn = await fetch(`https://api.github.com/repos/${owner}/${repo}/tarball/${ref}`, { headers: { ...GITHUB_HEADERS, Authorization: `Bearer ${token}` } });
+  if (!signedIn.ok || !signedIn.body) throw new CatalogError(`Couldn't download ${owner}/${repo} with gh's login (HTTP ${signedIn.status})`);
+  return signedIn;
+}
+
+const ghToken = () => run('gh', homedir(), ['auth', 'token']).then((out) => out.trim() || null, () => null);
+
+// Repos change rarely and a browse downloads a whole archive, so catalogs are kept on disk for an hour. Offline, an
+// older copy is better than nothing, except for an update check (`isFresh`), which must not mistake it for the source.
+export async function cached<T>(key: string, load: () => Promise<T>, isFresh = false): Promise<T> {
   const file = join(app.getPath('userData'), 'library-cache', `${createHash('sha256').update(key).digest('hex').slice(0, 32)}.json`);
   const hit = await readFile(file, 'utf8').then((text) => JSON.parse(text) as { at: number; value: T }, () => null);
   if (hit && !isFresh && Date.now() - hit.at < CATALOG_TTL_MS) return hit.value;
-  const value = await load();
+  const value = await load().catch((error: unknown) => {
+    if (hit && !isFresh && !(error instanceof CatalogError)) return hit.value;
+    throw error;
+  });
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify({ at: Date.now(), value }));
   return value;
