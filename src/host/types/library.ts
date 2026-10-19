@@ -1,5 +1,5 @@
 import type { AppProviderId, DeviceCode } from '../../library/connectors.ts';
-import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog } from '../../library/library.ts';
+import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog, SkillDestination, SkillsShSkill } from '../../library/library.ts';
 import type { SetupResult, SetupTarget } from '../../library/recipes.ts';
 import type { Provider } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
@@ -14,8 +14,13 @@ export interface LibraryHost {
   importFromAccount(spaceId: string, provider: Provider, parts: ('skills' | 'mcp')[]): Promise<{ entries: LibraryEntry[]; notes: string[] }>;
   /** Every SKILL.md folder in a public GitHub repo or path (`owner/repo`, `owner/repo/dir`, or a github.com URL). */
   discoverSkills(source: string): Promise<CatalogSkill[]>;
-  /** Installs, or reinstalls keeping its profiles, and turns it on for this profile. */
-  installSkill(spaceId: string, source: string, name: string): Promise<LibraryEntry[]>;
+  /** A found skill's text files by path, SKILL.md included, to read before installing. */
+  skillFiles(source: string, name: string): Promise<Record<string, string>>;
+  /** Installs, or reinstalls keeping its profiles: into the library for this profile (default), or to the agents' own folders. */
+  installSkill(spaceId: string, source: string, name: string, destination?: SkillDestination): Promise<LibraryEntry[]>;
+  /** skills.sh's search (2+ characters) and its all-time leaderboard; cached, and the last answer when offline. */
+  searchSkillsSh(query: string): Promise<SkillsShSkill[]>;
+  popularSkillsSh(): Promise<SkillsShSkill[]>;
   /** The featured marketplaces, then the user's. */
   marketplaces(): Promise<Marketplace[]>;
   addMarketplace(source: string): Promise<Marketplace[]>;
@@ -60,7 +65,10 @@ export const libraryMethods = {
   remove: 'invoke',
   importFromAccount: 'invoke',
   discoverSkills: 'invoke',
+  skillFiles: 'invoke',
   installSkill: 'invoke',
+  searchSkillsSh: 'invoke',
+  popularSkillsSh: 'invoke',
   marketplaces: 'invoke',
   addMarketplace: 'invoke',
   removeMarketplace: 'invoke',

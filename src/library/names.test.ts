@@ -18,6 +18,8 @@ const entry = (fields: Partial<LibraryEntry> & Pick<LibraryEntry, 'kind' | 'name
   alias: null,
   autoUpdate: null,
   updatedAt: null,
+  commit: null,
+  placements: [],
   ...fields,
 });
 

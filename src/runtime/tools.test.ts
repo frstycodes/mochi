@@ -1287,7 +1287,7 @@ test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and 
 });
 
 function connectorEntry(name: string, url: string, alias: string): LibraryEntry {
-  return { id: `${name}-${alias}`, kind: 'connector', name, title: name[0].toUpperCase() + name.slice(1), description: '', targets: ['claude', 'codex'], isEnabled: true, profileIds: ['latitude'], source: url, icon: null, contents: null, remotes: [], unsupported: [], isLinked: true, alias, autoUpdate: null, updatedAt: null };
+  return { id: `${name}-${alias}`, kind: 'connector', name, title: name[0].toUpperCase() + name.slice(1), description: '', targets: ['claude', 'codex'], isEnabled: true, profileIds: ['latitude'], source: url, icon: null, contents: null, remotes: [], unsupported: [], isLinked: true, alias, autoUpdate: null, updatedAt: null, commit: null, placements: [] };
 }
 
 

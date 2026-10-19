@@ -1,12 +1,15 @@
 import { app } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
-import { EMPTY_LIBRARY, FEATURED_MARKETPLACES, itemName, parseLibrary, profileLayout, STANDALONE_PLUGIN, type LibraryIndex, type LibraryItem, type Marketplace } from '../../src/library/library.ts';
+import { EMPTY_LIBRARY, FEATURED_MARKETPLACES, itemName, parseLibrary, profileLayout, skillPlacementDir, STANDALONE_PLUGIN, type LibraryIndex, type LibraryItem, type LibrarySkill, type Marketplace, type SkillDestination, type SkillPlacement } from '../../src/library/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { skillMeta, stripSecrets, type McpServerDef } from '../../src/settings/agentConfig.ts';
+import { accountFor } from '../agents/config.ts';
 import { expand, expandAll, readProfileConfig } from '../agents/profileConfig.ts';
 import { CatalogError, discoverSkills, fetchMarketplace, fetchPluginBundle, normalizeMarketplaceSource } from './catalog.ts';
+import { removeSkillFolder, writeSkillFolder } from './skillFiles.ts';
 
 /**
  * The library index in userData/library.json, and each profile's plugin folders under userData/library/<profile>/, one
@@ -77,11 +80,38 @@ export async function importFromAccount(spaceId: string, provider: Provider, par
   return notes;
 }
 
-/** Installs (or reinstalls, keeping its id and profiles) one skill found in a GitHub repo, and turns it on for the profile. */
-export async function installSkill(spaceId: string, source: string, name: string) {
+/**
+ * Installs (or reinstalls, keeping its id and profiles) one skill found in a GitHub repo. Into the library it is turned on
+ * for the profile; to an agent's own folders (`destination`) it is written there as the skills CLI would, and stays in
+ * the library only to show its source, update and remove it.
+ */
+export async function installSkill(spaceId: string, source: string, name: string, destination: SkillDestination = { scope: 'library' }) {
   const found = (await discoverSkills(source)).find((skill) => skill.name === name);
   if (!found) throw new CatalogError(`${name} isn't in ${source}`);
-  await install(spaceId, { kind: 'skill', id: randomUUID(), name: found.name, description: found.description, files: found.files, source: found.source, icon: found.icon, targets: ['claude', 'codex'], addedAt: Date.now() });
+  const old = (await readLibrary()).items.find((item): item is LibrarySkill => item.kind === 'skill' && item.name === found.name);
+  const placements = destination.scope === 'library' ? [] : await placementsFor(spaceId, found.name, destination);
+  const owned = old?.placements ?? [];
+  for (const placement of placements) await writeSkillFolder(placement.dir, found.files, owned.some((p) => p.dir === placement.dir));
+  const kept = owned.filter((p) => !placements.some((n) => n.dir === p.dir));
+  const item: LibrarySkill = { kind: 'skill', id: randomUUID(), name: found.name, description: found.description, files: found.files, source: found.source, commit: found.commit, placements: [...kept, ...placements], icon: found.icon, targets: ['claude', 'codex'], addedAt: Date.now() };
+  await install(spaceId, item, destination.scope === 'library');
+}
+
+async function placementsFor(spaceId: string, name: string, destination: Exclude<SkillDestination, { scope: 'library' }>): Promise<SkillPlacement[]> {
+  if (!destination.providers.length) throw new Error('Pick Claude Code, Codex or both');
+  const { configDir } = await accountFor(spaceId, 'claude');
+  const where = { home: homedir(), claudeDir: configDir ?? join(homedir(), '.claude'), project: destination.scope === 'project' ? destination.project : undefined };
+  return destination.providers.map((provider) => ({ provider, scope: destination.scope, dir: skillPlacementDir(provider, destination.scope, name, where) }));
+}
+
+/** Rewrites a skill's folders on disk with what the library now holds (after an update). */
+export async function syncPlacements(skill: LibrarySkill) {
+  for (const placement of skill.placements ?? []) await writeSkillFolder(placement.dir, skill.files, true);
+}
+
+/** Deletes the folders Mochi wrote a skill to. */
+export async function removePlacements(item: LibraryItem | undefined) {
+  if (item?.kind === 'skill') for (const placement of item.placements ?? []) await removeSkillFolder(placement.dir);
 }
 
 export async function installPlugin(spaceId: string, marketplaceName: string, name: string) {
@@ -111,7 +141,7 @@ export function removeMarketplace(name: string) {
   return updateLibrary((index) => ({ ...index, marketplaces: index.marketplaces.filter((m) => m.name !== name) }));
 }
 
-async function install(spaceId: string, item: LibraryItem) {
+async function install(spaceId: string, item: LibraryItem, isForProfile = true) {
   await updateLibrary((index) => {
     const old = index.items.find((other) => other.kind === item.kind && itemName(other) === itemName(item));
     const next = old ? { ...item, id: old.id, targets: old.targets, addedAt: old.addedAt } : item;
@@ -119,7 +149,7 @@ async function install(spaceId: string, item: LibraryItem) {
     return {
       ...index,
       items: old ? index.items.map((other) => (other === old ? next : other)) : [...index.items, next],
-      profiles: { ...index.profiles, [spaceId]: members.includes(next.id) ? members : [...members, next.id] },
+      profiles: { ...index.profiles, [spaceId]: !isForProfile || members.includes(next.id) ? members : [...members, next.id] },
     };
   });
 }

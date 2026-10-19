@@ -23,8 +23,23 @@ export interface LibrarySkill extends ItemBase {
   files: Record<string, string>;
   /** GitHub `owner/repo/path` it was installed from; null when imported from an account. */
   source: string | null;
+  /** The source's commit these files were read at. */
+  commit?: string | null;
+  /** Folders it was also written to, where the skills CLI puts skills; Mochi rewrites them on update and deletes them on remove. */
+  placements?: SkillPlacement[];
   icon: string | null;
 }
+
+/** A skill written to disk for an agent to find on its own, as `npx skills add` does (`skillPlacementDir`). */
+export interface SkillPlacement {
+  provider: Provider;
+  scope: 'user' | 'project';
+  /** The skill's folder. */
+  dir: string;
+}
+
+/** Where an install goes: the Mochi library (loaded per profile) or, like the skills CLI, the agents' own folders. */
+export type SkillDestination = { scope: 'library' } | { scope: 'user'; providers: Provider[] } | { scope: 'project'; providers: Provider[]; project: string };
 
 export interface LibraryServer extends ItemBase {
   kind: 'server';
@@ -99,6 +114,9 @@ export interface LibraryEntry {
   /** Null when it has no source to update from. */
   autoUpdate: boolean | null;
   updatedAt: number | null;
+  /** A skill's source commit, when known. */
+  commit: string | null;
+  placements: SkillPlacement[];
 }
 
 /** One plugin as a marketplace lists it, before it is installed. */
@@ -129,6 +147,18 @@ export interface CatalogSkill {
   source: string;
   fileCount: number;
   icon: string | null;
+  commit: string | null;
+}
+
+/** One skill as skills.sh lists it; `installSource` (`owner/repo@skill`) installs it through `discoverSkills`. */
+export interface SkillsShSkill {
+  id: string;
+  name: string;
+  source: string;
+  installs: number;
+  installSource: string;
+  url: string;
+  icon: string;
 }
 
 /** One plugin folder's files by path relative to it, keyed by the plugin's name. */
@@ -162,7 +192,20 @@ export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEnt
     alias: item.kind === 'connector' ? item.alias : null,
     autoUpdate: isUpdatable(item) ? item.autoUpdate !== false : null,
     updatedAt: item.updatedAt ?? null,
+    commit: item.kind === 'skill' ? (item.commit ?? null) : null,
+    placements: item.kind === 'skill' ? (item.placements ?? []) : [],
   }));
+}
+
+/**
+ * The folder the skills CLI installs a skill to (verified in vercel-labs/skills `src/agents.ts`): Claude Code reads
+ * `<config dir>/skills` and `<project>/.claude/skills`, Codex `~/.agents/skills` and `<project>/.agents/skills`.
+ * `claudeDir` is the profile's Claude config folder (`~/.claude` unless the account has its own).
+ */
+export function skillPlacementDir(provider: Provider, scope: SkillPlacement['scope'], name: string, { home, claudeDir, project }: { home: string; claudeDir: string; project?: string }) {
+  if (scope === 'project' && !project) throw new Error('A project install needs a project');
+  const root = scope === 'project' ? `${project}/${provider === 'claude' ? '.claude' : '.agents'}` : provider === 'claude' ? claudeDir : `${home}/.agents`;
+  return `${root}/skills/${name}`;
 }
 
 /** Skills installed from GitHub and plugins from a marketplace can follow their source. */

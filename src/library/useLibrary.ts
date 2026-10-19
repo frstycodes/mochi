@@ -3,7 +3,7 @@ import { toast } from '@/toast/store';
 import { host } from '../host';
 import type { Provider } from '../model';
 import { setLibraryNames } from './names';
-import type { CatalogPlugin, CatalogSkill, LibraryEntry, Marketplace } from './library';
+import type { CatalogPlugin, CatalogSkill, LibraryEntry, Marketplace, SkillDestination } from './library';
 
 /** The profile's library entries, and every change to them; a failed change toasts and leaves the list as it was. */
 export function useLibrary(spaceId: string) {
@@ -42,7 +42,7 @@ export function useLibrary(spaceId: string) {
       apply(`${entry.title} not changed`)(host.library.setEnabled(profileId, entry.id, isIn).then(() => host.library.list(spaceId))),
     remove: (entry: LibraryEntry) => apply(`${entry.title} not removed`)(host.library.remove(spaceId, entry.id)),
     /** `source` is what the catalog was browsed from, so install reads the same (cached) repo. */
-    installSkill: (source: string, skill: CatalogSkill) => apply(`${skill.name} not installed`)(host.library.installSkill(spaceId, source, skill.name)),
+    installSkill: (source: string, skill: CatalogSkill, destination?: SkillDestination) => apply(`${skill.name} not installed`)(host.library.installSkill(spaceId, source, skill.name, destination)),
     installPlugin: (marketplace: string, plugin: CatalogPlugin) => apply(`${plugin.title ?? plugin.name} not installed`)(host.library.installPlugin(spaceId, marketplace, plugin.name)),
     addConnector: (account: NewConnector) => apply(`${account.alias} not connected`)(host.library.addConnector(spaceId, account)),
     signIn: (entry: LibraryEntry) => apply(`${entry.title} not signed in`)(host.library.signIn(spaceId, entry.id)),

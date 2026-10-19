@@ -90,6 +90,14 @@ Status labels as in RUNTIME.md: **verified** = read in this repo, `~/liane` or `
 - New threads load an update. Running Claude sessions keep the folder they started with: the new content is a new folder (by hash), which `reloadPlugins` wouldn't see.
 - Folders of older hashes are removed before a profile's first session of each app run (`prune` in `store.ts`), when nothing can still be reading them.
 
+## Phase 4: skills like `npx skills add`, and skills.sh (built)
+
+- Sources are read as Vercel's skills CLI reads them (verified in `vercel-labs/skills` `src/source-parser.ts`): `owner/repo`, `owner/repo/path`, `owner/repo@skill`, `github:`, `#ref[@skill]`, github.com repo, tree and blob URLs (`src/library/skillSource.ts`). SKILL.md folders are found by its rules (`src/skills.ts`): a SKILL.md at the path is the one skill; else the path one level down, `skills/` (and `.curated`, `.experimental`, `.system`) and `.<agent>/skills` three levels down, stopping under a skill; else any depth to five. Duplicate names keep the first.
+- Private repos: anonymous codeload first, then `api.github.com/repos/…/tarball` with `gh auth token`, the token kept in main. Each read records the commit from the archive's pax header (`git archive` writes it), shown as `source @ sha7`.
+- **Decision 4 exception, by the user's choice per install**: Add from GitHub (and every Install) opens one dialog: pick among the skills found, read each one's files (a warning above them for owners other than the featured repos'), and install to the Mochi library (per profile, as before), your account, or a project. The last two write where the CLI does (verified, `src/agents.ts`): Claude Code `<config dir>/skills` and `<project>/.claude/skills`, Codex `~/.agents/skills` and `<project>/.agents/skills`, copied, never symlinked. The item keeps its `placements`: an update rewrites them, Remove deletes them, a folder Mochi didn't write is never overwritten. Nothing runs at install; a shebang script only gets its execute bit back.
+- skills.sh (Discover): its documented `/api/v1` needs a Vercel OIDC token, which a desktop app can't get, so search uses the CLI's own `/api/search`, and Popular reads the leaderboard the front page embeds (`initialSkills`, top 100), an hour's cache each, the last answer when offline. Terms: rate-limited per IP, caching encouraged. If the front page changes shape, Popular shows an error and search still works.
+- Not verified: Codex loading `~/.agents/skills` (the CLI's claim, not run here); the `gh` path against a real private repo.
+
 ## Not verified yet
 
 - Codex: a per-thread skill folder. Until one exists, Codex skills would go into the account's `CODEX_HOME/skills`, with a record of what Mochi owns there, as Liane's `state.json` did.
