@@ -403,13 +403,22 @@ function tail(text: string) {
   return text.length > OUTPUT_MAX ? `…${text.slice(-OUTPUT_MAX)}` : text;
 }
 
-/** An Edit/Write result's `structuredPatch` as a unified diff `@pierre/diffs` can render. */
+/** An Edit/Write result's `structuredPatch` as a unified diff `@pierre/diffs` can render. A created file comes with no hunks, so its whole `content` is the one hunk. */
 export function patchOf(input: Record<string, unknown>, result: unknown) {
-  const hunks = (result as { structuredPatch?: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] } | undefined)?.structuredPatch;
+  const output = result as { type?: string; content?: unknown; structuredPatch?: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] } | undefined;
   const file = input.file_path ?? input.notebook_path;
-  if (!Array.isArray(hunks) || !hunks.length || typeof file !== 'string') return undefined;
+  if (typeof file !== 'string') return undefined;
   const name = path.basename(file);
-  return [`diff --git a/${name} b/${name}`, `--- a/${name}`, `+++ b/${name}`, ...hunks.flatMap((h) => [`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`, ...h.lines])].join('\n');
+  const hunks = output?.type === 'create' && !output.structuredPatch?.length && typeof output.content === 'string' ? createdHunks(output.content) : output?.structuredPatch;
+  if (!Array.isArray(hunks) || !hunks.length) return undefined;
+  const old = output?.type === 'create' ? '/dev/null' : `a/${name}`;
+  return [`diff --git a/${name} b/${name}`, `--- ${old}`, `+++ b/${name}`, ...hunks.flatMap((h) => [`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`, ...h.lines])].join('\n');
+}
+
+function createdHunks(content: string) {
+  if (!content) return [];
+  const lines = content.replace(/\n$/, '').split('\n');
+  return [{ oldStart: 0, oldLines: 0, newStart: 1, newLines: lines.length, lines: lines.map((l) => `+${l}`) }];
 }
 
 /** The skill a Skill call loads (its `skill` input, a leading `/` allowed) or the MCP server and tool an `mcp__` call runs. */
