@@ -20,8 +20,7 @@ export const isHandingOff = (thread: Thread) => draftingIndex(thread) >= 0;
  * Hands the thread to the other agent now: its turn stops, the transcript shows the handoff drafting, and the new agent starts
  * with the draft, or with the local summary when the draft fails or passes `DRAFT_TIMEOUT_MS`.
  */
-export function handOffHere(thread: Thread, dispatch: Dispatch<Action>) {
-  const to = otherProvider(thread);
+export function handOffHere(thread: Thread, dispatch: Dispatch<Action>, to = otherProvider(thread)) {
   if (thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
   dispatch({ type: 'handoff-draft', threadId: thread.id, to });
   draftHandoff(thread, to).then(

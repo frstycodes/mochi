@@ -31,6 +31,12 @@ const VERB = { drafting: 'Handing off', started: 'Handed off', failed: 'Could no
 
 const handoffEntry = (at: number, handoff: Handoff): ActivityEntry => ({ at, who: 'harness', kind: 'event', text: `${VERB[handoff.status]} from ${PROVIDER_NAME[handoff.from]} to ${PROVIDER_NAME[handoff.to]}`, handoff });
 
+/** Why a handoff to `to` can't land on `thread` now: drafting takes a while, and the thread can move on meanwhile. */
+export function handoffBlocker(thread: Thread, to: Provider) {
+  if (thread.providers[0] === to) return `Already on ${PROVIDER_NAME[to]}`;
+  if (thread.status === 'settled') return 'The thread was settled';
+}
+
 /** The thread's handoff row still waiting on its prompt; -1 when none is. */
 export const draftingIndex = (thread: Thread) => thread.activity.findLastIndex((e) => e.handoff?.status === 'drafting');
 
@@ -47,7 +53,8 @@ export function handoff(state: State, threadId: string, to: Provider, prompt: st
     ...state,
     threads: mapThread(state.threads, threadId, (t) => {
       const from = t.providers[0];
-      if (from === to) return settleDraft(t, state.now, { status: 'failed', error: `Already on ${PROVIDER_NAME[to]}` });
+      const blocker = handoffBlocker(t, to);
+      if (blocker) return settleDraft(t, state.now, { status: 'failed', error: blocker });
       const moved = { ...t, providers: [to, ...t.providers.filter((p) => p !== to)] };
       return settleDraft(moved, state.now, { from, to, status: 'started', prompt, ...(fallback && { fallback }) });
     }),

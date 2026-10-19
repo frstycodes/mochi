@@ -18,7 +18,7 @@ import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, turnUndo, 
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import { contextMax } from '../runtime/models.ts';
-import { handoff, handoffDraft, handoffFail } from '../rewind/handoff.ts';
+import { handoff, handoffBlocker, handoffDraft, handoffFail } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { projectRef, repoFor } from '../projects.ts';
@@ -325,7 +325,8 @@ function reduce(state: State, action: Action): State {
     case 'handoff-draft':
       return handoffDraft(state, action.threadId, action.to);
     case 'handoff': {
-      const isMoving = state.threads.find((t) => t.id === action.threadId)?.providers[0] !== action.to;
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      const isMoving = !!thread && !handoffBlocker(thread, action.to);
       const next = handoff(state, action.threadId, action.to, action.summary, action.fallback);
       return isMoving ? handoffLive(next, action) : next;
     }

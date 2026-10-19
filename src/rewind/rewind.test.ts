@@ -139,6 +139,19 @@ test('a drafted handoff fills its drafting row; a second draft waits; a handoff 
   assert.deepEqual(thread(s, 'rl').providers[0], 'codex');
 });
 
+test('a thread settled while its handoff drafts stays settled on its agent, and the row fails', () => {
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: 'harness', isLive: true };
+  let s = threadsReducer(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = threadsReducer(s, { type: 'handoff-draft', threadId: id, to: 'codex' });
+  s = threadsReducer(s, { type: 'settle', threadId: id });
+  const handoff: Action = { type: 'handoff', threadId: id, to: 'codex', summary: 'x' };
+  assert.deepEqual(calls(s, handoff), [], 'no agent stops or starts');
+  const t = thread(threadsReducer(s, handoff), id);
+  assert.deepEqual([t.status, t.providers[0]], ['settled', 'claude']);
+  assert.deepEqual(t.activity.findLast((e) => e.handoff)!.handoff, { from: 'claude', to: 'codex', status: 'failed', error: 'The thread was settled' });
+});
+
 test('a draft that throws or outlives the window fails its row', () => {
   let s = threadsReducer(base(), { type: 'handoff-draft', threadId: 'rl', to: 'codex' });
   s = threadsReducer(s, { type: 'handoff-fail', threadId: 'rl', error: 'boom' });
