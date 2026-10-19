@@ -1,5 +1,6 @@
 import type { Provider } from '../model.ts';
 import { serverSummary, type McpServerDef } from '../settings/agentConfig.ts';
+import type { ConnectorSettings } from './connectorTools.ts';
 import { connectorIcon } from './connectors.ts';
 import type { PluginBundle } from './pluginBundle.ts';
 
@@ -11,6 +12,8 @@ export interface LibraryIndex {
   items: LibraryItem[];
   profiles: Record<string, string[]>;
   marketplaces: Marketplace[];
+  /** Per connector (`connectorKey`): on or off, its tools' permissions and their last listing. Missing in older files. */
+  connectors?: Record<string, ConnectorSettings>;
 }
 
 export type LibraryItem = LibrarySkill | LibraryServer | LibraryPlugin | LibraryConnector;
@@ -50,7 +53,10 @@ export interface LibraryServer extends ItemBase {
 export interface LibraryPlugin extends ItemBase {
   kind: 'plugin';
   bundle: PluginBundle;
-  marketplace: string;
+  /** Null for an uploaded plugin, which has no source to update from. */
+  marketplace: string | null;
+  /** The file it was uploaded from, by name and SHA-256 of its bytes. */
+  upload?: { file: string; sha256: string };
   icon: string | null;
 }
 
@@ -140,6 +146,34 @@ export interface MarketplaceCatalog {
   plugins: CatalogPlugin[];
 }
 
+/**
+ * An uploaded plugin file read in main, before it is installed: what it adds, with every command a hook or server would
+ * run written out as the plugin has it.
+ */
+export interface PluginReview {
+  file: string;
+  sha256: string;
+  name: string;
+  title: string;
+  version: string | null;
+  author: string | null;
+  description: string | null;
+  /** Commands are in here too: Mochi installs them as skills. */
+  skills: { name: string; description: string }[];
+  agents: { name: string; description: string }[];
+  /** `condition` is a handler's own `if` (`Bash(git*commit*)`), narrower than the group's matcher. */
+  hooks: { event: string; matcher: string | null; condition: string | null; type: string; run: string }[];
+  servers: { name: string; run: string; env: string[] }[];
+  remotes: { name: string; url: string }[];
+  unsupported: string[];
+  /** Files left out: not text, or too big to store. */
+  skipped: string[];
+  /** What each harness's threads get from it (`2 skills, 1 server`); null when nothing. */
+  loads: Record<Provider, string | null>;
+  /** A plugin of the same name already in the library, which installing replaces. */
+  existing: { id: string; title: string; isUpload: boolean } | null;
+}
+
 /** One skill found in a GitHub repo, before it is installed. */
 export interface CatalogSkill {
   name: string;
@@ -184,7 +218,7 @@ export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEnt
     targets: item.targets,
     isEnabled: enabled.has(item.id),
     profileIds: Object.keys(index.profiles).filter((space) => index.profiles[space].includes(item.id)),
-    source: item.kind === 'skill' ? item.source : item.kind === 'plugin' ? item.marketplace : item.kind === 'connector' ? item.url : null,
+    source: item.kind === 'skill' ? item.source : item.kind === 'plugin' ? (item.upload?.file ?? item.marketplace) : item.kind === 'connector' ? item.url : null,
     icon: item.kind === 'skill' || item.kind === 'plugin' ? item.icon : item.kind === 'connector' ? connectorIcon(item.url) : null,
     contents: item.kind === 'plugin' ? pluginContents(item.bundle) : null,
     remotes: item.kind === 'plugin' ? item.bundle.remotes : [],
@@ -211,7 +245,7 @@ export function skillPlacementDir(provider: Provider, scope: SkillPlacement['sco
 
 /** Skills installed from GitHub and plugins from a marketplace can follow their source. */
 export function isUpdatable(item: LibraryItem) {
-  return (item.kind === 'skill' && !!item.source) || item.kind === 'plugin';
+  return (item.kind === 'skill' && !!item.source) || (item.kind === 'plugin' && !!item.marketplace);
 }
 
 function itemTitle(item: LibraryItem) {
@@ -269,12 +303,12 @@ export function profileLayout(index: LibraryIndex, spaceId: string, provider: Pr
   return { plugins: folders, servers };
 }
 
-/** The profile's signed-in connector accounts, grouped by the server they're on, in the order they were added. */
+/** The profile's signed-in connector accounts on connectors that are on, grouped by the server they're on, in the order they were added. */
 export function profileConnectors(index: LibraryIndex, spaceId: string): Map<string, LibraryConnector[]> {
   const enabled = new Set(index.profiles[spaceId] ?? []);
   const groups = new Map<string, LibraryConnector[]>();
   for (const item of index.items) {
-    if (item.kind !== 'connector' || !item.isLinked || !enabled.has(item.id)) continue;
+    if (item.kind !== 'connector' || !item.isLinked || !enabled.has(item.id) || index.connectors?.[item.key]?.isOff) continue;
     groups.set(item.key, [...(groups.get(item.key) ?? []), item]);
   }
   return groups;
@@ -319,7 +353,7 @@ function renderMarkdown(frontmatter: Record<string, string>, body: string) {
   return `---\n${lines.join('\n')}\n---\n\n${body.trim()}\n`;
 }
 
-const usesPluginRoot = (server: PluginBundle['servers'][number]) => /\$\{(CLAUDE_)?PLUGIN_(ROOT|DATA)\}/.test(JSON.stringify(server));
+export const usesPluginRoot = (server: PluginBundle['servers'][number]) => /\$\{(CLAUDE_)?PLUGIN_(ROOT|DATA)\}/.test(JSON.stringify(server));
 
 const stdioDef = ({ name, command, args, env }: PluginBundle['servers'][number]): McpServerDef => ({ name, type: 'stdio', command, args, env });
 
@@ -356,7 +390,8 @@ export function parseLibrary(raw: string | null): LibraryIndex {
     const saved = JSON.parse(raw ?? 'null') as Partial<LibraryIndex> | null;
     if (!saved || !Array.isArray(saved.items) || typeof saved.profiles !== 'object' || saved.profiles === null) return EMPTY_LIBRARY;
     const items = saved.items.filter((item) => ITEM_KINDS.includes(item?.kind));
-    return { items, profiles: saved.profiles, marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [] };
+    const connectors = typeof saved.connectors === 'object' && saved.connectors !== null ? saved.connectors : {};
+    return { items, profiles: saved.profiles, marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [], connectors };
   } catch {
     return EMPTY_LIBRARY;
   }

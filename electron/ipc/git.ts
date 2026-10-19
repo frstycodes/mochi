@@ -116,12 +116,7 @@ export const git = {
   },
 
   async ciLog(_sender, cwd, link, user) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const job = /\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/.exec(string(link, 'checkLink', 2048));
-    if (!job) throw new Error("This check doesn't run on GitHub Actions, so there's no log to fetch. Open it on GitHub instead.");
-    const [, runId, jobId] = job;
-    const log = await runGh(top, ['run', 'view', runId, ...(jobId ? ['--job', jobId] : []), '--log-failed'], githubAccount(user));
-    return log.split('\n').slice(-CI_LOG_LINES).join('\n');
+    return failedLog(await topLevel(string(cwd, 'cwd')), string(link, 'checkLink', 2048), githubAccount(user));
   },
 
   async ghAccounts() {
@@ -347,6 +342,15 @@ async function currentBranch(top: string) {
   return (await runGit(top, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'HEAD')).trim();
 }
 
+
+/** The tail of a failed GitHub Actions job's log, from the check's link; throws for a check that isn't an Actions job. */
+export async function failedLog(top: string, link: string, account: GithubAccountRef | undefined, lines = CI_LOG_LINES) {
+  const job = /\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/.exec(link);
+  if (!job) throw new Error("This check doesn't run on GitHub Actions, so there's no log to fetch. Open it on GitHub instead.");
+  const [, runId, jobId] = job;
+  const log = await runGh(top, ['run', 'view', runId, ...(jobId ? ['--job', jobId] : []), '--log-failed'], account);
+  return log.split('\n').slice(-lines).join('\n');
+}
 
 /** The branch's PR and its checks, or null when the branch has none. */
 export async function readPr(cwd: string, account: GithubAccountRef | undefined): Promise<PrInfo | null> {

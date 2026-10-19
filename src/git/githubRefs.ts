@@ -24,7 +24,7 @@ fragment S on IssueOrPullRequest {
   __typename
   ... on PullRequest {
     title url state isDraft mergeable reviewDecision updatedAt author { login avatarUrl(size: 40) } headRefName baseRefName additions deletions changedFiles
-    commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+    commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 0) { totalCount checkRunCountsByState { state count } statusContextCountsByState { state count } } } } } }
   }
   ... on Issue { title url state stateReason updatedAt author { login avatarUrl(size: 40) } }
 }`;
@@ -48,8 +48,20 @@ type Node = {
   additions?: number;
   deletions?: number;
   changedFiles?: number;
-  commits?: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
+  commits?: { nodes: { commit: { statusCheckRollup: Rollup | null } }[] };
 };
+
+type Counts = { state: string; count: number }[];
+type Rollup = { state: string; contexts?: { totalCount: number; checkRunCountsByState?: Counts; statusContextCountsByState?: Counts } };
+
+/** "3/5": check runs that succeeded, were skipped or neutral, and commit statuses that succeeded, out of every check. */
+function checkCounts(rollup: Rollup | null | undefined): RefState['checkCounts'] {
+  const contexts = rollup?.contexts;
+  if (!contexts?.totalCount) return null;
+  const sum = (counts: Counts | undefined, states: string[]) => (counts ?? []).reduce((n, c) => n + (states.includes(c.state) ? c.count : 0), 0);
+  const passed = sum(contexts.checkRunCountsByState, ['SUCCESS', 'SKIPPED', 'NEUTRAL']) + sum(contexts.statusContextCountsByState, ['SUCCESS']);
+  return { passed, total: contexts.totalCount };
+}
 
 /** gh's response → state per `refKey`; refs GitHub didn't resolve (missing, no access) are left out, so they stay unknown. */
 export function parseRefs(json: string, refs: GithubRef[]): Record<string, RefState> {
@@ -64,7 +76,7 @@ export function parseRefs(json: string, refs: GithubRef[]): Record<string, RefSt
 
 function toState(node: Node): RefState {
   const isPr = node.__typename === 'PullRequest';
-  const rollup = node.commits?.nodes[0]?.commit.statusCheckRollup?.state;
+  const rollup = node.commits?.nodes[0]?.commit.statusCheckRollup;
   const status = node.state === 'MERGED' ? 'merged' : node.state === 'CLOSED' ? 'closed' : node.isDraft ? 'draft' : 'open';
   return {
     kind: isPr ? 'pr' : 'issue',
@@ -72,7 +84,8 @@ function toState(node: Node): RefState {
     title: node.title,
     url: node.url,
     hasConflicts: status === 'open' && node.mergeable === 'CONFLICTING',
-    checks: (rollup ? CHECKS[rollup] : null) ?? null,
+    checks: (rollup ? CHECKS[rollup.state] : null) ?? null,
+    checkCounts: checkCounts(rollup),
     review: (node.reviewDecision && REVIEWS[node.reviewDecision]) ?? null,
     isNotPlanned: node.stateReason === 'NOT_PLANNED',
     author: node.author ?? null,

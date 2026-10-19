@@ -1,12 +1,15 @@
-import type { ComponentProps, ReactElement, ReactNode } from 'react';
-import { ArrowRight, ArrowUpRight, ClockCircle, XCircle, Edit, Eye, Hierarchy2, MessageEdit, CheckBadge, UserCheck, type IconComponent } from '@/icons';
+import { useId, type ComponentProps, type ReactElement, type ReactNode } from 'react';
+import { ArrowRight, ArrowUpRight, ClockCircle, XCircle, Edit, Eye, Hierarchy2, MagicStar, MessageEdit, CheckBadge, UserCheck, type IconComponent } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
+import { canAutofix, setAutofix } from '../git/autofixToggle';
 import { useThreadPr } from '../git/useThreadPrs';
+import { useHarness } from '../store';
 import type { PullRequest, Thread } from '../model';
 import { timeAgo } from '../progress';
 import { refKey, refStatus, refTone, refUrl, STATUS_WORDS, type ChecksState, type GithubRef, type RefState, type ReviewState } from './refs';
@@ -22,20 +25,36 @@ export interface RefItem {
 type Placement = Pick<ComponentProps<typeof HoverCardContent>, 'side' | 'align'>;
 
 /** Wraps a PR or issue trigger; hovering it (300ms) or focusing it opens the preview. The caller already holds the state, from `useRefState`. */
-export function RefHoverCard({ item, side, align, children }: Placement & { item: RefItem; children: ReactElement }) {
+export function RefHoverCard({ item, side, align, footer, children }: Placement & { item: RefItem; footer?: ReactNode; children: ReactElement }) {
   return (
     <HoverCard openDelay={OPEN_DELAY} closeDelay={CLOSE_DELAY}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent side={side} align={align} collisionPadding={8} className={cn('flex w-80 flex-col gap-3 p-3', REDUCED_MOTION)}>
         <RefPreview item={item} />
+        {footer}
       </HoverCardContent>
     </HoverCard>
   );
 }
 
-/** `RefHoverCard` for one of a thread's PRs, reading its live state. */
+/** `RefHoverCard` for one of a thread's PRs, reading its live state, with its Auto-fix switch while Mochi can watch it. */
 export function ThreadPrHoverCard({ thread, pr, ...props }: Placement & { thread: Thread; pr: PullRequest; children: ReactElement }) {
-  return <RefHoverCard item={useThreadPr(thread, pr)} {...props} />;
+  return <RefHoverCard item={useThreadPr(thread, pr)} footer={canAutofix(thread, pr) && <AutofixSwitch thread={thread} pr={pr} />} {...props} />;
+}
+
+function AutofixSwitch({ thread, pr }: { thread: Thread; pr: PullRequest }) {
+  const { dispatch } = useHarness();
+  const id = useId();
+  return (
+    <div className="flex min-w-0 items-center gap-2 border-t pt-3 type-meta">
+      <MagicStar aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />
+      <label htmlFor={id} className="flex min-w-0 flex-1 flex-col">
+        <span className="text-foreground">Auto-fix</span>
+        <span className="truncate type-caption text-subtle-foreground">Fixes CI and conflicts, weighs reviews</span>
+      </label>
+      <Switch id={id} size="sm" checked={!!pr.autofixSince} onCheckedChange={(isOn) => setAutofix(dispatch, thread, pr, isOn)} />
+    </div>
+  );
 }
 
 /** Every ref in `items` as one compact list, for a stack that shows only some of them. */

@@ -9,7 +9,8 @@ import type { McpWidgetResource } from '../../../src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
 import { toClaude } from '../../../src/settings/agentConfig.ts';
-import { sessionConnectors } from '../../library/connectors.ts';
+import { sessionConnectors, sessionToolRules } from '../../library/connectors.ts';
+import { claudePermissions } from '../../../src/library/connectorTools.ts';
 import { sessionLibrary } from '../../library/store.ts';
 import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, HIDDEN_PLAN_TOOLS, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent } from './map.ts';
@@ -188,20 +189,21 @@ async function launch(session: Session) {
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
     const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
-    const [library, connectors] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId)]);
+    const [library, connectors, toolRules] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId), sessionToolRules(options.spaceId)]);
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     const { forkAt, isMissing } = await takeForkAt(session);
     if (isMissing) emit({ threadId, type: 'notice', text: FORK_MISSING_NOTICE });
     const mode = (options.permissionMode as PermissionMode | undefined) ?? 'default';
     const permissions = permissionOptions(mode);
+    const connectorRules = claudePermissions(toolRules);
     session.query = query({
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
         systemPrompt: { type: 'preset', preset: 'claude_code', append: mochiInstructions(options.isGoalsOff) },
         // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
-        settings: { skillOverrides: CLAUDE_SKILLS_OFF, ...(options.speed && { fastMode: true }) },
+        settings: { skillOverrides: CLAUDE_SKILLS_OFF, permissions: connectorRules, ...(options.speed && { fastMode: true }) },
         // Claude in Chrome would otherwise wire itself when CLAUDE_CODE_ENABLE_CFC=1 is in the user's environment.
         extraArgs: { 'no-chrome': null },
         cwd: options.cwd,
@@ -225,7 +227,8 @@ async function launch(session: Session) {
         },
         hooks: { ...compactHooks(threadId), PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)] },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
-        disallowedTools: HIDDEN_PLAN_TOOLS,
+        // Deny rules alone only refuse a call; disallowedTools also takes an Off tool out of the model's context (sdk.d.ts).
+        disallowedTools: [...HIDDEN_PLAN_TOOLS, ...connectorRules.deny],
       },
     });
     for await (const message of session.query) {

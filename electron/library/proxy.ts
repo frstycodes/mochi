@@ -34,7 +34,7 @@ export async function connectorServer(name: string, aliases: string[], clientFor
 }
 
 // GAP: lists the upstream's tools on every tools/list; cache per account if a slow upstream makes sessions wait.
-async function allTools(client: Client) {
+export async function allTools(client: Client) {
   const tools: Tool[] = [];
   let cursor: string | undefined;
   do {

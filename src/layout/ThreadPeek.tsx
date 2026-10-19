@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Eye, EyeOff } from '@/icons';
+import { Eye, EyeOff, MagicStar } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
@@ -49,7 +49,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
           <ul className="flex flex-col gap-2">
             {tail.map((a) => (
               <li key={a.at + a.text} className="flex gap-2">
-                <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.who === 'you' && 'You'}</span>
+                <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.autofix ? <MagicStar aria-hidden className="size-4 text-muted-foreground" /> : a.who === 'you' && 'You'}</span>
                 <p className={cn('line-clamp-2 type-meta', a.who === 'you' ? 'text-foreground' : 'text-muted-foreground')}>{a.text}</p>
               </li>
             ))}

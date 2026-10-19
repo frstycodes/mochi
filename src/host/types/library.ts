@@ -1,5 +1,6 @@
+import type { ConnectorSettings, ConnectorToolList } from '../../library/connectorTools.ts';
 import type { AppProviderId, DeviceCode } from '../../library/connectors.ts';
-import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog, SkillDestination, SkillsShSkill } from '../../library/library.ts';
+import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog, PluginReview, SkillDestination, SkillsShSkill } from '../../library/library.ts';
 import type { SetupResult, SetupTarget } from '../../library/recipes.ts';
 import type { Provider } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
@@ -27,6 +28,10 @@ export interface LibraryHost {
   removeMarketplace(name: string): Promise<Marketplace[]>;
   marketplaceCatalog(name: string): Promise<MarketplaceCatalog>;
   installPlugin(spaceId: string, marketplace: string, name: string): Promise<LibraryEntry[]>;
+  /** Reads a plugin file (.plugin, .zip, .tar.gz, .tgz) for review; throws with the reason when it isn't one Mochi can install. */
+  reviewUpload(file: PluginFile): Promise<PluginReview>;
+  /** Installs the file reviewed as `sha256` for `targets`, turned on for `profileIds`; replaces a plugin of the same name. */
+  installUpload(spaceId: string, file: PluginFile, choice: { sha256: string; targets: Provider[]; profileIds: string[] }): Promise<LibraryEntry[]>;
   /**
    * Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth.
    * For an agent's connect: `inPane` sends the sign-in page to `onAuthorize` instead of the user's browser, and `secretFrom`
@@ -34,7 +39,7 @@ export interface LibraryHost {
    * `slackTokenFrom` is a Slack app configuration token there, from which main creates the app and takes its credentials;
    * `fromSetup` uses what the last `runSetup` for the connector captured instead.
    */
-  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: PageRef; slackTokenFrom?: PageRef; fromSetup?: boolean }): Promise<LibraryEntry[]>;
+  addConnector(spaceId: string, account: { url: string; alias: string; name?: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: PageRef; slackTokenFrom?: PageRef; fromSetup?: boolean }): Promise<LibraryEntry[]>;
   /** Runs a connector's setup recipe on a browser tab (LIBRARY.md); secrets it captures stay in main for `fromSetup`. */
   runSetup(connector: string, viewId: string, options?: { params?: Record<string, string>; fromStep?: string }): Promise<SetupResult>;
   /** Saves the user's own target for one step of a connector's recipe. */
@@ -51,6 +56,18 @@ export interface LibraryHost {
   signIn(spaceId: string, id: string): Promise<LibraryEntry[]>;
   /** Updates a skill or plugin from its source now; `autoUpdate` set leaves it to follow its source (or pins it). */
   update(spaceId: string, id: string, autoUpdate?: boolean): Promise<LibraryEntry[]>;
+  /** Names a connector (every account on it); its key, and so its permission rules, stay. */
+  renameConnector(spaceId: string, key: string, name: string): Promise<LibraryEntry[]>;
+  /** Every connector's on/off, tool permissions and last tool listing, by key. */
+  connectorSettings(): Promise<Record<string, ConnectorSettings>>;
+  /** Lists the connector's tools from its first signed-in account and keeps the result (an error included). */
+  listConnectorTools(key: string): Promise<ConnectorToolList>;
+  setConnectorSettings(key: string, settings: Omit<ConnectorSettings, 'toolList'>): Promise<Record<string, ConnectorSettings>>;
+}
+
+export interface PluginFile {
+  name: string;
+  bytes: Uint8Array;
 }
 
 /** An element on a browser tab's page, by its ref from the latest snapshot. */
@@ -74,6 +91,8 @@ export const libraryMethods = {
   removeMarketplace: 'invoke',
   marketplaceCatalog: 'invoke',
   installPlugin: 'invoke',
+  reviewUpload: 'invoke',
+  installUpload: 'invoke',
   addConnector: 'invoke',
   onAuthorize: 'event',
   runSetup: 'invoke',
@@ -83,4 +102,8 @@ export const libraryMethods = {
   onDeviceCode: 'event',
   signIn: 'invoke',
   update: 'invoke',
+  renameConnector: 'invoke',
+  connectorSettings: 'invoke',
+  listConnectorTools: 'invoke',
+  setConnectorSettings: 'invoke',
 } satisfies Manifest<LibraryHost>;

@@ -1,11 +1,18 @@
 import { useState } from 'react';
-import { Plus } from '@/icons';
+import { Key, Pen, Plus } from '@/icons';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { openSettings } from '../settings/open';
 import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
+import { OverflowIcon } from '../ui';
 import { ConnectAccountDialog } from './ConnectDialog';
-import { CONNECTORS, connectorFor, connectorIcon, isSameServer, type Connector } from './connectors';
+import { CONNECTORS, connectorIcon, connectorKey, isSameServer, type Connector } from './connectors';
+import { serviceName } from './names';
 import type { LibraryEntry } from './library';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { ALL, CategoryChips, countOf, EmptyRow, EntryActions, filterBy, InstalledList, LibraryIcon, LibraryRow, LIST } from './LibraryParts';
@@ -91,7 +98,7 @@ function NothingConnected({ onDiscover }: { onDiscover: () => void }) {
   );
 }
 
-type Service = { url: string; name: string; icon: string | null; accounts: LibraryEntry[] };
+type Service = { url: string; key: string; name: string; icon: string | null; accounts: LibraryEntry[] };
 
 /** Connector accounts by the server they're on, each service where its first account was added. */
 function byService(accounts: LibraryEntry[]): Service[] {
@@ -100,7 +107,7 @@ function byService(accounts: LibraryEntry[]): Service[] {
     const url = (account.source ?? account.id).replace(/\/+$/, '');
     groups.set(url, [...(groups.get(url) ?? []), account]);
   }
-  return [...groups].map(([url, list]) => ({ url, name: connectorFor(url)?.name ?? (URL.canParse(url) ? new URL(url).hostname : url), icon: list[0].icon, accounts: list }));
+  return [...groups].map(([url, list]) => ({ url, key: URL.canParse(url) ? connectorKey(url) : url, name: serviceName(list[0]), icon: list[0].icon, accounts: list }));
 }
 
 /** One service, closed to a line saying which accounts it has; opened, each account with its sign-in and switch. */
@@ -111,9 +118,13 @@ function ServiceRow({ service, library }: { service: Service; library: Library }
   const signedOut = accounts.filter((a) => a.isLinked === false).length;
   return (
     <AccordionItem value={service.url} className="relative not-last:border-b-0 not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border">
-      <AccordionTrigger className="items-center gap-3 rounded-none px-4 py-3 font-normal hover:no-underline">
+      {/* A button can't sit inside the trigger, so the ⋯ floats over it, left of the chevron; the trigger leaves it room. */}
+      <div className="absolute top-3 right-10 z-10 flex h-10 items-center">
+        <ServiceMenu service={service} library={library} />
+      </div>
+      <AccordionTrigger className="items-center gap-3 rounded-none py-3 pr-4 pl-4 font-normal hover:no-underline">
         <LibraryIcon key={service.icon} url={service.icon} letter={service.name} />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5 pr-10">
           <span className="truncate type-body font-medium">{service.name}</span>
           <span className="truncate type-caption text-subtle-foreground">
             {countOf(accounts.length, 'account')} · {LIST.format(aliases)}
@@ -144,6 +155,73 @@ function ServiceRow({ service, library }: { service: Service; library: Library }
         <ConnectAccountDialog open={isConnecting} onOpenChange={setConnecting} url={service.url} library={library} />
       </AccordionContent>
     </AccordionItem>
+  );
+}
+
+/** Rename the connector, or open its tools and their permissions. */
+function ServiceMenu({ service, library }: { service: Service; library: Library }) {
+  const [isRenaming, setRenaming] = useState(false);
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={`${service.name} actions`}>
+            <OverflowIcon />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onSelect={() => setRenaming(true)}>
+            <Pen />
+            Rename…
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => openSettings('connectorTools', `connector-${service.key}`)}>
+            <Key />
+            Tools and permissions
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog open={isRenaming} onOpenChange={setRenaming}>
+        <DialogContent className="sm:max-w-sm">
+          <RenameForm service={service} library={library} onDone={() => setRenaming(false)} />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// Inside the dialog's content, which unmounts when it closes, so every opening starts from the current name.
+function RenameForm({ service, library, onDone }: { service: Service; library: Library; onDone: () => void }) {
+  const [name, setName] = useState(service.name);
+  const trimmed = name.trim();
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!trimmed || trimmed === service.name) return onDone();
+        void library.renameConnector(service.key, trimmed).then((isDone) => isDone && onDone());
+      }}
+    >
+      <DialogHeader>
+        <DialogTitle>Rename {service.name}</DialogTitle>
+        <DialogDescription>Threads, menus and the work log show this name.</DialogDescription>
+      </DialogHeader>
+      <Field>
+        <FieldLabel htmlFor="connector-name">Name</FieldLabel>
+        <Input id="connector-name" autoFocus maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
+        <FieldDescription>
+          Agents still reach it as <code className="font-mono">{service.key}</code>, so its tool permissions keep working.
+        </FieldDescription>
+      </Field>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!trimmed}>
+          Save name
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }
 

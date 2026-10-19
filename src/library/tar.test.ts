@@ -34,6 +34,6 @@ test('readTar hands over the commit git archive writes in the global header', as
   const archive = gzipSync(execFileSync('git', ['-C', root, 'archive', '--format=tar', '--prefix=repo-HEAD/', 'HEAD']));
   let commit = '';
   const stream = new Blob([archive]).stream().pipeThrough(new DecompressionStream('gzip'));
-  for await (const entry of readTar(stream, () => true, (c) => (commit = c))) assert.equal(entry.path, 'repo-HEAD/SKILL.md');
+  for await (const entry of readTar(stream, () => true, { onComment: (c) => (commit = c) })) assert.equal(entry.path, 'repo-HEAD/SKILL.md');
   assert.equal(commit, git('rev-parse', 'HEAD'));
 });

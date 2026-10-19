@@ -29,8 +29,9 @@ import { killThreadSessions } from '../pty/sessions.ts';
 import { stopCompare } from '../browser/compare.ts';
 import { headOf, switchBranch } from '../git/branches.ts';
 import { topLevel } from '../git/run.ts';
+import { codexToolConfig } from '../../src/library/connectorTools.ts';
 import { codexServerConfig } from '../../src/library/library.ts';
-import { sessionConnectors } from '../library/connectors.ts';
+import { sessionConnectors, sessionToolRules } from '../library/connectors.ts';
 import { sessionLibrary } from '../library/store.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
@@ -90,8 +91,9 @@ const codex = new CodexAdapter(
   undefined,
   codexUrl,
   async (spaceId) => {
-    const [{ servers }, connectors] = await Promise.all([sessionLibrary(spaceId, 'codex'), sessionConnectors(spaceId)]);
-    return { ...codexServerConfig(servers), ...Object.fromEntries(connectors.map(([name, url]) => [`mcp_servers.${name}.url`, url])) };
+    const [{ servers }, connectors, rules] = await Promise.all([sessionLibrary(spaceId, 'codex'), sessionConnectors(spaceId), sessionToolRules(spaceId)]);
+    const tools = Object.entries(rules).map(([key, keyRules]) => codexToolConfig(key, keyRules));
+    return { ...codexServerConfig(servers), ...Object.fromEntries(connectors.map(([name, url]) => [`mcp_servers.${name}.url`, url])), ...Object.assign({}, ...tools) };
   },
 );
 codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);

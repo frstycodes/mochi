@@ -10,6 +10,7 @@ import { accountFor } from '../agents/config.ts';
 import { expand, expandAll, readProfileConfig } from '../agents/profileConfig.ts';
 import { CatalogError, discoverSkills, fetchMarketplace, fetchPluginBundle, normalizeMarketplaceSource } from './catalog.ts';
 import { removeSkillFolder, writeSkillFolder } from './skillFiles.ts';
+import { reviewUpload, unpackUpload, UploadError } from './upload.ts';
 
 /**
  * The library index in userData/library.json, and each profile's plugin folders under userData/library/<profile>/, one
@@ -120,6 +121,34 @@ export async function installPlugin(spaceId: string, marketplaceName: string, na
   const { icon, ...bundle } = await fetchPluginBundle(marketplace.source, name);
   if (bundle.name === STANDALONE_PLUGIN) throw new CatalogError(`${STANDALONE_PLUGIN} is the name Mochi gives its own skills; this plugin can't take it`);
   await install(spaceId, { kind: 'plugin', id: randomUUID(), bundle, marketplace: marketplace.name, icon, targets: ['claude', 'codex'], addedAt: Date.now() });
+}
+
+/** Reads an uploaded plugin file for the review step; nothing is installed. */
+export async function reviewUploadedPlugin(fileName: string, bytes: Uint8Array) {
+  return reviewUpload(fileName, bytes, await unpackUpload(bytes), (await readLibrary()).items).review;
+}
+
+/**
+ * Installs the reviewed upload for the chosen harnesses and profiles, replacing a plugin of the same name (keeping its id
+ * and the profiles it had). The file is read again, and refused if it isn't the one reviewed.
+ */
+export async function installUploadedPlugin(fileName: string, bytes: Uint8Array, reviewed: string, targets: Provider[], profileIds: string[]) {
+  const { review, bundle } = reviewUpload(fileName, bytes, await unpackUpload(bytes), (await readLibrary()).items);
+  if (review.sha256 !== reviewed) throw new UploadError('The file changed since you reviewed it; upload it again');
+  const unloadable = targets.filter((provider) => !review.loads[provider]);
+  if (unloadable.includes('codex')) throw new UploadError('Nothing in it loads in Codex threads: Codex gets only MCP servers that don’t run the plugin’s own files');
+  if (unloadable.length) throw new UploadError(`Nothing in it loads in ${unloadable.join(' or ')} threads`);
+  const fresh: LibraryItem = { kind: 'plugin', id: randomUUID(), bundle, marketplace: null, upload: { file: fileName, sha256: review.sha256 }, icon: null, targets, addedAt: Date.now() };
+  await updateLibrary((index) => {
+    const old = index.items.find((item) => item.kind === 'plugin' && item.bundle.name === bundle.name);
+    const item = old ? { ...fresh, id: old.id, addedAt: old.addedAt, updatedAt: Date.now() } : fresh;
+    const profiles = { ...index.profiles };
+    for (const space of profileIds) {
+      const members = profiles[space] ?? [];
+      profiles[space] = members.includes(item.id) ? members : [...members, item.id];
+    }
+    return { ...index, items: old ? index.items.map((other) => (other === old ? item : other)) : [...index.items, item], profiles };
+  });
 }
 
 /** The featured marketplaces, then the ones the user added. */

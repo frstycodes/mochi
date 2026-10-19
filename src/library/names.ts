@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { MOCHI_SERVER } from '../runtime/toolTable.ts';
-import { connectorFor, connectorIcon, connectorKey, CONNECTORS } from './connectors.ts';
+import { connectorIcon, connectorKey, CONNECTORS } from './connectors.ts';
 import { STANDALONE_PLUGIN, type LibraryEntry } from './library.ts';
 
 /** What to show for a server, plugin or skill: its human name, its own image when it has one, the raw id for a tooltip. */
@@ -25,7 +25,7 @@ export function libraryNames(entries: LibraryEntry[]) {
     const scoped = /^plugin:([^:]+):/.exec(key);
     if (scoped) return { ...plugin(scoped[1]), raw: key };
     const account = entries.find((e) => e.kind === 'connector' && !!e.source && URL.canParse(e.source) && connectorKey(e.source) === key);
-    if (account?.source) return { title: connectorFor(account.source)?.name ?? withoutAlias(account), raw: key, url: account.source, ...(account.icon && { image: account.icon }) };
+    if (account?.source) return { title: serviceName(account), raw: key, url: account.source, ...(account.icon && { image: account.icon }) };
     const known = CONNECTORS.find((c) => c.id === key);
     if (known) {
       const image = connectorIcon(known.serverUrl);
@@ -67,7 +67,8 @@ export function deslug(name: string) {
   return words ? words[0].toUpperCase() + words.slice(1) : name;
 }
 
-const withoutAlias = (entry: LibraryEntry) => (entry.alias && entry.title.endsWith(` · ${entry.alias}`) ? entry.title.slice(0, -` · ${entry.alias}`.length) : entry.title);
+/** A connector account's service name, as named when added or renamed: its title without ` · <alias>`. */
+export const serviceName = (entry: LibraryEntry) => (entry.alias && entry.title.endsWith(` · ${entry.alias}`) ? entry.title.slice(0, -` · ${entry.alias}`.length) : entry.title);
 
 // One set for the whole window: items are installed once, so every profile's list names them alike.
 let current = libraryNames([]);

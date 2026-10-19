@@ -285,7 +285,7 @@ async function fetchRepoTextFiles(target: GitHubTarget, keep: (path: string) => 
   // GitHub prefixes every path with "<repo>-<ref>/"
   const repoPath = (path: string) => path.slice(path.indexOf('/') + 1);
   const accept = (path: string, size: number) => size <= MAX_FILE_BYTES && keep(repoPath(path));
-  for await (const entry of readTar(response.body!.pipeThrough(new DecompressionStream('gzip')), accept, (comment) => (commit = comment))) {
+  for await (const entry of readTar(response.body!.pipeThrough(new DecompressionStream('gzip')), accept, { onComment: (comment) => (commit = comment) })) {
     if (!entry.body.includes(0)) files.set(repoPath(entry.path), decoder.decode(entry.body));
   }
   return { files, commit };
