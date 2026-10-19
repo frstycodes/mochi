@@ -43,7 +43,7 @@ export function NoPanes({ thread }: { thread: Thread }) {
 /** Dev servers listening under the thread's folder; one click opens it in Preview. */
 function DetectedPorts({ thread, cwd }: { thread: Thread; cwd: string }) {
   const { openPort } = usePaneOpeners(thread.id);
-  const { ports } = usePorts(thread.id, cwd, openPort);
+  const { ports } = usePorts(thread.id, cwd);
   if (!ports?.length) return null;
   return (
     <section className="flex flex-col gap-2">

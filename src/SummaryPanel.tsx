@@ -63,7 +63,8 @@ import { SkillIcon } from './icons/ObjectIcons';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
 import { useLibraryNames } from './library/names';
 import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
-import { usePorts } from './terminal/ports';
+import { useLaunchNames, usePorts } from './terminal/ports';
+import { portUrl } from './terminal/devServer';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
 import { PortIcon } from './pane/PortIcon';
 import { queuedMessage } from './chat/outbox';
@@ -100,7 +101,7 @@ const CARD = 'rounded-xl border bg-card group-data-floating/summary:bg-popover g
 
 /** What needs you first, then a card per thing the right side holds, each only once it has something: like Claude's. */
 function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
-  const { summary, cards, ports, outputs, open } = useSummary(thread, onPaneOpened);
+  const { summary, cards, ports, launchNames, outputs, open } = useSummary(thread, onPaneOpened);
   const [order, reorder] = useCardOrder(cards);
   const props = { thread, summary, open };
   const BODIES = {
@@ -108,7 +109,7 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
     environment: <EnvironmentCard {...props} />,
     sources: <SourcesCard {...props} />,
     connectors: <ConnectorsCard {...props} />,
-    servers: <ServersCard ports={ports} onOpen={open.port} />,
+    servers: <ServersCard ports={ports} launchNames={launchNames} onOpen={open.port} />,
     outputs: <OutputsCard {...outputs} open={open} />,
     changes: <ChangesCard {...props} />,
   } satisfies Record<SummaryCardId, ReactNode>;
@@ -212,11 +213,12 @@ function useSummary(thread: Thread, onPaneOpened?: () => void) {
   const summary = summarize(thread.activity);
   const open = useSummaryOpeners(thread, onPaneOpened);
   const cwd = threadCwd(thread) ?? null;
-  const { ports = [] } = usePorts(thread.id, cwd, open.port);
+  const { ports = [] } = usePorts(thread.id, cwd);
+  const launchNames = useLaunchNames(cwd);
   const outputs = useArtifacts(thread, thread.repo ? null : cwd);
   const outputCount = outputs.files.length + outputs.visuals.length;
   const cards = summaryCards({ thread, summary, portCount: ports.length, outputCount });
-  return { summary, cards, ports, outputs, open };
+  return { summary, cards, ports, launchNames, outputs, open };
 }
 
 interface CardProps {
@@ -384,7 +386,7 @@ function ConnectorsCard({ thread }: CardProps) {
   );
 }
 
-function ServersCard({ ports, onOpen }: { ports: ListeningPort[]; onOpen: (port: number) => void }) {
+function ServersCard({ ports, launchNames, onOpen }: { ports: ListeningPort[]; launchNames: Map<number, string>; onOpen: (port: number) => void }) {
   return (
     <>
       <CardHeader title="Servers" meta={ports.length} />
@@ -393,17 +395,20 @@ function ServersCard({ ports, onOpen }: { ports: ListeningPort[]; onOpen: (port:
           <SummaryRow
             key={`${p.pid}:${p.port}`}
             icon={<PortIcon />}
-            label={
-              <span title={`${p.command} · pid ${p.pid}`}>
-                <span className="text-muted-foreground">localhost:</span>
-                <span className="tabular">{p.port}</span>
-                <span className="text-subtle-foreground"> · {p.command}</span>
-              </span>
-            }
+            label={<span title={portUrl(p.port)}>{launchNames.get(p.port) ?? <PortLabel port={p.port} />}</span>}
             onClick={() => onOpen(p.port)}
           />
         ))}
       </CardBody>
+    </>
+  );
+}
+
+function PortLabel({ port }: { port: number }) {
+  return (
+    <>
+      <span className="text-muted-foreground">localhost:</span>
+      <span className="tabular">{port}</span>
     </>
   );
 }
