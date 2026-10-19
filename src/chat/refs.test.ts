@@ -55,6 +55,7 @@ const pr = (extra: Partial<RefState>): RefState => ({
   url: 'u',
   hasConflicts: false,
   checks: null,
+  checkCounts: null,
   review: null,
   isNotPlanned: false,
   author: null,
