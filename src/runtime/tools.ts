@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
 import { gateRefusal, prGate } from '../goals/verdict.ts';
-import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
@@ -374,7 +373,9 @@ const THREAD_SPECS = {
       const project = projectRef(caller.repo);
       // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
       const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
-      const workspace = project ? { ...(await newWorktree(env, project, prompt)), ...(base && { base }) } : undefined;
+      // Always its own worktree, whatever the composer's Worktree box says: parallel agents sharing one folder trip over each
+      // other's changes and make worktrees Mochi can't see. Its branch gets a temp name until its title names it.
+      const workspace = project ? { mode: 'worktree' as const, ...(base && { base }) } : undefined;
       const controls = await newThreadControls(env, caller, provider, args);
       const before = state();
       dispatch({
@@ -643,17 +644,6 @@ async function parentBase(env: ToolEnv, state: State, caller: Thread, githubUser
   if (!parentCwd) return undefined;
   await env.git.push(parentCwd, githubUser);
   return parent.repo.branch;
-}
-
-/**
- * An agent-started thread always gets its own worktree, whatever the composer's Worktree box says: parallel agents sharing
- * one folder trip over each other's changes and make worktrees Mochi can't see. Its branch is named from the prompt.
- */
-async function newWorktree(env: ToolEnv, project: string, prompt: string) {
-  const list = await env.git.branches(project).catch(() => null);
-  const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
-  const branch = uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken);
-  return { mode: 'worktree' as const, branch, autoBranch: branch };
 }
 
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {

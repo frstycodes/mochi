@@ -32,45 +32,37 @@ export function repoWorkspace(draft: WorkspaceDraft): Pick<Repo, 'mode' | 'base'
   return draft.isExisting ? { isExisting: true } : { ...(draft.base && { base: draft.base }) };
 }
 
-const MAX_SLUG_WORDS = 5;
 const MAX_SLUG_CHARS = 40;
+const TEMP_HEX = /^[0-9a-f]{8}$/;
 
-// The first word that says what kind of change it is; anything else is a feature. The Conventional Commits types.
-const TYPE_CUES: [RegExp, string][] = [
-  [/^(fix|fixes|fixed|bug|broken|crash|crashes|repair|resolve)$/, 'fix'],
-  [/^(docs?|document|readme|changelog)$/, 'docs'],
-  [/^(refactor|clean|cleanup|rename|move|extract|simplify|tidy)$/, 'refactor'],
-  [/^(tests?|testing|cover|coverage)$/, 'test'],
-  [/^(chore|bump|upgrade|deps|dependencies)$/, 'chore'],
-  [/^(perf|speed|optimize|optimise)$/, 'perf'],
-];
-const FILLER = new Set(['the', 'a', 'an', 'please', 'can', 'you', 'could', 'we', 'lets', 'let', 'us', 'to', 'add', 'make', 'implement', 'create', 'build']);
+/** `prefix` + 8 hex from `seed`, the name a new thread's branch has until its title names it. Pure, so the reducer can make it. */
+export function tempBranch(prefix: string, seed: string) {
+  // FNV-1a over a seed unique to the thread: a clash is 1 in 4 billion, and createWorktree refuses one.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) hash = Math.imul(hash ^ seed.charCodeAt(i), 0x01000193);
+  return `${prefix}${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
 
 /**
- * `prefix` + Conventional Commits type + the words that matter, dashed: "Fix the login bug!" → `fix/login-bug`,
- * "Add a dark mode toggle" → `feat/dark-mode-toggle`. Empty slug → `prefix` + `fallback`.
+ * The branch a thread on the temp name `temp` takes once `title` names it: the same prefix + the title as a slug, made unique
+ * against `taken` ("Fix login bug" → `mochi/fix-login-bug`, then `mochi/fix-login-bug-2`). Null when `temp` isn't a temp name
+ * or the title has no letters to slug.
  */
-export function branchName(prefix: string, text: string, fallback: string) {
-  const words = text
+export function branchFromTitle(temp: string, title: string, taken: ReadonlySet<string>) {
+  const prefix = temp.slice(0, -8);
+  if (!TEMP_HEX.test(temp.slice(-8))) return null;
+  const slug = title
     .normalize('NFKD')
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .split(/[\s-]+/)
-    .filter(Boolean);
-  const cue = words.findIndex((w) => !FILLER.has(w));
-  const type = TYPE_CUES.find(([re]) => re.test(words[cue] ?? ''))?.[1];
-  const slug = words
-    .filter((w, i) => !(type && i === cue) && !FILLER.has(w))
-    .slice(0, MAX_SLUG_WORDS)
+    .filter(Boolean)
     .join('-')
     .slice(0, MAX_SLUG_CHARS)
     .replace(/-+$/, '');
-  return slug ? `${prefix}${type ?? 'feat'}/${slug}` : `${prefix}${fallback}`;
-}
-
-/** `name`, or `name-2`, `name-3`… when taken. */
-export function uniqueBranch(name: string, taken: ReadonlySet<string>) {
+  if (!slug) return null;
+  const name = `${prefix}${slug}`;
   if (!taken.has(name)) return name;
   let n = 2;
   while (taken.has(`${name}-${n}`)) n++;

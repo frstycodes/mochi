@@ -8,15 +8,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { host } from '../host';
 import type { Branch, BranchList } from '../host/types/git';
-import { firstPrompt, type Thread } from '../model';
+import type { Thread } from '../model';
 import { timeAgo } from '../progress';
 import { projectName, projectRef } from '../projects';
-import { getPrefs } from '../settings/prefs';
 import { useHarness } from '../store';
+import { nextTempBranch } from '../store/threads';
 import { MetaChip } from '../MetaChip';
 import { SwitchBranchDialog } from './SwitchBranchDialog';
 import { useBranches } from './useGit';
-import { branchName, isUnstarted, uniqueBranch, type WorkspaceDraft } from './workspace';
+import { isUnstarted, type WorkspaceDraft } from './workspace';
 
 const NAME_CHECK_MS = 250;
 
@@ -37,15 +37,15 @@ export interface Workspace {
   isDirty: boolean;
 }
 
-/** The pickers' state for a new thread in `root` (empty: none, nothing is read); `prompt` names the new branch until you type a name. */
-export function useWorkspace(root: string, draft: WorkspaceDraft, onChange: (draft: WorkspaceDraft) => void, prompt: string, threadId?: string): Workspace {
+/** The pickers' state for a new thread in `root` (empty: none, nothing is read); a new branch has a temp name until you type one or its title names it. */
+export function useWorkspace(root: string, draft: WorkspaceDraft, onChange: (draft: WorkspaceDraft) => void, threadId?: string): Workspace {
   const branches = useBranches(root);
   const { list } = branches;
-  const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
+  const { state } = useHarness();
   const isNew = draft.mode === 'worktree' && !draft.isExisting;
-  const branch = isNew ? (draft.branch ?? uniqueBranch(branchName(getPrefs().branchPrefix, prompt, 'thread'), taken)) : draft.isExisting ? draft.branch : (list?.current ?? undefined);
+  const branch = isNew ? (draft.branch ?? nextTempBranch(state)) : draft.isExisting ? draft.branch : (list?.current ?? undefined);
   const nameError = useBranchNameError(root, isNew && !!list ? branch : undefined);
-  const sharers = useHarness().state.threads.filter((t) => t.id !== threadId && t.status !== 'settled' && t.repo?.mode === 'folder' && projectRef(t.repo) === root);
+  const sharers = state.threads.filter((t) => t.id !== threadId && t.status !== 'settled' && t.repo?.mode === 'folder' && projectRef(t.repo) === root);
   return { root, draft, onChange, branches, branch, error: isNew ? nameError : draft.isExisting && !draft.branch ? 'Pick the branch to check out' : null, sharers, isDirty: !!list?.changes.files };
 }
 
@@ -56,7 +56,7 @@ export function useThreadWorkspace(thread: Thread): Workspace | null {
   const isOpen = !!repo && isUnstarted(thread);
   const draft: WorkspaceDraft = { mode: repo?.mode ?? 'worktree', base: repo?.base, isExisting: repo?.isExisting, branch: repo?.branch };
   const change = (next: WorkspaceDraft) => dispatch({ type: 'workspace', threadId: thread.id, workspace: { ...next, branch: next.branch ?? (next.mode === 'folder' ? (workspace.branches.list?.current ?? undefined) : undefined) } });
-  const workspace = useWorkspace(isOpen ? projectRef(repo)! : '', draft, change, firstPrompt(thread), thread.id);
+  const workspace = useWorkspace(isOpen ? projectRef(repo)! : '', draft, change, thread.id);
   return isOpen ? workspace : null;
 }
 

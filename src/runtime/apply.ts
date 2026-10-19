@@ -6,16 +6,18 @@ import { getThreadPins } from '../chat/pins.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
 import type { Action, State } from '../store/index.tsx';
-import { completeStep, log, mapStep, mapThread, seePrs } from '../store/threads.ts';
+import { completeStep, log, mapStep, mapThread, seePrs, withGeneratedTitle } from '../store/threads.ts';
 import { createdPr } from '../git/prs.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
 
+const MAIN_EVENTS = new Set<AgentEvent['type']>(['worktree', 'setup', 'branch', 'title']);
+
 /** Folds one agent event into the store. The goal is Mochi's and yours; the agent's plan is mirrored as its steps, never the goal. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
-  // Any word from the agent means it's up; its folder being made and set up is main's, not the agent's.
-  if (event.type !== 'worktree' && event.type !== 'setup' && state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
+  // Any word from the agent means it's up; its folder being made, set up and named is main's, not the agent's.
+  if (!MAIN_EVENTS.has(event.type) && state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
     state = { ...state, threads: mapThread(state.threads, event.threadId, (t) => ({ ...t, live: { ...t.live!, starting: undefined } })) };
   }
   const thread = state.threads.find((t) => t.id === event.threadId);
@@ -32,6 +34,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => ({ ...t, setup: event.setup, status: event.setup.status === 'failed' ? 'needs-you' : t.setup?.status === 'failed' && t.status === 'needs-you' ? 'running' : t.status }));
     case 'branch':
       return update((t) => ({ ...t, repo: t.repo && withHead(t.repo, { branch: event.branch, isDetached: !!event.isDetached }, false) }));
+    case 'title':
+      return update((t) => withGeneratedTitle(t, event.title));
     case 'session':
       return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId }, agent: {} }));
     case 'info':

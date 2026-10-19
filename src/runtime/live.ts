@@ -2,9 +2,10 @@ import { agentImage } from '../chat/images.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
-import { startWorkspace, workspaceMode } from '../git/workspace.ts';
+import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts';
 import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
+import { startTitleRequest } from '../utility/titles.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
 import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
@@ -15,7 +16,7 @@ export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
   | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string; steer?: boolean }
   | { method: 'compact'; threadId: string; focus: string }
-  | { method: 'interrupt' | 'stop' | 'settle'; threadId: string }
+  | { method: 'interrupt' | 'stop' | 'settle' | 'keepTitle'; threadId: string }
   | { method: 'stopSubagent'; threadId: string; subagentId: string };
 
 /** The `host.agent` calls an action makes for live threads; demo threads make none. `next` is the state after the action. */
@@ -32,8 +33,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const images = sent.length > 0 ? { images: sent } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }), ...images }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: firstWorkspace(t), ...(first.skills && { skills: first.skills }), ...images }));
     }
+    case 'rename':
+      return state.threads.find((t) => t.id === action.threadId)?.live ? [{ method: 'keepTitle', threadId: action.threadId }] : [];
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
@@ -120,12 +123,24 @@ function start(thread: Thread, provider: Provider, controls: ThreadControls, pro
   return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
 }
 
-/** How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder. Undefined when it can't run. */
+/** A new thread's first start: its branch is its own, and main names it from the first message before the agent starts. */
+function firstWorkspace(thread: Thread): StartWorkspace | undefined {
+  const workspace = startWorkspace(thread.repo);
+  if (workspace?.mode !== 'worktree' || workspace.isExisting) return workspace;
+  const titlePrompt = startTitleRequest(thread);
+  return { ...workspace, isNew: true, ...(titlePrompt && { titlePrompt }) };
+}
+
+/**
+ * How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder, named from its
+ * first message before its first run (`triggerAfter` drops that once a run started). Undefined when it can't run.
+ */
 export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'> | undefined {
   const cwd = runFolder(thread);
   const provider = thread.session?.provider ?? thread.providers[0];
   if (cwd === undefined) return;
-  return { provider, spaceId: thread.spaceId, cwd, workspace: startWorkspace(thread.repo), ...agentOptions(controlsOf(thread), provider) };
+  const workspace = isUnstarted(thread) ? firstWorkspace(thread) : startWorkspace(thread.repo);
+  return { provider, spaceId: thread.spaceId, cwd, workspace, ...agentOptions(controlsOf(thread), provider) };
 }
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */
