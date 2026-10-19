@@ -35,7 +35,7 @@ export function repoWorkspace(draft: WorkspaceDraft): Pick<Repo, 'mode' | 'base'
 const MAX_SLUG_WORDS = 5;
 const MAX_SLUG_CHARS = 40;
 
-// The first word that says what kind of change it is; anything else is a feature. Same types as the commit hook.
+// The first word that says what kind of change it is; anything else is a feature. The Conventional Commits types.
 const TYPE_CUES: [RegExp, string][] = [
   [/^(fix|fixes|fixed|bug|broken|crash|crashes|repair|resolve)$/, 'fix'],
   [/^(docs?|document|readme|changelog)$/, 'docs'],
