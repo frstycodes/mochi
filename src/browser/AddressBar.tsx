@@ -9,7 +9,6 @@ import type { Thread } from '@/model';
 import { usePrefs } from '../settings/prefs';
 import { useHarness } from '../store';
 import { usePorts } from '../terminal/ports';
-import { usePaneOpeners } from '../terminal/usePaneOpeners';
 import { TooltipIconButton } from '../ui';
 import { historyTitle, pageKey, updatePage, useAddressHistory, type Page } from './pages';
 import { openExternally, openInLabel } from './systemBrowser';
@@ -134,8 +133,7 @@ export function AddressBar({ thread, pageId, page }: { thread: Thread; pageId: s
 function useCandidates(thread: Thread, pageId: string) {
   const { state } = useHarness();
   const history = useAddressHistory();
-  const { openPort } = usePaneOpeners(thread.id);
-  const { ports } = usePorts(thread.id, threadCwd(thread) ?? null, openPort);
+  const { ports } = usePorts(thread.id, threadCwd(thread) ?? null);
   const tabs = state.panes.find((p) => p.threadId === thread.id)?.tabs;
   return useMemo<Candidate[]>(
     () => [
