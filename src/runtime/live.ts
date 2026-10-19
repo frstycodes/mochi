@@ -2,7 +2,7 @@ import { agentImage } from '../chat/images.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
-import { startWorkspace, workspaceMode } from '../git/workspace.ts';
+import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts';
 import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
 import { startTitleRequest } from '../utility/titles.ts';
@@ -131,12 +131,16 @@ function firstWorkspace(thread: Thread): StartWorkspace | undefined {
   return { ...workspace, isNew: true, ...(titlePrompt && { titlePrompt }) };
 }
 
-/** How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder. Undefined when it can't run. */
+/**
+ * How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder, named from its
+ * first message before its first run (`triggerAfter` drops that once a run started). Undefined when it can't run.
+ */
 export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'> | undefined {
   const cwd = runFolder(thread);
   const provider = thread.session?.provider ?? thread.providers[0];
   if (cwd === undefined) return;
-  return { provider, spaceId: thread.spaceId, cwd, workspace: startWorkspace(thread.repo), ...agentOptions(controlsOf(thread), provider) };
+  const workspace = isUnstarted(thread) ? firstWorkspace(thread) : startWorkspace(thread.repo);
+  return { provider, spaceId: thread.spaceId, cwd, workspace, ...agentOptions(controlsOf(thread), provider) };
 }
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */

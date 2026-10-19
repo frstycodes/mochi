@@ -145,7 +145,16 @@ test('workspace per mode: a new worktree from a chosen base, an existing branch 
   assert.equal(isUnstarted(thread), true);
   assert.deepEqual(scheduledStart(thread)?.workspace, { mode: 'folder', branch: 'main' }, 'schedules run where the thread was set to');
   const moved = run(scheduled, { type: 'workspace', threadId: thread.id, workspace: { mode: 'worktree', base: 'dev', branch: 'mochi/nightly' } });
-  assert.deepEqual(scheduledStart(moved.threads.at(-1)!)?.workspace, { mode: 'worktree', branch: 'mochi/nightly', base: 'dev' });
+  assert.deepEqual(scheduledStart(moved.threads.at(-1)!)?.workspace, { mode: 'worktree', branch: 'mochi/nightly', base: 'dev', isNew: true });
+});
+
+test("a scheduled thread's first run names it from its first message before its agent starts, as a composer start does", () => {
+  const schedule = { when: { kind: 'cron' as const, cron: '0 2 * * *' }, missed: 'skip' as const };
+  const s = run(base(), { type: 'create', title: 'check the dependencies for security updates', provider: 'claude', project: '/Users/me/dev/app', isLive: true, schedule });
+  const thread = s.threads.at(-1)!;
+  assert.deepEqual(scheduledStart(thread)?.workspace, { mode: 'worktree', branch: thread.repo!.branch, isNew: true, titlePrompt: 'User: check the dependencies for security updates' });
+  const started = { ...thread, session: { provider: 'claude' as const, id: 'sess-1' } };
+  assert.deepEqual(scheduledStart(started)?.workspace, { mode: 'worktree', branch: thread.repo!.branch }, 'once it ran, a re-sent trigger starts as a restart');
 });
 
 test('adding a source tells a live agent in your name; a demo thread only logs it, and a duplicate does nothing', () => {
