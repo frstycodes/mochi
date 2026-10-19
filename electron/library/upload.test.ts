@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { gzipSync } from 'node:zlib';
+import { deflateRawSync, gzipSync } from 'node:zlib';
 import { reviewUpload, unpackUpload, UPLOAD_LIMITS } from './upload.ts';
 
 const PLUGIN = {
@@ -25,11 +25,12 @@ test('a .plugin zipped from inside the folder, and a .tgz of the folder itself, 
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), text);
   }
-  execFileSync('zip', ['-qr', join(root, 'review-kit.plugin'), '.'], { cwd: dir });
+  // Built in-process (deflated, like `zip -r` makes Cowork's .plugin): Windows runners have no zip binary.
+  const plugin = zip(Object.entries(PLUGIN).map(([path, body]) => ({ path, body, deflate: true })));
   // Gzipped separately: bsdtar pads its own -z output, which a gzip stream reader rejects as trailing junk.
   const tgz = gzipSync(execFileSync('tar', ['-c', '-C', root, 'review-kit']));
 
-  for (const bytes of [new Uint8Array(readFileSync(join(root, 'review-kit.plugin'))), new Uint8Array(tgz)]) {
+  for (const bytes of [plugin, new Uint8Array(tgz)]) {
     const unpacked = await unpackUpload(bytes);
     assert.deepEqual(unpacked.skipped, ['logo.png']);
     const { review } = reviewUpload('review-kit.plugin', bytes, unpacked, []);
@@ -91,26 +92,29 @@ test('a missing or broken manifest says what a plugin needs', async () => {
   assert.deepEqual(codex.review.loads, { claude: '1 skill', codex: null });
 });
 
-type ZipEntry = { path: string; body: string; symlink?: boolean };
+type ZipEntry = { path: string; body: string; symlink?: boolean; deflate?: boolean };
 
-// Stored (uncompressed) entries, which the reader takes like deflated ones; a symlink is a Unix entry holding its target.
+// Stored or deflated entries; a symlink is a Unix entry holding its target.
 function zip(entries: ZipEntry[]) {
   const locals: Buffer[] = [];
   const centrals: Buffer[] = [];
   let offset = 0;
-  for (const { path, body, symlink } of entries) {
+  for (const { path, body, symlink, deflate } of entries) {
     const name = Buffer.from(path);
-    const data = Buffer.from(body);
+    const raw = Buffer.from(body, 'latin1');
+    const data = deflate ? deflateRawSync(raw) : raw;
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(deflate ? 8 : 0, 8);
     local.writeUInt32LE(data.length, 18);
-    local.writeUInt32LE(data.length, 22);
+    local.writeUInt32LE(raw.length, 22);
     local.writeUInt16LE(name.length, 26);
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE((3 << 8) | 20, 4);
+    central.writeUInt16LE(deflate ? 8 : 0, 10);
     central.writeUInt32LE(data.length, 20);
-    central.writeUInt32LE(data.length, 24);
+    central.writeUInt32LE(raw.length, 24);
     central.writeUInt16LE(name.length, 28);
     central.writeUInt32LE(((symlink ? 0o120777 : 0o100644) << 16) >>> 0, 38);
     central.writeUInt32LE(offset, 42);
