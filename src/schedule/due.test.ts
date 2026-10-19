@@ -3,7 +3,7 @@ process.env.TZ = 'America/New_York';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Trigger } from '../host/types/schedule.ts';
-import { afterLaunch, branchMatches, cronDecision, prEvents, summaryLine, type PrSnapshot } from './due.ts';
+import { afterLaunch, branchMatches, cronDecision, prEvents, summaryLine, triggerAfter, type PrSnapshot } from './due.ts';
 
 const local = (y: number, mo: number, d: number, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();
 const idle = { isRunning: false, isBusy: false };
@@ -71,4 +71,15 @@ test('branch patterns and summaries', () => {
   assert.ok(!branchMatches('release/*', 'hotfix/release/1'));
   assert.ok(branchMatches('a.b', 'a.b') && !branchMatches('a.b', 'axb'));
   assert.equal(summaryLine('\n## **2 findings**\n- lodash is outdated'), '2 findings');
+});
+
+test("a trigger names its thread on the first run only, and later runs resume the session on the branch it was renamed to", () => {
+  const first = trigger({ start: { provider: 'claude', spaceId: 'work', cwd: '/repo', workspace: { mode: 'worktree', branch: 'mochi/0badf00d', isNew: true, titlePrompt: 'User: check deps' } } });
+  const renamed = triggerAfter(first, { threadId: 't1', type: 'branch', branch: 'mochi/check-deps' });
+  assert.equal(renamed.start.workspace?.branch, 'mochi/check-deps');
+  const ran = triggerAfter(renamed, { threadId: 't1', type: 'session', provider: 'claude', sessionId: 'sess-1' });
+  assert.equal(ran.sessionId, 'sess-1');
+  assert.deepEqual(ran.start.workspace, { mode: 'worktree', branch: 'mochi/check-deps' }, 'no second naming, no refusing its own branch after a cleanup');
+  const folder = trigger({ start: { provider: 'claude', spaceId: 'work', cwd: '/repo', workspace: { mode: 'folder', branch: 'main' } } });
+  assert.equal(triggerAfter(folder, { threadId: 't1', type: 'branch', branch: 'dev' }), folder, "a folder's checkout isn't the trigger's branch");
 });

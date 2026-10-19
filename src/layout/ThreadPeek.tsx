@@ -11,6 +11,7 @@ import { ProviderMark, ThreadStatusIcon } from '../ui';
 import { BoundShortcut } from '../Shortcut';
 import { isCommandId, pinnedCommand } from '../keymap';
 import { ThreadMessageIcon } from '../chat/ThreadMessage';
+import { useRenameSurface } from '../rename';
 
 const PEEK_OPEN_MS = 500;
 const PEEK_CLOSE_MS = 240;
@@ -26,9 +27,11 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
   const isWatched = state.watched.includes(thread.id);
   const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
   const [isOpen, setOpen] = useState(false);
+  // The trigger opens on focus too, and renaming focuses the row's field.
+  const isRenaming = useRenameSurface(thread.id) === 'row';
 
   return (
-    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={!isDisabled && isOpen} onOpenChange={(open) => setOpen(open && !document.querySelector(NESTED_PREVIEW_ACTIVE))}>
+    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={!isDisabled && !isRenaming && isOpen} onOpenChange={(open) => setOpen(open && !document.querySelector(NESTED_PREVIEW_ACTIVE))}>
       <HoverCardTrigger asChild onPointerOver={(e) => e.target instanceof Element && e.target.closest(NESTED_PREVIEW) && setOpen(false)}>
         {children}
       </HoverCardTrigger>

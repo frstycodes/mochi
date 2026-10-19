@@ -173,6 +173,7 @@ export const SETTINGS_SECTIONS = [
     icon: Compass,
     component: GoalsSection,
     settings: [
+      { id: 'goals', label: 'Goals', keywords: 'goals off disable turn off kill switch criteria verdict propose' },
       { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
       { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
       { id: 'proposedGoals', label: 'Agent-proposed goals', keywords: 'propose goal accept apply undo agent writes criteria' },

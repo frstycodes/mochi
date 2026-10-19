@@ -13,9 +13,12 @@ import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
+import { PROVIDER_NAME } from '../rewind/handoff';
+import { copyHandoffPrompt, handOffHere, isHandingOff, otherProvider } from '../rewind/runHandoff';
 import { openSchedule } from '../schedule/ScheduleDialog';
 import { openGoalEditor } from '../goals/GoalEditor';
 import { hasGoal } from '../drift';
+import { getPrefs } from '../settings/prefs';
 import { startRename } from '../rename';
 import { openSettings } from '../settings/open';
 import { openReplay } from '../replay/open';
@@ -83,15 +86,27 @@ export const ACTIONS = [
   { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, command: 'thread-pin', when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
   { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, command: 'thread-pin', when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
-  { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, keywords: 'title name', when: when.thread, run: inThread((t) => startRename(t.id)) },
+  { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, command: 'thread-rename', keywords: 'title name', when: when.thread, run: onThread((t, { scope }) => startRename(t.id, scope.isRow ? 'row' : 'dialog')) },
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
   { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, disabledReason: (s) => s.thread && rewindBlockedReason(s.thread), run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
   { id: 'thread-replay', group: 'Thread', title: 'Replay thread', icon: VideoPlay, keywords: 'recording session playback demo debug', when: when.thread, run: onThread((t) => openReplay(t.id)) },
   { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Share, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
-  { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
+  { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && getPrefs().goals && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
   { id: 'thread-goal-remove', group: 'Thread', title: 'Remove goal', icon: XSquare, keywords: 'goal chat question untrack progress', when: (s) => when.thread(s) && hasGoal(s.thread!), run: onThread((t, { dispatch }) => dispatch({ type: 'goal-remove', threadId: t.id })) },
-  { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: Transfer, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
+  {
+    id: 'thread-handoff',
+    group: 'Thread',
+    title: 'Hand off to another agent',
+    icon: Transfer,
+    keywords: 'claude codex switch',
+    when: when.liveThread,
+    label: (s) => `Hand off to ${PROVIDER_NAME[otherProvider(s.thread!)]} here`,
+    mark: (s) => otherProvider(s.thread!),
+    disabledReason: (s) => (isHandingOff(s.thread!) ? 'Already handing off' : undefined),
+    run: onThread((t, { dispatch }) => handOffHere(t, dispatch)),
+  },
+  { id: 'thread-handoff-copy', group: 'Thread', title: 'Copy handoff prompt', icon: Copy, keywords: 'claude codex switch hand off summary clipboard', when: when.liveThread, run: onThread((t) => copyHandoffPrompt(t)) },
   {
     id: 'thread-second-opinion',
     group: 'Thread',

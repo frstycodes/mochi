@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { hooksEnv } from '../../git/hooks.ts';
-import { PR_GUARD } from './prGuard.ts';
+import { goalNudge } from './goalNudge.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
 import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -16,7 +15,7 @@ import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent, withPlanTools } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
-import { CLAUDE_SKILLS_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
+import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -183,7 +182,7 @@ async function launch(session: Session) {
     const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
     if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
     // A consequential Mochi call waits on the user's card; Claude Code's own MCP timeout would cut it short.
-    const base = withPlanTools({ ...hooksEnv(accountEnv('claude', configDir)), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
+    const base = withPlanTools({ ...accountEnv('claude', configDir), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
     const key = options.useApiKey ? apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
@@ -200,7 +199,7 @@ async function launch(session: Session) {
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: MOCHI_INSTRUCTIONS },
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: mochiInstructions(options.isGoalsOff) },
         // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
         settings: { skillOverrides: CLAUDE_SKILLS_OFF, ...(options.speed && { fastMode: true }) },
         // Claude in Chrome would otherwise wire itself when CLAUDE_CODE_ENABLE_CFC=1 is in the user's environment.
@@ -222,9 +221,9 @@ async function launch(session: Session) {
         mcpServers: {
           ...Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig])),
           ...Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }])),
-          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd),
+          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, options.isGoalsOff),
         },
-        hooks: { ...PR_GUARD, ...compactHooks(threadId) },
+        hooks: { ...compactHooks(threadId), PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)] },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
       },
     });

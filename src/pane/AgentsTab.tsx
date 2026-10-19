@@ -273,7 +273,7 @@ function NoAgents() {
           <Hierarchy />
         </EmptyMedia>
         <EmptyTitle>No agents yet</EmptyTitle>
-        <EmptyDescription>Subagents and background agents this thread's agent starts show here, with their logs and changes.</EmptyDescription>
+        <EmptyDescription>Subagents and delegated tasks this thread's agent starts show here, with their logs and changes.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

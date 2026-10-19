@@ -1,8 +1,8 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { Branch, BranchList, ChangeStat, Head, SwitchOptions } from '../../src/host/types/git.ts';
+import { mkdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import type { Branch, BranchList, ChangeStat, Head, SwitchOptions, WorktreeOptions } from '../../src/host/types/git.ts';
 import { listWorktrees, runGit } from './run.ts';
-import { uniqueBranch } from '../../src/git/workspace.ts';
+import { branchFromTitle } from '../../src/git/workspace.ts';
 
 const MAX_BRANCHES = 500;
 // Untracked files are read whole to count their lines; past this many the rest count as files only.
@@ -147,13 +147,25 @@ export async function baseRef(top: string) {
   return 'HEAD';
 }
 
-export async function renameAutoBranch(cwd: string, expected: string, name: string) {
+/** Makes the worktree `dir` of the repo at `top` on `branch`, as `addWorktree` (electron/ipc/git.ts) describes. */
+export async function addBranchWorktree(top: string, dir: string, branch: string, { base, isExisting, isNew }: WorktreeOptions = {}) {
+  const name = (await runGit(top, ['check-ref-format', '--branch', isExisting ? await localName(top, branch) : branch])).trim();
+  const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
+  if (exists && isNew && !isExisting) throw new Error(`A branch named ${name} already exists; name the thread's branch something else`);
+  if (exists || isExisting) await assertFreeBranch(top, name);
+  await mkdir(dirname(dir), { recursive: true });
+  // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.
+  await runGit(top, exists || isExisting ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, base ?? (await baseRef(top))]);
+}
+
+/** Renames the temp branch `expected` after `title` (`branchFromTitle`); null when HEAD moved on, it was published, or the title has no slug. */
+export async function renameAutoBranch(cwd: string, expected: string, title: string) {
   if ((await currentBranch(cwd)) !== expected) return null;
   const refs = await runGit(cwd, ['for-each-ref', '--format=%(refname:short)%00%(upstream)', 'refs/heads', 'refs/remotes']);
   const entries = refs.trim().split('\n').map((line) => line.split('\0'));
   if (entries.some(([ref, upstream]) => (ref === expected && upstream) || ref.endsWith(`/${expected}`))) return null;
-  const taken = new Set(entries.map(([ref]) => ref).filter((ref) => ref !== expected));
-  const branch = uniqueBranch(name, taken);
-  if (branch !== expected) await runGit(cwd, ['branch', '-m', expected, branch]);
+  const branch = branchFromTitle(expected, title, new Set(entries.map(([ref]) => ref)));
+  if (!branch) return null;
+  await runGit(cwd, ['branch', '-m', expected, branch]);
   return branch;
 }

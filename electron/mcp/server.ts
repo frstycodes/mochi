@@ -12,7 +12,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ImageGenHarness } from '../../src/host/types/settings.ts';
 import type { GeneratedImage } from '../../src/model.ts';
 import { IMAGE_SIZES, IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, imageResultText, type ImageSize } from '../../src/runtime/imageTool.ts';
-import { MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
+import { isGoalTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
 import { agentSettings } from '../agents/config.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
@@ -24,10 +24,14 @@ import { toolCalls } from './calls.ts';
 export const SERVER = MOCHI_SERVER;
 
 const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
+const NO_GOAL_TOOLS = TOOLS.filter((t) => !isGoalTool(t.name));
 
 /** Shown to the model as the server's instructions (MCP `initialize`); the same for every thread, so it reads its own goal. */
-export const INSTRUCTIONS =
+const INSTRUCTIONS =
   "Mochi runs this thread and shows the user its goal. Call get_goal at the start. Mochi does not draft a goal from the first prompt: for a task with a checkable outcome, research the code and the user's request, then call propose_goal with the concrete outcome and checkable criteria before finishing the work. A goal is optional: a question, a chat, or a small one-step change needs none. Older threads may have a draft (isDraft): replace it after research. Propose again only if what done means has to change. While a proposal awaits acceptance, keep working and report progress; claim criteria once accepted. With a goal: keep your plan current in your own task tools; call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (what changed in the user's terms, decisions, what's left, at most one question for the user, and the next move as one yes/no question). To split a goal, start one sub-thread per independent piece with create_thread and that piece's criterionId (pieces that touch different files); a sub-thread works only on its piece and opens its PR into its parent's branch with open_pr, and its result comes back to the parent.";
+
+/** With goals off (Settings › Goals and checks), nothing about goals: the main instructions say the rest. */
+const NO_GOAL_INSTRUCTIONS = 'Mochi runs this thread and shows the user what its tools do.';
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
 export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SERVER}__${name}`);
@@ -37,10 +41,10 @@ export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SE
  * is Claude's only (Codex generates natively) and runs here in main, not in the renderer; a session started while it was
  * off in Settings doesn't get it.
  */
-export function claudeServer(thread: string, spaceId: string, cwd: string) {
-  const tools = TOOLS.map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args)));
+export function claudeServer(thread: string, spaceId: string, cwd: string, isGoalsOff?: boolean) {
+  const tools = (isGoalsOff ? NO_GOAL_TOOLS : TOOLS).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args)));
   const image = tool(IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, (args, extra) => generateImage(spaceId, cwd, args, (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal));
-  return createSdkMcpServer({ name: SERVER, instructions: INSTRUCTIONS, tools: agentSettings().imageGen === 'off' ? tools : [...tools, image] });
+  return createSdkMcpServer({ name: SERVER, instructions: isGoalsOff ? NO_GOAL_INSTRUCTIONS : INSTRUCTIONS, tools: agentSettings().imageGen === 'off' ? tools : [...tools, image] });
 }
 
 type GenerateImage = (spaceId: string, prompt: string, signal: AbortSignal) => Promise<GeneratedImage>;
@@ -74,9 +78,9 @@ async function generateImage(spaceId: string, cwd: string, args: { prompt: strin
 }
 
 /** Codex: a streamable-HTTP URL on localhost for its `mcp_servers` config, one path per thread behind a per-launch secret. */
-export async function codexUrl(thread: string) {
+export async function codexUrl(thread: string, isGoalsOff?: boolean) {
   const { port } = (await listening()).address() as AddressInfo;
-  return `http://127.0.0.1:${port}/mcp/${SECRET}/${thread}`;
+  return `http://127.0.0.1:${port}/mcp/${SECRET}/${thread}${isGoalsOff ? '?goals=off' : ''}`;
 }
 
 /**
@@ -119,14 +123,15 @@ function listening() {
     // Stateless: each POST gets a fresh server and transport, so nothing is kept between Codex's calls.
     const server = createServer(async (req, res) => {
       if (await routed(req, res)) return;
-      const match = req.url?.match(/^\/mcp\/(\w+)\/([\w-]+)$/);
+      const match = req.url?.match(/^\/mcp\/(\w+)\/([\w-]+)(\?goals=off)?$/);
       if (!match || match[1] !== SECRET) return void res.writeHead(404).end();
       // Codex sends no Origin; a browser page always does, so this keeps web pages off the port even if they learn the URL.
       if (req.headers.origin !== undefined) return void res.writeHead(403).end();
+      const isGoalsOff = !!match[3];
       const isDev = !app.isPackaged && process.env.MOCHI_DEV_MCP === '1' && match[2] === '__dev__';
-      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: isDev ? 'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.' : INSTRUCTIONS });
+      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: isDev ? 'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.' : isGoalsOff ? NO_GOAL_INSTRUCTIONS : INSTRUCTIONS });
       if (isDev) registerDevTools(mcp);
-      else for (const t of TOOLS) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
+      else for (const t of isGoalsOff ? NO_GOAL_TOOLS : TOOLS) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => void transport.close().then(() => mcp.close()));
       await mcp.connect(transport);

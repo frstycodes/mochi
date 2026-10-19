@@ -239,13 +239,13 @@ test('auto tools never wait: creating and messaging threads run straight through
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no widget was shown');
 });
 
-test('create_thread names the branch from its prompt, unique among the repo branches, and falls back to the prompt alone without git', async () => {
-  const named = setup({ gitBranches: ['main', 'feat/rate-limit-dashboard'] });
-  const created = await named.ok('create_thread', { prompt: 'Add a rate limit dashboard' });
-  assert.equal(named.thread(created.id)?.repo?.branch, 'feat/rate-limit-dashboard-2');
-  const offline = setup();
-  const fallback = await offline.ok('create_thread', { prompt: 'Fix the login bug' });
-  assert.equal(offline.thread(fallback.id)?.repo?.branch, 'fix/login-bug');
+test('create_thread starts each thread on a temp branch of its own, for its title to name', async () => {
+  const t = setup();
+  const [a, b] = [await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' }), await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' })];
+  const [first, second] = [t.thread(a.id).repo!, t.thread(b.id).repo!];
+  assert.match(first.branch, /^mochi\/[0-9a-f]{8}$/);
+  assert.equal(first.autoBranch, first.branch);
+  assert.notEqual(second.branch, first.branch, 'the same prompt never clashes');
 });
 
 test('create_thread gives the new thread its own worktree even when your Worktree box is unticked', async () => {
@@ -255,7 +255,7 @@ test('create_thread gives the new thread its own worktree even when your Worktre
   try {
     const created = await t.ok('create_thread', { prompt: 'Fix the login bug' });
     assert.notEqual(t.thread(created.id)?.repo?.mode, 'folder');
-    assert.equal(t.thread(created.id)?.repo?.branch, 'fix/login-bug');
+    assert.match(t.thread(created.id)?.repo?.branch ?? '', /^mochi\/[0-9a-f]{8}$/);
   } finally {
     setPrefs({ workspaceMode: DEFAULT_PREFS.workspaceMode });
   }
@@ -283,14 +283,11 @@ test('new tasks and subtasks inherit the running session and honor user-named mo
   }
 });
 
-test('create_thread reads current controls after approval and workspace preparation, not at tool invocation', async () => {
+test('create_thread reads current controls after approval, not at tool invocation', async () => {
   const t = setup();
   t.env.prefs.set({ toolPolicies: { create_thread: 'ask' } });
   const pending = await t.asking('create_thread', { prompt: 'Fix login', isSubThread: true });
-  t.env.git.branches = async () => {
-    t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
-    throw new Error('offline');
-  };
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
   decideTool(pending.card.id, { isApproved: true });
   const result = await pending.result;
   assert.ok(!result.isError, result.text);

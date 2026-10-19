@@ -18,7 +18,7 @@ export function useIdleChecks(threads: Thread[], dispatch: Dispatch<Action>) {
       const isWorking = !!t.live?.isWorking;
       const was = wasWorking.get(t.id);
       wasWorking.set(t.id, isWorking);
-      if (was && !isWorking && t.live) void gather(t, dispatch);
+      if (was && !isWorking && t.live && getPrefs().goals) void gather(t, dispatch);
     }
   }, [threads, dispatch]);
 }

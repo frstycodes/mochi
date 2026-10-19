@@ -30,8 +30,8 @@ export function isConcrete(text: string) {
   return content.length >= 2 || (content.length === 1 && text.trim().split(/\s+/).length >= 2);
 }
 
-/** Drift is measured only after the working agent or user has set a goal. */
-export const hasGoal = (thread: Thread) => !!thread.goal.trim();
+/** A goal Mochi shows and acts on: set by the agent or you, with goals on in Settings. Drift is measured only then. */
+export const hasGoal = (thread: Thread) => getPrefs().goals && !!thread.goal.trim();
 
 /** Clear on-goal cases are settled here; the rest go to the classifier, and only a confident off-goal from it suggests a new thread. */
 export function judgeDrift(prompt: string, thread: Thread): DriftVerdict | Promise<DriftVerdict> {

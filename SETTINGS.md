@@ -127,7 +127,7 @@ Sections: Worktrees (New threads work in, Worktrees folder, Remove settled workt
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Worktrees folder | path + Browse | `~/.harness/worktrees` | now | electron/git/run.ts:6 |
-| Branch prefix | text | `harness/` | now | — |
+| Branch prefix | text | `mochi/` | now | — |
 | Open pull requests as drafts | switch | off | now | electron/ipc/git.ts:74 |
 | Diffs | Unified / Split (Changes tab and work log) | Unified | now | src/pane/ChangesTab.tsx:36 |
 | Prepare worktrees before starting | switch | on | done | electron/git/setup.ts (RUNTIME.md › Worktree setup) |
