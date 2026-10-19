@@ -116,10 +116,16 @@ function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: stri
   const threads = state.threads
     .filter((t) => state.watched.includes(t.id))
     .map((t) => ({ id: t.id, title: t.title, cwd: threadCwd(t) ?? undefined, githubUser: profiles.find((p) => p.id === t.spaceId)?.github || undefined }));
+  const autofix = state.threads.flatMap((t) => {
+    const cwd = threadCwd(t);
+    if (!t.live || t.status === 'settled' || !cwd) return [];
+    const githubUser = profiles.find((p) => p.id === t.spaceId)?.github || undefined;
+    return t.prs.flatMap((pr) => (pr.autofixSince && pr.state !== 'merged' ? [{ threadId: t.id, title: t.title, pr: pr.number, cwd, githubUser, since: pr.autofixSince }] : []));
+  });
   const { muted, quiet } = state.notifications;
   // Another computer's threads count toward the badge too, keyed by machine so ids never collide with this one's.
   const remoteNeedsYou = machines.flatMap(({ machine, state }) => (state?.threads ?? []).filter((t) => t.status === 'needs-you').map((t) => `${machine.id}/${t.id}`));
-  return { threads, kinds: alertKinds, quiet, muted, needsYou: [...state.threads.filter((t) => t.status === 'needs-you').map((t) => t.id), ...remoteNeedsYou], dockBadge };
+  return { threads, autofix, kinds: alertKinds, quiet, muted, needsYou: [...state.threads.filter((t) => t.status === 'needs-you').map((t) => t.id), ...remoteNeedsYou], dockBadge };
 }
 
 /** Opens what a notice is about: its queue item while that's still open, else its thread. */
