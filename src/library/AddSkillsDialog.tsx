@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Code, Download, FileText, Link, ShieldAlert } from '@/icons';
+import { ChevronDown, Code, Download, FileText, Folder, Link, ShieldAlert, Skill, UserCircle, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { toast } from '@/toast/store';
@@ -13,11 +15,11 @@ import { host } from '../host';
 import type { Provider } from '../model';
 import { useProjects } from '../projects';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
-import { SkeletonRows } from '../settings/parts';
+import { SettingsSelect } from '../settings/parts';
 import { useHarness, useSpaceThreads } from '../store';
 import { ProviderMark } from '../ui';
 import { TRUSTED_SKILL_OWNERS, type CatalogSkill, type SkillDestination } from './library';
-import { CatalogErrorRow, countOf, EmptyRow } from './LibraryParts';
+import { CatalogErrorRow, countOf } from './LibraryParts';
 import { parseSkillSource } from './skillSource';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
 
@@ -28,13 +30,12 @@ import { installedEntry, useLoaded, type Library } from './useLibrary';
 export function AddSkillsDialog({ source, onClose, library }: { source: string | null; onClose: () => void; library: Library }) {
   return (
     <Dialog open={source !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="h-[calc(100dvh-2rem)] grid-rows-[minmax(0,1fr)] sm:h-[min(880px,calc(100dvh-4rem))] sm:max-w-[min(1200px,calc(100vw-4rem))]">{source !== null && <AddSkillsForm initialSource={source} library={library} onDone={onClose} />}</DialogContent>
+      <DialogContent className="flex h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[min(860px,calc(100dvh-4rem))] sm:max-w-[min(1160px,calc(100vw-4rem))]">
+        {source !== null && <AddSkillsForm initialSource={source} library={library} onDone={onClose} />}
+      </DialogContent>
     </Dialog>
   );
 }
-
-
-type Scope = SkillDestination['scope'];
 
 // Inside the dialog's content, which unmounts on close, so each opening starts fresh.
 function AddSkillsForm({ initialSource, library, onDone }: { initialSource: string; library: Library; onDone: () => void }) {
@@ -49,148 +50,248 @@ function AddSkillsForm({ initialSource, library, onDone }: { initialSource: stri
   const shown = found.find((s) => s.name === focused) ?? found.find((s) => picked.includes(s.name)) ?? found[0];
   const [destination, setDestination] = useDestination();
   const [isInstalling, setInstalling] = useState(false);
-  const owner = parseSkillSource(source)?.owner;
-  const isTrusted = !!owner && TRUSTED_SKILL_OWNERS.includes(owner);
+  const owner = parseSkillSource(source)?.owner ?? '';
   const isReady = !!picked.length && !isInstalling && destination.isValid;
   const install = async () => {
     setInstalling(true);
-    const skills = found.filter((s) => picked.includes(s.name));
     let installed = 0;
-    for (const skill of skills) if (await library.installSkill(source, skill, destination.value)) installed++;
+    for (const skill of found.filter((s) => picked.includes(s.name))) if (await library.installSkill(source, skill, destination.value)) installed++;
     setInstalling(false);
     if (!installed) return;
     toast.success(`Installed ${countOf(installed, 'skill')}`, { description: destination.summary });
     onDone();
   };
   const toggle = (name: string, isOn: boolean) => {
-    setChosen(isOn ? [...picked, name] : picked.filter((n) => n !== name));
+    setChosen((was) => {
+      const current = was ?? picked;
+      return isOn ? [...current.filter((n) => n !== name), name] : current.filter((n) => n !== name);
+    });
     setFocused(name);
+  };
+  const browse = () => {
+    setChosen(null);
+    setFocused(null);
+    setSource(draft.trim());
   };
   return (
     <form
-      className="-mx-4 flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault();
         if (isReady) void install();
       }}
     >
-      <DialogHeader>
-        <DialogTitle>Add skills from GitHub</DialogTitle>
-        <DialogDescription>Like npx skills add: a repository, a folder in one, or one skill by name.</DialogDescription>
-      </DialogHeader>
-      <InputGroup>
-        <InputGroupAddon>
-          <Link />
-        </InputGroupAddon>
-        <InputGroupInput
-          autoFocus={!initialSource}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            setChosen(null);
-            setFocused(null);
-            setSource(draft.trim());
-          }}
-          placeholder="owner/repo, owner/repo@skill or a github.com link, then Enter"
-          aria-label="GitHub source"
-        />
-      </InputGroup>
-      {!!source && (
-        <div className="grid shrink-0 gap-3 sm:min-h-0 sm:flex-1 sm:shrink sm:grid-cols-[18rem_minmax(0,1fr)]">
-          <div className="flex max-h-60 min-h-0 min-w-0 flex-col overflow-y-auto rounded-xl border sm:max-h-none">
-            {state.status === 'loading' && <SkeletonRows count={3} />}
-            {state.status === 'error' && <CatalogErrorRow what={source} message={state.message} onRetry={retry} />}
-            {state.status === 'done' && !found.length && <EmptyRow text={`No SKILL.md in ${source}`} />}
-            {found.map((skill) => (
-              <FoundSkillRow key={skill.source} skill={skill} isPicked={picked.includes(skill.name)} isShown={skill === shown} isInstalled={!!installedEntry(library.entries, 'skill', skill.name)} onToggle={(isOn) => toggle(skill.name, isOn)} onShow={() => setFocused(skill.name)} />
-            ))}
-          </div>
-          {!!shown && <SkillFiles key={shown.source} source={source} skill={shown} isTrusted={isTrusted} owner={owner ?? ''} />}
+      <header className="flex flex-col gap-3 border-b px-5 pt-4 pr-12 pb-3">
+        <div className="flex flex-col gap-0.5">
+          <DialogTitle>Add skills from GitHub</DialogTitle>
+          <DialogDescription>Like npx skills add: a repository, a folder in one, or one skill by name.</DialogDescription>
         </div>
-      )}
-      {!!found.length && <DestinationPicker destination={destination} onChange={setDestination} />}
-      <DialogFooter>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={!isReady}>
-          {isInstalling ? <Spinner data-icon="inline-start" /> : <Download data-icon="inline-start" />}
-          {picked.length > 1 ? `Install ${countOf(picked.length, 'skill')}` : 'Install'}
-        </Button>
-      </DialogFooter>
+        <InputGroup className="max-w-2xl">
+          <InputGroupAddon>
+            <Link />
+          </InputGroupAddon>
+          <InputGroupInput
+            autoFocus={!initialSource}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return;
+              e.preventDefault();
+              browse();
+            }}
+            placeholder="owner/repo, owner/repo@skill or a github.com link"
+            aria-label="GitHub source"
+          />
+        </InputGroup>
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto sm:flex-row sm:overflow-hidden">
+        {!source ? (
+          <EmptyBody text="Type a repository and press Enter to see its skills." />
+        ) : state.status === 'error' ? (
+          <div className="flex-1 p-4">
+            <CatalogErrorRow what={source} message={state.message} onRetry={retry} />
+          </div>
+        ) : state.status === 'done' && !found.length ? (
+          <EmptyBody text={`No SKILL.md in ${source}`} />
+        ) : (
+          <>
+            <SkillList found={found} isLoading={state.status === 'loading'} picked={picked} shown={shown} library={library} onToggle={toggle} onShow={setFocused} />
+            {shown ? <SkillFiles key={shown.source} source={source} skill={shown} owner={owner} /> : <div className="flex-1" />}
+          </>
+        )}
+      </div>
+      <footer className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t px-5 py-3">
+        {destination.scope !== 'library' && <DestinationFields destination={destination} onChange={setDestination} />}
+        <div className="ml-auto flex items-center gap-2">
+          <Button type="button" variant="ghost" onClick={onDone}>
+            Cancel
+          </Button>
+          <InstallButton count={picked.length} destination={destination} onChange={setDestination} isReady={isReady} isBusy={isInstalling} />
+        </div>
+      </footer>
     </form>
   );
 }
 
-function FoundSkillRow({ skill, isPicked, isShown, isInstalled, onToggle, onShow }: { skill: CatalogSkill; isPicked: boolean; isShown: boolean; isInstalled: boolean; onToggle: (isOn: boolean) => void; onShow: () => void }) {
+function EmptyBody({ text }: { text: string }) {
+  return <p className="flex flex-1 items-center justify-center p-8 text-center type-meta text-muted-foreground">{text}</p>;
+}
+
+/** The skills found, a checkbox each; the row you last touched is the one whose files show. */
+function SkillList({ found, isLoading, picked, shown, library, onToggle, onShow }: { found: CatalogSkill[]; isLoading: boolean; picked: string[]; shown: CatalogSkill | undefined; library: Library; onToggle: (name: string, isOn: boolean) => void; onShow: (name: string) => void }) {
   return (
-    <div className={cn('flex items-start gap-2.5 px-3 py-2.5 not-first:border-t', isShown && 'bg-accent/50')}>
-      <Checkbox className="mt-0.5" checked={isPicked} onCheckedChange={(v) => onToggle(v === true)} aria-label={`Pick ${skill.name}`} />
-      <button type="button" className="flex min-w-0 flex-1 flex-col gap-0.5 text-left outline-none focus-visible:underline" onClick={onShow} aria-label={`Read ${skill.name}’s files`}>
-        <span className="flex items-center gap-1.5 truncate type-body font-medium">
-          {skill.name}
-          {isInstalled && <span className="type-caption font-normal text-muted-foreground">installed</span>}
-        </span>
-        <span className="line-clamp-2 type-caption text-muted-foreground">{skill.description}</span>
-      </button>
-    </div>
+    <aside className="flex max-h-64 shrink-0 flex-col border-b sm:max-h-none sm:w-72 sm:border-r sm:border-b-0">
+      <p className="px-4 pt-3 pb-1.5 type-caption text-muted-foreground">{isLoading ? 'Looking for SKILL.md…' : `${countOf(found.length, 'skill')} · ${picked.length} picked`}</p>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="flex flex-col gap-px px-2 pb-2">
+          {isLoading && Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="mx-2 my-2 h-9" />)}
+          {found.map((skill) => {
+            const isShown = skill === shown;
+            return (
+              <div key={skill.source} className={cn('flex items-start gap-2.5 rounded-lg px-2 py-2 transition-colors', isShown ? 'bg-accent' : 'hover:bg-accent/50')}>
+                <Checkbox className="mt-0.5" checked={picked.includes(skill.name)} onCheckedChange={(v) => onToggle(skill.name, v === true)} aria-label={`Pick ${skill.name}`} />
+                <button type="button" className="flex min-w-0 flex-1 flex-col gap-0.5 text-left outline-none focus-visible:underline" onClick={() => onShow(skill.name)} aria-current={isShown || undefined} aria-label={`Read ${skill.name}’s files`}>
+                  <span className="flex min-w-0 items-baseline gap-1.5">
+                    <span className={cn('truncate type-body font-medium', !isShown && 'text-foreground/80')}>{skill.name}</span>
+                    {!!installedEntry(library.entries, 'skill', skill.name) && <span className="shrink-0 type-caption text-muted-foreground">installed</span>}
+                  </span>
+                  <span className="line-clamp-2 type-caption text-muted-foreground">{skill.description}</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    </aside>
   );
 }
 
 /**
- * The skill's files as text, SKILL.md first: what an agent will read and may run, read here before it installs. Files on
- * the left, the open one filling the rest; what to watch for sits under it.
+ * The skill's files as text, SKILL.md first: what an agent will read and may run, read here before it installs. Its name
+ * heads it, file tabs run across the top, the file sits flush below, and what to watch for closes it.
  */
-function SkillFiles({ source, skill, isTrusted, owner }: { source: string; skill: CatalogSkill; isTrusted: boolean; owner: string }) {
+function SkillFiles({ source, skill, owner }: { source: string; skill: CatalogSkill; owner: string }) {
   const { state, retry } = useLoaded(`${source}:${skill.name}`, () => host.library.skillFiles(source, skill.name));
   const files = state.status === 'done' ? state.value : {};
   const paths = Object.keys(files).sort((a, b) => Number(b === 'SKILL.md') - Number(a === 'SKILL.md') || a.localeCompare(b));
   const [path, setPath] = useState('SKILL.md');
   const scripts = paths.filter(isScript);
+  const isTrusted = TRUSTED_SKILL_OWNERS.includes(owner);
   return (
-    <div className="flex min-h-0 min-w-0 flex-col gap-2">
-      <div className="grid h-96 min-h-0 overflow-hidden rounded-xl border sm:h-auto sm:flex-1 sm:grid-cols-[13rem_minmax(0,1fr)]">
-        <nav aria-label={`${skill.name}’s files`} className="flex max-h-32 min-w-0 flex-col gap-px overflow-y-auto border-b p-1.5 sm:max-h-none sm:border-r sm:border-b-0">
-          {state.status === 'loading' && <SkeletonRows count={3} />}
+    <section className="flex min-h-96 min-w-0 flex-1 flex-col sm:min-h-0" aria-label={`${skill.name}’s files`}>
+      <div className="flex flex-col gap-0.5 px-5 pt-4 pb-3">
+        <h3 className="type-title">{skill.name}</h3>
+        <p className="truncate type-caption text-muted-foreground">{skill.source}</p>
+      </div>
+      <ScrollArea className="shrink-0 border-b">
+        <div role="tablist" aria-label="Files" className="flex gap-1 px-4">
+          {state.status === 'loading' && <Skeleton className="my-2 h-5 w-40" />}
           {paths.map((p) => (
             <button
               key={p}
               type="button"
+              role="tab"
+              aria-selected={p === path}
               onClick={() => setPath(p)}
-              aria-current={p === path || undefined}
-              className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground aria-current:bg-accent aria-current:text-foreground"
+              className="-mb-px flex shrink-0 items-center gap-1.5 border-b border-transparent px-2 py-2 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground aria-selected:border-foreground aria-selected:text-foreground"
             >
-              {isScript(p) ? <Code aria-hidden className="size-3.5 shrink-0" /> : <FileText aria-hidden className="size-3.5 shrink-0" />}
-              <span className="truncate">{p}</span>
+              <FileIcon path={p} />
+              {p}
             </button>
           ))}
-        </nav>
-        <pre className="min-h-0 min-w-0 overflow-auto bg-muted/40 p-4 font-mono text-xs/5 break-words whitespace-pre-wrap text-foreground" aria-label={`${path} of ${skill.name}`}>
-          {files[path] ?? files['SKILL.md']}
-        </pre>
-      </div>
-      {state.status === 'error' && <CatalogErrorRow what={skill.name} message={state.message} onRetry={retry} />}
-      {!isTrusted && (
-        <p className="flex items-start gap-1.5 type-caption text-warning">
-          <ShieldAlert aria-hidden className="mt-px size-3.5 shrink-0" />
-          {owner} isn’t a source Mochi knows. Read SKILL.md{scripts.length ? ` and its ${countOf(scripts.length, 'script')}` : ''} first: agents follow it, and may run what it ships. Nothing runs when it installs.
-        </p>
-      )}
-    </div>
+        </div>
+      </ScrollArea>
+      <ScrollArea className="min-h-0 flex-1 bg-muted/30">
+        {state.status === 'error' ? (
+          <div className="p-4">
+            <CatalogErrorRow what={skill.name} message={state.message} onRetry={retry} />
+          </div>
+        ) : (
+          <pre className="p-5 font-mono text-xs/5 break-words whitespace-pre-wrap text-foreground">{files[path] ?? files['SKILL.md']}</pre>
+        )}
+      </ScrollArea>
+      <p className={cn('flex items-start gap-2 border-t px-5 py-2.5 type-caption', isTrusted ? 'text-muted-foreground' : 'text-warning')}>
+        <ShieldAlert aria-hidden className="mt-px size-3.5 shrink-0" />
+        {isTrusted
+          ? 'Nothing runs when it installs. Agents follow SKILL.md and may run what it ships.'
+          : `${owner} isn’t a source Mochi knows. Read SKILL.md${scripts.length ? ` and its ${countOf(scripts.length, 'script')}` : ''} first: agents follow it and may run what it ships. Nothing runs when it installs.`}
+      </p>
+    </section>
   );
+}
+
+function FileIcon({ path }: { path: string }) {
+  const Icon = isScript(path) ? Code : FileText;
+  return <Icon aria-hidden className="size-3.5 shrink-0" />;
 }
 
 const isScript = (path: string) => /\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl|ps1)$/.test(path) || path.startsWith('scripts/');
 
+type Scope = SkillDestination['scope'];
+
 const SCOPES = {
-  library: { title: 'Mochi library', body: 'Loaded per profile into Claude Code threads as /mochi:name; you pick the profiles.' },
-  user: { title: 'Your account', body: 'Like npx skills add -g: ~/.claude/skills for Claude Code, ~/.agents/skills for Codex. Every session sees it.' },
-  project: { title: 'A project', body: 'Its .claude/skills and .agents/skills, so it travels with the repository.' },
-} satisfies Record<Scope, { title: string; body: string }>;
+  library: { icon: Skill, title: 'Mochi library', action: 'Install to library', body: 'Per profile, in Claude Code threads as /mochi:name.' },
+  user: { icon: UserCircle, title: 'Your account', action: 'Install to account', body: 'Like npx skills add -g: ~/.claude/skills and ~/.agents/skills. Every session sees it.' },
+  project: { icon: Folder, title: 'A project', action: 'Install to project', body: 'Its .claude/skills and .agents/skills, so it travels with the repository.' },
+} satisfies Record<Scope, { icon: IconComponent; title: string; action: string; body: string }>;
 
 type Destination = ReturnType<typeof useDestination>[0];
+type ChangeDestination = ReturnType<typeof useDestination>[1];
+
+/** GitHub's merge button: install to the chosen place, and a chevron to pick another; its fields show beside it. */
+function InstallButton({ count, destination, onChange, isReady, isBusy }: { count: number; destination: Destination; onChange: ChangeDestination; isReady: boolean; isBusy: boolean }) {
+  const { action } = SCOPES[destination.scope];
+  return (
+    <ButtonGroup>
+      <Button type="submit" disabled={!isReady}>
+        {isBusy ? <Spinner data-icon="inline-start" /> : <Download data-icon="inline-start" />}
+        {count > 1 ? `${action} (${count})` : action}
+      </Button>
+      <ButtonGroupSeparator />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" aria-label="Choose where to install" disabled={isBusy}>
+            <ChevronDown />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuRadioGroup value={destination.scope} onValueChange={(v) => onChange({ scope: v as Scope })}>
+            {(Object.keys(SCOPES) as Scope[]).map((scope) => {
+              const Icon = SCOPES[scope].icon;
+              return (
+                <DropdownMenuRadioItem key={scope} value={scope} disabled={scope === 'project' && !destination.projects.length} className="items-start">
+                  <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="type-body font-medium">{SCOPES[scope].title}</span>
+                    <span className="type-meta text-pretty text-muted-foreground">{SCOPES[scope].body}</span>
+                  </span>
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </ButtonGroup>
+  );
+}
+
+/** What installing to an account or a project needs: which agents, and which project. */
+function DestinationFields({ destination, onChange }: { destination: Destination; onChange: ChangeDestination }) {
+  const { scope, providers, projects, project } = destination;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {scope === 'project' && !!project && <SettingsSelect aria-label="Project" value={project.path} options={projects.map((p) => ({ value: p.path, label: p.name }))} onChange={(path) => onChange({ projectPath: path })} />}
+      {HARNESS_IDS.map((provider) => (
+        <label key={provider} className="flex cursor-pointer items-center gap-2 type-meta">
+          <Checkbox checked={providers.includes(provider)} onCheckedChange={(v) => onChange({ providers: v === true ? [...providers, provider] : providers.filter((p) => p !== provider) })} />
+          <ProviderMark provider={provider} size={14} />
+          {HARNESSES[provider].name}
+        </label>
+      ))}
+      {!providers.length && <span className="type-caption text-destructive">Pick at least one agent</span>}
+    </div>
+  );
+}
 
 /** Where an install goes, and whether the choice is complete (a project picked, an agent ticked). */
 function useDestination() {
@@ -201,7 +302,7 @@ function useDestination() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const project = projects.find((p) => p.path === projectPath) ?? projects[0];
   const value: SkillDestination = scope === 'library' ? { scope } : scope === 'user' ? { scope, providers } : { scope, providers, project: project?.path ?? '' };
-  const where = scope === 'library' ? 'Mochi library' : scope === 'user' ? 'your account' : (project?.name ?? 'a project');
+  const where = scope === 'user' ? 'your account' : (project?.name ?? 'a project');
   const destination = {
     scope,
     providers,
@@ -217,49 +318,4 @@ function useDestination() {
     if (next.projectPath) setProjectPath(next.projectPath);
   };
   return [destination, change] as const;
-}
-
-function DestinationPicker({ destination, onChange }: { destination: Destination; onChange: ReturnType<typeof useDestination>[1] }) {
-  const { scope, providers, projects, project } = destination;
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="type-body font-medium">Install to</span>
-      <RadioGroup value={scope} onValueChange={(v) => onChange({ scope: v as Scope })} aria-label="Install to" className="grid gap-2 sm:grid-cols-3">
-        {(Object.keys(SCOPES) as Scope[]).map((s) => (
-          <label
-            key={s}
-            htmlFor={`skill-scope-${s}`}
-            className="flex cursor-pointer gap-2.5 rounded-xl border p-3 transition-colors hover:bg-accent/40 has-data-checked:border-foreground/25 has-data-checked:bg-accent/50 has-disabled:cursor-not-allowed has-disabled:opacity-60"
-          >
-            <RadioGroupItem id={`skill-scope-${s}`} value={s} disabled={s === 'project' && !projects.length} className="mt-0.5" />
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="type-body font-medium">{SCOPES[s].title}</span>
-              <span className="type-caption text-pretty text-muted-foreground">{SCOPES[s].body}</span>
-            </span>
-          </label>
-        ))}
-      </RadioGroup>
-      {scope !== 'library' && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
-          {scope === 'project' && (
-            <NativeSelect size="sm" value={project?.path} onChange={(e) => onChange({ projectPath: e.target.value })} aria-label="Project">
-              {projects.map((p) => (
-                <NativeSelectOption key={p.id} value={p.path}>
-                  {p.name}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          )}
-          {HARNESS_IDS.map((provider) => (
-            <label key={provider} className="flex cursor-pointer items-center gap-2 type-meta">
-              <Checkbox checked={providers.includes(provider)} onCheckedChange={(v) => onChange({ providers: v === true ? [...providers, provider] : providers.filter((p) => p !== provider) })} />
-              <ProviderMark provider={provider} size={14} />
-              {HARNESSES[provider].name}
-            </label>
-          ))}
-          {!providers.length && <span className="type-caption text-destructive">Pick at least one agent</span>}
-        </div>
-      )}
-    </div>
-  );
 }
