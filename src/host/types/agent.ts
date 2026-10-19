@@ -44,8 +44,10 @@ export type AgentEvent =
   | { threadId: string; type: 'worktree'; path: string }
   /** Main is preparing the new worktree before the agent's first turn; each event carries the whole setup so far. */
   | { threadId: string; type: 'setup'; setup: WorktreeSetup }
-  /** A project folder thread's agent runs on this branch of the project's checkout. */
+  /** The thread's agent runs on this branch: a project folder thread's checkout, or a worktree's temp branch named after its title. */
   | { threadId: string; type: 'branch'; branch: string; isDetached?: boolean }
+  /** Main named a new thread from its first message (`StartWorkspace.titlePrompt`) before its agent started. */
+  | { threadId: string; type: 'title'; title: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }
@@ -148,6 +150,10 @@ export interface StartWorkspace {
   branch: string;
   base?: string;
   isExisting?: boolean;
+  /** The thread's first start: its new branch must not exist yet. A restart after cleanup checks out the one it left. */
+  isNew?: boolean;
+  /** With `isNew`, on a temp branch: main asks for a title while the worktree is set up and renames the branch after it before the agent starts. */
+  titlePrompt?: string;
 }
 
 /**
@@ -298,6 +304,8 @@ export interface AgentHost {
   interrupt(threadId: string): Promise<void>;
   /** After a failed setup step: run the failed step again, or start the agent without the rest of the setup. */
   setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
+  /** You named the thread: a start still naming it (`titlePrompt`) leaves its title and branch as they are. */
+  keepTitle(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
@@ -347,6 +355,7 @@ export const agentMethods = {
   compactInstructions: 'invoke',
   interrupt: 'invoke',
   setupChoice: 'invoke',
+  keepTitle: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
   settle: 'invoke',

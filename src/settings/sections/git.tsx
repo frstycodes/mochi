@@ -19,7 +19,7 @@ export function GitSection() {
         </SettingsGroup>
         <ProjectSetupCommands />
       </DesktopOnly>
-      <SettingsGroup title="Branches and pull requests" footer="Agents' commits follow Conventional Commits, type(scope): subject; the repo's own hooks still run.">
+      <SettingsGroup title="Branches and pull requests">
         <CatalogRow settingKey="branchPrefix" />
         <CatalogRow settingKey="prDrafts" />
       </SettingsGroup>

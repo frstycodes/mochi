@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
 import { gateRefusal, prGate } from '../goals/verdict.ts';
-import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
@@ -12,7 +11,7 @@ import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Subagent, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Thread } from '../model.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
@@ -374,7 +373,9 @@ const THREAD_SPECS = {
       const project = projectRef(caller.repo);
       // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
       const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
-      const workspace = project ? { ...(await newWorktree(env, project, prompt)), ...(base && { base }) } : undefined;
+      // Always its own worktree, whatever the composer's Worktree box says: parallel agents sharing one folder trip over each
+      // other's changes and make worktrees Mochi can't see. Its branch gets a temp name until its title names it.
+      const workspace = project ? { mode: 'worktree' as const, ...(base && { base }) } : undefined;
       const controls = await newThreadControls(env, caller, provider, args);
       const before = state();
       dispatch({
@@ -562,29 +563,16 @@ const USER_SPECS = {
 } satisfies Partial<Specs>;
 
 const AGENT_SPECS = {
-  start_background_agent: {
+  delegate_task: {
     run: ({ state, caller, args, dispatch }) => {
-      if (!caller.live) throw new Error('Background agents run only in a live desktop thread.');
+      if (!caller.live) throw new Error('Delegated tasks run only in a live desktop thread.');
       if (args.worktree === 'new' && !caller.repo) throw new Error('This chat has no project, so there is no repository to make a worktree in. Use worktree: same.');
       const id = `bg${(caller.subagents ?? []).filter((s) => s.origin === 'mochi').length + 1}`;
-      const agent = { id, name: args.name.trim(), prompt: args.prompt.trim(), provider: providerOf(args.provider, caller), hasOwnWorktree: args.worktree === 'new', ...(args.model && { model: args.model }) };
+      const agent = { id, name: args.name.trim(), prompt: args.prompt.trim(), provider: args.provider, hasOwnWorktree: args.worktree === 'new', ...(args.model && { model: args.model }) };
       dispatch({ type: 'bg-start', threadId: caller.id, agent });
       const started = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === id);
-      if (!started) throw new Error('The background agent did not start');
-      return { changed: `started background agent "${agent.name}"`, result: agentOf(started), isFinal: true };
-    },
-  },
-  list_background_agents: {
-    run: ({ caller, args, env }) => ({ result: { agents: (caller.subagents ?? []).filter((s) => !args.status || s.status === args.status).map((s) => agentOf(s, env.now?.() ?? Date.now())) } }),
-  },
-  stop_background_agent: {
-    run: ({ state, caller, args, dispatch }) => {
-      const subagent = caller.subagents?.find((s) => s.id === args.id);
-      if (!subagent) throw new Error(`No agent ${args.id} in this thread; ids come from list_background_agents`);
-      if (subagent.status !== 'running') throw new Error(`"${subagent.name}" already ${subagent.status === 'done' ? 'finished' : subagent.status}`);
-      dispatch({ type: 'bg-stop', threadId: caller.id, subagentId: subagent.id });
-      const after = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === subagent.id);
-      return { changed: `stopped background agent "${subagent.name}"`, result: agentOf(after ?? subagent), isFinal: true };
+      if (!started) throw new Error('The delegated task did not start');
+      return { changed: `delegated "${agent.name}" to ${agent.provider}`, result: { id, name: agent.name, provider: agent.provider, status: started.status }, isFinal: true };
     },
   },
 } satisfies Partial<Specs>;
@@ -645,17 +633,6 @@ async function parentBase(env: ToolEnv, state: State, caller: Thread, githubUser
   return parent.repo.branch;
 }
 
-/**
- * An agent-started thread always gets its own worktree, whatever the composer's Worktree box says: parallel agents sharing
- * one folder trip over each other's changes and make worktrees Mochi can't see. Its branch is named from the prompt.
- */
-async function newWorktree(env: ToolEnv, project: string, prompt: string) {
-  const list = await env.git.branches(project).catch(() => null);
-  const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
-  const branch = uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken);
-  return { mode: 'worktree' as const, branch, autoBranch: branch };
-}
-
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
   const models = await env.models(provider, caller.spaceId);
   const origin = env.getState().threads.find((t) => t.id === caller.id) ?? caller;
@@ -677,10 +654,6 @@ const capitalize = (s: string) => s[0].toUpperCase() + s.slice(1);
 const asObject = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? v : { result: v });
 
 const fail = (text: string): AgentToolResult => ({ text, isError: true });
-
-function agentOf(s: Subagent, now = Date.now()) {
-  return { id: s.id, name: s.name, status: s.status, origin: s.origin, provider: s.provider, tokens: s.tokens, elapsedSeconds: Math.round(((s.endedAt ?? now) - s.startedAt) / 1000), ...(s.result && { result: s.result.slice(0, 4000) }), ...(s.error && { error: s.error }) };
-}
 
 /** `threads`, when given, lists the thread's sub-threads and which criterion each covers. */
 function goalOf(thread: Thread, threads?: Thread[]) {

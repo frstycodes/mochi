@@ -1,6 +1,7 @@
 import { parseDiff } from '../../git/parse.ts';
 import { bareState, refKey, type RefState } from '../../chat/refs.ts';
 import type { GitHost } from '../types/git.ts';
+import { branchFromTitle } from '../../git/workspace.ts';
 
 // Fixture paths match the `adm` thread's demo work, so the Changes pane has something to show.
 const STAGED = [
@@ -173,8 +174,8 @@ export const git: GitHost = {
       branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.mochi/worktrees/latitude/adm' : undefined })),
     };
   },
-  async renameAutoBranch(_cwd, _expected, name) {
-    return name;
+  async renameAutoBranch(_cwd, expected, title) {
+    return branchFromTitle(expected, title, new Set(FIXTURE_BRANCHES.map(([b]) => b)));
   },
   async branchNameError(_root, name) {
     if (!name.trim()) return 'Name the branch';

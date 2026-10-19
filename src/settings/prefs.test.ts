@@ -38,16 +38,16 @@ test('setPrefs persists, notifies, and survives a reload from storage', () => {
   unsubscribe();
 });
 
-test("new threads' branches have no prefix by default, follow the Branch prefix setting, and drop the old mochi/ default", async () => {
-  assert.equal(DEFAULT_PREFS.branchPrefix, '');
-  assert.equal(parsePrefs(JSON.stringify({ branchPrefix: 'mochi/' }), null).branchPrefix, '');
+test("new threads' temp branches start with mochi/ by default, follow the Branch prefix setting, and the old '' default becomes mochi/", async () => {
+  assert.equal(DEFAULT_PREFS.branchPrefix, 'mochi/');
+  assert.equal(parsePrefs(JSON.stringify({ branchPrefix: '' }), null).branchPrefix, 'mochi/');
   const { initialThreads, threadsReducer } = await import('../store/threads.ts');
   const create = { type: 'create', title: 'x', provider: 'claude', project: '/Users/me/dev/app' } as const;
   const branchOf = () => threadsReducer({ ...initialThreads(), spaceId: 'latitude', views: {} } as never, create).threads.at(-1)!.repo!.branch;
   setPrefs({ branchPrefix: DEFAULT_PREFS.branchPrefix });
-  assert.equal(branchOf(), 'feat/x');
+  assert.match(branchOf(), /^mochi\/[0-9a-f]{8}$/);
   setPrefs({ branchPrefix: 'me/' });
-  assert.equal(branchOf(), 'me/feat/x');
+  assert.match(branchOf(), /^me\/[0-9a-f]{8}$/);
 });
 
 test('agent control: the old Reversible default becomes Everything (deletes and settings still ask); unknown values fall back', async () => {

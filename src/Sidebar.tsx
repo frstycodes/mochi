@@ -19,6 +19,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Input } from '@/components/ui/input';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
@@ -43,6 +44,7 @@ import { useReviewEntry } from './review/useReviewMode';
 import { useSnapPager } from './useSnapPager';
 import { haptic } from './haptic';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type State, type View } from './store';
+import { endRename, startRename, titleToSave, useRenameSurface } from './rename';
 import type { FollowedMachine } from './host/types/remote';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { SpaceIcon, TooltipIconButton, UnreadDot } from './ui';
@@ -213,6 +215,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
       isActive={isActive(t)}
       isSelected={selection.ids.includes(t.id)}
       onSelect={(e) => selection.onClick(e, t.id) && go({ kind: 'thread', id: t.id })}
+      onRename={() => startRename(t.id, 'row')}
     />
   );
 
@@ -674,39 +677,92 @@ function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string
  * `isSub`: a sub-thread under its parent, one line unless it asks for you. `machine`: the computer it runs on, for another
  * computer's thread among this one's (Pinned).
  */
-export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSelect }: { thread: Thread; isSub?: boolean; machine?: FollowedMachine; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void }) {
+export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSelect, onRename }: { thread: Thread; isSub?: boolean; machine?: FollowedMachine; isActive: boolean; isSelected?: boolean; onSelect: (e: ReactMouseEvent) => void; onRename?: () => void }) {
   const row = useThreadRow(thread);
   const { isSettled, toggle: settle } = useSettle(thread);
+  const isRenaming = useRenameSurface(thread.id) === 'row';
   const asks = row.tone === 'warning' || row.tone === 'destructive';
+  const body = (
+    <>
+      <span className="flex min-w-0 items-center gap-2">
+        <StatusRing met={row.progress.met} total={row.progress.total} tone={row.tone} isWorking={row.isWorking} slot={thread.line} label={row.status} />
+        {isRenaming ? <RowTitleField thread={thread} /> : <span className={cn('min-w-0 flex-1 truncate', (isActive || row.isUnread) && 'text-foreground')}>{thread.title}</span>}
+        {row.isUnread && !isActive && <UnreadDot className="shrink-0" />}
+        {isSub && <PrStack thread={thread} />}
+        {/* Room for the Settle / Reactivate chip while it shows, so the title truncates before the chip instead of under it. */}
+        {!isRenaming && <span aria-hidden className={cn('shrink-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')} />}
+      </span>
+      {isSub ? (
+        asks && <span className={cn('truncate pl-6 type-caption', row.tone === 'destructive' ? 'text-destructive' : 'text-warning')}>{row.detail}</span>
+      ) : (
+        <RowDetail thread={thread} row={row} machine={machine} />
+      )}
+    </>
+  );
   return (
     <>
+      {/* Renaming, the row is a div: a field inside a button would click and key through to it. */}
       <SidebarMenuButton
+        asChild={isRenaming}
         isActive={isActive}
         data-selected={isSelected || undefined}
         aria-description={isSelected ? 'Selected' : undefined}
-        onClick={onSelect}
-        tooltip={thread.title}
+        onClick={isRenaming ? undefined : onSelect}
+        onDoubleClick={onRename}
+        tooltip={isRenaming ? undefined : thread.title}
         className={cn('h-auto flex-col items-stretch gap-1 py-2 group-has-data-[sidebar=menu-action]/menu-item:pr-2 data-selected:bg-sidebar-accent', isSub && 'gap-0.5 px-1 py-1.5')}
       >
-        <span className="flex min-w-0 items-center gap-2">
-          <StatusRing met={row.progress.met} total={row.progress.total} tone={row.tone} isWorking={row.isWorking} slot={thread.line} label={row.status} />
-          <span className={cn('min-w-0 flex-1 truncate', (isActive || row.isUnread) && 'text-foreground')}>{thread.title}</span>
-          {row.isUnread && !isActive && <UnreadDot className="shrink-0" />}
-          {isSub && <PrStack thread={thread} />}
-          {/* Room for the Settle / Reactivate chip while it shows, so the title truncates before the chip instead of under it. */}
-          <span aria-hidden className={cn('shrink-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')} />
-        </span>
-        {isSub ? (
-          asks && <span className={cn('truncate pl-6 type-caption', row.tone === 'destructive' ? 'text-destructive' : 'text-warning')}>{row.detail}</span>
-        ) : (
-          <RowDetail thread={thread} row={row} machine={machine} />
-        )}
+        {isRenaming ? <div>{body}</div> : body}
       </SidebarMenuButton>
-      <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] px-1.5 type-caption [&>svg]:size-3.5">
+      {!isRenaming && <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] px-1.5 type-caption [&>svg]:size-3.5">
         {isSettled ? <Undo /> : <Archive />}
         {isSettled ? 'Reactivate' : 'Settle'}
-      </SidebarMenuAction>
+      </SidebarMenuAction>}
     </>
+  );
+}
+
+/** The row's title as a field: Enter or leaving it saves, Esc keeps the old title. */
+function RowTitleField({ thread }: { thread: Thread }) {
+  const { dispatch } = useHarness();
+  const [startedFrom] = useState(thread.title);
+  const ref = useRef<HTMLInputElement>(null);
+  // Enter and Esc end it, and the field's unmount then blurs it: once is enough.
+  const isDone = useRef(false);
+  // After the menu that started the rename has closed and handed focus back to the row.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const finish = (text: string | null) => {
+    if (isDone.current) return;
+    isDone.current = true;
+    const title = text === null ? undefined : titleToSave(startedFrom, text);
+    if (title) dispatch({ type: 'rename', threadId: thread.id, title });
+    endRename();
+  };
+  return (
+    <Input
+      ref={ref}
+      defaultValue={thread.title}
+      aria-label="Thread title"
+      maxLength={120}
+      onBlur={(e) => finish(e.currentTarget.value)}
+      // The row drags, reorders on Alt ↑/↓ and clears its selection on Esc: none of that while typing.
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key !== 'Enter' && e.key !== 'Escape') return;
+        const row = e.currentTarget.closest('[data-thread-row]');
+        finish(e.key === 'Enter' ? e.currentTarget.value : null);
+        // The row turns back into a button: keep the keyboard on it.
+        requestAnimationFrame(() => row?.querySelector<HTMLElement>('[data-sidebar=menu-button]')?.focus());
+      }}
+      className="-mx-[5px] h-5 flex-1 rounded-md px-1 py-0 text-foreground"
+    />
   );
 }
 
