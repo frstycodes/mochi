@@ -36,6 +36,7 @@ export const COMMANDS = {
   'layout-overview': { title: 'Show all sessions', group: 'General', scope: 'global', keys: ['mod', 'up'] },
 
   'thread-pin': { title: 'Pin or unpin thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', 'P'] },
+  'thread-rename': { title: 'Rename thread', group: 'Threads', scope: 'global', keys: ['F2'] },
   'pinned-previous': { title: 'Previous pinned thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', '['] },
   'pinned-next': { title: 'Next pinned thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', ']'] },
   ...numbered(PINS, (n) => [`pinned-${n}`, { title: `Pinned thread ${n}`, group: 'Threads', scope: 'global', keys: ['mod', String(n)] }]),
