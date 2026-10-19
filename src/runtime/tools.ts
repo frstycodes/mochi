@@ -23,7 +23,7 @@ import { BROWSER_TOOLS } from './browserTools.ts';
 import { SETTINGS_TOOLS } from './settingsTools.ts';
 import { controlsOf, DEFAULT_CONTROLS } from './controls.ts';
 import { resolveRun } from './models.ts';
-import { APPROVAL_TIMEOUT_MS, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
+import { APPROVAL_TIMEOUT_MS, isGoalTool, isQuiet, tierOf, TOOL_TABLE, type ToolName } from './toolTable.ts';
 import { LEVEL, toolPolicy } from './toolPolicy.ts';
 import { applyUndo, captureUndo } from './undo.ts';
 
@@ -142,6 +142,7 @@ export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentT
   const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);
   try {
     if (isChosen && policy === 'off') throw new Error(`The user turned ${name} off for agents in Settings › Mochi access. Don't call it again unless they turn it back on.`);
+    if (isGoalTool(name) && !env.prefs.get().goals) throw new Error('The user turned goals off in Settings › Goals and checks. Carry on without a goal and don\'t call goal tools again.');
     if (!isChosen) gate(ctx, name, LEVEL[tier]);
     const approval = spec.ask?.(ctx) ?? (policy === 'ask' ? approvalFor(ctx, name) : undefined);
     // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.
@@ -434,14 +435,15 @@ const GOAL_SPECS = {
       const { current, defaultBranch } = await env.git.branches(cwd);
       if (!current) throw new Error(`${cwd} is on a detached HEAD, so there is no branch to push. Commit on this thread's own branch, not in another worktree`);
       if (current === defaultBranch) throw new Error(`${cwd} is on ${defaultBranch}; open_pr would push straight to it. Commit on a branch of its own first`);
+      const isGoalsOn = env.prefs.get().goals;
       // Checks run again here: open_pr usually comes mid-turn, before the idle pass would have run them.
-      for (const c of caller.criteria ?? []) {
+      for (const c of isGoalsOn ? (caller.criteria ?? []) : []) {
         if (!c.command) continue;
         const result = await env.git.runCheck(cwd, c.command).catch((error: Error) => ({ exitCode: null, output: error.message, ms: 0 }));
         dispatch({ type: 'criterion-check', threadId: caller.id, criterionId: c.id, result });
       }
       const checked = target(state(), caller, caller.id);
-      const gate = prGate(checked, env.prefs.get().prGaps);
+      const gate = isGoalsOn ? prGate(checked, env.prefs.get().prGaps) : { blocking: [], noted: [] };
       if (gate.blocking.length) throw new Error(gateRefusal(checked, gate.blocking));
       const githubUser = env.profiles.list().find((p) => p.id === caller.spaceId)?.github || undefined;
       const base = await parentBase(env, state(), caller, githubUser);

@@ -1,11 +1,12 @@
 import { isMet, type Thread } from '../model.ts';
 import { openTurn } from '../chat/turnChanges.ts';
 import type { RefStatus } from '../chat/refs.ts';
+import { getPrefs } from '../settings/prefs.ts';
 
 /** The latest report while it still describes the thread: it has a goal, isn't working, and you haven't written since. */
 export function currentReport(t: Thread) {
   const { report } = t;
-  if (!t.goal || !report || t.live?.isWorking) return null;
+  if (!getPrefs().goals || !t.goal || !report || t.live?.isWorking) return null;
   const lastYou = t.activity.findLast((e) => e.who === 'you' && e.kind === 'message');
   if (lastYou && lastYou.at > report.at) return null;
   const criteria = t.criteria ?? [];
@@ -16,7 +17,7 @@ export function currentReport(t: Thread) {
 /** Whether the end-of-turn card shows: a goal thread gone idle, with a turn Mochi checked or the agent reported, nothing from you since, and its card not answered yet. */
 export function showsVerdictCard(t: Thread) {
   const since = t.idle?.at ?? t.report?.at;
-  if (!t.goal || t.live?.isWorking || t.status === 'settled' || since === undefined || t.idle?.isMoveAnswered) return false;
+  if (!getPrefs().goals || !t.goal || t.live?.isWorking || t.status === 'settled' || since === undefined || t.idle?.isMoveAnswered) return false;
   const lastYou = t.activity.findLast((e) => e.who === 'you' && e.kind === 'message');
   return !lastYou || lastYou.at <= since;
 }

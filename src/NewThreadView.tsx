@@ -167,16 +167,17 @@ function NewThread() {
   };
 
   return (
-    // Three rows, the composer in the middle: the greeting sits on top of it and duplicates open below it without moving it.
-    <div className="mx-auto grid min-h-full max-w-[720px] grid-cols-1 grid-rows-[1fr_auto_1fr] px-4 md:px-6">
-      <header className="flex flex-col items-center justify-end pt-10 pb-6 text-center">
+    // The greeting row has a fixed height, so the card's top stays put whichever step it holds and however tall it grows.
+    <div className="mx-auto grid min-h-full max-w-[720px] grid-cols-1 grid-rows-[auto_auto_1fr] px-4 md:px-6">
+      <header className="flex min-h-[30vh] flex-col items-center justify-end pt-10 pb-6 text-center">
         <h1 className="text-balance type-display">{greeting(new Date())}</h1>
       </header>
 
       {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. A constant layoutDependency keeps its resizes (project step to composer) instant; the handoff still animates. */}
       <motion.div layoutId={layoutId} layoutDependency={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
         {step === 'project' && (
-          <ComposerCard>
+          // Static: the list resizes on every keystroke while filtering.
+          <ComposerCard isStatic>
             {/* Keyed so the highlight starts on the latest project once the list loads. */}
             <ProjectChooser key={project} value={project} projects={projects} placeholder="Start a thread in…" onChoose={chooseFirst} />
           </ComposerCard>
