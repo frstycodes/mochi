@@ -1,7 +1,8 @@
-import { connectorFor, connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
+import { connectorName } from '../../library/connectorTools.ts';
+import { connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
 import { FEATURED_MARKETPLACES, libraryEntries, removeItem, setItemEnabled, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
 import type { LibraryHost } from '../types/library.ts';
-import { fixtureParts, MARKETPLACE_CATALOGS, SKILL_CATALOGS } from './libraryFixtures.ts';
+import { CONNECTOR_TOOLS, fixtureParts, MARKETPLACE_CATALOGS, SKILL_CATALOGS } from './libraryFixtures.ts';
 
 // The web build has no agents to load a library into: it browses fixed catalogs and installs into memory, starting
 // with a few items in the demo's first profile, so every state of the Library page can be seen and tried.
@@ -64,9 +65,10 @@ export const library: LibraryHost = {
     if (!plugin) throw new Error(`${name} isn't in ${marketplace}`);
     return install(spaceId, pluginItem(marketplace, plugin.name));
   },
-  async addConnector(spaceId, { url, alias }) {
+  async addConnector(spaceId, { url, alias, name }) {
     await pause();
-    return install(spaceId, connectorItem(url, alias, true));
+    const sibling = index.items.find((i) => i.kind === 'connector' && i.key === connectorKey(url));
+    return install(spaceId, connectorItem(url, alias, true, name?.trim() || (sibling?.kind === 'connector' ? sibling.title : undefined)));
   },
   onDeviceCode() {
     return () => {};
@@ -96,6 +98,27 @@ export const library: LibraryHost = {
     index = { ...index, items: index.items.map((i) => (i.id !== id ? i : autoUpdate === undefined ? { ...i, updatedAt: Date.now() } : { ...i, autoUpdate })) };
     return libraryEntries(index, spaceId);
   },
+  async renameConnector(spaceId, key, name) {
+    index = { ...index, items: index.items.map((i) => (i.kind === 'connector' && i.key === key ? { ...i, title: name.trim() } : i)) };
+    return libraryEntries(index, spaceId);
+  },
+  async connectorSettings() {
+    return index.connectors ?? {};
+  },
+  async listConnectorTools(key) {
+    await pause();
+    const isLinked = index.items.some((i) => i.kind === 'connector' && i.key === key && i.isLinked);
+    const tools = CONNECTOR_TOOLS[key];
+    const error = !isLinked ? 'No account on it is signed in.' : !tools ? 'The web preview lists tools only for Linear.' : null;
+    const toolList = { tools: tools ?? [], listedAt: Date.now(), error };
+    index = { ...index, connectors: { ...index.connectors, [key]: { ...index.connectors?.[key], toolList } } };
+    return toolList;
+  },
+  async setConnectorSettings(key, settings) {
+    const { toolList } = index.connectors?.[key] ?? {};
+    index = { ...index, connectors: { ...index.connectors, [key]: { ...settings, ...(toolList && { toolList }) } } };
+    return index.connectors ?? {};
+  },
 };
 
 const pause = () => new Promise((resolve) => setTimeout(resolve, 400));
@@ -107,9 +130,9 @@ function pluginItem(marketplace: string, name: string): LibraryItem {
   return { kind: 'plugin', id: `plugin-${name}`, bundle, marketplace, icon: plugin.icon, targets: ['claude', 'codex'], addedAt: Date.now() };
 }
 
-function connectorItem(url: string, alias: string, isLinked: boolean): LibraryItem {
+function connectorItem(url: string, alias: string, isLinked: boolean, title = connectorName(url)): LibraryItem {
   const key = connectorKey(url);
-  return { kind: 'connector', id: `connector-${key}-${alias}`, key, title: connectorFor(url)?.name ?? new URL(url).hostname, url, alias, isLinked, targets: ['claude', 'codex'], addedAt: Date.now() };
+  return { kind: 'connector', id: `connector-${key}-${alias}`, key, title, url, alias, isLinked, targets: ['claude', 'codex'], addedAt: Date.now() };
 }
 
 /** The demo's first profile starts with a little of everything, one account signed out and one plugin updated. */

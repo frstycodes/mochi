@@ -7,14 +7,15 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { connectorFor, connectorKey, GOOGLE_WORKSPACE_URL, isSameServer, OAUTH_PROVIDERS, oauthProviderFor, relayState, type DeviceCode, type OAuthProviderId } from '../../src/library/connectors.ts';
+import { connectorKey, GOOGLE_WORKSPACE_URL, isSameServer, OAUTH_PROVIDERS, oauthProviderFor, relayState, type DeviceCode, type OAuthProviderId } from '../../src/library/connectors.ts';
 import { RELAY_URL } from '../remote/relayClient.ts';
 import { mochiOAuthApp } from './oauthApps.ts';
 import { ensureLocalServer, saveGoogleClient } from './googleWorkspace.ts';
-import { profileConnectors, type LibraryConnector } from '../../src/library/library.ts';
+import { connectorName, toolRules, type ConnectorSettings, type ConnectorToolList, type ToolRules } from '../../src/library/connectorTools.ts';
+import { profileConnectors, type LibraryConnector, type LibraryIndex } from '../../src/library/library.ts';
 import { addLoopbackRoute, loopbackUrl } from '../mcp/server.ts';
 import { identityOf } from './identity.ts';
-import { connectorServer } from './proxy.ts';
+import { allTools, connectorServer } from './proxy.ts';
 import { readLibrary, updateLibrary } from './store.ts';
 
 /**
@@ -66,6 +67,8 @@ type OpenPage = (url: string) => Promise<unknown>;
 export interface NewConnectorAccount {
   url: string;
   alias: string;
+  /** The connector's name; left out, accounts already on it keep theirs, else the directory's or the host. */
+  name?: string;
   apiKey?: string;
   clientId?: string;
   clientSecret?: string;
@@ -76,7 +79,9 @@ export async function addConnectorAccount(spaceId: string, input: NewConnectorAc
   const key = connectorKey(input.url);
   const index = await readLibrary();
   if (index.items.some((item) => item.kind === 'connector' && item.key === key && item.alias === input.alias)) throw new Error(`There is already a ${input.alias} account on ${key}`);
-  const account: LibraryConnector = { kind: 'connector', id: randomUUID(), key, title: connectorFor(input.url)?.name ?? new URL(input.url).hostname, url: input.url, alias: input.alias, isLinked: false, targets: ['claude', 'codex'], addedAt: Date.now() };
+  const sibling = index.items.find((item): item is LibraryConnector => item.kind === 'connector' && item.key === key);
+  const title = input.name?.trim() || sibling?.title || connectorName(input.url);
+  const account: LibraryConnector = { kind: 'connector', id: randomUUID(), key, title, url: input.url, alias: input.alias, isLinked: false, targets: ['claude', 'codex'], addedAt: Date.now() };
   if (input.apiKey) await saveApiKey(account.id, input.apiKey);
   // Google Workspace's accounts register with the local server; a client brought for it is the server's, for every account.
   const isGoogle = isSameServer(input.url, GOOGLE_WORKSPACE_URL);
@@ -101,8 +106,9 @@ export async function signIn(account: LibraryConnector, onDeviceCode: (code: Dev
     throw new Error(`${OAUTH_PROVIDERS[oauthProvider].name} doesn’t let apps register themselves, and this build of Mochi has no ${OAUTH_PROVIDERS[oauthProvider].name} app yet. Connect it with an API key or your own OAuth app.`);
   if (usesMochiApp && OAUTH_PROVIDERS[oauthProvider].flow === 'device') {
     await deviceSignIn(account, mochiOAuthApp(oauthProvider)!.client_id, onDeviceCode, open);
-    await (await connect(account, new AccountAuth(account, await loopbackUrl(CALLBACK)))).close();
-    return setLinked(account.id, true);
+    const info = await probe(account, new AccountAuth(account, await loopbackUrl(CALLBACK)));
+    await setLinked(account.id, true);
+    return info;
   }
   const { redirectUrl, port } = await redirectFor(oauthProvider);
   if (secrets.clientInformation && !secrets.isOwnClient && secrets.registeredFor !== redirectUrl) await saveSecrets(account.id, { clientInformation: undefined });
@@ -111,13 +117,38 @@ export async function signIn(account: LibraryConnector, onDeviceCode: (code: Dev
   // signs in up front whenever its server publishes OAuth metadata.
   const metadata = !secrets.apiKey && !secrets.tokens ? await discoverOAuthProtectedResourceMetadata(account.url).catch(() => undefined) : undefined;
   if (metadata?.authorization_servers?.length && (await auth(provider, { serverUrl: account.url })) === 'REDIRECT') await finish(provider, account, open);
+  let info: ServerInfo;
   try {
-    await (await connect(account, provider)).close();
+    info = await probe(account, provider);
   } catch (error) {
     if (!(error instanceof UnauthorizedError) || !provider.authorizationUrl) throw error;
     await finish(provider, account, open);
+    info = await probe(account, provider);
   }
   await setLinked(account.id, true);
+  return info;
+}
+
+type ServerInfo = { name?: string; title?: string } | undefined;
+
+/** Connects once to check the sign-in, and returns what the server calls itself. */
+async function probe(account: LibraryConnector, provider: AccountAuth): Promise<ServerInfo> {
+  const client = await connect(account, provider);
+  const info = client.getServerVersion();
+  await client.close();
+  return info;
+}
+
+/** A connector added without a name, and not in the directory, takes the name its server gives itself. */
+export async function nameFromServer(account: LibraryConnector, info: ServerInfo) {
+  if (account.title !== connectorName(account.url)) return;
+  const name = connectorName(account.url, undefined, info);
+  if (name !== account.title) await renameConnector(account.key, name);
+}
+
+/** Every account on the connector takes the name; the key (and so every permission rule) stays. */
+export function renameConnector(key: string, name: string) {
+  return updateLibrary((index) => ({ ...index, items: index.items.map((item) => (item.kind === 'connector' && item.key === key ? { ...item, title: name } : item)) }));
 }
 
 /**
@@ -202,6 +233,37 @@ export function saveApiKey(id: string, apiKey: string) {
 
 export function saveOwnClient(id: string, clientId: string, clientSecret?: string) {
   return saveSecrets(id, { clientInformation: { client_id: clientId, ...(clientSecret && { client_secret: clientSecret }) }, isOwnClient: true });
+}
+
+/** The tool permissions per connector the profile reaches, by server name. */
+export async function sessionToolRules(spaceId: string): Promise<Record<string, ToolRules>> {
+  const index = await readLibrary();
+  return Object.fromEntries([...profileConnectors(index, spaceId).keys()].map((key) => [key, toolRules(index.connectors?.[key])]));
+}
+
+/** Lists the connector's tools through its first signed-in account, and keeps the listing (or its error) in the index. */
+export async function listConnectorTools(key: string): Promise<ConnectorToolList> {
+  const account = (await readLibrary()).items.find((item): item is LibraryConnector => item.kind === 'connector' && item.key === key && item.isLinked);
+  const toolList = account ? await listTools(account) : { tools: [], listedAt: Date.now(), error: 'No account on it is signed in.' };
+  await updateLibrary((index) => withSettings(index, key, (settings) => ({ ...settings, toolList })));
+  return toolList;
+}
+
+async function listTools(account: LibraryConnector): Promise<ConnectorToolList> {
+  try {
+    const tools = await allTools(await clientFor(account));
+    return {
+      tools: tools.map(({ name, title, description, annotations }) => ({ name, title: title ?? annotations?.title ?? null, description: description ?? '', isReadOnly: annotations?.readOnlyHint === true, isDestructive: annotations?.readOnlyHint !== true && annotations?.destructiveHint !== false })),
+      listedAt: Date.now(),
+      error: null,
+    };
+  } catch (error) {
+    return { tools: [], listedAt: Date.now(), error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export function withSettings(index: LibraryIndex, key: string, change: (settings: ConnectorSettings) => ConnectorSettings): LibraryIndex {
+  return { ...index, connectors: { ...index.connectors, [key]: change(index.connectors?.[key] ?? {}) } };
 }
 
 /** The proxy URL per connector the profile has a signed-in account on, as `[server name, url]`. */

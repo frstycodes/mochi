@@ -140,6 +140,7 @@ export const Plus = solar(Linear.AddIcon, Bold.AddIcon);
 export const PlusBold = solar(Linear.AddCircleIcon, Bold.AddCircleIcon);
 export const Power = solar(Linear.PowerIcon, Bold.PowerIcon);
 export const Pushpin = solar(Linear.PinIcon, Bold.PinIcon);
+export const RaisedHand = solar(Linear.UserHandUpIcon, Bold.UserHandUpIcon);
 export const Record = solar(Linear.ZipFileIcon, Bold.ZipFileIcon);
 export const RecordCircle = solar(Linear.RecordCircleIcon, Bold.RecordCircleIcon);
 export const Redo = solar(Linear.UndoRightIcon, Bold.UndoRightIcon);

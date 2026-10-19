@@ -1,3 +1,4 @@
+import type { ConnectorSettings, ConnectorToolList } from '../../library/connectorTools.ts';
 import type { AppProviderId, DeviceCode } from '../../library/connectors.ts';
 import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog } from '../../library/library.ts';
 import type { SetupResult, SetupTarget } from '../../library/recipes.ts';
@@ -29,7 +30,7 @@ export interface LibraryHost {
    * `slackTokenFrom` is a Slack app configuration token there, from which main creates the app and takes its credentials;
    * `fromSetup` uses what the last `runSetup` for the connector captured instead.
    */
-  addConnector(spaceId: string, account: { url: string; alias: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: PageRef; slackTokenFrom?: PageRef; fromSetup?: boolean }): Promise<LibraryEntry[]>;
+  addConnector(spaceId: string, account: { url: string; alias: string; name?: string; apiKey?: string; clientId?: string; clientSecret?: string }, options?: { inPane?: boolean; secretFrom?: PageRef; slackTokenFrom?: PageRef; fromSetup?: boolean }): Promise<LibraryEntry[]>;
   /** Runs a connector's setup recipe on a browser tab (LIBRARY.md); secrets it captures stay in main for `fromSetup`. */
   runSetup(connector: string, viewId: string, options?: { params?: Record<string, string>; fromStep?: string }): Promise<SetupResult>;
   /** Saves the user's own target for one step of a connector's recipe. */
@@ -46,6 +47,13 @@ export interface LibraryHost {
   signIn(spaceId: string, id: string): Promise<LibraryEntry[]>;
   /** Updates a skill or plugin from its source now; `autoUpdate` set leaves it to follow its source (or pins it). */
   update(spaceId: string, id: string, autoUpdate?: boolean): Promise<LibraryEntry[]>;
+  /** Names a connector (every account on it); its key, and so its permission rules, stay. */
+  renameConnector(spaceId: string, key: string, name: string): Promise<LibraryEntry[]>;
+  /** Every connector's on/off, tool permissions and last tool listing, by key. */
+  connectorSettings(): Promise<Record<string, ConnectorSettings>>;
+  /** Lists the connector's tools from its first signed-in account and keeps the result (an error included). */
+  listConnectorTools(key: string): Promise<ConnectorToolList>;
+  setConnectorSettings(key: string, settings: Omit<ConnectorSettings, 'toolList'>): Promise<Record<string, ConnectorSettings>>;
 }
 
 /** An element on a browser tab's page, by its ref from the latest snapshot. */
@@ -75,4 +83,8 @@ export const libraryMethods = {
   onDeviceCode: 'event',
   signIn: 'invoke',
   update: 'invoke',
+  renameConnector: 'invoke',
+  connectorSettings: 'invoke',
+  listConnectorTools: 'invoke',
+  setConnectorSettings: 'invoke',
 } satisfies Manifest<LibraryHost>;

@@ -9,7 +9,8 @@ import { addMarketplace, importFromAccount, installPlugin, installSkill, marketp
 import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
 import { overrideStep, playwrightOps, recipeFor } from '../library/recipeRunner.ts';
 import { runRecipe } from '../library/runRecipe.ts';
-import { addConnectorAccount, forgetAccount, readSecrets, recordIdentity, saveSecrets, signIn } from '../library/connectors.ts';
+import { addConnectorAccount, forgetAccount, listConnectorTools, nameFromServer, readSecrets, recordIdentity, renameConnector, saveSecrets, signIn, withSettings } from '../library/connectors.ts';
+import { TOOL_PERMISSIONS, type ConnectorSettings, type ToolPermission } from '../../src/library/connectorTools.ts';
 import { sameAccount } from '../library/identity.ts';
 import { hasGoogleClient } from '../library/googleWorkspace.ts';
 import { createSlackApp } from '../library/slackApp.ts';
@@ -83,7 +84,8 @@ export const library = {
     if (fromSetup) Object.assign(fields, await clientFromSetup(fields.url, takeCapture(sender, fields.url)));
     const account = await addConnectorAccount(space, fields);
     const open = inPane ? async (authorizationUrl: string) => void (!sender.isDestroyed() && sender.send('library:onAuthorize', { url: account.url, authorizationUrl })) : undefined;
-    await signIn(account, deviceCodeTo(sender), open);
+    const info = await signIn(account, deviceCodeTo(sender), open);
+    if (!fields.name) await nameFromServer(account, info);
     await keepOneAccount(space, await recordIdentity(account));
     return libraryEntries(await readLibrary(), space);
   },
@@ -120,7 +122,37 @@ export const library = {
     else throw new TypeError('autoUpdate must be a boolean');
     return libraryEntries(await readLibrary(), space);
   },
+  async renameConnector(_sender, spaceId, key, name) {
+    const space = spaceIdOf(spaceId);
+    const title = string(name, 'name', 64).trim();
+    if (!title) throw new TypeError('Give the connector a name');
+    await renameConnector(string(key, 'key', 128), title);
+    return libraryEntries(await readLibrary(), space);
+  },
+  async connectorSettings() {
+    return (await readLibrary()).connectors ?? {};
+  },
+  async listConnectorTools(_sender, key) {
+    return listConnectorTools(string(key, 'key', 128));
+  },
+  async setConnectorSettings(_sender, key, settings) {
+    const chosen = connectorSettingsInput(settings);
+    const index = await updateLibrary((current) => withSettings(current, string(key, 'key', 128), ({ toolList }) => ({ ...chosen, ...(toolList && { toolList }) })));
+    return index.connectors ?? {};
+  },
 } satisfies Handlers<LibraryHost>;
+
+function connectorSettingsInput(value: unknown): Omit<ConnectorSettings, 'toolList'> {
+  const input = record(value, 'settings');
+  if (input.isOff !== undefined && typeof input.isOff !== 'boolean') throw new TypeError('isOff must be a boolean');
+  const tools = Object.entries(input.tools === undefined ? {} : record(input.tools, 'tools'));
+  if (tools.length > 1000) throw new TypeError('tools holds at most 1000 choices');
+  for (const [name, permission] of tools) {
+    string(name, 'tool name', 128);
+    if (!TOOL_PERMISSIONS.includes(permission as ToolPermission)) throw new TypeError(`${name} must be one of ${TOOL_PERMISSIONS.join(', ')}`);
+  }
+  return { ...(input.isOff === true && { isOff: true }), tools: Object.fromEntries(tools) as Record<string, ToolPermission> };
+}
 
 /** A device sign-in's code goes to the window that started it, for the dialog to show. */
 const deviceCodeTo = (sender: WebContents) => (code: DeviceCode) => !sender.isDestroyed() && sender.send('library:onDeviceCode', code);
@@ -223,7 +255,7 @@ function connectorInput(value: unknown) {
   const alias = string(input.alias, 'alias', 32);
   if (!ALIAS.test(alias)) throw new TypeError('Name the account with lowercase letters, digits and dashes, like work or personal');
   const optional = (key: string) => (input[key] === undefined || input[key] === '' ? undefined : string(input[key], key, 4096));
-  return { url, alias, apiKey: optional('apiKey'), clientId: optional('clientId'), clientSecret: optional('clientSecret') };
+  return { url, alias, name: optional('name')?.slice(0, 64), apiKey: optional('apiKey'), clientId: optional('clientId'), clientSecret: optional('clientSecret') };
 }
 
 function spaceIdOf(value: unknown) {
