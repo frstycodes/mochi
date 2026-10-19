@@ -2,7 +2,7 @@ import { app } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
 import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, normalize, relative, resolve } from 'node:path';
 import { EMPTY_LIBRARY, FEATURED_MARKETPLACES, itemName, parseLibrary, profileLayout, skillPlacementDir, STANDALONE_PLUGIN, type LibraryIndex, type LibraryItem, type LibrarySkill, type Marketplace, type SkillDestination, type SkillPlacement } from '../../src/library/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { skillMeta, stripSecrets, type McpServerDef } from '../../src/settings/agentConfig.ts';
@@ -101,7 +101,7 @@ async function placementsFor(spaceId: string, name: string, destination: Exclude
   if (!destination.providers.length) throw new Error('Pick Claude Code, Codex or both');
   const { configDir } = await accountFor(spaceId, 'claude');
   const where = { home: homedir(), claudeDir: configDir ?? join(homedir(), '.claude'), project: destination.scope === 'project' ? destination.project : undefined };
-  return destination.providers.map((provider) => ({ provider, scope: destination.scope, dir: skillPlacementDir(provider, destination.scope, name, where) }));
+  return destination.providers.map((provider) => ({ provider, scope: destination.scope, dir: normalize(skillPlacementDir(provider, destination.scope, name, where)) }));
 }
 
 /** Rewrites a skill's folders on disk with what the library now holds (after an update). */
