@@ -301,15 +301,18 @@ function SideInput({ label, value, onChange }: { label: string; value: number; o
   );
 }
 
-/** Agent driving indicator with take-over / give-back. */
-export function DriveBar({ thread, pageId, hasTakenOver }: { thread: Thread; pageId: string; hasTakenOver: boolean }) {
+/** Agent driving indicator with take-over / give-back; a handoff names what the agent needs, and giving back is Done. */
+export function DriveBar({ thread, pageId, hasTakenOver, handoff }: { thread: Thread; pageId: string; hasTakenOver: boolean; handoff: string | null }) {
   const agent = agentName(thread);
+  const text = handoff ? `${agent} needs you to: ${handoff}` : hasTakenOver ? `You have the browser. ${agent} waits until you give it back.` : `${agent} is driving this browser`;
   return (
     <div role="status" className="mx-2 mb-1.5 flex h-8 shrink-0 items-center gap-2 rounded-lg bg-muted/60 pr-1 pl-2.5 type-meta text-muted-foreground">
       <ProviderMark provider={thread.providers[0]} size={14} />
-      <span className="min-w-0 flex-1 truncate">{hasTakenOver ? `You have the browser. ${agent} waits until you give it back.` : `${agent} is driving this browser`}</span>
+      <span className={cn('min-w-0 flex-1 truncate', !!handoff && 'text-foreground')} title={text}>
+        {text}
+      </span>
       <Button size="xs" variant={hasTakenOver ? 'default' : 'outline'} onClick={() => updatePage(pageId, { hasTakenOver: !hasTakenOver })}>
-        {hasTakenOver ? `Give back to ${agent}` : 'Take over'}
+        {handoff ? 'Done' : hasTakenOver ? `Give back to ${agent}` : 'Take over'}
       </Button>
     </div>
   );

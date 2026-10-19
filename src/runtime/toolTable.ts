@@ -250,6 +250,22 @@ export const TOOL_TABLE = {
     description: 'Emulate a device size: responsive (fills the pane), iphone-se, iphone-16, iphone-16-pro-max, pixel-9, ipad-mini, ipad-pro, laptop.',
     shape: { tabId, device: z.string(), rotated: z.boolean().optional() },
   },
+  browser_handoff: {
+    tier: 'read',
+    description:
+      "Hand the tab to the user for something only they can do (sign in, a 2-step code, a captcha, a choice only they can make) and wait until they're done, then go on with your plan in the same turn. Mochi brings the tab to the front and shows them a card with Done. With doneWhen, it also returns on its own once that holds on a page that finished loading; pick something that only becomes true after they finish, like the URL you land on after signing in, not the 2-step page. Other browser tools on this tab fail until it returns. Returns done: 'detected' or 'you', and the page; snapshot again before acting.",
+    shape: {
+      tabId,
+      task: z.string().min(1).max(120).describe('What they should do, as the card\'s title, like "Sign in to GitHub"'),
+      doneWhen: z
+        .object({
+          url: z.string().optional().describe('Done once the URL contains this'),
+          text: z.string().optional().describe('Done once the page shows this text'),
+          selector: z.string().optional().describe('Done once an element matches this CSS selector'),
+        })
+        .optional(),
+    },
+  },
   browser_batch: {
     tier: 'read',
     description:

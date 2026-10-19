@@ -76,6 +76,8 @@ export interface ToolContext<A = Record<string, unknown>> {
   confirm: (approval: Approval) => Promise<string[]>;
   /** Asks the user to pick one of `options` on a widget, at any agent setting: a question, not a permission. */
   choose: (question: { title: string; detail?: string; options: string[] }) => Promise<string>;
+  /** Waits on a widget for something only the user can do, at any agent setting; throws when they cancel it. */
+  waitOn: (approval: Approval) => Promise<string[]>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
   /** When waiting on the user must end; a batch's steps share their batch's, so it never outlasts the harness's timeout. */
@@ -97,6 +99,12 @@ export interface Approval {
   isDestructive?: boolean;
   /** The record line when the user says no, like "Kept \"Fix e2e\"". */
   denied?: string;
+  /** The record line when the user says yes, in place of "Approved: <title>". */
+  approved?: string;
+  /** A handoff: the widget reads as the user's turn, with Done. */
+  isHandoff?: boolean;
+  /** Settles the widget as approved, with its answer as the one option, without the user; aborted once they answer. */
+  until?: (signal: AbortSignal) => Promise<string>;
   edits?: FileEdit[];
   notes?: string[];
 }
@@ -174,7 +182,7 @@ const RUN = Date.now().toString(36);
 export const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
 
 function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName, deadline: number): ToolContext<A> {
-  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), cards: [], deadline };
+  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), waitOn: (approval) => ask(ctx, approval), cards: [], deadline };
   return ctx;
 }
 
@@ -208,16 +216,19 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = cardId('tool', ctx.caller.id);
-  const { options, pick, isDestructive, edits, notes } = approval;
-  const tool = { callId: id, options, pick, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
+  const { options, pick, isDestructive, isHandoff, edits, notes } = approval;
+  const tool = { callId: id, options, pick, isDestructive, isHandoff, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
+  const watch = new AbortController();
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
     const timer = setTimeout(() => resolve(null), Math.max(0, ctx.deadline - Date.now()));
     waiting.set(id, (d) => (clearTimeout(timer), resolve(d)));
+    approval.until?.(watch.signal).then((answer) => decideTool(id, { isApproved: true, options: [answer] }), () => undefined);
   });
+  watch.abort();
   waiting.delete(id);
   const picked = pick && options?.find((o) => o.id === decision?.options?.[0])?.label;
-  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : `Approved: ${approval.title}`) : (approval.denied ?? `Denied: ${approval.title}`);
+  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : (approval.approved ?? `Approved: ${approval.title}`)) : (approval.denied ?? `Denied: ${approval.title}`);
   ctx.dispatch({ type: 'card-record', queueId: id, text });
   if (!decision) throw new Error('Nobody answered in time; nothing was done.');
   if (!decision.isApproved) throw new Error(`The user denied it: ${approval.title} Nothing was done.`);

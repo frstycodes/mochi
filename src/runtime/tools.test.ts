@@ -813,6 +813,48 @@ test('browser_batch steps ask where they would alone; a denial stops the batch',
   assert.deepEqual(t.acts, [], 'neither the click nor Enter ran');
 });
 
+test('browser_handoff gives you the tab with a card, keeps the agent off it, and returns when you click Done', async () => {
+  const t = setup();
+  const pending = t.call('browser_handoff', { task: 'Sign in to GitHub' });
+  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual([t.card().title, t.card().detail, t.card().tool!.isHandoff], ['Sign in to GitHub', 'Claude carries on when you click Done.', true]);
+  assert.deepEqual([t.pages.get('rl/tab-1')!.hasTakenOver, t.pages.get('rl/tab-1')!.handoff], [true, 'Sign in to GitHub']);
+  assert.match(await t.err('browser_snapshot'), /The user has this tab for "Sign in to GitHub"/);
+  decideTool(t.card().tool!.callId, { isApproved: true });
+  const r = JSON.parse((await pending).text);
+  assert.deepEqual([r.done, r.url], ['you', 'http://localhost:5173/']);
+  assert.equal(lastLog(t.thread('rl')), 'Finished: Sign in to GitHub');
+  assert.deepEqual([t.pages.get('rl/tab-1')!.hasTakenOver, t.pages.get('rl/tab-1')!.handoff], [false, null]);
+  await t.ok('browser_snapshot');
+});
+
+test('browser_handoff returns by itself once doneWhen holds, and refuses one that already does', async () => {
+  const t = setup();
+  assert.match(await t.err('browser_handoff', { task: 'Sign in', doneWhen: { text: 'Hello' } }), /already holds/);
+  let isSignedIn = false;
+  t.env.browser.waitFor = async () => ({ isMet: isSignedIn, waitedMs: 1 });
+  const pending = t.call('browser_handoff', { task: 'Sign in', doneWhen: { url: '/dashboard' } });
+  await new Promise((r) => setTimeout(r, 600));
+  assert.equal(t.state().queue.some((q) => q.tool?.isHandoff), true, 'still waiting');
+  isSignedIn = true;
+  assert.equal(JSON.parse((await pending).text).done, 'detected');
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'the card closed itself');
+});
+
+test('browser_handoff returns when you give the tab back in the pane; Cancel tells the agent', async () => {
+  const t = setup();
+  const given = t.call('browser_handoff', { task: 'Enter the code' });
+  await new Promise((r) => setTimeout(r, 0));
+  t.env.pages.update('rl/tab-1', { hasTakenOver: false });
+  assert.equal(JSON.parse((await given).text).done, 'you');
+  const cancelled = t.call('browser_handoff', { task: 'Enter the code' });
+  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  assert.equal((await cancelled).isError, true);
+  assert.equal(lastLog(t.thread('rl')), 'Stopped waiting: Enter the code');
+  assert.equal(t.pages.get('rl/tab-1')!.handoff, null);
+});
+
 test('browser_batch refuses nesting and non-browser tools before running them', async () => {
   const t = setup();
   for (const name of ['browser_batch', 'settle_thread']) assert.match(JSON.parse(await t.err('browser_batch', { actions: [{ name, input: {} }] })).failed.error, /browser_\* tools other than browser_batch/);

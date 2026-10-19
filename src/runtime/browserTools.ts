@@ -2,7 +2,7 @@ import type { Page } from '../browser/pages.ts';
 import { DEVICES, RESPONSIVE } from '../browser/devices.ts';
 import { dialogNote } from '../browser/dialog.ts';
 import { displayUrl, normalizeUrl } from '../browser/url.ts';
-import type { BrowserAct, BrowserSnapshot } from '../host/types/browser.ts';
+import type { BrowserAct, BrowserSnapshot, BrowserWait } from '../host/types/browser.ts';
 import { authorName, type EventGlyph, type PaneTab } from '../model.ts';
 import type { ToolContext, ToolSpec } from './tools.ts';
 import type { ToolName } from './toolTable.ts';
@@ -175,6 +175,29 @@ export const BROWSER_TOOLS = {
       return { changed: `set the browser to ${device?.label ?? 'responsive'}${ctx.args.rotated ? ', rotated' : ''}`, isFinal: true, result: { tabId: tab.id, device: device ?? RESPONSIVE } };
     },
   },
+  browser_handoff: {
+    run: async (ctx) => {
+      const { key, tab, page } = await live(ctx, tabFor(ctx));
+      const { task, doneWhen } = ctx.args;
+      if (doneWhen && (await holds(ctx, page.hostId!, doneWhen))) throw new Error('doneWhen already holds on this page; pick something that only becomes true once they finish, or leave it out');
+      ctx.dispatch({ type: 'pane-select-tab', threadId: ctx.caller.id, tabId: tab.id });
+      ctx.env.pages.update(key, { hasTakenOver: true, handoff: task });
+      try {
+        const [done = 'you'] = await ctx.waitOn({
+          title: task,
+          detail: `${name(ctx)} carries on ${doneWhen ? "once the page shows you're done, or " : ''}when you click Done.`,
+          isHandoff: true,
+          approved: `Finished: ${task}`,
+          denied: `Stopped waiting: ${task}`,
+          until: (signal) => handedBack(ctx, key, doneWhen, signal),
+        });
+        if (!ctx.env.pages.get(key)) throw new Error('The tab was closed while the user had it');
+        return { result: { ...pageResult(tab, await loaded(ctx, key)), done } };
+      } finally {
+        if (ctx.env.pages.get(key)) ctx.env.pages.update(key, { hasTakenOver: false, handoff: null });
+      }
+    },
+  },
 } satisfies { [K in BrowserToolName]: ToolSpec<K> };
 
 /** Local means this machine or a dev domain: the agent browses those freely; anything else is logged, and forms there ask. */
@@ -260,8 +283,36 @@ function tabFor(ctx: Ctx) {
 async function live(ctx: Ctx, tab: PaneTab) {
   const found = await shown(ctx, tab);
   if (found.page.dialog) throw new Error(dialogNote(found.page.dialog));
+  // What they type there (a password, a code) is theirs: nothing reads or acts on the tab until they're done.
+  if (found.page.handoff) throw new Error(`The user has this tab for "${found.page.handoff}"; browser_handoff returns once they're done`);
   return found;
 }
+
+const HANDOFF_POLL_MS = 500;
+
+/**
+ * 'you' once they give the tab back in the pane; 'detected' once `doneWhen` holds on a loaded page two polls running, so
+ * a redirect passing through doesn't count. Rejects once the card is answered.
+ */
+async function handedBack(ctx: Ctx, key: string, doneWhen: Omit<BrowserWait, 'timeoutMs'> | undefined, signal: AbortSignal) {
+  let wasMet = false;
+  while (!signal.aborted) {
+    await new Promise((r) => setTimeout(r, HANDOFF_POLL_MS));
+    const page = ctx.env.pages.get(key);
+    if (!page?.hasTakenOver) return 'you';
+    const isMet = !!doneWhen && !page.isLoading && (await holds(ctx, page.hostId!, doneWhen));
+    if (isMet && wasMet) return 'detected';
+    wasMet = isMet;
+  }
+  throw new Error('The card was answered');
+}
+
+/** Whether `until` holds right now; a page mid-navigation, or a bad selector, reads as not yet. */
+const holds = (ctx: Ctx, hostId: string, until: Omit<BrowserWait, 'timeoutMs'>) =>
+  ctx.env.browser.waitFor(hostId, { ...until, timeoutMs: 1 }).then(
+    (r) => r.isMet,
+    () => false,
+  );
 
 /** Marks the tab as driven, so it floats unless it's already in front, and waits for its native view. Off screen, the view is opened hidden: CDP drives and captures it without a window. */
 async function shown(ctx: Ctx, tab: PaneTab) {

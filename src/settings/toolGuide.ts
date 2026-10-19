@@ -55,6 +55,7 @@ export const TOOL_GUIDE = {
   browser_forward: { group: 'Using the browser', label: 'Go forward', description: 'Go forward a page in a tab.' },
   browser_reload: { group: 'Using the browser', label: 'Reload', description: 'Reload a tab.' },
   browser_dialog: { group: 'Using the browser', label: 'Answer page dialogs', description: 'Press OK or Cancel on an alert or confirm the page shows.' },
+  browser_handoff: { group: 'Using the browser', label: 'Hand you the browser', description: 'Bring a tab to you for something only you can do, like signing in, then carry on once you’re done.' },
   browser_batch: { group: 'Using the browser', label: 'Run several steps at once', description: 'Run a few browser steps in one go. Each step still asks you wherever it would on its own.' },
   browser_set_device: { group: 'Using the browser', label: 'Change device size', description: 'Show the page at a phone, tablet or laptop size.' },
 
