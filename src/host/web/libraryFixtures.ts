@@ -1,6 +1,6 @@
 import type { ConnectorTool } from '../../library/connectorTools.ts';
 import { CONNECTORS } from '../../library/connectors.ts';
-import type { CatalogPlugin, CatalogSkill, MarketplaceCatalog } from '../../library/library.ts';
+import type { CatalogPlugin, CatalogSkill, MarketplaceCatalog, PluginReview } from '../../library/library.ts';
 
 // The web build's stand-in catalogs: names and owners from the real repositories (anthropics/skills, openai/skills,
 // anthropics/claude-plugins-official), icons from each owner's GitHub avatar, the way the desktop app shows them.
@@ -90,6 +90,27 @@ export function fixtureParts(name: string, category: string | null) {
     remotes: isProduct ? [{ name, url: CONNECTORS.find((c) => c.id === name)?.serverUrl ?? `https://mcp.${name}.com/mcp` }] : [],
   };
 }
+
+/** What the web build's upload review shows for any plugin file: one of each part, with a hook and a server that run commands. */
+export const UPLOAD_REVIEW: Omit<PluginReview, 'file' | 'existing'> = {
+  sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  name: 'review-kit',
+  title: 'Review Kit',
+  version: '1.2.0',
+  author: 'Sam Rivera',
+  description: 'Code review helpers: triage issues, ship a branch, and a security reviewer that reads every diff.',
+  skills: [
+    { name: 'triage', description: 'Sort new issues by area and severity, and label them.' },
+    { name: 'ship', description: 'Commit, push and open a pull request in one step.' },
+  ],
+  agents: [{ name: 'security', description: 'Finds vulnerabilities in the change before it merges.' }],
+  hooks: [{ event: 'PostToolUse', matcher: 'Edit|Write', condition: null, type: 'command', run: '"${CLAUDE_PLUGIN_ROOT}"/scripts/format.sh --fix' }],
+  servers: [{ name: 'db', run: 'npx -y @modelcontextprotocol/server-postgres postgresql://localhost/app', env: ['PGPASSWORD'] }],
+  remotes: [{ name: 'linear', url: 'https://mcp.linear.app/mcp' }],
+  unsupported: ['Language servers'],
+  skipped: ['assets/logo.png'],
+  loads: { claude: '2 skills, 1 agent, 1 hook, 1 server', codex: '1 server' },
+};
 
 const tool = (name: string, description: string, hint: 'read' | 'write' | 'destructive' | 'none' = 'read'): ConnectorTool => ({ name, title: null, description, isReadOnly: hint === 'read', isDestructive: hint === 'destructive' || hint === 'none' });
 

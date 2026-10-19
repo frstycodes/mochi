@@ -2,7 +2,7 @@ import { connectorName } from '../../library/connectorTools.ts';
 import { connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
 import { FEATURED_MARKETPLACES, libraryEntries, removeItem, setItemEnabled, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
 import type { LibraryHost } from '../types/library.ts';
-import { CONNECTOR_TOOLS, fixtureParts, MARKETPLACE_CATALOGS, SKILL_CATALOGS } from './libraryFixtures.ts';
+import { CONNECTOR_TOOLS, fixtureParts, MARKETPLACE_CATALOGS, SKILL_CATALOGS, UPLOAD_REVIEW } from './libraryFixtures.ts';
 
 // The web build has no agents to load a library into: it browses fixed catalogs and installs into memory, starting
 // with a few items in the demo's first profile, so every state of the Library page can be seen and tried.
@@ -64,6 +64,24 @@ export const library: LibraryHost = {
     const plugin = MARKETPLACE_CATALOGS[marketplace]?.plugins.find((p) => p.name === name);
     if (!plugin) throw new Error(`${name} isn't in ${marketplace}`);
     return install(spaceId, pluginItem(marketplace, plugin.name));
+  },
+  // A file named like an archive gets the fixture review; "no-manifest" in its name shows that error.
+  async reviewUpload({ name }) {
+    await pause();
+    if (!/\.(plugin|zip|tar\.gz|tgz|tar)$/i.test(name)) throw new Error('Not a plugin archive: upload a .plugin, .zip, .tar.gz or .tgz file');
+    if (name.includes('no-manifest')) throw new Error('No plugin manifest: a plugin has .claude-plugin/plugin.json (Claude Code) or plugin.json (Codex) at its root');
+    const existing = index.items.find((i) => i.kind === 'plugin' && i.bundle.name === UPLOAD_REVIEW.name);
+    return { ...UPLOAD_REVIEW, file: name, existing: existing ? { id: existing.id, title: UPLOAD_REVIEW.title, isUpload: true } : null };
+  },
+  async installUpload(spaceId, { name }, { sha256, targets, profileIds }) {
+    await pause();
+    const { title, description, version } = UPLOAD_REVIEW;
+    const { skills, subagents, remotes } = fixtureParts(UPLOAD_REVIEW.name, 'development');
+    const bundle = { name: UPLOAD_REVIEW.name, title, description, version, skills, subagents, hooks: [], servers: [], remotes, files: {}, unsupported: [] };
+    const item: LibraryItem = { kind: 'plugin', id: `plugin-${UPLOAD_REVIEW.name}`, bundle, marketplace: null, upload: { file: name, sha256 }, icon: null, targets, addedAt: Date.now() };
+    index = { ...index, items: [...index.items.filter((i) => i.id !== item.id), item] };
+    for (const profileId of profileIds) index = setItemEnabled(index, profileId, item.id, true);
+    return libraryEntries(index, spaceId);
   },
   async addConnector(spaceId, { url, alias, name }) {
     await pause();

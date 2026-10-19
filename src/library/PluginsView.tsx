@@ -1,5 +1,5 @@
-import { useState, useSyncExternalStore } from 'react';
-import { Plus, Trash } from '@/icons';
+import { useRef, useState, useSyncExternalStore } from 'react';
+import { ChevronDown, Globe, Plus, Trash, Upload } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -13,20 +13,23 @@ import { OverflowIcon } from '../ui';
 import { FEATURED_MARKETPLACES, type MarketplaceCatalog } from './library';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { ALL, CatalogErrorRow, CategoryChips, EmptyRow, filterBy, InstallControl, InstalledList, LibraryRow, PAGE } from './LibraryParts';
+import { PluginDropZone, UploadPluginDialog } from './UploadPlugin';
 import { installedEntry, useLoaded, useMarketplaces, type Library } from './useLibrary';
 
 /** Settings › Plugins: the plugins installed, which profiles get each, and the marketplaces to add more from. */
 export function PluginsView() {
   return (
-    <LibraryPage
-      id="pluginsLibrary"
-      noun="plugins"
-      description="Installed once and unpacked into skills, agents, hooks and servers, then handed to the profiles that should have them. Claude’s own plugin system never sees them."
-      count={({ entries }) => entries?.filter((e) => e.kind === 'plugin').length ?? 0}
-      actions={({ showDiscover }) => <AddMarketplaceButton onAdded={showDiscover} />}
-      library={InstalledPlugins}
-      discover={PluginCatalog}
-    />
+    <PluginDropZone>
+      <LibraryPage
+        id="pluginsLibrary"
+        noun="plugins"
+        description="Installed once and unpacked into skills, agents, hooks and servers, then handed to the profiles that should have them. Claude’s own plugin system never sees them."
+        count={({ entries }) => entries?.filter((e) => e.kind === 'plugin').length ?? 0}
+        actions={({ library, showDiscover }) => <AddPluginMenu library={library} onMarketplaceAdded={showDiscover} />}
+        library={InstalledPlugins}
+        discover={PluginCatalog}
+      />
+    </PluginDropZone>
   );
 }
 
@@ -39,7 +42,7 @@ function InstalledPlugins({ library, query, showDiscover }: Parameters<PagePart>
       empty={
         <SettingsRow
           label="No plugins yet"
-          description="A plugin bundles skills, agents, hooks and servers. Mochi unpacks it into this profile’s threads."
+          description="A plugin bundles skills, agents, hooks and servers. Mochi unpacks it into this profile’s threads. Drop a .plugin, .zip or .tgz file here to upload one."
           control={
             <Button variant="outline" size="sm" onClick={showDiscover}>
               Discover plugins
@@ -154,24 +157,43 @@ function PluginList({ catalog, marketplace, library, query }: { catalog: Marketp
   );
 }
 
-// {ADD MARKETPLACE}
+// {ADD PLUGIN}
 
-function AddMarketplaceButton({ onAdded }: { onAdded: () => void }) {
-  const [isOpen, setOpen] = useState(false);
+/** One header action for both ways in: a marketplace to browse under Discover, or a plugin file from this computer. */
+function AddPluginMenu({ library, onMarketplaceAdded }: { library: Library; onMarketplaceAdded: () => void }) {
+  const [isMarketplaceOpen, setMarketplaceOpen] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   return (
     <>
-      <Button size="xs" onClick={() => setOpen(true)}>
-        <Plus />
-        Add marketplace
-      </Button>
-      <Dialog open={isOpen} onOpenChange={setOpen}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="xs">
+            <Plus />
+            Add plugin
+            <ChevronDown data-icon="inline-end" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          {ADD_SOURCES.map(({ id, icon: Icon, title, description }) => (
+            <DropdownMenuItem key={id} className="items-start" onSelect={() => (id === 'file' ? fileInput.current?.click() : setMarketplaceOpen(true))}>
+              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <span className="flex flex-col gap-0.5">
+                <span className="type-body font-medium">{title}</span>
+                <span className="type-meta text-pretty text-muted-foreground">{description}</span>
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <UploadPluginDialog library={library} fileInput={fileInput} />
+      <Dialog open={isMarketplaceOpen} onOpenChange={setMarketplaceOpen}>
         <DialogContent className="sm:max-w-md">
           <AddMarketplaceForm
-            onCancel={() => setOpen(false)}
+            onCancel={() => setMarketplaceOpen(false)}
             onAdded={(name) => {
-              setOpen(false);
+              setMarketplaceOpen(false);
               pickMarketplace(name);
-              onAdded();
+              onMarketplaceAdded();
             }}
           />
         </DialogContent>
@@ -179,6 +201,11 @@ function AddMarketplaceButton({ onAdded }: { onAdded: () => void }) {
     </>
   );
 }
+
+const ADD_SOURCES = [
+  { id: 'marketplace', icon: Globe, title: 'From a marketplace', description: 'A GitHub repository or marketplace.json link. Its plugins show up under Discover.' },
+  { id: 'file', icon: Upload, title: 'From a file', description: 'A .plugin, .zip or .tgz on this computer. You review what it adds before it installs.' },
+] as const;
 
 // Inside the dialog's content, which unmounts on close, so each opening starts empty.
 function AddMarketplaceForm({ onCancel, onAdded }: { onCancel: () => void; onAdded: (name: string) => void }) {

@@ -5,7 +5,8 @@ import type { LibraryHost, PageRef } from '../../src/host/types/library.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS } from '../../src/settings/harnesses.ts';
 import { discoverSkills, fetchMarketplace } from '../library/catalog.ts';
-import { addMarketplace, importFromAccount, installPlugin, installSkill, marketplaces, readLibrary, removeMarketplace, updateLibrary } from '../library/store.ts';
+import { addMarketplace, importFromAccount, installPlugin, installSkill, installUploadedPlugin, marketplaces, readLibrary, removeMarketplace, reviewUploadedPlugin, updateLibrary } from '../library/store.ts';
+import { UPLOAD_LIMITS } from '../library/upload.ts';
 import { copiedByRef, pageOfView, readRefValue } from '../browser/views.ts';
 import { overrideStep, playwrightOps, recipeFor } from '../library/recipeRunner.ts';
 import { runRecipe } from '../library/runRecipe.ts';
@@ -73,6 +74,20 @@ export const library = {
   async installPlugin(_sender, spaceId, marketplace, name) {
     const space = spaceIdOf(spaceId);
     await installPlugin(space, string(marketplace, 'marketplace', 128), string(name, 'name', 128));
+    return libraryEntries(await readLibrary(), space);
+  },
+  async reviewUpload(_sender, file) {
+    const { name, bytes } = pluginFile(file);
+    return reviewUploadedPlugin(name, bytes);
+  },
+  async installUpload(_sender, spaceId, file, choice) {
+    const space = spaceIdOf(spaceId);
+    const { name, bytes } = pluginFile(file);
+    const picked = record(choice, 'choice');
+    const targets = picked.targets;
+    if (!Array.isArray(targets) || !targets.length || !targets.every((t) => HARNESS_IDS.includes(t as Provider))) throw new TypeError(`targets must list ${HARNESS_IDS.join(' and/or ')}`);
+    if (!Array.isArray(picked.profileIds)) throw new TypeError('profileIds must be a list of profile ids');
+    await installUploadedPlugin(name, bytes, string(picked.sha256, 'sha256', 64), targets as Provider[], picked.profileIds.map(spaceIdOf));
     return libraryEntries(await readLibrary(), space);
   },
   async addConnector(sender, spaceId, input, options) {
@@ -256,6 +271,13 @@ function connectorInput(value: unknown) {
   if (!ALIAS.test(alias)) throw new TypeError('Name the account with lowercase letters, digits and dashes, like work or personal');
   const optional = (key: string) => (input[key] === undefined || input[key] === '' ? undefined : string(input[key], key, 4096));
   return { url, alias, name: optional('name')?.slice(0, 64), apiKey: optional('apiKey'), clientId: optional('clientId'), clientSecret: optional('clientSecret') };
+}
+
+function pluginFile(value: unknown) {
+  const file = record(value, 'file');
+  if (!(file.bytes instanceof Uint8Array)) throw new TypeError('file.bytes must be a Uint8Array');
+  if (file.bytes.length > UPLOAD_LIMITS.archiveBytes) throw new TypeError(`The file is over ${UPLOAD_LIMITS.archiveBytes / 1_000_000} MB`);
+  return { name: string(file.name, 'file.name', 255), bytes: file.bytes };
 }
 
 function spaceIdOf(value: unknown) {

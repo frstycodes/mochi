@@ -1,6 +1,6 @@
 import type { ConnectorSettings, ConnectorToolList } from '../../library/connectorTools.ts';
 import type { AppProviderId, DeviceCode } from '../../library/connectors.ts';
-import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog } from '../../library/library.ts';
+import type { CatalogSkill, LibraryEntry, Marketplace, MarketplaceCatalog, PluginReview } from '../../library/library.ts';
 import type { SetupResult, SetupTarget } from '../../library/recipes.ts';
 import type { Provider } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
@@ -23,6 +23,10 @@ export interface LibraryHost {
   removeMarketplace(name: string): Promise<Marketplace[]>;
   marketplaceCatalog(name: string): Promise<MarketplaceCatalog>;
   installPlugin(spaceId: string, marketplace: string, name: string): Promise<LibraryEntry[]>;
+  /** Reads a plugin file (.plugin, .zip, .tar.gz, .tgz) for review; throws with the reason when it isn't one Mochi can install. */
+  reviewUpload(file: PluginFile): Promise<PluginReview>;
+  /** Installs the file reviewed as `sha256` for `targets`, turned on for `profileIds`; replaces a plugin of the same name. */
+  installUpload(spaceId: string, file: PluginFile, choice: { sha256: string; targets: Provider[]; profileIds: string[] }): Promise<LibraryEntry[]>;
   /**
    * Adds an account on a remote MCP server (turned on for the profile) and signs it in, in the browser when it uses OAuth.
    * For an agent's connect: `inPane` sends the sign-in page to `onAuthorize` instead of the user's browser, and `secretFrom`
@@ -56,6 +60,11 @@ export interface LibraryHost {
   setConnectorSettings(key: string, settings: Omit<ConnectorSettings, 'toolList'>): Promise<Record<string, ConnectorSettings>>;
 }
 
+export interface PluginFile {
+  name: string;
+  bytes: Uint8Array;
+}
+
 /** An element on a browser tab's page, by its ref from the latest snapshot. */
 export interface PageRef {
   viewId: string;
@@ -74,6 +83,8 @@ export const libraryMethods = {
   removeMarketplace: 'invoke',
   marketplaceCatalog: 'invoke',
   installPlugin: 'invoke',
+  reviewUpload: 'invoke',
+  installUpload: 'invoke',
   addConnector: 'invoke',
   onAuthorize: 'event',
   runSetup: 'invoke',

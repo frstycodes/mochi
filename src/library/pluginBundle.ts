@@ -19,7 +19,7 @@ export interface PluginBundle {
 
 export type HookHandler = { type: string; command?: string; args?: string[]; timeout?: number; [key: string]: unknown };
 
-const MANIFEST_PATHS = ['.claude-plugin/plugin.json', '.codex-plugin/plugin.json', 'plugin.json'];
+export const MANIFEST_PATHS = ['.claude-plugin/plugin.json', '.codex-plugin/plugin.json', 'plugin.json'];
 
 // Folders and files an agent reads that have no portable equivalent; listed so the UI can say what was left out.
 const UNSUPPORTED_PATHS = [
