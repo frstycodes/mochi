@@ -51,7 +51,7 @@ export function BrowserView({ thread, tab, isDriving }: { thread: Thread; tab: P
       <BrowserToolbar thread={thread} pageId={pageId} page={page} />
       {page.device !== RESPONSIVE && <DeviceBar pageId={pageId} page={page} />}
       {!!page.find && <FindBar pageId={pageId} page={page} find={page.find} />}
-      {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} />}
+      {isDriving && <DriveBar thread={thread} pageId={pageId} hasTakenOver={page.hasTakenOver} handoff={page.handoff} />}
       <div className="min-h-0 flex-1">
         {page.annotating ? (
           <Annotator thread={thread} pageId={pageId} image={page.annotating.image} name={page.annotating.name} />

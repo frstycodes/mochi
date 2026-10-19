@@ -522,6 +522,8 @@ export interface ToolWidget {
   /** `options` are radio buttons: one must be picked. */
   pick?: 'one';
   isDestructive?: boolean;
+  /** Something only you can do in the browser (a sign-in, a code); Mochi closes it itself once the page shows it's done. */
+  isHandoff?: boolean;
   /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
   edits?: FileEdit[];
   /** Mochi's own facts under the title, like which other profiles share the account. */

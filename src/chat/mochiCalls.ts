@@ -45,6 +45,8 @@ export const MOCHI_CALLS = {
   browser_reload: ['Reloading the page', 'Reloaded the page'],
   browser_dialog: ['Answering a page dialog', 'Answered a page dialog'],
   browser_set_device: ['Changing the device size', 'Changed the device size'],
+  browser_handoff: ['Waiting on you in the browser', 'Waited on you in the browser'],
+  browser_batch: ['Running browser steps', 'Ran browser steps'],
   open_pane_tab: ['Opening a side pane tab', 'Opened a side pane tab'],
   split_with: ['Opening a split', 'Opened a split'],
   close_pane: ['Closing the side pane', 'Closed the side pane'],
