@@ -100,6 +100,7 @@ export const Keyboard = solar(Linear.KeyboardIcon, Bold.KeyboardIcon);
 export const Layers = solar(Linear.LayersIcon, Bold.LayersIcon);
 export const Layout = solar(Linear.Widget2Icon, Bold.Widget2Icon);
 export const Link = solar(Linear.LinkIcon, Bold.LinkIcon);
+export const List = solar(Linear.ListIcon, Bold.ListIcon);
 export const Loader = solar(Linear.RefreshCircleIcon, Bold.RefreshCircleIcon);
 export const Lock = solar(Linear.LockIcon, Bold.LockIcon);
 export const LockKeyhole = solar(Linear.LockKeyholeIcon, Bold.LockKeyholeIcon);

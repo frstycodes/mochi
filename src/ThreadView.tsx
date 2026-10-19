@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { LimitChip } from './chat/LimitCard';
 import { motion } from 'motion/react';
 import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
-import type { FollowedMachine } from './host/types/remote';
-import { DeviceIcon, THIS_DEVICE } from './remote/DeviceIcon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,8 +27,7 @@ import { layoutOf } from './store/panes';
 import { BoundShortcut } from './Shortcut';
 import { commandOf, paneCommand } from './keymap';
 import { isInside, PINNABLE_KINDS, setPinned, useHeaderPins, usePinDrop, type PinnableKind } from './pane/headerPins';
-import { AgentLoader } from './AgentLoader';
-import { agentPhase, isWorking } from './agentPhase';
+import { isWorking } from './agentPhase';
 import { PipLayer } from './Browser';
 import { RewindLayer } from './rewind/RewindLayer';
 import { RewindMenuItems } from './rewind/RewindMenuItems';
@@ -254,8 +251,6 @@ function ThreadHeader({
   return (
     <TargetContextMenu target={{ leafId }} groups={THREAD_HEADER_MENU}>
       <TitleBar ref={header} isFirst={isFirst} isMulti={isMulti} data-pin-drop className={cn('@container transition-colors duration-150', pinDrop.isOver && 'bg-accent/40')}>
-        <AgentLoader phase={agentPhase(thread)} className="-mx-1 size-7 text-muted-foreground" />
-        <DeviceIndicator />
         <ThreadMenu thread={thread} />
         <LimitChip thread={thread} />
         {thread.prs.map((pr) => (
@@ -295,25 +290,6 @@ function ThreadHeader({
         <RewindLayer thread={thread} />
       </TitleBar>
     </TargetContextMenu>
-  );
-}
-
-/** Where the agent runs: this computer, or `machine` for another computer's thread. A thread stays where it started. */
-export function DeviceIndicator({ machine }: { machine?: Pick<FollowedMachine, 'name' | 'kind'> }) {
-  const machineName = machine?.name;
-  const label = `Runs on ${machineName ?? 'this computer'}`;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span tabIndex={0} aria-label={label} className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
-          <DeviceIcon kind={machine ? machine.kind : THIS_DEVICE} className="size-4" />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent className="flex-col items-start gap-0.5">
-        <span className="block font-medium">{label}</span>
-        <span className="block opacity-80">{machineName ? `The agent works in this thread's folder on ${machineName}; this computer steers it` : "The agent works in this thread's folder on your machine"}</span>
-      </TooltipContent>
-    </Tooltip>
   );
 }
 

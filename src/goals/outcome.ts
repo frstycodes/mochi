@@ -10,7 +10,7 @@ export function outcomeOf(thread: Thread) {
     minutes: Math.max(0, Math.round(end - thread.startedAt)),
     total: criteria.length,
     verified,
-    claimed: criteria.filter(isMet).length - verified,
+    claimed: criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length - verified,
     revisions: thread.revisions.length - 1,
     merged: thread.prs.filter((p) => p.state === 'merged'),
     unmerged: thread.prs.filter((p) => p.state !== 'merged'),

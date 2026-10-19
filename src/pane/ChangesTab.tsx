@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { setPrefs, usePrefs } from '../settings/prefs';
-import { Danger, File, Folder, Columns, Rows } from '@/icons';
+import { Danger, File, Folder, Columns, List, Rows } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ChangeList, type ChangeActions, type DiffStyle, type LineNote } from '../git/ChangeList';
-import { fileKey, reviewNote } from '../git/files';
+import { changeSections, fileKey, reviewNote } from '../git/files';
+import { ChangeTree } from '../git/ChangeTree';
+import { ComparePicker, type Compare } from '../git/ComparePicker';
 import { ShipBar } from '../git/ShipBar';
 import { useConfirm } from '../git/useConfirm';
 import { useGitAction, useGitDiff } from '../git/useGit';
@@ -18,6 +19,8 @@ import { useWorktreePath } from '../git/worktrees';
 import { host } from '../host';
 import { threadCwd } from '../host/cwd';
 import type { ChangeTarget, DiffFile, DiffScope } from '../host/types/git';
+import { cn } from '@/lib/utils';
+import { TooltipIconButton } from '../ui';
 import type { Thread } from '../model';
 import { useHarness } from '../store';
 import { DiffStat } from '../WorkLog';
@@ -32,31 +35,34 @@ export function ChangesTab({ thread, tab }: PaneTabProps) {
 
 function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: string }) {
   usePaneMenu();
-  const [scope, setScope] = useState<DiffScope>('branch');
+  const [compare, setCompare] = useState<Compare>({ scope: 'branch' });
+  const [isTreeOpen, setTreeOpen] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
+  const diffColumn = useRef<HTMLDivElement>(null);
   const { diffStyle } = usePrefs();
-  const diffQuery = useGitDiff(cwd, scope, thread.repo?.base);
+  const diffQuery = useGitDiff(cwd, compare.scope, compare.base ?? thread.repo?.base);
   const { run } = useGitAction(diffQuery.refresh);
   const { confirm, dialog } = useConfirm();
-  const actions = useChangeActions({ thread, cwd, canStage: scope === 'uncommitted', diffStyle, run, confirm });
+  const canStage = compare.scope === 'uncommitted';
+  const actions = useChangeActions({ thread, cwd, canStage, diffStyle, run, confirm });
 
   const diff = diffQuery.data;
   const files = diff?.files ?? [];
+  const sections = changeSections(files, canStage);
   const isEmpty = !!diff && diff.files.length === 0;
+
+  const reveal = (file: DiffFile) => {
+    setSelected(fileKey(file));
+    diffColumn.current?.querySelector(`[data-file-key="${CSS.escape(fileKey(file))}"]`)?.scrollIntoView({ block: 'start' });
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PaneTitle>
-        <Select value={scope} onValueChange={(v) => setScope(v as DiffScope)}>
-          <SelectTrigger size="sm" aria-label="Compare" className="-ml-1.5 shrink-0">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="branch">Branch</SelectItem>
-              <SelectItem value="uncommitted">Uncommitted</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        <TooltipIconButton label={isTreeOpen ? 'Hide the file tree' : 'Show the file tree'} aria-pressed={isTreeOpen} onClick={() => setTreeOpen((o) => !o)} className={cn('-ml-1.5 shrink-0 text-muted-foreground', isTreeOpen && 'bg-accent text-foreground')}>
+          <List />
+        </TooltipIconButton>
+        <ComparePicker cwd={cwd} compare={compare} threadBase={thread.repo?.base} onChange={setCompare} />
       </PaneTitle>
       <PaneActions>
         {files.length > 0 && (
@@ -79,14 +85,21 @@ function Changes({ thread, cwd, tabId }: { thread: Thread; cwd: string; tabId: s
       </PaneActions>
       {!!diffQuery.error && !diff && <DiffError message={diffQuery.error} onRetry={diffQuery.refresh} />}
       {diffQuery.isLoading && <ChangesSkeleton />}
-      {isEmpty && <NoChanges scope={scope} />}
-      {/* Radix lays the viewport content out as `display: table`, which grows to the widest diff line instead of scrolling it. */}
+      {isEmpty && <NoChanges scope={compare.scope} />}
       {files.length > 0 && (
-        <ScrollArea type="scroll" className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
-          <ChangeList key={scope} files={files} actions={actions} />
-        </ScrollArea>
+        <div className="flex min-h-0 flex-1 border-t">
+          {isTreeOpen && (
+            <ScrollArea type="scroll" className="w-60 max-w-[40%] shrink-0 border-r">
+              <ChangeTree sections={sections} selected={selected} onSelect={reveal} />
+            </ScrollArea>
+          )}
+          {/* Radix lays the viewport content out as `display: table`, which grows to the widest diff line instead of scrolling it. */}
+          <ScrollArea ref={diffColumn} type="scroll" className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
+            <ChangeList key={`${compare.scope}:${compare.base}`} sections={sections} actions={actions} />
+          </ScrollArea>
+        </div>
       )}
-      {!!diff && <ShipBar thread={thread} cwd={cwd} diff={diff} canCommit={scope === 'uncommitted'} run={run} confirm={confirm} />}
+      {!!diff && <ShipBar thread={thread} cwd={cwd} diff={diff} canCommit={canStage} run={run} confirm={confirm} />}
       {dialog}
     </div>
   );

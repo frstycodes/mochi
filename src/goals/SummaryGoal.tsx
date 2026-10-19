@@ -21,10 +21,10 @@ export function SummaryGoal({ className, ...props }: ComponentProps<'section'>) 
   return <section aria-label="Goal" className={cn('flex flex-col gap-2.5 rounded-lg px-2 py-2', className)} {...props} />;
 }
 
-/** "Goal", edit and open beside it, then what done means counted (met, claimed included) on the right, where a drag handle may cover it. */
+/** "Goal", edit and open beside it, then what done means counted on the right, where a drag handle may cover it. */
 export function SummaryGoalHeader({ thread, onEdit, onOpen, countClassName }: { thread: Thread; onEdit: () => void; onOpen: () => void; countClassName?: string }) {
   const criteria = thread.criteria ?? [];
-  const met = criteria.filter((c) => ['verified', 'claimed'].includes(criterionState(c, thread.idle?.isConfirmed))).length;
+  const met = criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length;
   return (
     <div className="flex items-center gap-1">
       <h2 className="mr-1 type-title">Goal</h2>
@@ -78,7 +78,7 @@ export function SummaryCriteria({ thread }: { thread: Thread }) {
   const { state } = useHarness();
   if (!thread.criteria?.length) return null;
   // A criterion handed to a sub-thread shows that sub-thread until it's met here.
-  const handedTo = (c: Criterion) => (isMet(c) ? undefined : subThreadsOf(state.threads, thread.id).find((t) => t.parent?.criterionId === c.id && t.status !== 'settled'));
+  const handedTo = (c: Criterion) => (isMet(c, thread.idle?.isConfirmed) ? undefined : subThreadsOf(state.threads, thread.id).find((t) => t.parent?.criterionId === c.id && t.status !== 'settled'));
   return (
     <ul aria-label="Done when" className="flex flex-col gap-1.5">
       {thread.criteria.map((c) => {

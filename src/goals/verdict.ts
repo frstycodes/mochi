@@ -104,9 +104,8 @@ export const YOUR_CALL = 'Your call';
 
 /** Met for the verdict: Mochi's check passed or the agent claimed one you judge; you confirmed one you judge; or you accepted it unchecked. */
 function counts(thread: Thread, c: Criterion) {
-  if (isMet(c)) return true;
-  if (!c.command) return !!thread.idle?.isConfirmed;
-  return !c.check && !!thread.idle?.accepted.includes(uncheckedId(c));
+  if (isMet(c, thread.idle?.isConfirmed)) return true;
+  return !!c.command && !c.check && !!thread.idle?.accepted.includes(uncheckedId(c));
 }
 
 /** Evidence the agent stopped short: its plan has items open, or its report says work is left. Unmet criteria alone aren't. */
@@ -235,7 +234,7 @@ function criteriaTile(thread: Thread): Tile | null {
   const criteria = thread.criteria ?? [];
   if (!criteria.length) return null;
   const bars = criteria.map((c): TileTone => (c.check?.status === 'failed' ? 'destructive' : c.check?.status === 'passed' || (!c.command && thread.idle?.isConfirmed) ? 'success' : c.claim ? 'info' : 'none'));
-  return { id: 'criteria', name: 'Criteria', bars, value: `${criteria.filter(isMet).length} of ${criteria.length}` };
+  return { id: 'criteria', name: 'Criteria', bars, value: `${criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length} of ${criteria.length}` };
 }
 
 function checksTile(thread: Thread): Tile | null {

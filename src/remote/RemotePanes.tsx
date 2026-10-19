@@ -23,7 +23,7 @@ import { FilePath } from '../files/FileView';
 import { ancestors, buildTree, visibleRows } from '../files/tree';
 import type { FileTarget } from '../files/FileFinder';
 import { ChangeList, type ChangeActions, type DiffStyle, type LineNote } from '../git/ChangeList';
-import { fileKey } from '../git/files';
+import { changeSections, fileKey } from '../git/files';
 import { useConfirm } from '../git/useConfirm';
 import { gitError } from '../git/useGit';
 import type { DiffScope } from '../host/types/git';
@@ -202,7 +202,7 @@ function RemoteChanges({ machine, thread }: { machine: FollowedMachine; thread: 
       {isEmpty && <NoChanges scope={checkpoint === undefined ? (scope as DiffScope) : 'branch'} />}
       {files.length > 0 && (
         <ScrollArea type="scroll" className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
-          <ChangeList key={scope} files={files} actions={actions} />
+          <ChangeList key={scope} sections={changeSections(files, actions.canStage)} actions={actions} />
         </ScrollArea>
       )}
       {dialog}

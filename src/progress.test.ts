@@ -40,6 +40,13 @@ test('the ring counts criteria only, never steps or a percent, and the phase fol
   assert.equal(progressLabel(noCriteria), 'Building');
 });
 
+test('judged criteria you confirmed count as met, so the ring agrees with the goal panel', () => {
+  const goal = { ...thread, goal: 'Calm pane', status: 'running' as const, activity: [], criteria: [{ id: 'c1', text: 'Typecheck', command: 'pnpm typecheck', check: { status: 'passed' as const, at: 1 } }, { id: 'c2', text: 'Looks calm' }, { id: 'c3', text: 'Both themes' }] };
+  assert.equal(progressLabel(goalProgress(goal)), 'Verifying · 1/3');
+  const confirmed = { ...goal, idle: { at: 2, accepted: [], isConfirmed: true } };
+  assert.equal(progressLabel(goalProgress(confirmed)), 'Ready for review · 3/3');
+});
+
 test("a step sits in its own plan's column on the board", () => {
   const cols = boardColumns([[step('a1'), step('a2')], [step('b1')]]);
   assert.deepEqual([cols.get('a1'), cols.get('a2'), cols.get('b1')], [0, 1, 0]);

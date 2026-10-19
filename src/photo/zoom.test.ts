@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { FIT, MAX_SCALE, clampPan, zoomAt } from './zoom.ts';
+import { FIT, MAX_SCALE, clampPan, isBackdropClick, zoomAt } from './zoom.ts';
 
 const fitted = { width: 800, height: 600 };
 const viewport = { width: 1000, height: 700 };
@@ -24,4 +24,15 @@ test('panning stops at the image edges and keeps a narrow axis centred', () => {
   assert.equal(v.x, (800 * 2 - 1000) / 2);
   assert.equal(v.y, (600 * 2 - 700) / 2);
   assert.equal(clampPan({ scale: 1.1, x: 0, y: 300 }, fitted, viewport).y, 0);
+});
+
+test('a click closes only outside the image and only when it did not end a pan', () => {
+  const image = { left: 100, top: 50, right: 900, bottom: 650 };
+  const click = (x: number, y: number, press = { x, y }) => isBackdropClick({ x, y }, press, image);
+  assert.equal(click(50, 300), true);
+  assert.equal(click(500, 20), true);
+  assert.equal(click(500, 300), false);
+  assert.equal(click(100, 50), false);
+  assert.equal(click(50, 300, { x: 60, y: 300 }), false);
+  assert.equal(isBackdropClick({ x: 500, y: 300 }, { x: 500, y: 300 }, undefined), true);
 });
