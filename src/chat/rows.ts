@@ -13,7 +13,7 @@ export type ChatRow =
   | { kind: 'widget'; key: string; entry: ActivityEntry }
   /** A subagent where it was started (`entry.subagentId`). */
   | { kind: 'subagent'; key: string; entry: ActivityEntry }
-  /** A message another thread's agent sent (`entry.from`): a line in the log, not a bubble. It still starts a turn like yours. */
+  /** A message another thread's agent sent (`entry.from`) or an Auto-fix event (`entry.autofix`): a line in the log, not a bubble. It still starts a turn like yours. */
   | { kind: 'thread-message'; key: string; entry: ActivityEntry; index: number }
   /** The files a finished turn changed, after its last row. */
   | { kind: 'changes'; key: string; turn: TurnChanges };
@@ -63,7 +63,7 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
     }
     turn = undefined;
     isMidWork = false;
-    if (entry.from) return rows.push({ kind: 'thread-message', key, entry, index: i });
+    if (entry.from || entry.autofix) return rows.push({ kind: 'thread-message', key, entry, index: i });
     const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
     rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });

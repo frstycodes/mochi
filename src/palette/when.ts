@@ -1,5 +1,6 @@
 import { findLeaf, leaves, type View } from '../layout/tree.ts';
 import { isMultiTab, type PaneTab, type Thread } from '../model.ts';
+import { autofixPr } from '../git/autofixToggle.ts';
 import { pinnedThreads } from '../reorder.ts';
 import { reviewThreads } from '../review/order.ts';
 import type { State } from '../store/index.tsx';
@@ -48,6 +49,8 @@ export const when = {
   unwatched: (s: ActionScope) => isLive(s) && !s.isWatched,
   watched: (s: ActionScope) => !!s.thread && s.isWatched,
   repo: (s: ActionScope) => !!s.thread?.repo,
+  autofixOff: (s: ActionScope) => !!s.thread && !!autofixPr(s.thread) && !autofixPr(s.thread)!.autofixSince,
+  autofixOn: (s: ActionScope) => !!s.thread && !!autofixPr(s.thread)?.autofixSince,
   worktree: (s: ActionScope) => !!s.thread?.repo && s.isDesktop,
   splits: (s: ActionScope) => s.leafCount > 1,
   /** Swap, rotate and zoom need every split on screen. */

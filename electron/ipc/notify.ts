@@ -75,6 +75,17 @@ function watchConfig(value: unknown): WatchConfig {
         githubUser: t.githubUser === undefined ? undefined : string(t.githubUser, 'thread.githubUser', 128),
       };
     }),
+    autofix: list(c.autofix, 'config.autofix').map((v) => {
+      const t = record(v, 'autofix');
+      return {
+        threadId: string(t.threadId, 'autofix.threadId', 256),
+        title: string(t.title, 'autofix.title', 500),
+        pr: integer(t.pr, 'autofix.pr', 1, 1e9),
+        cwd: string(t.cwd, 'autofix.cwd'),
+        githubUser: t.githubUser === undefined ? undefined : string(t.githubUser, 'autofix.githubUser', 128),
+        since: integer(t.since, 'autofix.since', 0, Number.MAX_SAFE_INTEGER),
+      };
+    }),
     kinds: list(c.kinds, 'config.kinds').map((k) => string(k, 'kind', 64)),
     quiet: { isOn: quiet.isOn === true, start: integer(quiet.start, 'quiet.start', 0, 23), end: integer(quiet.end, 'quiet.end', 0, 23) },
     muted: list(c.muted, 'config.muted').map((id) => string(id, 'muted', 256)),

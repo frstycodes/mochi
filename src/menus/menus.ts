@@ -3,6 +3,7 @@ export const THREAD_MENU = [
   ['thread-open', 'thread-open-split'],
   ['thread-rename', 'thread-pin', 'thread-unpin', 'thread-watch', 'thread-unwatch'],
   ['thread-goal-make', 'thread-goal-remove'],
+  ['thread-autofix', 'thread-autofix-off'],
   ['thread-schedule', 'thread-fork', 'thread-handoff', 'thread-handoff-copy', 'thread-second-opinion', 'thread-rewind'],
   ['thread-replay', 'thread-export-replay'],
   ['thread-copy-branch', 'thread-reveal'],

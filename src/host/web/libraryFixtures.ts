@@ -1,3 +1,4 @@
+import type { ConnectorTool } from '../../library/connectorTools.ts';
 import { CONNECTORS } from '../../library/connectors.ts';
 import type { CatalogPlugin, CatalogSkill, MarketplaceCatalog, PluginReview } from '../../library/library.ts';
 
@@ -109,4 +110,22 @@ export const UPLOAD_REVIEW: Omit<PluginReview, 'file' | 'existing'> = {
   unsupported: ['Language servers'],
   skipped: ['assets/logo.png'],
   loads: { claude: '2 skills, 1 agent, 1 hook, 1 server', codex: '1 server' },
+};
+
+const tool = (name: string, description: string, hint: 'read' | 'write' | 'destructive' | 'none' = 'read'): ConnectorTool => ({ name, title: null, description, isReadOnly: hint === 'read', isDestructive: hint === 'destructive' || hint === 'none' });
+
+/** What `tools/list` answers per connector in the web build: Linear's real tool names (mcp.linear.app), with their annotations. */
+export const CONNECTOR_TOOLS: Record<string, ConnectorTool[]> = {
+  linear: [
+    tool('list_issues', 'List issues in the workspace, filtered by team, assignee, state or label.'),
+    tool('get_issue', 'Get an issue by its ID or identifier, with its comments and attachments.'),
+    tool('list_projects', 'List projects, with their status, lead and target date.'),
+    tool('list_teams', 'List the teams in the workspace.'),
+    tool('search_documentation', "Search Linear's documentation."),
+    tool('create_issue', 'Create an issue in a team, with a title, description, assignee and labels.', 'write'),
+    tool('update_issue', 'Change an issue’s title, description, state, assignee, priority or labels.', 'write'),
+    tool('create_comment', 'Comment on an issue.', 'write'),
+    tool('delete_comment', 'Delete a comment from an issue.', 'destructive'),
+    tool('archive_project', 'Archive a project and every issue in it.', 'none'),
+  ],
 };

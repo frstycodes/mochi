@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Clock, Connector, Folder, Inbox, Plugin, Route, Skill, type IconComponent } from '@/icons';
+import { Clock, Connector, Folder, Inbox, Key, Plugin, Route, Skill, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -61,9 +61,9 @@ export function SidebarNav({ view, go, queueCount }: { view: View; go: (view: Vi
   );
 }
 
-type SidebarItem = { id: string; label: string; icon: IconComponent } & ({ view: View } | { section: 'skills' | 'plugins' | 'connectors' | 'schedules' });
+type SidebarItem = { id: string; label: string; icon: IconComponent } & ({ view: View } | { section: 'skills' | 'plugins' | 'connectors' | 'connectorTools' | 'schedules' });
 
-/** In sidebar order. Skills, Plugins, Connectors and Scheduled live in Settings; their items are shortcuts there. */
+/** In sidebar order. Skills, Plugins, Connectors, Connector tools and Scheduled live in Settings; their items are shortcuts there. */
 export const SIDEBAR_ITEMS = [
   { id: 'queue', label: 'Queue', icon: Inbox, view: { kind: 'queue' } },
   { id: 'board', label: 'Board', icon: Route, view: { kind: 'board' } },
@@ -71,6 +71,7 @@ export const SIDEBAR_ITEMS = [
   { id: 'skills', label: 'Skills', icon: Skill, section: 'skills' },
   { id: 'plugins', label: 'Plugins', icon: Plugin, section: 'plugins' },
   { id: 'connectors', label: 'Connectors', icon: Connector, section: 'connectors' },
+  { id: 'connectorTools', label: 'Connector tools', icon: Key, section: 'connectorTools' },
   { id: 'schedules', label: 'Scheduled', icon: Clock, section: 'schedules' },
 ] satisfies SidebarItem[];
 

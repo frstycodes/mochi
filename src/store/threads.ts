@@ -74,7 +74,7 @@ export type ThreadsAction =
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
    * `queuedId`: the queued message this sends, which leaves the queue. `steers`: joins the turn in flight instead of waiting for it to end (every `sendMessage`).
    */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** The images you attached, as the transcript shows them. */ shownImages?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** The images you attached, as the transcript shows them. */ shownImages?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef; /** An Auto-fix event; `prompt` is the event as the agent gets it. */ autofix?: ActivityEntry['autofix'] }
   /** `/compact`: the harness compacts the live session now. `queuedId`: it waited in the queue as typed. */
   | { type: 'compact'; threadId: string; focus: string; queuedId?: string }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
@@ -463,7 +463,7 @@ function withWorkspace(repo: NonNullable<Thread['repo']>, draft: WorkspaceDraft,
   return { project, ...(path && { path }), branch: draft.branch || fallback, ...repoWorkspace(draft), ...(draft.mode === 'worktree' && !draft.isExisting && (draft.autoBranch || !draft.branch) && { autoBranch: draft.autoBranch || fallback }) };
 }
 
-function send(state: State, action: Extract<Action, { type: 'send' }>): State {
+export function send(state: State, action: Extract<Action, { type: 'send' }>): State {
   const now = state.now;
   const { from } = action;
   const threads = from?.threadId ? mapThread(state.threads, from.threadId, (t) => markSent(t, { threadId: action.threadId, title: state.threads.find((r) => r.id === action.threadId)?.title ?? '', text: action.text })) : state.threads;
@@ -474,7 +474,7 @@ function send(state: State, action: Extract<Action, { type: 'send' }>): State {
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
       const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
-      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }) });
+      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }), ...(action.autofix && { autofix: action.autofix }) });
       return action.drift ? applyDrift(said, action.drift, action.reason, now) : said;
     }),
   };

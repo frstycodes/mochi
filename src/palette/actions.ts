@@ -1,10 +1,11 @@
 import type { Dispatch } from 'react';
-import { Archive, Connector, ExternalLink, Plugin, Skill, Flag, Link, SearchAlt, ArrowLeft, ArrowRight, Clock, Scale, ArrowLeftRight, XSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, Folder, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Columns, Rows, Settings, Sidebar, SidebarRight, Sun, TaskSquare, Transfer, VideoPlay, Share, X, type IconComponent } from '@/icons';
+import { Archive, Connector, ExternalLink, Plugin, Skill, Flag, Link, SearchAlt, ArrowLeft, ArrowRight, Clock, Scale, ArrowLeftRight, XSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, Folder, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, MagicStar, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Columns, Rows, Settings, Sidebar, SidebarRight, Sun, TaskSquare, Transfer, VideoPlay, Share, X, type IconComponent } from '@/icons';
 import { ForkIcon } from '../ui';
 import { toast } from '../toast/store.ts';
 import { getPage, openFind, pageKey, reloadPage } from '../browser/pages';
 import { openExternally, openInLabel } from '../browser/systemBrowser';
 import { threadCwd } from '../host/cwd';
+import { autofixPr, setAutofix } from '../git/autofixToggle';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
 import { PRESETS, PRESET_LABELS } from '../layout/tree';
@@ -121,6 +122,8 @@ export const ACTIONS = [
   },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
+  { id: 'thread-autofix', group: 'Thread', title: 'Auto-fix pull request', icon: MagicStar, keywords: 'ci checks review conflicts pr', when: when.autofixOff, label: (s) => `Auto-fix PR #${autofixPr(s.thread!)!.number}`, run: onThread((t, { dispatch }) => setAutofix(dispatch, t, autofixPr(t)!, true)) },
+  { id: 'thread-autofix-off', group: 'Thread', title: 'Stop Auto-fix', icon: MagicStar, keywords: 'ci checks review conflicts pr', when: when.autofixOn, label: (s) => `Stop Auto-fix on PR #${autofixPr(s.thread!)!.number}`, run: onThread((t, { dispatch }) => setAutofix(dispatch, t, autofixPr(t)!, false)) },
   { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: Hierarchy2, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
   { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },

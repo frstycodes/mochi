@@ -47,6 +47,8 @@ export function useLibrary(spaceId: string) {
     /** Rejects with the reason instead of toasting, for the review dialog to show inline. */
     installUpload: (file: PluginFile, choice: Parameters<typeof host.library.installUpload>[2]) => host.library.installUpload(spaceId, file, choice).then(setEntries),
     addConnector: (account: NewConnector) => apply(`${account.alias} not connected`)(host.library.addConnector(spaceId, account)),
+    /** Names the connector `key`, every account on it. */
+    renameConnector: (key: string, name: string) => apply(`${name} not renamed`)(host.library.renameConnector(spaceId, key, name)),
     signIn: (entry: LibraryEntry) => apply(`${entry.title} not signed in`)(host.library.signIn(spaceId, entry.id)),
     update: (entry: LibraryEntry) =>
       apply(`${entry.title} not updated`)(

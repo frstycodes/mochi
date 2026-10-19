@@ -1,5 +1,6 @@
 import type { Provider } from '../model.ts';
 import { serverSummary, type McpServerDef } from '../settings/agentConfig.ts';
+import type { ConnectorSettings } from './connectorTools.ts';
 import { connectorIcon } from './connectors.ts';
 import type { PluginBundle } from './pluginBundle.ts';
 
@@ -11,6 +12,8 @@ export interface LibraryIndex {
   items: LibraryItem[];
   profiles: Record<string, string[]>;
   marketplaces: Marketplace[];
+  /** Per connector (`connectorKey`): on or off, its tools' permissions and their last listing. Missing in older files. */
+  connectors?: Record<string, ConnectorSettings>;
 }
 
 export type LibraryItem = LibrarySkill | LibraryServer | LibraryPlugin | LibraryConnector;
@@ -256,12 +259,12 @@ export function profileLayout(index: LibraryIndex, spaceId: string, provider: Pr
   return { plugins: folders, servers };
 }
 
-/** The profile's signed-in connector accounts, grouped by the server they're on, in the order they were added. */
+/** The profile's signed-in connector accounts on connectors that are on, grouped by the server they're on, in the order they were added. */
 export function profileConnectors(index: LibraryIndex, spaceId: string): Map<string, LibraryConnector[]> {
   const enabled = new Set(index.profiles[spaceId] ?? []);
   const groups = new Map<string, LibraryConnector[]>();
   for (const item of index.items) {
-    if (item.kind !== 'connector' || !item.isLinked || !enabled.has(item.id)) continue;
+    if (item.kind !== 'connector' || !item.isLinked || !enabled.has(item.id) || index.connectors?.[item.key]?.isOff) continue;
     groups.set(item.key, [...(groups.get(item.key) ?? []), item]);
   }
   return groups;
@@ -343,7 +346,8 @@ export function parseLibrary(raw: string | null): LibraryIndex {
     const saved = JSON.parse(raw ?? 'null') as Partial<LibraryIndex> | null;
     if (!saved || !Array.isArray(saved.items) || typeof saved.profiles !== 'object' || saved.profiles === null) return EMPTY_LIBRARY;
     const items = saved.items.filter((item) => ITEM_KINDS.includes(item?.kind));
-    return { items, profiles: saved.profiles, marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [] };
+    const connectors = typeof saved.connectors === 'object' && saved.connectors !== null ? saved.connectors : {};
+    return { items, profiles: saved.profiles, marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [], connectors };
   } catch {
     return EMPTY_LIBRARY;
   }

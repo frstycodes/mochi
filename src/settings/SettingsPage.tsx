@@ -19,8 +19,9 @@ export function SettingsPage() {
   useFlashSetting(route);
 
   return (
-    // Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track.
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+    // Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track. The column is
+    // minmax(0, 1fr) so truncated text can't widen the page past a phone screen.
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
         <TitleBar className="px-4">
           <span className="flex-1" />
           <SettingsComputerPicker value={machine ? machineId : null} onChange={setMachineId} />
