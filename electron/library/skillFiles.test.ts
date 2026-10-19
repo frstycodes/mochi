@@ -19,7 +19,8 @@ test('skills land where the skills CLI puts them, in a temp home', async () => {
   const dir = placed('claude', 'user', 'pdf', where);
   await writeSkillFolder(dir, { 'SKILL.md': '---\nname: pdf\n---\n', 'scripts/run.sh': '#!/bin/sh\necho hi\n' }, false);
   assert.equal(readFileSync(join(dir, 'SKILL.md'), 'utf8'), '---\nname: pdf\n---\n');
-  assert.ok(statSync(join(dir, 'scripts/run.sh')).mode & 0o100);
+  // Windows has no execute bit to give back.
+  if (process.platform !== 'win32') assert.ok(statSync(join(dir, 'scripts/run.sh')).mode & 0o100);
   await writeSkillFolder(dir, { 'SKILL.md': 'v2' }, true);
   assert.ok(!existsSync(join(dir, 'scripts')), 'an update replaces the folder whole');
   await removeSkillFolder(dir);
