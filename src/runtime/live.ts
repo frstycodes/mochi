@@ -2,6 +2,7 @@ import { agentImage } from '../chat/images.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
+import { handoffBlocker } from '../rewind/handoff.ts';
 import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts';
 import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
@@ -108,7 +109,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.
       const thread = state.threads.find((t) => t.id === action.threadId);
-      if (!thread?.live || thread.providers[0] === action.to) return [];
+      if (!thread?.live || handoffBlocker(thread, action.to)) return [];
       // No model: the adapter picks the Settings default (Claude) or the harness's own (Codex).
       return [...(thread.live.isDetached ? [] : [{ method: 'stop' as const, threadId: thread.id }]), ...start(thread, action.to, DEFAULT_CONTROLS[action.to], action.summary, { model: undefined })];
     }

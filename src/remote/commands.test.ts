@@ -11,6 +11,11 @@ import { runRemoteCommand } from './commands.ts';
 import { closeIdleShells } from './terminals.ts';
 import { tapAction } from './tap.ts';
 
+async function until(isDone: () => boolean) {
+  for (let i = 0; i < 100 && !isDone(); i++) await new Promise((r) => setTimeout(r, 5));
+  assert.ok(isDone(), 'timed out');
+}
+
 function machine() {
   const base = {
     ...initialThreads(undefined, false),
@@ -98,9 +103,12 @@ test('operate and manage commands dispatch the same actions the UI does, and the
     { type: 'handoff', threadId, to: 'codex' },
     { type: 'settle', threadId, isSettled: true },
     { type: 'create', title: 'Write the changelog', provider: 'codex', project: null },
-  ] as const)
+  ] as const) {
     assert.deepEqual(await runRemoteCommand(command, env), { isOk: true }, command.type);
-  assert.deepEqual(dispatched.map((a) => a.type), ['rename', 'edit-goal', 'reorder', 'fork', 'handoff', 'settle', 'create']);
+    // The handoff drafts its prompt first, as a click here does; it lands before the next command.
+    if (command.type === 'handoff') await until(() => dispatched.some((a) => a.type === 'handoff'));
+  }
+  assert.deepEqual(dispatched.map((a) => a.type), ['rename', 'edit-goal', 'reorder', 'fork', 'handoff-draft', 'handoff', 'settle', 'create']);
 
   const applied = dispatched.reduce((s, a) => threadsReducer(s, a), state as State);
   const thread = applied.threads.find((t) => t.id === threadId)!;
@@ -117,7 +125,7 @@ test('commands that would change nothing say so or do nothing', async () => {
   const { state, threadId } = machine();
   const dispatched: Action[] = [];
   const env = device(state, 'Laptop', dispatched);
-  assert.deepEqual(await runRemoteCommand({ type: 'handoff', threadId, to: 'claude' }, env), { isOk: false, error: 'The thread is already on that agent' });
+  assert.deepEqual(await runRemoteCommand({ type: 'handoff', threadId, to: 'claude' }, env), { isOk: false, error: 'Already on Claude' });
   assert.deepEqual(await runRemoteCommand({ type: 'pin', threadId, isPinned: false }, env), { isOk: true });
   assert.deepEqual(await runRemoteCommand({ type: 'settle', threadId, isSettled: false }, env), { isOk: true });
   assert.deepEqual(await runRemoteCommand({ type: 'rename', threadId: 'nope', title: 'x' }, env), { isOk: false, error: 'No such thread on this machine' });

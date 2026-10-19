@@ -13,6 +13,8 @@ import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
+import { PROVIDER_NAME } from '../rewind/handoff';
+import { copyHandoffPrompt, handOffHere, isHandingOff, otherProvider } from '../rewind/runHandoff';
 import { openSchedule } from '../schedule/ScheduleDialog';
 import { openGoalEditor } from '../goals/GoalEditor';
 import { hasGoal } from '../drift';
@@ -92,7 +94,19 @@ export const ACTIONS = [
   { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Share, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
   { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && getPrefs().goals && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
   { id: 'thread-goal-remove', group: 'Thread', title: 'Remove goal', icon: XSquare, keywords: 'goal chat question untrack progress', when: (s) => when.thread(s) && hasGoal(s.thread!), run: onThread((t, { dispatch }) => dispatch({ type: 'goal-remove', threadId: t.id })) },
-  { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: Transfer, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
+  {
+    id: 'thread-handoff',
+    group: 'Thread',
+    title: 'Hand off to another agent',
+    icon: Transfer,
+    keywords: 'claude codex switch',
+    when: when.liveThread,
+    label: (s) => `Hand off to ${PROVIDER_NAME[otherProvider(s.thread!)]} here`,
+    mark: (s) => otherProvider(s.thread!),
+    disabledReason: (s) => (isHandingOff(s.thread!) ? 'Already handing off' : undefined),
+    run: onThread((t, { dispatch }) => handOffHere(t, dispatch)),
+  },
+  { id: 'thread-handoff-copy', group: 'Thread', title: 'Copy handoff prompt', icon: Copy, keywords: 'claude codex switch hand off summary clipboard', when: when.liveThread, run: onThread((t) => copyHandoffPrompt(t)) },
   {
     id: 'thread-second-opinion',
     group: 'Thread',
