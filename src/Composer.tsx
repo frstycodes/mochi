@@ -65,11 +65,11 @@ export function useComposerHandoff(leafId: string) {
   return { isHandoff: !!layoutId, layout: { layoutId: reduce ? undefined : layoutId, layoutCrossfade: false, transition: HANDOFF_TRANSITION } };
 }
 
-/** The glass card. Holds an optional tray above a ComposerInput. */
-export function ComposerCard({ className, children, ...props }: ComponentProps<'div'>) {
+/** The glass card. Holds an optional tray above a ComposerInput; `isStatic` skips the height animation. */
+export function ComposerCard({ className, children, isStatic, ...props }: ComponentProps<'div'> & { isStatic?: boolean }) {
   return (
     <div className={cn('surface-glass overflow-hidden rounded-2xl border shadow-composer transition-colors has-[.cm-focused]:border-primary/30 [&_[data-slot=input-group]]:rounded-none [&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:bg-transparent', className)} {...props}>
-      <AutoHeight className="justify-end">{children}</AutoHeight>
+      {isStatic ? children : <AutoHeight className="justify-end">{children}</AutoHeight>}
     </div>
   );
 }

@@ -44,7 +44,8 @@ function SourceList({ machine, onBack, onPick }: { machine?: FollowedMachine; on
   const folder = usePrefs().projectsFolder;
   const where = machine ? `${machine.name}’s projects folder` : folder;
   return (
-    <Command>
+    // No search field to hold focus, so the list takes it: cmdk's arrow keys only work with focus inside.
+    <Command ref={(el) => el?.focus()} tabIndex={-1} className="outline-none">
       <AddHeader title={machine ? `Add a project on ${machine.name}` : 'Add project'} onBack={onBack} />
       <CommandList className="max-h-80">
         <CommandGroup>
