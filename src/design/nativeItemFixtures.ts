@@ -48,7 +48,9 @@ export const KIND_PAGE = { skill: 'skills', plugin: 'plugins', subagent: 'plugin
 
 export const KIND_LABELS = { skill: 'Skill', plugin: 'Plugin', subagent: 'Subagent', hook: 'Hook', server: 'MCP server', connector: 'Connector' } satisfies Record<ItemKind, string>;
 
-const CLAUDE_AI_LOCK = 'Comes with your Claude.ai login. Mochi can’t leave one out of a session yet.';
+const CLAUDE_AI_LOCK = 'Comes with your Claude.ai login. Mochi can turn off all Claude.ai connectors for a profile, not one yet.';
+const CLAUDE_HOOK_LOCK = 'Claude Code runs every hook in its settings. Mochi can turn off all hooks for a profile, or the plugin a hook came from, but not one hook.';
+const CODEX_ROLE_LOCK = 'Codex has no switch for one subagent. Mochi can turn off all Codex subagents for a profile.';
 
 export const ITEMS: ProfileItem[] = [
   // Mochi's own library: handed to profiles, as today.
@@ -64,11 +66,11 @@ export const ITEMS: ProfileItem[] = [
 
   // Claude Code, Default account (Personal and Liane).
   { id: 'cd-ui', name: 'ui', description: 'Learned taste plus craft defaults for UI work', kind: 'skill', source: 'claude', accountId: 'claude-default', where: '~/.claude/skills/ui', profileIds: [] },
-  { id: 'cd-unslop', name: 'unslop', description: 'Cut AI tells from any writing', kind: 'skill', source: 'claude', accountId: 'claude-default', where: '~/.claude/skills/unslop', profileIds: ['liane'] },
+  { id: 'cd-unslop', name: 'unslop', description: 'Cut AI tells from any writing', kind: 'skill', source: 'claude', accountId: 'claude-default', where: '~/.claude/skills/unslop', profileIds: ['personal'] },
   { id: 'cd-ponytail', name: 'ponytail', description: 'Forces the laziest solution that works', kind: 'plugin', source: 'claude', accountId: 'claude-default', where: 'ponytail@ponytail · 6 skills, 2 hooks', profileIds: ['personal', 'liane'] },
   { id: 'cd-broken', name: 'release-notes', description: '', kind: 'skill', source: 'claude', accountId: 'claude-default', where: '~/.claude/skills/release-notes', profileIds: [], error: 'SKILL.md has no name in its front matter, so Claude Code skips it' },
   { id: 'cd-runner', name: 'runner', description: 'Runs typecheck, lint and tests and reports verbatim', kind: 'subagent', source: 'claude', accountId: 'claude-default', where: '~/.claude/agents/runner.md', profileIds: [] },
-  { id: 'cd-hook', name: 'SessionStart: statusline check', description: 'bash ~/.claude/hooks/statusline-check.sh', kind: 'hook', source: 'claude', accountId: 'claude-default', where: '~/.claude/settings.json · hooks.SessionStart', profileIds: [] },
+  { id: 'cd-hook', name: 'SessionStart: statusline check', description: 'bash ~/.claude/hooks/statusline-check.sh', kind: 'hook', source: 'claude', accountId: 'claude-default', where: '~/.claude/settings.json · hooks.SessionStart', profileIds: [], lockedReason: CLAUDE_HOOK_LOCK },
   { id: 'cd-figma', name: 'figma', description: 'Design context from Figma files', kind: 'server', source: 'claude', accountId: 'claude-default', where: '~/.claude.json · http · mcp.figma.com', profileIds: ['liane'], isNew: true },
   { id: 'cd-gmail', name: 'Gmail', description: 'Read and draft email', kind: 'connector', source: 'claude', accountId: 'claude-default', where: 'claude.ai · your Claude.ai account', profileIds: [], lockedReason: CLAUDE_AI_LOCK },
   { id: 'cd-gcal', name: 'Google Calendar', description: 'Events and free time', kind: 'connector', source: 'claude', accountId: 'claude-default', where: 'claude.ai · your Claude.ai account', profileIds: [], lockedReason: CLAUDE_AI_LOCK },
@@ -76,6 +78,8 @@ export const ITEMS: ProfileItem[] = [
   // Codex, one account for everyone.
   { id: 'cx-openai-docs', name: 'openai-docs', description: 'Look things up in the OpenAI docs', kind: 'skill', source: 'codex', accountId: 'codex-default', where: '~/.codex/skills/.system/openai-docs', profileIds: [] },
   { id: 'cx-writing', name: 'writing', description: 'House style for docs and PRs', kind: 'skill', source: 'codex', accountId: 'codex-default', where: '~/.agents/skills/writing', profileIds: ['latitude'] },
+  { id: 'cx-explorer', name: 'explorer', description: 'Read-only codebase search', kind: 'subagent', source: 'codex', accountId: 'codex-default', where: '~/.codex/config.toml · agents.explorer', profileIds: [], lockedReason: CODEX_ROLE_LOCK },
+  { id: 'cx-review-hook', name: 'UserPromptSubmit: secret scan', description: 'python3 ~/.codex/hooks/scan.py', kind: 'hook', source: 'codex', accountId: 'codex-default', where: '~/.codex/hooks.json · UserPromptSubmit', profileIds: [] },
   { id: 'cx-context7', name: 'context7', description: 'Up-to-date library docs', kind: 'server', source: 'codex', accountId: 'codex-default', where: '~/.codex/config.toml · stdio · npx @upstash/context7-mcp', profileIds: [] },
   { id: 'cx-playwright', name: 'playwright', description: '', kind: 'server', source: 'codex', accountId: 'codex-default', where: '~/.codex/config.toml · stdio · npx @playwright/mcp', profileIds: [], error: 'Exited at start: npx: command not found' },
 ];

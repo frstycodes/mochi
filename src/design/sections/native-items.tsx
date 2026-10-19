@@ -412,6 +412,18 @@ function MockFrame({ children, className }: { children: ReactNode; className?: s
 
 // {PROFILE SETTINGS}
 
+/** What a harness can only drop as a group (feasibility matrix in PROFILES-UX.md): one switch each, on by default. */
+const GROUP_SWITCHES = {
+  claude: [
+    ['hooks', 'Hooks', 'Claude Code can’t skip one hook, so this turns off every hook in Mochi threads, plugins’ included'],
+    ['claudeAi', 'Claude.ai connectors', 'The connectors your Claude.ai login brings, like Gmail and Google Calendar'],
+  ],
+  codex: [
+    ['subagents', 'Subagents', 'Codex can’t skip one subagent, so this turns off all of them in Mochi threads'],
+    ['apps', 'ChatGPT apps', 'The apps your ChatGPT login brings'],
+  ],
+} as const satisfies Record<Provider, readonly (readonly [string, string, string])[]>;
+
 const NEW_ITEM_OPTIONS = [
   { value: 'on', label: 'Load them' },
   { value: 'off', label: 'Only what I add' },
@@ -419,6 +431,7 @@ const NEW_ITEM_OPTIONS = [
 
 function ProfileHarnessRows({ items, setItems, profileId }: Items & { profileId: string }) {
   const [newItems, setNewItems] = useState<Record<string, NewItemsMode>>({ 'latitude:claude': 'on', 'latitude:codex': 'on', 'personal:claude': 'on', 'personal:codex': 'off', 'liane:claude': 'off', 'liane:codex': 'off' });
+  const [groupsOff, setGroupsOff] = useState<string[]>([]);
   const profile = PROFILES.find((p) => p.id === profileId)!;
   return (
     <MockFrame className="gap-4">
@@ -454,6 +467,17 @@ function ProfileHarnessRows({ items, setItems, profileId }: Items & { profileId:
                 description={newItems[key] === 'on' ? `What you add to ${harness} later loads here too` : `What you add to ${harness} later arrives off; turn it on here`}
                 control={<SettingsSelect value={newItems[key]} options={NEW_ITEM_OPTIONS} onChange={(v) => setNewItems((m) => ({ ...m, [key]: v }))} aria-label={`New ${harness} items in ${profile.name}`} />}
               />,
+              ...GROUP_SWITCHES[provider].map(([id, label, description]) => {
+                const groupKey = `${key}:${id}`;
+                return (
+                  <SettingsRow
+                    key={groupKey}
+                    label={`${label} from ${harness}`}
+                    description={description}
+                    control={<Switch checked={!groupsOff.includes(groupKey)} onCheckedChange={(isOn) => setGroupsOff((off) => (isOn ? off.filter((k) => k !== groupKey) : [...off, groupKey]))} aria-label={`${label} from ${harness} in ${profile.name}`} />}
+                  />
+                );
+              }),
             ];
           })}
         </SettingsCard>
