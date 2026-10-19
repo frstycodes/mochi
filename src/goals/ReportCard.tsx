@@ -181,7 +181,7 @@ export function Evidence({ thread, tiles, prs }: { thread: Thread; tiles: Tile[]
 
 function FactIcon({ thread, tile }: { thread: Thread; tile: Tile }) {
   const criteria = thread.criteria ?? [];
-  if (tile.id === 'criteria' && criteria.length > 0) return <ProgressRing met={criteria.filter(isMet).length} total={criteria.length} slot={thread.line} size={14} />;
+  if (tile.id === 'criteria' && criteria.length > 0) return <ProgressRing met={criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length} total={criteria.length} slot={thread.line} size={14} />;
   const className = cn('size-3.5 shrink-0', REF_TONE_CLASS[factTone(tile.bars)]);
   if (tile.id === 'pr') return tile.bars.includes('merged') ? <GitMergeIcon aria-hidden className={className} /> : <GitPullRequestIcon aria-hidden className={className} />;
   const Icon = FACT_ICONS[tile.id];

@@ -6,6 +6,7 @@ import { approvalEvent, callDescription, claudeModels, commandsFrom, createMappe
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
+import { toolCall } from '../../../src/summary.ts';
 
 const CWD = '/repo';
 
@@ -259,6 +260,9 @@ test('work-group rows: Bash keeps its own description, file paths read relative 
   assert.equal(patch, 'diff --git a/math.js b/math.js\n--- a/math.js\n+++ b/math.js\n@@ -1,1 +1,2 @@\n a\n+b');
   assert.equal(parsePatchFiles(patch!)[0].files[0].type, 'change');
   assert.equal(patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [] }), undefined);
+  const created = patchOf({ file_path: '/repo/new.ts' }, { type: 'create', content: 'a\nb\nc\n', structuredPatch: [] });
+  assert.equal(created, 'diff --git a/new.ts b/new.ts\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1,3 @@\n+a\n+b\n+c');
+  assert.deepEqual(toolCall({ text: 'Write new.ts', patch: created }), { verb: 'Write', target: 'new.ts', added: 3, removed: 0 });
 });
 
 test('a Skill call is a skill load and an mcp__ call names its server and tool, read back through init', () => {

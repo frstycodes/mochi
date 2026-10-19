@@ -137,7 +137,7 @@ function NewThread() {
         toast.error(problem);
         return false;
       }
-      const images = await sentImages(files);
+      const images = await sentImages(files, (type, base64) => host.data.saveImage(type, base64));
       const result = await machines.run(remote.id, { type: 'create', title, provider, project: remoteProject, ...(picked && { controls }), ...(images.length > 0 && { images }) });
       if (!result.isOk) return false;
       return void toast.success(`Started on ${remote.name}`, { description: 'It’s in the sidebar under that computer.' });
@@ -147,7 +147,7 @@ function NewThread() {
       toast.error(problem);
       return false;
     }
-    const images = await sentImages(files);
+    const images = await sentImages(files, (type, base64) => host.data.saveImage(type, base64));
     const references = withReferences(title, mention.mentions, state.threads, { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
     handOffComposer(leafId, layoutId);
     mention.clear();
@@ -173,8 +173,8 @@ function NewThread() {
         <h1 className="text-balance type-display">{greeting(new Date())}</h1>
       </header>
 
-      {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. */}
-      <motion.div layoutId={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
+      {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. A constant layoutDependency keeps its resizes (project step to composer) instant; the handoff still animates. */}
+      <motion.div layoutId={layoutId} layoutDependency={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
         {step === 'project' && (
           <ComposerCard>
             {/* Keyed so the highlight starts on the latest project once the list loads. */}

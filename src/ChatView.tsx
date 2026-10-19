@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
+import { host } from './host';
 import { getDraft, threadDraftKey } from './chat/drafts';
 import { ContextRing } from './ContextRing';
 import { threadUsage } from './usage/model';
@@ -427,7 +428,7 @@ function Composer({
                 const focus = compactFocus(trimmed);
                 if (focus !== null) return runCompact(focus, files.length > 0);
                 if (!isQueueing) recordUnanswered();
-                const images = await sentImages(files);
+                const images = await sentImages(files, (type, base64) => host.data.saveImage(type, base64));
                 const message = queuedMessage(trimmed, { ...(images.length > 0 && { images }), mentions: mention.mentions, isCommand: !!resolveToken(trimmed, slashItems), typedSkills: typedSkills(trimmed, slashItems) });
                 if (!isQueueing) return drift.submit(message);
                 dispatch({ type: 'queued-add', threadId: thread.id, message });

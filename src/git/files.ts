@@ -1,18 +1,27 @@
 import type { DiffFile } from '../host/types/git.ts';
+import { buildTree, compactTree, visibleRows, type TreeNode } from '../files/tree.ts';
 
-export interface DirGroup {
-  dir: string;
+export interface ChangeSection {
+  /** "Staged" / "Changes" while staging is possible; null for one flat list. */
+  title: string | null;
+  tree: TreeNode[];
+  /** In the tree's order, so the diffs read top to bottom like the tree. */
   files: DiffFile[];
 }
 
-/** Files sorted by path and grouped under their directory, like a compressed file tree. */
-export function groupByDir(files: DiffFile[]): DirGroup[] {
-  const groups = new Map<string, DiffFile[]>();
-  for (const file of [...files].sort((a, b) => a.path.localeCompare(b.path))) {
-    const dir = file.path.slice(0, file.path.lastIndexOf('/') + 1);
-    groups.set(dir, [...(groups.get(dir) ?? []), file]);
-  }
-  return [...groups].map(([dir, files]) => ({ dir, files }));
+export function changeSections(files: DiffFile[], canStage: boolean): ChangeSection[] {
+  const groups = canStage
+    ? [
+        { title: 'Staged', files: files.filter((f) => f.staged) },
+        { title: 'Changes', files: files.filter((f) => !f.staged) },
+      ].filter((g) => g.files.length > 0)
+    : [{ title: null, files }];
+  return groups.map(({ title, files }) => {
+    const tree = compactTree(buildTree(files.map((f) => f.path)));
+    const byPath = new Map(files.map((f) => [f.path, f]));
+    const ordered = visibleRows(tree, 'all').flatMap(({ node }) => byPath.get(node.path) ?? []);
+    return { title, tree, files: ordered };
+  });
 }
 
 export function fileKey(file: Pick<DiffFile, 'path' | 'staged'>) {

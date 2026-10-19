@@ -22,7 +22,7 @@ export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', v
  */
 export function goalProgress(thread: Thread) {
   const criteria = thread.criteria ?? [];
-  const met = criteria.filter(isMet).length;
+  const met = criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length;
   return { met, total: criteria.length, phase: phaseOf(thread, criteria.length > 0 && met === criteria.length) };
 }
 

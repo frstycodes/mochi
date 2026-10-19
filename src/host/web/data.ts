@@ -34,4 +34,8 @@ export const data: DataHost = {
     setTimeout(() => URL.revokeObjectURL(url), 0);
     return name;
   },
+  // Nothing outlives the page here, so the original stays as the data URL it came in.
+  async saveImage(mediaType, base64) {
+    return `data:${mediaType};base64,${base64}`;
+  },
 };

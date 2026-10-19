@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ChevronDown, Hierarchy2, WarningAlt } from '@/icons';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,6 +15,7 @@ import { getPrefs } from '../settings/prefs';
 import { useHarness } from '../store';
 import { MetaChip } from '../MetaChip';
 import { SwitchBranchDialog } from './SwitchBranchDialog';
+import { useBranches } from './useGit';
 import { branchName, isUnstarted, uniqueBranch, type WorkspaceDraft } from './workspace';
 
 const NAME_CHECK_MS = 250;
@@ -254,19 +255,6 @@ export function WorkspaceNotes({ workspace }: { workspace: Workspace }) {
       ))}
     </ul>
   );
-}
-
-function useBranches(root: string) {
-  const [state, setState] = useState<{ root: string; list?: BranchList; error?: string }>({ root });
-  const refresh = useCallback(() => {
-    if (!root) return;
-    host.git.branches(root).then(
-      (list) => setState({ root, list }),
-      (error: Error) => setState({ root, error: error.message }),
-    );
-  }, [root]);
-  useEffect(refresh, [refresh]);
-  return state.root === root ? { list: state.list, error: state.error, refresh } : { refresh };
 }
 
 function useBranchNameError(root: string, name: string | undefined) {

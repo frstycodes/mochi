@@ -11,7 +11,7 @@ export function useTerminals(thread: Thread, tabId: string, cwd: string) {
   const openers = usePaneOpeners(thread.id);
   const context = useMemo(() => ({ cwd, threadId: thread.id, links: openers }), [cwd, thread.id, openers]);
   const group = useTerminalGroup(key);
-  usePorts(thread.id, cwd, openers.openPort);
+  usePorts(thread.id, cwd);
   useEffect(() => ensureGroup(key, context), [key, context]);
 
   const runs = useMemo(() => agentRuns(thread), [thread]);
