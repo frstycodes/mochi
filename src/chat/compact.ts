@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { isWorking } from '../agentPhase.ts';
 import { host } from '../host/index.ts';
-import { IS_MAC } from '../keys.ts';
 import { authorName, type ActivityEntry, type Compaction, type Thread } from '../model.ts';
 import { getThreadPins, useAllPins, type Pin } from './pins.ts';
 import { parseSlash } from './slash.ts';
@@ -49,18 +48,17 @@ function clip(text: string) {
   return flat.length > PIN_CHARS ? `${flat.slice(0, PIN_CHARS - 1)}…` : flat;
 }
 
-/** Whether `/compact` can run now: `run`, `queue` behind the turn (the message-queue rules), or `off` with why. */
+/** Whether `/compact` can run now: `run`, `queue` behind a working turn (a compaction can't steer one), or `off` with why. */
 export type CompactGate = { kind: 'run' } | { kind: 'queue' } | { kind: 'off'; reason: string };
 
-export function compactGate(thread: Thread, isQueueing: boolean, isWaitingOnYou = false): CompactGate {
+export function compactGate(thread: Thread, isWaitingOnYou = false): CompactGate {
   const { live } = thread;
   if (!live || !thread.session) return off('Nothing to compact until the agent has started');
   if (live.isDetached) return off('Send a message first: the agent reconnects with it');
   if (live.starting) return off('The agent is still starting');
   if (isCompacting(thread)) return off('Already compacting');
   if (isWaitingOnYou) return off('Answer the agent first');
-  if (!isWorking(thread)) return { kind: 'run' };
-  return isQueueing ? { kind: 'queue' } : off(`${authorName(thread.providers[0])} is working: hold ${IS_MAC ? '⌘' : 'Ctrl'} to queue it`);
+  return isWorking(thread) ? { kind: 'queue' } : { kind: 'run' };
 }
 
 const off = (reason: string): CompactGate => ({ kind: 'off', reason });

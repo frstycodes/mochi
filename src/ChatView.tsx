@@ -357,7 +357,7 @@ function Composer({
   const root = projectRef(thread.repo);
   const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent));
   const drift = useDriftGuard(thread, mention.clear);
-  const compact = compactGate(thread, isQueueing, decisions.length > 0);
+  const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
   const items = useMemo(() => slashItems.map((i) => (i.source === 'mochi' && i.name === 'compact' && offReason ? { ...i, disabledReason: offReason } : i)), [slashItems, offReason]);
   const slash = useSlashMenu(items);
@@ -401,7 +401,7 @@ function Composer({
           <MentionMenu menu={mention} />
           <ComposerCard data-composer className="in-data-image-over:border-ring">
             {decisions.length > 0 && <QuestionTray decisions={decisions} isOpen={isTrayOpen} onToggle={onToggleTray} />}
-            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id, steers: true })} />
+            <QueueTray thread={thread} onEdit={edit} onSendNow={(message) => drift.submit(message, { queuedId: message.id })} />
             <MentionChips menu={mention} />
             <ComposerInput
               ref={editor}
