@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Hourglass } from '@/icons';
+import { ChevronDown, Copy, Hourglass } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { host } from '../host';
 import type { ActivityEntry, Provider, Thread } from '../model';
-import { openRewind } from '../rewind/requests';
 import { PROVIDER_NAME } from '../rewind/handoff';
+import { copyHandoffPrompt, handOffHere, isHandingOff, otherProvider } from '../rewind/runHandoff';
 import { HARNESSES } from '../settings/harnesses';
 import { useHarness } from '../store';
 import { ProviderMark } from '../ui';
@@ -28,7 +29,6 @@ export function LimitEntry({ thread, entry }: { thread: Thread; entry: ActivityE
 function LimitCard({ thread, title, limit }: { thread: Thread; title: string; limit: NonNullable<NonNullable<Thread['live']>['limit']> }) {
   const { dispatch } = useHarness();
   const provider = thread.providers[0];
-  const other: Provider = provider === 'claude' ? 'codex' : 'claude';
   const until = useUntil(limit.resetsAt);
   const isReset = until <= 0;
   const hasApiKey = useHasApiKey(provider) && !thread.live?.isOnApiKey;
@@ -52,10 +52,7 @@ function LimitCard({ thread, title, limit }: { thread: Thread; title: string; li
         </p>
       </CardContent>
       <CardFooter className="flex-wrap justify-end gap-2 border-t-0 bg-transparent pt-0">
-        <Button variant="ghost" size="sm" onClick={() => openRewind({ kind: 'handoff', threadId: thread.id })}>
-          <ProviderMark provider={other} size={14} />
-          Hand off to {PROVIDER_NAME[other]}
-        </Button>
+        <HandoffMenu thread={thread} />
         {hasApiKey && (
           <Button variant="outline" size="sm" onClick={() => resume(true)}>
             Use API key
@@ -65,6 +62,33 @@ function LimitCard({ thread, title, limit }: { thread: Thread; title: string; li
         {!limit.isTurnHeld && <ResumeButton isReset={isReset || !at} isArmed={!!limit.autoResume} at={at} onResume={() => resume()} onArm={arm} />}
       </CardFooter>
     </Card>
+  );
+}
+
+/** Both ways to hand off at once: here, or the prompt on the clipboard to take anywhere. */
+function HandoffMenu({ thread }: { thread: Thread }) {
+  const { dispatch } = useHarness();
+  const other = otherProvider(thread);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <ProviderMark provider={other} size={14} />
+          Hand off to {PROVIDER_NAME[other]}
+          <ChevronDown data-icon="inline-end" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-max">
+        <DropdownMenuItem disabled={isHandingOff(thread)} onSelect={() => handOffHere(thread, dispatch)}>
+          <ProviderMark provider={other} size={14} />
+          Hand off to {PROVIDER_NAME[other]} here
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => copyHandoffPrompt(thread)}>
+          <Copy />
+          Copy handoff prompt
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

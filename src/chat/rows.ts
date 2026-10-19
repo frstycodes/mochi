@@ -55,9 +55,9 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       return rows.push({ kind: 'subagent', key, entry });
     }
     if (entry.kind === 'event') {
-      const isWidget = !!entry.card || !!entry.isLimit || !!entry.compaction || !!entry.nextMove || !!entry.subThread;
+      const isWidget = !!entry.card || !!entry.isLimit || !!entry.compaction || !!entry.handoff || !!entry.nextMove || !!entry.subThread;
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
-      // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, an answered next move, a sub-thread's result) stay in view: the turn continues in a new accordion after one.
+      // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread's result) stay in view: the turn continues in a new accordion after one.
       if (isWidget) turn = undefined;
       return rows.push({ kind: 'event', key, entry });
     }
