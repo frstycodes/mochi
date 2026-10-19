@@ -1,7 +1,7 @@
 import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type Handoff, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
@@ -18,7 +18,7 @@ import { recordCheckpoints, rewind, rewindToMessage, seedCheckpoints, turnUndo, 
 import { forkThread, keepFork, type Fork, type ForkPoint } from '../rewind/fork.ts';
 import type { ThreadControls } from '../runtime/controls.ts';
 import { contextMax } from '../runtime/models.ts';
-import { handoff } from '../rewind/handoff.ts';
+import { handoff, handoffDraft, handoffFail } from '../rewind/handoff.ts';
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { projectRef, repoFor } from '../projects.ts';
@@ -122,7 +122,10 @@ export type ThreadsAction =
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
   | { type: 'fork'; threadId: string; point: ForkPoint }
   | { type: 'fork-keep'; keepId: string; dropId: string }
-  | { type: 'handoff'; threadId: string; to: Provider; summary: string }
+  /** Opens the handoff row while the prompt drafts (`src/rewind/runHandoff.ts`); `handoff` then moves the thread. */
+  | { type: 'handoff-draft'; threadId: string; to: Provider }
+  | { type: 'handoff'; threadId: string; to: Provider; summary: string; fallback?: Handoff['fallback'] }
+  | { type: 'handoff-fail'; threadId: string; error: string }
   /** A Mochi background agent for the thread (`start_background_agent`); `agentCalls` starts its session. */
   | { type: 'bg-start'; threadId: string; agent: BackgroundStart }
   /** Stops a subagent: a Mochi one ends here, a native one when its harness reports it stopped. */
@@ -319,8 +322,15 @@ function reduce(state: State, action: Action): State {
       if (!subagent || (subagent.origin === 'native' && thread?.live && !thread.live.isDetached)) return state;
       return applyAgentEvent(state, { threadId: action.threadId, type: 'subagent', id: subagent.id, phase: 'end', status: 'stopped' });
     }
-    case 'handoff':
-      return handoffLive(handoff(state, action.threadId, action.to, action.summary), action);
+    case 'handoff-draft':
+      return handoffDraft(state, action.threadId, action.to);
+    case 'handoff': {
+      const isMoving = state.threads.find((t) => t.id === action.threadId)?.providers[0] !== action.to;
+      const next = handoff(state, action.threadId, action.to, action.summary, action.fallback);
+      return isMoving ? handoffLive(next, action) : next;
+    }
+    case 'handoff-fail':
+      return handoffFail(state, action.threadId, action.error);
     default:
       return state;
   }

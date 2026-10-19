@@ -171,6 +171,19 @@ export interface ActivityEntry {
   sent?: ThreadRef & { text: string };
   /** Events only: the harness compacted the conversation here. */
   compaction?: Compaction;
+  /** Events only: the thread moved to the other agent here. */
+  handoff?: Handoff;
+}
+
+/** A handoff to the other agent: drafting while a model writes `prompt`, started once the new agent has it as its first message. */
+export interface Handoff {
+  from: Provider;
+  to: Provider;
+  status: 'drafting' | 'started' | 'failed';
+  prompt?: string;
+  /** Why `prompt` is the local summary instead of a model's draft. */
+  fallback?: 'timeout' | 'error';
+  error?: string;
 }
 
 /**
