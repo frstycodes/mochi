@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type DragEvent, type ReactNode, type RefObject } from 'react';
 import { AlertTriangle, Terminal, Upload } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,18 +17,16 @@ import type { PluginReview } from './library';
 import { countOf, LibraryIcon, LIST } from './LibraryParts';
 import type { Library } from './useLibrary';
 
-/** Plugins › Upload plugin: a file from the picker or dropped on the page, read in main, reviewed, then installed. */
-export function UploadPluginButton({ library }: { library: Library }) {
+/**
+ * Plugins › Add plugin › Plugin file: a file from the picker (`fileInput`, which the menu clicks) or dropped on the page,
+ * read in main, reviewed here, then installed.
+ */
+export function UploadPluginDialog({ library, fileInput }: { library: Library; fileInput: RefObject<HTMLInputElement | null> }) {
   const file = usePendingUpload();
-  const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <Button size="xs" variant="outline" onClick={() => input.current?.click()}>
-        <Upload />
-        Upload plugin
-      </Button>
       <input
-        ref={input}
+        ref={fileInput}
         type="file"
         accept={UPLOAD_ACCEPT}
         className="hidden"
@@ -40,7 +38,7 @@ export function UploadPluginButton({ library }: { library: Library }) {
       />
       <Dialog open={!!file} onOpenChange={(isOpen) => !isOpen && setPendingUpload(null)}>
         <DialogContent className="flex max-h-[min(720px,calc(100dvh-4rem))] flex-col sm:max-w-lg">
-          {!!file && <UploadReview key={`${file.name}:${file.lastModified}:${file.size}`} file={file} library={library} onPickAnother={() => input.current?.click()} onDone={() => setPendingUpload(null)} />}
+          {!!file && <UploadReview key={`${file.name}:${file.lastModified}:${file.size}`} file={file} library={library} onPickAnother={() => fileInput.current?.click()} onDone={() => setPendingUpload(null)} />}
         </DialogContent>
       </Dialog>
     </>
