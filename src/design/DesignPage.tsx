@@ -437,7 +437,7 @@ function Actions() {
         </Block>
         <Block title="Toggle and toggle group" use="Separate bordered toggles. The selected one gets a stronger border and a fill.">
           <div className="flex flex-wrap items-center gap-3">
-            <ToggleGroup type="single" variant="outline" size="sm" spacing={1} defaultValue="claude" aria-label="Agent">
+            <ToggleGroup type="single" variant="outline" size="sm" defaultValue="claude" aria-label="Agent">
               <ToggleGroupItem value="claude">
                 <ProviderMark provider="claude" size={14} />
                 Claude
