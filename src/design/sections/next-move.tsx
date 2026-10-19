@@ -38,7 +38,7 @@ function PlanMock({ rl }: { rl: Thread }) {
     <MockFrame label="Working · the plan stays last until it's done" control={isDone ? <Button size="xs" variant="outline" onClick={() => setItems(PLAN)}>Reset</Button> : <Button size="xs" variant="outline" onClick={() => setItems(advance)}>Finish a step</Button>}>
       <p className="type-prose">Adding Retry-After to the 429 path first, then the burst test.</p>
       <WorkLine>Edited rate-limit.ts</WorkLine>
-      <PlanList items={items} slot={rl.line} />
+      <PlanList items={items} slot={rl.line} isWorking={!isDone} />
       <ComposerStub placeholder={isDone ? `Message ${authorName(rl.providers[0])}` : `Steer ${authorName(rl.providers[0])} while it works`} />
     </MockFrame>
   );
