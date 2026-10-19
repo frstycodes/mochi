@@ -1,21 +1,14 @@
 import { useState } from 'react';
-import { Key, Pen, Plus } from '@/icons';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { CheckCircle, ChevronRight, Plus } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-import { openSettings } from '../settings/open';
+import { openSubpage } from '../settings/open';
 import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
-import { OverflowIcon } from '../ui';
 import { ConnectAccountDialog } from './ConnectDialog';
 import { CONNECTORS, connectorIcon, connectorKey, isSameServer, type Connector } from './connectors';
 import { serviceName } from './names';
 import type { LibraryEntry } from './library';
 import { LibraryPage, type PagePart } from './LibraryPage';
-import { ALL, CategoryChips, countOf, EmptyRow, EntryActions, filterBy, InstalledList, LibraryIcon, LibraryRow, LIST } from './LibraryParts';
+import { ALL, CategoryChips, countOf, EmptyRow, filterBy, InstalledList, LibraryIcon, LibraryRow, LIST } from './LibraryParts';
 import type { Library } from './useLibrary';
 
 /** Settings › Connectors: every connected account and local server, which profiles reach each, and a directory of services to connect. */
@@ -66,13 +59,9 @@ function Connected({ library, query, showDiscover }: Parameters<PagePart>[0]) {
         <SettingsCard>
           {!services && <SkeletonRows count={2} />}
           {isEmpty && (query ? <EmptyRow text={`Nothing in your library matches “${query}”`} /> : <NothingConnected onDiscover={showDiscover} />)}
-          {!!services?.length && (
-            <Accordion type="multiple">
-              {services.map((service) => (
-                <ServiceRow key={service.url} service={service} library={library} />
-              ))}
-            </Accordion>
-          )}
+          {services?.map((service) => (
+            <ServiceRow key={service.url} service={service} />
+          ))}
         </SettingsCard>
       </SettingsSection>
       {shownServers.length > 0 && (
@@ -110,123 +99,31 @@ function byService(accounts: LibraryEntry[]): Service[] {
   return [...groups].map(([url, list]) => ({ url, key: URL.canParse(url) ? connectorKey(url) : url, name: serviceName(list[0]), icon: list[0].icon, accounts: list }));
 }
 
-/** One service, closed to a line saying which accounts it has; opened, each account with its sign-in and switch. */
-function ServiceRow({ service, library }: { service: Service; library: Library }) {
-  const [isConnecting, setConnecting] = useState(false);
+/** One service as a settings row that opens its own page: tile, name and accounts, then its status beside the chevron. */
+function ServiceRow({ service }: { service: Service }) {
   const { accounts } = service;
   const aliases = accounts.flatMap((a) => (a.alias ? [a.alias] : []));
   const signedOut = accounts.filter((a) => a.isLinked === false).length;
   return (
-    <AccordionItem value={service.url} className="relative not-last:border-b-0 not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border">
-      {/* A button can't sit inside the trigger, so the ⋯ floats over it, left of the chevron; the trigger leaves it room. */}
-      <div className="absolute top-3 right-10 z-10 flex h-10 items-center">
-        <ServiceMenu service={service} library={library} />
-      </div>
-      <AccordionTrigger className="items-center gap-3 rounded-none py-3 pr-4 pl-4 font-normal hover:no-underline">
-        <LibraryIcon key={service.icon} url={service.icon} letter={service.name} />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5 pr-10">
-          <span className="truncate type-body font-medium">{service.name}</span>
-          <span className="truncate type-caption text-subtle-foreground">
-            {countOf(accounts.length, 'account')} · {LIST.format(aliases)}
-          </span>
-          {signedOut > 0 && <span className="type-caption text-warning">{signedOut} signed out</span>}
-        </span>
-      </AccordionTrigger>
-      <AccordionContent className="bg-muted/30 p-0">
-        <ul aria-label={`${service.name} accounts`}>
-          {accounts.map((account) => (
-            <li key={account.id} className={NESTED_ROW}>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate type-body">{account.alias}</span>
-                <span className={account.isLinked === false ? 'type-caption text-warning' : 'type-caption text-subtle-foreground'}>{account.isLinked === false ? 'Signed out: its tools are left out of threads' : 'Signed in'}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <EntryActions entry={account} library={library} />
-              </span>
-            </li>
-          ))}
-          <li>
-            <button type="button" onClick={() => setConnecting(true)} className={cn(NESTED_ROW, 'min-h-13 w-full text-left type-body text-muted-foreground outline-none transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/40 focus-visible:text-foreground')}>
-              <Plus aria-hidden className="size-4" />
-              Add a {service.name} account
-            </button>
-          </li>
-        </ul>
-        <ConnectAccountDialog open={isConnecting} onOpenChange={setConnecting} url={service.url} library={library} />
-      </AccordionContent>
-    </AccordionItem>
-  );
-}
-
-/** Rename the connector, or open its tools and their permissions. */
-function ServiceMenu({ service, library }: { service: Service; library: Library }) {
-  const [isRenaming, setRenaming] = useState(false);
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={`${service.name} actions`}>
-            <OverflowIcon />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuItem onSelect={() => setRenaming(true)}>
-            <Pen />
-            Rename…
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => openSettings('connectorTools', `connector-${service.key}`)}>
-            <Key />
-            Tools and permissions
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Dialog open={isRenaming} onOpenChange={setRenaming}>
-        <DialogContent className="sm:max-w-sm">
-          <RenameForm service={service} library={library} onDone={() => setRenaming(false)} />
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-// Inside the dialog's content, which unmounts when it closes, so every opening starts from the current name.
-function RenameForm({ service, library, onDone }: { service: Service; library: Library; onDone: () => void }) {
-  const [name, setName] = useState(service.name);
-  const trimmed = name.trim();
-  return (
-    <form
-      className="flex flex-col gap-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!trimmed || trimmed === service.name) return onDone();
-        void library.renameConnector(service.key, trimmed).then((isDone) => isDone && onDone());
-      }}
+    <button
+      type="button"
+      onClick={() => openSubpage('connectors', service.key)}
+      className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
     >
-      <DialogHeader>
-        <DialogTitle>Rename {service.name}</DialogTitle>
-        <DialogDescription>Threads, menus and the work log show this name.</DialogDescription>
-      </DialogHeader>
-      <Field>
-        <FieldLabel htmlFor="connector-name">Name</FieldLabel>
-        <Input id="connector-name" autoFocus maxLength={64} value={name} onChange={(e) => setName(e.target.value)} />
-        <FieldDescription>
-          Agents still reach it as <code className="font-mono">{service.key}</code>, so its tool permissions keep working.
-        </FieldDescription>
-      </Field>
-      <DialogFooter>
-        <Button type="button" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={!trimmed}>
-          Save name
-        </Button>
-      </DialogFooter>
-    </form>
+      <LibraryIcon key={service.icon} url={service.icon} letter={service.name} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate type-body font-medium">{service.name}</span>
+        <span className="truncate type-caption text-subtle-foreground">
+          {countOf(accounts.length, 'account')} · {LIST.format(aliases)}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        {signedOut ? <span className="type-meta text-warning">{signedOut} signed out</span> : <CheckCircle aria-label="Every account signed in" className="size-4 text-muted-foreground" />}
+        <ChevronRight aria-hidden className="size-4 text-subtle-foreground" />
+      </span>
+    </button>
   );
 }
-
-// A row inside an open service: indented to the service's name, split from the row above by the card's inset hairline.
-const NESTED_ROW = 'relative flex items-center gap-3 py-2 pr-4 pl-4 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border sm:pl-17';
 
 // {DISCOVER}
 
@@ -292,3 +189,4 @@ function ConnectorRow({ connector, accounts, library }: { connector: Connector; 
     />
   );
 }
+

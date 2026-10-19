@@ -4,18 +4,19 @@ import { MachineSettings, SettingsComputerPicker } from '../remote/MachineSettin
 import { SharedSettingsNotice } from '../remote/SharedSettingsNotice';
 import { useMachines } from '../remote/useMachines';
 import { TitleBar } from '../TitleBar';
-import { closeSettings, useSettingsRoute, type SettingsRoute } from './open';
+import { closeSettings, openSettings, useSettingsRoute, type SettingsRoute } from './open';
 import { prefersReducedMotion } from './prefs';
-import { SETTINGS_SECTIONS } from './sections';
+import { SETTINGS_SECTIONS, type SettingsSection } from './sections';
 
 /** The content column while settings are open: one page under its title, scrolling on its own. */
 export function SettingsPage() {
   const route = useSettingsRoute();
   const section = SETTINGS_SECTIONS.find((s) => s.id === route?.section) ?? SETTINGS_SECTIONS[0];
   const Section = section.component;
+  const Subpage = route?.subpage ? (section as SettingsSection).subpage : undefined;
   const [machineId, setMachineId] = useState<string | null>(null);
   const machine = useMachines().machines.find((m) => m.machine.id === machineId)?.machine;
-  useEscapeBack();
+  useEscapeBack(route);
   useFlashSetting(route);
 
   return (
@@ -28,9 +29,11 @@ export function SettingsPage() {
         </TitleBar>
         <ScrollArea type="scroll" className="min-h-0">
           <div className="mx-auto flex w-full max-w-180 flex-col gap-8 px-4 pt-6 pb-16 md:px-8">
-            <h1 className="px-1 type-display">{section.title}</h1>
+            {!Subpage && <h1 className="px-1 type-display">{section.title}</h1>}
             {machine ? (
               <MachineSettings key={machine.id} machine={machine} section={section.id} />
+            ) : Subpage ? (
+              <Subpage key={route!.subpage} id={route!.subpage!} />
             ) : (
               <>
                 <SharedSettingsNotice />
@@ -43,19 +46,21 @@ export function SettingsPage() {
   );
 }
 
-/** Esc goes back to the app, unless it's closing a menu or popover first, or leaving a text field (then a second Esc goes back). */
-function useEscapeBack() {
+/** Esc goes back to the app (from a subpage, to its section), unless it's closing a menu or popover first, or leaving a text field (then a second Esc goes back). */
+function useEscapeBack(route: SettingsRoute | null) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       if (document.querySelector('[data-radix-popper-content-wrapper], [role=dialog], [role=alertdialog]')) return;
       const target = e.target as HTMLElement;
       if (target.matches?.('input, textarea, select')) return void target.blur();
+      // A subpage steps back to its section first.
+      if (route?.subpage) return openSettings(route.section);
       closeSettings();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [route]);
 }
 
 const FLASH_MS = 1200;
