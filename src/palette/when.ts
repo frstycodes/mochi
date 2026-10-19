@@ -9,6 +9,8 @@ export interface ActionScope {
   thread: Thread | undefined;
   /** False when a menu targets a thread other than the focused split's, so "Open" only shows where it would navigate. */
   isFocused: boolean;
+  /** The menu was opened on the thread's sidebar row. */
+  isRow: boolean;
   isPinned: boolean;
   isWatched: boolean;
   isDesktop: boolean;
@@ -28,6 +30,7 @@ export interface ScopeTarget {
   threadId?: string;
   leafId?: string;
   tabId?: string;
+  isRow?: boolean;
 }
 
 type Rule = (scope: ActionScope) => boolean;
@@ -90,6 +93,7 @@ export function scopeOf(state: State, target: ScopeTarget = {}, isDesktop = IS_D
   return {
     thread,
     isFocused: !!thread && thread.id === threadOf(findLeaf(layout.root, layout.focusId)?.view),
+    isRow: !!target.isRow,
     isPinned: !!thread && pinnedThreads(state.threads, state.spaceId).includes(thread),
     isWatched: !!thread && state.watched.includes(thread.id),
     isDesktop,

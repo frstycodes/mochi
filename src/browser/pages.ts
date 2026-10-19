@@ -46,6 +46,8 @@ export interface Page {
   devtools: BrowserDevtools;
   isPicking: boolean;
   hasTakenOver: boolean;
+  /** What the agent handed you the tab for (`browser_handoff`), while it waits on you; you have the tab meanwhile. */
+  handoff: string | null;
   reloads: number;
   isAutoReloading: boolean;
   /** A capture waiting in the annotation editor, as a PNG data URL. */
@@ -269,6 +271,7 @@ function seed(key: string, url: string): Page {
     devtools: 'closed',
     isPicking: false,
     hasTakenOver: false,
+    handoff: null,
     reloads: 0,
     isAutoReloading: false,
     annotating: null,

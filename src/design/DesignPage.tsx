@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { EventLine } from '../chat/MochiWidget';
+import { EventLine, MochiWidget } from '../chat/MochiWidget';
 import { ArrowUp, CheckCircle, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
@@ -48,6 +48,7 @@ import { VizThreadProvider } from '../viz/WidgetVisual';
 import { TurnChangesCard } from '../chat/TurnChangesCard';
 import { turnChanges } from '../chat/turnChanges';
 import { PipLayer } from '../Browser';
+import { DriveBar } from '../browser/Toolbar';
 import { SidePane } from '../SidePane';
 import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
@@ -803,6 +804,23 @@ function Recipes() {
         </Block>
         <Block title="Queue decision" use="Same card in the Queue and inline at the end of a chat." wide>
           <QueueDecision item={decision} showThread />
+        </Block>
+        <Block title="Handoff" use="An agent hands you the tab for what only you can do. The card sits where it asked and the bar tops the pane; Done in either, or the page showing you're done, lets it carry on." wide>
+          <div className="flex flex-col gap-3">
+            <MochiWidget
+              item={{
+                id: 'q-handoff-demo',
+                kind: 'approval',
+                threadId: rl.id,
+                title: 'Sign in to GitHub',
+                detail: "Claude carries on once the page shows you're done, or when you click Done.",
+                blocks: { steps: 0, threads: 1 },
+                createdAt: rl.startedAt,
+                tool: { callId: 'q-handoff-demo', isHandoff: true },
+              }}
+            />
+            <DriveBar thread={rl} pageId="design/handoff" hasTakenOver handoff="Sign in to GitHub" />
+          </div>
         </Block>
         <Block title="Same files" use="Two live threads of one project edited the same file; never pauses either agent." wide>
           <QueueDecision

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { prBody } from '../git/prBody.ts';
 import { gateRefusal, prGate } from '../goals/verdict.ts';
-import { branchName, uniqueBranch } from '../git/workspace.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
 import type { AgentModel, AgentPlanItem, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
@@ -12,7 +11,7 @@ import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Subagent, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread } from '../model.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
@@ -76,8 +75,12 @@ export interface ToolContext<A = Record<string, unknown>> {
   confirm: (approval: Approval) => Promise<string[]>;
   /** Asks the user to pick one of `options` on a widget, at any agent setting: a question, not a permission. */
   choose: (question: { title: string; detail?: string; options: string[] }) => Promise<string>;
+  /** Waits on a widget for something only the user can do, at any agent setting; throws when they cancel it. */
+  waitOn: (approval: Approval) => Promise<string[]>;
   /** Widgets this call opened and the user approved; the last one's record becomes what the call changed. */
   cards: string[];
+  /** When waiting on the user must end; a batch's steps share their batch's, so it never outlasts the harness's timeout. */
+  deadline: number;
   /** A config write `ask` previewed: `run` applies exactly these changes, refused if a file changed since (`befores`). */
   write?: { spaceId: string; changes: ConfigChange[]; befores: Record<string, string> };
 }
@@ -95,6 +98,12 @@ export interface Approval {
   isDestructive?: boolean;
   /** The record line when the user says no, like "Kept \"Fix e2e\"". */
   denied?: string;
+  /** The record line when the user says yes, in place of "Approved: <title>". */
+  approved?: string;
+  /** A handoff: the widget reads as the user's turn, with Done. */
+  isHandoff?: boolean;
+  /** Settles the widget as approved, with its answer as the one option, without the user; aborted once they answer. */
+  until?: (signal: AbortSignal) => Promise<string>;
   edits?: FileEdit[];
   notes?: string[];
 }
@@ -129,14 +138,14 @@ const levelLabel = (control: AgentControl) => AGENT_CONTROL.options.find((o) => 
  * Runs a Mochi tool an agent called (RUNTIME.md › Mochi tools): checks scope and the level the setting allows, asks on
  * a widget in the thread for deletes and settings, runs the handler on the store, logs it, and toasts with Undo.
  */
-export async function runTool(call: AgentToolCall, env: ToolEnv): Promise<AgentToolResult> {
+export async function runTool(call: AgentToolCall, env: ToolEnv, deadline = Date.now() + APPROVAL_TIMEOUT_MS): Promise<AgentToolResult> {
   const caller = env.getState().threads.find((t) => t.id === call.threadId);
   if (!caller) return fail(`No thread ${call.threadId}`);
   if (!Object.hasOwn(TOOL_TABLE, call.name)) return fail(`No Mochi tool ${call.name}`);
   const name = call.name as ToolName;
   const parsed = z.object(TOOL_TABLE[name].shape).safeParse(call.args);
   if (!parsed.success) return fail(parsed.error.issues.map((i) => `${i.path.join('.') || 'args'}: ${i.message}`).join('; '));
-  const ctx = context(env, caller, parsed.data, name);
+  const ctx = context(env, caller, parsed.data, name, deadline);
   const spec = SPECS[name] as ToolSpec<ToolName>;
   const tier = tierOf(name);
   const { policy, isChosen } = toolPolicy(name, env.prefs.get().agentControl, env.prefs.get().toolPolicies);
@@ -172,8 +181,8 @@ let nextCard = 0;
 const RUN = Date.now().toString(36);
 export const cardId = (kind: string, threadId: string) => `q-${kind}-${threadId}-${RUN}-${++nextCard}`;
 
-function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName): ToolContext<A> {
-  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), cards: [] };
+function context<A>(env: ToolEnv, caller: Thread, args: A, name: ToolName, deadline: number): ToolContext<A> {
+  const ctx: ToolContext<A> = { env, caller, args, state: env.getState, dispatch: env.dispatch, confirm: (approval) => (gate(ctx, name, 'everything'), ask(ctx, approval)), choose: (q) => choose(ctx, q), waitOn: (approval) => ask(ctx, approval), cards: [], deadline };
   return ctx;
 }
 
@@ -207,18 +216,21 @@ function gate(ctx: ToolContext<unknown>, name: ToolName, needs: AgentControl) {
 
 async function ask(ctx: ToolContext<unknown>, approval: Approval): Promise<string[]> {
   const id = cardId('tool', ctx.caller.id);
-  const { options, pick, isDestructive, edits, notes } = approval;
-  const tool = { callId: id, options, pick, isDestructive, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
+  const { options, pick, isDestructive, isHandoff, edits, notes } = approval;
+  const tool = { callId: id, options, pick, isDestructive, isHandoff, notes, edits: edits?.map((e) => ({ path: e.path, before: redactSecrets(e.before), after: redactSecrets(e.after) })) };
   open(ctx, card(ctx, id, 'approval', { title: approval.title, detail: approval.detail, code: approval.code, tool }));
+  const watch = new AbortController();
   const decision = await new Promise<{ isApproved: boolean; options?: string[] } | null>((resolve) => {
-    const timer = setTimeout(() => resolve(null), APPROVAL_TIMEOUT_MS);
+    const timer = setTimeout(() => resolve(null), Math.max(0, ctx.deadline - Date.now()));
     waiting.set(id, (d) => (clearTimeout(timer), resolve(d)));
+    approval.until?.(watch.signal).then((answer) => decideTool(id, { isApproved: true, options: [answer] }), () => undefined);
   });
+  watch.abort();
   waiting.delete(id);
   const picked = pick && options?.find((o) => o.id === decision?.options?.[0])?.label;
-  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : `Approved: ${approval.title}`) : (approval.denied ?? `Denied: ${approval.title}`);
+  const text = !decision ? `Expired: ${approval.title}` : decision.isApproved ? (picked ? `${approval.title} ${picked}` : (approval.approved ?? `Approved: ${approval.title}`)) : (approval.denied ?? `Denied: ${approval.title}`);
   ctx.dispatch({ type: 'card-record', queueId: id, text });
-  if (!decision) throw new Error(`Nobody answered in ${APPROVAL_TIMEOUT_MS / 60_000} minutes; nothing was done.`);
+  if (!decision) throw new Error('Nobody answered in time; nothing was done.');
   if (!decision.isApproved) throw new Error(`The user denied it: ${approval.title} Nothing was done.`);
   ctx.cards.push(id);
   return decision.options ?? [];
@@ -374,7 +386,9 @@ const THREAD_SPECS = {
       const project = projectRef(caller.repo);
       // A sub-thread starts from what the parent has committed, so its PR into the parent's branch holds only its own change.
       const base = parent && caller.repo && !caller.repo.isDetached ? caller.repo.branch : undefined;
-      const workspace = project ? { ...(await newWorktree(env, project, prompt)), ...(base && { base }) } : undefined;
+      // Always its own worktree, whatever the composer's Worktree box says: parallel agents sharing one folder trip over each
+      // other's changes and make worktrees Mochi can't see. Its branch gets a temp name until its title names it.
+      const workspace = project ? { mode: 'worktree' as const, ...(base && { base }) } : undefined;
       const controls = await newThreadControls(env, caller, provider, args);
       const before = state();
       dispatch({
@@ -570,34 +584,37 @@ const AGENT_SPECS = {
       return { result: `Plan shown (${items.length} steps).` };
     },
   },
-  start_background_agent: {
+  delegate_task: {
     run: ({ state, caller, args, dispatch }) => {
-      if (!caller.live) throw new Error('Background agents run only in a live desktop thread.');
+      if (!caller.live) throw new Error('Delegated tasks run only in a live desktop thread.');
       if (args.worktree === 'new' && !caller.repo) throw new Error('This chat has no project, so there is no repository to make a worktree in. Use worktree: same.');
       const id = `bg${(caller.subagents ?? []).filter((s) => s.origin === 'mochi').length + 1}`;
-      const agent = { id, name: args.name.trim(), prompt: args.prompt.trim(), provider: providerOf(args.provider, caller), hasOwnWorktree: args.worktree === 'new', ...(args.model && { model: args.model }) };
+      const agent = { id, name: args.name.trim(), prompt: args.prompt.trim(), provider: args.provider, hasOwnWorktree: args.worktree === 'new', ...(args.model && { model: args.model }) };
       dispatch({ type: 'bg-start', threadId: caller.id, agent });
       const started = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === id);
-      if (!started) throw new Error('The background agent did not start');
-      return { changed: `started background agent "${agent.name}"`, result: agentOf(started), isFinal: true };
-    },
-  },
-  list_background_agents: {
-    run: ({ caller, args, env }) => ({ result: { agents: (caller.subagents ?? []).filter((s) => !args.status || s.status === args.status).map((s) => agentOf(s, env.now?.() ?? Date.now())) } }),
-  },
-  stop_background_agent: {
-    run: ({ state, caller, args, dispatch }) => {
-      const subagent = caller.subagents?.find((s) => s.id === args.id);
-      if (!subagent) throw new Error(`No agent ${args.id} in this thread; ids come from list_background_agents`);
-      if (subagent.status !== 'running') throw new Error(`"${subagent.name}" already ${subagent.status === 'done' ? 'finished' : subagent.status}`);
-      dispatch({ type: 'bg-stop', threadId: caller.id, subagentId: subagent.id });
-      const after = state().threads.find((t) => t.id === caller.id)?.subagents?.find((s) => s.id === subagent.id);
-      return { changed: `stopped background agent "${subagent.name}"`, result: agentOf(after ?? subagent), isFinal: true };
+      if (!started) throw new Error('The delegated task did not start');
+      return { changed: `delegated "${agent.name}" to ${agent.provider}`, result: { id, name: agent.name, provider: agent.provider, status: started.status }, isFinal: true };
     },
   },
 } satisfies Partial<Specs>;
 
-const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, ...SETTINGS_TOOLS } satisfies Specs;
+const SPECS = { ...THREAD_SPECS, ...GOAL_SPECS, ...LAYOUT_SPECS, ...USER_SPECS, ...AGENT_SPECS, ...BROWSER_TOOLS, browser_batch: { run: runBatch }, ...SETTINGS_TOOLS } satisfies Specs;
+
+/** Each step runs as its own call: its policy, its approvals and its line in the thread, until one fails. */
+async function runBatch(ctx: ToolContext<Args<'browser_batch'>>): Promise<Outcome> {
+  const steps: { name: string; result: unknown }[] = [];
+  let image: Outcome['image'];
+  for (const [i, { name, input = {} }] of ctx.args.actions.entries()) {
+    const stop = (error: string) => new Error(JSON.stringify({ steps, failed: { step: i + 1, name, error } }));
+    if (!name.startsWith('browser_') || name === 'browser_batch') throw stop('A batch runs browser_* tools other than browser_batch');
+    if (Date.now() >= ctx.deadline) throw stop('The batch ran out of time; this step and the rest did not run');
+    const result = await runTool({ id: `${ctx.caller.id}-batch-${i}`, threadId: ctx.caller.id, name, args: input }, ctx.env, ctx.deadline);
+    if (result.isError) throw stop(result.text);
+    image = result.image ?? image;
+    steps.push({ name, result: JSON.parse(result.text) });
+  }
+  return { result: { steps }, ...(image && { image }) };
+}
 
 // {HELPERS}
 
@@ -653,17 +670,6 @@ async function parentBase(env: ToolEnv, state: State, caller: Thread, githubUser
   return parent.repo.branch;
 }
 
-/**
- * An agent-started thread always gets its own worktree, whatever the composer's Worktree box says: parallel agents sharing
- * one folder trip over each other's changes and make worktrees Mochi can't see. Its branch is named from the prompt.
- */
-async function newWorktree(env: ToolEnv, project: string, prompt: string) {
-  const list = await env.git.branches(project).catch(() => null);
-  const taken = new Set(list?.branches.filter((b) => !b.isRemote).map((b) => b.name));
-  const branch = uniqueBranch(branchName(env.prefs.get().branchPrefix, prompt, 'thread'), taken);
-  return { mode: 'worktree' as const, branch, autoBranch: branch };
-}
-
 async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
   const models = await env.models(provider, caller.spaceId);
   const origin = env.getState().threads.find((t) => t.id === caller.id) ?? caller;
@@ -685,10 +691,6 @@ const capitalize = (s: string) => s[0].toUpperCase() + s.slice(1);
 const asObject = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? v : { result: v });
 
 const fail = (text: string): AgentToolResult => ({ text, isError: true });
-
-function agentOf(s: Subagent, now = Date.now()) {
-  return { id: s.id, name: s.name, status: s.status, origin: s.origin, provider: s.provider, tokens: s.tokens, elapsedSeconds: Math.round(((s.endedAt ?? now) - s.startedAt) / 1000), ...(s.result && { result: s.result.slice(0, 4000) }), ...(s.error && { error: s.error }) };
-}
 
 /** `threads`, when given, lists the thread's sub-threads and which criterion each covers. */
 function goalOf(thread: Thread, threads?: Thread[]) {

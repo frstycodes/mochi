@@ -15,7 +15,7 @@ import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, HIDDEN_PLAN_TOOLS, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
-import { HIDDEN_CLAUDE_SKILLS, mochiInstructions } from '../instructions.ts';
+import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -201,7 +201,9 @@ async function launch(session: Session) {
         pathToClaudeCodeExecutable: install.path,
         systemPrompt: { type: 'preset', preset: 'claude_code', append: mochiInstructions(options.isGoalsOff) },
         // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
-        settings: { skillOverrides: HIDDEN_CLAUDE_SKILLS, ...(options.speed && { fastMode: true }) },
+        settings: { skillOverrides: CLAUDE_SKILLS_OFF, ...(options.speed && { fastMode: true }) },
+        // Claude in Chrome would otherwise wire itself when CLAUDE_CODE_ENABLE_CFC=1 is in the user's environment.
+        extraArgs: { 'no-chrome': null },
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),

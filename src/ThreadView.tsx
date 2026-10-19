@@ -4,7 +4,6 @@ import { motion } from 'motion/react';
 import { ChevronDown, SidebarRight, TextAlignLeft } from '@/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -43,7 +42,6 @@ import { SummaryPanel } from './SummaryPanel';
 import { TitleBar } from './TitleBar';
 import { useHarness } from './store';
 import { hasGoal } from './drift';
-import { startRename, useIsRenaming } from './rename';
 import { OverflowIcon, ProgressRing, TooltipIconButton } from './ui';
 import { ThreadPrHoverCard } from './chat/RefHoverCard';
 import { useSeen } from './notify/useSeen';
@@ -295,8 +293,6 @@ function ThreadHeader({
 
 /** The title opens the thread's actions, like Claude's: the same registry actions as the header's right-click menu, plus rewind's undo and fork comparisons. */
 function ThreadMenu({ thread }: { thread: Thread }) {
-  const isRenaming = useIsRenaming(thread.id);
-  if (isRenaming) return <TitleField thread={thread} />;
   return (
     <DropdownMenu>
       <h1 className="flex min-w-0">
@@ -312,43 +308,6 @@ function ThreadMenu({ thread }: { thread: Thread }) {
         <RewindMenuItems thread={thread} />
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/** The header title as a field: Enter or leaving it saves, Esc keeps the old title. */
-function TitleField({ thread }: { thread: Thread }) {
-  const { dispatch } = useHarness();
-  const ref = useRef<HTMLInputElement>(null);
-  // After the menu that started the rename has closed and handed focus back.
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      ref.current?.focus();
-      ref.current?.select();
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
-  const isCancelled = useRef(false);
-  const save = (title: string) => {
-    startRename(null);
-    if (!isCancelled.current && title.trim() && title.trim() !== thread.title) dispatch({ type: 'rename', threadId: thread.id, title: title.trim() });
-  };
-  return (
-    <h1 className="flex min-w-0 flex-1">
-      <Input
-        ref={ref}
-        defaultValue={thread.title}
-        aria-label="Thread title"
-        maxLength={120}
-        onBlur={(e) => save(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-          if (e.key !== 'Escape') return;
-          isCancelled.current = true;
-          startRename(null);
-        }}
-        className="h-7 max-w-md px-1.5 type-title"
-      />
-    </h1>
   );
 }
 

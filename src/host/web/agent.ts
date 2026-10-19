@@ -26,6 +26,7 @@ export const agent: AgentHost = {
   settle: endTurn,
   async resolve() {},
   async setupChoice() {},
+  async keepTitle() {},
   onEvent(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);

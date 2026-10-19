@@ -6,6 +6,7 @@ import type { AttachedAgent, WorktreeSetup } from '../host/types/agent.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
+import { failDrafts } from '../rewind/handoff.ts';
 import type { State } from './index.tsx';
 
 /** What the desktop app saves between launches: your own (live) threads and the slices that refer to them. Demo threads start fresh every launch. */
@@ -78,7 +79,11 @@ function migrateWaitingSteps(thread: Thread): Thread {
 }
 
 function reattachThread(thread: Thread, isWorking: boolean, reasked: Set<string>): Thread {
-  const activity = thread.activity.filter((e) => !(e.card?.isOpen && reasked.has(e.card.id)));
+  // The draft ran in the window that reloaded; its answer never comes.
+  const activity = failDrafts(
+    thread.activity.filter((e) => !(e.card?.isOpen && reasked.has(e.card.id))),
+    'Stopped when the window reloaded',
+  );
   return { ...thread, activity, live: { ...thread.live!, isWorking, isDetached: false } };
 }
 
@@ -93,7 +98,10 @@ function restoreThread(thread: Thread, now: number): Thread {
   // Sending the queue on launch would spend usage unasked.
   const restored = pauseQueue({ ...thread, live, ...(criteria && { criteria }), ...(idle && { idle }), ...(reviews && { reviews }), ...(subagents && { subagents }), ...(setup && { setup }), ...(thread.setup?.status === 'failed' && thread.status === 'needs-you' && { status: 'running' as const }) }, 'restart');
   // An image still being made when Mochi quit never lands; its card says so instead of generating forever.
-  const activity = restored.activity.map((e) => (e.generated?.status === 'running' ? { ...e, generated: { ...e.generated, status: 'failed' as const, error: 'Stopped when Mochi quit' } } : e));
+  const activity = failDrafts(
+    restored.activity.map((e) => (e.generated?.status === 'running' ? { ...e, generated: { ...e.generated, status: 'failed' as const, error: 'Stopped when Mochi quit' } } : e)),
+    'Stopped when Mochi quit',
+  );
   if (!thread.live!.isWorking) return { ...restored, activity };
   return { ...restored, activity: [...activity, { at: now, who: 'harness', kind: 'event', text: 'Stopped when Mochi quit. Send a message to continue.' }] };
 }

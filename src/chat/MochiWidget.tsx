@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ChevronRight, Cursor, Flag, Globe, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
+import { ChevronRight, Cursor, Flag, Globe, Hand, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -65,13 +65,14 @@ const KIND = {
   delete: { icon: Trash, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
   confirm: { icon: ShieldCheck, label: 'Approval', approve: 'Allow', deny: 'Deny' },
   choose: { icon: MessageQuestion, label: 'Question', approve: 'Continue', deny: 'Cancel' },
+  handoff: { icon: Hand, label: 'Your turn', approve: 'Done', deny: 'Cancel' },
 } satisfies Record<string, { icon: IconComponent; label: string; approve: string; deny: string }>;
 
-/** A call waiting on you: a delete, a browser escalation, or a question with one answer. Enter works on whichever button has focus; Esc anywhere inside says no. */
-function MochiWidget({ item }: { item: QueueItem }) {
+/** A call waiting on you: a delete, a browser escalation, a question with one answer, or a handoff. Enter works on whichever button has focus; Esc anywhere inside says no. */
+export function MochiWidget({ item }: { item: QueueItem }) {
   const [options, setOptions] = useState<string[]>([]);
   const [isCodeOpen, setCodeOpen] = useState(false);
-  const kind = item.tool?.isDestructive ? 'delete' : item.tool?.pick === 'one' ? 'choose' : 'confirm';
+  const kind = item.tool?.isDestructive ? 'delete' : item.tool?.pick === 'one' ? 'choose' : item.tool?.isHandoff ? 'handoff' : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
   const decide = (isApproved: boolean, chosen?: string[]) => (item.tool ? decideTool(item.tool.callId, { isApproved, options: chosen }) : undefined);
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));

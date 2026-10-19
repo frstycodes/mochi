@@ -23,7 +23,7 @@ export function ThreadRowMenu({ threadId, selectedIds, children, ...props }: { t
           <BulkActionItems threadIds={selectedIds} groups={THREAD_MENU} />
         ) : (
           <>
-            <ActionItems target={{ threadId }} groups={THREAD_MENU} />
+            <ActionItems target={{ threadId, isRow: true }} groups={THREAD_MENU} />
             <SubThreadItems threadId={threadId} />
           </>
         )}

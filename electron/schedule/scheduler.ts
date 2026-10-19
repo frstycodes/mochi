@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { AgentEvent } from '../../src/host/types/agent.ts';
 import type { ScheduleEvent, ScheduleRun, Trigger, TriggerInput } from '../../src/host/types/schedule.ts';
 import { describeCron } from '../../src/schedule/cron.ts';
-import { afterLaunch, cronDecision, prEvents, prPrompt, summaryLine, SUMMARY_HINT, withRun, type PrSnapshot } from '../../src/schedule/due.ts';
+import { afterLaunch, cronDecision, prEvents, prPrompt, summaryLine, SUMMARY_HINT, triggerAfter, withRun, type PrSnapshot } from '../../src/schedule/due.ts';
 import { isBusy, keepWhenClosed, onAgentEvent, openWindows } from '../agents/events.ts';
 import { githubAccount, runGh } from '../git/gh.ts';
 import { startAgent } from '../ipc/agent.ts';
@@ -140,9 +140,9 @@ async function startRun(trigger: Trigger, reason: string, prompt: string) {
   }
 }
 
-/** Keeps each trigger's session id current (a run resumes the thread's latest session) and ends runs on their turn's end. */
+/** Keeps each trigger's session and branch current (`triggerAfter`) and ends runs on their turn's end. */
 function watch(event: AgentEvent) {
-  if (event.type === 'session' && triggers.some((t) => t.threadId === event.threadId)) update(event.threadId, (t) => ({ ...t, sessionId: event.sessionId }));
+  if ((event.type === 'session' || event.type === 'branch') && triggers.some((t) => t.threadId === event.threadId)) update(event.threadId, (t) => triggerAfter(t, event));
   const current = active.get(event.threadId);
   if (!current) return;
   if (event.type === 'message') current.message = event.isDelta ? current.message + event.text : event.text;

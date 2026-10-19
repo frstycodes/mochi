@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { assertFreeBranch, branchNameError, listBranches, renameAutoBranch, switchBranch } from './branches.ts';
+import { addBranchWorktree, assertFreeBranch, branchNameError, listBranches, renameAutoBranch, switchBranch } from './branches.ts';
 
 // A Mochi session injects its commit-msg hook through GIT_CONFIG_*; the scratch repo's commits mustn't run it.
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_COUNT: '0' };
@@ -139,17 +139,42 @@ test('discard: tracked changes reset, untracked files gone, target clean', async
   assert.equal(git('stash', 'list'), '');
 });
 
-test('automatic branch naming changes the real checkout, avoids collisions, and leaves switched or published branches alone', async () => {
+test('a temp branch is renamed after the title, made unique; a switched, published or tracking branch is left alone', async () => {
   const { dir, git } = repo();
-  git('switch', '-c', 'feat/first-prompt');
-  git('branch', 'feat/login-redirect');
-  assert.equal(await renameAutoBranch(dir, 'feat/first-prompt', 'feat/login-redirect'), 'feat/login-redirect-2');
-  assert.equal(git('branch', '--show-current').trim(), 'feat/login-redirect-2');
-  assert.equal(await renameAutoBranch(dir, 'feat/first-prompt', 'feat/other'), null, 'HEAD changed');
-  git('update-ref', 'refs/remotes/origin/feat/login-redirect-2', 'HEAD');
-  assert.equal(await renameAutoBranch(dir, 'feat/login-redirect-2', 'feat/other'), null, 'published without an upstream');
-  git('update-ref', '-d', 'refs/remotes/origin/feat/login-redirect-2');
-  git('config', 'branch.feat/login-redirect-2.remote', '.');
-  git('config', 'branch.feat/login-redirect-2.merge', 'refs/heads/main');
-  assert.equal(await renameAutoBranch(dir, 'feat/login-redirect-2', 'feat/other'), null, 'tracking a branch');
+  git('switch', '-c', 'mochi/0badf00d');
+  git('branch', 'mochi/login-redirect');
+  assert.equal(await renameAutoBranch(dir, 'mochi/0badf00d', 'Login redirect'), 'mochi/login-redirect-2');
+  assert.equal(git('branch', '--show-current').trim(), 'mochi/login-redirect-2');
+  assert.equal(await renameAutoBranch(dir, 'mochi/0badf00d', 'Other'), null, 'HEAD changed');
+  assert.equal(await renameAutoBranch(dir, 'mochi/login-redirect-2', 'Other'), null, 'not a temp name');
+  git('switch', '-c', 'mochi/feedf00d');
+  assert.equal(await renameAutoBranch(dir, 'mochi/feedf00d', '???'), null, 'no slug in the title');
+  git('update-ref', 'refs/remotes/origin/mochi/feedf00d', 'HEAD');
+  assert.equal(await renameAutoBranch(dir, 'mochi/feedf00d', 'Other'), null, 'published without an upstream');
+  git('update-ref', '-d', 'refs/remotes/origin/mochi/feedf00d');
+  git('config', 'branch.mochi/feedf00d.remote', '.');
+  git('config', 'branch.mochi/feedf00d.merge', 'refs/heads/main');
+  assert.equal(await renameAutoBranch(dir, 'mochi/feedf00d', 'Other'), null, 'tracking a branch');
+});
+
+test("a thread's first start refuses a branch that exists; a restart or a branch you picked checks it out", async () => {
+  const { dir, git } = repo();
+  git('branch', 'mochi/0badf00d');
+  const at = (name: string) => join(dir, '..', `${name}-${Date.now()}`);
+  const fresh = at('fresh');
+  await assert.rejects(addBranchWorktree(dir, fresh, 'mochi/0badf00d', { isNew: true }), { message: "A branch named mochi/0badf00d already exists; name the thread's branch something else" });
+  assert.ok(!existsSync(fresh), 'no worktree made');
+
+  const restart = at('restart');
+  await addBranchWorktree(dir, restart, 'mochi/0badf00d');
+  assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: restart }).toString().trim(), 'mochi/0badf00d');
+  git('worktree', 'remove', restart);
+
+  const picked = at('picked');
+  await addBranchWorktree(dir, picked, 'mochi/0badf00d', { isNew: true, isExisting: true });
+  assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: picked }).toString().trim(), 'mochi/0badf00d');
+
+  const created = at('created');
+  await addBranchWorktree(dir, created, 'mochi/feedf00d', { isNew: true });
+  assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: created }).toString().trim(), 'mochi/feedf00d');
 });
