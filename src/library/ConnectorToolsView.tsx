@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { ChevronDown, Refresh, SearchAlt } from '@/icons';
+import { Ban, CheckCircle, ChevronDown, RaisedHand, Refresh, SearchAlt, type IconComponent } from '@/icons';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { timeAgo } from '../progress';
 import { openSettings } from '../settings/open';
-import { SettingsCard, SettingsChoice, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
+import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
 import { useHarness } from '../store';
-import { setAllTools, toolPermission, type ConnectorSettings, type ConnectorTool, type ToolPermission } from './connectorTools';
+import { groupPermission, setTools, toolGroups, toolPermission, type ConnectorSettings, type ConnectorTool, type ToolPermission } from './connectorTools';
 import { countOf, EmptyRow, filterBy, LibraryRow } from './LibraryParts';
 import { deslug } from './names';
 import { useConnectorTools, type ToolsConnector } from './useConnectorTools';
@@ -26,7 +29,7 @@ export function ConnectorToolsView() {
   const shown = tools.connectors?.filter((c) => !query || matchesConnector(c, query) || shownTools(tools.settings?.[c.key], c, query).length > 0) ?? [];
   return (
     <div data-setting-id="connectorTools" className="flex flex-col gap-10">
-      <SettingsSection footer="Always allow runs a tool without asking; Ask waits on a card in the thread; Off leaves it out of threads. Read-only tools start allowed and the rest ask. Claude Code and Codex both get these as their own permission rules for each thread.">
+      <SettingsSection footer="Choose when agents may use each connector's tools. Always allow runs a tool without asking, Needs approval waits on a card in the thread, Blocked leaves it out. Read-only tools start allowed and the rest need approval. Claude Code and Codex both get these as their own permission rules for each thread.">
         <InputGroup>
           <InputGroupAddon>
             <SearchAlt />
@@ -86,7 +89,6 @@ function ConnectorSection({ connector, settings, query, isListing, onList, onCha
           meta={meta}
           actions={
             <>
-              {!isOff && <SetAllMenu name={connector.name} onChange={onChange} />}
               {!isOff && (
                 <Button variant="ghost" size="icon-sm" aria-label={`List ${connector.name}’s tools again`} disabled={isListing} onClick={onList}>
                   {isListing ? <Spinner /> : <Refresh />}
@@ -107,7 +109,109 @@ function ToolRows({ connector, settings, tools, isListing, onList, onChange }: {
   if (!toolList) return <SkeletonRows count={2} />;
   if (toolList.error) return <ListError name={connector.name} error={toolList.error} isListing={isListing} onRetry={onList} />;
   if (!toolList.tools.length) return <EmptyRow text={`${connector.name} lists no tools.`} />;
-  return tools.map((tool) => <ToolRow key={tool.name} connectorKey={connector.key} tool={tool} settings={settings} onChange={onChange} />);
+  const groups = toolGroups(tools).filter((group) => group.tools.length > 0);
+  return (
+    <Accordion type="multiple" defaultValue={groups.map((g) => g.id)} className="relative before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border">
+      {groups.map((group) => (
+        <ToolGroup key={group.id} id={group.id} connectorKey={connector.key} title={GROUP_TITLES[group.id]} tools={group.tools} settings={settings} onChange={onChange} />
+      ))}
+    </Accordion>
+  );
+}
+
+const GROUP_TITLES = { read: 'Read-only tools', write: 'Write/delete tools' };
+
+/** One annotation group, open by default: its count and one choice for every tool in it, then a row per tool. */
+function ToolGroup({ id, connectorKey, title, tools, settings, onChange }: { id: string; connectorKey: string; title: string; tools: ConnectorTool[]; settings: ConnectorSettings; onChange: Change }) {
+  return (
+    <AccordionItem value={id} className="relative border-b-0 not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border">
+      {/* A menu can't sit inside the trigger, so it floats over the trigger's right end. */}
+      <div className="absolute top-2 right-4 z-10">
+        <GroupMenu title={title} permission={groupPermission(settings, tools)} onChange={(p) => onChange((s) => setTools(s, tools, p))} />
+      </div>
+      <AccordionTrigger className="flex-row-reverse justify-end gap-2 rounded-none py-3 pr-4 pl-4 font-normal hover:no-underline **:data-[slot=accordion-trigger-icon]:ml-0">
+        <span className="flex items-center gap-2 pr-44">
+          <span className="type-body font-medium">{title}</span>
+          <Badge variant="secondary" className="tabular">
+            {tools.length}
+          </Badge>
+        </span>
+      </AccordionTrigger>
+      <AccordionContent className="pb-1">
+        <ul aria-label={title}>
+          {tools.map((tool) => (
+            <ToolRow key={tool.name} connectorKey={connectorKey} tool={tool} settings={settings} onChange={onChange} />
+          ))}
+        </ul>
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
+const CHOICES = [
+  { value: 'allow', label: 'Always allow', icon: CheckCircle },
+  { value: 'ask', label: 'Needs approval', icon: RaisedHand },
+  { value: 'off', label: 'Blocked', icon: Ban },
+] as const satisfies { value: ToolPermission; label: string; icon: IconComponent }[];
+
+const choiceOf = (permission: ToolPermission) => CHOICES.find((c) => c.value === permission)!;
+
+/** The group's permission when its tools agree ("Mixed" when they don't), and a menu that sets them all. */
+function GroupMenu({ title, permission, onChange }: { title: string; permission: ToolPermission | null; onChange: (permission: ToolPermission) => void }) {
+  const current = permission && choiceOf(permission);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" aria-label={`${title}: ${current?.label ?? 'Mixed'}`}>
+          {current && <current.icon data-icon="inline-start" />}
+          {current?.label ?? 'Mixed'}
+          <ChevronDown data-icon="inline-end" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuRadioGroup value={permission ?? ''} onValueChange={(v) => onChange(v as ToolPermission)}>
+          {CHOICES.map((choice) => (
+            <DropdownMenuRadioItem key={choice.value} value={choice.value}>
+              <choice.icon />
+              {choice.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** A tool's name (its description and server name on hover) and its three choices as icons. */
+function ToolRow({ connectorKey, tool, settings, onChange }: { connectorKey: string; tool: ConnectorTool; settings: ConnectorSettings; onChange: Change }) {
+  const { permission } = toolPermission(settings, tool);
+  const label = tool.title ?? deslug(tool.name);
+  return (
+    <li data-setting-id={`connector-${connectorKey}-${tool.name}`} className="relative flex min-h-12 items-center gap-3 py-1.5 pr-4 pl-10 before:absolute before:top-0 before:right-4 before:left-10 before:h-px before:bg-border">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="min-w-0 flex-1 truncate type-body text-muted-foreground">{label}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="start" className="max-w-80 flex-col items-start gap-0.5">
+          <code className="block font-mono">{tool.name}</code>
+          {!!tool.description && <span className="block opacity-80">{tool.description}</span>}
+        </TooltipContent>
+      </Tooltip>
+      {/* Tooltip's data-state replaces the item's, so the chosen one is styled by aria-checked. */}
+      <ToggleGroup type="single" spacing={0} value={permission} onValueChange={(v) => v && onChange((s) => ({ ...s, tools: { ...s.tools, [tool.name]: v as ToolPermission } }))} aria-label={`${label}: permission`} className="shrink-0 rounded-lg bg-muted p-0.5">
+        {CHOICES.map((choice) => (
+          <Tooltip key={choice.value}>
+            <TooltipTrigger asChild>
+              <ToggleGroupItem value={choice.value} aria-label={choice.label} size="sm" className="size-8 rounded-md! px-0! text-muted-foreground aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-xs aria-checked:ring-1 aria-checked:ring-input dark:aria-checked:bg-accent">
+                <choice.icon />
+              </ToggleGroupItem>
+            </TooltipTrigger>
+            <TooltipContent>{choice.label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </ToggleGroup>
+    </li>
+  );
 }
 
 function ListError({ name, error, isListing, onRetry }: { name: string; error: string; isListing: boolean; onRetry: () => void }) {
@@ -121,57 +225,5 @@ function ListError({ name, error, isListing, onRetry }: { name: string; error: s
         </Button>
       }
     />
-  );
-}
-
-const CHOICES = [
-  { value: 'allow', label: 'Always allow' },
-  { value: 'ask', label: 'Ask' },
-  { value: 'off', label: 'Off' },
-] as const satisfies { value: ToolPermission; label: string }[];
-
-function ToolRow({ connectorKey, tool, settings, onChange }: { connectorKey: string; tool: ConnectorTool; settings: ConnectorSettings; onChange: Change }) {
-  const { permission } = toolPermission(settings, tool);
-  const id = `connector-${connectorKey}-${tool.name}`;
-  return (
-    <SettingsRow
-      id={id}
-      label={
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span>{tool.title ?? deslug(tool.name)}</span>
-          <code className="truncate font-mono type-caption text-muted-foreground">{tool.name}</code>
-          <ToolHint tool={tool} />
-        </span>
-      }
-      description={!!tool.description && <span className="line-clamp-2">{tool.description}</span>}
-      control={<SettingsChoice id={id} aria-label={`${tool.title ?? deslug(tool.name)}: permission`} value={permission} options={CHOICES} onChange={(p) => onChange((s) => ({ ...s, tools: { ...s.tools, [tool.name]: p } }))} />}
-    />
-  );
-}
-
-/** The server's own annotation: read-only, or destructive (MCP's default for a tool that doesn't say it only reads). */
-function ToolHint({ tool }: { tool: ConnectorTool }) {
-  if (tool.isReadOnly) return <Badge variant="outline">Read-only</Badge>;
-  if (tool.isDestructive) return <Badge variant="destructive">Destructive</Badge>;
-  return null;
-}
-
-/** All tools to Ask or Always allow (Off ones stay off), or back to the defaults from each tool's annotations. */
-function SetAllMenu({ name, onChange }: { name: string; onChange: Change }) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" aria-label={`Set every ${name} tool`}>
-          Set all
-          <ChevronDown data-icon="inline-end" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => onChange((s) => setAllTools(s, 'allow'))}>All tools: always allow</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onChange((s) => setAllTools(s, 'ask'))}>All tools: ask</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => onChange(({ isOff }) => ({ ...(isOff && { isOff }) }))}>Back to defaults</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

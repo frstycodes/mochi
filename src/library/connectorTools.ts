@@ -28,8 +28,6 @@ export interface ConnectorToolList {
 /** A connector's settings, keyed in the index by its `connectorKey`, shared by every account on it. */
 export interface ConnectorSettings {
   isOff?: boolean;
-  /** "All tools: ask / allow"; a tool's own choice wins over it. */
-  permission?: 'ask' | 'allow';
   tools?: Record<string, ToolPermission>;
   toolList?: ConnectorToolList;
 }
@@ -42,13 +40,26 @@ export function defaultPermission(tool: Pick<ConnectorTool, 'isReadOnly'>): Tool
 export function toolPermission(settings: ConnectorSettings | undefined, tool: ConnectorTool): { permission: ToolPermission; isChosen: boolean } {
   const chosen = settings?.tools?.[tool.name];
   if (chosen) return { permission: chosen, isChosen: true };
-  return { permission: settings?.permission ?? defaultPermission(tool), isChosen: false };
+  return { permission: defaultPermission(tool), isChosen: false };
 }
 
-/** Sets every tool to one choice: the connector-wide permission, with each tool's own choice cleared (Off stays off). */
-export function setAllTools(settings: ConnectorSettings, permission: 'ask' | 'allow'): ConnectorSettings {
-  const offOnly = Object.fromEntries(Object.entries(settings.tools ?? {}).filter(([, p]) => p === 'off'));
-  return { ...settings, permission, tools: offOnly };
+/** Tools split as Claude's connector settings show them: read-only ones, then everything that writes or deletes. */
+export function toolGroups(tools: ConnectorTool[]) {
+  return [
+    { id: 'read', tools: tools.filter((t) => t.isReadOnly) },
+    { id: 'write', tools: tools.filter((t) => !t.isReadOnly) },
+  ] as const;
+}
+
+/** The one permission every tool in a group has, or null when they differ. */
+export function groupPermission(settings: ConnectorSettings | undefined, tools: ConnectorTool[]): ToolPermission | null {
+  const permissions = new Set(tools.map((tool) => toolPermission(settings, tool).permission));
+  return permissions.size === 1 ? [...permissions][0] : null;
+}
+
+/** Gives every tool in the group the same permission. */
+export function setTools(settings: ConnectorSettings, tools: ConnectorTool[], permission: ToolPermission): ConnectorSettings {
+  return { ...settings, tools: { ...settings.tools, ...Object.fromEntries(tools.map((t) => [t.name, permission])) } };
 }
 
 export type ToolRules = Record<ToolPermission, string[]>;

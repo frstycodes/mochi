@@ -145,14 +145,13 @@ export const library = {
 function connectorSettingsInput(value: unknown): Omit<ConnectorSettings, 'toolList'> {
   const input = record(value, 'settings');
   if (input.isOff !== undefined && typeof input.isOff !== 'boolean') throw new TypeError('isOff must be a boolean');
-  if (input.permission !== undefined && input.permission !== 'ask' && input.permission !== 'allow') throw new TypeError('permission must be ask or allow');
   const tools = Object.entries(input.tools === undefined ? {} : record(input.tools, 'tools'));
   if (tools.length > 1000) throw new TypeError('tools holds at most 1000 choices');
   for (const [name, permission] of tools) {
     string(name, 'tool name', 128);
     if (!TOOL_PERMISSIONS.includes(permission as ToolPermission)) throw new TypeError(`${name} must be one of ${TOOL_PERMISSIONS.join(', ')}`);
   }
-  return { ...(input.isOff === true && { isOff: true }), ...(input.permission !== undefined && { permission: input.permission }), tools: Object.fromEntries(tools) as Record<string, ToolPermission> };
+  return { ...(input.isOff === true && { isOff: true }), tools: Object.fromEntries(tools) as Record<string, ToolPermission> };
 }
 
 /** A device sign-in's code goes to the window that started it, for the dialog to show. */

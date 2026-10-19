@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { claudePermissions, codexToolConfig, connectorName, setAllTools, toolRules, type ConnectorSettings, type ConnectorTool } from './connectorTools.ts';
+import { claudePermissions, codexToolConfig, connectorName, groupPermission, setTools, toolGroups, toolRules, type ConnectorSettings, type ConnectorTool } from './connectorTools.ts';
 import { profileConnectors, type LibraryIndex } from './library.ts';
 
 const tool = (name: string, isReadOnly: boolean): ConnectorTool => ({ name, title: null, description: '', isReadOnly, isDestructive: !isReadOnly });
@@ -14,13 +14,22 @@ test('a connector is named by you, else the directory, else its server, else its
   assert.equal(connectorName('https://mcp.example.com/mcp', '   ', { name: ' ' }), 'mcp.example.com');
 });
 
-test('read-only tools allow and the rest ask by default; your choices and set-all win in that order', () => {
+test('read-only tools allow and the rest ask by default; your choices win', () => {
   assert.deepEqual(toolRules(listed), { allow: ['list_issues'], ask: ['create_issue', 'delete_comment'], off: [] });
-  const chosen = { ...listed, permission: 'allow' as const, tools: { delete_comment: 'off' as const, list_issues: 'ask' as const, gone_tool: 'allow' as const } };
-  assert.deepEqual(toolRules(chosen), { allow: ['create_issue', 'gone_tool'], ask: ['list_issues'], off: ['delete_comment'] });
-  assert.deepEqual(toolRules(setAllTools(chosen, 'ask')), { allow: [], ask: ['list_issues', 'create_issue'], off: ['delete_comment'] });
+  const chosen = { ...listed, tools: { delete_comment: 'off' as const, list_issues: 'ask' as const, gone_tool: 'allow' as const } };
+  assert.deepEqual(toolRules(chosen), { allow: ['gone_tool'], ask: ['list_issues', 'create_issue'], off: ['delete_comment'] });
   assert.deepEqual(toolRules({ ...chosen, isOff: true }), { allow: [], ask: [], off: [] });
   assert.deepEqual(toolRules(undefined), { allow: [], ask: [], off: [] });
+});
+
+test('a group reads as one permission until its tools differ, and setting it sets each tool', () => {
+  const [read, write] = toolGroups(listed.toolList!.tools);
+  assert.deepEqual([read.tools.length, write.tools.length], [1, 2]);
+  assert.equal(groupPermission(listed, write.tools), 'ask');
+  const mixed = { ...listed, tools: { delete_comment: 'off' as const } };
+  assert.equal(groupPermission(mixed, write.tools), null);
+  assert.equal(groupPermission(setTools(mixed, write.tools, 'allow'), write.tools), 'allow');
+  assert.equal(groupPermission(setTools(mixed, write.tools, 'allow'), read.tools), 'allow');
 });
 
 test('Claude gets allow / ask / deny rules as mcp__<server>__<tool>', () => {
