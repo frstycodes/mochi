@@ -173,8 +173,8 @@ function NewThread() {
         <h1 className="text-balance type-display">{greeting(new Date())}</h1>
       </header>
 
-      {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. */}
-      <motion.div layoutId={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
+      {/* Hidden once it hands off: the thread's composer is the same card, already on its way down. A constant layoutDependency keeps its resizes (project step to composer) instant; the handoff still animates. */}
+      <motion.div layoutId={layoutId} layoutDependency={layoutId} layoutCrossfade={false} transition={HANDOFF_TRANSITION} className="motion-safe:in-data-exiting:invisible">
         {step === 'project' && (
           <ComposerCard>
             {/* Keyed so the highlight starts on the latest project once the list loads. */}
