@@ -248,6 +248,5 @@ Design in CHECKLIST §10–12 (decided 2026-10-13). Runtime pieces:
 - Whether `TaskCreate` / `TaskUpdate` replace `TodoWrite` on the default model (docs say "on certain models"; `CLAUDE_CODE_ENABLE_TASKS=0` forces TodoWrite).
 - Whether runtime events say clearly enough when a test or check ran to drive the Verifying phase (check `src/runtime/apply.ts` event kinds before goals PR 5).
 - How reliably Claude and Codex call an end-of-turn Mochi tool when asked; the background-model fallback covers misses.
-- How to block `gh pr create` in Codex; the fallback replaces the body after the fact.
 - How to attach screenshots to a PR body without a GitHub upload API (side branch or release assets).
 - Whether a thread records the files it actually edited outside the plan's `footprint` (check before goals PR 4).

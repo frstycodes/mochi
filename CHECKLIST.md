@@ -310,8 +310,7 @@ Why goals exist: you run many threads (often one coordinator plus workers) and n
 Defaults; a repo's own `.github/pull_request_template.md`, commitlint config or branch pattern wins.
 
 - [ ] Branch names from the goal: `type/short-slug` (`feat/per-key-overrides`), validated by `branchNameError`
-- [ ] Commits checked by a `commit-msg` hook Mochi installs in its worktrees (plain git, every agent): Conventional `type(scope): subject`, subject ≤ 72 chars; rejected messages tell the agent why; tool attribution stripped when settings say none
-- [ ] PR descriptions written by Mochi from the report card: the agent calls `open_pr` with a title and one line of why; body is What / Why / Checks / Screenshots with hard length limits. Raw `gh pr create` is denied for Claude (hook pointing at `open_pr`); for Codex, a PR that appears in the thread gets its body replaced with the template
+- [ ] PR descriptions written by Mochi from the report card: the agent calls `open_pr` with a title and one line of why; body is What / Why / Checks / Screenshots with hard length limits
 - [ ] Before/after screenshots required when the diff touches UI files (`.tsx`, `.css`): captured through the browser pane on the base and the thread's branch; `open_pr` refuses without them
 
 ## 12. Simplify (decided 2026-10-13)

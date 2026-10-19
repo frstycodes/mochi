@@ -57,17 +57,16 @@ test('/compact is Mochi’s, with an optional focus', () => {
 const live = (extra: Partial<Thread['live']> = {}, rest: Partial<Thread> = {}) =>
   thread([], { providers: ['claude'], session: { provider: 'claude', id: 's' }, live: { isWorking: false, ...extra }, ...rest } as Partial<Thread>);
 
-test('/compact runs when idle, queues behind a turn in queue mode, and is off (with why) otherwise', () => {
-  assert.deepEqual(compactGate(live(), false), { kind: 'run' });
-  assert.deepEqual(compactGate(live({ isWorking: true }), true), { kind: 'queue' });
-  assert.equal(compactGate(live({ isWorking: true }), false).kind, 'off', 'steer mode can’t steer a compaction');
-  assert.equal(compactGate(live(), false, true).kind, 'off', 'waiting on your answer');
-  assert.equal(compactGate(live({ isDetached: true }), false).kind, 'off');
-  assert.equal(compactGate(live({ starting: 'claude' }), false).kind, 'off');
-  assert.equal(compactGate(thread([], { providers: ['claude'] } as Partial<Thread>), false).kind, 'off', 'a demo thread has no agent');
+test('/compact runs when idle, queues behind a working turn (it can’t steer one), and is off (with why) otherwise', () => {
+  assert.deepEqual(compactGate(live()), { kind: 'run' });
+  assert.deepEqual(compactGate(live({ isWorking: true })), { kind: 'queue' });
+  assert.equal(compactGate(live(), true).kind, 'off', 'waiting on your answer');
+  assert.equal(compactGate(live({ isDetached: true })).kind, 'off');
+  assert.equal(compactGate(live({ starting: 'claude' })).kind, 'off');
+  assert.equal(compactGate(thread([], { providers: ['claude'] } as Partial<Thread>)).kind, 'off', 'a demo thread has no agent');
   const compacting = live({}, { activity: [{ at: 0, who: 'harness', kind: 'event', text: '', compaction: { trigger: 'manual', status: 'running', pins: 0, hasGoal: false } }] });
   assert.equal(isCompacting(compacting), true);
-  const gate = compactGate(compacting, false);
+  const gate = compactGate(compacting);
   assert.equal(gate.kind === 'off' && gate.reason, 'Already compacting');
 });
 
