@@ -98,7 +98,7 @@ app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };
 setImageGenerator('codex', codex.generateImage.bind(codex));
 const starts = new Starts();
-// A Mochi background agent's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
+// A delegated task's session id, `<thread>--<agent>` (`backgroundSession` in src/runtime/subagents.ts).
 const isBackgroundSession = (threadId: string) => threadId.includes('--');
 
 export const agent = {

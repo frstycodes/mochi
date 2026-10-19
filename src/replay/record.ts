@@ -50,6 +50,7 @@ const RECORDED = [
   'handoff',
   'bg-start',
   'bg-stop',
+  'delegate-report',
   'rewind',
   'rewind-message',
   'answer',
