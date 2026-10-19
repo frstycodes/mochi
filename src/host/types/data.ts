@@ -1,11 +1,18 @@
 import type { AgentImage } from './agent.ts';
 import type { Manifest } from './manifest.ts';
 
-/** The desktop app's saved threads: one JSON document in main's userData, shaped and parsed by the renderer (`src/store/persist.ts`). */
+/** The saved threads as files: an index (`SavedIndex` JSON) and one `SavedThread` JSON per thread, shaped by `src/store/persist.ts`. */
+export interface SavedFiles {
+  index: string;
+  threads: string[];
+}
+
+/** The desktop app's saved threads, in main's `userData/threads`; the renderer shapes and parses them (`src/store/persist.ts`). */
 export interface DataHost {
   /** null when nothing was saved yet. */
-  load(): Promise<string | null>;
-  save(json: string): Promise<void>;
+  load(): Promise<SavedFiles | null>;
+  /** `threads` holds only the threads that changed, by id; any thread the index no longer lists is deleted. */
+  save(index: string, threads: Record<string, string>): Promise<void>;
   /** A thread's replay recording, JSON lines (`src/replay/record.ts`); null when it has none. */
   loadReplay(threadId: string): Promise<string | null>;
   /** Appends to the thread's recording; false once it reached its cap, after which main keeps only the one `capped` line it wrote. */
