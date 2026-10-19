@@ -11,6 +11,7 @@ import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
+import { dueReports } from '../runtime/subagents.ts';
 import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
@@ -161,6 +162,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     return off;
   }, [dispatch]);
   useQueueRunner(state, dispatch);
+  useDelegatedReports(state.threads, dispatch);
   useCompactInstructions(state.threads);
   useRemoteBridge(state, dispatch);
   useLimitResumes(state.threads, dispatch);
@@ -190,6 +192,20 @@ function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
       else sendMessage(dispatch, state, thread, message, { queuedId: message.id });
     }
   }, [state, dispatch]);
+}
+
+/** Sends each finished delegated task's report to its thread's agent right away, steering a turn in flight; `dueReports` says which. */
+function useDelegatedReports(threads: Thread[], dispatch: Dispatch<Action>) {
+  // The report applies on the next render; until then the same one is still due.
+  const sent = useRef(new Set<string>());
+  useEffect(() => {
+    for (const { thread, subagent } of dueReports(threads)) {
+      const key = `${thread.id}:${subagent.id}`;
+      if (sent.current.has(key)) continue;
+      sent.current.add(key);
+      dispatch({ type: 'delegate-report', threadId: thread.id, subagentId: subagent.id });
+    }
+  }, [threads, dispatch]);
 }
 
 /** Resumes threads you set to Resume at reset once their reset passes; one timer for the earliest. */

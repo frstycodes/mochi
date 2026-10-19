@@ -8,7 +8,7 @@ import { sourcePrompt } from '../sources.ts';
 import { startTitleRequest } from '../utility/titles.ts';
 import type { Action, State } from '../store/index.tsx';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
-import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
+import { backgroundPrompt, backgroundSession, isRunning, reportOf, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
 
@@ -98,12 +98,12 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       if (subagent.sessionId) return [{ method: 'stop', threadId: subagent.sessionId }];
       return hasAgent(state, action.threadId) ? [{ method: 'stopSubagent', threadId: action.threadId, subagentId: subagent.id }] : [];
     }
-    case 'agent': {
-      // A background agent's session ends with its first turn: the report is in, nobody will send it more.
-      const { event } = action;
-      if (event.type !== 'turn-end' && event.type !== 'limit') return [];
-      const isBackground = state.threads.some((t) => t.subagents?.some((s) => s.sessionId === event.threadId && isRunning(s)));
-      return isBackground ? [{ method: 'stop', threadId: event.threadId }] : [];
+    case 'delegate-report': {
+      const subagent = state.threads.find((t) => t.id === action.threadId)?.subagents?.find((s) => s.id === action.subagentId);
+      if (!subagent?.sessionId) return [];
+      // Its session ends with its first turn: the report is in, nobody will send it more.
+      const report = agentCalls(state, { type: 'send', threadId: action.threadId, text: reportOf(subagent), reason: '', steers: true }, next);
+      return [{ method: 'stop', threadId: subagent.sessionId }, ...report];
     }
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.

@@ -151,25 +151,19 @@ export const TOOL_TABLE = {
     shape: { threadId: otherThread, reason: z.string().min(1) },
   },
   // {AGENTS}
-  start_background_agent: {
+  delegate_task: {
     tier: 'change',
     quiet: true,
     description:
-      "Start a background agent that works on its own while you keep going: in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new). It runs on this profile's account and counts toward the concurrency cap. When it finishes, its report comes to you with the user's next message. For work that needs no answer from you mid-way; for a quick lookup use your own subagents.",
+      "Run a task on the other provider (Codex from a Claude thread, Claude from a Codex thread), or on a model your own subagent tool doesn't offer. Prefer your native subagent tool for same-provider work whenever it supports the model you want. The child sees only the prompt, nothing of this conversation. It runs in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new), on this profile's account. Returns at once; when it finishes, its report comes to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
     shape: {
       prompt: z.string().min(1).max(20_000).describe('The whole task: it sees nothing of this conversation'),
       name: z.string().min(1).max(60).describe('A few words the user sees, like "Fix flaky checkout test"'),
+      provider: z.enum(['claude', 'codex']),
+      model: z.string().optional().describe("A model id the account offers; defaults to the provider's"),
       worktree: z.enum(['same', 'new']).optional(),
-      provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
-      model: z.string().optional().describe("A model id the account offers; defaults to this thread's"),
     },
   },
-  list_background_agents: {
-    tier: 'read',
-    description: "List this thread's subagents and background agents: id, name, status, origin (mochi: started with start_background_agent; native: your own), tokens, elapsed, and the result of finished ones.",
-    shape: { status: z.enum(['running', 'done', 'failed', 'stopped']).optional() },
-  },
-  stop_background_agent: { tier: 'change', quiet: true, description: 'Stop one of your running background agents (ids from list_background_agents). Its partial work stays in its worktree.', shape: { id: z.string() } },
   // {BROWSER}
   browser_tabs: { tier: 'read', description: "List your thread's browser tabs in the side pane: tabId, url, title, loading, active.", shape: {} },
   browser_open: {

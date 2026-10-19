@@ -6,7 +6,7 @@ import { panesReducer } from '../store/panes.ts';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls, type AgentCall } from './live.ts';
-import { oneLine } from './subagents.ts';
+import { dueReports, oneLine } from './subagents.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { DEFAULT_PREFS } from '../settings/prefs.ts';
 import { runTool, type ToolEnv } from './tools.ts';
@@ -70,66 +70,37 @@ function setup() {
   return { id, tool, event, dispatch, thread, calls, state: () => state };
 }
 
-test('start_background_agent runs a session of its own, reports back into the thread, and its report reaches the agent with the next message', async () => {
+test('delegate_task runs a session of its own, reports back into the thread, and its report steers the running turn', async () => {
   const { id, tool, event, dispatch, thread, calls, state } = setup();
-  const started = await tool('start_background_agent', {
+  const started = await tool('delegate_task', {
     prompt: 'Load test the limiter',
     name: 'Load test',
+    provider: 'codex',
   });
   assert.equal(started.isError, undefined, started.text);
-  assert.deepEqual([started.json.id, started.json.status, started.json.origin], ['bg1', 'running', 'mochi']);
+  assert.deepEqual(started.json, { changed: 'Delegated "Load test" to codex', id: 'bg1', name: 'Load test', provider: 'codex', status: 'running' });
 
   const session = `${id}--bg1`;
   assert.equal(calls.length, 1);
   const [start] = calls;
   assert.equal(start.method === 'start' && start.threadId, session, 'its own session in host.agent, so the concurrency cap counts it');
+  assert.equal(start.method === 'start' && start.options.provider, 'codex');
   assert.equal(start.method === 'start' && start.options.cwd, '/wt/main', "worktree: same runs in the thread's worktree");
   assert.equal(start.method === 'start' && start.options.workspace, undefined);
-  assert.match(start.method === 'start' ? start.options.prompt : '', /^Load test the limiter\n\nYou are a background agent/);
+  assert.match(start.method === 'start' ? start.options.prompt : '', /^Load test the limiter\n\nAnother agent's thread delegated this task to you/);
 
   const pane = state().panes.find((p) => p.threadId === id)!;
   assert.deepEqual(
     pane.tabs.map((t) => t.kind),
     ['agents'],
-    'the first background agent opens the Agents tab',
+    'the first delegated task opens the Agents tab',
   );
 
-  event({
-    threadId: session,
-    type: 'tool',
-    id: 'k1',
-    phase: 'start',
-    text: 'Run k6 run load.js',
-  });
-  event({
-    threadId: session,
-    type: 'tool',
-    id: 'k1',
-    phase: 'end',
-    text: 'Run k6 run load.js',
-    exitCode: 0,
-  });
-  event({
-    threadId: session,
-    type: 'usage',
-    inputTokens: 900,
-    outputTokens: 100,
-    costUsd: 0.01,
-    contextUsed: 50_000,
-    contextMax: 200_000,
-  });
-  event({
-    threadId: session,
-    type: 'message',
-    text: 'p95 is 11ms',
-    isDelta: false,
-  });
-  event({
-    threadId: session,
-    type: 'message',
-    text: ' at 1,200 rps.',
-    isDelta: true,
-  });
+  event({ threadId: session, type: 'tool', id: 'k1', phase: 'start', text: 'Run k6 run load.js' });
+  event({ threadId: session, type: 'tool', id: 'k1', phase: 'end', text: 'Run k6 run load.js', exitCode: 0 });
+  event({ threadId: session, type: 'usage', inputTokens: 900, outputTokens: 100, costUsd: 0.01, contextUsed: 50_000, contextMax: 200_000 });
+  event({ threadId: session, type: 'message', text: 'p95 is 11ms', isDelta: false });
+  event({ threadId: session, type: 'message', text: ' at 1,200 rps.', isDelta: true });
   const running = thread().subagents![0];
   assert.deepEqual(running.steps, [{ id: 'k1', text: 'Run k6 run load.js', isDone: true, exitCode: 0 }]);
   assert.equal(running.tokens, 1000);
@@ -141,42 +112,46 @@ test('start_background_agent runs a session of its own, reports back into the th
     "its tools stay out of the thread's work log",
   );
 
-  calls.length = 0;
   event({ threadId: session, type: 'turn-end', status: 'done' });
-  assert.deepEqual(calls, [{ method: 'stop', threadId: session }], 'its session ends with its first turn');
   const done = thread().subagents![0];
-  assert.deepEqual([done.status, done.result], ['done', 'p95 is 11ms at 1,200 rps.']);
-  assert.equal(thread().activity.at(-1)?.text, 'Background agent "Load test" finished');
-  event({
-    threadId: session,
-    type: 'turn-end',
-    status: 'failed',
-    error: 'late',
-  });
+  assert.deepEqual([done.status, done.result, done.isReportDue], ['done', 'p95 is 11ms at 1,200 rps.', true]);
+  assert.equal(thread().activity.at(-1)?.text, 'Delegated task "Load test" finished');
+  event({ threadId: session, type: 'turn-end', status: 'failed', error: 'late' });
   assert.equal(thread().subagents![0].status, 'done', 'the first end wins');
 
+  assert.equal(thread().live?.isWorking, true);
   calls.length = 0;
-  dispatch({ type: 'send', threadId: id, text: 'thanks', reason: '' });
+  deliver(state(), dispatch);
   assert.deepEqual(calls, [
-    {
-      method: 'send',
-      threadId: id,
-      text: '[Background agent "Load test" finished]\np95 is 11ms at 1,200 rps.\n\nthanks',
-    },
-  ]);
-  assert.equal(thread().live?.notes, undefined, 'delivered once');
-
-  const listed = await tool('list_background_agents');
-  assert.deepEqual(
-    listed.json.agents.map((a: { id: string; status: string; result: string }) => [a.id, a.status, a.result]),
-    [['bg1', 'done', 'p95 is 11ms at 1,200 rps.']],
-  );
+    { method: 'stop', threadId: session },
+    { method: 'send', threadId: id, text: '[Delegated task "Load test" finished]\np95 is 11ms at 1,200 rps.', steer: true },
+  ], 'its session ends with its first turn, and the report joins the turn in flight');
+  assert.deepEqual(dueReports(state().threads), [], 'delivered once');
 });
 
-test("a background agent in a worktree of its own branches off the thread's branch; stop ends it and its session", async () => {
-  const { id, tool, event, thread, calls } = setup();
+test("a delegated task's report starts a turn when the thread's agent is idle, and one you stop wakes nobody", async () => {
+  const { id, tool, event, dispatch, thread, calls, state } = setup();
+  event({ threadId: id, type: 'turn-end', status: 'done' });
+  await tool('delegate_task', { prompt: 'Review the diff', name: 'Review', provider: 'codex' });
+  event({ threadId: `${id}--bg1`, type: 'message', text: 'Looks good', isDelta: false });
+  event({ threadId: `${id}--bg1`, type: 'limit', label: 'Weekly' });
+  assert.equal(thread().live?.isWorking, false);
+
+  calls.length = 0;
+  deliver(state(), dispatch);
+  assert.deepEqual(calls.at(-1), { method: 'send', threadId: id, text: '[Delegated task "Review" failed: Usage limit reached]\nLooks good' });
+  assert.deepEqual([thread().live?.isWorking, thread().status], [true, 'running'], "the report is the agent's next turn");
+
+  await tool('delegate_task', { prompt: 'x', name: 'Spike', provider: 'codex' });
+  dispatch({ type: 'bg-stop', threadId: id, subagentId: 'bg2' });
+  event({ threadId: `${id}--bg2`, type: 'turn-end', status: 'interrupted' });
+  assert.deepEqual(dueReports(state().threads), []);
+});
+
+test("a delegated task in a worktree of its own branches off the thread's branch; stop ends it and its session", async () => {
+  const { id, tool, event, dispatch, thread, calls } = setup();
   const branch = thread().repo!.branch;
-  await tool('start_background_agent', {
+  await tool('delegate_task', {
     prompt: 'Try the Redis approach',
     name: 'Redis spike',
     worktree: 'new',
@@ -188,16 +163,14 @@ test("a background agent in a worktree of its own branches off the thread's bran
   assert.equal(thread().subagents![0].cwd, '/wt/redis');
 
   calls.length = 0;
-  const stopped = await tool('stop_background_agent', { id: 'bg1' });
-  assert.equal(stopped.json.status, 'stopped');
+  dispatch({ type: 'bg-stop', threadId: id, subagentId: 'bg1' });
+  assert.equal(thread().subagents![0].status, 'stopped');
   assert.deepEqual(calls, [{ method: 'stop', threadId: `${id}--bg1` }]);
-  assert.match((await tool('stop_background_agent', { id: 'bg1' })).text, /already stopped/);
-  assert.match((await tool('stop_background_agent', { id: 'nope' })).text, /No agent nope/);
 });
 
-test("a background agent's approval waits on the thread's queue, and settling the thread stops it", async () => {
+test("a delegated task's approval waits on the thread's queue, and settling the thread stops it", async () => {
   const { id, tool, event, dispatch, state, calls } = setup();
-  await tool('start_background_agent', { prompt: 'x', name: 'Migrator' });
+  await tool('delegate_task', { prompt: 'x', name: 'Migrator', provider: 'codex' });
   event({
     threadId: `${id}--bg1`,
     type: 'approval',
@@ -211,7 +184,7 @@ test("a background agent's approval waits on the thread's queue, and settling th
   assert.deepEqual([card.threadId, card.title], [id, 'Migrator: Run a command']);
   calls.length = 0;
   dispatch({ type: 'settle', threadId: id });
-  assert.deepEqual(calls, [{ method: 'settle', threadId: id }], 'main stops the background agents with the thread (electron/agents/settle.ts)');
+  assert.deepEqual(calls, [{ method: 'settle', threadId: id }], 'main stops the delegated tasks with the thread (electron/agents/settle.ts)');
 });
 
 test('native subagents: start logs one row where it began, progress fills its log, the first end wins, and stop goes to the harness', () => {
@@ -290,6 +263,11 @@ test('native subagents: start logs one row where it began, progress fills its lo
   assert.deepEqual([s.status, s.tokens, s.result, s.steps[0].files], ['stopped', 4200, undefined, ['src/a.ts']]);
   assert.equal(thread().live?.notes, undefined, "a native agent reports to its own harness, not through Mochi's notes");
 });
+
+/** As the store's `useDelegatedReports` does. */
+function deliver(state: State, dispatch: (a: Action) => void) {
+  for (const { thread, subagent } of dueReports(state.threads)) dispatch({ type: 'delegate-report', threadId: thread.id, subagentId: subagent.id });
+}
 
 test("a report's one line drops markdown marks and link targets", () => {
   assert.equal(oneLine('\n**Verified** the `EX271UZ`. [BenQ page](https://benq.com/x)\nmore'), 'Verified the EX271UZ. BenQ page');

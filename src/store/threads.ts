@@ -123,10 +123,12 @@ export type ThreadsAction =
   | { type: 'fork'; threadId: string; point: ForkPoint }
   | { type: 'fork-keep'; keepId: string; dropId: string }
   | { type: 'handoff'; threadId: string; to: Provider; summary: string }
-  /** A Mochi background agent for the thread (`start_background_agent`); `agentCalls` starts its session. */
+  /** A task the thread's agent delegated (`delegate_task`); `agentCalls` starts its session. */
   | { type: 'bg-start'; threadId: string; agent: BackgroundStart }
   /** Stops a subagent: a Mochi one ends here, a native one when its harness reports it stopped. */
-  | { type: 'bg-stop'; threadId: string; subagentId: string };
+  | { type: 'bg-stop'; threadId: string; subagentId: string }
+  /** A finished delegated task's report goes to the thread's agent: steered into its turn, or starting one (`dueReports`). */
+  | { type: 'delegate-report'; threadId: string; subagentId: string };
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
 export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
@@ -319,6 +321,16 @@ function reduce(state: State, action: Action): State {
       if (!subagent || (subagent.origin === 'native' && thread?.live && !thread.live.isDetached)) return state;
       return applyAgentEvent(state, { threadId: action.threadId, type: 'subagent', id: subagent.id, phase: 'end', status: 'stopped' });
     }
+    case 'delegate-report':
+      // As `send` does: the report is the agent's next message, carrying its notes.
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) => ({
+          ...t,
+          ...(t.live && { status: 'running', live: { ...t.live, isWorking: true, isDetached: undefined, notes: undefined, restart: undefined } }),
+          subagents: t.subagents?.map((s) => (s.id === action.subagentId ? { ...s, isReportDue: undefined } : s)),
+        })),
+      };
     case 'handoff':
       return handoffLive(handoff(state, action.threadId, action.to, action.summary), action);
     default:

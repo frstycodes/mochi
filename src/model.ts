@@ -410,10 +410,10 @@ export interface SentImage extends AgentImage {
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
 
-/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a Mochi background agent (`start_background_agent`). */
+/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a task delegated to another provider (`delegate_task`). */
 export interface Subagent {
   id: string;
-  /** `mochi`: a background agent Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
+  /** `mochi`: a delegated task Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
   origin: 'native' | 'mochi';
   provider: Provider;
   name: string;
@@ -436,6 +436,8 @@ export interface Subagent {
   /** Mochi agents: the folder they run in, and whether it is a worktree of their own (else the parent's, shared). */
   cwd?: string;
   hasOwnWorktree?: boolean;
+  /** Mochi agents: it ended on its own and its report hasn't reached this thread's agent yet (`dueReports`). */
+  isReportDue?: boolean;
 }
 
 export interface SubagentStep {
@@ -468,7 +470,7 @@ export interface LiveRun {
   eventSeq?: number;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
-  /** Background agents' reports, sent to the agent ahead of your next message. */
+  /** Codex compaction restore notes, sent to the agent ahead of your next message. */
   notes?: string[];
   /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
   restart?: { forkAt: string } | { seed: string };
