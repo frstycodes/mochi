@@ -110,7 +110,7 @@ export const DEFAULT_PREFS: Prefs = {
   headerPins: ['browser', 'terminal'],
   sidebarItems: ['queue', 'board', 'projects'],
   driftGuard: true,
-  whileWorking: 'queue',
+  whileWorking: 'steer',
   simplifyLength: 'short',
   simplifyNeedsFirst: true,
   simplifyRules: '',
