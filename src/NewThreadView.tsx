@@ -137,7 +137,7 @@ function NewThread() {
         toast.error(problem);
         return false;
       }
-      const images = await sentImages(files);
+      const images = await sentImages(files, (type, base64) => host.data.saveImage(type, base64));
       const result = await machines.run(remote.id, { type: 'create', title, provider, project: remoteProject, ...(picked && { controls }), ...(images.length > 0 && { images }) });
       if (!result.isOk) return false;
       return void toast.success(`Started on ${remote.name}`, { description: 'It’s in the sidebar under that computer.' });
@@ -147,7 +147,7 @@ function NewThread() {
       toast.error(problem);
       return false;
     }
-    const images = await sentImages(files);
+    const images = await sentImages(files, (type, base64) => host.data.saveImage(type, base64));
     const references = withReferences(title, mention.mentions, state.threads, { isCommand: !!resolveToken(title, slashItems), provider, typedSkills: typedSkills(title, slashItems) });
     handOffComposer(leafId, layoutId);
     mention.clear();

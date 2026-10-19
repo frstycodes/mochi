@@ -153,7 +153,7 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
-  /** Your messages: thumbnails (data URLs) of the images sent with it. Tool entries: images the call returned, as absolute paths. */
+  /** Your messages: the images sent with it, as `shownImage` gives them. Tool entries: images the call returned, as absolute paths. */
   images?: string[];
   /** Tool entries: the image this call made, shown as its own card in the transcript. */
   generated?: GeneratedImage;
@@ -401,9 +401,11 @@ export interface QueuedMessage {
   typedSkills: string[];
 }
 
-/** An image you sent: what the agent gets, and the small copy (`thumb`, a data URL) the transcript shows. */
+/** An image you sent: what the agent gets, a small copy (`thumb`, a data URL), and where the original was kept (`original`). */
 export interface SentImage extends AgentImage {
   thumb: string;
+  /** A file path on desktop, the data URL in the web build; unset for images sent from a phone or before originals were kept. */
+  original?: string;
 }
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
