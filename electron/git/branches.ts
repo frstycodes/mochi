@@ -1,6 +1,6 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { Branch, BranchList, ChangeStat, Head, SwitchOptions } from '../../src/host/types/git.ts';
+import { mkdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import type { Branch, BranchList, ChangeStat, Head, SwitchOptions, WorktreeOptions } from '../../src/host/types/git.ts';
 import { listWorktrees, runGit } from './run.ts';
 import { branchFromTitle } from '../../src/git/workspace.ts';
 
@@ -145,6 +145,17 @@ export async function baseRef(top: string) {
     if (found.trim()) return name;
   }
   return 'HEAD';
+}
+
+/** Makes the worktree `dir` of the repo at `top` on `branch`, as `addWorktree` (electron/ipc/git.ts) describes. */
+export async function addBranchWorktree(top: string, dir: string, branch: string, { base, isExisting, isNew }: WorktreeOptions = {}) {
+  const name = (await runGit(top, ['check-ref-format', '--branch', isExisting ? await localName(top, branch) : branch])).trim();
+  const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
+  if (exists && isNew && !isExisting) throw new Error(`A branch named ${name} already exists; name the thread's branch something else`);
+  if (exists || isExisting) await assertFreeBranch(top, name);
+  await mkdir(dirname(dir), { recursive: true });
+  // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.
+  await runGit(top, exists || isExisting ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, base ?? (await baseRef(top))]);
 }
 
 /** Renames the temp branch `expected` after `title` (`branchFromTitle`); null when HEAD moved on, it was published, or the title has no slug. */

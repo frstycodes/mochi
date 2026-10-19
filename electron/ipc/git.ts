@@ -6,7 +6,7 @@ import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, P
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
-import { assertFreeBranch, baseRef, branchNameError, headOf, listBranches, localName, renameAutoBranch, switchBranch } from '../git/branches.ts';
+import { addBranchWorktree, baseRef, branchNameError, headOf, listBranches, renameAutoBranch, switchBranch } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
@@ -301,18 +301,12 @@ export async function addWorktree(root: string, threadId: string, branch: string
 }
 
 /** As `addWorktree`; `isNew` says this call made it, so it still needs its setup. */
-export async function createWorktree(root: string, threadId: string, branch: string, { base, isExisting, isNew }: WorktreeOptions = {}) {
+export async function createWorktree(root: string, threadId: string, branch: string, options: WorktreeOptions = {}) {
   const top = await mainRepo(root);
   if (!/^[\w-]+$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
   const dir = join(worktreeRoot(), basename(top), threadId);
   if (existsSync(dir)) return { dir, isNew: false };
-  const name = (await runGit(top, ['check-ref-format', '--branch', isExisting ? await localName(top, branch) : branch])).trim();
-  const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
-  if (exists && isNew && !isExisting) throw new Error(`A branch named ${name} already exists; name the thread's branch something else`);
-  if (exists || isExisting) await assertFreeBranch(top, name);
-  await mkdir(dirname(dir), { recursive: true });
-  // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.
-  await runGit(top, exists || isExisting ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, base ?? (await baseRef(top))]);
+  await addBranchWorktree(top, dir, branch, options);
   return { dir, isNew: true };
 }
 

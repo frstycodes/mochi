@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { assertFreeBranch, branchNameError, listBranches, renameAutoBranch, switchBranch } from './branches.ts';
+import { addBranchWorktree, assertFreeBranch, branchNameError, listBranches, renameAutoBranch, switchBranch } from './branches.ts';
 
 // A Mochi session injects its commit-msg hook through GIT_CONFIG_*; the scratch repo's commits mustn't run it.
 const IDENTITY = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t', GIT_CONFIG_COUNT: '0' };
@@ -155,4 +155,26 @@ test('a temp branch is renamed after the title, made unique; a switched, publish
   git('config', 'branch.mochi/feedf00d.remote', '.');
   git('config', 'branch.mochi/feedf00d.merge', 'refs/heads/main');
   assert.equal(await renameAutoBranch(dir, 'mochi/feedf00d', 'Other'), null, 'tracking a branch');
+});
+
+test("a thread's first start refuses a branch that exists; a restart or a branch you picked checks it out", async () => {
+  const { dir, git } = repo();
+  git('branch', 'mochi/0badf00d');
+  const at = (name: string) => join(dir, '..', `${name}-${Date.now()}`);
+  const fresh = at('fresh');
+  await assert.rejects(addBranchWorktree(dir, fresh, 'mochi/0badf00d', { isNew: true }), { message: "A branch named mochi/0badf00d already exists; name the thread's branch something else" });
+  assert.ok(!existsSync(fresh), 'no worktree made');
+
+  const restart = at('restart');
+  await addBranchWorktree(dir, restart, 'mochi/0badf00d');
+  assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: restart }).toString().trim(), 'mochi/0badf00d');
+  git('worktree', 'remove', restart);
+
+  const picked = at('picked');
+  await addBranchWorktree(dir, picked, 'mochi/0badf00d', { isNew: true, isExisting: true });
+  assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: picked }).toString().trim(), 'mochi/0badf00d');
+
+  const created = at('created');
+  await addBranchWorktree(dir, created, 'mochi/feedf00d', { isNew: true });
+  assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd: created }).toString().trim(), 'mochi/feedf00d');
 });
