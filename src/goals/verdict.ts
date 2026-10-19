@@ -2,6 +2,7 @@ import { isMet, type Criterion, type Thread } from '../model.ts';
 import { bareState, type RefState, type RefTone } from '../chat/refs.ts';
 import { resetLabel } from '../usage/limits.ts';
 import { subThreadsOf } from '../reorder.ts';
+import { getPrefs } from '../settings/prefs.ts';
 import { nextStep } from './report.ts';
 
 export type VerdictKind = 'checking' | 'done' | 'needs-you' | 'gaps' | 'stalled' | 'waiting' | 'idle';
@@ -51,7 +52,7 @@ export function idleVerdict(thread: Thread, prs: RefState[], subs: SubThreadVerd
   if (thread.queuePause === 'failed') return { kind: 'stalled', chip: 'Error', tone: 'destructive', reason: failure(thread) ?? 'The agent stopped with an error', gaps: [] };
   const question = asked(thread);
   if (question) return { kind: 'needs-you', chip: question.chip, tone: 'warning', reason: question.text, gaps: [] };
-  if (!thread.goal) return { kind: 'idle', chip: 'Idle', tone: 'muted', reason: 'Idle', gaps: [] };
+  if (!getPrefs().goals || !thread.goal) return { kind: 'idle', chip: 'Idle', tone: 'muted', reason: 'Idle', gaps: [] };
 
   if (thread.criteria?.some((c) => c.check?.status === 'running') || thread.idle?.isGathering) return { kind: 'checking', chip: 'Checking', tone: 'muted', reason: 'Checking the turn', gaps: [] };
   const out = subs.filter((s) => !s.thread.parent?.handedBackAt && s.thread.status !== 'settled');
@@ -77,7 +78,7 @@ export function idleVerdict(thread: Thread, prs: RefState[], subs: SubThreadVerd
  * CI and conflicts as last read aren't counted; the thread's own card and sidebar chip do count them.
  */
 export function isGoalMet(thread: Thread) {
-  if (!thread.goal || thread.status === 'settled') return false;
+  if (!getPrefs().goals || !thread.goal || thread.status === 'settled') return false;
   return idleVerdict(thread, bareStates(thread))?.kind === 'done';
 }
 
