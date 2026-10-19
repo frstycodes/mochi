@@ -191,6 +191,7 @@ export const Transfer = solar(Linear.TransferHorizontalIcon, Bold.TransferHorizo
 export const Trash = solar(Linear.TrashBinMinimalisticIcon, Bold.TrashBinMinimalisticIcon);
 export const Undo = solar(Linear.UndoLeftIcon, Bold.UndoLeftIcon);
 export const Unlink = solar(Linear.UnlinkIcon, Bold.UnlinkIcon);
+export const Upload = solar(Linear.UploadIcon, Bold.UploadIcon);
 export const UserCheck = solar(Linear.UserCheckRoundedIcon, Bold.UserCheckRoundedIcon);
 export const UserCircle = solar(Linear.UserCircleIcon, Bold.UserCircleIcon);
 export const UserEdit = solar(Linear.UserHandUpIcon, Bold.UserHandUpIcon);

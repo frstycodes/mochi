@@ -44,6 +44,8 @@ export function useLibrary(spaceId: string) {
     /** `source` is what the catalog was browsed from, so install reads the same (cached) repo. */
     installSkill: (source: string, skill: CatalogSkill) => apply(`${skill.name} not installed`)(host.library.installSkill(spaceId, source, skill.name)),
     installPlugin: (marketplace: string, plugin: CatalogPlugin) => apply(`${plugin.title ?? plugin.name} not installed`)(host.library.installPlugin(spaceId, marketplace, plugin.name)),
+    /** Rejects with the reason instead of toasting, for the review dialog to show inline. */
+    installUpload: (file: PluginFile, choice: Parameters<typeof host.library.installUpload>[2]) => host.library.installUpload(spaceId, file, choice).then(setEntries),
     addConnector: (account: NewConnector) => apply(`${account.alias} not connected`)(host.library.addConnector(spaceId, account)),
     signIn: (entry: LibraryEntry) => apply(`${entry.title} not signed in`)(host.library.signIn(spaceId, entry.id)),
     update: (entry: LibraryEntry) =>
@@ -79,6 +81,8 @@ export function useLibraryNamesLoader(spaceId: string | undefined) {
 }
 
 export type NewConnector = Parameters<typeof host.library.addConnector>[1];
+
+type PluginFile = Parameters<typeof host.library.reviewUpload>[0];
 
 /** The entry a catalog item became, if it is installed. */
 export function installedEntry(entries: LibraryEntry[] | null, kind: LibraryEntry['kind'], name: string) {

@@ -13,20 +13,28 @@ import { OverflowIcon } from '../ui';
 import { FEATURED_MARKETPLACES, type MarketplaceCatalog } from './library';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { ALL, CatalogErrorRow, CategoryChips, EmptyRow, filterBy, InstallControl, InstalledList, LibraryRow, PAGE } from './LibraryParts';
+import { PluginDropZone, UploadPluginButton } from './UploadPlugin';
 import { installedEntry, useLoaded, useMarketplaces, type Library } from './useLibrary';
 
 /** Settings › Plugins: the plugins installed, which profiles get each, and the marketplaces to add more from. */
 export function PluginsView() {
   return (
-    <LibraryPage
-      id="pluginsLibrary"
-      noun="plugins"
-      description="Installed once and unpacked into skills, agents, hooks and servers, then handed to the profiles that should have them. Claude’s own plugin system never sees them."
-      count={({ entries }) => entries?.filter((e) => e.kind === 'plugin').length ?? 0}
-      actions={({ showDiscover }) => <AddMarketplaceButton onAdded={showDiscover} />}
-      library={InstalledPlugins}
-      discover={PluginCatalog}
-    />
+    <PluginDropZone>
+      <LibraryPage
+        id="pluginsLibrary"
+        noun="plugins"
+        description="Installed once and unpacked into skills, agents, hooks and servers, then handed to the profiles that should have them. Claude’s own plugin system never sees them."
+        count={({ entries }) => entries?.filter((e) => e.kind === 'plugin').length ?? 0}
+        actions={({ library, showDiscover }) => (
+          <>
+            <UploadPluginButton library={library} />
+            <AddMarketplaceButton onAdded={showDiscover} />
+          </>
+        )}
+        library={InstalledPlugins}
+        discover={PluginCatalog}
+      />
+    </PluginDropZone>
   );
 }
 
@@ -39,7 +47,7 @@ function InstalledPlugins({ library, query, showDiscover }: Parameters<PagePart>
       empty={
         <SettingsRow
           label="No plugins yet"
-          description="A plugin bundles skills, agents, hooks and servers. Mochi unpacks it into this profile’s threads."
+          description="A plugin bundles skills, agents, hooks and servers. Mochi unpacks it into this profile’s threads. Drop a .plugin, .zip or .tgz file here to upload one."
           control={
             <Button variant="outline" size="sm" onClick={showDiscover}>
               Discover plugins
