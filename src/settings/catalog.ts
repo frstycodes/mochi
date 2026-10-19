@@ -445,7 +445,7 @@ const APP_SETTINGS: Setting[] = [
   hostSetting('worktreeInclude', 'Ignored files to copy', 'git', { type: 'text', placeholder: '.env*, .claude/settings.local.json', isMono: true }, { group: 'Worktree setup', description: 'Gitignore patterns, comma separated' }),
   pref('worktreeCleanup', 'Remove settled worktrees', 'git', select(WORKTREE_CLEANUP), { group: 'Worktrees', description: 'Only clean ones; their branches stay' }),
   pref('workspaceMode', 'New threads work in', 'git', choice(WORKSPACE_MODES), { group: 'Worktrees', description: 'A worktree keeps a thread’s changes out of your checkout' }),
-  pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: 'None', fallback: DEFAULT_PREFS.branchPrefix, isMono: true }, { group: 'Branches and pull requests', description: 'Comes before names read from your prompt, like fix/login-bug' }),
+  pref('branchPrefix', 'Branch prefix', 'git', { type: 'text', placeholder: DEFAULT_PREFS.branchPrefix, fallback: DEFAULT_PREFS.branchPrefix, isMono: true }, { group: 'Branches and pull requests', description: 'Comes before every new branch name, like mochi/login-bug' }),
   pref('diffStyle', 'Diffs', 'git', choice(DIFF_STYLES), { group: 'Changes', description: 'In the Changes tab and the work log’s edits' }),
   hostSetting('shell', 'Shell', 'terminal', { type: 'text', placeholder: '$SHELL', isMono: true }, { group: 'Shell', description: 'Empty uses your login shell' }),
   pref('restoreTerminals', 'Restore terminals on launch', 'terminal', SWITCH, { group: 'Shell', description: 'Each thread’s tabs and recent output; shells start fresh' }),

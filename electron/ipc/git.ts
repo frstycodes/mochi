@@ -154,9 +154,9 @@ export const git = {
     }
   },
 
-  async renameAutoBranch(_sender, cwd, expected, name) {
+  async renameAutoBranch(_sender, cwd, expected, title) {
     const dir = insideWorktreeRoot(string(cwd, 'cwd'));
-    return renameAutoBranch(dir, string(expected, 'expected', 255), string(name, 'name', 255));
+    return renameAutoBranch(dir, string(expected, 'expected', 255), string(title, 'title', 255));
   },
   async sync(_sender, cwd, chosenBase) {
     const top = await topLevel(string(cwd, 'cwd'));
@@ -294,20 +294,21 @@ export const git = {
 /**
  * The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. A new branch starts at
  * `base` (the default branch when unset); one that already exists (a restart after cleanup, or `isExisting`) is checked out,
- * refused when another worktree has it.
+ * refused when another worktree has it, and refused outright on an `isNew` start, which asked for a branch of its own.
  */
 export async function addWorktree(root: string, threadId: string, branch: string, options: WorktreeOptions = {}) {
   return (await createWorktree(root, threadId, branch, options)).dir;
 }
 
 /** As `addWorktree`; `isNew` says this call made it, so it still needs its setup. */
-export async function createWorktree(root: string, threadId: string, branch: string, { base, isExisting }: WorktreeOptions = {}) {
+export async function createWorktree(root: string, threadId: string, branch: string, { base, isExisting, isNew }: WorktreeOptions = {}) {
   const top = await mainRepo(root);
   if (!/^[\w-]+$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
   const dir = join(worktreeRoot(), basename(top), threadId);
   if (existsSync(dir)) return { dir, isNew: false };
   const name = (await runGit(top, ['check-ref-format', '--branch', isExisting ? await localName(top, branch) : branch])).trim();
   const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
+  if (exists && isNew && !isExisting) throw new Error(`A branch named ${name} already exists; name the thread's branch something else`);
   if (exists || isExisting) await assertFreeBranch(top, name);
   await mkdir(dirname(dir), { recursive: true });
   // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.

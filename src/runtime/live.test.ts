@@ -20,11 +20,11 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
   let s = base();
   const [start] = calls(s, create);
   assert.equal(start.method, 'start');
-  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', workspace: { mode: 'worktree', branch: 'feat/reply-with-ok' }, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
-
   s = run(s, create);
   const id = start.threadId;
   const thread = s.threads.find((t) => t.id === id)!;
+  const workspace = { mode: 'worktree', branch: thread.repo!.branch, isNew: true, titlePrompt: 'User: reply with ok' };
+  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', workspace, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
   assert.deepEqual(thread.steps, [], 'no demo placeholder steps on a live thread');
   assert.equal(thread.live?.isWorking, true);
   assert.equal(run(s, { type: 'tick' }).threads.find((t) => t.id === id)!.activity.length, thread.activity.length, 'the demo tick leaves live threads alone');
@@ -78,7 +78,8 @@ test('a folderless chat starts with no folder (main makes one); a restart reuses
 
   const s = run(base(), { type: 'create', title: 'hi', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
   const thread = s.threads.at(-1)!;
-  assert.deepEqual(thread.repo, { project: 'app', branch: 'feat/hi', autoBranch: 'feat/hi', path: '/Users/me/dev/app' });
+  assert.match(thread.repo!.branch, /^mochi\/[0-9a-f]{8}$/);
+  assert.deepEqual(thread.repo, { project: 'app', branch: thread.repo!.branch, autoBranch: thread.repo!.branch, path: '/Users/me/dev/app' });
   assert.equal(thread.live?.cwd, '/Users/me/dev/app');
   const [restart] = calls(s, { type: 'resume', threadId: thread.id, onApiKey: true });
   assert.equal(restart.method === 'start' && restart.options.cwd, '/Users/me/dev/app');
@@ -99,7 +100,7 @@ test("a project thread asks main for its worktree; once main reports it, restart
   let s = run(base(), create);
   const thread = s.threads.at(-1)!;
   assert.equal(start.method === 'start' && start.options.cwd, '/Users/me/dev/app');
-  assert.deepEqual(start.method === 'start' && start.options.workspace, { mode: 'worktree', branch: thread.repo!.branch });
+  assert.deepEqual(start.method === 'start' && start.options.workspace, { mode: 'worktree', branch: thread.repo!.branch, isNew: true }, '"hi" is named after the first exchange');
 
   // As the store's event listener does: the path goes on record, the reducer moves the live run there.
   setWorktreePath(thread.id, '/Users/me/.harness/worktrees/app/t1');
@@ -120,7 +121,7 @@ test('workspace per mode: a new worktree from a chosen base, an existing branch 
   };
 
   const fresh = startOf({ mode: 'worktree', base: 'origin/release', branch: 'mochi/fix-the-login-bug' });
-  assert.deepEqual(fresh.options?.workspace, { mode: 'worktree', branch: 'mochi/fix-the-login-bug', base: 'origin/release' });
+  assert.deepEqual(fresh.options?.workspace, { mode: 'worktree', branch: 'mochi/fix-the-login-bug', base: 'origin/release', isNew: true }, 'a branch you named keeps its name');
   assert.equal(fresh.thread.repo?.base, 'origin/release', 'the Changes tab diffs against the chosen base');
 
   const existing = startOf({ mode: 'worktree', base: 'main', branch: 'feat/x', isExisting: true });
@@ -225,6 +226,24 @@ test('a thread whose worktree was cleaned up makes it again on its next message'
   setWorktreePath(id, null);
   const [remade] = calls(s, { type: 'send', threadId: id, text: 'go on', drift: 'on-goal', reason: '' });
   assert.equal(remade.method === 'start' && remade.options.cwd, '/Users/me/dev/harness');
-  assert.deepEqual(remade.method === 'start' && remade.options.workspace, { mode: 'worktree', branch: 'fix/bug' });
+  assert.deepEqual(remade.method === 'start' && remade.options.workspace, { mode: 'worktree', branch: s.threads.at(-1)!.repo!.branch }, 'a remake checks out the branch it left');
   assert.equal(remade.method === 'start' && remade.options.resume, 'sess-1');
+});
+
+test("main's pre-start naming lands as the title and branch unless you renamed it, and a rename tells main to keep yours", () => {
+  const create: Action = { type: 'create', title: 'fix the login redirect', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
+  let s = run(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = run(s, { type: 'agent-starting', threadId: id, provider: 'claude' });
+  const thread = () => s.threads.find((t) => t.id === id)!;
+  s = applyAgentEvent(s, { threadId: id, type: 'branch', branch: 'mochi/login-redirect' });
+  s = applyAgentEvent(s, { threadId: id, type: 'title', title: 'Login redirect' });
+  assert.equal(thread().live?.starting, 'claude', "main's events aren't the agent being up");
+  assert.deepEqual([thread().title, thread().isTitleGenerated, thread().repo?.branch, thread().repo?.autoBranch?.startsWith('mochi/')], ['Login redirect', true, 'mochi/login-redirect', true]);
+
+  assert.deepEqual(calls(s, { type: 'rename', threadId: id, title: 'Auth' }), [{ method: 'keepTitle', threadId: id }]);
+  s = run(s, { type: 'rename', threadId: id, title: 'Auth' });
+  s = applyAgentEvent(s, { threadId: id, type: 'title', title: 'Something else' });
+  assert.equal(thread().title, 'Auth', 'your name wins over a late one');
+  assert.equal(thread().repo?.branch, 'mochi/login-redirect', 'a rename never touches the branch');
 });

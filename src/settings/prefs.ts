@@ -120,7 +120,7 @@ export const DEFAULT_PREFS: Prefs = {
   simplifyAuto: false,
   simplifyAutoWords: 150,
   branchFrom: 'current',
-  branchPrefix: '',
+  branchPrefix: 'mochi/',
   workspaceMode: 'worktree',
   diffStyle: 'unified',
   worktreeCleanup: '7',
@@ -187,8 +187,8 @@ export function parsePrefs(raw: string | null, legacyBranchFrom?: string | null)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) saved = parsed as Record<string, unknown>;
   } catch {}
   if (saved.branchFrom === undefined && legacyBranchFrom === 'base') saved.branchFrom = 'base';
-  // 'mochi/' was the old default; branches are now `type/slug` and a prefix is something you add.
-  if (saved.branchPrefix === 'mochi/') delete saved.branchPrefix;
+  // '' was the old default, saved with every pref since; a temp name needs the prefix to stand apart from your branches.
+  if (saved.branchPrefix === '') delete saved.branchPrefix;
   // 'reversible' was the old default, which refused creating and messaging threads; those now run on their own.
   if (!(AGENT_CONTROLS as readonly unknown[]).includes(saved.agentControl)) delete saved.agentControl;
   if (saved.speed !== '' && saved.speed !== 'fast') delete saved.speed;

@@ -139,17 +139,20 @@ test('discard: tracked changes reset, untracked files gone, target clean', async
   assert.equal(git('stash', 'list'), '');
 });
 
-test('automatic branch naming changes the real checkout, avoids collisions, and leaves switched or published branches alone', async () => {
+test('a temp branch is renamed after the title, made unique; a switched, published or tracking branch is left alone', async () => {
   const { dir, git } = repo();
-  git('switch', '-c', 'feat/first-prompt');
-  git('branch', 'feat/login-redirect');
-  assert.equal(await renameAutoBranch(dir, 'feat/first-prompt', 'feat/login-redirect'), 'feat/login-redirect-2');
-  assert.equal(git('branch', '--show-current').trim(), 'feat/login-redirect-2');
-  assert.equal(await renameAutoBranch(dir, 'feat/first-prompt', 'feat/other'), null, 'HEAD changed');
-  git('update-ref', 'refs/remotes/origin/feat/login-redirect-2', 'HEAD');
-  assert.equal(await renameAutoBranch(dir, 'feat/login-redirect-2', 'feat/other'), null, 'published without an upstream');
-  git('update-ref', '-d', 'refs/remotes/origin/feat/login-redirect-2');
-  git('config', 'branch.feat/login-redirect-2.remote', '.');
-  git('config', 'branch.feat/login-redirect-2.merge', 'refs/heads/main');
-  assert.equal(await renameAutoBranch(dir, 'feat/login-redirect-2', 'feat/other'), null, 'tracking a branch');
+  git('switch', '-c', 'mochi/0badf00d');
+  git('branch', 'mochi/login-redirect');
+  assert.equal(await renameAutoBranch(dir, 'mochi/0badf00d', 'Login redirect'), 'mochi/login-redirect-2');
+  assert.equal(git('branch', '--show-current').trim(), 'mochi/login-redirect-2');
+  assert.equal(await renameAutoBranch(dir, 'mochi/0badf00d', 'Other'), null, 'HEAD changed');
+  assert.equal(await renameAutoBranch(dir, 'mochi/login-redirect-2', 'Other'), null, 'not a temp name');
+  git('switch', '-c', 'mochi/feedf00d');
+  assert.equal(await renameAutoBranch(dir, 'mochi/feedf00d', '???'), null, 'no slug in the title');
+  git('update-ref', 'refs/remotes/origin/mochi/feedf00d', 'HEAD');
+  assert.equal(await renameAutoBranch(dir, 'mochi/feedf00d', 'Other'), null, 'published without an upstream');
+  git('update-ref', '-d', 'refs/remotes/origin/mochi/feedf00d');
+  git('config', 'branch.mochi/feedf00d.remote', '.');
+  git('config', 'branch.mochi/feedf00d.merge', 'refs/heads/main');
+  assert.equal(await renameAutoBranch(dir, 'mochi/feedf00d', 'Other'), null, 'tracking a branch');
 });

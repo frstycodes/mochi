@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Branch, BranchList, ChangeStat, Head, SwitchOptions } from '../../src/host/types/git.ts';
 import { listWorktrees, runGit } from './run.ts';
-import { uniqueBranch } from '../../src/git/workspace.ts';
+import { branchFromTitle } from '../../src/git/workspace.ts';
 
 const MAX_BRANCHES = 500;
 // Untracked files are read whole to count their lines; past this many the rest count as files only.
@@ -147,13 +147,14 @@ export async function baseRef(top: string) {
   return 'HEAD';
 }
 
-export async function renameAutoBranch(cwd: string, expected: string, name: string) {
+/** Renames the temp branch `expected` after `title` (`branchFromTitle`); null when HEAD moved on, it was published, or the title has no slug. */
+export async function renameAutoBranch(cwd: string, expected: string, title: string) {
   if ((await currentBranch(cwd)) !== expected) return null;
   const refs = await runGit(cwd, ['for-each-ref', '--format=%(refname:short)%00%(upstream)', 'refs/heads', 'refs/remotes']);
   const entries = refs.trim().split('\n').map((line) => line.split('\0'));
   if (entries.some(([ref, upstream]) => (ref === expected && upstream) || ref.endsWith(`/${expected}`))) return null;
-  const taken = new Set(entries.map(([ref]) => ref).filter((ref) => ref !== expected));
-  const branch = uniqueBranch(name, taken);
-  if (branch !== expected) await runGit(cwd, ['branch', '-m', expected, branch]);
+  const branch = branchFromTitle(expected, title, new Set(entries.map(([ref]) => ref)));
+  if (!branch) return null;
+  await runGit(cwd, ['branch', '-m', expected, branch]);
   return branch;
 }
