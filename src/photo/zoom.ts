@@ -29,3 +29,11 @@ export function clampPan(view: View, fitted: Size, viewport: Size): View {
 }
 
 const clamp = (v: number, max: number) => Math.min(max, Math.max(-max, v));
+
+/** A click outside the image's on-screen box closes the viewer; one that ended a pan (moved 4px or more since the press) doesn't. */
+export function isBackdropClick(at: Point, press: Point, image: { left: number; top: number; right: number; bottom: number } | undefined) {
+  if (Math.hypot(at.x - press.x, at.y - press.y) >= 4) return false;
+  return !image || at.x < image.left || at.x > image.right || at.y < image.top || at.y > image.bottom;
+}
+
+type Point = { x: number; y: number };
