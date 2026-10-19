@@ -123,7 +123,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
                 </Transcript>
                 <ProposalCard thread={thread} />
                 <ReportCard thread={thread} isReadOnly={isReadOnly} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
-                <PlanList items={planItems(thread)} slot={thread.line} />
+                <PlanList items={planItems(thread)} slot={thread.line} isWorking={isRunning} />
                 <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
               </div>
             </ConversationContent>

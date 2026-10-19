@@ -1166,6 +1166,23 @@ test('Read only and Changes block every settings suggestion and delete with no w
   }
 });
 
+test("update_plan is the thread's plan, even read-only: resent lists move steps on and drop what's left out", async () => {
+  const t = setup({ control: 'read' });
+  const plan = () => t.thread('rl').steps.filter((s) => s.status !== 'dropped').map((s) => [s.title, s.status]);
+  await t.ok('update_plan', { items: [{ title: 'Read the limiter', status: 'in_progress' }, { title: 'Add Retry-After', status: 'pending' }, { title: 'Run the tests', status: 'pending' }] });
+  assert.deepEqual(plan().slice(0, 3), [['Read the limiter', 'running'], ['Add Retry-After', 'ready'], ['Run the tests', 'ready']]);
+  await t.ok('update_plan', { items: [{ title: 'Read the limiter', status: 'completed' }, { title: 'Add Retry-After', status: 'in_progress' }] });
+  assert.deepEqual(plan().slice(0, 2), [['Read the limiter', 'done'], ['Add Retry-After', 'running']]);
+  assert.equal(t.thread('rl').steps.find((s) => s.title === 'Run the tests')?.status, 'dropped');
+  await t.ok('update_plan', { items: [{ title: 'Add Retry-After', status: 'in_progress' }, { title: 'Run the tests', status: 'pending' }] });
+  const status = (title: string) => t.thread('rl').steps.find((s) => s.title === title && s.status !== 'dropped')?.status;
+  await t.ok('update_plan', { advance: true });
+  assert.deepEqual([status('Add Retry-After'), status('Run the tests')], ['done', 'running']);
+  await t.ok('update_plan', { advance: true });
+  assert.deepEqual([status('Add Retry-After'), status('Run the tests')], ['done', 'done'], 'advance after the last step finishes the plan');
+  assert.match(await t.err('update_plan', {}), /advance/);
+});
+
 test('claim_criterion records evidence; report and get_report give the turn as data', async () => {
   const t = setup();
   t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }] } });

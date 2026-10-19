@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { McpServerStatus, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, planFromTodos, userContent, withPlanTools } from './map.ts';
+import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, userContent } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
@@ -10,12 +10,12 @@ import { toolCall } from '../../../src/summary.ts';
 
 const CWD = '/repo';
 
-test('maps a turn to session, message deltas, tools, plan, usage and turn end', () => {
+test('maps a turn to session, message deltas, tools, usage and turn end', () => {
   const { map } = createMapper('t1', CWD);
   const events = FIXTURE.flatMap((m) => map(m as SDKMessage));
   assert.deepEqual(
     events.map((e) => e.type),
-    ['session', 'info', 'message', 'message', 'tool', 'plan', 'tool', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
+    ['session', 'info', 'message', 'message', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
   );
   const [, , first, second] = events;
   assert.deepEqual([first, second], [
@@ -95,35 +95,6 @@ test('a result after interrupt ends the turn as interrupted, not failed', () => 
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'interrupted' });
 });
 
-test('TaskCreate and TaskUpdate build the plan once the created task has an id', () => {
-  const { map } = createMapper('t1', CWD);
-  const use = (id: string, name: string, input: object) => ({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input }] } }) as unknown as SDKMessage;
-  const done = (id: string, result: unknown) => ({ type: 'user', parent_tool_use_id: null, tool_use_result: result, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } }) as unknown as SDKMessage;
-  map(use('a', 'TaskCreate', { subject: 'Write the parser', description: '' }));
-  assert.deepEqual(map(done('a', { task: { id: '1', subject: 'Write the parser' } })).at(-1), { threadId: 't1', type: 'plan', items: [{ title: 'Write the parser', status: 'pending' }] });
-  assert.deepEqual(map(use('b', 'TaskUpdate', { taskId: '1', status: 'in_progress' })).at(-1), { threadId: 't1', type: 'plan', items: [{ title: 'Write the parser', status: 'running' }] });
-  assert.deepEqual(map(use('c', 'TaskUpdate', { taskId: '1', status: 'deleted' })).at(-1), { threadId: 't1', type: 'plan', items: [] });
-});
-
-test('plan from TodoWrite maps statuses and skips malformed items', () => {
-  assert.deepEqual(
-    planFromTodos({
-      todos: [
-        { content: 'Read the code', status: 'completed', activeForm: 'Reading' },
-        { content: 'Fix the bug', status: 'in_progress', activeForm: 'Fixing' },
-        { content: 'Add a test', status: 'pending', activeForm: 'Adding' },
-        { status: 'pending' },
-      ],
-    }),
-    [
-      { title: 'Read the code', status: 'done' },
-      { title: 'Fix the bug', status: 'running' },
-      { title: 'Add a test', status: 'pending' },
-    ],
-  );
-  assert.deepEqual(planFromTodos({}), []);
-});
-
 test('subagent messages are skipped', () => {
   const { map } = createMapper('t1', CWD);
   assert.deepEqual(map({ type: 'assistant', parent_tool_use_id: 'task-1', message: { content: [{ type: 'tool_use', id: 'x', name: 'Bash', input: { command: 'ls' } }] } } as unknown as SDKMessage), []);
@@ -173,10 +144,6 @@ test("Claude's limit states pass through as Claude Code reports them: held turn,
   const { map: overage } = createMapper('t2', CWD);
   const rejected = overage({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', rateLimitType: 'seven_day', overageStatus: 'allowed', resetsAt: 1_760_000_000 } } as unknown as SDKMessage);
   assert.deepEqual(rejected, [{ threadId: 't2', type: 'limit-notice', text: 'Claude is past its weekly limit and using extra usage, billed per use' }], 'extra usage keeps running: no pause');
-});
-
-test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
-  assert.deepEqual(withPlanTools({ PATH: '/bin' }), { PATH: '/bin', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' });
 });
 
 test('WebSearch ends with its hits as links, WebFetch with the page it read', () => {

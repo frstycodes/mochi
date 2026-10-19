@@ -10,7 +10,7 @@ Status labels: **verified** = read in this repo; **docs** = read in the vendor's
 2. **Claude: the Claude Agent SDK** (`@anthropic-ai/claude-agent-sdk`), one `query()` per thread with streaming input. It is Claude Code as a library: built-in tools, hooks, permissions, sessions, file checkpoints ([docs](https://code.claude.com/docs/en/agent-sdk/overview.md)).
 3. **Codex: one `codex app-server` child process** speaking JSON-RPC over stdio, holding every Codex thread (`thread/start` per thread, each with its own `cwd`). OpenAI recommends app-server for deep product integrations; it is what the VS Code extension uses. The `@openai/codex-sdk` spawns `codex exec` per turn and has no approval callbacks, so it doesn't fit ([docs](https://learn.chatgpt.com/docs/app-server); `openai/codex` `sdk/typescript/src/exec.ts`).
 4. **One normalized event stream.** Both adapters translate their protocol into `AgentEvent`s (below); the store only ever sees those. The `tick` simulation becomes a third adapter, `demo`, emitting the same events, so the web build and the artifact keep working with no runtime.
-5. **Mochi's goal stays canonical.** The agent's own plan (TodoWrite / Codex plan updates) is mapped onto goal steps; it never replaces them. Overlap detection, revisions and the metro board keep working unchanged.
+5. **Mochi's goal stays canonical.** The agent's own plan (Mochi's `update_plan`, Codex plan updates) is mapped onto goal steps; it never replaces them. Overlap detection, revisions and the metro board keep working unchanged.
 6. **Defaults:** Claude model `claude-opus-5-5`; the drift classifier's small model `claude-haiku-5-5` (current Haiku). Codex model: whatever the user's Codex config defaults to until the model picker sends one.
 
 ## Auth
@@ -82,7 +82,7 @@ Methods: `start(threadId, { provider, cwd, prompt, model, effort, permissionMode
 | `message` | `assistant` text blocks; deltas from `stream_event` with `includePartialMessages: true` | `item/agentMessage/delta`, `item/completed` `agentMessage` | `say` (activity `message`) |
 | `reasoning` | thinking blocks (summarized display) | `item/reasoning/summaryTextDelta` | activity `reasoning` |
 | `tool` | `tool_use` blocks in `assistant`, results in `user` (shape not verified); or `PreToolUse`/`PostToolUse` hooks | `item/started` / `item/completed` for `commandExecution` (`exitCode`) and `fileChange` (`changes`) | activity `tool` → work log; edited files feed the step's `footprint` and overlap detection |
-| `plan` | latest `TodoWrite` `tool_use` input `{ todos: { content, status, activeForm }[] }`, or `TaskCreate` / `TaskUpdate` on newer models | `turn/plan/updated { plan: { step, status }[] }`, full list each time | reconcile onto goal steps (below) |
+| `plan` | Mochi's `update_plan` tool (`src/runtime/tools.ts`), full list each time; Claude Code's own task tools are disallowed | `turn/plan/updated { plan: { step, status }[] }`, full list each time | reconcile onto goal steps (below) |
 | `approval` | `canUseTool(toolName, input, { toolUseID, signal })`, resolve later with `{ behavior: 'allow' }` or `{ behavior: 'deny', message }` | server requests `item/commandExecution/requestApproval` / `item/fileChange/requestApproval`, reply `{ decision }` | queue item `approval` (existing `Confirmation` card) |
 | `question` | `canUseTool` with `toolName === 'AskUserQuestion'`, answer via `updatedInput: { questions, answers }` | none found | queue item `question` (existing `Questionnaire`) |
 | `usage` | `result.usage`, `result.modelUsage` (includes subagents), `result.total_cost_usd` | `thread/tokenUsage/updated { total, last, modelContextWindow }`; no cost field | usage model (`src/usage/model.ts`), context meter |
@@ -92,7 +92,7 @@ Interrupt: Claude `query.interrupt()`; Codex `turn/interrupt { threadId, turnId 
 
 ## Plans onto goal steps
 
-The agent's plan list arrives whole each time (TodoWrite input, `turn/plan/updated`). For each item, match an open goal step by title with `similarity()` (`src/progress.ts`, verified; already used for overlap detection):
+The agent's plan list arrives whole each time (`update_plan` input, `turn/plan/updated`). For each item, match an open goal step by title with `similarity()` (`src/progress.ts`, verified; already used for overlap detection):
 
 - match → copy the status onto the step (`running` starts it, `done` completes it through the existing `completeStep`, so provided-by links and races keep working);
 - no match → add the step through the existing scope-add revision flow, `addedBy` = the provider, so the timeline shows where scope came from and the drift guard's rules apply;
@@ -233,7 +233,7 @@ All of the above verified with live runs on 2026-10-13 (tiny prompts, `electron/
 Design in CHECKLIST §10–12 (decided 2026-10-13). Runtime pieces:
 
 - **Drafting.** On a thread's first message, and on later messages while the thread has no goal, one background-model call returns `{ kind: 'task' | 'chat', outcome, criteria[], similar[] }`. `similar` judges a shortlist (word overlap against active goals and settled records in the profile). The agent starts at once; the draft lands when it returns and never blocks the send.
-- **Plan prompting.** Goal threads get an instruction to keep their own plan current (Claude task tools, Codex `turn/plan/updated`); the plan still maps through `applyPlan`, without sizes and without a revision.
+- **Plan prompting.** Every thread is told to keep `mcp__mochi__update_plan` current for any request that edits files or runs more than one command (`electron/agents/instructions.ts`); Codex's native `turn/plan/updated` still maps too. Both go through `applyPlan`, without sizes and without a revision.
 - **Mochi tools.** `report` (decisions, what's left, one question for you; once per turn), `claim_criterion` (criterion id + one line of evidence), `get_report` (read, for coordinators). `edit_goal` edits outcome and criteria; `add_step` and friends edit the plan without a revision. `propose_goal`: after its first look the agent proposes the concrete outcome and criteria; it waits for your Accept (`thread.proposal`, the row reads Goal to accept) or, with Settings › Goals › Apply, with undo, applies at once with an Undo. The background drafter still writes the provisional goal at send time.
 - **Verification.** A checkable criterion's command runs in the thread's worktree (`threadCwd`), through main, with a timeout; output is kept on the criterion. It runs from the Run check button and when the agent goes idle after a turn that edited files (`useIdleChecks`); a claim alone doesn't run it.
 - **Idle verdict.** When the agent goes idle, Mochi records `thread.idle` (uncommitted files, the transcript audit, gaps you accepted) and `idleVerdict` (`src/goals/verdict.ts`) reads it with the criteria checks, PR state and the stop itself: Done, Needs you, Gaps, Stalled, or plain Idle for a chat. Never from the agent's report.
@@ -245,7 +245,6 @@ Design in CHECKLIST §10–12 (decided 2026-10-13). Runtime pieces:
 - Env var the Agent SDK reads for the API key; the `user` tool_result message shape.
 - Per-process memory of a Claude Agent SDK session; safe concurrency count.
 - Whether app-server picks up an existing `codex login` without a login call; concurrent-turn limits.
-- Whether `TaskCreate` / `TaskUpdate` replace `TodoWrite` on the default model (docs say "on certain models"; `CLAUDE_CODE_ENABLE_TASKS=0` forces TodoWrite).
 - Whether runtime events say clearly enough when a test or check ran to drive the Verifying phase (check `src/runtime/apply.ts` event kinds before goals PR 5).
 - How reliably Claude and Codex call an end-of-turn Mochi tool when asked; the background-model fallback covers misses.
 - How to attach screenshots to a PR body without a GitHub upload API (side branch or release assets).

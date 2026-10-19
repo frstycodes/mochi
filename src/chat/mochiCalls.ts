@@ -24,6 +24,7 @@ export const MOCHI_CALLS = {
   report_turn: ['Reporting progress', 'Reported progress'],
   get_report: ['Reading the progress report', 'Read the progress report'],
   settle_goal: ['Settling the goal', 'Settled the goal'],
+  update_plan: ['Updating the plan', 'Updated the plan'],
   delegate_task: ['Delegating a task', 'Delegated a task'],
   browser_tabs: ['Looking at the browser tabs', 'Looked at the browser tabs'],
   browser_open: ['Opening a page', 'Opened a page'],

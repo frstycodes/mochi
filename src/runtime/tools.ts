@@ -3,7 +3,7 @@ import { prBody } from '../git/prBody.ts';
 import { gateRefusal, prGate } from '../goals/verdict.ts';
 import { openedPr } from '../git/prs.ts';
 import type { Page } from '../browser/pages.ts';
-import type { AgentModel, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
+import type { AgentModel, AgentPlanItem, AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
 import type { BrowserHost } from '../host/types/browser.ts';
 import type { BranchList, CheckRun } from '../host/types/git.ts';
 import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
@@ -11,7 +11,7 @@ import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Thread } from '../model.ts';
+import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread } from '../model.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
@@ -576,6 +576,14 @@ const USER_SPECS = {
 } satisfies Partial<Specs>;
 
 const AGENT_SPECS = {
+  update_plan: {
+    run: ({ caller, args, dispatch }) => {
+      if (!args.items && !args.advance) throw new Error('Pass {"items": [...]} (the whole plan) or {"advance": true}');
+      const items = args.items ? args.items.map((i) => ({ title: i.title.trim(), status: PLAN_STATUS[i.status] })) : advanced(caller.steps);
+      dispatch({ type: 'agent', event: { threadId: caller.id, type: 'plan', items } });
+      return { result: `Plan shown (${items.length} steps).` };
+    },
+  },
   delegate_task: {
     run: ({ state, caller, args, dispatch }) => {
       if (!caller.live) throw new Error('Delegated tasks run only in a live desktop thread.');
@@ -698,6 +706,18 @@ function isDraftGoal(thread: Thread) {
 const DRAFT_NEXT = "This goal is Mochi's guess from the user's first message, not checked against the code. Once you've looked at the code, call propose_goal with the real outcome and 2 to 4 criteria (a command for each where one proves it); claim_criterion and report_turn wait until you have.";
 
 const DRAFT_REFUSAL = `Call propose_goal first. ${DRAFT_NEXT}`;
+
+const PLAN_STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
+
+/** The thread's plan one step on: the running step done, the next open one running. */
+function advanced(steps: Step[]): AgentPlanItem[] {
+  const items = steps.flatMap((s): AgentPlanItem[] => (s.status === 'dropped' ? [] : [{ title: s.title, status: s.status === 'done' || s.status === 'running' ? s.status : 'pending' }]));
+  const running = items.findIndex((i) => i.status === 'running');
+  if (running >= 0) items[running].status = 'done';
+  const next = items.findIndex((i, k) => k > running && i.status === 'pending');
+  if (next >= 0) items[next].status = 'running';
+  return items;
+}
 
 export function summary(thread: Thread) {
   return { id: thread.id, title: thread.title, status: thread.status, pinned: isPinned(thread), provider: thread.providers[0], project: thread.repo?.project ?? null };

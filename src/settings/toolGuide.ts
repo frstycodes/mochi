@@ -31,6 +31,7 @@ export const TOOL_GUIDE = {
   get_report: { group: 'Goals and progress', label: 'Read reports', description: "Read another thread's latest report, to coordinate without reading its transcript." },
   settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Close out a goal with a reason and settle its thread. Never its own thread." },
 
+  update_plan: { group: 'Goals and progress', label: 'Keep a plan', description: 'Show its plan under its latest message and tick steps off as it works.' },
   delegate_task: { group: 'Delegated tasks', label: 'Delegate tasks', description: 'Hand a task to the other provider (or a model its own subagents lack), in the same worktree or a fresh one, on this profile’s account. Its report comes back to the agent when it finishes.' },
 
   browser_tabs: { group: 'Reading the browser', label: 'List browser tabs', description: "See the thread's browser tabs: address, title and which is active." },

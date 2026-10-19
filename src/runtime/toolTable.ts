@@ -151,6 +151,20 @@ export const TOOL_TABLE = {
     shape: { threadId: otherThread, reason: z.string().min(1) },
   },
   // {AGENTS}
+  update_plan: {
+    tier: 'read',
+    description:
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply.',
+    shape: {
+      items: z
+        .array(z.object({ title: z.string().min(1).max(120).describe('A short step, like "Add the parser test"'), status: z.enum(['pending', 'in_progress', 'completed']) }))
+        .min(1)
+        .max(12)
+        .optional()
+        .describe('The whole plan, in order; replaces the previous one, and steps left out are dropped'),
+      advance: z.boolean().optional().describe('Complete the in_progress step and start the next pending one; ignored with items'),
+    },
+  },
   delegate_task: {
     tier: 'change',
     quiet: true,
