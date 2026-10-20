@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ComponentType, type RefObject } from 'react';
 import { useIsSimplifying } from './simplify/useSimplify';
 import { SimplifySwap } from './simplify/SimplifyMotion';
 import { host } from './host';
@@ -65,6 +65,7 @@ import { McpAppCard } from './chat/McpAppCard';
 import { MessageImages } from './chat/MessageImages';
 import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
+import { PendingSteers } from './chat/SteerBubble';
 import { usePrefs, type Prefs } from './settings/prefs';
 import { MentionChips, MentionMenu, useMentionMenu, useThreadMentionFiles } from './chat/MentionMenu';
 import type { Mention } from './chat/mentions';
@@ -106,6 +107,8 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
   const slashItems = useSlashItems(thread.providers[0], thread.spaceId, projectRef(thread.repo), thread.agent);
   const transcript = useRef<TranscriptHandle | null>(null);
   const [remembered] = useState(() => rememberedScroll.get(thread.id));
+  // The composer's own: a message taken back returns there with its mentions and images.
+  const restoreDraft = useRef<((message: QueuedMessage) => void) | null>(null);
 
   return (
     // The provider holds the message box's text for the whole chat: the next-move card fills it with the agent's draft.
@@ -121,6 +124,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
                 <Transcript ref={transcript} threadId={thread.id} rows={rows} remembered={remembered}>
                   {(row, i) => <ChatRowView thread={thread} row={row} slashItems={slashItems} isReadOnly={isReadOnly} messageBar={messageBar} hasActions={withActions.has(i)} isLive={row.kind === 'work' ? i === liveWork && !!action : i === liveIndex && isRunning} action={action} />}
                 </Transcript>
+                {!isReadOnly && <PendingSteers thread={thread} onTakeBack={(message) => restoreDraft.current?.(message)} />}
                 <ProposalCard thread={thread} />
                 <ReportCard thread={thread} isReadOnly={isReadOnly} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
                 <ThreadPlan thread={thread} isWorking={isRunning} />
@@ -136,7 +140,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
         {!isReadOnly && (
           <div ref={composer.ref} className="absolute inset-x-0 bottom-0 z-10">
             <ImageDropTarget>
-              <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} />
+              <Composer thread={thread} slashItems={slashItems} decisions={decisions} isTrayOpen={tray.isOpen} onToggleTray={tray.toggle} handoff={handoff} restoreRef={restoreDraft} />
             </ImageDropTarget>
             <ComposerInbox threadId={thread.id} />
           </div>
@@ -350,6 +354,7 @@ function Composer({
   isTrayOpen,
   onToggleTray,
   handoff,
+  restoreRef,
 }: {
   thread: Thread;
   slashItems: SlashItem[];
@@ -357,6 +362,7 @@ function Composer({
   isTrayOpen: boolean;
   onToggleTray: () => void;
   handoff: ReturnType<typeof useComposerHandoff>;
+  restoreRef: RefObject<((message: QueuedMessage) => void) | null>;
 }) {
   const { dispatch } = useHarness();
   const { whileWorking, promptSuggestions } = usePrefs();
@@ -398,13 +404,19 @@ function Composer({
 
   const recordUnanswered = useRecordUnanswered(thread);
 
-  const edit = (message: QueuedMessage) => {
-    dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id });
-    // Whatever you were already typing stays; the queued text follows it.
+  const restore = (message: QueuedMessage) => {
+    // Whatever you were already typing stays; the message's text follows it.
     textInput.setInput(textInput.value.trim() ? `${textInput.value}\n${message.draft}` : message.draft);
     mention.restore(message.mentions);
     if (message.images?.length) attachments.add(imageFiles(message.images));
     editor.current?.focus();
+  };
+  useEffect(() => {
+    restoreRef.current = restore;
+  });
+  const edit = (message: QueuedMessage) => {
+    dispatch({ type: 'queued-remove', threadId: thread.id, id: message.id });
+    restore(message);
   };
 
   return (

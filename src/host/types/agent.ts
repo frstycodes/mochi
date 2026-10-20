@@ -56,6 +56,8 @@ export type AgentEvent =
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }
   | { threadId: string; type: 'message'; text: string; isDelta: boolean }
+  /** The agent took the message sent into its turn under this id (`send`'s `steerId`), right after its latest step. */
+  | { threadId: string; type: 'steer-read'; id: string }
   | { threadId: string; type: 'reasoning'; text: string }
   /**
    * `links`: the pages a web search returned or the page a fetch read; with them, `end` also replaces the start's text (Codex fills
@@ -320,8 +322,11 @@ export interface AgentHost {
   /**
    * `skills`: as `AgentStartOptions.skills`, for this message. `speed`: the thread's speed from this message on ('' standard); unset keeps it.
    * `steer`: the turn in flight takes the message at its next step instead of a new turn starting after it (Claude `priority: 'next'`, Codex `turn/steer`).
+   * `steerId`: names a steered message, so `steer-read` reports when the agent took it and `unsteer` can take it back until then.
    */
-  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean): Promise<void>;
+  send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean, steerId?: string): Promise<void>;
+  /** Takes back a steered message the agent hasn't read; false once it can't (it was read, or is being read now). */
+  unsteer(threadId: string, steerId: string): Promise<boolean>;
   /** Compacts the live session now with the harness's own compaction; `focus` is what you typed after `/compact` (Claude only). */
   compact(threadId: string, focus: string): Promise<void>;
   /** What Mochi asks the harness to keep on every compaction of the thread, manual or auto: '' clears it. Claude only (PreCompact hook); Codex takes none. */
@@ -377,6 +382,7 @@ export interface AgentHost {
 export const agentMethods = {
   start: 'invoke',
   send: 'invoke',
+  unsteer: 'invoke',
   compact: 'invoke',
   compactInstructions: 'invoke',
   interrupt: 'invoke',

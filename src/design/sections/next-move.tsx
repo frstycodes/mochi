@@ -90,7 +90,7 @@ function TurnEndRecord({ fixture, answer }: { fixture: NextMoveFixture; answer: 
   return <NextMoveRecord record={{ summary: fixture.summary, question: fixture.question, ...(answer.label && { answer: answer.label }) }} />;
 }
 
-function MockFrame({ label, control, children }: { label: string; control?: ReactNode; children: ReactNode }) {
+export function MockFrame({ label, control, children }: { label: string; control?: ReactNode; children: ReactNode }) {
   return (
     <figure className="flex max-w-[720px] flex-col gap-5">
       <figcaption className="flex h-6 items-center gap-2 type-caption text-muted-foreground">
@@ -103,7 +103,7 @@ function MockFrame({ label, control, children }: { label: string; control?: Reac
 }
 
 /** Stands in for a finished work-log group. */
-function WorkLine({ children }: { children: ReactNode }) {
+export function WorkLine({ children }: { children: ReactNode }) {
   return (
     <p className="type-prose text-muted-foreground">
       {children} <ChevronRight aria-hidden className="inline size-3 align-middle" />
@@ -120,7 +120,7 @@ function YourMessage({ children }: { children: ReactNode }) {
 }
 
 /** Stands in for the editor: the placeholder, or what an answer put there for you to finish. */
-function ComposerStub({ placeholder, draft }: { placeholder: string; draft?: string }) {
+export function ComposerStub({ placeholder, draft }: { placeholder: string; draft?: string }) {
   return (
     <ComposerCard>
       <div className="flex items-center gap-2 py-2 pr-2 pl-4">

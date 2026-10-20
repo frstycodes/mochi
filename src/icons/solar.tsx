@@ -29,6 +29,7 @@ export const Camera = solar(Linear.CameraIcon, Bold.CameraIcon);
 export const Chart = solar(Linear.ChartIcon, Bold.ChartIcon);
 export const Chat = solar(Linear.ChatRoundIcon, Bold.ChatRoundIcon);
 export const Check = solar(Linear.CheckReadIcon, Bold.CheckReadIcon);
+export const CheckSingle = solar(Linear.CheckIcon, Bold.CheckIcon);
 export const CheckBadge = solar(Linear.CheckCircleIcon, Bold.CheckCircleIcon);
 export const CheckCircle = solar(Linear.CheckCircleIcon, Bold.CheckCircleIcon);
 export const ChevronDown = solar(Linear.AltArrowDownIcon, Bold.AltArrowDownIcon);

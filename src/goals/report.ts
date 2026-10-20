@@ -40,7 +40,7 @@ export function showsVerdictCard(t: Thread) {
 export function reportHeadline(t: Thread) {
   const view = currentReport(t);
   if (!view) return null;
-  if (view.report.question) return `Needs you: ${view.report.question}`;
+  if (view.report.question && !view.report.isSuperseded) return `Needs you: ${view.report.question}`;
   if (view.isReady) return NEXT_STEP_TITLES[nextStep(t.prs.map((p) => p.state))];
   if (view.criteria.length) return `${view.met} of ${view.criteria.length} criteria done`;
   return view.report.left[0] ?? null;

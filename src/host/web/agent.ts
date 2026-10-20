@@ -19,6 +19,9 @@ const endTurn = async (threadId: string) => {
 export const agent: AgentHost = {
   start: endTurn,
   send: endTurn,
+  async unsteer() {
+    return true;
+  },
   compact: endTurn,
   async compactInstructions() {},
   interrupt: endTurn,

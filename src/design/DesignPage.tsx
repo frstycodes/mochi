@@ -53,6 +53,7 @@ import { SidePane } from '../SidePane';
 import { AppSidebar, ThreadItem } from '../Sidebar';
 import { proposalFixture, verdictFixtures } from './verdictFixtures';
 import { NextMoveBlock } from './sections/next-move';
+import { SteerBlock } from './sections/steer';
 import { SummaryGoalBlock } from './sections/summary-goal';
 import { ThreadRowVariantsBlock } from './sections/thread-rows';
 import { SubThreadsBlock } from './sections/sub-threads';
@@ -765,6 +766,7 @@ function Recipes() {
           </div>
         </Block>
         <NextMoveBlock rl={rl} />
+        <SteerBlock />
         <SummaryGoalBlock rl={rl} />
         <ThreadRowVariantsBlock rl={rl} />
         <SubThreadsBlock rl={rl} />

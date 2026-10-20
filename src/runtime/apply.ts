@@ -6,7 +6,7 @@ import { getThreadPins } from '../chat/pins.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
 import type { Action, State } from '../store/index.tsx';
-import { completeStep, log, mapStep, mapThread, seePrs, withGeneratedTitle } from '../store/threads.ts';
+import { completeStep, log, mapStep, mapThread, readSteer, seePrs, withGeneratedTitle } from '../store/threads.ts';
 import { createdPr } from '../git/prs.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
@@ -49,6 +49,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
         if (i < 0) return log(t, { at: now, who, kind: 'message', text: event.text });
         return { ...t, activity: t.activity.map((e, j) => (j === i ? { ...e, text: e.text + event.text } : e)) };
       });
+    case 'steer-read':
+      return update((t) => readSteer(t, event.id, now));
     case 'reasoning':
       return update((t) => log(t, { at: now, who, kind: 'reasoning', text: event.text }));
     case 'tool':
