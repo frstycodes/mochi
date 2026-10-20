@@ -79,6 +79,8 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   provider: Provider;
   /** Keeps the model list to `provider`. */
   isLocked?: boolean;
+  /** The model picker alone, no effort or speed: the settings chat. */
+  isModelOnly?: boolean;
   onControlsChange: (controls: ThreadControls, model?: ModelOption) => void;
   /** `/` commands and skills a token in the text can resolve to. */
   slashItems: SlashItem[];
@@ -95,7 +97,7 @@ type ComposerInputProps = Omit<ComponentProps<typeof ComposerEditor>, 'items'> &
   draftExtra?: unknown;
 };
 
-export function ComposerInput({ controls, provider, isLocked, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
+export function ComposerInput({ controls, provider, isLocked, isModelOnly, onControlsChange, slashItems, onSend, onStop, submitLabel = 'Send', meter, draftKey, draftExtra, className, ...editorProps }: ComposerInputProps) {
   const catalog = useModels(useSpace().id);
   const model = optionFor(catalog[provider], controls.model, provider);
   const defaults = useNewThreadDefaults(catalog, model);
@@ -123,8 +125,8 @@ export function ComposerInput({ controls, provider, isLocked, onControlsChange, 
             </PromptInputActionMenuContent>
           </PromptInputActionMenu>
           <ModelPicker value={controls.model} provider={provider} isLocked={isLocked} onChange={(m) => onControlsChange({ ...controls, model: m.id }, m)} defaults={defaults.model} />
-          <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />
-          <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />
+          {!isModelOnly && <EffortPicker model={model} value={controls.effort} onChange={(effort) => onControlsChange({ ...controls, effort })} defaults={defaults.effort} />}
+          {!isModelOnly && <SpeedPicker model={model} value={controls.speed} onChange={(speed) => onControlsChange({ ...controls, speed })} defaults={defaults.speed} />}
         </PromptInputTools>
         <PromptInputTools>
           {meter}

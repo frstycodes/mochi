@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '../agents/instructions.ts';
-import { GOAL_TOOLS, isGoalTool, TOOL_NAMES } from '../../src/runtime/toolTable.ts';
+import { GOAL_TOOLS, isGoalTool, SETTINGS_CHAT_TOOLS, TOOL_NAMES } from '../../src/runtime/toolTable.ts';
 
 test('browser instructions route to Mochi, and Codex loses the cua_repl browser it reached for instead', () => {
   assert.match(mochiInstructions(), /mcp__mochi__browser_open/);
@@ -16,8 +16,14 @@ test('browser instructions route to Mochi, and Codex loses the cua_repl browser 
 
 test('goals off leaves goals out of the instructions, browser guidance stays', () => {
   assert.match(mochiInstructions(), /mcp__mochi__propose_goal/);
-  assert.doesNotMatch(mochiInstructions(true), /goal/i);
-  assert.match(mochiInstructions(true), /mcp__mochi__browser_open/);
+  assert.doesNotMatch(mochiInstructions({ isGoalsOff: true }), /goal/i);
+  assert.match(mochiInstructions({ isGoalsOff: true }), /mcp__mochi__browser_open/);
+});
+
+test('only the settings chat is told to read Mochi settings first; threads are told to hand off', () => {
+  assert.match(mochiInstructions({ isSettingsChat: true }), /mcp__mochi__get_settings/);
+  assert.doesNotMatch(mochiInstructions({ isSettingsChat: true }), /browser_open|update_plan/);
+  assert.match(mochiInstructions(), /mcp__mochi__open_settings_chat/);
 });
 
 test('Codex HTTP exposes the same browser tools as Claude and dispatches to the caller thread', async (t) => {
@@ -68,13 +74,29 @@ test('Codex HTTP exposes the same browser tools as Claude and dispatches to the 
   const codexOff = new Client({ name: 'codex-off', version: '1' });
   t.after(async () => { await claudeOff.close(); await codexOff.close(); });
   const [offClient, offServer] = InMemoryTransport.createLinkedPair();
-  await claudeServer('claude-thread', 'space', '/tmp', true).instance.connect(offServer);
+  await claudeServer('claude-thread', 'space', '/tmp', { isGoalsOff: true }).instance.connect(offServer);
   await claudeOff.connect(offClient);
-  await codexOff.connect(new StreamableHTTPClientTransport(new URL(await codexUrl('codex-thread', true))));
+  await codexOff.connect(new StreamableHTTPClientTransport(new URL(await codexUrl('codex-thread', { isGoalsOff: true }))));
   assert.deepEqual(goalTools((await claudeOff.listTools()).tools), []);
   assert.deepEqual(goalTools((await codexOff.listTools()).tools), []);
   assert.doesNotMatch(codexOff.getInstructions() ?? '', /goal/i);
   assert.equal(browsers((await codexOff.listTools()).tools).length, browsers((await codex.listTools()).tools).length);
+  const names = async (client: Client) => (await client.listTools()).tools.map((tool) => tool.name).sort();
+  const settingsTools: string[] = [...SETTINGS_CHAT_TOOLS].sort();
+  for (const client of [claude, codex, claudeOff, codexOff]) {
+    assert.deepEqual((await names(client)).filter((name) => settingsTools.includes(name)), []);
+    assert.ok((await names(client)).includes('open_settings_chat'));
+  }
+  const claudeSettings = new Client({ name: 'claude-settings', version: '1' });
+  const codexSettings = new Client({ name: 'codex-settings', version: '1' });
+  t.after(async () => { await claudeSettings.close(); await codexSettings.close(); });
+  const [settingsClient, settingsServer] = InMemoryTransport.createLinkedPair();
+  await claudeServer('settings-thread', 'space', '/tmp', { isGoalsOff: true, isSettingsChat: true }).instance.connect(settingsServer);
+  await claudeSettings.connect(settingsClient);
+  await codexSettings.connect(new StreamableHTTPClientTransport(new URL(await codexUrl('settings-thread', { isGoalsOff: true, isSettingsChat: true }))));
+  assert.deepEqual(await names(claudeSettings), settingsTools);
+  assert.deepEqual(await names(codexSettings), settingsTools);
+  assert.match(codexSettings.getInstructions() ?? '', /get_settings/);
   const result = await codex.callTool({ name: 'browser_open', arguments: { url: 'about:blank' } });
   assert.equal(result.isError, undefined);
   assert.deepEqual(JSON.parse((result.content as { text: string }[])[0].text), {

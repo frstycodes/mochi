@@ -318,6 +318,13 @@ export const TOOL_TABLE = {
     description: 'Tell the user something that needs their attention now, as a toast and an OS notification. At most one per minute per thread; say why in `reason`.',
     shape: { title: z.string().min(1).max(80), reason: z.string().min(1).max(240) },
   },
+  open_settings_chat: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Hand a request about Mochi itself (its settings, default model, theme, permissions, shortcuts, MCP servers, profiles) to Mochi's settings chat: it is drafted there and the user gets a toast to open it. You have no settings tools; this is the only way to change Mochi. Not for Claude Code's or Codex's own config files.",
+    shape: { prompt: z.string().min(1).max(2000).describe("The user's request, in their words") },
+  },
   // {SETTINGS}
   get_settings: {
     tier: 'read',
@@ -444,7 +451,23 @@ export const GOAL_TOOLS = ['get_goal', 'propose_goal', 'claim_criterion', 'get_r
 
 export const isGoalTool = (name: string) => (GOAL_TOOLS as readonly string[]).includes(name);
 
-export const tierOf = (name: ToolName): Tier => TOOL_TABLE[name].tier;
+/** Served only in a profile's settings chat (Settings › Ask Mochi), which gets nothing else; every other thread gets everything but these. */
+export const SETTINGS_CHAT_TOOLS = ['get_settings', 'update_settings', 'get_keybindings', 'set_keybinding', 'list_profiles', 'add_mcp_server', 'remove_mcp_server'] as const satisfies ToolName[];
+
+/** What kind of session a Mochi server serves; read at session start. */
+export interface MochiScope {
+  isGoalsOff?: boolean;
+  isSettingsChat?: boolean;
+}
+
+const isSettingsChatTool = (name: ToolName) => (SETTINGS_CHAT_TOOLS as readonly string[]).includes(name);
+
+export function servedTools({ isGoalsOff, isSettingsChat }: MochiScope): ToolName[] {
+  if (isSettingsChat) return [...SETTINGS_CHAT_TOOLS];
+  return TOOL_NAMES.filter((name) => !isSettingsChatTool(name) && !(isGoalsOff && isGoalTool(name)));
+}
+
+export const tierOf =(name: ToolName): Tier => TOOL_TABLE[name].tier;
 
 export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
 

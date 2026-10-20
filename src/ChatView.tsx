@@ -422,6 +422,7 @@ function Composer({
               controls={controls}
               provider={provider}
               isLocked={!!thread.live}
+              isModelOnly={thread.isSettingsChat}
               onControlsChange={setControls}
               slashItems={items}
               inlineMentions={mention.inlineMentions}
@@ -465,7 +466,7 @@ function Composer({
           </ComposerCard>
         </div>
         <ComposerMeta>
-          <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />
+          {!thread.isSettingsChat && <PermissionsMenu threadId={thread.id} provider={provider} value={controls.access} onChange={(access) => setControls({ ...controls, access })} />}
           {workspace ? <WorkspaceControls workspace={workspace} /> : !!thread.repo && <BranchLabel repo={thread.repo} />}
           {thread.live?.limit ? <LimitHint limit={thread.live.limit} /> : isWorking(thread) && <WhileWorkingHint whileWorking={whileWorking} isHeld={isHeld} />}
         </ComposerMeta>

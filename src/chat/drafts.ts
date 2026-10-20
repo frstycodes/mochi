@@ -24,6 +24,8 @@ export interface DraftStore {
 
 export const threadDraftKey = (threadId: string) => `thread:${threadId}`;
 export const newThreadDraftKey = (spaceId: string) => `new:${spaceId}`;
+/** Before the profile's settings chat exists, and what `open_settings_chat` drafts into it. */
+export const settingsChatDraftKey = (spaceId: string) => `settings-chat:${spaceId}`;
 
 const SAVE_DELAY_MS = 400;
 // Attachments past this stay in the composer but aren't kept across a relaunch.

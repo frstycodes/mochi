@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { MessagePlus } from '@/icons';
 import { MachineSettings, SettingsComputerPicker } from '../remote/MachineSettings';
 import { SharedSettingsNotice } from '../remote/SharedSettingsNotice';
 import { useMachines } from '../remote/useMachines';
+import { useHarness } from '../store';
 import { TitleBar } from '../TitleBar';
 import { closeSettings, openSettings, useSettingsRoute, type SettingsRoute } from './open';
 import { prefersReducedMotion } from './prefs';
+import { SettingsChat, settingsChatOf } from './SettingsChat';
 import { SETTINGS_SECTIONS, type SettingsSection } from './sections';
 
 /** The content column while settings are open: one page under its title, scrolling on its own. */
@@ -18,6 +22,7 @@ export function SettingsPage() {
   const machine = useMachines().machines.find((m) => m.machine.id === machineId)?.machine;
   useEscapeBack(route);
   useFlashSetting(route);
+  if (section.id === 'chat') return <SettingsChatPage />;
 
   return (
     // Grid, not flex: the scroll viewport's height: 100% only resolves against a definite grid track. The column is
@@ -42,6 +47,28 @@ export function SettingsPage() {
             )}
           </div>
         </ScrollArea>
+    </div>
+  );
+}
+
+/** The chat fills the column and scrolls itself; it is this computer's only, so no computer picker. */
+function SettingsChatPage() {
+  const { state, dispatch } = useHarness();
+  const thread = settingsChatOf(state);
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
+      <TitleBar className="px-4">
+        <span className="flex-1" />
+        {!!thread && (
+          <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'delete', threadIds: [thread.id] })}>
+            <MessagePlus aria-hidden />
+            New chat
+          </Button>
+        )}
+      </TitleBar>
+      <div className="flex min-h-0 flex-col">
+        <SettingsChat />
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Brush, Clock, Connector, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
+import { Brush, Chat, Clock, Connector, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -7,6 +7,7 @@ import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
 import { IDLE_ALERTS } from '../settingOptions';
 import { AboutSection } from './about';
+import { SettingsChat } from '../SettingsChat';
 import { ConnectorsView } from '../../library/ConnectorsView';
 import { ConnectorPage } from '../../library/ConnectorPage';
 import { PluginsView } from '../../library/PluginsView';
@@ -46,6 +47,14 @@ export interface SettingsSection {
 
 /** The settings page in sidebar order (SETTINGS.md). */
 export const SETTINGS_SECTIONS = [
+  {
+    id: 'chat',
+    group: 'Mochi',
+    title: 'Ask Mochi',
+    icon: Chat,
+    component: SettingsChat,
+    settings: [],
+  },
   {
     id: 'general',
     group: 'Mochi',

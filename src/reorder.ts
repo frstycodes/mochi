@@ -1,4 +1,4 @@
-import { PIN_SLOTS, type Thread } from './model.ts';
+import { isListed, PIN_SLOTS, type Thread } from './model.ts';
 
 /**
  * Sidebar drag and drop: pinned threads take Orbit slots in list order, both lists keep the dropped order, threads not listed
@@ -71,7 +71,7 @@ export function pinnedThreads(threads: Thread[], spaceId: string) {
 
 /** A space's unpinned threads, most recent activity first; only pinned threads keep a manual order. */
 export function activeThreads(threads: Thread[], spaceId: string) {
-  return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot === undefined && t.status !== 'settled').sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
+  return threads.filter((t) => t.spaceId === spaceId && t.orbitSlot === undefined && t.status !== 'settled' && isListed(t)).sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
 }
 
 /** The parent a sub-thread nests under in the sidebar; none once that parent is settled or gone, so the sub-thread stands on its own. */

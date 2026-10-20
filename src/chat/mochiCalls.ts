@@ -56,6 +56,7 @@ export const MOCHI_CALLS = {
   open_changes: ['Opening the changes', 'Opened the changes'],
   ask_side_chat: ['Asking the side chat', 'Asked the side chat'],
   notify_user: ['Notifying you', 'Notified you'],
+  open_settings_chat: ['Handing this to the settings chat', 'Drafted in the settings chat'],
   get_settings: ['Reading your settings', 'Read your settings'],
   update_settings: ['Suggesting setting changes', 'Suggested setting changes'],
   get_keybindings: ['Reading your shortcuts', 'Read your shortcuts'],

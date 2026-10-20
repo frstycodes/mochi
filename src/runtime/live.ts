@@ -136,7 +136,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
-  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider, thread.spaceId), ...extra } }];
+  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider, thread.spaceId), ...(thread.isSettingsChat && { isSettingsChat: true }), ...extra } }];
 }
 
 /** A new thread's first start: its branch is its own, and main names it from the first message before the agent starts. */
