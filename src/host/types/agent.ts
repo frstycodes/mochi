@@ -29,6 +29,8 @@ export interface AgentStartOptions {
   useApiKey?: boolean;
   /** Settings › Goals and checks › Goals is off: the session gets no goal instructions, tools or nudge. Read at session start. */
   isGoalsOff?: boolean;
+  /** The profile's turned-off Claude Code or Codex items for this harness (`NativeItem.id`); main leaves them out of this session only. Read at session start. */
+  nativeOff?: string[];
 }
 
 export type SeqAgentEvent = AgentEvent & { seq?: number };

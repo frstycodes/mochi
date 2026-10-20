@@ -66,8 +66,8 @@ test('a limit pauses the thread; resume sends on the same account, the API key c
 
 test("a new thread's model starts at the Settings default, old catalog ids read as provider ids", () => {
   assert.equal(initialControls('claude', '').model, '', "'' is the account default, resolved in main");
-  assert.equal(agentOptions(initialControls('codex', ''), 'codex').model, undefined);
-  assert.equal(agentOptions(initialControls('codex', 'gpt-6-astra'), 'codex').model, 'gpt-6-astra');
+  assert.equal(agentOptions(initialControls('codex', ''), 'codex', 'personal').model, undefined);
+  assert.equal(agentOptions(initialControls('codex', 'gpt-6-astra'), 'codex', 'personal').model, 'gpt-6-astra');
   assert.equal(initialControls('claude', 'sonnet-5.5').model, 'claude-sonnet-5-5');
 });
 
