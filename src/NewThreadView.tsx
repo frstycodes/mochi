@@ -102,7 +102,7 @@ function NewThread() {
     if (next.mode !== workspaceDraft.mode) setPrefs({ workspaceMode: next.mode });
     setWorkspaceDraft(next);
   };
-  const workspace = useWorkspace(project ?? '', workspaceDraft, changeWorkspace, draft);
+  const workspace = useWorkspace(project ?? '', workspaceDraft, changeWorkspace);
 
   // Bases and branch names belong to one project.
   const changeProject = (next: string | null) => {

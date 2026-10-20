@@ -23,7 +23,7 @@ export function ComparePane({ thread, pageId, page, compare }: { thread: Thread;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-2 px-2 type-caption text-muted-foreground">
-        <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={compare.mode} disabled={compare.status !== 'ready'} onValueChange={(v) => v && updatePage(pageId, { compare: { ...compare, mode: v as CompareState['mode'] } })} aria-label="Compare layout">
+        <ToggleGroup type="single" size="sm" variant="outline" value={compare.mode} disabled={compare.status !== 'ready'} onValueChange={(v) => v && updatePage(pageId, { compare: { ...compare, mode: v as CompareState['mode'] } })} aria-label="Compare layout">
           <ToggleGroupItem value="split">Side by side</ToggleGroupItem>
           <ToggleGroupItem value="slider">Slider</ToggleGroupItem>
         </ToggleGroup>
@@ -165,7 +165,7 @@ function SliderCompare({ thread, pageId, page, base, branch }: { thread: Thread;
       </div>
       <SliderLabel side="left">{base.branch}</SliderLabel>
       <SliderLabel side="right">{branch}</SliderLabel>
-      <Button size="xs" variant="outline" className="absolute bottom-2 left-1/2 -translate-x-1/2 border-transparent bg-popover text-foreground shadow-popover dark:bg-popover" onClick={() => setShots(null)}>
+      <Button size="xs" variant="outline" className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full border-transparent bg-popover text-foreground shadow-popover dark:bg-popover" onClick={() => setShots(null)}>
         Capture again
       </Button>
     </div>

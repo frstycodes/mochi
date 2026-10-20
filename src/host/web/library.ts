@@ -1,7 +1,9 @@
-import { connectorFor, connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
-import { FEATURED_MARKETPLACES, libraryEntries, removeItem, setItemEnabled, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
+import { connectorName } from '../../library/connectorTools.ts';
+import { connectorKey, OAUTH_PROVIDER_IDS } from '../../library/connectors.ts';
+import { FEATURED_MARKETPLACES, libraryEntries, removeItem, setItemEnabled, skillPlacementDir, type LibraryIndex, type LibraryItem } from '../../library/library.ts';
+import { parseSkillSource } from '../../library/skillSource.ts';
 import type { LibraryHost } from '../types/library.ts';
-import { fixtureParts, MARKETPLACE_CATALOGS, SKILL_CATALOGS } from './libraryFixtures.ts';
+import { CONNECTOR_TOOLS, fixtureParts, fixtureSkillFiles, MARKETPLACE_CATALOGS, SKILL_CATALOGS, SKILLS_SH_POPULAR, UPLOAD_REVIEW } from './libraryFixtures.ts';
 
 // The web build has no agents to load a library into: it browses fixed catalogs and installs into memory, starting
 // with a few items in the demo's first profile, so every state of the Library page can be seen and tried.
@@ -32,15 +34,32 @@ export const library: LibraryHost = {
   },
   async discoverSkills(source) {
     await pause();
-    const skills = SKILL_CATALOGS[source];
-    if (!skills) throw new Error(`The web preview only browses ${Object.keys(SKILL_CATALOGS).join(' and ')}`);
-    return skills;
+    return fixtureSkills(source);
   },
-  async installSkill(spaceId, source, name) {
+  async skillFiles(source, name) {
     await pause();
-    const skill = SKILL_CATALOGS[source]?.find((s) => s.name === name);
+    const skill = fixtureSkills(source).find((s) => s.name === name);
     if (!skill) throw new Error(`${name} isn't in ${source}`);
-    return install(spaceId, { kind: 'skill', id: `skill-${name}`, name, description: skill.description, files: {}, source: skill.source, icon: skill.icon, targets: ['claude', 'codex'], addedAt: Date.now() });
+    return fixtureSkillFiles(skill.name, skill.description);
+  },
+  async installSkill(spaceId, source, name, destination = { scope: 'library' }) {
+    await pause();
+    const skill = fixtureSkills(source).find((s) => s.name === name);
+    if (!skill) throw new Error(`${name} isn't in ${source}`);
+    const placements = destination.scope === 'library' ? [] : destination.providers.map((provider) => ({ provider, scope: destination.scope, dir: skillPlacementDir(provider, destination.scope, name, { home: '~', claudeDir: '~/.claude', project: destination.scope === 'project' ? destination.project : undefined }) }));
+    const item: LibraryItem = { kind: 'skill', id: `skill-${name}`, name, description: skill.description, files: {}, source: skill.source, commit: skill.commit, placements, icon: skill.icon, targets: ['claude', 'codex'], addedAt: Date.now() };
+    if (destination.scope === 'library') return install(spaceId, item);
+    index = { ...index, items: [...index.items.filter((i) => i.id !== item.id), item] };
+    return libraryEntries(index, spaceId);
+  },
+  async searchSkillsSh(query) {
+    await pause();
+    const q = query.trim().toLowerCase();
+    return q.length < 2 ? [] : SKILLS_SH_POPULAR.filter((s) => s.id.includes(q));
+  },
+  async popularSkillsSh() {
+    await pause();
+    return SKILLS_SH_POPULAR;
   },
   async marketplaces() {
     return [...FEATURED_MARKETPLACES, ...index.marketplaces];
@@ -64,9 +83,28 @@ export const library: LibraryHost = {
     if (!plugin) throw new Error(`${name} isn't in ${marketplace}`);
     return install(spaceId, pluginItem(marketplace, plugin.name));
   },
-  async addConnector(spaceId, { url, alias }) {
+  // A file named like an archive gets the fixture review; "no-manifest" in its name shows that error.
+  async reviewUpload({ name }) {
     await pause();
-    return install(spaceId, connectorItem(url, alias, true));
+    if (!/\.(plugin|zip|tar\.gz|tgz|tar)$/i.test(name)) throw new Error('Not a plugin archive: upload a .plugin, .zip, .tar.gz or .tgz file');
+    if (name.includes('no-manifest')) throw new Error('No plugin manifest: a plugin has .claude-plugin/plugin.json (Claude Code) or plugin.json (Codex) at its root');
+    const existing = index.items.find((i) => i.kind === 'plugin' && i.bundle.name === UPLOAD_REVIEW.name);
+    return { ...UPLOAD_REVIEW, file: name, existing: existing ? { id: existing.id, title: UPLOAD_REVIEW.title, isUpload: true } : null };
+  },
+  async installUpload(spaceId, { name }, { sha256, targets, profileIds }) {
+    await pause();
+    const { title, description, version } = UPLOAD_REVIEW;
+    const { skills, subagents, remotes } = fixtureParts(UPLOAD_REVIEW.name, 'development');
+    const bundle = { name: UPLOAD_REVIEW.name, title, description, version, skills, subagents, hooks: [], servers: [], remotes, files: {}, unsupported: [] };
+    const item: LibraryItem = { kind: 'plugin', id: `plugin-${UPLOAD_REVIEW.name}`, bundle, marketplace: null, upload: { file: name, sha256 }, icon: null, targets, addedAt: Date.now() };
+    index = { ...index, items: [...index.items.filter((i) => i.id !== item.id), item] };
+    for (const profileId of profileIds) index = setItemEnabled(index, profileId, item.id, true);
+    return libraryEntries(index, spaceId);
+  },
+  async addConnector(spaceId, { url, alias, name }) {
+    await pause();
+    const sibling = index.items.find((i) => i.kind === 'connector' && i.key === connectorKey(url));
+    return install(spaceId, connectorItem(url, alias, true, name?.trim() || (sibling?.kind === 'connector' ? sibling.title : undefined)));
   },
   onDeviceCode() {
     return () => {};
@@ -96,9 +134,42 @@ export const library: LibraryHost = {
     index = { ...index, items: index.items.map((i) => (i.id !== id ? i : autoUpdate === undefined ? { ...i, updatedAt: Date.now() } : { ...i, autoUpdate })) };
     return libraryEntries(index, spaceId);
   },
+  async renameConnector(spaceId, key, name) {
+    index = { ...index, items: index.items.map((i) => (i.kind === 'connector' && i.key === key ? { ...i, title: name.trim() } : i)) };
+    return libraryEntries(index, spaceId);
+  },
+  async connectorSettings() {
+    return index.connectors ?? {};
+  },
+  async listConnectorTools(key) {
+    await pause();
+    const isLinked = index.items.some((i) => i.kind === 'connector' && i.key === key && i.isLinked);
+    const tools = CONNECTOR_TOOLS[key];
+    const error = !isLinked ? 'No account on it is signed in.' : !tools ? 'The web preview lists tools only for Linear.' : null;
+    const toolList = { tools: tools ?? [], listedAt: Date.now(), error };
+    index = { ...index, connectors: { ...index.connectors, [key]: { ...index.connectors?.[key], toolList } } };
+    return toolList;
+  },
+  async setConnectorSettings(key, settings) {
+    const { toolList } = index.connectors?.[key] ?? {};
+    index = { ...index, connectors: { ...index.connectors, [key]: { ...settings, ...(toolList && { toolList }) } } };
+    return index.connectors ?? {};
+  },
 };
 
 const pause = () => new Promise((resolve) => setTimeout(resolve, 400));
+
+// The web build reads its fixture repos the way main reads GitHub: `owner/repo`, a path in it, or `owner/repo@skill`.
+function fixtureSkills(source: string) {
+  const parsed = parseSkillSource(source);
+  const repo = parsed && `${parsed.owner}/${parsed.repo}`;
+  const key = parsed && [repo, parsed.path].filter(Boolean).join('/');
+  const skills = parsed && key && repo ? (SKILL_CATALOGS[key] ?? SKILL_CATALOGS[repo]?.filter((s) => s.source.startsWith(key))) : undefined;
+  if (!parsed || !skills?.length) throw new Error(`The web preview only browses ${Object.keys(SKILL_CATALOGS).join(', ')}`);
+  const picked = parsed.skill ? skills.filter((s) => s.name === parsed.skill) : skills;
+  if (!picked.length) throw new Error(`No skill named ${parsed.skill} in ${repo}`);
+  return picked;
+}
 
 function pluginItem(marketplace: string, name: string): LibraryItem {
   const plugin = MARKETPLACE_CATALOGS[marketplace].plugins.find((p) => p.name === name)!;
@@ -107,9 +178,9 @@ function pluginItem(marketplace: string, name: string): LibraryItem {
   return { kind: 'plugin', id: `plugin-${name}`, bundle, marketplace, icon: plugin.icon, targets: ['claude', 'codex'], addedAt: Date.now() };
 }
 
-function connectorItem(url: string, alias: string, isLinked: boolean): LibraryItem {
+function connectorItem(url: string, alias: string, isLinked: boolean, title = connectorName(url)): LibraryItem {
   const key = connectorKey(url);
-  return { kind: 'connector', id: `connector-${key}-${alias}`, key, title: connectorFor(url)?.name ?? new URL(url).hostname, url, alias, isLinked, targets: ['claude', 'codex'], addedAt: Date.now() };
+  return { kind: 'connector', id: `connector-${key}-${alias}`, key, title, url, alias, isLinked, targets: ['claude', 'codex'], addedAt: Date.now() };
 }
 
 /** The demo's first profile starts with a little of everything, one account signed out and one plugin updated. */

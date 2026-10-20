@@ -127,7 +127,7 @@ export function MentionChips({ menu }: { menu: ReturnType<typeof useMentionMenu>
             {m.kind === 'skill' ? names.skill(m.title).title : m.kind === 'mcp' ? names.server(m.title).title : m.title}
           </span>
           {m.kind === 'mcp' && m.toolCount !== undefined && <span className="shrink-0 type-caption text-subtle-foreground tabular">{m.toolCount}</span>}
-          <button type="button" aria-label={`Remove ${m.title}`} onClick={() => menu.remove(m.id)} className="grid size-5 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
+          <button type="button" aria-label={`Remove ${m.title}`} onClick={() => menu.remove(m.id)} className="grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground">
             <X className="size-3.5" />
           </button>
         </li>

@@ -1,7 +1,7 @@
 import type { ToolName } from '../runtime/toolTable.ts';
 
 /** Settings › Mochi access shows tools in these groups, in this order. */
-export const TOOL_GROUPS = ['Threads', 'Goals and progress', 'Background agents', 'Reading the browser', 'Using the browser', 'Your screen', 'Reaching you', 'Settings and profiles'] as const;
+export const TOOL_GROUPS = ['Threads', 'Goals and progress', 'Delegated tasks', 'Reading the browser', 'Using the browser', 'Your screen', 'Reaching you', 'Settings and profiles'] as const;
 
 export type ToolGroup = (typeof TOOL_GROUPS)[number];
 
@@ -31,9 +31,8 @@ export const TOOL_GUIDE = {
   get_report: { group: 'Goals and progress', label: 'Read reports', description: "Read another thread's latest report, to coordinate without reading its transcript." },
   settle_goal: { group: 'Goals and progress', label: 'Close goals', description: "Close out a goal with a reason and settle its thread. Never its own thread." },
 
-  start_background_agent: { group: 'Background agents', label: 'Start background agents', description: 'Start an agent that works alongside it, in the same worktree or a fresh one, on this profile’s account.' },
-  list_background_agents: { group: 'Background agents', label: 'List background agents', description: 'See its background agents and subagents, their status, cost so far and results.' },
-  stop_background_agent: { group: 'Background agents', label: 'Stop background agents', description: 'Stop one of its background agents. Partial work stays in the worktree.' },
+  update_plan: { group: 'Goals and progress', label: 'Keep a plan', description: 'Show its plan under its latest message and tick steps off as it works.' },
+  delegate_task: { group: 'Delegated tasks', label: 'Delegate tasks', description: 'Hand a task to the other provider (or a model its own subagents lack), in the same worktree or a fresh one, on this profile’s account. Its report comes back to the agent when it finishes.' },
 
   browser_tabs: { group: 'Reading the browser', label: 'List browser tabs', description: "See the thread's browser tabs: address, title and which is active." },
   browser_snapshot: { group: 'Reading the browser', label: 'Read pages', description: 'Read the page as text: headings, buttons, fields and links.' },
@@ -55,6 +54,8 @@ export const TOOL_GUIDE = {
   browser_forward: { group: 'Using the browser', label: 'Go forward', description: 'Go forward a page in a tab.' },
   browser_reload: { group: 'Using the browser', label: 'Reload', description: 'Reload a tab.' },
   browser_dialog: { group: 'Using the browser', label: 'Answer page dialogs', description: 'Press OK or Cancel on an alert or confirm the page shows.' },
+  browser_handoff: { group: 'Using the browser', label: 'Hand you the browser', description: 'Bring a tab to you for something only you can do, like signing in, then carry on once you’re done.' },
+  browser_batch: { group: 'Using the browser', label: 'Run several steps at once', description: 'Run a few browser steps in one go. Each step still asks you wherever it would on its own.' },
   browser_set_device: { group: 'Using the browser', label: 'Change device size', description: 'Show the page at a phone, tablet or laptop size.' },
 
   open_pane_tab: { group: 'Your screen', label: 'Open pane tabs', description: "Open the preview, changes, terminal, files or side chat in a thread's side pane." },

@@ -1,6 +1,7 @@
 import { parseDiff } from '../../git/parse.ts';
 import { bareState, refKey, type RefState } from '../../chat/refs.ts';
 import type { GitHost } from '../types/git.ts';
+import { branchFromTitle } from '../../git/workspace.ts';
 
 // Fixture paths match the `adm` thread's demo work, so the Changes pane has something to show.
 const STAGED = [
@@ -173,8 +174,8 @@ export const git: GitHost = {
       branches: FIXTURE_BRANCHES.map(([name, days]) => ({ name, isRemote: name.startsWith('origin/'), committedAt: now - days * DAY, worktree: name === 'main' ? root : name === 'feat/admin-usage' ? '~/.mochi/worktrees/latitude/adm' : undefined })),
     };
   },
-  async renameAutoBranch(_cwd, _expected, name) {
-    return name;
+  async renameAutoBranch(_cwd, expected, title) {
+    return branchFromTitle(expected, title, new Set(FIXTURE_BRANCHES.map(([b]) => b)));
   },
   async branchNameError(_root, name) {
     if (!name.trim()) return 'Name the branch';
@@ -227,24 +228,24 @@ const demoRef = (kind: RefState['kind'], status: RefState['status'], number: num
   ...bareState(kind, status, title, `https://github.com/frstycodes/mochi/${kind === 'pr' ? 'pull' : 'issues'}/${number}`),
   author: { login: 'frstycodes', avatarUrl: 'https://avatars.githubusercontent.com/frstycodes?s=40' },
   updatedAt: new Date(Date.now() - (number % 9) * 47 * 60_000).toISOString(),
-  ...(kind === 'pr' && { branch: { head: `feat/demo-${number}`, base: 'main' }, diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 }, checks: 'pass', review: 'approved' }),
+  ...(kind === 'pr' && { branch: { head: `feat/demo-${number}`, base: 'main' }, diff: { added: number * 7, removed: number * 2, files: (number % 7) + 1 }, checks: 'pass', checkCounts: { passed: 5, total: 5 }, review: 'approved' }),
   ...extra,
 });
 
 const DEMO_REFS: Record<number, RefState> = {
   45: demoRef('pr', 'open', 45, 'fix(header): restore the side pane and sidebar toggles'),
   46: demoRef('pr', 'open', 46, 'feat(composer): slash anywhere, @ skills and MCP servers', { hasConflicts: true }),
-  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', { checks: 'fail' }),
-  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links', { checks: 'pending', review: null }),
+  48: demoRef('pr', 'open', 48, 'Interleave work groups with prose', { checks: 'fail', checkCounts: { passed: 3, total: 5 } }),
+  49: demoRef('pr', 'draft', 49, 'feat(chat): PR and file links', { checks: 'pending', checkCounts: { passed: 3, total: 5 }, review: null }),
   47: demoRef('pr', 'merged', 47, 'fix: replace prototype stubs with working actions'),
   30: demoRef('pr', 'closed', 30, 'feat: experimental orbit gestures'),
   7: demoRef('pr', 'closed', 7, 'An early PR that was closed'),
   50: demoRef('pr', 'open', 50, 'A PR that conflicts with main', { hasConflicts: true }),
   // The Better Auth demo thread's PRs: one of each attention rank, so its sidebar stack overflows.
   479: demoRef('pr', 'merged', 479, 'Better Auth core', { branch: { head: 'feat/better-auth', base: 'main' } }),
-  482: demoRef('pr', 'open', 482, 'Session backfill + legacy removal', { branch: { head: 'feat/better-auth-backfill', base: 'main' }, checks: 'fail', review: 'changes' }),
-  484: demoRef('pr', 'open', 484, 'Keep the latitude.sid cookie name', { branch: { head: 'fix/session-cookie', base: 'feat/better-auth-backfill' }, checks: 'pending', review: 'required' }),
-  485: demoRef('pr', 'draft', 485, 'Passkeys on the login page', { branch: { head: 'feat/passkeys', base: 'main' }, checks: null, review: null }),
+  482: demoRef('pr', 'open', 482, 'Session backfill + legacy removal', { branch: { head: 'feat/better-auth-backfill', base: 'main' }, checks: 'fail', checkCounts: { passed: 4, total: 6 }, review: 'changes' }),
+  484: demoRef('pr', 'open', 484, 'Keep the latitude.sid cookie name', { branch: { head: 'fix/session-cookie', base: 'feat/better-auth-backfill' }, checks: 'pending', checkCounts: { passed: 3, total: 5 }, review: 'required' }),
+  485: demoRef('pr', 'draft', 485, 'Passkeys on the login page', { branch: { head: 'feat/passkeys', base: 'main' }, checks: null, checkCounts: null, review: null }),
   487: demoRef('pr', 'open', 487, 'Docs: migrating to Better Auth', { branch: { head: 'docs/better-auth', base: 'main' } }),
   12: demoRef('issue', 'open', 12, 'Sidebar loses scroll position on space switch'),
   9: demoRef('issue', 'closed', 9, 'Composer drops pasted images'),

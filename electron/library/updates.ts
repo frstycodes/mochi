@@ -1,6 +1,6 @@
 import { isUpdatable, type LibraryItem } from '../../src/library/library.ts';
 import { discoverSkills, fetchPluginBundle } from './catalog.ts';
-import { marketplaces, readLibrary, updateLibrary } from './store.ts';
+import { marketplaces, readLibrary, syncPlacements, updateLibrary } from './store.ts';
 
 /**
  * Skills and plugins follow their source (LIBRARY.md Phase 3): checked a minute after launch and every 6 hours, each
@@ -28,6 +28,7 @@ export async function updateItem(id: string): Promise<boolean> {
   if (!item || !isUpdatable(item)) throw new Error('Only skills from GitHub and plugins from a marketplace can update');
   const next = await latest(item);
   if (!next) return false;
+  if (next.kind === 'skill') await syncPlacements(next);
   await updateLibrary((index) => ({ ...index, items: index.items.map((i) => (i.id === id ? { ...next, updatedAt: Date.now() } : i)) }));
   return true;
 }
@@ -38,7 +39,7 @@ async function latest(item: LibraryItem): Promise<LibraryItem | null> {
     const found = (await discoverSkills(item.source, { isFresh: true })).find((skill) => skill.name === item.name);
     if (!found) throw new Error(`${item.name} is no longer in ${item.source}`);
     if (JSON.stringify(found.files) === JSON.stringify(item.files)) return null;
-    return { ...item, files: found.files, description: found.description, icon: found.icon };
+    return { ...item, files: found.files, description: found.description, icon: found.icon, commit: found.commit };
   }
   if (item.kind === 'plugin') {
     const marketplace = (await marketplaces()).find((m) => m.name === item.marketplace);

@@ -26,7 +26,8 @@ test('a save keeps live threads only and comes back idle, detached and without d
   const restored = { ...initialThreads(back, false), ...initialQueue(back, false), spaceId: 'personal', views: {} } as unknown as State;
   const thread = restored.threads.find((t) => t.id === id)!;
   assert.equal(restored.threads.length, 1, 'no demo threads on desktop');
-  assert.deepEqual(thread.repo, { project: 'app', branch: id, autoBranch: id, path: '/Users/me/dev/app' });
+  const branch = s.threads.find((t) => t.id === id)!.repo!.branch;
+  assert.deepEqual(thread.repo, { project: 'app', branch, autoBranch: branch, path: '/Users/me/dev/app' });
   assert.equal(thread.session?.id, 'sess-1');
   assert.deepEqual([thread.live?.isWorking, thread.live?.isDetached], [false, true]);
   assert.equal(thread.activity.at(-1)?.text, 'Stopped when Mochi quit. Send a message to continue.');

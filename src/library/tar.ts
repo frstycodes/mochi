@@ -1,5 +1,11 @@
 // Regular files from a ustar stream, with pax `path` records for names over 100 bytes. Bodies `accept` rejects are skipped unread.
-export async function* readTar(stream: ReadableStream<Uint8Array>, accept: (path: string, size: number) => boolean) {
+// Symlinks and hard links go to `onLink` (an upload rejects ones that leave the archive); every other entry type is skipped.
+// `onComment` gets the global header's `comment`, where `git archive` (and so GitHub's codeload) puts the commit SHA.
+export async function* readTar(
+  stream: ReadableStream<Uint8Array>,
+  accept: (path: string, size: number) => boolean,
+  { onLink, onComment }: { onLink?: (path: string, target: string, type: 'symlink' | 'hardlink') => void; onComment?: (comment: string) => void } = {},
+) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = new Uint8Array(0);
@@ -30,7 +36,7 @@ export async function* readTar(stream: ReadableStream<Uint8Array>, accept: (path
     }
   };
 
-  let paxPath: string | undefined;
+  let pax: { path?: string; linkpath?: string } = {};
   while (await fill(512)) {
     const header = await take(512);
     if (header[0] === 0) break;
@@ -39,13 +45,22 @@ export async function* readTar(stream: ReadableStream<Uint8Array>, accept: (path
     const type = field(156, 1);
     const prefix = field(345, 155);
     const padding = Math.ceil(size / 512) * 512 - size;
-    if (type === 'x') {
-      paxPath = decoder.decode(await take(size)).match(/^\d+ path=(.*)$/m)?.[1];
+    if (type === 'g') {
+      const comment = decoder.decode(await take(size)).match(/^\d+ comment=(.*)$/m)?.[1];
+      if (comment) onComment?.(comment);
       await skip(padding);
       continue;
     }
-    const path = paxPath ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
-    paxPath = undefined;
+    if (type === 'x') {
+      const records = decoder.decode(await take(size));
+      pax = { path: records.match(/^\d+ path=(.*)$/m)?.[1], linkpath: records.match(/^\d+ linkpath=(.*)$/m)?.[1] };
+      await skip(padding);
+      continue;
+    }
+    const path = pax.path ?? (prefix ? `${prefix}/${field(0, 100)}` : field(0, 100));
+    const link = pax.linkpath ?? field(157, 100);
+    pax = {};
+    if (type === '1' || type === '2') onLink?.(path, link, type === '1' ? 'hardlink' : 'symlink');
     const isFile = type === '0' || type === '';
     if (isFile && accept(path, size)) yield { path, body: await take(size) };
     else await skip(size);

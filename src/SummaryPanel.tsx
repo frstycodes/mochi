@@ -23,9 +23,16 @@ import {
 import { GitPullRequestIcon } from '@/icons/github';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -37,7 +44,9 @@ import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
 import { openFiles } from './files/viewer';
-import { RefHoverCard, RefIcon } from './chat/RefHoverCard';
+import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
+import { refDescription, type ChecksState } from './chat/refs';
+import { canAutofix, setAutofix } from './git/autofixToggle';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import type { McpServer, Provider, Source, Thread } from './model';
@@ -74,7 +83,7 @@ import type { VizLanguage } from './viz/fence';
 import type { ListeningPort } from './host/types/ports';
 
 const LIST_LIMIT = 3;
-const OPEN_BY_DEFAULT = ['environment', 'sources', 'servers', 'outputs', 'changes'] satisfies SummaryCardId[];
+const OPEN_BY_DEFAULT: string[] = ['environment', 'sources', 'servers', 'outputs'] satisfies SummaryCardId[];
 
 /** `onPaneOpened`: a row opened something in the side pane, so a summary covering it (the narrow sheet) can step aside. `isFloating`: cards float over the chat. */
 export function SummaryPanel({
@@ -103,6 +112,12 @@ const CARD = 'rounded-xl border bg-card group-data-floating/summary:bg-popover g
 function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: () => void }) {
   const { summary, cards, ports, launchNames, outputs, open } = useSummary(thread, onPaneOpened);
   const [order, reorder] = useCardOrder(cards);
+  const [openCards, setOpenCards] = useState(OPEN_BY_DEFAULT);
+  const [isChangesOpen, setChangesOpen] = useChangesOpen(thread.id);
+  const onOpenChange = (value: string[]) => {
+    setOpenCards(value.filter((id) => id !== 'changes'));
+    setChangesOpen(value.includes('changes'));
+  };
   const props = { thread, summary, open };
   const BODIES = {
     goal: <GoalSection thread={thread} />,
@@ -119,7 +134,7 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
       {hasGoal(thread) && <WaitingMove thread={thread} />}
       <NeedsYou thread={thread} />
       <RateLimitWarning thread={thread} />
-      <Accordion type="multiple" defaultValue={OPEN_BY_DEFAULT} asChild>
+      <Accordion type="multiple" value={isChangesOpen ? [...openCards, 'changes'] : openCards} onValueChange={onOpenChange} asChild>
         <Reorder.Group axis="y" values={order} onReorder={reorder} className="flex flex-col gap-2">
           {order.map((id) => (
             <DraggableCard key={id} id={id} onMove={(step) => reorder(moveCard(order, id, step))}>
@@ -159,6 +174,31 @@ function useCardOrder(cards: SummaryCardId[]) {
     }
   };
   return [orderCards(cards, saved), reorder] as const;
+}
+
+const CHANGES_CLOSED_KEY = 'mochi.summary-changes-closed.v1';
+
+/** Changes is open unless you folded it in this thread; remembered on this device. */
+function useChangesOpen(threadId: string) {
+  const [closed, setClosed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CHANGES_CLOSED_KEY) ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  });
+  const isOpen = !closed.includes(threadId);
+  const setOpen = (open: boolean) => {
+    if (open === isOpen) return;
+    const next = open ? closed.filter((id) => id !== threadId) : [...closed, threadId];
+    setClosed(next);
+    try {
+      localStorage.setItem(CHANGES_CLOSED_KEY, JSON.stringify(next));
+    } catch {
+      // Storage can be blocked (private window); the fold still holds for this session.
+    }
+  };
+  return [isOpen, setOpen] as const;
 }
 
 const moveCard = (order: SummaryCardId[], id: SummaryCardId, step: -1 | 1) => {
@@ -475,25 +515,29 @@ function ChangesBody({
     <>
       <CardHeader title="Changes" />
       <CardBody>
-        {!!files && (
+        {prs.map((item) => (
+          <PullRequestRow key={item.pr.number} thread={thread} item={item} onOpen={open.url} />
+        ))}
+        {!!files && prs.length === 0 && (
           <SummaryRow
             icon={DiffIcon}
             label={hasChanges ? fileCount(files.length) : thread.status === 'settled' ? 'No changes' : 'No changes yet'}
             onClick={open.changes}
           >
-            {hasChanges && (
-              <span className="tabular type-caption">
-                <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span>
-              </span>
-            )}
+            {hasChanges && <DiffCount added={added} removed={removed} />}
           </SummaryRow>
         )}
-        {prs.map((item) => (
-          <PullRequestRow key={item.pr.number} item={item} onOpen={open.url} />
-        ))}
         {canOpenPr && <CreatePrRow thread={thread} />}
       </CardBody>
     </>
+  );
+}
+
+function DiffCount({ added, removed }: { added: number; removed: number }) {
+  return (
+    <span className="tabular type-caption">
+      <span className="text-success">+{added}</span> <span className="text-destructive">−{removed}</span>
+    </span>
   );
 }
 
@@ -588,34 +632,74 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
   return { changes: () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }), url, source, output, visual, port };
 }
 
-// SummaryRow doesn't forward props, so the hover card and context menu triggers sit on a wrapper.
-function PullRequestRow({ item, onOpen }: { item: ThreadPr; onOpen: (url: string) => void }) {
-  const url = item.state.url;
-  const row = (
-    <div>
-      <SummaryRow icon={<RefIcon item={item} className="size-4" />} label={item.state.title} onClick={url ? () => onOpen(url) : undefined}>
-        <span className="tabular type-caption text-subtle-foreground">{item.label}</span>
-      </SummaryRow>
-    </div>
-  );
-  if (!url)
-    return (
-      <RefHoverCard item={item} side="left" align="start">
-        {row}
-      </RefHoverCard>
-    );
+/** Like Claude's: state icon, title and ⋮ on top; number, diff and checks under the title. Hover previews it, a click opens it. */
+function PullRequestRow({ thread, item, onOpen }: { thread: Thread; item: ThreadPr; onOpen: (url: string) => void }) {
+  const { state, label } = item;
   return (
-    <ContextMenu>
-      <RefHoverCard item={item} side="left" align="start">
-        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-      </RefHoverCard>
-      <ContextMenuContent>
-        <ContextMenuItem onSelect={() => onOpen(url)}>Open in the side pane</ContextMenuItem>
+    <ThreadPrHoverCard thread={thread} pr={item.pr} side="left" align="start">
+      <div className="relative isolate flex flex-col gap-0.5 rounded-lg px-2 py-1.5 hover:bg-accent/60">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <RefIcon item={item} className="size-4" />
+          {state.url ? (
+            // The stretched button makes the whole row the target while the ⋮ stays its own button.
+            <button
+              type="button"
+              onClick={() => onOpen(state.url)}
+              aria-label={`${label}: ${state.title}, ${refDescription('pr', state)}`}
+              className="min-w-0 flex-1 cursor-default truncate text-left type-meta after:absolute after:inset-0 after:rounded-lg focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:-outline-offset-2"
+            >
+              {state.title}
+            </button>
+          ) : (
+            <span className="min-w-0 flex-1 truncate type-meta">{state.title}</span>
+          )}
+          {!!state.url && <PullRequestMenu thread={thread} item={item} />}
+        </div>
+        <div className="flex min-w-0 items-center gap-2 pl-6.5 tabular type-caption text-subtle-foreground">
+          <span>{label}</span>
+          {!!state.diff && <DiffCount added={state.diff.added} removed={state.diff.removed} />}
+          {!!state.checkCounts && <CheckCount checks={state.checks} counts={state.checkCounts} />}
+        </div>
+      </div>
+    </ThreadPrHoverCard>
+  );
+}
+
+const CHECK_DOT = { pending: 'bg-subtle-foreground', pass: 'bg-success', fail: 'bg-destructive' } satisfies Record<ChecksState, string>;
+
+function CheckCount({ checks, counts }: { checks: ChecksState | null; counts: { passed: number; total: number } }) {
+  return (
+    <span className="ml-auto flex items-center gap-1.5" aria-label={`${counts.passed} of ${counts.total} checks passed`}>
+      <span aria-hidden className={cn('size-1.5 rounded-full', CHECK_DOT[checks ?? 'pending'])} />
+      {counts.passed}/{counts.total}
+    </span>
+  );
+}
+
+function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
+  const { dispatch } = useHarness();
+  const url = item.state.url;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-xs" aria-label={`${item.label} options`} className="relative z-10 -my-1 -mr-1">
+          <OverflowIcon vertical />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
         {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
-        <ContextMenuItem onSelect={() => window.open(url, '_blank', 'noreferrer')}>Open in your browser</ContextMenuItem>
-        <ContextMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+        <DropdownMenuItem onSelect={() => window.open(url, '_blank', 'noreferrer')}>Open on GitHub</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</DropdownMenuItem>
+        {canAutofix(thread, item.pr) && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem checked={!!item.pr.autofixSince} onCheckedChange={(isOn) => setAutofix(dispatch, thread, item.pr, isOn)}>
+              Auto-fix
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

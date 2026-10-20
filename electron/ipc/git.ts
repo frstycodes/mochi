@@ -6,7 +6,7 @@ import type { ChangeTarget, CheckState, DiffFile, DiffScope, GitHost, PrCheck, P
 import { parseDiff, parseStatus } from '../../src/git/parse.ts';
 import { applyFiles, changedPaths, checkpointRef, resolveCommit, restore, restorePaths, snapshot, snapshotCommit } from '../git/checkpoints.ts';
 import { inside, listWorktrees, mainRepo, run, runGit, topLevel } from '../git/run.ts';
-import { assertFreeBranch, baseRef, branchNameError, headOf, listBranches, localName, renameAutoBranch, switchBranch } from '../git/branches.ts';
+import { addBranchWorktree, baseRef, branchNameError, headOf, listBranches, renameAutoBranch, switchBranch } from '../git/branches.ts';
 import { prDrafts, worktreeRoot, worktreeRoots } from '../agents/config.ts';
 import { ghAccounts, githubAccount, pushAs, runGh } from '../git/gh.ts';
 import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/github.ts';
@@ -116,12 +116,7 @@ export const git = {
   },
 
   async ciLog(_sender, cwd, link, user) {
-    const top = await topLevel(string(cwd, 'cwd'));
-    const job = /\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/.exec(string(link, 'checkLink', 2048));
-    if (!job) throw new Error("This check doesn't run on GitHub Actions, so there's no log to fetch. Open it on GitHub instead.");
-    const [, runId, jobId] = job;
-    const log = await runGh(top, ['run', 'view', runId, ...(jobId ? ['--job', jobId] : []), '--log-failed'], githubAccount(user));
-    return log.split('\n').slice(-CI_LOG_LINES).join('\n');
+    return failedLog(await topLevel(string(cwd, 'cwd')), string(link, 'checkLink', 2048), githubAccount(user));
   },
 
   async ghAccounts() {
@@ -154,9 +149,9 @@ export const git = {
     }
   },
 
-  async renameAutoBranch(_sender, cwd, expected, name) {
+  async renameAutoBranch(_sender, cwd, expected, title) {
     const dir = insideWorktreeRoot(string(cwd, 'cwd'));
-    return renameAutoBranch(dir, string(expected, 'expected', 255), string(name, 'name', 255));
+    return renameAutoBranch(dir, string(expected, 'expected', 255), string(title, 'title', 255));
   },
   async sync(_sender, cwd, chosenBase) {
     const top = await topLevel(string(cwd, 'cwd'));
@@ -294,24 +289,19 @@ export const git = {
 /**
  * The thread's worktree of the repo at `root` on `branch`, made on first call; agent.start also uses it. A new branch starts at
  * `base` (the default branch when unset); one that already exists (a restart after cleanup, or `isExisting`) is checked out,
- * refused when another worktree has it.
+ * refused when another worktree has it, and refused outright on an `isNew` start, which asked for a branch of its own.
  */
 export async function addWorktree(root: string, threadId: string, branch: string, options: WorktreeOptions = {}) {
   return (await createWorktree(root, threadId, branch, options)).dir;
 }
 
 /** As `addWorktree`; `isNew` says this call made it, so it still needs its setup. */
-export async function createWorktree(root: string, threadId: string, branch: string, { base, isExisting }: WorktreeOptions = {}) {
+export async function createWorktree(root: string, threadId: string, branch: string, options: WorktreeOptions = {}) {
   const top = await mainRepo(root);
   if (!/^[\w-]+$/.test(threadId)) throw new Error('threadId must be letters, digits, - or _');
   const dir = join(worktreeRoot(), basename(top), threadId);
   if (existsSync(dir)) return { dir, isNew: false };
-  const name = (await runGit(top, ['check-ref-format', '--branch', isExisting ? await localName(top, branch) : branch])).trim();
-  const exists = await runGit(top, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], { okCodes: [1] }).then((s) => !!s.trim());
-  if (exists || isExisting) await assertFreeBranch(top, name);
-  await mkdir(dirname(dir), { recursive: true });
-  // An existing remote-only branch: `worktree add <dir> <name>` makes the local tracking branch itself.
-  await runGit(top, exists || isExisting ? ['worktree', 'add', dir, name] : ['worktree', 'add', '-b', name, dir, base ?? (await baseRef(top))]);
+  await addBranchWorktree(top, dir, branch, options);
   return { dir, isNew: true };
 }
 
@@ -352,6 +342,15 @@ async function currentBranch(top: string) {
   return (await runGit(top, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'HEAD')).trim();
 }
 
+
+/** The tail of a failed GitHub Actions job's log, from the check's link; throws for a check that isn't an Actions job. */
+export async function failedLog(top: string, link: string, account: GithubAccountRef | undefined, lines = CI_LOG_LINES) {
+  const job = /\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/.exec(link);
+  if (!job) throw new Error("This check doesn't run on GitHub Actions, so there's no log to fetch. Open it on GitHub instead.");
+  const [, runId, jobId] = job;
+  const log = await runGh(top, ['run', 'view', runId, ...(jobId ? ['--job', jobId] : []), '--log-failed'], account);
+  return log.split('\n').slice(-lines).join('\n');
+}
 
 /** The branch's PR and its checks, or null when the branch has none. */
 export async function readPr(cwd: string, account: GithubAccountRef | undefined): Promise<PrInfo | null> {

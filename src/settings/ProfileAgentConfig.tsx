@@ -321,7 +321,7 @@ function AddServerForm({ provider, taken, review, onDone, initialJson }: { provi
         void submit();
       }}
     >
-      <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
+      <ToggleGroup type="single" size="sm" variant="outline" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
         <ToggleGroupItem value="command">Command</ToggleGroupItem>
         <ToggleGroupItem value="json">JSON</ToggleGroupItem>
       </ToggleGroup>
@@ -498,7 +498,7 @@ function PerHarness({ text }: { text: (provider: Provider) => string }) {
 
 function HarnessPicker({ value, onChange }: { value: Provider; onChange: (provider: Provider) => void }) {
   return (
-    <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={value} onValueChange={(v) => v && onChange(v as Provider)}>
+    <ToggleGroup type="single" size="sm" variant="outline" value={value} onValueChange={(v) => v && onChange(v as Provider)}>
       {HARNESS_IDS.map((id) => (
         <ToggleGroupItem key={id} value={id}>
           <ProviderMark provider={id} size={14} />

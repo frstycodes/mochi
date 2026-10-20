@@ -14,6 +14,7 @@ import { host } from '../host';
 import { copyText } from '../clipboard';
 import { appInfo, appProviderFor, connectorFor, connectorIcon, freeAlias, isSameServer, OAUTH_PROVIDERS, type AppProviderId, type DeviceCode } from './connectors';
 import { LibraryIcon } from './LibraryParts';
+import { serviceName } from './names';
 import type { Library } from './useLibrary';
 import { closeSettings } from '../settings/open';
 import { getPrefs } from '../settings/prefs';
@@ -40,7 +41,11 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
   const [typedUrl, setTypedUrl] = useState('');
   const url = fixedUrl ?? typedUrl.trim();
   const isUrlValid = URL.canParse(url) && /^https?:\/\//.test(url);
-  const name = connectorFor(url)?.name ?? (isUrlValid ? new URL(url).hostname : 'a server');
+  const existing = library.entries?.find((e) => e.kind === 'connector' && !!e.source && isUrlValid && isSameServer(e.source, url));
+  const [typedName, setTypedName] = useState('');
+  // A server already in the library keeps its name; a new custom one may be named here, else takes the server's own.
+  const isNameAsked = !fixedUrl && !existing && !connectorFor(url);
+  const name = existing ? serviceName(existing) : connectorFor(url)?.name || (isNameAsked && typedName.trim()) || (isUrlValid ? new URL(url).hostname : 'a server');
   const provider = appProviderFor(url);
   const mochiApps = useMochiOAuthApps();
   const hasMochiApp = !!provider && !!mochiApps?.includes(provider);
@@ -70,7 +75,7 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
   const deviceCode = useDeviceCode(isBusy ? url : null);
   const submit = () => {
     setBusy(true);
-    const account = { url, alias, ...(method === 'key' && { apiKey: secret.apiKey }), ...(method === 'app' && { clientId: secret.clientId, clientSecret: secret.clientSecret }) };
+    const account = { url, alias, ...(isNameAsked && !!typedName.trim() && { name: typedName.trim() }), ...(method === 'key' && { apiKey: secret.apiKey }), ...(method === 'app' && { clientId: secret.clientId, clientSecret: secret.clientSecret }) };
     void library.addConnector(account).then((isDone) => {
       setBusy(false);
       if (!isDone) return;
@@ -99,6 +104,13 @@ function ConnectAccountForm({ fixedUrl, library, onCancel, onConnected }: { fixe
           <FieldLabel htmlFor="connect-url">Server URL</FieldLabel>
           <Input id="connect-url" autoFocus type="url" placeholder="https://mcp.example.com/mcp" value={typedUrl} onChange={(e) => setTypedUrl(e.target.value)} aria-invalid={!!typedUrl.trim() && !isUrlValid} />
           {!!typedUrl.trim() && !isUrlValid && <FieldError>Use the full address, starting with https://</FieldError>}
+        </Field>
+      )}
+      {isNameAsked && (
+        <Field>
+          <FieldLabel htmlFor="connect-name">Connector name</FieldLabel>
+          <Input id="connect-name" maxLength={64} placeholder={isUrlValid ? new URL(url).hostname : 'Acme'} value={typedName} onChange={(e) => setTypedName(e.target.value)} />
+          <FieldDescription>Left empty, it takes the name the server gives itself. You can rename it later.</FieldDescription>
         </Field>
       )}
       <Field data-invalid={isTaken || undefined}>

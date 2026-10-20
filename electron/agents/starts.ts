@@ -5,6 +5,7 @@ interface Pending {
   finish: () => void;
   abort: AbortController;
   answer?: (choice: SetupChoice) => void;
+  keepsTitle?: boolean;
 }
 
 /**
@@ -24,6 +25,7 @@ export class Starts {
     return {
       signal: entry.abort.signal,
       choose: () => new Promise<SetupChoice>((resolve) => (entry.answer = resolve)),
+      keepsTitle: () => !!entry.keepsTitle,
       end: () => {
         if (this.pending.get(threadId) === entry) this.pending.delete(threadId);
         entry.finish();
@@ -49,6 +51,12 @@ export class Starts {
     const entry = this.pending.get(threadId);
     entry?.abort.abort();
     return !!entry;
+  }
+
+  /** You named the thread while it was starting: the start doesn't name it. */
+  keepTitle(threadId: string) {
+    const entry = this.pending.get(threadId);
+    if (entry) entry.keepsTitle = true;
   }
 
   /** Answers a failed setup step; false when the thread isn't waiting on one. */

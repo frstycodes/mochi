@@ -163,7 +163,7 @@ function AgentTranscript({ thread, subagent }: { thread: Thread; subagent: Subag
               <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={VIZ_REHYPE_PLUGINS} className={cn('type-prose', subagent.error && 'text-destructive')}>
                 {report}
               </MessageResponse>
-              <Button size="sm" variant="secondary" className="w-fit" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: reportOf(subagent), reason: 'A subagent report you sent on' })}>
+              <Button size="sm" variant="secondary" className="w-fit rounded-full" onClick={() => dispatch({ type: 'send', threadId: thread.id, text: reportOf(subagent), reason: 'A subagent report you sent on' })}>
                 <Send data-icon="inline-start" />
                 Send to thread
               </Button>
@@ -273,7 +273,7 @@ function NoAgents() {
           <Hierarchy />
         </EmptyMedia>
         <EmptyTitle>No agents yet</EmptyTitle>
-        <EmptyDescription>Subagents and background agents this thread's agent starts show here, with their logs and changes.</EmptyDescription>
+        <EmptyDescription>Subagents and delegated tasks this thread's agent starts show here, with their logs and changes.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

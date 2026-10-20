@@ -125,22 +125,22 @@ export interface PlanItem {
   minutes?: number;
 }
 
-/** The agent's own to-do list, each step with how long it took; kept visible after completion. */
-export function PlanList({ items, slot }: { items: PlanItem[]; slot: LineSlot }) {
+/** The agent's own to-do list, each step with how long it took; kept visible after completion. The running step spins only while `isWorking`. */
+export function PlanList({ items, slot, isWorking }: { items: PlanItem[]; slot: LineSlot; isWorking: boolean }) {
   if (!items.length) return null;
   return (
     <CallList aria-label="Plan" className="divide-y-0 py-1">
       {items.map((item) => (
-        <PlanRow key={item.title} item={item} slot={slot} />
+        <PlanRow key={item.title} item={item} slot={slot} isWorking={isWorking} />
       ))}
     </CallList>
   );
 }
 
-function PlanRow({ item, slot }: { item: PlanItem; slot: LineSlot }) {
+function PlanRow({ item, slot, isWorking }: { item: PlanItem; slot: LineSlot; isWorking: boolean }) {
   return (
     <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta">
-      <PlanIcon status={item.status} slot={slot} />
+      <PlanIcon status={item.status} slot={slot} isWorking={isWorking} />
       {item.status === 'running' ? (
         <Shimmer as="span" className="min-w-0 flex-1 truncate">
           {item.title}
@@ -159,9 +159,9 @@ function planDuration(minutes: number) {
   return whole < 1 ? '<1m' : duration(whole);
 }
 
-function PlanIcon({ status, slot }: { status: PlanItem['status']; slot: LineSlot }) {
+function PlanIcon({ status, slot, isWorking }: { status: PlanItem['status']; slot: LineSlot; isWorking: boolean }) {
   if (status === 'done') return <CheckCircle aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
-  if (status === 'running') return <ProgressRing met={0} total={1} slot={slot} size={14} isWorking />;
+  if (status === 'running') return <ProgressRing met={0} total={1} slot={slot} size={14} isWorking={isWorking} />;
   return <span aria-hidden className="m-px size-3 shrink-0 rounded-full border border-dashed border-subtle-foreground" />;
 }
 

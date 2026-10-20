@@ -28,6 +28,7 @@ import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
+import { RenameLayer } from './RenameDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useCheckoutRecovery, useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
@@ -69,6 +70,7 @@ export function App() {
               <PhotoViewer />
               <FileViewer />
               <ScheduleLayer />
+              <RenameLayer />
               <GoalEditorLayer />
               <DeviceApprovalLayer />
               <Toaster />

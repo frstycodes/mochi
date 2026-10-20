@@ -3,7 +3,7 @@ import { toast } from '@/toast/store';
 import { host } from '../host';
 import type { Provider } from '../model';
 import { setLibraryNames } from './names';
-import type { CatalogPlugin, CatalogSkill, LibraryEntry, Marketplace } from './library';
+import type { CatalogPlugin, CatalogSkill, LibraryEntry, Marketplace, SkillDestination } from './library';
 
 /** The profile's library entries, and every change to them; a failed change toasts and leaves the list as it was. */
 export function useLibrary(spaceId: string) {
@@ -42,9 +42,13 @@ export function useLibrary(spaceId: string) {
       apply(`${entry.title} not changed`)(host.library.setEnabled(profileId, entry.id, isIn).then(() => host.library.list(spaceId))),
     remove: (entry: LibraryEntry) => apply(`${entry.title} not removed`)(host.library.remove(spaceId, entry.id)),
     /** `source` is what the catalog was browsed from, so install reads the same (cached) repo. */
-    installSkill: (source: string, skill: CatalogSkill) => apply(`${skill.name} not installed`)(host.library.installSkill(spaceId, source, skill.name)),
+    installSkill: (source: string, skill: CatalogSkill, destination?: SkillDestination) => apply(`${skill.name} not installed`)(host.library.installSkill(spaceId, source, skill.name, destination)),
     installPlugin: (marketplace: string, plugin: CatalogPlugin) => apply(`${plugin.title ?? plugin.name} not installed`)(host.library.installPlugin(spaceId, marketplace, plugin.name)),
+    /** Rejects with the reason instead of toasting, for the review dialog to show inline. */
+    installUpload: (file: PluginFile, choice: Parameters<typeof host.library.installUpload>[2]) => host.library.installUpload(spaceId, file, choice).then(setEntries),
     addConnector: (account: NewConnector) => apply(`${account.alias} not connected`)(host.library.addConnector(spaceId, account)),
+    /** Names the connector `key`, every account on it. */
+    renameConnector: (key: string, name: string) => apply(`${name} not renamed`)(host.library.renameConnector(spaceId, key, name)),
     signIn: (entry: LibraryEntry) => apply(`${entry.title} not signed in`)(host.library.signIn(spaceId, entry.id)),
     update: (entry: LibraryEntry) =>
       apply(`${entry.title} not updated`)(
@@ -79,6 +83,8 @@ export function useLibraryNamesLoader(spaceId: string | undefined) {
 }
 
 export type NewConnector = Parameters<typeof host.library.addConnector>[1];
+
+type PluginFile = Parameters<typeof host.library.reviewUpload>[0];
 
 /** The entry a catalog item became, if it is installed. */
 export function installedEntry(entries: LibraryEntry[] | null, kind: LibraryEntry['kind'], name: string) {

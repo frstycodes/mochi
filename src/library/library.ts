@@ -1,5 +1,6 @@
 import type { Provider } from '../model.ts';
 import { serverSummary, type McpServerDef } from '../settings/agentConfig.ts';
+import type { ConnectorSettings } from './connectorTools.ts';
 import { connectorIcon } from './connectors.ts';
 import type { PluginBundle } from './pluginBundle.ts';
 
@@ -11,6 +12,8 @@ export interface LibraryIndex {
   items: LibraryItem[];
   profiles: Record<string, string[]>;
   marketplaces: Marketplace[];
+  /** Per connector (`connectorKey`): on or off, its tools' permissions and their last listing. Missing in older files. */
+  connectors?: Record<string, ConnectorSettings>;
 }
 
 export type LibraryItem = LibrarySkill | LibraryServer | LibraryPlugin | LibraryConnector;
@@ -23,8 +26,23 @@ export interface LibrarySkill extends ItemBase {
   files: Record<string, string>;
   /** GitHub `owner/repo/path` it was installed from; null when imported from an account. */
   source: string | null;
+  /** The source's commit these files were read at. */
+  commit?: string | null;
+  /** Folders it was also written to, where the skills CLI puts skills; Mochi rewrites them on update and deletes them on remove. */
+  placements?: SkillPlacement[];
   icon: string | null;
 }
+
+/** A skill written to disk for an agent to find on its own, as `npx skills add` does (`skillPlacementDir`). */
+export interface SkillPlacement {
+  provider: Provider;
+  scope: 'user' | 'project';
+  /** The skill's folder. */
+  dir: string;
+}
+
+/** Where an install goes: the Mochi library (loaded per profile) or, like the skills CLI, the agents' own folders. */
+export type SkillDestination = { scope: 'library' } | { scope: 'user'; providers: Provider[] } | { scope: 'project'; providers: Provider[]; project: string };
 
 export interface LibraryServer extends ItemBase {
   kind: 'server';
@@ -35,7 +53,10 @@ export interface LibraryServer extends ItemBase {
 export interface LibraryPlugin extends ItemBase {
   kind: 'plugin';
   bundle: PluginBundle;
-  marketplace: string;
+  /** Null for an uploaded plugin, which has no source to update from. */
+  marketplace: string | null;
+  /** The file it was uploaded from, by name and SHA-256 of its bytes. */
+  upload?: { file: string; sha256: string };
   icon: string | null;
 }
 
@@ -99,6 +120,9 @@ export interface LibraryEntry {
   /** Null when it has no source to update from. */
   autoUpdate: boolean | null;
   updatedAt: number | null;
+  /** A skill's source commit, when known. */
+  commit: string | null;
+  placements: SkillPlacement[];
 }
 
 /** One plugin as a marketplace lists it, before it is installed. */
@@ -122,6 +146,34 @@ export interface MarketplaceCatalog {
   plugins: CatalogPlugin[];
 }
 
+/**
+ * An uploaded plugin file read in main, before it is installed: what it adds, with every command a hook or server would
+ * run written out as the plugin has it.
+ */
+export interface PluginReview {
+  file: string;
+  sha256: string;
+  name: string;
+  title: string;
+  version: string | null;
+  author: string | null;
+  description: string | null;
+  /** Commands are in here too: Mochi installs them as skills. */
+  skills: { name: string; description: string }[];
+  agents: { name: string; description: string }[];
+  /** `condition` is a handler's own `if` (`Bash(git*commit*)`), narrower than the group's matcher. */
+  hooks: { event: string; matcher: string | null; condition: string | null; type: string; run: string }[];
+  servers: { name: string; run: string; env: string[] }[];
+  remotes: { name: string; url: string }[];
+  unsupported: string[];
+  /** Files left out: not text, or too big to store. */
+  skipped: string[];
+  /** What each harness's threads get from it (`2 skills, 1 server`); null when nothing. */
+  loads: Record<Provider, string | null>;
+  /** A plugin of the same name already in the library, which installing replaces. */
+  existing: { id: string; title: string; isUpload: boolean } | null;
+}
+
 /** One skill found in a GitHub repo, before it is installed. */
 export interface CatalogSkill {
   name: string;
@@ -129,6 +181,18 @@ export interface CatalogSkill {
   source: string;
   fileCount: number;
   icon: string | null;
+  commit: string | null;
+}
+
+/** One skill as skills.sh lists it; `installSource` (`owner/repo@skill`) installs it through `discoverSkills`. */
+export interface SkillsShSkill {
+  id: string;
+  name: string;
+  source: string;
+  installs: number;
+  installSource: string;
+  url: string;
+  icon: string;
 }
 
 /** One plugin folder's files by path relative to it, keyed by the plugin's name. */
@@ -139,7 +203,8 @@ export const EMPTY_LIBRARY: LibraryIndex = { items: [], profiles: {}, marketplac
 /** Claude names a plugin's skills `<plugin>:<skill>` (verified with the SDK), so standalone skills read `mochi:<skill>`; no installed plugin may take the name. */
 export const STANDALONE_PLUGIN = 'mochi';
 
-export const FEATURED_SKILL_SOURCES = ['anthropics/skills', 'openai/skills/skills/.curated'];
+/** Owners whose skills install without a warning over their files; everyone else's are read first. */
+export const TRUSTED_SKILL_OWNERS = ['anthropics', 'openai'];
 export const FEATURED_MARKETPLACES: Marketplace[] = [{ name: 'claude-plugins-official', source: 'anthropics/claude-plugins-official' }];
 
 export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEntry[] {
@@ -153,7 +218,7 @@ export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEnt
     targets: item.targets,
     isEnabled: enabled.has(item.id),
     profileIds: Object.keys(index.profiles).filter((space) => index.profiles[space].includes(item.id)),
-    source: item.kind === 'skill' ? item.source : item.kind === 'plugin' ? item.marketplace : item.kind === 'connector' ? item.url : null,
+    source: item.kind === 'skill' ? item.source : item.kind === 'plugin' ? (item.upload?.file ?? item.marketplace) : item.kind === 'connector' ? item.url : null,
     icon: item.kind === 'skill' || item.kind === 'plugin' ? item.icon : item.kind === 'connector' ? connectorIcon(item.url) : null,
     contents: item.kind === 'plugin' ? pluginContents(item.bundle) : null,
     remotes: item.kind === 'plugin' ? item.bundle.remotes : [],
@@ -162,12 +227,25 @@ export function libraryEntries(index: LibraryIndex, spaceId: string): LibraryEnt
     alias: item.kind === 'connector' ? item.alias : null,
     autoUpdate: isUpdatable(item) ? item.autoUpdate !== false : null,
     updatedAt: item.updatedAt ?? null,
+    commit: item.kind === 'skill' ? (item.commit ?? null) : null,
+    placements: item.kind === 'skill' ? (item.placements ?? []) : [],
   }));
+}
+
+/**
+ * The folder the skills CLI installs a skill to (verified in vercel-labs/skills `src/agents.ts`): Claude Code reads
+ * `<config dir>/skills` and `<project>/.claude/skills`, Codex `~/.agents/skills` and `<project>/.agents/skills`.
+ * `claudeDir` is the profile's Claude config folder (`~/.claude` unless the account has its own).
+ */
+export function skillPlacementDir(provider: Provider, scope: SkillPlacement['scope'], name: string, { home, claudeDir, project }: { home: string; claudeDir: string; project?: string }) {
+  if (scope === 'project' && !project) throw new Error('A project install needs a project');
+  const root = scope === 'project' ? `${project}/${provider === 'claude' ? '.claude' : '.agents'}` : provider === 'claude' ? claudeDir : `${home}/.agents`;
+  return `${root}/skills/${name}`;
 }
 
 /** Skills installed from GitHub and plugins from a marketplace can follow their source. */
 export function isUpdatable(item: LibraryItem) {
-  return (item.kind === 'skill' && !!item.source) || item.kind === 'plugin';
+  return (item.kind === 'skill' && !!item.source) || (item.kind === 'plugin' && !!item.marketplace);
 }
 
 function itemTitle(item: LibraryItem) {
@@ -225,12 +303,12 @@ export function profileLayout(index: LibraryIndex, spaceId: string, provider: Pr
   return { plugins: folders, servers };
 }
 
-/** The profile's signed-in connector accounts, grouped by the server they're on, in the order they were added. */
+/** The profile's signed-in connector accounts on connectors that are on, grouped by the server they're on, in the order they were added. */
 export function profileConnectors(index: LibraryIndex, spaceId: string): Map<string, LibraryConnector[]> {
   const enabled = new Set(index.profiles[spaceId] ?? []);
   const groups = new Map<string, LibraryConnector[]>();
   for (const item of index.items) {
-    if (item.kind !== 'connector' || !item.isLinked || !enabled.has(item.id)) continue;
+    if (item.kind !== 'connector' || !item.isLinked || !enabled.has(item.id) || index.connectors?.[item.key]?.isOff) continue;
     groups.set(item.key, [...(groups.get(item.key) ?? []), item]);
   }
   return groups;
@@ -275,7 +353,7 @@ function renderMarkdown(frontmatter: Record<string, string>, body: string) {
   return `---\n${lines.join('\n')}\n---\n\n${body.trim()}\n`;
 }
 
-const usesPluginRoot = (server: PluginBundle['servers'][number]) => /\$\{(CLAUDE_)?PLUGIN_(ROOT|DATA)\}/.test(JSON.stringify(server));
+export const usesPluginRoot = (server: PluginBundle['servers'][number]) => /\$\{(CLAUDE_)?PLUGIN_(ROOT|DATA)\}/.test(JSON.stringify(server));
 
 const stdioDef = ({ name, command, args, env }: PluginBundle['servers'][number]): McpServerDef => ({ name, type: 'stdio', command, args, env });
 
@@ -312,7 +390,8 @@ export function parseLibrary(raw: string | null): LibraryIndex {
     const saved = JSON.parse(raw ?? 'null') as Partial<LibraryIndex> | null;
     if (!saved || !Array.isArray(saved.items) || typeof saved.profiles !== 'object' || saved.profiles === null) return EMPTY_LIBRARY;
     const items = saved.items.filter((item) => ITEM_KINDS.includes(item?.kind));
-    return { items, profiles: saved.profiles, marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [] };
+    const connectors = typeof saved.connectors === 'object' && saved.connectors !== null ? saved.connectors : {};
+    return { items, profiles: saved.profiles, marketplaces: Array.isArray(saved.marketplaces) ? saved.marketplaces : [], connectors };
   } catch {
     return EMPTY_LIBRARY;
   }

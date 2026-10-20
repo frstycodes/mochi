@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Eye, EyeOff } from '@/icons';
+import { Eye, EyeOff, MagicStar } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { ProviderMark, ThreadStatusIcon } from '../ui';
 import { BoundShortcut } from '../Shortcut';
 import { isCommandId, pinnedCommand } from '../keymap';
 import { ThreadMessageIcon } from '../chat/ThreadMessage';
+import { useRenameSurface } from '../rename';
 
 const PEEK_OPEN_MS = 500;
 const PEEK_CLOSE_MS = 240;
@@ -26,9 +27,11 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
   const isWatched = state.watched.includes(thread.id);
   const tail = thread.activity.filter((a) => a.kind === 'message').slice(-TAIL);
   const [isOpen, setOpen] = useState(false);
+  // The trigger opens on focus too, and renaming focuses the row's field.
+  const isRenaming = useRenameSurface(thread.id) === 'row';
 
   return (
-    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={!isDisabled && isOpen} onOpenChange={(open) => setOpen(open && !document.querySelector(NESTED_PREVIEW_ACTIVE))}>
+    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={!isDisabled && !isRenaming && isOpen} onOpenChange={(open) => setOpen(open && !document.querySelector(NESTED_PREVIEW_ACTIVE))}>
       <HoverCardTrigger asChild onPointerOver={(e) => e.target instanceof Element && e.target.closest(NESTED_PREVIEW) && setOpen(false)}>
         {children}
       </HoverCardTrigger>
@@ -46,7 +49,7 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, children }: { thread
           <ul className="flex flex-col gap-2">
             {tail.map((a) => (
               <li key={a.at + a.text} className="flex gap-2">
-                <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.who === 'you' && 'You'}</span>
+                <span className="flex w-6 shrink-0 pt-0.5 type-caption text-subtle-foreground">{a.who === 'claude' || a.who === 'codex' ? <ProviderMark provider={a.who} size={14} /> : a.from ? <ThreadMessageIcon direction="from" /> : a.autofix ? <MagicStar aria-hidden className="size-4 text-muted-foreground" /> : a.who === 'you' && 'You'}</span>
                 <p className={cn('line-clamp-2 type-meta', a.who === 'you' ? 'text-foreground' : 'text-muted-foreground')}>{a.text}</p>
               </li>
             ))}

@@ -1,4 +1,5 @@
 import type { QuietHours } from '../../notify/model.ts';
+import type { AutofixTarget } from '../../git/autofix.ts';
 import type { Manifest } from './manifest.ts';
 
 export interface Notice {
@@ -19,6 +20,8 @@ export interface WatchedThread {
 /** What main needs to alert for watched threads while no window is in front, or none is open. The renderer resends it on every change. */
 export interface WatchConfig {
   threads: WatchedThread[];
+  /** PRs with Auto-fix on, in threads that aren't settled; watched or not. */
+  autofix: AutofixTarget[];
   /** Settings › Notifications › System alerts. */
   kinds: string[];
   quiet: QuietHours;

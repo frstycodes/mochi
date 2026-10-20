@@ -1,10 +1,11 @@
 import type { Dispatch } from 'react';
-import { Archive, Connector, ExternalLink, Plugin, Skill, Flag, Link, SearchAlt, ArrowLeft, ArrowRight, Clock, Scale, ArrowLeftRight, XSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, Folder, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Columns, Rows, Settings, Sidebar, SidebarRight, Sun, TaskSquare, Transfer, VideoPlay, Share, X, type IconComponent } from '@/icons';
+import { Archive, Connector, ExternalLink, Plugin, Skill, Flag, Link, SearchAlt, ArrowLeft, ArrowRight, Clock, Scale, ArrowLeftRight, XSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, Folder, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, MagicStar, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Columns, Rows, Settings, Sidebar, SidebarRight, Sun, TaskSquare, Transfer, VideoPlay, Share, X, type IconComponent } from '@/icons';
 import { ForkIcon } from '../ui';
 import { toast } from '../toast/store.ts';
 import { getPage, openFind, pageKey, reloadPage } from '../browser/pages';
 import { openExternally, openInLabel } from '../browser/systemBrowser';
 import { threadCwd } from '../host/cwd';
+import { autofixPr, setAutofix } from '../git/autofixToggle';
 import { copyText } from '../clipboard';
 import { REVEAL_IN, revealPath } from '../files/editors';
 import { PRESETS, PRESET_LABELS } from '../layout/tree';
@@ -13,6 +14,8 @@ import { getProfiles, MAX_PROFILES } from '../profiles';
 import { PANE_TABS } from '../pane/tabs';
 import { rewindBlockedReason } from '../rewind/checkpoints';
 import { openRewind } from '../rewind/requests';
+import { PROVIDER_NAME } from '../rewind/handoff';
+import { copyHandoffPrompt, handOffHere, isHandingOff, otherProvider } from '../rewind/runHandoff';
 import { openSchedule } from '../schedule/ScheduleDialog';
 import { openGoalEditor } from '../goals/GoalEditor';
 import { hasGoal } from '../drift';
@@ -84,7 +87,7 @@ export const ACTIONS = [
   { id: 'thread-pin', group: 'Thread', title: 'Pin thread', icon: Pin, command: 'thread-pin', when: when.unpinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Pin threads', skipReason: 'already pinned or settled', run: pin } },
   { id: 'thread-unpin', group: 'Thread', title: 'Unpin thread', icon: PinOff, command: 'thread-pin', when: when.pinned, run: onThread((t, ctx) => pin([t], ctx)), many: { title: 'Unpin threads', skipReason: 'not pinned', run: pin } },
   // Desktop runs need a real agent; the web build edits schedules on demo threads so the editor can be tried.
-  { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, keywords: 'title name', when: when.thread, run: inThread((t) => startRename(t.id)) },
+  { id: 'thread-rename', group: 'Thread', title: 'Rename thread', icon: Edit, command: 'thread-rename', keywords: 'title name', when: when.thread, run: onThread((t, { scope }) => startRename(t.id, scope.isRow ? 'row' : 'dialog')) },
   { id: 'thread-schedule', group: 'Thread', title: 'Schedule…', icon: Clock, keywords: 'cron nightly background pr trigger recurring', when: (s) => when.liveThread(s) && (!s.isDesktop || !!s.thread!.live), run: onThread((t) => openSchedule(t.id)) },
   { id: 'thread-rewind', group: 'Thread', title: 'Rewind to a checkpoint', icon: History, keywords: 'undo restore', when: when.liveThread, disabledReason: (s) => s.thread && rewindBlockedReason(s.thread), run: inThread((t) => openRewind({ kind: 'rewind', threadId: t.id })) },
   { id: 'thread-fork', group: 'Thread', title: 'Fork thread', icon: ForkIcon, keywords: 'branch alternative', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'fork', threadId: t.id })) },
@@ -92,7 +95,19 @@ export const ACTIONS = [
   { id: 'thread-export-replay', group: 'Thread', title: 'Export replay…', icon: Share, keywords: 'recording session share html', when: when.thread, run: onThread((t, { state }) => void shareReplay(state, t)) },
   { id: 'thread-goal-make', group: 'Thread', title: 'Make this a goal', icon: Flag, keywords: 'goal outcome criteria done task track progress', when: (s) => when.thread(s) && getPrefs().goals && !hasGoal(s.thread!), run: onThread((t) => openGoalEditor(t.id)) },
   { id: 'thread-goal-remove', group: 'Thread', title: 'Remove goal', icon: XSquare, keywords: 'goal chat question untrack progress', when: (s) => when.thread(s) && hasGoal(s.thread!), run: onThread((t, { dispatch }) => dispatch({ type: 'goal-remove', threadId: t.id })) },
-  { id: 'thread-handoff', group: 'Thread', title: 'Hand off to another agent', icon: Transfer, keywords: 'claude codex switch', when: when.liveThread, run: inThread((t) => openRewind({ kind: 'handoff', threadId: t.id })) },
+  {
+    id: 'thread-handoff',
+    group: 'Thread',
+    title: 'Hand off to another agent',
+    icon: Transfer,
+    keywords: 'claude codex switch',
+    when: when.liveThread,
+    label: (s) => `Hand off to ${PROVIDER_NAME[otherProvider(s.thread!)]} here`,
+    mark: (s) => otherProvider(s.thread!),
+    disabledReason: (s) => (isHandingOff(s.thread!) ? 'Already handing off' : undefined),
+    run: onThread((t, { dispatch }) => handOffHere(t, dispatch)),
+  },
+  { id: 'thread-handoff-copy', group: 'Thread', title: 'Copy handoff prompt', icon: Copy, keywords: 'claude codex switch hand off summary clipboard', when: when.liveThread, run: onThread((t) => copyHandoffPrompt(t)) },
   {
     id: 'thread-second-opinion',
     group: 'Thread',
@@ -107,6 +122,8 @@ export const ACTIONS = [
   },
   { id: 'thread-watch', group: 'Thread', title: 'Watch thread', icon: Eye, keywords: 'notify follow', when: when.unwatched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Watch threads', skipReason: 'already watched or settled', run: watch } },
   { id: 'thread-unwatch', group: 'Thread', title: 'Stop watching', icon: EyeSlash, keywords: 'notify follow', when: when.watched, run: onThread((t, ctx) => watch([t], ctx)), many: { title: 'Stop watching threads', skipReason: 'not watched', run: watch } },
+  { id: 'thread-autofix', group: 'Thread', title: 'Auto-fix pull request', icon: MagicStar, keywords: 'ci checks review conflicts pr', when: when.autofixOff, label: (s) => `Auto-fix PR #${autofixPr(s.thread!)!.number}`, run: onThread((t, { dispatch }) => setAutofix(dispatch, t, autofixPr(t)!, true)) },
+  { id: 'thread-autofix-off', group: 'Thread', title: 'Stop Auto-fix', icon: MagicStar, keywords: 'ci checks review conflicts pr', when: when.autofixOn, label: (s) => `Stop Auto-fix on PR #${autofixPr(s.thread!)!.number}`, run: onThread((t, { dispatch }) => setAutofix(dispatch, t, autofixPr(t)!, false)) },
   { id: 'thread-copy-branch', group: 'Thread', title: 'Copy branch name', icon: Hierarchy2, when: when.repo, run: onThread((t) => copyBranches([t])), many: { title: 'Copy branch names', skipReason: 'no project, so no branch', run: copyBranches } },
   { id: 'thread-reveal', group: 'Thread', title: `Reveal worktree in ${REVEAL_IN}`, icon: FolderOpen, when: when.worktree, run: onThread((t) => revealPath(threadCwd(t)!, '')) },
   { id: 'thread-summary', group: 'Thread', title: 'Toggle summary', icon: SidebarRight, when: when.thread, run: ({ state }) => clickInFocusedSplit(state, 'Thread summary') },

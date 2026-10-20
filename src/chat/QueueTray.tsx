@@ -29,7 +29,7 @@ export function QueueTray({ thread, onSendNow, onEdit }: { thread: Thread; onSen
           <span className="ml-auto shrink-0 text-subtle-foreground">{isOpen ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}</span>
         </button>
         {!!thread.queuePause && thread.queuePause !== 'limit' && (
-          <Button variant="outline" size="xs" onClick={() => dispatch({ type: 'queued-resume', threadId: thread.id })}>
+          <Button variant="outline" size="xs" className="rounded-full" onClick={() => dispatch({ type: 'queued-resume', threadId: thread.id })}>
             Resume
           </Button>
         )}
@@ -75,7 +75,7 @@ function QueueRow({ message, onSendNow, onEdit, onRemove, onMove }: { message: Q
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 group-focus-within/queued:opacity-100 group-hover/queued:opacity-100 pointer-coarse:opacity-100">
         {/* A compaction can't cut into the turn: it waits for the end. */}
         {compactFocus(message.draft) === null && (
-          <Button variant="ghost" size="xs" onClick={() => onSendNow(message)}>
+          <Button variant="ghost" size="xs" className="rounded-full" onClick={() => onSendNow(message)}>
             Send now
           </Button>
         )}

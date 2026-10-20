@@ -1,11 +1,19 @@
-import { branchName } from '../git/workspace.ts';
 import { isConcrete } from '../drift.ts';
-import type { Thread } from '../model.ts';
+import { firstPrompt, type Thread } from '../model.ts';
 import { titlePrompt } from './prompts.ts';
 
 /**
- * The prompt that names a live thread once its first real exchange is over; null while it's working, after only small talk
- * (a thread started with "hi"), and once a title was generated or you renamed it.
+ * The prompt main names a new thread with while its worktree is set up, so the agent starts on the named branch: its first
+ * message alone. Undefined unless the thread is on its temp branch and that message says what it's about.
+ */
+export function startTitleRequest(t: Thread) {
+  const asked = firstPrompt(t);
+  return hasTempBranch(t) && !t.isTitleRenamed && isConcrete(asked) ? titlePrompt(asked) : undefined;
+}
+
+/**
+ * The prompt that names a live thread once its first real exchange is over, when naming it before the start didn't: null while
+ * it's working, after only small talk (a thread started with "hi"), and once a title was generated or you renamed it.
  */
 export function titleRequest(t: Thread) {
   if (!t.live || t.live.isWorking || t.isTitleRenamed || t.isTitleGenerated) return null;
@@ -15,10 +23,8 @@ export function titleRequest(t: Thread) {
   return reply?.text ? titlePrompt(asked, reply.text.slice(0, 2000)) : null;
 }
 
-export function automaticBranchTitle(t: Thread, title: string) {
+/** Still on the temp branch Mochi made for it, so its title may rename it (`renameAutoBranch` also refuses a pushed one). */
+export function hasTempBranch(t: Thread) {
   const repo = t.repo;
-  if (!repo?.autoBranch || repo.branch !== repo.autoBranch || repo.mode === 'folder' || repo.isExisting || repo.isDetached) return null;
-  const slug = branchName('', title, '').split('/').at(-1);
-  if (!slug) return null;
-  return repo.branch.slice(0, repo.branch.lastIndexOf('/') + 1) + slug;
+  return !!repo?.autoBranch && repo.branch === repo.autoBranch && repo.mode !== 'folder' && !repo.isExisting && !repo.isDetached;
 }

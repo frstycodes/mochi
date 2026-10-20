@@ -31,3 +31,33 @@ test('a scheduled thread waits for its run; the run wakes it, lands in the Queue
   assert.ok(!s.queue.some((q) => q.kind === 'run'));
   assert.equal(s.threads.at(-1)!.activity.at(-1)?.text, 'Settled: Nightly dependency check finished: 2 findings');
 });
+
+test('Auto-fix: turning it on tells the agent once, events go to it as their own rows, off or capped stops them', () => {
+  const create: Action = { type: 'create', title: 'Fix login', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
+  let s = reduce(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = reduce(s, { type: 'prs-seen', threadId: id, prs: [{ number: 12, state: 'open', title: 'Fix login', url: 'https://github.com/o/r/pull/12' }] });
+  const callsFor = (action: Action) => agentCalls(s, action, () => reduce(s, action));
+  const prompt = (action: Action) => callsFor(action).map((c) => (c.method === 'start' ? c.options.prompt : c.method === 'send' ? c.text : ''))[0];
+
+  const on: Action = { type: 'autofix-set', threadId: id, pr: 12, since: 5 };
+  assert.match(prompt(on) ?? '', /^<mochi-autofix-event kind="enabled" pr="12">[\s\S]*No action needed right now/);
+  s = reduce(s, on);
+  const notice = s.threads.at(-1)!.activity.at(-1)!;
+  assert.deepEqual([notice.who, notice.autofix?.kind], ['you', 'enabled']);
+  assert.ok(!notice.text.includes('<mochi-autofix-event'), 'the row shows the event, not its tag');
+  assert.deepEqual(callsFor(on), [], 'already on: no second notice');
+
+  const ci: Action = { type: 'autofix', threadId: id, event: { kind: 'ci', pr: 12, url: 'u', head: 'abcdef1', failed: [{ name: 'lint', state: 'fail' }], attempt: 1 } };
+  assert.match(prompt(ci) ?? '', /kind="ci"[\s\S]*lint/);
+  s = reduce(s, ci);
+  assert.equal(s.threads.at(-1)!.activity.at(-1)!.autofix?.title, 'CI failed on #12 · fixing');
+
+  const capped = reduce(s, { type: 'autofix', threadId: id, event: { kind: 'stopped', pr: 12, url: 'u', reason: 'cap', failed: [{ name: 'lint', state: 'fail' }] } });
+  assert.equal(capped.threads.at(-1)!.prs[0].autofixSince, undefined);
+  assert.ok(capped.queue.some((q) => q.kind === 'ci' && q.threadId === id), 'out of attempts: the failure is yours, in the Queue');
+
+  s = reduce(s, { type: 'autofix-set', threadId: id, pr: 12 });
+  assert.deepEqual(callsFor(ci), [], 'off: a late event from main goes nowhere');
+  assert.equal(reduce(s, ci).threads.at(-1)!.activity.length, s.threads.at(-1)!.activity.length);
+});

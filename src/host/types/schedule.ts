@@ -1,4 +1,5 @@
 import type { AgentEvent, AgentStartOptions } from './agent.ts';
+import type { AutofixEvent } from '../../git/autofix.ts';
 import type { CiResult } from '../../notify/watch.ts';
 import type { Manifest } from './manifest.ts';
 
@@ -63,6 +64,8 @@ export type ScheduleEvent =
   | { type: 'run-end'; run: ScheduleRun; name: string }
   /** A watched thread's PR checks settled (`src/notify/watch.ts`); a failure becomes a Queue item. */
   | { type: 'ci'; threadId: string; result: CiResult }
+  /** An Auto-fix PR changed (`src/git/autofix.ts`): it goes to the thread's agent as its own message, or turns Auto-fix off. */
+  | { type: 'autofix'; threadId: string; event: AutofixEvent }
   /** An agent event that happened while no window was open. */
   | { type: 'agent'; event: AgentEvent };
 

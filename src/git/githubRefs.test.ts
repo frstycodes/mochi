@@ -36,7 +36,26 @@ test("gh's response maps to states; unresolved refs are left out", () => {
           additions: 12,
           deletions: 3,
           changedFiles: 2,
-          commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE' } } }] },
+          commits: {
+            nodes: [
+              {
+                commit: {
+                  statusCheckRollup: {
+                    state: 'FAILURE',
+                    contexts: {
+                      totalCount: 5,
+                      checkRunCountsByState: [
+                        { state: 'SUCCESS', count: 2 },
+                        { state: 'SKIPPED', count: 1 },
+                        { state: 'FAILURE', count: 1 },
+                      ],
+                      statusContextCountsByState: [{ state: 'PENDING', count: 1 }],
+                    },
+                  },
+                },
+              },
+            ],
+          },
         },
       },
       r1: { issueOrPullRequest: { __typename: 'Issue', title: 'B', url: 'u1', state: 'CLOSED', stateReason: 'NOT_PLANNED', author: null } },
@@ -51,6 +70,7 @@ test("gh's response maps to states; unresolved refs are left out", () => {
       url: 'u0',
       hasConflicts: true,
       checks: 'fail',
+      checkCounts: { passed: 3, total: 5 },
       review: 'changes',
       isNotPlanned: false,
       author: { login: 'ana', avatarUrl: 'a.png' },
@@ -58,6 +78,6 @@ test("gh's response maps to states; unresolved refs are left out", () => {
       branch: { head: 'feat/a', base: 'main' },
       diff: { added: 12, removed: 3, files: 2 },
     },
-    'o/r#2': { kind: 'issue', status: 'closed', title: 'B', url: 'u1', hasConflicts: false, checks: null, review: null, isNotPlanned: true, author: null, updatedAt: null, branch: null, diff: null },
+    'o/r#2': { kind: 'issue', status: 'closed', title: 'B', url: 'u1', hasConflicts: false, checks: null, checkCounts: null, review: null, isNotPlanned: true, author: null, updatedAt: null, branch: null, diff: null },
   });
 });

@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Plus } from '@/icons';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { CheckCircle, ChevronRight, Plus } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { openSubpage } from '../settings/open';
 import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
 import { ConnectAccountDialog } from './ConnectDialog';
-import { CONNECTORS, connectorFor, connectorIcon, isSameServer, type Connector } from './connectors';
+import { CONNECTORS, connectorIcon, connectorKey, isSameServer, type Connector } from './connectors';
+import { serviceName } from './names';
 import type { LibraryEntry } from './library';
 import { LibraryPage, type PagePart } from './LibraryPage';
-import { ALL, CategoryChips, countOf, EmptyRow, EntryActions, filterBy, InstalledList, LibraryIcon, LibraryRow, LIST } from './LibraryParts';
+import { ALL, CategoryChips, countOf, EmptyRow, filterBy, InstalledList, LibraryIcon, LibraryRow, LIST } from './LibraryParts';
 import type { Library } from './useLibrary';
 
 /** Settings › Connectors: every connected account and local server, which profiles reach each, and a directory of services to connect. */
@@ -59,13 +59,9 @@ function Connected({ library, query, showDiscover }: Parameters<PagePart>[0]) {
         <SettingsCard>
           {!services && <SkeletonRows count={2} />}
           {isEmpty && (query ? <EmptyRow text={`Nothing in your library matches “${query}”`} /> : <NothingConnected onDiscover={showDiscover} />)}
-          {!!services?.length && (
-            <Accordion type="multiple">
-              {services.map((service) => (
-                <ServiceRow key={service.url} service={service} library={library} />
-              ))}
-            </Accordion>
-          )}
+          {services?.map((service) => (
+            <ServiceRow key={service.url} service={service} />
+          ))}
         </SettingsCard>
       </SettingsSection>
       {shownServers.length > 0 && (
@@ -91,7 +87,7 @@ function NothingConnected({ onDiscover }: { onDiscover: () => void }) {
   );
 }
 
-type Service = { url: string; name: string; icon: string | null; accounts: LibraryEntry[] };
+type Service = { url: string; key: string; name: string; icon: string | null; accounts: LibraryEntry[] };
 
 /** Connector accounts by the server they're on, each service where its first account was added. */
 function byService(accounts: LibraryEntry[]): Service[] {
@@ -100,55 +96,34 @@ function byService(accounts: LibraryEntry[]): Service[] {
     const url = (account.source ?? account.id).replace(/\/+$/, '');
     groups.set(url, [...(groups.get(url) ?? []), account]);
   }
-  return [...groups].map(([url, list]) => ({ url, name: connectorFor(url)?.name ?? (URL.canParse(url) ? new URL(url).hostname : url), icon: list[0].icon, accounts: list }));
+  return [...groups].map(([url, list]) => ({ url, key: URL.canParse(url) ? connectorKey(url) : url, name: serviceName(list[0]), icon: list[0].icon, accounts: list }));
 }
 
-/** One service, closed to a line saying which accounts it has; opened, each account with its sign-in and switch. */
-function ServiceRow({ service, library }: { service: Service; library: Library }) {
-  const [isConnecting, setConnecting] = useState(false);
+/** One service as a settings row that opens its own page: tile, name and accounts, then its status beside the chevron. */
+function ServiceRow({ service }: { service: Service }) {
   const { accounts } = service;
   const aliases = accounts.flatMap((a) => (a.alias ? [a.alias] : []));
   const signedOut = accounts.filter((a) => a.isLinked === false).length;
   return (
-    <AccordionItem value={service.url} className="relative not-last:border-b-0 not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border">
-      <AccordionTrigger className="items-center gap-3 rounded-none px-4 py-3 font-normal hover:no-underline">
-        <LibraryIcon key={service.icon} url={service.icon} letter={service.name} />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate type-body font-medium">{service.name}</span>
-          <span className="truncate type-caption text-subtle-foreground">
-            {countOf(accounts.length, 'account')} · {LIST.format(aliases)}
-          </span>
-          {signedOut > 0 && <span className="type-caption text-warning">{signedOut} signed out</span>}
+    <button
+      type="button"
+      onClick={() => openSubpage('connectors', service.key)}
+      className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
+    >
+      <LibraryIcon key={service.icon} url={service.icon} letter={service.name} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate type-body font-medium">{service.name}</span>
+        <span className="truncate type-caption text-subtle-foreground">
+          {countOf(accounts.length, 'account')} · {LIST.format(aliases)}
         </span>
-      </AccordionTrigger>
-      <AccordionContent className="bg-muted/30 p-0">
-        <ul aria-label={`${service.name} accounts`}>
-          {accounts.map((account) => (
-            <li key={account.id} className={NESTED_ROW}>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate type-body">{account.alias}</span>
-                <span className={account.isLinked === false ? 'type-caption text-warning' : 'type-caption text-subtle-foreground'}>{account.isLinked === false ? 'Signed out: its tools are left out of threads' : 'Signed in'}</span>
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <EntryActions entry={account} library={library} />
-              </span>
-            </li>
-          ))}
-          <li>
-            <button type="button" onClick={() => setConnecting(true)} className={cn(NESTED_ROW, 'min-h-13 w-full text-left type-body text-muted-foreground outline-none transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/40 focus-visible:text-foreground')}>
-              <Plus aria-hidden className="size-4" />
-              Add a {service.name} account
-            </button>
-          </li>
-        </ul>
-        <ConnectAccountDialog open={isConnecting} onOpenChange={setConnecting} url={service.url} library={library} />
-      </AccordionContent>
-    </AccordionItem>
+      </span>
+      <span className="flex shrink-0 items-center gap-2">
+        {signedOut ? <span className="type-meta text-warning">{signedOut} signed out</span> : <CheckCircle aria-label="Every account signed in" className="size-4 text-muted-foreground" />}
+        <ChevronRight aria-hidden className="size-4 text-subtle-foreground" />
+      </span>
+    </button>
   );
 }
-
-// A row inside an open service: indented to the service's name, split from the row above by the card's inset hairline.
-const NESTED_ROW = 'relative flex items-center gap-3 py-2 pr-4 pl-4 before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border sm:pl-17';
 
 // {DISCOVER}
 
@@ -214,3 +189,4 @@ function ConnectorRow({ connector, accounts, library }: { connector: Connector; 
     />
   );
 }
+

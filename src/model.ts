@@ -1,4 +1,5 @@
 import type { AgentImage, AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
+import type { AutofixEvent } from './git/autofix.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
 import type { McpServerDef } from './settings/agentConfig.ts';
@@ -165,12 +166,27 @@ export interface ActivityEntry {
   nextMove?: { summary?: string; question: string; answer?: string };
   /** Messages: another thread's agent sent this (`send_to_thread`), not you. */
   from?: ThreadRef;
+  /** Messages: an Auto-fix event Mochi sent the agent about one of the thread's PRs; `text` is the event, the row shows `title`. */
+  autofix?: { kind: AutofixEvent['kind']; pr: number; title: string };
   /** Events only: a sub-thread handed its result back here. */
   subThread?: { threadId: string; title: string; text: string };
   /** Tool entries: the message this `send_to_thread` call delivered. */
   sent?: ThreadRef & { text: string };
   /** Events only: the harness compacted the conversation here. */
   compaction?: Compaction;
+  /** Events only: the thread moved to the other agent here. */
+  handoff?: Handoff;
+}
+
+/** A handoff to the other agent: drafting while a model writes `prompt`, started once the new agent has it as its first message. */
+export interface Handoff {
+  from: Provider;
+  to: Provider;
+  status: 'drafting' | 'started' | 'failed';
+  prompt?: string;
+  /** Why `prompt` is the local summary instead of a model's draft. */
+  fallback?: 'timeout' | 'error';
+  error?: string;
 }
 
 /**
@@ -306,6 +322,8 @@ export interface PullRequest {
   title: string;
   /** Live PRs from `gh`; the demo fixtures have none, so their rows don't open anything. */
   url?: string;
+  /** Auto-fix is on (`src/git/autofix.ts`) since this epoch ms. */
+  autofixSince?: number;
 }
 
 /**
@@ -410,10 +428,10 @@ export interface SentImage extends AgentImage {
 
 export type QueuePause = 'failed' | 'interrupted' | 'limit' | 'restart';
 
-/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a Mochi background agent (`start_background_agent`). */
+/** A subagent of a thread: the harness's own (Claude Agent tool, Codex spawn) or a task delegated to another provider (`delegate_task`). */
 export interface Subagent {
   id: string;
-  /** `mochi`: a background agent Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
+  /** `mochi`: a delegated task Mochi runs as a session of its own (`sessionId`), reporting back into this thread. */
   origin: 'native' | 'mochi';
   provider: Provider;
   name: string;
@@ -436,6 +454,8 @@ export interface Subagent {
   /** Mochi agents: the folder they run in, and whether it is a worktree of their own (else the parent's, shared). */
   cwd?: string;
   hasOwnWorktree?: boolean;
+  /** Mochi agents: it ended on its own and its report hasn't reached this thread's agent yet (`dueReports`). */
+  isReportDue?: boolean;
 }
 
 export interface SubagentStep {
@@ -468,7 +488,7 @@ export interface LiveRun {
   eventSeq?: number;
   /** You chose to continue on your API key after a limit; it stays on the key until handed off. */
   isOnApiKey?: boolean;
-  /** Background agents' reports, sent to the agent ahead of your next message. */
+  /** Codex compaction restore notes, sent to the agent ahead of your next message. */
   notes?: string[];
   /** A chat rewind replaced the session: the next start forks it at `forkAt`, or starts fresh with the transcript up to the rewind as `seed`. */
   restart?: { forkAt: string } | { seed: string };
@@ -507,6 +527,8 @@ export interface ToolWidget {
   /** `options` are radio buttons: one must be picked. */
   pick?: 'one';
   isDestructive?: boolean;
+  /** Something only you can do in the browser (a sign-in, a code); Mochi closes it itself once the page shows it's done. */
+  isHandoff?: boolean;
   /** A config write's file diffs, secrets redacted (the card is saved with the thread). */
   edits?: FileEdit[];
   /** Mochi's own facts under the title, like which other profiles share the account. */

@@ -89,7 +89,7 @@ export const TOOL_TABLE = {
   open_pr: {
     tier: 'change',
     description:
-      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first. Use this instead of `gh pr create`.',
+      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first.',
     shape: {
       title: z.string().min(1).max(72).describe('Conventional Commits style, like "fix(auth): keep the session cookie"'),
       why: z.string().min(1).max(300).describe('One sentence: why this change'),
@@ -151,25 +151,33 @@ export const TOOL_TABLE = {
     shape: { threadId: otherThread, reason: z.string().min(1) },
   },
   // {AGENTS}
-  start_background_agent: {
+  update_plan: {
+    tier: 'read',
+    description:
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply.',
+    shape: {
+      items: z
+        .array(z.object({ title: z.string().min(1).max(120).describe('A short step, like "Add the parser test"'), status: z.enum(['pending', 'in_progress', 'completed']) }))
+        .min(1)
+        .max(12)
+        .optional()
+        .describe('The whole plan, in order; replaces the previous one, and steps left out are dropped'),
+      advance: z.boolean().optional().describe('Complete the in_progress step and start the next pending one; ignored with items'),
+    },
+  },
+  delegate_task: {
     tier: 'change',
     quiet: true,
     description:
-      "Start a background agent that works on its own while you keep going: in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new). It runs on this profile's account and counts toward the concurrency cap. When it finishes, its report comes to you with the user's next message. For work that needs no answer from you mid-way; for a quick lookup use your own subagents.",
+      "Run a task on the other provider (Codex from a Claude thread, Claude from a Codex thread), or on a model your own subagent tool doesn't offer. Prefer your native subagent tool for same-provider work whenever it supports the model you want. The child sees only the prompt, nothing of this conversation. It runs in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new), on this profile's account. Returns at once; when it finishes, its report comes to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
     shape: {
       prompt: z.string().min(1).max(20_000).describe('The whole task: it sees nothing of this conversation'),
       name: z.string().min(1).max(60).describe('A few words the user sees, like "Fix flaky checkout test"'),
+      provider: z.enum(['claude', 'codex']),
+      model: z.string().optional().describe("A model id the account offers; defaults to the provider's"),
       worktree: z.enum(['same', 'new']).optional(),
-      provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
-      model: z.string().optional().describe("A model id the account offers; defaults to this thread's"),
     },
   },
-  list_background_agents: {
-    tier: 'read',
-    description: "List this thread's subagents and background agents: id, name, status, origin (mochi: started with start_background_agent; native: your own), tokens, elapsed, and the result of finished ones.",
-    shape: { status: z.enum(['running', 'done', 'failed', 'stopped']).optional() },
-  },
-  stop_background_agent: { tier: 'change', quiet: true, description: 'Stop one of your running background agents (ids from list_background_agents). Its partial work stays in its worktree.', shape: { id: z.string() } },
   // {BROWSER}
   browser_tabs: { tier: 'read', description: "List your thread's browser tabs in the side pane: tabId, url, title, loading, active.", shape: {} },
   browser_open: {
@@ -249,6 +257,33 @@ export const TOOL_TABLE = {
     quiet: true,
     description: 'Emulate a device size: responsive (fills the pane), iphone-se, iphone-16, iphone-16-pro-max, pixel-9, ipad-mini, ipad-pro, laptop.',
     shape: { tabId, device: z.string(), rotated: z.boolean().optional() },
+  },
+  browser_handoff: {
+    tier: 'read',
+    description:
+      "Hand the tab to the user for something only they can do (sign in, a 2-step code, a captcha, a choice only they can make) and wait until they're done, then go on with your plan in the same turn. Mochi brings the tab to the front and shows them a card with Done. With doneWhen, it also returns on its own once that holds on a page that finished loading; pick something that only becomes true after they finish, like the URL you land on after signing in, not the 2-step page. Other browser tools on this tab fail until it returns. Returns done: 'detected' or 'you', and the page; snapshot again before acting.",
+    shape: {
+      tabId,
+      task: z.string().min(1).max(120).describe('What they should do, as the card\'s title, like "Sign in to GitHub"'),
+      doneWhen: z
+        .object({
+          url: z.string().optional().describe('Done once the URL contains this'),
+          text: z.string().optional().describe('Done once the page shows this text'),
+          selector: z.string().optional().describe('Done once an element matches this CSS selector'),
+        })
+        .optional(),
+    },
+  },
+  browser_batch: {
+    tier: 'read',
+    description:
+      "Run several browser tool calls in one round trip, in order, stopping at the first that fails. Each step is {name, input}, with input exactly as that tool takes it, and runs as if called on its own: it asks the user where that tool would, and shows in the thread. Refs come from the snapshot before the batch, so batch the steps you can predict (open, type, press Enter, screenshot) and snapshot again once the page changes. Only the last screenshot comes back as an image.",
+    shape: {
+      actions: z
+        .array(z.object({ name: z.string().describe('A browser_* tool, not browser_batch'), input: z.record(z.string(), z.unknown()).optional() }))
+        .min(1)
+        .max(20),
+    },
   },
   // {LAYOUT}
   open_pane_tab: {

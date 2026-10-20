@@ -5,14 +5,13 @@ import test from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { mochiInstructions } from '../agents/instructions.ts';
+import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '../agents/instructions.ts';
 import { GOAL_TOOLS, isGoalTool, TOOL_NAMES } from '../../src/runtime/toolTable.ts';
 
-test('browser instructions route directly to Mochi even when cua reports no browser', () => {
+test('browser instructions route to Mochi, and Codex loses the cua_repl browser it reached for instead', () => {
   assert.match(mochiInstructions(), /mcp__mochi__browser_open/);
   assert.match(mochiInstructions(), /mcp__mochi__browser_snapshot/);
-  assert.match(mochiInstructions(), /Mochi.*not.*cua/);
-  assert.match(mochiInstructions(), /No browser is available.*Mochi/);
+  assert.equal(CODEX_BROWSER_PLUGINS_OFF['plugins.unified-computer-use@openai-bundled.enabled'], false);
 });
 
 test('goals off leaves goals out of the instructions, browser guidance stays', () => {
