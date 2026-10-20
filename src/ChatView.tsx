@@ -55,9 +55,9 @@ import { LimitEntry, LimitHint } from './chat/LimitCard';
 import { CompactionRow } from './chat/CompactionRow';
 import { HandoffRow } from './chat/HandoffRow';
 import { compactFocus, compactGate } from './chat/compact';
-import { parseSlash, resolveToken, slashTokens, typedSkills, type SlashItem } from './chat/slash';
+import { parseSlash, resolveToken, typedSkills, type SlashItem } from './chat/slash';
+import { rehypeSlashTokens } from './chat/rehypeRefs';
 import { SlashMenu, useSlashItems, useSlashMenu, useThreadServers, useThreadSkills } from './chat/SlashMenu';
-import { SlashTokenText } from './chat/SlashToken';
 import { queuedMessage, shouldQueue } from './chat/outbox';
 import { imageFiles, imageProblem, sentImages } from './chat/images';
 import { ImageGenCard } from './chat/ImageGenCard';
@@ -220,8 +220,8 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
               <span className="tabular">{clock(entry.at)}</span>
             </span>
           )}
-          {isYou && slashTokens(entry.text, slashItems).length > 0 ? (
-            <SlashTokenText text={entry.text} items={slashItems} />
+          {isYou ? (
+            <YourMessage text={entry.text} slashItems={slashItems} />
           ) : isAgent ? (
             <AgentReply thread={thread} index={row.index} isLive={isLive} />
           ) : (
@@ -241,6 +241,16 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
     </MessageContextMenu>
   );
 });
+
+/** Your message as markdown with its links, the known `/name` tokens coloured as they were in the composer. */
+function YourMessage({ text, slashItems }: { text: string; slashItems: SlashItem[] }) {
+  const rehypePlugins = useMemo(() => [...VIZ_REHYPE_PLUGINS, [rehypeSlashTokens, slashItems.map((i) => i.name)]] as typeof VIZ_REHYPE_PLUGINS, [slashItems]);
+  return (
+    <MessageResponse plugins={VIZ_PLUGINS} components={VIZ_COMPONENTS} rehypePlugins={rehypePlugins} isAnimating={false}>
+      {text}
+    </MessageResponse>
+  );
+}
 
 /** An agent's reply, or its simplified version: it shimmers while that is made, then crossfades to it. */
 function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; isLive: boolean }) {
