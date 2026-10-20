@@ -11,6 +11,7 @@ import { createdPr } from '../git/prs.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
+import { applyTask } from './tasks.ts';
 
 const MAIN_EVENTS = new Set<AgentEvent['type']>(['worktree', 'setup', 'branch', 'title']);
 
@@ -58,6 +59,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return applyPlan(state, thread, event.items);
     case 'subagent':
       return applySubagent(state, thread, event, who);
+    case 'task':
+      return applyTask(state, thread, event, who);
     case 'approval':
       return waitOnYou(state, thread, { id: `q-${event.requestId}`, kind: 'approval', title: event.title, detail: event.detail, code: event.code, requestId: event.requestId }, 'Paused for your approval');
     case 'question': {

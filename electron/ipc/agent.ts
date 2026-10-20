@@ -7,7 +7,7 @@ import { NO_AGENT_PROCESS, NO_PENDING_REQUEST, type AgentAskContext, type AgentA
 import { classifyWithModel } from '../../src/drift.ts';
 import type { McpWidgetResource, Provider, Thread } from '../../src/model.ts';
 import { askClaude, classifyClaude, claudeLimits, warmClaude } from '../agents/claude/oneshot.ts';
-import { claudeRewindPoint, claudeRunOptions, readClaudeWidget, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeSubagent } from '../agents/claude/sessions.ts';
+import { claudeRewindPoint, claudeRunOptions, readClaudeWidget, claudeSessionIds, compactClaude, hasClaudeSession, setClaudeCompactInstructions, interruptClaude, resolveClaude, rewindClaude, sendClaude, startClaude, stopClaude, stopClaudeTask } from '../agents/claude/sessions.ts';
 import { CodexAdapter } from '../agents/codex/adapter.ts';
 import { reviewClaude, type ReviewUpdate } from '../agents/review.ts';
 import { accountFor, agentSettings, secondOpinionModel } from '../agents/config.ts';
@@ -181,12 +181,12 @@ export const agent = {
       .filter((t) => hasClaudeSession(t.threadId) || codex.owns(t.threadId))
       .map(({ threadId, after }) => ({ threadId, isWorking: isBusy(threadId), events: after === undefined ? [] : eventsSince(threadId, after) }));
   },
-  async stopSubagent(_sender, threadId, subagentId) {
+  async stopTask(_sender, threadId, taskId) {
     string(threadId, 'threadId', 256);
-    string(subagentId, 'subagentId', 256);
-    if (hasClaudeSession(threadId as string)) return stopClaudeSubagent(threadId as string, subagentId as string);
-    if (codex.owns(threadId as string)) return codex.stopSubagent(threadId as string, subagentId as string);
-    // Its parent's process is gone, so the subagent already stopped with it.
+    string(taskId, 'taskId', 256);
+    if (hasClaudeSession(threadId as string)) return stopClaudeTask(threadId as string, taskId as string);
+    if (codex.owns(threadId as string)) return codex.stopSubagent(threadId as string, taskId as string);
+    // Its parent's process is gone, so the task already stopped with it.
   },
   async warm(_sender, spaceId) {
     return warmClaude(string(spaceId, 'spaceId', 256));

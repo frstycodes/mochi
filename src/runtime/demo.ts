@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
+import type { AgentEvent, AgentPlanItem, AgentTaskEvent } from '../host/types/agent.ts';
 import { DEMO_LINKS, FAKE_TOOLS, genericTools, NOW0, type Step, type Thread } from '../model.ts';
 
 /** The prototype's scripted agent: a pure function from a thread snapshot and the clock to what it would report this minute. */
@@ -51,7 +51,7 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
       { threadId, type: 'approval', requestId: id, kind: 'tool', title: `Search the web for “${WEB_APPROVAL.query}” on ${WEB_APPROVAL.domains}`, detail: 'Looks this up before picking a CSV streaming approach.' },
     );
   }
-  events.push(...agentEvents(thread, now));
+  events.push(...agentEvents(thread, now), ...taskEvents(thread, now));
 
   const isFinished = isIdle && !next && thread.status !== 'review' && !steps.some((s) => s.status !== 'done' && s.status !== 'dropped');
   if (isFinished) events.push({ threadId, type: 'turn-end', status: 'done' });
@@ -113,6 +113,18 @@ const AGENTS = [
     result: '**Drafted** `docs/api/limits.md`: tiers table, the three RateLimit-* headers with examples, and an [override request](https://example.com/overrides) section.',
   },
   {
+    threadId: 'rl',
+    id: 'demo-agent-redis',
+    name: 'Profile the Redis calls',
+    prompt: 'Measure how many Redis round trips one limited request makes.',
+    model: 'claude-haiku-5-5',
+    isBackground: true,
+    at: NOW0 + 4,
+    ticks: 4,
+    steps: ['Run redis-cli --latency'],
+    error: 'redis-cli: command not found',
+  },
+  {
     threadId: 'adm',
     id: 'demo-agent-callers',
     name: 'Find usage query callers',
@@ -135,11 +147,29 @@ function agentEvents(thread: Thread, now: number): AgentEvent[] {
     const base = { threadId: thread.id, type: 'subagent', id: a.id } as const;
     if (t === 0 && !subagent) return [{ ...base, phase: 'start', toolId: `${a.id}-call`, name: a.name, prompt: a.prompt, model: a.model, isBackground: a.isBackground }];
     if (subagent?.status !== 'running' || t <= 0) return [];
-    if (t >= a.ticks) return [{ ...base, phase: 'end', status: 'done', result: a.result, tokens: subagent.tokens + TOKENS_PER_AGENT_STEP }];
+    if (t >= a.ticks) return [{ ...base, phase: 'end', tokens: subagent.tokens + TOKENS_PER_AGENT_STEP, ...('error' in a ? { status: 'failed', error: a.error } : { status: 'done', result: a.result }) }];
     const n = Math.floor((t - 1) / 2);
     const text = a.steps[n % a.steps.length];
     const step = { id: `${a.id}-${n}`, phase: t % 2 ? 'start' : 'end', text, ...(t % 2 === 0 && text.startsWith('Run') && { exitCode: 0 }) } as const;
     return [{ ...base, phase: 'progress', step, tokens: subagent.tokens + TOKENS_PER_AGENT_STEP }];
+  });
+}
+
+/** Scripted background commands on Claude's thread: one that keeps running, one that passes, one that fails, and a workflow. */
+const TASKS = [
+  { id: 'demo-task-watch', kind: 'shell', title: 'Watch the limiter tests', command: 'pnpm --filter api test --watch ratelimit', at: NOW0 + 1, ticks: Infinity },
+  { id: 'demo-task-build', kind: 'shell', title: 'Build the API', command: 'pnpm --filter api build', at: NOW0 + 2, ticks: 6, exitCode: 0 },
+  { id: 'demo-task-lint', kind: 'shell', title: 'pnpm lint --max-warnings 0', command: 'pnpm lint --max-warnings 0', at: NOW0 + 4, ticks: 3, exitCode: 1 },
+  { id: 'demo-task-spec', kind: 'workflow', title: 'Check the spec against the routes', at: NOW0 + 5, ticks: Infinity },
+] satisfies (Pick<AgentTaskEvent, 'id' | 'kind' | 'title' | 'command' | 'exitCode'> & { at: number; ticks: number })[];
+
+function taskEvents(thread: Thread, now: number): AgentEvent[] {
+  if (thread.id !== 'rl') return [];
+  return TASKS.flatMap(({ at, ticks, exitCode, ...task }): AgentEvent[] => {
+    const base = { threadId: thread.id, type: 'task', id: task.id } as const;
+    if (now === at) return [{ ...base, ...task, phase: 'start' }];
+    if (now !== at + ticks) return [];
+    return [{ ...base, phase: 'end', status: exitCode ? 'failed' : 'done', ...(exitCode !== undefined && { exitCode }) }];
   });
 }
 

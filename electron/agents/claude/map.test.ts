@@ -191,6 +191,46 @@ test('a background Agent call becomes a subagent with its own steps, tokens and 
   assert.deepEqual(events.filter((e) => e.type === 'turn-end').length, 2, 'the background report starts a turn of its own');
 });
 
+test('backgrounded Bash calls become background tasks that end done, failed (with the exit code) or stopped (real 0.3.296 trace)', () => {
+  const trace = readFileSync(new URL('./fixtures/background.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as SDKMessage);
+  const mapper = createMapper('t1', '/tmp/scratch');
+  const events = trace.flatMap(mapper.map);
+  const tasks = events.filter((e) => e.type === 'task');
+  assert.deepEqual(
+    tasks.filter((e) => e.phase === 'start'),
+    [
+      { threadId: 't1', type: 'task', id: 'brpnuwjdw', phase: 'start', kind: 'shell', title: 'Wait a minute', command: 'sleep 60' },
+      { threadId: 't1', type: 'task', id: 'bh9bd7gcs', phase: 'start', kind: 'shell', title: 'Say hi later', command: 'sleep 3 && echo hi' },
+      { threadId: 't1', type: 'task', id: 'bg27tw88d', phase: 'start', kind: 'shell', title: 'Fail fast', command: 'exit 3' },
+    ],
+  );
+  assert.ok(tasks.some((e) => e.phase === 'progress' && e.id === 'brpnuwjdw' && e.outputFile === '/tmp/tasks/brpnuwjdw.output'), "the call's receipt names the output file");
+  assert.deepEqual(
+    tasks.filter((e) => e.phase === 'end').map((e) => [e.id, e.status, e.exitCode]),
+    [
+      ['bg27tw88d', 'failed', 3],
+      ['brpnuwjdw', 'stopped', undefined],
+      ['bh9bd7gcs', 'done', 0],
+    ],
+  );
+  assert.deepEqual(events.filter((e) => e.type === 'subagent'), [], 'shells are not subagents');
+  assert.equal(mapper.taskOf('brpnuwjdw'), undefined, 'an ended task has nothing left to stop');
+});
+
+test('a shell task is stoppable by its own id while it runs, and only joins once it is backgrounded', () => {
+  const mapper = createMapper('t1', CWD);
+  const base = { session_id: 's', uuid: 'u' };
+  const started = mapper.map({ ...base, type: 'system', subtype: 'task_started', task_id: 'b1', description: 'Build', task_type: 'local_bash', is_backgrounded: false } as unknown as SDKMessage);
+  assert.deepEqual(started, [], 'a foreground command is the call row, not a background task');
+  assert.equal(mapper.taskOf('b1'), 'b1');
+  const moved = mapper.map({ ...base, type: 'system', subtype: 'task_updated', task_id: 'b1', patch: { is_backgrounded: true } } as unknown as SDKMessage);
+  assert.deepEqual(moved, [{ threadId: 't1', type: 'task', id: 'b1', phase: 'start', kind: 'shell', title: 'Build' }]);
+  const ambient = mapper.map({ ...base, type: 'system', subtype: 'task_started', task_id: 'w1', description: 'Watch', task_type: 'local_workflow', ambient: true } as unknown as SDKMessage);
+  assert.deepEqual(ambient, [], 'ambient housekeeping is not activity');
+  const workflow = mapper.map({ ...base, type: 'system', subtype: 'task_started', task_id: 'w2', description: '', workflow_name: 'spec', task_type: 'local_workflow' } as unknown as SDKMessage);
+  assert.deepEqual(workflow, [{ threadId: 't1', type: 'task', id: 'w2', phase: 'start', kind: 'workflow', title: 'spec' }]);
+});
+
 test('a foreground Agent call ends with its answer from the tool result; a failed one with the error', () => {
   const { map } = createMapper('t1', CWD);
   const base = { parent_tool_use_id: null, session_id: 's', uuid: 'u' };

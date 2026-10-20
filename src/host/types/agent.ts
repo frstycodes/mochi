@@ -65,6 +65,8 @@ export type AgentEvent =
   | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
+  /** A command (or workflow, monitor) the agent left running in the background: Claude's `run_in_background` Bash and its other non-agent tasks, a Codex background terminal. */
+  | AgentTaskEvent
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
@@ -109,6 +111,25 @@ export interface AccountLimits {
 }
 
 export type SubagentStatus = 'running' | 'done' | 'failed' | 'stopped';
+
+export type BackgroundTaskKind = 'shell' | 'workflow' | 'monitor';
+
+export interface AgentTaskEvent {
+  threadId: string;
+  type: 'task';
+  /** Claude: the task id Claude Code gives it (`stopTask` takes it); Codex: the background terminal's process id. */
+  id: string;
+  phase: 'start' | 'progress' | 'end';
+  kind?: BackgroundTaskKind;
+  /** The agent's own description of it, else the command. */
+  title?: string;
+  command?: string;
+  /** Where its output goes, once the harness says. */
+  outputFile?: string;
+  /** `end` only. */
+  status?: Exclude<SubagentStatus, 'running'>;
+  exitCode?: number;
+}
 
 export interface AgentSubagentEvent {
   threadId: string;
@@ -335,8 +356,8 @@ export interface AgentHost {
   rewindPoint(threadId: string, text: string): Promise<string | null>;
   /** A tool's MCP App view (`ui://`), read through a live Claude session's own connection to `server`; the last read is kept on disk for when none is live. */
   readWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource>;
-  /** Stops one of a thread's native subagents (Claude task, Codex spawned agent); it ends with status `stopped`. */
-  stopSubagent(threadId: string, subagentId: string): Promise<void>;
+  /** Stops one of a thread's native background tasks (a Claude subagent or shell task, a Codex spawned agent or background terminal); it ends with status `stopped`. */
+  stopTask(threadId: string, taskId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
   warm(spaceId: string): Promise<void>;
   /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
@@ -372,7 +393,7 @@ export const agentMethods = {
   rewindFiles: 'invoke',
   rewindPoint: 'invoke',
   readWidget: 'invoke',
-  stopSubagent: 'invoke',
+  stopTask: 'invoke',
   warm: 'invoke',
   models: 'invoke',
   limits: 'invoke',

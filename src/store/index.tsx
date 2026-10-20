@@ -237,7 +237,7 @@ function callAgent(call: AgentCall) {
     if (call.method === 'start') return host.agent.start(call.threadId, call.options);
     if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images, call.skills, call.speed, call.steer);
     if (call.method === 'compact') return host.agent.compact(call.threadId, call.focus);
-    if (call.method === 'stopSubagent') return host.agent.stopSubagent(call.threadId, call.subagentId);
+    if (call.method === 'stopTask') return host.agent.stopTask(call.threadId, call.taskId);
     return host.agent[call.method](call.threadId);
   };
   const next = pending.then(run);

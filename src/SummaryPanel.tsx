@@ -4,6 +4,7 @@ import { Reorder, useDragControls } from 'motion/react';
 import { limitStatus } from './chat/LimitCard';
 import {
   Plus,
+  BackgroundTask,
   Code,
   Chart,
   File,
@@ -15,9 +16,10 @@ import {
   Pin,
   PinOff,
   Route,
+  Stop,
+  Warning,
   ShieldAlert,
   ShieldCheck,
-  Warning,
   type IconComponent,
 } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -39,7 +41,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/toast/store';
 import { threadCwd } from '@/host/cwd';
 import { useGitDiff } from './git/useGit';
-import { DiffIcon } from './icons/panes';
+import { DiffIcon, TerminalIcon } from './icons/panes';
 import { cn } from '@/lib/utils';
 import { copyText } from './clipboard';
 import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors';
@@ -64,9 +66,11 @@ import { useHarness } from './store';
 import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
-import { OverflowIcon, ProviderMark } from './ui';
+import { OverflowIcon, ProviderMark, TooltipIconButton } from './ui';
 import { toneFor, untilLabel } from './usage/limits';
 import { useAccountLimits } from './usage/useAccountLimits';
+import { shortElapsed, taskResult, threadTasks, type TaskRow } from './runtime/tasks';
+import { SubagentAvatar, subagentPersona, useElapsed } from './agents/parts';
 import { connectorStatus, fileCount, orderCards, savedOrder, summaryCards, type SummaryCardId } from './summarySections';
 import { SkillIcon } from './icons/ObjectIcons';
 import { McpServerMark, SkillMark } from './chat/McpIcon';
@@ -113,10 +117,12 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
   const { summary, cards, ports, launchNames, outputs, open } = useSummary(thread, onPaneOpened);
   const [order, reorder] = useCardOrder(cards);
   const [openCards, setOpenCards] = useState(OPEN_BY_DEFAULT);
-  const [isChangesOpen, setChangesOpen] = useChangesOpen(thread.id);
+  const [isChangesOpen, setChangesOpen] = useOpenInThread(CHANGES_CLOSED_KEY, thread.id);
+  const [isTasksOpen, setTasksOpen] = useOpenInThread(TASKS_CLOSED_KEY, thread.id);
   const onOpenChange = (value: string[]) => {
-    setOpenCards(value.filter((id) => id !== 'changes'));
+    setOpenCards(value.filter((id) => id !== 'changes' && id !== 'tasks'));
     setChangesOpen(value.includes('changes'));
+    setTasksOpen(value.includes('tasks'));
   };
   const props = { thread, summary, open };
   const BODIES = {
@@ -127,6 +133,7 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
     servers: <ServersCard ports={ports} launchNames={launchNames} onOpen={open.port} />,
     outputs: <OutputsCard {...outputs} open={open} />,
     changes: <ChangesCard {...props} />,
+    tasks: <TasksCard {...props} />,
   } satisfies Record<SummaryCardId, ReactNode>;
 
   return (
@@ -134,7 +141,7 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
       {hasGoal(thread) && <WaitingMove thread={thread} />}
       <NeedsYou thread={thread} />
       <RateLimitWarning thread={thread} />
-      <Accordion type="multiple" value={isChangesOpen ? [...openCards, 'changes'] : openCards} onValueChange={onOpenChange} asChild>
+      <Accordion type="multiple" value={[...openCards, ...(isChangesOpen ? ['changes'] : []), ...(isTasksOpen ? ['tasks'] : [])]} onValueChange={onOpenChange} asChild>
         <Reorder.Group axis="y" values={order} onReorder={reorder} className="flex flex-col gap-2">
           {order.map((id) => (
             <DraggableCard key={id} id={id} onMove={(step) => reorder(moveCard(order, id, step))}>
@@ -177,12 +184,13 @@ function useCardOrder(cards: SummaryCardId[]) {
 }
 
 const CHANGES_CLOSED_KEY = 'mochi.summary-changes-closed.v1';
+const TASKS_CLOSED_KEY = 'mochi.summary-tasks-closed.v1';
 
-/** Changes is open unless you folded it in this thread; remembered on this device. */
-function useChangesOpen(threadId: string) {
+/** A card that is open unless you folded it in this thread (Changes, Background tasks); remembered on this device under `key`. */
+function useOpenInThread(key: string, threadId: string) {
   const [closed, setClosed] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem(CHANGES_CLOSED_KEY) ?? '[]') as string[];
+      return JSON.parse(localStorage.getItem(key) ?? '[]') as string[];
     } catch {
       return [];
     }
@@ -193,7 +201,7 @@ function useChangesOpen(threadId: string) {
     const next = open ? closed.filter((id) => id !== threadId) : [...closed, threadId];
     setClosed(next);
     try {
-      localStorage.setItem(CHANGES_CLOSED_KEY, JSON.stringify(next));
+      localStorage.setItem(key, JSON.stringify(next));
     } catch {
       // Storage can be blocked (private window); the fold still holds for this session.
     }
@@ -563,6 +571,83 @@ function CreatePrRow({ thread }: { thread: Thread }) {
   );
 }
 
+/** Like Claude's: what runs now, each with its age and a stop button, then one "N finished" row whose list opens beside the card. */
+function TasksCard({ thread, open }: CardProps) {
+  const tasks = threadTasks(thread);
+  const running = tasks.filter((t) => t.status === 'running');
+  const finished = tasks.filter((t) => t.status !== 'running');
+  const openTask = (task: TaskRow) => {
+    if (task.subagent) return () => open.agent(task.id);
+    const file = task.outputFile;
+    return file ? () => open.output(file) : undefined;
+  };
+  return (
+    <>
+      <CardHeader title="Background tasks" meta={running.length || undefined} />
+      <CardBody>
+        {running.map((task) => (
+          <SummaryRow key={task.id} icon={<TaskIcon thread={thread} task={task} />} label={task.title} onClick={openTask(task)}>
+            <TaskAge task={task} />
+            <StopTask thread={thread} task={task} />
+          </SummaryRow>
+        ))}
+        {finished.length > 0 && <FinishedTasks thread={thread} tasks={finished} openTask={openTask} />}
+      </CardBody>
+    </>
+  );
+}
+
+/** The finished tasks stay out of the card: their row opens them in a popover beside it, each with its outcome and how long it ran. */
+function FinishedTasks({ thread, tasks, openTask }: { thread: Thread; tasks: TaskRow[]; openTask: (task: TaskRow) => (() => void) | undefined }) {
+  const [isOpen, setOpen] = useState(false);
+  const pick = (task: TaskRow) => {
+    const onOpen = openTask(task);
+    if (!onOpen) return undefined;
+    return () => {
+      setOpen(false);
+      onOpen();
+    };
+  };
+  return (
+    <Popover open={isOpen} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <div>
+          <SummaryRow icon={BackgroundTask} label={`${tasks.length} finished`} onClick={() => setOpen((o) => !o)} />
+        </div>
+      </PopoverAnchor>
+      <PopoverContent side="left" align="end" sideOffset={12} collisionPadding={16} className="max-h-[min(420px,calc(100vh-32px))] w-72 gap-0 overflow-y-auto p-1">
+        {tasks.toReversed().map((task) => (
+          <SummaryRow key={task.id} icon={<TaskIcon thread={thread} task={task} />} label={task.title} onClick={pick(task)}>
+            <span className={cn('type-caption', task.status === 'failed' ? 'text-destructive' : 'text-subtle-foreground')}>{taskResult(task)}</span>
+            <TaskAge task={task} />
+          </SummaryRow>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TaskIcon({ thread, task }: { thread: Thread; task: TaskRow }) {
+  if (task.subagent) return <SubagentAvatar flavor={subagentPersona(thread, task.subagent).flavor} subagent={task.subagent} className="-mx-0.5 size-5" />;
+  const Icon = task.kind === 'shell' ? TerminalIcon : BackgroundTask;
+  return <Icon aria-label={task.kind === 'shell' ? 'Command' : 'Task'} className="size-4 text-muted-foreground" />;
+}
+
+/** How long it has run, ticking while it runs; how long it took once it ended. */
+function TaskAge({ task }: { task: TaskRow }) {
+  return <span className="tabular type-caption text-subtle-foreground">{shortElapsed(useElapsed(task.startedAt, task.endedAt))}</span>;
+}
+
+function StopTask({ thread, task }: { thread: Thread; task: TaskRow }) {
+  const { dispatch } = useHarness();
+  const stop = () => dispatch(task.subagent ? { type: 'bg-stop', threadId: thread.id, subagentId: task.id } : { type: 'task-stop', threadId: thread.id, taskId: task.id });
+  return (
+    <TooltipIconButton label="Stop task" hint={`Stops “${task.title}”; its output so far stays`} size="icon-xs" className="text-subtle-foreground hover:text-foreground" onClick={stop}>
+      <Stop filled className="size-3" />
+    </TooltipIconButton>
+  );
+}
+
 function SourceIcon({ thread, source }: { thread: Thread; source: Source }) {
   if (source.kind === 'link') return <Link className="size-4 text-chart-1" />;
   if (source.kind === 'file') return <File className="size-4 text-chart-4" />;
@@ -629,7 +714,9 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
     onPaneOpened?.();
   };
 
-  return { changes: () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }), url, source, output, visual, port };
+  const agent = (subagentId: string) => toPane({ type: 'pane-show-agent', threadId: thread.id, subagentId });
+
+  return { changes: () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'changes' }), url, source, output, visual, port, agent };
 }
 
 /** Like Claude's: state icon, title and ⋮ on top; number, diff and checks under the title. Hover previews it, a click opens it. */

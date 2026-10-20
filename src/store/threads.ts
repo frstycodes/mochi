@@ -130,6 +130,8 @@ export type ThreadsAction =
   | { type: 'bg-start'; threadId: string; agent: BackgroundStart }
   /** Stops a subagent: a Mochi one ends here, a native one when its harness reports it stopped. */
   | { type: 'bg-stop'; threadId: string; subagentId: string }
+  /** Stops a background command (or workflow, monitor); it ends when its harness reports it stopped, or here when no harness is live to. */
+  | { type: 'task-stop'; threadId: string; taskId: string }
   /** A finished delegated task's report goes to the thread's agent: steered into its turn, or starting one (`dueReports`). */
   | { type: 'delegate-report'; threadId: string; subagentId: string };
 
@@ -323,6 +325,12 @@ function reduce(state: State, action: Action): State {
       // A native agent of a live harness ends when the harness reports it stopped.
       if (!subagent || (subagent.origin === 'native' && thread?.live && !thread.live.isDetached)) return state;
       return applyAgentEvent(state, { threadId: action.threadId, type: 'subagent', id: subagent.id, phase: 'end', status: 'stopped' });
+    }
+    case 'task-stop': {
+      const thread = state.threads.find((t) => t.id === action.threadId);
+      const task = thread?.backgroundTasks?.find((t) => t.id === action.taskId);
+      if (!thread || !task || (thread.live && !thread.live.isDetached)) return state;
+      return applyAgentEvent(state, { threadId: thread.id, type: 'task', id: task.id, phase: 'end', status: 'stopped' });
     }
     case 'delegate-report':
       // As `send` does: the report is the agent's next message, carrying its notes.

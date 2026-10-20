@@ -1,12 +1,13 @@
 import type { McpServer, Thread } from './model.ts';
 import type { ThreadSummary } from './summary.ts';
 import { hasGoal } from './drift.ts';
+import { threadTasks } from './runtime/tasks.ts';
 
-export type SummaryCardId = 'goal' | 'environment' | 'sources' | 'connectors' | 'servers' | 'outputs' | 'changes';
+export type SummaryCardId = 'goal' | 'environment' | 'sources' | 'connectors' | 'servers' | 'outputs' | 'changes' | 'tasks';
 
 export const TOKENS = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
-/** The cards with something to show, in Claude's order: where it runs, what it holds, what it reaches, then what it made. */
+/** The cards with something to show, in Claude's order: where it runs, what it holds, what it reaches, what it made, then what still runs. */
 export function summaryCards({
   thread,
   summary,
@@ -26,6 +27,7 @@ export function summaryCards({
     portCount > 0 && 'servers',
     outputCount > 0 && 'outputs',
     (!!thread.repo || summary.files.length > 0 || thread.prs.length > 0) && 'changes',
+    threadTasks(thread).length > 0 && 'tasks',
   ];
   return cards.filter((c) => c !== false);
 }

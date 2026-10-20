@@ -241,7 +241,7 @@ test('native subagents: start logs one row where it began, progress fills its lo
 
   calls.length = 0;
   dispatch({ type: 'bg-stop', threadId: id, subagentId: 'toolu_1' });
-  assert.deepEqual(calls, [{ method: 'stopSubagent', threadId: id, subagentId: 'toolu_1' }]);
+  assert.deepEqual(calls, [{ method: 'stopTask', threadId: id, taskId: 'toolu_1' }]);
   assert.equal(thread().subagents![0].status, 'running', 'a native agent ends when its harness says so');
 
   event({
