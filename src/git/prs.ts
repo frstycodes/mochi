@@ -1,11 +1,12 @@
-import type { PullRequest } from '../model.ts';
+import type { PullRequest, Thread } from '../model.ts';
 
 /** `prs` with `seen` added or updated by number; the same array when nothing changed, so the store neither re-renders nor re-saves. */
 export function recordPrs(prs: PullRequest[], seen: PullRequest[]): PullRequest[] {
   let next = prs;
   for (const pr of seen) {
     const i = next.findIndex((p) => p.number === pr.number);
-    if (i < 0) next = [...next, pr];
+    // A closed PR only updates one already recorded: an old one on a reused branch name isn't this thread's.
+    if (i < 0) next = pr.state === 'closed' ? next : [...next, pr];
     else if (!isSame(next[i], pr)) next = next.map((p, j) => (j === i ? { ...p, ...pr } : p));
   }
   return next;
@@ -25,13 +26,33 @@ export interface GhPr {
   isCrossRepository: boolean;
 }
 
-/** `gh pr list --json` rows on one of `branches` → those branches' PRs. A closed one isn't recorded, nor a fork's PR that shares a branch name. */
+/** `gh pr list --json` rows on one of `branches` → those branches' PRs, leaving out a fork's PR that shares a branch name. */
 export function prsOnBranches(rows: GhPr[], branches: Set<string>): { branch: string; pr: PullRequest }[] {
   return rows.flatMap((row) => {
-    const state = row.state === 'MERGED' ? 'merged' : row.state === 'OPEN' ? (row.isDraft ? 'draft' : 'open') : null;
-    if (!state || row.isCrossRepository || !branches.has(row.headRefName)) return [];
+    const state = row.state === 'MERGED' ? 'merged' : row.state === 'CLOSED' ? 'closed' : row.isDraft ? 'draft' : 'open';
+    if (row.isCrossRepository || !branches.has(row.headRefName)) return [];
     return [{ branch: row.headRefName, pr: { number: row.number, state, title: row.title, url: row.url } }];
   });
+}
+
+/** Auto-archive (`useAutoArchive`) is due: a PR has it on, every PR merged or closed, and the agent idle; until then it waits. */
+export function isArchiveDue(thread: Thread) {
+  if (thread.status === 'settled' || thread.live?.isWorking) return false;
+  return thread.prs.some((p) => p.autoArchive) && thread.prs.every((p) => p.state === 'merged' || p.state === 'closed');
+}
+
+export interface MergeMethods {
+  squashMergeAllowed: boolean;
+  mergeCommitAllowed: boolean;
+  rebaseMergeAllowed: boolean;
+}
+
+/** `gh pr merge` turning auto-merge on with the first method the repo allows (squash, merge, rebase), or off when `allowed` is null. */
+export function autoMergeArgs(pr: number, allowed: MergeMethods | null): string[] {
+  if (!allowed) return ['pr', 'merge', String(pr), '--disable-auto'];
+  const method = allowed.squashMergeAllowed ? '--squash' : allowed.mergeCommitAllowed ? '--merge' : allowed.rebaseMergeAllowed ? '--rebase' : null;
+  if (!method) throw new Error('This repository allows no merge method');
+  return ['pr', 'merge', String(pr), '--auto', method];
 }
 
 const GH_PR_CREATE = /\bgh\s+pr\s+create\b/;

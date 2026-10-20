@@ -149,10 +149,12 @@ export interface GitHost {
   createPr(cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string): Promise<string>;
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
   /**
-   * The open, draft and merged PRs from the branch each of `worktrees` (one repo's) has checked out now, which the agent may have
+   * The PRs in every state from the branch each of `worktrees` (one repo's) has checked out now, which the agent may have
    * switched: one `gh pr list` for them all. Never throws: no gh, no login or offline is none.
    */
   worktreePrs(worktrees: string[], githubUser?: string): Promise<{ worktree: string; pr: PullRequest }[]>;
+  /** GitHub auto-merge for the cwd repo's PR `pr`: on with the first merge method the repo allows (squash, merge, rebase), or off. */
+  setAutoMerge(cwd: string, pr: number, isOn: boolean, githubUser?: string): Promise<void>;
   /** The tail of a failed GitHub Actions job's log, from the check's `link`; throws for a check that isn't an Actions job. */
   ciLog(cwd: string, checkLink: string, githubUser?: string): Promise<string>;
   /** origin's `owner/repo` when it's on github.com; null otherwise (no origin, another host, not a repo). */
@@ -224,6 +226,7 @@ export const gitMethods = {
   createPr: 'invoke',
   pr: 'invoke',
   worktreePrs: 'invoke',
+  setAutoMerge: 'invoke',
   ciLog: 'invoke',
   repoSlug: 'invoke',
   refStates: 'invoke',

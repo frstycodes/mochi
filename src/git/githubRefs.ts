@@ -23,7 +23,7 @@ export function refsQuery(refs: GithubRef[]) {
 fragment S on IssueOrPullRequest {
   __typename
   ... on PullRequest {
-    title url state isDraft mergeable reviewDecision updatedAt author { login avatarUrl(size: 40) } headRefName baseRefName additions deletions changedFiles
+    title url state isDraft mergeable reviewDecision updatedAt author { login avatarUrl(size: 40) } headRefName baseRefName additions deletions changedFiles autoMergeRequest { enabledAt }
     commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 0) { totalCount checkRunCountsByState { state count } statusContextCountsByState { state count } } } } } }
   }
   ... on Issue { title url state stateReason updatedAt author { login avatarUrl(size: 40) } }
@@ -48,6 +48,7 @@ type Node = {
   additions?: number;
   deletions?: number;
   changedFiles?: number;
+  autoMergeRequest?: { enabledAt: string } | null;
   commits?: { nodes: { commit: { statusCheckRollup: Rollup | null } }[] };
 };
 
@@ -84,6 +85,7 @@ function toState(node: Node): RefState {
     title: node.title,
     url: node.url,
     hasConflicts: status === 'open' && node.mergeable === 'CONFLICTING',
+    isAutoMerge: !!node.autoMergeRequest,
     checks: (rollup ? CHECKS[rollup.state] : null) ?? null,
     checkCounts: checkCounts(rollup),
     review: (node.reviewDecision && REVIEWS[node.reviewDecision]) ?? null,

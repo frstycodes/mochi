@@ -22,6 +22,8 @@ import { handoff, handoffBlocker, handoffDraft, handoffFail } from '../rewind/ha
 import { getPrefs } from '../settings/prefs.ts';
 import { threadCwd } from '../host/cwd.ts';
 import { projectRef, repoFor } from '../projects.ts';
+import { autofixTitle } from '../git/autofix.ts';
+import { canAutofix } from '../git/autofixToggle.ts';
 import { recordPrs } from '../git/prs.ts';
 import { repoWorkspace, tempBranch, withHead, type WorkspaceDraft } from '../git/workspace.ts';
 import type { Action, Snapshot, State } from './index.tsx';
@@ -378,11 +380,19 @@ function mapEntry(t: Thread, index: number, fn: (e: ActivityEntry) => ActivityEn
 }
 
 /** Unchanged state when every PR is already recorded as it is, so a periodic gh read doesn't re-save. */
-export function seePrs<S extends { threads: Thread[] }>(state: S, threadId: string, prs: PullRequest[]): S {
+/** Records gh's PRs on the thread; one new to it starts with your defaults (Settings › Git), Auto-fix only where Mochi can watch it. */
+export function seePrs(state: State, threadId: string, prs: PullRequest[]): State {
   const thread = state.threads.find((t) => t.id === threadId);
-  const next = thread && recordPrs(thread.prs, prs);
-  if (!thread || next === thread.prs) return state;
-  return { ...state, threads: mapThread(state.threads, threadId, (t) => ({ ...t, prs: next! })) };
+  if (!thread) return state;
+  const next = recordPrs(thread.prs, prs);
+  if (next === thread.prs) return state;
+  const { autofixPrs, autoArchivePrs } = getPrefs();
+  const isNew = (pr: PullRequest) => !thread.prs.some((p) => p.number === pr.number);
+  const withDefaults = (pr: PullRequest): PullRequest => ({ ...pr, ...(autoArchivePrs && { autoArchive: true }), ...(autofixPrs && canAutofix(thread, pr) && { autofixSince: state.now }) });
+  const recorded = next.map((pr) => (isNew(pr) ? withDefaults(pr) : pr));
+  const enabled = recorded.filter((pr) => isNew(pr) && pr.autofixSince);
+  const said = enabled.reduce((t, pr) => log(t, { at: state.now, who: 'harness', kind: 'event', text: autofixTitle({ kind: 'enabled', pr: pr.number }) }), { ...thread, prs: recorded });
+  return { ...state, threads: mapThread(state.threads, threadId, () => said) };
 }
 
 export function mapThread(threads: Thread[], id: string, fn: (t: Thread) => Thread) {

@@ -1,15 +1,14 @@
 import { useId, type ComponentProps, type ReactElement, type ReactNode } from 'react';
-import { ArrowRight, ArrowUpRight, ClockCircle, XCircle, Edit, Eye, Hierarchy2, MagicStar, MessageEdit, CheckBadge, UserCheck, type IconComponent } from '@/icons';
+import { Archive, ArrowRight, ArrowUpRight, ClockCircle, XCircle, Edit, Eye, Hierarchy2, MagicStar, MessageEdit, CheckBadge, UserCheck, type IconComponent } from '@/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
-import { GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
+import { GitMergeIcon, GithubStateIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
-import { canAutofix, setAutofix } from '../git/autofixToggle';
+import { usePrSwitches, type PrSwitch, type PrSwitchId } from '../git/prSwitches';
 import { useThreadPr } from '../git/useThreadPrs';
-import { useHarness } from '../store';
 import type { PullRequest, Thread } from '../model';
 import { timeAgo } from '../progress';
 import { refKey, refStatus, refTone, refUrl, STATUS_WORDS, type ChecksState, type GithubRef, type RefState, type ReviewState } from './refs';
@@ -37,22 +36,33 @@ export function RefHoverCard({ item, side, align, footer, children }: Placement 
   );
 }
 
-/** `RefHoverCard` for one of a thread's PRs, reading its live state, with its Auto-fix switch while Mochi can watch it. */
+/** `RefHoverCard` for one of a thread's PRs, reading its live state, with its switches while Mochi can watch it. */
 export function ThreadPrHoverCard({ thread, pr, ...props }: Placement & { thread: Thread; pr: PullRequest; children: ReactElement }) {
-  return <RefHoverCard item={useThreadPr(thread, pr)} footer={canAutofix(thread, pr) && <AutofixSwitch thread={thread} pr={pr} />} {...props} />;
+  const item = useThreadPr(thread, pr);
+  const switches = usePrSwitches(thread, item);
+  const footer = switches.length > 0 && (
+    <div className="flex flex-col gap-2.5 border-t pt-3">
+      {switches.map((s) => (
+        <PrSwitchRow key={s.id} item={s} />
+      ))}
+    </div>
+  );
+  return <RefHoverCard item={item} footer={footer} {...props} />;
 }
 
-function AutofixSwitch({ thread, pr }: { thread: Thread; pr: PullRequest }) {
-  const { dispatch } = useHarness();
+const SWITCH_ICONS = { autofix: MagicStar, merge: GitMergeIcon, archive: Archive } satisfies Record<PrSwitchId, unknown>;
+
+function PrSwitchRow({ item }: { item: PrSwitch }) {
   const id = useId();
+  const Icon = SWITCH_ICONS[item.id];
   return (
-    <div className="flex min-w-0 items-center gap-2 border-t pt-3 type-meta">
-      <MagicStar aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />
+    <div className="flex min-w-0 items-center gap-2 type-meta">
+      <Icon aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />
       <label htmlFor={id} className="flex min-w-0 flex-1 flex-col">
-        <span className="text-foreground">Auto-fix</span>
-        <span className="truncate type-caption text-subtle-foreground">Fixes CI and conflicts, weighs reviews</span>
+        <span className="text-foreground">{item.label}</span>
+        <span className="truncate type-caption text-subtle-foreground">{item.hint}</span>
       </label>
-      <Switch id={id} size="sm" checked={!!pr.autofixSince} onCheckedChange={(isOn) => setAutofix(dispatch, thread, pr, isOn)} />
+      <Switch id={id} size="sm" checked={item.isOn} onCheckedChange={item.set} />
     </div>
   );
 }

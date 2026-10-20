@@ -66,6 +66,7 @@ const pr = (extra: Partial<RefState>): RefState => ({
   title: 't',
   url: 'u',
   hasConflicts: false,
+  isAutoMerge: false,
   checks: null,
   checkCounts: null,
   review: null,

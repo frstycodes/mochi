@@ -36,6 +36,7 @@ test("gh's response maps to states; unresolved refs are left out", () => {
           additions: 12,
           deletions: 3,
           changedFiles: 2,
+          autoMergeRequest: { enabledAt: '2026-10-13T10:00:00Z' },
           commits: {
             nodes: [
               {
@@ -69,6 +70,7 @@ test("gh's response maps to states; unresolved refs are left out", () => {
       title: 'A',
       url: 'u0',
       hasConflicts: true,
+      isAutoMerge: true,
       checks: 'fail',
       checkCounts: { passed: 3, total: 5 },
       review: 'changes',
@@ -78,6 +80,6 @@ test("gh's response maps to states; unresolved refs are left out", () => {
       branch: { head: 'feat/a', base: 'main' },
       diff: { added: 12, removed: 3, files: 2 },
     },
-    'o/r#2': { kind: 'issue', status: 'closed', title: 'B', url: 'u1', hasConflicts: false, checks: null, checkCounts: null, review: null, isNotPlanned: true, author: null, updatedAt: null, branch: null, diff: null },
+    'o/r#2': { kind: 'issue', status: 'closed', title: 'B', url: 'u1', hasConflicts: false, isAutoMerge: false, checks: null, checkCounts: null, review: null, isNotPlanned: true, author: null, updatedAt: null, branch: null, diff: null },
   });
 });

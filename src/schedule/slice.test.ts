@@ -5,6 +5,7 @@ import type { Action, State } from '../store/index.tsx';
 import { initialQueue, queueReducer } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { agentCalls } from '../runtime/live.ts';
+import { DEFAULT_PREFS, setPrefs } from '../settings/prefs.ts';
 import { scheduleReducer } from './slice.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
@@ -32,7 +33,9 @@ test('a scheduled thread waits for its run; the run wakes it, lands in the Queue
   assert.equal(s.threads.at(-1)!.activity.at(-1)?.text, 'Settled: Nightly dependency check finished: 2 findings');
 });
 
-test('Auto-fix: turning it on tells the agent once, events go to it as their own rows, off or capped stops them', () => {
+test('Auto-fix: turning it on tells the agent once, events go to it as their own rows, off or capped stops them', (t) => {
+  setPrefs({ autofixPrs: false });
+  t.after(() => setPrefs(DEFAULT_PREFS));
   const create: Action = { type: 'create', title: 'Fix login', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
   let s = reduce(base(), create);
   const id = s.threads.at(-1)!.id;
@@ -60,4 +63,40 @@ test('Auto-fix: turning it on tells the agent once, events go to it as their own
   s = reduce(s, { type: 'autofix-set', threadId: id, pr: 12 });
   assert.deepEqual(callsFor(ci), [], 'off: a late event from main goes nowhere');
   assert.equal(reduce(s, ci).threads.at(-1)!.activity.length, s.threads.at(-1)!.activity.length);
+});
+
+test('a PR new to a thread starts with your defaults, said on the thread; one it already had keeps its state', (t) => {
+  t.after(() => setPrefs(DEFAULT_PREFS));
+  const create: Action = { type: 'create', title: 'Fix login', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
+  let s = reduce(base(), create);
+  const id = s.threads.at(-1)!.id;
+  const seen = (number: number, state: 'open' | 'merged' = 'open'): Action => ({ type: 'prs-seen', threadId: id, prs: [{ number, state, title: 'Fix', url: `https://github.com/o/r/pull/${number}` }] });
+  const pr = (number: number) => s.threads.at(-1)!.prs.find((p) => p.number === number)!;
+
+  s = reduce(s, seen(12));
+  assert.deepEqual([!!pr(12).autofixSince, pr(12).autoArchive], [true, undefined]);
+  assert.equal(s.threads.at(-1)!.activity.at(-1)?.text, 'Auto-fix on for #12');
+
+  s = reduce(s, { type: 'autofix-set', threadId: id, pr: 12 });
+  s = reduce(s, seen(12));
+  assert.equal(pr(12).autofixSince, undefined, 'turned off stays off');
+
+  s = reduce(s, seen(13, 'merged'));
+  assert.equal(pr(13).autofixSince, undefined, 'a merged PR has nothing to fix');
+
+  setPrefs({ autofixPrs: false, autoArchivePrs: true });
+  s = reduce(s, seen(14));
+  assert.deepEqual([pr(14).autofixSince, pr(14).autoArchive], [undefined, true]);
+  s = reduce(s, { type: 'auto-archive-set', threadId: id, pr: 14, isOn: false });
+  assert.equal(pr(14).autoArchive, undefined);
+});
+
+test('Auto-fix stopping on a merged or closed PR records that state; at its cap the state stays', () => {
+  const create: Action = { type: 'create', title: 'Fix login', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
+  let s = reduce(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = reduce(s, { type: 'prs-seen', threadId: id, prs: [{ number: 12, state: 'open', title: 'Fix', url: 'u' }] });
+  const stop = (reason: 'closed' | 'cap'): Action => ({ type: 'autofix', threadId: id, event: { kind: 'stopped', pr: 12, url: 'u', reason } });
+  assert.equal(reduce(s, stop('cap')).threads.at(-1)!.prs[0].state, 'open');
+  assert.equal(reduce(s, stop('closed')).threads.at(-1)!.prs[0].state, 'closed');
 });

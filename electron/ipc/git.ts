@@ -13,7 +13,7 @@ import { GITHUB_COM, parseRemote, type GithubAccountRef } from '../../src/git/gi
 import { parseRefs, refsQuery, validRef } from '../../src/git/githubRefs.ts';
 import { integer, record, string, type Handlers } from './handlers.ts';
 import { runCheck } from '../git/check.ts';
-import { prsOnBranches, type GhPr } from '../../src/git/prs.ts';
+import { autoMergeArgs, prsOnBranches, type GhPr, type MergeMethods } from '../../src/git/prs.ts';
 
 const DIFF_FLAGS = ['--no-color', '--no-ext-diff', '--src-prefix=a/', '--dst-prefix=b/', '-M'];
 const SCOPES = ['branch', 'uncommitted'] satisfies DiffScope[];
@@ -113,6 +113,13 @@ export const git = {
     } catch {
       return [];
     }
+  },
+
+  async setAutoMerge(_sender, cwd, pr, isOn, user) {
+    const top = await topLevel(string(cwd, 'cwd'));
+    const account = githubAccount(user);
+    const allowed = isOn === true ? (JSON.parse(await runGh(top, ['repo', 'view', '--json', 'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed'], account)) as MergeMethods) : null;
+    await runGh(top, autoMergeArgs(integer(pr, 'pr', 1, 1e9), allowed), account);
   },
 
   async ciLog(_sender, cwd, link, user) {

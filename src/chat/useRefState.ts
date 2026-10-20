@@ -45,6 +45,16 @@ export function useRefStates(refs: GithubRef[], scope: Scope) {
   return keys.map((key) => cache.get(key)?.state);
 }
 
+/** Reads `ref` again now, after Mochi changed it on GitHub; `expected` shows meanwhile, so a switch doesn't flick back. */
+export function refreshRef(ref: GithubRef, scope: Scope, expected?: Partial<RefState>) {
+  const key = refKey(ref);
+  const entry = cache.get(key);
+  if (entry) cache.set(key, { state: entry.state && { ...entry.state, ...expected }, at: 0 });
+  version++;
+  listeners.forEach((l) => l());
+  request(key, ref, scope);
+}
+
 function request(key: string, ref: GithubRef, scope: Scope) {
   const entry = cache.get(key);
   if (inFlight.has(key) || (entry && Date.now() - entry.at < TTL_MS)) return;

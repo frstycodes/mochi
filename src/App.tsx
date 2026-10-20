@@ -31,6 +31,7 @@ import { ScheduleLayer } from './schedule/ScheduleDialog';
 import { RenameLayer } from './RenameDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
+import { useAutoArchive } from './git/autoArchive';
 import { useCheckoutRecovery, useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
 import { readEmbeddedReplay } from './replay/export';
 import { useReplayRoute } from './replay/open';
@@ -126,6 +127,7 @@ function Shell() {
   useWorktreeManager();
   useCheckoutRecovery();
   useWorktreeCleanup();
+  useAutoArchive();
   const review = useReviewMode();
   const isSettingsOpen = !!useSettingsRoute();
   const isReplayOpen = !!useReplayRoute();
