@@ -24,6 +24,8 @@ type ComposerEditorProps = {
   /** Files and threads picked from `@`: each one's `@token` in the text renders as one unit. */
   inlineMentions?: InlineMention[];
   placeholder?: string;
+  /** Your likely next message: shown in place of the placeholder while the text is empty; Tab or → takes it. */
+  suggestion?: string;
   autoFocus?: boolean;
   className?: string;
   /** Runs before the editor's own keys; `preventDefault()` takes the key. */
@@ -41,13 +43,13 @@ type ComposerEditorProps = {
  * (lists indent with real bullets, `code`, **bold**, fences, headings, quotes) with its markup kept in the text. Enter sends,
  * Shift+Enter continues a list, Tab and Shift+Tab nest and outdent items. Its text is the `PromptInputProvider`'s.
  */
-export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholder = '', autoFocus, className, onKeyDown, onCaret, onKeyUp, onBlur, attributes, ref }: ComposerEditorProps) {
+export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholder = '', suggestion, autoFocus, className, onKeyDown, onCaret, onKeyUp, onBlur, attributes, ref }: ComposerEditorProps) {
   const { textInput } = usePromptInputController();
   const attachments = usePromptInputAttachments();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>(null);
-  const latest = useRef({ onKeyDown, onCaret, setInput: textInput.setInput, attachments });
-  latest.current = { onKeyDown, onCaret, setInput: textInput.setInput, attachments };
+  const latest = useRef({ onKeyDown, onCaret, setInput: textInput.setInput, attachments, suggestion });
+  latest.current = { onKeyDown, onCaret, setInput: textInput.setInput, attachments, suggestion };
   const [compartments] = useState(() => ({ items: new Compartment(), mentions: new Compartment(), placeholder: new Compartment(), attributes: new Compartment() }));
   const contentAttributes = { 'aria-label': placeholder, ...definedOnly(attributes) };
 
@@ -66,7 +68,7 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
           EditorView.contentAttributes.of({ spellcheck: 'true', autocorrect: 'on', autocapitalize: 'sentences' }),
           compartments.items.of(slashItemsFacet.of(items)),
           compartments.mentions.of(mentionsFacet.of(inlineMentions)),
-          compartments.placeholder.of(placeholderText(placeholder)),
+          compartments.placeholder.of(placeholderText(suggestion || placeholder)),
           compartments.attributes.of(EditorView.contentAttributes.of(contentAttributes)),
           Prec.highest(
             EditorView.domEventHandlers({
@@ -76,6 +78,7 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
                 latest.current.onKeyDown?.(event, view);
                 if (event.defaultPrevented) return true;
                 if (event.key === 'Enter' && !event.shiftKey) return submit(view);
+                if (isTakingSuggestion(event, view, latest.current.suggestion)) return takeSuggestion(view, latest.current.suggestion!);
                 const { files, remove } = latest.current.attachments;
                 if (event.key !== 'Backspace' || view.state.doc.length || !files.length) return false;
                 remove(files.at(-1)!.id);
@@ -121,11 +124,11 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
       effects: [
         compartments.items.reconfigure(slashItemsFacet.of(items)),
         compartments.mentions.reconfigure(mentionsFacet.of(inlineMentions)),
-        compartments.placeholder.reconfigure(placeholderText(placeholder)),
+        compartments.placeholder.reconfigure(placeholderText(suggestion || placeholder)),
         compartments.attributes.reconfigure(EditorView.contentAttributes.of(contentAttributes)),
       ],
     });
-  }, [items, inlineMentions, placeholder, attributesKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [items, inlineMentions, placeholder, suggestion, attributesKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <div ref={host} onKeyUp={onKeyUp} onBlur={onBlur} className={cn('w-full min-w-0', className)} />;
 }
@@ -134,6 +137,14 @@ export function ComposerEditor({ items, inlineMentions = NO_MENTIONS, placeholde
 function submit(view: EditorView) {
   const form = view.dom.closest('form');
   if (!form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled) form?.requestSubmit();
+  return true;
+}
+
+const isTakingSuggestion = (event: KeyboardEvent, view: EditorView, suggestion?: string) =>
+  !!suggestion && !view.state.doc.length && (event.key === 'Tab' || event.key === 'ArrowRight') && !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+
+function takeSuggestion(view: EditorView, suggestion: string) {
+  view.dispatch({ changes: { from: 0, insert: suggestion }, selection: { anchor: suggestion.length }, userEvent: 'input' });
   return true;
 }
 

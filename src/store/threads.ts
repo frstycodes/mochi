@@ -106,7 +106,8 @@ export type ThreadsAction =
   | { type: 'goal-propose'; threadId: string; goal: string; criteria: { text: string; command?: string }[]; basis?: string; by: Provider; isApplied: boolean }
   | { type: 'goal-proposal'; threadId: string; decision: 'accept' | 'keep' | 'undo' }
   | { type: 'idle-start'; threadId: string }
-  | { type: 'idle-update'; threadId: string; patch: Partial<Omit<IdleCheck, 'at'>> }
+  /** `turn`: only that turn's record takes the patch, so a late answer can't land on the next turn's. */
+  | { type: 'idle-update'; threadId: string; patch: Partial<Omit<IdleCheck, 'at'>>; turn?: number }
   /** You answered the turn's next-move card, or wrote instead: it's kept in the chat as a record and the card goes. */
   | { type: 'next-move-record'; threadId: string; record: NonNullable<ActivityEntry['nextMove']> }
   /** `at`: epoch ms, the order key a new pin at the end takes (`reorderThreads`). */
@@ -282,7 +283,7 @@ function reduce(state: State, action: Action): State {
     case 'next-move-record':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => log({ ...t, idle: { ...(t.idle ?? { at: state.now, accepted: [] }), isMoveAnswered: true } }, { at: state.now, who: 'harness', kind: 'event', text: action.record.question, nextMove: action.record })) };
     case 'idle-update':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.idle ? { ...t, idle: { ...t.idle, ...action.patch } } : t)) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.idle && (action.turn === undefined || t.idle.turn === action.turn) ? { ...t, idle: { ...t.idle, ...action.patch } } : t)) };
     case 'report':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now, turn: (t.idle?.turn ?? 0) + 1 } })) };
     case 'simplified':

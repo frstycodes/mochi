@@ -66,6 +66,7 @@ export const SETTINGS_SECTIONS = [
       { id: 'agent', label: 'Agent', keywords: 'harness claude codex new thread default' },
       { id: 'permissions', label: 'Permissions', keywords: 'manual ask auto edit full access bypass plan' },
       { id: 'whileWorking', label: 'While the agent is working, new messages', keywords: 'queue steer send message interrupt busy' },
+      { id: 'promptSuggestions', label: 'Suggest your next message', keywords: 'prompt suggestion autocomplete ghost placeholder tab next message composer' },
       { id: 'concurrency', label: 'Agents running at once', keywords: 'concurrency limit parallel' },
       { id: 'usageLimit', label: 'When a usage limit hits', keywords: 'rate limit pause reset quota' },
       { id: 'projectsFolder', label: 'Projects folder', keywords: 'path open folder directory' },
