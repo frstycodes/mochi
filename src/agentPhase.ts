@@ -3,7 +3,7 @@ import type { ActivityEntry, Thread, WebLink } from './model.ts';
 import { namesNow } from './library/names.ts';
 import { HARNESSES } from './settings/harnesses.ts';
 import { parseTool, toolVerb, type ToolCall, type ToolVerb } from './summary.ts';
-import { mochiCall } from './chat/mochiCalls.ts';
+import { isTurnCall, mochiCall } from './chat/mochiCalls.ts';
 import { isSendTarget } from './chat/threadMessages.ts';
 
 const VERB_PHASE = { Read: 'read', Edit: 'edit', Write: 'edit', Run: 'run', Browser: 'browse', Search: 'browse', Fetch: 'browse', Skill: 'read', Mcp: 'run' } satisfies Record<ToolVerb, AgentPhase>;
@@ -66,8 +66,8 @@ export function currentAction(thread: Thread): CurrentAction | undefined {
   if (thread.setup?.status === 'failed' && isWaiting) return { label: 'Worktree setup failed', isWaiting };
   const pending = pendingWork(thread);
   if (pending) return { label: pending.label };
-  const last = thread.activity.findLast((e) => e.kind === 'tool' || e.kind === 'reasoning' || e.kind === 'message' || (isWaiting && isWaitEvent(e)));
-  const tool = thread.activity.findLast((e) => e.kind === 'tool');
+  const last = thread.activity.findLast((e) => (e.kind === 'tool' && !isTurnCall(e)) || e.kind === 'reasoning' || e.kind === 'message' || (isWaiting && isWaitEvent(e)));
+  const tool = thread.activity.findLast((e) => e.kind === 'tool' && !isTurnCall(e));
   if (last && isWaitEvent(last)) {
     const call = tool && parseTool(tool.text);
     return { label: call ? waitingLabel(call) : PHASE_LABELS.wait, call, links: tool?.links, isWaiting: true };

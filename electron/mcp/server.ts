@@ -12,7 +12,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ImageGenHarness } from '../../src/host/types/settings.ts';
 import type { GeneratedImage } from '../../src/model.ts';
 import { IMAGE_SIZES, IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, imageResultText, type ImageSize } from '../../src/runtime/imageTool.ts';
-import { isGoalTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
+import { isGoalTool, isTurnTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
 import { agentSettings } from '../agents/config.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
@@ -42,7 +42,7 @@ export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SE
  * off in Settings doesn't get it.
  */
 export function claudeServer(thread: string, spaceId: string, cwd: string, isGoalsOff?: boolean) {
-  const tools = (isGoalsOff ? NO_GOAL_TOOLS : TOOLS).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args)));
+  const tools = (isGoalsOff ? NO_GOAL_TOOLS : TOOLS).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args), { alwaysLoad: isTurnTool(t.name) }));
   const image = tool(IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, (args, extra) => generateImage(spaceId, cwd, args, (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal));
   return createSdkMcpServer({ name: SERVER, instructions: isGoalsOff ? NO_GOAL_INSTRUCTIONS : INSTRUCTIONS, tools: agentSettings().imageGen === 'off' ? tools : [...tools, image] });
 }

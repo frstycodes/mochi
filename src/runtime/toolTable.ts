@@ -448,6 +448,11 @@ export const tierOf = (name: ToolName): Tier => TOOL_TABLE[name].tier;
 
 export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
 
+/** Called every turn, each with its own surface (the plan list, the end-of-turn card): always loaded for Claude, never deferred behind tool search, and no work-log row. */
+export const TURN_TOOLS = ['update_plan', 'report_turn'] as const satisfies ToolName[];
+
+export const isTurnTool = (name: string) => (TURN_TOOLS as readonly string[]).includes(name);
+
 export const asks = (tier: Tier) => (ASKING_TIERS as readonly Tier[]).includes(tier);
 
 /** How long a call may wait on the user's widget. Main and both harnesses get the same limit (RUNTIME.md). */
