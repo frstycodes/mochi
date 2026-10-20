@@ -2,10 +2,11 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { Provider } from '../model';
 import type { SectionId } from './sections';
 
-/** `nonce` re-triggers the scroll-and-flash when the same setting is deep-linked twice. */
+/** `nonce` re-triggers the scroll-and-flash when the same setting is deep-linked twice. `subpage` is one item's own page inside the section (a connector). */
 export interface SettingsRoute {
   section: SectionId;
   settingId?: string;
+  subpage?: string;
   nonce: number;
 }
 
@@ -16,6 +17,11 @@ const listeners = new Set<() => void>();
 /** Opens the settings page (⌘, / Ctrl+,, the palette, the profile menu); `settingId` scrolls to that row and flashes it. */
 export function openSettings(section: SectionId = 'general', settingId?: string) {
   set({ section, settingId, nonce: ++nonce });
+}
+
+/** One item's own page inside a section, like Settings › Connectors › Linear; Esc or its back link return to the section. */
+export function openSubpage(section: SectionId, subpage: string, settingId?: string) {
+  set({ section, subpage, settingId, nonce: ++nonce });
 }
 
 let requestedHarness: Provider | null = null;

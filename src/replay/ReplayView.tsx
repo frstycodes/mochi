@@ -94,7 +94,7 @@ function ReplayHeader({ title, onExport, onClose }: { title: string; onExport?: 
       <span className="min-w-0 truncate type-meta text-muted-foreground">{title}</span>
       <span className="flex-1" />
       {!!onExport && (
-        <Button variant="outline" size="sm" onClick={onExport}>
+        <Button variant="outline" size="sm" className="rounded-full" onClick={onExport}>
           <Share data-icon="inline-start" />
           <span className="max-sm:sr-only">Export replay</span>
         </Button>
@@ -279,7 +279,7 @@ function Transport({ playback, isCapped, files }: { playback: Playback; isCapped
           <TooltipIconButton label="Previous event" hint="← (Shift+← for the previous marker)" disabled={n === 0} onClick={() => seekStep(n - 1)}>
             <SkipBack />
           </TooltipIconButton>
-          <Button size="icon" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
+          <Button size="icon" className="rounded-full" aria-label={isPlaying ? 'Pause' : 'Play'} onClick={toggle}>
             {isPlaying ? <Pause filled /> : <Play filled />}
           </Button>
           <TooltipIconButton label="Next event" hint="→ (Shift+→ for the next marker)" disabled={n >= times.length} onClick={() => seekStep(n + 1)}>
@@ -418,7 +418,7 @@ function FilesSheet({ children }: { children: ReactNode }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="md:hidden">
+        <Button variant="outline" size="sm" className="rounded-full md:hidden">
           <FileText data-icon="inline-start" />
           Files
         </Button>
