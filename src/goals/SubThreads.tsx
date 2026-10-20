@@ -1,52 +1,12 @@
 import { ChevronRight, DiagramTree } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
-import { GitPullRequestIcon, REF_TONE_CLASS } from '@/icons/github';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, Criterion, Thread } from '../model';
 import { ThreadName } from '../chat/ThreadMessage';
-import { parentOf, subThreadsOf } from '../reorder';
+import { parentOf } from '../reorder';
 import { useHarness } from '../store';
-import { CallList } from '../WorkLog';
 import { StatusRing, useThreadStatus } from './VerdictChip';
 import type { Verdict } from './verdict';
-
-/** A parent's sub-threads on its end-of-turn card: each one's ring, the criterion it covers, its state; the row opens it. */
-export function SubThreadList({ thread }: { thread: Thread }) {
-  const { state } = useHarness();
-  const subs = subThreadsOf(state.threads, thread.id).filter((t) => t.status !== 'settled');
-  if (!subs.length) return null;
-  return (
-    <CallList aria-label="Sub-threads">
-      {subs.map((sub) => (
-        <SubThreadRow key={sub.id} sub={sub} covers={thread.criteria?.find((c) => c.id === sub.parent?.criterionId)} />
-      ))}
-    </CallList>
-  );
-}
-
-function SubThreadRow({ sub, covers }: { sub: Thread; covers?: Criterion }) {
-  const status = useThreadStatus(sub);
-  const open = useOpenThread();
-  const pr = sub.prs.find((p) => p.state === 'open' || p.state === 'draft') ?? sub.prs.find((p) => p.state === 'merged');
-  return (
-    <li className="relative isolate flex min-h-11 min-w-0 items-center gap-2.5 px-3 py-1.5 type-meta hover:bg-accent/60">
-      <button type="button" aria-label={`Open ${sub.title}`} onClick={() => open(sub)} className="absolute inset-0 cursor-default focus-visible:outline-2 focus-visible:-outline-offset-2" />
-      <StatusRing met={status.progress.met} total={status.progress.total} tone={status.tone} isWorking={status.isWorking} slot={sub.line} label={status.status} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-foreground">{sub.title}</span>
-        {!!covers && <span className="truncate type-caption text-subtle-foreground">{`For: ${covers.text}`}</span>}
-      </span>
-      <SubThreadState sub={sub} status={status} className="type-caption font-medium" />
-      {!!pr && (
-        <span className="flex shrink-0 items-center gap-1 tabular type-caption text-muted-foreground">
-          <GitPullRequestIcon aria-hidden className={cn('size-3 shrink-0', REF_TONE_CLASS[pr.state === 'merged' ? 'merged' : 'success'])} />
-          {`#${pr.number}`}
-        </span>
-      )}
-      <ChevronRight aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />
-    </li>
-  );
-}
 
 /** Working (shimmering), handed back, or the verdict's word in its tone. */
 function SubThreadState({ sub, status, className }: { sub: Thread; status: ReturnType<typeof useThreadStatus>; className?: string }) {
@@ -127,7 +87,7 @@ export function SubThreadGuide({ isLast, className }: { isLast: boolean; classNa
 
 const GUIDE = 'border-[color-mix(in_oklab,var(--subtle-foreground)_40%,var(--sidebar))]';
 
-function useOpenThread() {
+export function useOpenThread() {
   const { state, dispatch } = useHarness();
   return (thread: Thread) => {
     if (thread.spaceId !== state.spaceId) dispatch({ type: 'space', id: thread.spaceId });
@@ -135,4 +95,4 @@ function useOpenThread() {
   };
 }
 
-const TONE_TEXT = { success: 'text-success', warning: 'text-warning', destructive: 'text-destructive', muted: 'text-muted-foreground' } satisfies Record<Verdict['tone'], string>;
+export const TONE_TEXT = { success: 'text-success', warning: 'text-warning', destructive: 'text-destructive', muted: 'text-muted-foreground' } satisfies Record<Verdict['tone'], string>;

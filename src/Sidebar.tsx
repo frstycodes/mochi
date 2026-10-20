@@ -1,8 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
-import { Archive, Chat, DiagramTree, Edit, BackgroundTask, Eye, Menu, Search, TaskSquare, Undo } from '@/icons';
+import { Archive, Chat, DiagramTree, Edit, Eye, Menu, Search, TaskSquare, Undo } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -23,7 +22,6 @@ import { Input } from '@/components/ui/input';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
-import { useThreadStatus } from './goals/VerdictChip';
 import { SubThreadGuide } from './goals/SubThreads';
 import { nestWithUndo, unnestWithUndo } from './subThreadActions';
 import { PIN_SLOTS, type Thread } from './model';
@@ -46,11 +44,8 @@ import { haptic } from './haptic';
 import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type State, type View } from './store';
 import { endRename, startRename, titleToSave, useRenameSurface } from './rename';
 import type { FollowedMachine } from './host/types/remote';
-import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
-import { LiveDot, SpaceIcon, TooltipIconButton } from './ui';
-import { isUnread } from './store/seen';
-import { workingLabel } from './agentPhase';
-import { runningTasks } from './runtime/tasks';
+import { SpaceIcon, TooltipIconButton } from './ui';
+import { AgentsBadge, ThreadStatusDot, useThreadRow, type ThreadRow } from './threadRow';
 import { BoundShortcut } from './Shortcut';
 import { spaceCommand } from './keymap';
 import { remoteDecisions, remoteThreads } from './remote/mirror';
@@ -133,7 +128,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
         onClickCapture={dock}
         inert={(!isOpen && !isDocking) || undefined}
         className={cn(
-          'fixed z-40 w-(--sidebar-width) app-no-drag **:app-no-drag! overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
+          'fixed z-40 w-(--sidebar-width) overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
           isDocking
             ? 'inset-y-0 left-0 rounded-none border-sidebar-border shadow-none transition-[top,bottom,left,border-radius,border-color,box-shadow] duration-[160ms]'
             : 'inset-y-2 left-2 rounded-xl border-transparent shadow-float transition-[translate,opacity]',
@@ -688,7 +683,7 @@ export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSel
       <span className="flex min-w-0 items-center gap-2">
         {isRenaming ? <RowTitleField thread={thread} /> : <span className={cn('min-w-0 flex-1 truncate', (isActive || row.isUnread) && 'text-foreground')}>{thread.title}</span>}
         {isSub && <PrStack thread={thread} />}
-        {!isRenaming && <RowStatusDot row={row} isActive={isActive} />}
+        {!isRenaming && <ThreadStatusDot row={row} isActive={isActive} className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden" />}
         {/* Room for the Settle / Reactivate chip while it shows, so the title truncates before the chip instead of under it. */}
         {!isRenaming && <span aria-hidden className={cn('shrink-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')} />}
       </span>
@@ -721,25 +716,6 @@ export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSel
     </>
   );
 }
-
-/**
- * The row's one status, at the title line's end: a quiet pulse while working, else a dot for what asks for you (needs you, failed),
- * else blue for unread; nothing for an idle thread you've seen. The hover Settle chip takes its place.
- */
-function RowStatusDot({ row, isActive }: { row: ReturnType<typeof useThreadRow>; isActive: boolean }) {
-  const hide = 'group-focus-within/menu-item:hidden group-hover/menu-item:hidden';
-  if (row.isWorking)
-    return (
-      <span role="img" aria-label="Working" className={cn('flex shrink-0', hide)}>
-        <LiveDot className="text-muted-foreground" />
-      </span>
-    );
-  const dot = row.tone === 'warning' || row.tone === 'destructive' ? row.tone : row.isUnread && !isActive ? 'unread' : null;
-  if (!dot) return null;
-  return <span role="img" aria-label={dot === 'unread' ? 'Unread' : row.status} className={cn('size-2 shrink-0 rounded-full', DOT_BG[dot], hide)} />;
-}
-
-const DOT_BG = { warning: 'bg-warning', destructive: 'bg-destructive', unread: 'bg-info' } satisfies Record<string, string>;
 
 /** The row's title as a field: Enter or leaving it saves, Esc keeps the old title. */
 function RowTitleField({ thread }: { thread: Thread }) {
@@ -786,7 +762,7 @@ function RowTitleField({ thread }: { thread: Thread }) {
 }
 
 /** A top-level row's second line: where it runs (another computer's), the project's icon, what it's doing or why it stopped, its badges. */
-function RowDetail({ thread, row, machine }: { thread: Thread; row: ReturnType<typeof useThreadRow>; machine?: FollowedMachine }) {
+function RowDetail({ thread, row, machine }: { thread: Thread; row: ThreadRow; machine?: FollowedMachine }) {
   const project = useProjectAt(thread.spaceId, thread.repo?.path);
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
   return (
@@ -803,46 +779,10 @@ function RowDetail({ thread, row, machine }: { thread: Thread; row: ReturnType<t
       {row.isWorking ? <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer> : <span className={cn('min-w-0 flex-1 truncate', row.tone === 'warning' && 'text-warning', row.tone === 'destructive' && 'text-destructive')}>{row.detail}</span>}
       {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
       <PrStack thread={thread} />
-      <TasksBadge thread={thread} />
+      <AgentsBadge thread={thread} />
       <NextRunBadge threadId={thread.id} />
     </span>
   );
-}
-
-/** How many background tasks (commands, agents) the thread has running; nothing when none do. */
-function TasksBadge({ thread }: { thread: Thread }) {
-  const running = runningTasks(thread);
-  if (!running) return null;
-  const label = TASKS_LABEL.select(running) === 'one' ? '1 background task running' : `${running} background tasks running`;
-  return (
-    <span aria-label={label} title={label} className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground">
-      <BackgroundTask aria-hidden className="size-3" />
-      {running}
-    </span>
-  );
-}
-
-const TASKS_LABEL = new Intl.PluralRules('en');
-
-/** A row's one status (`useThreadStatus`) and the line under its title: the verdict's reason when idle, else the step in flight or what it waits for. */
-function useThreadRow(thread: Thread) {
-  const { state } = useHarness();
-  const status = useThreadStatus(thread);
-  const detail = !status.isWorking && status.verdict ? status.verdict.reason : threadDetail(thread, state.queue.find((q) => q.threadId === thread.id)?.title);
-  return { ...status, detail, isUnread: isUnread(thread), isWatched: state.watched.includes(thread.id) };
-}
-
-export function threadDetail(thread: Thread, question?: string) {
-  const limit = limitStatus(thread);
-  if (limit) return limit;
-  if (thread.status === 'needs-you') return question ?? 'Waiting on you';
-  if (thread.status === 'settled') return 'Settled';
-  const pr = thread.prs[thread.prs.length - 1];
-  if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : NEXT_STEP_TITLES['open-pr'];
-  // A live agent reports what it's doing; idle, its last report says where things stand; demo threads are told by their goal steps.
-  if (thread.live) return workingLabel(thread) ?? reportHeadline(thread) ?? 'Idle';
-  const step = thread.steps.find((s) => s.status === 'running') ?? thread.steps.find((s) => s.status === 'ready');
-  return step?.title ?? 'Idle';
 }
 
 function SpaceFooter() {
