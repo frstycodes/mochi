@@ -12,6 +12,8 @@ import { toClaude } from '../../../src/settings/agentConfig.ts';
 import { sessionConnectors, sessionToolRules } from '../../library/connectors.ts';
 import { claudePermissions } from '../../../src/library/connectorTools.ts';
 import { sessionLibrary } from '../../library/store.ts';
+import { claudeNativeSettings, offItems } from '../../../src/library/nativeOverrides.ts';
+import { readProfileConfig } from '../profileConfig.ts';
 import { warmClaude } from './oneshot.ts';
 import { approvalEvent, commandsFrom, createMapper, HIDDEN_PLAN_TOOLS, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
@@ -162,6 +164,13 @@ app.on('before-quit', () => {
   for (const threadId of [...sessions.keys()]) stopClaude(threadId);
 });
 
+/** The profile's turned-off native items as flag-layer settings, read from the account's config (the thread's project included, for its `.mcp.json`). */
+async function nativeOffSettings(options: AgentRunOptions) {
+  if (!options.nativeOff?.length) return {};
+  const config = await readProfileConfig(options.spaceId, options.cwd);
+  return claudeNativeSettings(offItems(config.claude, options.nativeOff));
+}
+
 async function schedule(session: Session) {
   const cap = (await config()).concurrencyCap() || DEFAULT_CAP;
   const live = [...sessions.values()].filter((s) => s.query).length;
@@ -189,7 +198,7 @@ async function launch(session: Session) {
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
     const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
-    const [library, connectors, toolRules] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId), sessionToolRules(options.spaceId)]);
+    const [library, connectors, toolRules, native] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId), sessionToolRules(options.spaceId), nativeOffSettings(options)]);
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     const { forkAt, isMissing } = await takeForkAt(session);
@@ -203,7 +212,8 @@ async function launch(session: Session) {
         pathToClaudeCodeExecutable: install.path,
         systemPrompt: { type: 'preset', preset: 'claude_code', append: mochiInstructions(options.isGoalsOff) },
         // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
-        settings: { skillOverrides: CLAUDE_SKILLS_OFF, permissions: connectorRules, ...(options.speed && { fastMode: true }) },
+        // The profile's turned-off native items join the flag layer here; nothing is written to the account's own files.
+        settings: { ...native, skillOverrides: { ...CLAUDE_SKILLS_OFF, ...native.skillOverrides }, permissions: connectorRules, ...(options.speed && { fastMode: true }) },
         // Claude in Chrome would otherwise wire itself when CLAUDE_CODE_ENABLE_CFC=1 is in the user's environment.
         extraArgs: { 'no-chrome': null },
         cwd: options.cwd,

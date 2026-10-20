@@ -33,6 +33,8 @@ import { codexToolConfig } from '../../src/library/connectorTools.ts';
 import { codexServerConfig } from '../../src/library/library.ts';
 import { sessionConnectors, sessionToolRules } from '../library/connectors.ts';
 import { sessionLibrary } from '../library/store.ts';
+import { codexNativeConfig, offItems } from '../../src/library/nativeOverrides.ts';
+import { readProfileConfig } from '../agents/profileConfig.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
 
 let nextId = 0;
@@ -90,12 +92,21 @@ const codex = new CodexAdapter(
   undefined,
   undefined,
   codexUrl,
-  async (spaceId) => {
-    const [{ servers }, connectors, rules] = await Promise.all([sessionLibrary(spaceId, 'codex'), sessionConnectors(spaceId), sessionToolRules(spaceId)]);
+  async ({ spaceId, cwd, nativeOff }) => {
+    const [{ servers }, connectors, rules, native] = await Promise.all([sessionLibrary(spaceId, 'codex'), sessionConnectors(spaceId), sessionToolRules(spaceId), codexNativeOff(spaceId, cwd, nativeOff)]);
     const tools = Object.entries(rules).map(([key, keyRules]) => codexToolConfig(key, keyRules));
-    return { ...codexServerConfig(servers), ...Object.fromEntries(connectors.map(([name, url]) => [`mcp_servers.${name}.url`, url])), ...Object.assign({}, ...tools) };
+    const mochi = { ...codexServerConfig(servers), ...Object.fromEntries(connectors.map(([name, url]) => [`mcp_servers.${name}.url`, url])) };
+    // A turned-off native server shares `mcp_servers.<name>` with a library server or connector of that name; Mochi's own stays on.
+    const isMochis = (key: string) => Object.keys(mochi).some((k) => k.startsWith(key.replace(/enabled$/, '')));
+    const kept = Object.fromEntries(Object.entries(native).filter(([key]) => !key.startsWith('mcp_servers.') || !isMochis(key)));
+    return { ...kept, ...mochi, ...Object.assign({}, ...tools) };
   },
 );
+/** The profile's turned-off Codex items as thread config, read from the account's config (the thread's project included). */
+async function codexNativeOff(spaceId: string, cwd: string, ids: string[] | undefined) {
+  if (!ids?.length) return {};
+  return codexNativeConfig(offItems((await readProfileConfig(spaceId, cwd)).codex, ids));
+}
 codex.onLimits = (accountId, windows) => void recordLimits(accountId, 'codex', windows);
 app.on('will-quit', () => codex.dispose());
 const ASKERS = { claude: askClaude, codex: codex.ask.bind(codex) };

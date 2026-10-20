@@ -7,7 +7,7 @@ import { agentOptions } from './controls.ts';
 import { parsePrefs } from '../settings/prefs.ts';
 
 const sent = (provider: 'claude' | 'codex', access: (typeof ACCESS)[number]) => {
-  const mode = agentOptions({ model: '', effort: 'high', speed: '', access }, provider).permissionMode;
+  const mode = agentOptions({ model: '', effort: 'high', speed: '', access }, provider, 'personal').permissionMode;
   if (provider === 'codex') return { mode, ...POLICIES[mode] };
   const { allowedTools, ...rest } = permissionOptions(mode as Parameters<typeof permissionOptions>[0]);
   return { ...rest, allowedTools };
