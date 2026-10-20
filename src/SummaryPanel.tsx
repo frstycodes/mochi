@@ -377,7 +377,7 @@ function SkillRows({ thread, skills }: { thread: Thread; skills: ThreadSummary['
           key={skill.name}
           icon={<SkillMark skill={skill.name} fallback={<SkillIcon />} />}
           label={<span title={skill.name}>{names.skill(skill.name).title}</span>}
-          onClick={() => openProfileConfig(thread.spaceId, 'skills', thread.session?.provider ?? thread.providers[0])}
+          onClick={() => openProfileConfig(thread.spaceId, 'skills')}
         >
           <span className="tabular type-caption text-subtle-foreground">
             ×{skill.uses} · {clock(skill.lastAt)}
@@ -404,7 +404,7 @@ function ConnectorsCard({ thread }: CardProps) {
   const names = useLibraryNames();
   const servers = thread.agent?.mcpServers ?? [];
   const status = connectorStatus(servers);
-  const manage = () => openProfileConfig(thread.spaceId, 'mcp', thread.session?.provider ?? thread.providers[0]);
+  const manage = () => openProfileConfig(thread.spaceId, 'mcp');
   return (
     <>
       <CardHeader title="Connectors" meta={<span className={cn(status.needsYou && 'text-warning')}>{status.text}</span>} />
@@ -691,7 +691,7 @@ function useSummaryOpeners(thread: Thread, onPaneOpened?: () => void) {
 
   const source = (s: Source): (() => void) | null => {
     if (s.kind === 'link') return () => url(sourceUrl(s.label));
-    if (s.kind === 'mcp') return () => openProfileConfig(thread.spaceId, 'mcp', thread.providers[0]);
+    if (s.kind === 'mcp') return () => openProfileConfig(thread.spaceId, 'mcp');
     if (!root) return null;
     if (isFolderSource(s)) return () => toPane({ type: 'pane-show-tab', threadId: thread.id, kind: 'files' });
     return () => openFiles({ files: [{ source: 'workspace', threadId: thread.id, root, path: s.label }], index: 0 });

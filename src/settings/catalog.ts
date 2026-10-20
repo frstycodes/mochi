@@ -9,7 +9,7 @@ import { MOCHI_THEME_ID, slotOf, type ColorTheme, type ThemeSlot } from '../them
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../utility/prompts.ts';
 import { CONCURRENCY_RANGE, type AccountsState, type AgentSettings, type AgentSettingsPatch, type ImageGenHarness, type ModelChoice, type ProfileConfig } from '../host/types/settings.ts';
 import { linkedAccountId } from './accounts.ts';
-import { INSTRUCTIONS_FILE, type ConfigChange } from './agentConfig.ts';
+import type { ConfigChange } from './agentConfig.ts';
 import { HARNESS_IDS, HARNESSES } from './harnesses.ts';
 import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type CommandId } from '../keymap.ts';
 import { shortcutText } from '../keys.ts';
@@ -59,7 +59,6 @@ export type Control =
   | { type: 'icon' }
   | { type: 'github' }
   | { type: 'account'; provider: Provider }
-  | { type: 'instructions'; provider: Provider }
   | { type: 'mcp'; provider: Provider; name: string }
   | { type: 'skill'; provider: Provider; name: string }
   /** A command's chord as `chordText` writes it; '' is no shortcut. */
@@ -85,7 +84,7 @@ export type SettingWrite =
   | { to: 'quiet'; patch: Partial<QuietHours> }
   | { to: 'host'; patch: AgentSettingsPatch }
   | { to: 'remote'; patch: Partial<RemoteSettings> }
-  | { to: 'profile'; patch: Partial<Pick<Space, 'name' | 'icon' | 'github' | 'syncInstructions'>> }
+  | { to: 'profile'; patch: Partial<Pick<Space, 'name' | 'icon' | 'github'>> }
   | { to: 'account'; provider: Provider; accountId: string }
   | { to: 'config'; title: string; changes: ConfigChange[] };
 
@@ -136,22 +135,10 @@ export function valueLabel(setting: Setting, value: string | undefined) {
   const { control } = setting;
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return value === 'true' ? 'On' : 'Off';
   if ('options' in control) return control.options.find((o) => o.value === value)?.label ?? value;
-  if (control.type === 'instructions') return `${value.trimEnd().split('\n').length} lines`;
   if (control.type === 'shortcut') return value ? shortcutText(parseChord(value) ?? []) : 'No shortcut';
   // Ids are `ext:<namespace>.<name>:<label>` or `custom:<file>`: the last part names it.
   if (control.type === 'colorTheme') return value === MOCHI_THEME_ID ? 'Mochi' : value.split(':').pop()!;
   return value || 'Not set';
-}
-
-/**
- * A value as the widget's Done record compares it. Instructions go by length and a hash, never their text: the widget is
- * saved with the thread.
- */
-export function recordValue(setting: Setting, value: string) {
-  if (setting.control.type !== 'instructions') return value;
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) | 0;
-  return `${value.length}:${hash}`;
 }
 
 // {APP}
@@ -518,25 +505,6 @@ function profileSettings(config: ProfileConfig | undefined): Setting[] {
         control: { type: 'account', provider },
         read: ({ profile, accounts }) => profile && accounts && linkedAccountId(accounts.links, profile.id, provider),
         write: (value, { accounts }) => (accounts?.accounts.some((a) => a.id === value && a.provider === provider) ? { to: 'account', provider, accountId: value } : null),
-      }),
-    ),
-    {
-      key: 'profile.syncInstructions',
-      label: 'Keep CLAUDE.md and AGENTS.md the same',
-      section: 'profile',
-      control: SWITCH,
-      read: ({ profile }) => profile && String(!!profile.syncInstructions),
-      write: (value) => (value === 'true' || value === 'false' ? { to: 'profile', patch: { syncInstructions: value === 'true' } } : null),
-    },
-    ...HARNESS_IDS.map(
-      (provider): Setting => ({
-        key: `profile.${provider}.instructions`,
-        label: INSTRUCTIONS_FILE[provider],
-        section: 'profile',
-        description: `${HARNESSES[provider].name}'s instructions for every session in this profile`,
-        control: { type: 'instructions', provider },
-        read: ({ config: c }) => c?.[provider].instructions.text,
-        write: (value) => ({ to: 'config', title: `Save ${INSTRUCTIONS_FILE[provider]}`, changes: [{ kind: 'instructions', provider, text: value }] }),
       }),
     ),
     ...HARNESS_IDS.flatMap((provider) => [

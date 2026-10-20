@@ -36,6 +36,7 @@ import { sessionLibrary } from '../library/store.ts';
 import { codexNativeConfig, offItems } from '../../src/library/nativeOverrides.ts';
 import { readProfileConfig } from '../agents/profileConfig.ts';
 import { agentDecision, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
+import { profileInstructions } from '../agents/profileFolder.ts';
 
 let nextId = 0;
 const PROVIDERS = ['claude', 'codex'];
@@ -101,6 +102,7 @@ const codex = new CodexAdapter(
     const kept = Object.fromEntries(Object.entries(native).filter(([key]) => !key.startsWith('mcp_servers.') || !isMochis(key)));
     return { ...kept, ...mochi, ...Object.assign({}, ...tools) };
   },
+  (spaceId) => profileInstructions(spaceId, 'codex'),
 );
 /** The profile's turned-off Codex items as thread config, read from the account's config (the thread's project included). */
 async function codexNativeOff(spaceId: string, cwd: string, ids: string[] | undefined) {

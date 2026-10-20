@@ -23,7 +23,7 @@ import { googleClientFrom, slackClientFrom, type SetupCapture, type SlackApps } 
 import { mochiOAuthProviders } from '../library/oauthApps.ts';
 import { RELAY_URL } from '../remote/relayClient.ts';
 import { setAutoUpdate, updateItem } from '../library/updates.ts';
-import { record, string, type Handlers } from './handlers.ts';
+import { record, spaceIdOf, string, type Handlers } from './handlers.ts';
 
 const PARTS = ['skills', 'mcp'] as const;
 
@@ -294,12 +294,6 @@ function pluginFile(value: unknown) {
   if (!(file.bytes instanceof Uint8Array)) throw new TypeError('file.bytes must be a Uint8Array');
   if (file.bytes.length > UPLOAD_LIMITS.archiveBytes) throw new TypeError(`The file is over ${UPLOAD_LIMITS.archiveBytes / 1_000_000} MB`);
   return { name: string(file.name, 'file.name', 255), bytes: file.bytes };
-}
-
-function spaceIdOf(value: unknown) {
-  const id = string(value, 'spaceId', 128);
-  if (!/^[a-z0-9-]+$/.test(id)) throw new TypeError('spaceId must be a profile id');
-  return id;
 }
 
 // GAP: a project path is checked to be an absolute folder, not that it is one of the profile's projects.

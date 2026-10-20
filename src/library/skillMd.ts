@@ -12,6 +12,12 @@ export function parseSkillMd(markdown: string, folderName: string) {
   return { name, description: description.slice(0, 1024), body };
 }
 
+/** `metadata: { internal: true }`, which the skills CLI hides unless asked; splitFrontmatter reads top-level keys only. */
+export function isInternalSkill(markdown: string) {
+  const frontmatter = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
+  return /^metadata:[ \t]*\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+internal:[ \t]*true[ \t]*$/m.test(`${frontmatter}\n`);
+}
+
 // Reads the `key: value` and block-scalar (`|` / `>`) frontmatter that skills use; not a general YAML parser.
 export function splitFrontmatter(markdown: string) {
   const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);

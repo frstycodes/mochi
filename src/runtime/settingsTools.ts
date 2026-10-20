@@ -1,8 +1,8 @@
 import type { ProviderConfig } from '../host/types/settings.ts';
 import { authorName, settingRef, type Provider, type Space } from '../model.ts';
 import { linkedAccountId, profilesUsing } from '../settings/accounts.ts';
-import { REDACTED, redactSecrets, stripSecrets, type ConfigChange, type McpEntry, type McpServerDef } from '../settings/agentConfig.ts';
-import { findSetting, recordValue, settingsCatalog, valueLabel, type Setting, type SettingSources } from '../settings/catalog.ts';
+import { redactSecrets, stripSecrets, type ConfigChange, type McpEntry, type McpServerDef } from '../settings/agentConfig.ts';
+import { findSetting, settingsCatalog, valueLabel, type Setting, type SettingSources } from '../settings/catalog.ts';
 import { HARNESSES } from '../settings/harnesses.ts';
 import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
 import { IS_MAC } from '../keys.ts';
@@ -61,7 +61,7 @@ export const SETTINGS_TOOLS = {
         const row = { key: change.key, value: change.value, ...(isProfileKey && { profileId: profile.id }) };
         if (changes.some((c) => settingRef(c) === settingRef(row))) throw new Error(`${change.key} appears twice; suggest one value`);
         changes.push(row);
-        before[settingRef(row)] = recordValue(setting, current);
+        before[settingRef(row)] = current;
         labels.push(isProfileKey && profile.id !== caller.spaceId ? `${setting.label} (${profile.name})` : setting.label);
       }
       const by = caller.providers[0];
@@ -354,7 +354,7 @@ async function settingView(ctx: ToolContext<unknown>, setting: Setting, sources:
     section: setting.section,
     ...(setting.group && { group: setting.group }),
     type: control.type,
-    value: value === undefined ? null : control.type === 'instructions' ? redactSecrets(value) : value,
+    value: value ?? null,
     ...('options' in control && { allowed: control.options.map((o) => o.value) }),
     ...(control.type === 'number' && { min: control.min, max: control.max }),
     ...(control.type === 'colorTheme' && { allowed: [MOCHI_THEME_ID, ...(sources.colorThemes ?? []).filter((t) => slotOf(t.kind) === control.slot).map((t) => t.id)] }),
@@ -400,7 +400,6 @@ const allowedHint = (setting: Setting) => {
 /** Rules a valid value can still break: accounts are never switched under running threads, model ids come from the account. */
 async function checkSuggestion(ctx: ToolContext<unknown>, setting: Setting, value: string, profile: Space, sources: SettingSources) {
   const { control } = setting;
-  if (control.type === 'instructions' && value.includes(REDACTED)) throw new Error(`The text still holds ${REDACTED} from get_settings; send only text you wrote, and the user keeps the rest`);
   if (control.type === 'account') return checkAccount(ctx, profile, control.provider, sources);
   if (control.type === 'model' && value) {
     const [provider, model] = control.provider ? [control.provider, value] : [value.split(':')[0] as Provider, value.split(':').slice(1).join(':')];

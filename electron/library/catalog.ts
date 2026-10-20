@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import type { CatalogPlugin, MarketplaceCatalog } from '../../src/library/library.ts';
 import { parsePluginBundle } from '../../src/library/pluginBundle.ts';
-import { parseSkillMd } from '../../src/library/skillMd.ts';
+import { isInternalSkill, parseSkillMd } from '../../src/library/skillMd.ts';
 import { findSkillDirs, parseSkillSource } from '../../src/library/skillSource.ts';
 import { readTar } from '../../src/library/tar.ts';
 import { run } from '../git/run.ts';
@@ -242,9 +242,10 @@ async function loadSkills(source: string) {
     const folder = [...files].filter(([path]) => path.startsWith(prefix));
     const iconPath = codexSkillIcon(files.get(`${prefix}agents/openai.yaml`));
     const folderName = dir.split('/').pop() || target.repo;
-    const meta = parseSkillMd(files.get(`${prefix}SKILL.md`)!, folderName);
-    // The CLI keeps the first skill of a name.
-    if (seen.has(meta.name)) return [];
+    const skillMd = files.get(`${prefix}SKILL.md`)!;
+    const meta = parseSkillMd(skillMd, folderName);
+    // The CLI keeps the first skill of a name, and hides a repo's internal skills unless asked (`metadata.internal: true`).
+    if (seen.has(meta.name) || isInternalSkill(skillMd)) return [];
     seen.add(meta.name);
     return [
       {

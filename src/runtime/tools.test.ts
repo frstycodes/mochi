@@ -182,10 +182,9 @@ function fakeSettings() {
     plugins: [],
     projectInstructions: null,
   });
-  const pathOf = (c: ConfigChange) => `/acct/${c.provider}/${c.kind === 'instructions' ? 'instructions' : c.kind.startsWith('skill') ? 'settings.json' : '.claude.json'}`;
+  const pathOf = (c: ConfigChange) => `/acct/${c.provider}/${c.kind.startsWith('skill') ? 'settings.json' : '.claude.json'}`;
   const apply = (c: ConfigChange) => {
     const own = config[c.provider];
-    if (c.kind === 'instructions') own.instructions = c.text;
     if (c.kind === 'mcp-set') own.servers = [...own.servers, { def: c.server, enabled: true, scope: 'user', needs: [] }];
     if (c.kind === 'mcp-remove') own.servers = own.servers.filter((s) => s.def.name !== c.name);
     if (c.kind === 'mcp-enabled') own.servers = own.servers.map((s) => (s.def.name === c.name ? { ...s, enabled: c.enabled } : s));
@@ -197,7 +196,7 @@ function fakeSettings() {
     get: async () => DEFAULT_SETTINGS,
     agentConfig: async (spaceId) => ({ claude: providerConfig(spaceId, 'claude'), codex: providerConfig(spaceId, 'codex') }),
     previewConfig: async (_spaceId, changes) => ({
-      edits: changes.map((c) => ({ path: pathOf(c), before: files.get(pathOf(c)) ?? '', after: c.kind === 'instructions' ? c.text : JSON.stringify(c) })),
+      edits: changes.map((c) => ({ path: pathOf(c), before: files.get(pathOf(c)) ?? '', after: JSON.stringify(c) })),
       copies: [],
       notes: [],
     }),
@@ -908,7 +907,7 @@ test('get_settings reads every app setting and your profile’s, with values, al
   assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');
   assert.equal(byKey(r, 'profile.claude.mcp.github').value, 'true');
   assert.equal(byKey(r, 'profile.claude.skill.review').value, 'true');
-  assert.match(byKey(r, 'profile.claude.instructions').value!, /^Be brief\.\nAPI_TOKEN=\[redacted\]/);
+  assert.equal(r.settings.some((s: SettingView) => s.key.endsWith('.instructions')), false, 'instructions are files in the profile folder, not a setting');
   assert.deepEqual(byKey(r, 'profile.claude.mcp.linear').server!.needs, ['needs LINEAR_TOKEN']);
   assert.equal(byKey(r, 'profile.claude.mcp.github').server!.tools, undefined, 'servers start only for section: profile');
   for (const secret of SECRETS) assert.doesNotMatch(JSON.stringify(r), new RegExp(secret), 'secret leaked');
@@ -940,26 +939,23 @@ test('update_settings puts one live widget in the thread with every suggestion g
       { key: 'diffStyle', value: 'split' },
       { key: 'profile.name', value: 'Latitude HQ' },
       { key: 'profile.claude.mcp.github', value: 'false' },
-      { key: 'profile.claude.instructions', value: 'Be brief.\nRun pnpm test before you push.\n' },
     ],
     reason: 'Set up this profile for the refactor',
   });
-  assert.deepEqual(r.shown, ['Diffs', 'Name', 'MCP server github', 'CLAUDE.md']);
+  assert.deepEqual(r.shown, ['Diffs', 'Name', 'MCP server github']);
   assert.match(r.note, /won't get their answer/);
   assert.equal(r.changed, undefined, 'nothing changed, so no log line or toast');
   const { settings, title, kind } = widget(t);
   assert.equal(kind, 'setting');
-  assert.equal(title, 'Claude suggests 4 setting changes');
+  assert.equal(title, 'Claude suggests 3 setting changes');
   assert.equal(settings!.reason, 'Set up this profile for the refactor');
   assert.deepEqual(settings!.changes.map((c) => [c.key, c.profileId]), [
     ['diffStyle', undefined],
     ['profile.name', 'latitude'],
     ['profile.claude.mcp.github', 'latitude'],
-    ['profile.claude.instructions', 'latitude'],
   ]);
   assert.equal(settings!.before.diffStyle, 'unified');
   assert.equal(settings!.before['latitude/profile.name'], 'Latitude');
-  assert.match(settings!.before['latitude/profile.claude.instructions'], /^\d+:-?\d+$/, 'instructions are kept as a hash, never their text');
   assert.equal(t.thread('rl').activity.at(-1)!.card!.id, widget(t).id, 'it sits in the thread where the agent asked');
   assert.equal(t.prefs().diffStyle, 'unified');
   assert.equal(t.profiles()[0].name, 'Latitude');
@@ -981,7 +977,7 @@ test('update_settings validates every change before showing anything', async () 
   assert.match(await one('claude.path', '/tmp/evil'), /the user's alone/);
   assert.match(await one('diffStyle', 'split', 'latitude'), /isn't a profile setting/);
   assert.match(await one('profile.icon', 'skull'), /isn't a value of profile.icon/);
-  assert.match(await one('profile.claude.instructions', 'API_TOKEN=[redacted]'), /still holds \[redacted\]/);
+  assert.match(await one('profile.claude.instructions', 'Be brief.'), /No setting profile.claude.instructions/);
   assert.match(await one('claude.model', 'claude-gpt-9'), /isn't offered/);
   assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }, { key: 'diffStyle', value: 'split' }], reason: 'x' }), /appears twice/);
   assert.equal(t.state().queue.length, 0, 'no widget for a bad call');

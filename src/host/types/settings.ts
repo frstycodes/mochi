@@ -1,6 +1,7 @@
 import type { AgentCommand, Provider } from '../../model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../settings/harnesses.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../../settings/agentConfig.ts';
+import type { ProfileFolder } from '../../settings/instructionFiles.ts';
 import { CHEAP_MODELS, UTILITY_TASKS, type UtilityTask } from '../../utility/prompts.ts';
 import type { AppIcon } from '../../settings/settingOptions.ts';
 import type { Manifest } from './manifest.ts';
@@ -111,6 +112,10 @@ export interface SettingsHost {
   apiKey(provider: Provider): Promise<ApiKeyState>;
   /** Pass null to remove the stored key. */
   setApiKey(provider: Provider, key: string | null): Promise<ApiKeyState>;
+  /** The profile's own folder and its instruction files (made empty the first time), for Settings to open. */
+  profileFolder(spaceId: string): Promise<ProfileFolder>;
+  /** Copies one profile's folder into another's (Duplicate profile). */
+  copyProfileFolder(fromId: string, toId: string): Promise<void>;
   /** What each of the profile's accounts carries in its own config folder; `projectRoot` adds that project's `.mcp.json`. */
   agentConfig(spaceId: string, projectRoot?: string): Promise<ProfileConfig>;
   /** The file edits `changes` would make, for the user to review; nothing is written. */
@@ -168,6 +173,8 @@ export const settingsMethods = {
   linkAccount: 'invoke',
   apiKey: 'invoke',
   setApiKey: 'invoke',
+  profileFolder: 'invoke',
+  copyProfileFolder: 'invoke',
   agentConfig: 'invoke',
   previewConfig: 'invoke',
   applyConfig: 'invoke',

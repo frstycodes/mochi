@@ -41,3 +41,10 @@ export function agentDecision(value: unknown): AgentDecision {
   for (const key of ['forSession', 'interrupt']) if (d[key] !== undefined && typeof d[key] !== 'boolean') throw new TypeError(`decision.${key} must be a boolean`);
   return d as unknown as AgentDecision;
 }
+
+/** A profile id, checked strictly: it names folders on disk. */
+export function spaceIdOf(value: unknown) {
+  const id = string(value, 'spaceId', 128);
+  if (!/^[a-z0-9-]+$/.test(id)) throw new TypeError('spaceId must be a profile id');
+  return id;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { Provider } from '../model';
+import { setLibraryScope } from '../library/libraryScope';
 import type { SectionId } from './sections';
 
 /** `nonce` re-triggers the scroll-and-flash when the same setting is deep-linked twice. `subpage` is one item's own page inside the section (a connector). */
@@ -24,19 +24,10 @@ export function openSubpage(section: SectionId, subpage: string, settingId?: str
   set({ section, subpage, settingId, nonce: ++nonce });
 }
 
-let requestedHarness: Provider | null = null;
-
-/** A profile's MCP servers or skills, opened on one harness: the thread context panel links here for the thread's profile. */
-export function openProfileConfig(spaceId: string, part: 'mcp' | 'skills', provider: Provider) {
-  requestedHarness = provider;
-  openSettings('profiles', `${spaceId}-${part}`);
-}
-
-/** The harness the last `openProfileConfig` asked for, once. */
-export function takeRequestedHarness() {
-  const provider = requestedHarness;
-  requestedHarness = null;
-  return provider;
+/** A thread's skills or MCP servers: the thread context panel opens Skills or Connectors scoped to the thread's profile. */
+export function openProfileConfig(spaceId: string, part: 'mcp' | 'skills') {
+  setLibraryScope(spaceId);
+  openSettings(part === 'mcp' ? 'connectors' : 'skills');
 }
 
 /** Back to the app: the layout lives in the store, so the splits and views come back as they were. */

@@ -98,16 +98,18 @@ export class CodexAdapter {
   private findCodex: FindCodex;
   private toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>;
   private libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>;
+  private profileText?: (spaceId: string) => Promise<string>;
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
-  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. */
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>, libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>) {
+  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. `profileText` is the profile's own instructions for Codex (its folder's mochi.md and codex.md). */
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>, libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>, profileText?: (spaceId: string) => Promise<string>) {
     this.emit = emit;
     this.accountFor = accountFor;
     this.findCodex = findCodex;
     this.toolsUrl = toolsUrl;
     this.libraryConfig = libraryConfig;
+    this.profileText = profileText;
   }
 
   owns(threadId: string) {
@@ -372,7 +374,9 @@ export class CodexAdapter {
     // A settings chat gets Mochi's settings tools and nothing else: none of the profile's servers, nothing that writes or asks.
     const library = options.isSettingsChat ? undefined : await this.libraryConfig?.(options);
     const policy = POLICIES[options.isSettingsChat ? 'review' : (options.permissionMode ?? '')];
-    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: mochiInstructions(options), config: { ...GOALS_OFF, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...policy };
+    // The profile's own instructions follow Mochi's; the account's AGENTS.md loads as usual.
+    const profileText = options.isSettingsChat ? '' : await this.profileText?.(options.spaceId);
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: [mochiInstructions(options), profileText].filter(Boolean).join('\n\n'), config: { ...GOALS_OFF, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...policy };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume

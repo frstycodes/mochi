@@ -11,7 +11,8 @@ import { ProviderMark } from '../ui';
 import { AddSkillsDialog } from './AddSkillsDialog';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { NativeSections } from './NativeSections';
-import { CatalogErrorRow, EmptyRow, filterBy, InstalledList, LibraryRow, PAGE } from './LibraryParts';
+import { CatalogErrorRow, EmptyRow, EntryRow, filterBy, GroupControl, LibraryRow, PAGE, SimilarNote, useSimilarNative } from './LibraryParts';
+import { SkillGroups } from './SkillGroups';
 import { SKILLS_SH } from './skillsSh';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
 
@@ -36,25 +37,34 @@ export function SkillsView() {
 }
 
 function InstalledSkills({ library, query, showDiscover }: Parameters<PagePart>[0]) {
+  const skills = library.entries && filterBy(library.entries.filter((e) => e.kind === 'skill'), query, (e) => [e.title, e.description, e.source]);
   return (
     <>
       <SettingsSection title="In Mochi">
-        <InstalledList
-          entries={library.entries?.filter((e) => e.kind === 'skill')}
-          library={library}
-          query={query}
-          empty={
-            <SettingsRow
-              label="No skills yet"
-              description="Skills teach agents how to do a kind of task. Add some from skills.sh or a GitHub repository."
-              control={
-                <Button variant="outline" size="sm" onClick={showDiscover}>
-                  Discover skills
-                </Button>
-              }
+        <SettingsCard>
+          {!skills && <SkeletonRows count={2} />}
+          {skills?.length === 0 &&
+            (query ? (
+              <EmptyRow text={`Nothing in your library matches “${query}”`} />
+            ) : (
+              <SettingsRow
+                label="No skills yet"
+                description="Skills teach agents how to do a kind of task. Add some from skills.sh or a GitHub repository."
+                control={
+                  <Button variant="outline" size="sm" onClick={showDiscover}>
+                    Discover skills
+                  </Button>
+                }
+              />
+            ))}
+          {!!skills?.length && (
+            <SkillGroups
+              entries={skills}
+              row={(entry) => <EntryRow entry={entry} library={library} />}
+              control={(group) => <GroupControl entries={group.entries} name={group.repo} library={library} />}
             />
-          }
-        />
+          )}
+        </SettingsCard>
       </SettingsSection>
       <NativeSections kind="skill" query={query} />
     </>
@@ -71,6 +81,7 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
   const { state, retry } = useLoaded(isSearch ? `search:${search}` : 'popular', () => (isSearch ? host.library.searchSkillsSh(search) : host.library.popularSkillsSh()));
   const [limit, setLimit] = useState(PREVIEW_ROWS);
   const [adding, setAdding] = useState<string | null>(null);
+  const similarTo = useSimilarNative();
   // Under two characters skills.sh won't search: the leaderboard is filtered here instead.
   const skills = state.status === 'done' ? (isSearch ? state.value : filterBy(state.value, query, (s) => [s.name, s.source])) : [];
   return (
@@ -90,12 +101,16 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
         {state.status === 'loading' && <SkeletonRows count={4} />}
         {state.status === 'error' && <CatalogErrorRow what="skills.sh" message={state.message} onRetry={retry} />}
         {state.status === 'done' && !skills.length && <EmptyRow text={isSearch ? `Nothing on skills.sh matches “${search}”` : 'skills.sh listed nothing'} />}
-        {skills.slice(0, limit).map((skill) => (
+        {skills.slice(0, limit).map((skill) => {
+          const isInstalled = !!installedEntry(library.entries, 'skill', skill.name);
+          const similar = isInstalled ? [] : similarTo(skill.name);
+          return (
           <LibraryRow
             key={skill.id}
             name={skill.name}
             icon={skill.icon}
             meta={`${skill.source} · ${INSTALLS.format(skill.installs)} installs`}
+            status={!!similar.length && <SimilarNote similar={similar} />}
             actions={
               <>
                 <Button variant="ghost" size="icon-sm" asChild>
@@ -103,11 +118,12 @@ function SkillsShCatalog({ library, query }: Parameters<PagePart>[0]) {
                     <ExternalLink />
                   </a>
                 </Button>
-                <AddControl isInstalled={!!installedEntry(library.entries, 'skill', skill.name)} name={skill.name} onAdd={() => setAdding(skill.installSource)} />
+                <AddControl isInstalled={isInstalled} name={skill.name} onAdd={() => setAdding(skill.installSource)} />
               </>
             }
           />
-        ))}
+          );
+        })}
         {skills.length > limit && (
           <div className="px-4 py-2">
             <Button variant="ghost" size="sm" onClick={() => setLimit((n) => n + PAGE)}>
@@ -127,7 +143,7 @@ function AddControl({ isInstalled, name, onAdd }: { isInstalled: boolean; name: 
     return (
       <span className="flex h-7 w-24 items-center justify-end gap-1 type-meta text-muted-foreground">
         <CheckBadge aria-hidden className="size-3.5 text-success" />
-        Installed
+        In library
       </span>
     );
   return (

@@ -13,7 +13,7 @@ import { useProfiles } from '../profiles';
 import { clock } from '../progress';
 import { decideTool } from '../runtime/tools';
 import { AgentSettingsProvider } from '../settings/AgentSettings';
-import { findSetting, recordValue, settingsCatalog, valueLabel } from '../settings/catalog';
+import { findSetting, settingsCatalog, valueLabel } from '../settings/catalog';
 import { CatalogRow, isConfigKey, useSettingSources } from '../settings/CatalogRow';
 import { FileDiffs } from '../settings/FileDiffs';
 import { SettingsRow } from '../settings/parts';
@@ -213,8 +213,8 @@ function SuggestionGroup({ item, profile, profileId, changes, settings, readers 
     return changes.flatMap((c) => {
       const setting = findSetting(catalog, c.key);
       const value = setting?.read(now);
-      if (!setting || value === undefined || recordValue(setting, value) === settings.before[settingRef(c)]) return [];
-      return [setting.control.type === 'instructions' ? `saved ${setting.label}` : `set ${setting.label} to ${valueLabel(setting, value)}`];
+      if (!setting || value === undefined || value === settings.before[settingRef(c)]) return [];
+      return [`set ${setting.label} to ${valueLabel(setting, value)}`];
     });
   });
   if (profileId && !profile) return <SettingsRow label="That profile was removed" />;

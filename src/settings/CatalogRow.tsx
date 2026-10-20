@@ -16,7 +16,7 @@ import { useAgentSettings } from './AgentSettings';
 import { findSetting, isSharedSetting, settingsCatalog, valueLabel, type Setting, type SettingSources, type SettingWrite } from './catalog';
 import { CommitInput, FolderInput, NumberInput, SettingsChoice, SettingsRow, SettingsSelect, settingControlId } from './parts';
 import { setPrefs, usePrefs } from './prefs';
-import { InstructionsRow, useConfigWriter, useProfileConfig } from './ProfileAgentConfig';
+import { useConfigWriter, useProfileConfig } from './ProfileAgentConfig';
 import { AccountSelect, GitHubAccountSelect, IconPicker } from './sections/profiles';
 import { ModelSelect, StarredModelsRow } from './sections/models';
 import { SimulatorSelect } from './sections/browser';
@@ -91,15 +91,6 @@ function SettingRow({ setting, sources, profile, rowId, suggestion, onConfigWrit
   };
   const line = !!suggestion && <SuggestionLine setting={setting} value={value} suggestion={suggestion} onUse={() => set(suggestion.value)} />;
   const { control } = setting;
-  if (control.type === 'instructions')
-    return (
-      <>
-        <InstructionsRow profile={profile!} provider={control.provider} config={sources.config} review={apply.review} proposal={suggestion?.value}>
-          {!!suggestion && <p className="type-meta text-muted-foreground">{authorName(suggestion.by)}'s text is in the editor, not saved. Review and save it to apply.</p>}
-        </InstructionsRow>
-        {apply.dialog}
-      </>
-    );
   if (control.type === 'starredModels')
     return (
       <StarredModelsRow rowId={rowId} value={value?.split(',').filter(Boolean) ?? []} onChange={(ids) => set(ids.join(','))}>
