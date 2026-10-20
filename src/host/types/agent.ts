@@ -64,7 +64,8 @@ export type AgentEvent =
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage; /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget }
-  | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
+  /** `items` is the whole plan. `isFresh`: a new request's plan, so none of the previous plan's steps carry over. */
+  | { threadId: string; type: 'plan'; items: AgentPlanItem[]; isFresh?: boolean }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
   /** A command (or workflow, monitor) the agent left running in the background: Claude's `run_in_background` Bash and its other non-agent tasks, a Codex background terminal. */

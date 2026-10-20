@@ -56,6 +56,56 @@ test("the steps mirror the agent's plan: one it no longer lists is dropped, whoe
   assert.equal(rl.steps.find((x) => x.id === 'rl7')!.status, 'dropped', 'a step added by hand before steps became a mirror goes too');
 });
 
+test('a shorter plan leaves no stale step, done or not', () => {
+  for (const status of ['done', 'pending'] as const) {
+    let s = base();
+    const four = ['Read the code', 'Write the fix', 'Add tests', 'Ship it'];
+    s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items: four.map((title) => ({ title, status })), isFresh: true });
+    s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items: four.slice(0, 3).map((title) => ({ title, status: 'done' as const })) });
+    const shown = thread(s, 'rl').steps.filter((x) => x.status !== 'dropped').map((x) => x.title);
+    assert.deepEqual(shown, four.slice(0, 3), status);
+  }
+});
+
+test('a revised step keeps its id and start but shows the new title', () => {
+  let s = base();
+  const step = thread(s, 'rl').steps.find((x) => x.id === 'rl5')!;
+  const items = thread(s, 'rl').steps.filter((x) => x.status !== 'dropped').map((x): AgentPlanItem => ({ title: x.id === 'rl5' ? 'add a redis client' : x.title, status: 'pending' }));
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items });
+  const revised = thread(s, 'rl').steps.find((x) => x.id === 'rl5')!;
+  assert.notEqual(step.title, 'add a redis client');
+  assert.deepEqual([revised.title, revised.startedAt], ['add a redis client', step.startedAt]);
+});
+
+test('a first_task plan starts a fresh list', () => {
+  let s = base();
+  const before = thread(s, 'rl').steps;
+  const items = before.filter((x) => x.status !== 'dropped').map((x): AgentPlanItem => ({ title: x.title, status: 'pending' }));
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items, isFresh: true });
+  const rl = thread(s, 'rl');
+  const ids = new Set(before.map((x) => x.id));
+  assert.ok(rl.steps.filter((x) => ids.has(x.id)).every((x) => x.status === 'dropped'), 'the previous plan leaves, done steps too');
+  assert.deepEqual(rl.steps.filter((x) => !ids.has(x.id)).map((x) => [x.title, x.status]), items.map((i) => [i.title, 'ready']));
+});
+
+test('the plan shows in the order and with the statuses the agent last sent', () => {
+  let s = base();
+  const four = ['Read the code', 'Write the fix', 'Add tests', 'Ship it'];
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items: four.map((title) => ({ title, status: 'done' as const })), isFresh: true });
+  const items: AgentPlanItem[] = [
+    { title: 'Ship it', status: 'pending' },
+    { title: 'Read the code', status: 'running' },
+    { title: 'Write the fix', status: 'done' },
+  ];
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items });
+  const shown = thread(s, 'rl').steps.filter((x) => x.status !== 'dropped');
+  assert.deepEqual(shown.map((x) => [x.title, x.status, x.doneAt !== undefined]), [
+    ['Ship it', 'ready', false],
+    ['Read the code', 'running', false],
+    ['Write the fix', 'done', true],
+  ]);
+});
+
 test('an approval goes to the queue, blocks the running step, and its answer resolves back to the agent', () => {
   let s = live(base(), 'rl');
   const approval: AgentEvent = { threadId: 'rl', type: 'approval', requestId: 'tool-7', kind: 'command', title: 'Run pnpm db:migrate', detail: 'Applies 2 migrations', code: 'pnpm db:migrate' };
@@ -130,7 +180,7 @@ test('info merges into the thread, MCP servers by name, and a new session starts
 test('the demo adapter adds rl scope at the scripted minute', () => {
   let s = tick(base(), SCRIPT.scopeAt - NOW0);
   const rl = thread(s, 'rl');
-  const added = rl.steps.slice(-2);
+  const added = rl.steps.filter((x) => x.status !== 'dropped').slice(-2);
   assert.deepEqual(added.map((x) => [x.title, x.addedBy]), [
     ['Return RateLimit-* headers', 'claude'],
     ['Stricter limits for /search', 'claude'],
