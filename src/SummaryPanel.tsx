@@ -1,7 +1,6 @@
 import { isValidElement, useRef, useState, type KeyboardEvent, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { FileIcon } from '@react-symbols/icons/utils';
 import { Reorder, useDragControls } from 'motion/react';
-import { limitStatus } from './chat/LimitCard';
 import {
   Plus,
   BackgroundTask,
@@ -10,14 +9,12 @@ import {
   File,
   Folder,
   Grip,
-  Hourglass,
   Image,
   Link,
   Pin,
   PinOff,
   Route,
   Stop,
-  Warning,
   ShieldAlert,
   ShieldCheck,
   type IconComponent,
@@ -51,7 +48,7 @@ import { refDescription, type ChecksState } from './chat/refs';
 import { canAutofix, setAutofix } from './git/autofixToggle';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
-import type { McpServer, Provider, Source, Thread } from './model';
+import type { McpServer, Source, Thread } from './model';
 import { isFolderSource, sourceFrom, sourceUrl } from './sources';
 import type { Action } from './store';
 import { openProfileConfig } from './settings/open';
@@ -67,8 +64,6 @@ import { summarize, type ThreadSummary } from './summary';
 import { hasGoal } from './drift';
 import { currentAction, PHASE_LABELS } from './agentPhase';
 import { OverflowIcon, ProviderMark, TooltipIconButton } from './ui';
-import { toneFor, untilLabel } from './usage/limits';
-import { useAccountLimits } from './usage/useAccountLimits';
 import { shortElapsed, taskResult, threadTasks, type TaskRow } from './runtime/tasks';
 import { SubagentAvatar, subagentPersona, useElapsed } from './agents/parts';
 import { connectorStatus, fileCount, orderCards, savedOrder, summaryCards, type SummaryCardId } from './summarySections';
@@ -140,7 +135,6 @@ function SummaryBody({ thread, onPaneOpened }: { thread: Thread; onPaneOpened?: 
     <div className="flex flex-col gap-2">
       {hasGoal(thread) && <WaitingMove thread={thread} />}
       <NeedsYou thread={thread} />
-      <RateLimitWarning thread={thread} />
       <Accordion type="multiple" value={[...openCards, ...(isChangesOpen ? ['changes'] : []), ...(isTasksOpen ? ['tasks'] : [])]} onValueChange={onOpenChange} asChild>
         <Reorder.Group axis="y" values={order} onReorder={reorder} className="flex flex-col gap-2">
           {order.map((id) => (
@@ -295,7 +289,7 @@ function CardBody({ children }: { children: ReactNode }) {
 
 /** Pending approval or question; blocked steps say so in the goal block. */
 function NeedsYou({ thread }: { thread: Thread }) {
-  // A limit's own line is `RateLimitWarning`'s.
+  // A held limit says so in the chat; the summary doesn't repeat it.
   if (thread.status !== 'needs-you' || thread.live?.limit) return null;
   return (
     <p role="status" className="flex items-center gap-2.5 rounded-xl border border-warning/40 bg-warning/8 px-3 py-2 type-meta text-warning">
@@ -918,34 +912,6 @@ const permissionLabel = (mode: string) =>
     .split(' · ')
     .map((part) => PERMISSION_LABELS[part] ?? part)
     .join(', ');
-
-const PROVIDER_NAMES = { claude: 'Claude', codex: 'Codex' } satisfies Record<Provider, string>;
-
-function RateLimitWarning({ thread }: { thread: Thread }) {
-  const provider = thread.providers[0];
-  const { limits } = useAccountLimits(provider, thread.spaceId);
-  const tight = limits?.windows.find((w) => toneFor(w.usedPct / 100) === 'destructive');
-  const limit = limitStatus(thread);
-  if (limit) return <WarningLine icon={Hourglass}>{limit}</WarningLine>;
-  if (thread.status !== 'running' || !tight) return null;
-
-  const name = `${PROVIDER_NAMES[provider]} ${tight.label.toLowerCase()} limit`;
-  const resets = tight.resetsAt ? `, resets in ${untilLabel(Date.parse(tight.resetsAt) - Date.now())}` : '';
-  return (
-    <WarningLine icon={Warning}>
-      {tight.usedPct >= 100 ? `${name} reached; this agent stalls until it resets${resets}.` : `${name} at ${Math.round(tight.usedPct)}%${resets}.`}
-    </WarningLine>
-  );
-}
-
-function WarningLine({ icon: Icon, children }: { icon: IconComponent; children: ReactNode }) {
-  return (
-    <p role="status" className="flex items-start gap-2.5 rounded-xl border border-warning/40 bg-warning/8 px-3 py-2 type-caption text-warning">
-      <Icon className="size-4 shrink-0" aria-hidden />
-      {children}
-    </p>
-  );
-}
 
 /** The goal card; Open shows its history in a popover beside the panel. */
 function GoalSection({ thread }: { thread: Thread }) {
