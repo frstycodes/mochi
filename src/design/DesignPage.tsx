@@ -571,7 +571,7 @@ function Display() {
           <Collapsible className="flex flex-col gap-1">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="self-start">
-                Settled · 1
+                Archived · 1
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="px-3 type-meta text-muted-foreground">Onboarding emails</CollapsibleContent>
@@ -791,7 +791,7 @@ function Recipes() {
         </Block>
         <Block
           title="Report, criteria met"
-          use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to run open_pr; with a PR open the chip is the next step; merged, Settle thread."
+          use="Every criterion met: the card names what's next and offers it. No PR yet, so Open pull request asks the agent to run open_pr; with a PR open the chip is the next step; merged, Archive thread."
           wide
         >
           <VizThreadProvider value={rl.id}>
@@ -881,7 +881,7 @@ function Recipes() {
                 <span className="flex w-4 justify-center">
                   <ThreadStatusIcon status={s} />
                 </span>
-                {{ running: 'Running', 'needs-you': 'Needs you', review: 'Ready for review', settled: 'Settled' }[s]}
+                {{ running: 'Running', 'needs-you': 'Needs you', review: 'Ready for review', settled: 'Archived' }[s]}
               </span>
             ))}
           </div>

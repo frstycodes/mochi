@@ -222,16 +222,16 @@ function nextMoveFixtures(rl: Thread): NextMoveFixture[] {
       after: 'Continuing with offline ages',
     },
     {
-      label: 'Merged · Settle thread',
+      label: 'Merged · Archive thread',
       thread: thread('Done · merged'),
       summary: '#133 merged into main. Nothing is left open on this goal.',
-      question: 'Settle this thread?',
+      question: 'Archive this thread?',
       options: [
-        { label: 'Settle', reply: 'Settle this thread.' },
+        { label: 'Archive', reply: 'Archive this thread.' },
         { label: 'Keep it open', reply: 'Keep this thread open for now.' },
       ],
       before: 'Merged #133',
-      after: 'Settled',
+      after: 'Archived',
     },
     {
       label: 'Worst case · long everything',

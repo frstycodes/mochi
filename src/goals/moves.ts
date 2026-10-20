@@ -47,7 +47,7 @@ export function moveFor(thread: Thread, verdict: Verdict, prStates: RefStatus[],
   if (verdict.kind !== 'done') return null;
   if (!thread.repo) {
     if (!thread.idle?.isConfirmed && thread.criteria?.some((c) => !c.command)) return { kind: 'confirm', label: 'Verify outcome' };
-    return { kind: 'settle', label: 'Settle thread' };
+    return { kind: 'settle', label: 'Archive thread' };
   }
   if (thread.idle?.uncommitted) return { kind: 'commit', label: 'Commit' };
   const subPrs = context.subPrs ?? [];
@@ -56,7 +56,7 @@ export function moveFor(thread: Thread, verdict: Verdict, prStates: RefStatus[],
   if (step === 'open-pr') return { kind: 'open-pr', label: 'Open pull request' };
   // A sub-thread's PR goes into its parent's branch; once it's open, the result goes back and the parent merges it.
   if (thread.parent && step === 'review') return thread.parent.handedBackAt ? null : { kind: 'hand-back', label: 'Hand back' };
-  return step === 'settle' ? { kind: 'settle', label: 'Settle thread' } : null;
+  return step === 'settle' ? { kind: 'settle', label: 'Archive thread' } : null;
 }
 
 /** A parent's move for the sub-thread that holds it up: its gaps go to its own agent, a finished one is handed back. */
@@ -121,6 +121,6 @@ export function questionFor(verdict: Verdict, move: Move | null, report: TurnRep
     case 'merge-subs':
       return `Merge the ${context.subPrs?.length === 1 ? 'sub-thread PR' : `${context.subPrs?.length} sub-thread PRs`} into this branch?`;
     case 'settle':
-      return 'Settle this thread?';
+      return 'Archive this thread?';
   }
 }

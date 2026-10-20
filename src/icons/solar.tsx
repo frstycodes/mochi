@@ -193,6 +193,7 @@ export const TextTool = solar(Linear.TextFieldIcon, Bold.TextFieldIcon);
 export const Transfer = solar(Linear.TransferHorizontalIcon, Bold.TransferHorizontalIcon);
 export const Trash = solar(Linear.TrashBinMinimalisticIcon, Bold.TrashBinMinimalisticIcon);
 export const Undo = solar(Linear.UndoLeftIcon, Bold.UndoLeftIcon);
+export const Unarchive = solar(Linear.ArchiveUpIcon, Bold.ArchiveUpIcon);
 export const Unlink = solar(Linear.UnlinkIcon, Bold.UnlinkIcon);
 export const Upload = solar(Linear.UploadIcon, Bold.UploadIcon);
 export const UserCheck = solar(Linear.UserCheckRoundedIcon, Bold.UserCheckRoundedIcon);

@@ -24,7 +24,7 @@ export function threadDetail(thread: Thread, question?: string) {
   const limit = limitStatus(thread);
   if (limit) return limit;
   if (thread.status === 'needs-you') return question ?? 'Waiting on you';
-  if (thread.status === 'settled') return 'Settled';
+  if (thread.status === 'settled') return 'Archived';
   const pr = thread.prs[thread.prs.length - 1];
   if (thread.status === 'review') return pr ? `#${pr.number} ready for review` : NEXT_STEP_TITLES['open-pr'];
   // A live agent reports what it's doing; idle, its last report says where things stand; demo threads are told by their goal steps.

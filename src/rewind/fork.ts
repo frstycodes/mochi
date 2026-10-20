@@ -68,7 +68,7 @@ export function keepFork(state: State, keepId: string, dropId: string): State {
   const drop = state.threads.find((t) => t.id === dropId);
   if (!keep || !drop || keepId === dropId) return state;
   const now = state.now;
-  let threads = mapThread(state.threads, dropId, (t) => log({ ...t, status: 'settled', settledAt: now }, { at: now, who: 'harness', kind: 'event', text: `Settled: you kept "${keep.title}"` }));
+  let threads = mapThread(state.threads, dropId, (t) => log({ ...t, status: 'settled', settledAt: now }, { at: now, who: 'harness', kind: 'event', text: `Archived: you kept "${keep.title}"` }));
   threads = mapThread(threads, keepId, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: `Kept over "${drop.title}", which settled` }));
   return { ...state, threads, queue: state.queue.filter((q) => q.threadId !== dropId) };
 }

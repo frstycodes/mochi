@@ -67,7 +67,7 @@ export function ThreadStatusIcon({ status }: { status: ThreadStatus }) {
   if (status === 'running') return <LiveDot className="mx-1 text-success" />;
   if (status === 'needs-you') return <MessageCircleQuestion aria-label="Needs you" className="size-4 shrink-0 text-warning" />;
   if (status === 'review') return <ClipboardCheck aria-label="Ready for review" className="size-4 shrink-0 text-muted-foreground" />;
-  return <CircleCheck aria-label="Settled" className="size-4 shrink-0 text-subtle-foreground" />;
+  return <CircleCheck aria-label="Archived" className="size-4 shrink-0 text-subtle-foreground" />;
 }
 
 const STEP_ICONS = {

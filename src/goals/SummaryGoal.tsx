@@ -44,11 +44,11 @@ export function SummaryGoalHeader({ thread, onEdit, onOpen, countClassName }: { 
   );
 }
 
-/** Idle: the verdict in the sidebar chip's icon, tone and words. Working: the ring spins and the step in flight shimmers. Settled says so. */
+/** Idle: the verdict in the sidebar chip's icon, tone and words. Working: the ring spins and the step in flight shimmers. Archived says so. */
 export function SummaryGoalStatus({ thread, verdict, step }: { thread: Thread; verdict: Verdict | null; step?: string }) {
   const working = isWorking(thread);
   if (!working && (!verdict || verdict.kind === 'idle') && thread.status !== 'settled') return null;
-  if (thread.status === 'settled') return <StatusLine icon={<CheckBadge className="size-3.5 text-subtle-foreground" />}>Settled</StatusLine>;
+  if (thread.status === 'settled') return <StatusLine icon={<CheckBadge className="size-3.5 text-subtle-foreground" />}>Archived</StatusLine>;
   if (verdict && !working) return <StatusLine icon={<span className={cn('flex size-3.5 items-center justify-center', TONE_CLASS[verdict.tone])}><VerdictIcon kind={verdict.kind} className="size-3.5" /></span>}>{verdictHeading(verdict, thread).title}</StatusLine>;
   return (
     <StatusLine icon={<ProgressRing met={0} total={1} slot={thread.line} size={14} isWorking />}>

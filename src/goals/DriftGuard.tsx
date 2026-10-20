@@ -59,7 +59,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     if (thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
     dispatch({ type: 'drift-new-thread', threadId: thread.id, prompt: pending.text, branchFrom });
     setPending(null);
-    toast(isGoalDone ? `Settled "${thread.title}" and started a new thread` : 'Started a new thread', {
+    toast(isGoalDone ? `Archived "${thread.title}" and started a new thread` : 'Started a new thread', {
       duration: UNDO_MS,
       description: isGoalDone ? 'Its goal was done.' : undefined,
       action: {

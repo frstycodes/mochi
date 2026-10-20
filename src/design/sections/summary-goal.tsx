@@ -100,7 +100,7 @@ function summaryGoalFixtures(rl: Thread): SummaryGoalFixture[] {
       question: 'Retry it, or quarantine it and open an issue?',
     },
     {
-      label: 'Settled',
+      label: 'Archived',
       thread: { ...done, status: 'settled', goal: 'Admins see API usage per key for the last 30 days', prs: [{ number: 133, state: 'merged', title: 'Admin usage dashboard' }] },
       outcome: [
         ['Time', '2h 14m from start to settle'],

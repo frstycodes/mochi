@@ -23,7 +23,7 @@ test('a working thread has no verdict', () => {
 test('every criterion met reads done, and names what comes next from the PR', () => {
   assert.deepEqual(pick(idleVerdict(thread(), [])), ['done', 'Done', 'Open pull request']);
   assert.deepEqual(pick(idleVerdict(thread(), [pr('open')])), ['done', 'Done', 'In review · #135']);
-  assert.deepEqual(pick(idleVerdict(thread(), [pr('merged')])), ['done', 'Merged', 'Settle thread']);
+  assert.deepEqual(pick(idleVerdict(thread(), [pr('merged')])), ['done', 'Merged', 'Archive thread']);
 });
 
 test('a failing check is a critical gap even when the agent claimed the criterion', () => {
