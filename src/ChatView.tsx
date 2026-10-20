@@ -15,7 +15,7 @@ import { PromptInputProvider, usePromptInputController } from '@/components/ai-e
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ComposerInbox } from './browser/composer';
-import { authorName, isMochiCard, type Provider, type QueuedMessage, type QueueItem, type StepStatus, type Thread } from './model';
+import { authorName, isMochiCard, type Provider, type QueuedMessage, type QueueItem, type Thread } from './model';
 import { CardEntry, EventLine } from './chat/MochiWidget';
 import { clock } from './progress';
 import { QueueDecision } from './QueueView';
@@ -37,7 +37,7 @@ import { VizThreadProvider } from './viz/WidgetVisual';
 import { DriftCard, useDriftGuard } from './goals/DriftGuard';
 import { GoalCard } from './goals/GoalCard';
 import { ReportCard } from './goals/ReportCard';
-import { NextMoveRecord, PlanList, useNextMove, type PlanItem } from './goals/NextMove';
+import { NextMoveRecord, ThreadPlan, useNextMove } from './goals/NextMove';
 import { SubThreadResultRow } from './goals/SubThreads';
 import { showsVerdictCard } from './goals/report';
 import { ProposalCard } from './goals/ProposalCard';
@@ -123,7 +123,7 @@ export function ChatView({ thread, isReadOnly, messageBar }: { thread: Thread; i
                 </Transcript>
                 <ProposalCard thread={thread} />
                 <ReportCard thread={thread} isReadOnly={isReadOnly} onJump={(quote) => jumpToQuote(transcript.current, rows, quote)} />
-                <PlanList items={planItems(thread, state.now)} slot={thread.line} isWorking={isRunning} />
+                <ThreadPlan thread={thread} isWorking={isRunning} />
                 <ChatMochi phase={agentPhase(thread)} label={pendingWork(thread)?.label} />
               </div>
             </ConversationContent>
@@ -567,9 +567,3 @@ function useRecordUnanswered(thread: Thread) {
   };
 }
 
-/** The agent's plan as the chat's to-do list; dropped items leave it. */
-function planItems(thread: Thread, now: number): PlanItem[] {
-  return thread.steps.flatMap((s) => (s.status === 'dropped' ? [] : [{ title: s.title, status: PLAN_STATUS[s.status], ...(s.startedAt !== undefined && { minutes: (s.doneAt ?? now) - s.startedAt }) }]));
-}
-
-const PLAN_STATUS = { done: 'done', running: 'running', ready: 'pending', blocked: 'pending' } satisfies Record<Exclude<StepStatus, 'dropped'>, PlanItem['status']>;

@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils';
 import { authorName, type NextOption, type Thread } from '../../model';
 import { ComposerCard } from '../../Composer';
 import { Evidence, GapList } from '../../goals/ReportCard';
-import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveRecord, NextMoveSummary, PlanList, useNextMove, type PlanItem } from '../../goals/NextMove';
+import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveRecord, NextMoveSummary, PlanList, useNextMove } from '../../goals/NextMove';
+import type { PlanItem } from '../../goals/plan';
 import { VizThreadProvider } from '../../viz/WidgetVisual';
 import { Block } from '../layout';
 import { verdictFixtures } from '../verdictFixtures';
@@ -46,7 +47,7 @@ function PlanMock({ rl }: { rl: Thread }) {
 
 function advance(items: PlanItem[]): PlanItem[] {
   const i = items.findIndex((x) => x.status === 'running');
-  return items.map((x, j) => (j === i ? { ...x, status: 'done' } : j === i + 1 ? { ...x, status: 'running', minutes: 0 } : x));
+  return items.map((x, j) => (j === i ? { ...x, status: 'done' } : j === i + 1 ? { ...x, status: 'running', ms: 0 } : x));
 }
 
 type Answer = { label: string; draft?: string; isMove?: boolean; reply?: string };
@@ -133,8 +134,8 @@ function ComposerStub({ placeholder, draft }: { placeholder: string; draft?: str
 }
 
 const PLAN: PlanItem[] = [
-  { title: 'Read the rate limiter and its tests', status: 'done', minutes: 4 },
-  { title: 'Add Retry-After to every 429', status: 'running', minutes: 12 },
+  { title: 'Read the rate limiter and its tests', status: 'done', ms: 4 * 60_000 },
+  { title: 'Add Retry-After to every 429', status: 'running', ms: 12 * 60_000 + 7_000 },
   { title: 'Cover the burst case in rate-limit.test.ts', status: 'pending' },
   { title: 'Typecheck, test, then check the headers with curl', status: 'pending' },
 ];

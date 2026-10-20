@@ -59,6 +59,14 @@ export function duration(minutes: number) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+export function formatElapsed(ms: number) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 /** "just now", "1 minute ago", "3 hours ago", "yesterday" for something `minutes` old. */

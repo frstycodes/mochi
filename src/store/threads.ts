@@ -115,8 +115,9 @@ export type ThreadsAction =
   | { type: 'pin-at'; threadId: string; order: number }
   | { type: 'say'; threadId: string; entry: Omit<ActivityEntry, 'at'> }
   | { type: 'restore'; snapshot: Snapshot }
-  | { type: 'rewind'; threadId: string; n: number; mode?: RewindMode; forkAt?: string | null }
-  | { type: 'rewind-message'; threadId: string; index: number; mode?: RewindMode; forkAt?: string | null }
+  /** `ms`: wall-clock time of the rewind, the restarted clock of a step that was running then. */
+  | { type: 'rewind'; threadId: string; n: number; mode?: RewindMode; forkAt?: string | null; ms?: number }
+  | { type: 'rewind-message'; threadId: string; index: number; mode?: RewindMode; forkAt?: string | null; ms?: number }
   | { type: 'rewind-undo' }
   | { type: 'turn-undo'; threadId: string; start: number; isUndone: boolean; text: string }
   | { type: 'checkpoint-ref'; threadId: string; n: number; ref: string | null }
@@ -301,9 +302,9 @@ function reduce(state: State, action: Action): State {
     case 'restore':
       return { ...state, ...action.snapshot };
     case 'rewind':
-      return rewind(state, action.threadId, action.n, action.mode, action.forkAt);
+      return rewind(state, action.threadId, action.n, action.mode, action.forkAt, action.ms);
     case 'rewind-message':
-      return rewindToMessage(state, action.threadId, action.index, action.mode, action.forkAt);
+      return rewindToMessage(state, action.threadId, action.index, action.mode, action.forkAt, action.ms);
     case 'turn-undo':
       return turnUndo(state, action.threadId, { start: action.start, isUndone: action.isUndone }, action.text);
     case 'rewind-undo':
@@ -390,8 +391,25 @@ function withEventSeq(state: State, event: SeqAgentEvent): State {
 
 function stampNew(before: State, after: State, threadId: string, ms?: number): State {
   if (ms === undefined || after === before) return after;
-  const from = before.threads.find((t) => t.id === threadId)?.activity.length ?? 0;
-  return { ...after, threads: mapThread(after.threads, threadId, (t) => (t.activity.length > from ? { ...t, activity: t.activity.map((e, i) => (i >= from && e.ms === undefined ? { ...e, ms } : e)) } : t)) };
+  const prior = before.threads.find((t) => t.id === threadId);
+  const from = prior?.activity.length ?? 0;
+  const priorSteps = new Map(prior?.steps.map((s) => [s.id, s]));
+  return {
+    ...after,
+    threads: mapThread(after.threads, threadId, (t) => ({
+      ...t,
+      activity: t.activity.length > from ? t.activity.map((e, i) => (i >= from && e.ms === undefined ? { ...e, ms } : e)) : t.activity,
+      steps: t.steps.map((s) => stampStep(priorSteps.get(s.id), s, ms)),
+    })),
+  };
+}
+
+/** A step this action started or finished gets the wall clock beside Mochi's minute clock; one started before the stamps existed keeps none. */
+export function stampStep(prior: Step | undefined, step: Step, ms: number): Step {
+  const isStarted = step.startedAt !== undefined && prior?.startedAt === undefined;
+  const isDone = step.doneAt !== undefined && prior?.doneAt === undefined;
+  if (!isStarted && !isDone) return step;
+  return { ...step, ...(isStarted && { startedMs: ms }), ...(isDone && { doneMs: ms }) };
 }
 
 export function log(thread: Thread, entry: ActivityEntry): Thread {
