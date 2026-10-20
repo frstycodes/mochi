@@ -39,7 +39,8 @@ export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isR
   const { verdict, prs, tiles, question, report } = next;
   const changes = openTurn(thread.activity);
   return (
-    <NextMoveCard ref={card} data-next-move={thread.id}>
+    // A goal-less idle turn with no summary, changes or question leaves every section below empty; the children decide that, so CSS hides the shell.
+    <NextMoveCard ref={card} data-next-move={thread.id} className="has-[>[data-slot=card-content]:only-child:empty]:hidden">
       {verdict.kind !== 'idle' && <NextMoveHeader thread={thread} verdict={verdict} />}
       <NextMoveContent>
         <SubThreadLineage thread={thread} />
