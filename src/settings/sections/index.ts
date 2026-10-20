@@ -24,6 +24,7 @@ import { HarnessesSection } from './harnesses';
 import { KeyboardSection, shortcutRowId, shownCommands } from './keyboard';
 import { ModelsSection } from './models';
 import { NotificationsSection } from './notifications';
+import { ProfilePage } from './profilePage';
 import { ProfilesSection } from './profiles';
 import { RemoteSection } from './remote';
 import { SchedulesSection } from './schedules';
@@ -123,6 +124,7 @@ export const SETTINGS_SECTIONS = [
     title: 'Profiles',
     icon: Users,
     component: ProfilesSection,
+    subpage: ProfilePage,
     // A getter: the rows follow the profiles, so search finds "Personal GitHub account" right after a rename.
     get settings() {
       return [

@@ -32,6 +32,10 @@ export const settings: SettingsHost = {
     return { isSet: false, canStore: false };
   },
   setApiKey: desktopOnly,
+  async profileFolder() {
+    return { dir: '~/Library/Application Support/Mochi/profiles/latitude', files: [{ name: 'mochi.md', provider: null, lines: 4 }, { name: 'claude.md', provider: 'claude', lines: 0 }, { name: 'codex.md', provider: 'codex', lines: 0 }] };
+  },
+  copyProfileFolder: desktopOnly,
   async agentConfig() {
     return DEMO_CONFIG;
   },

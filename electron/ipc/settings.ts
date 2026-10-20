@@ -2,15 +2,16 @@ import { isAbsolute } from 'node:path';
 import { CONCURRENCY_RANGE, IMAGE_GEN_HARNESSES, type AgentSettingsPatch, type ImageGenHarness, type HarnessSettings, type SettingsHost } from '../../src/host/types/settings.ts';
 import type { Provider } from '../../src/model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../src/settings/harnesses.ts';
-import { fromClaude, SERVER_NAME, type ConfigChange, type ConfigPart } from '../../src/settings/agentConfig.ts';
+import { fromClaude, SERVER_NAME, type ConfigChange } from '../../src/settings/agentConfig.ts';
 import { APP_ICONS, type AppIcon } from '../../src/settings/settingOptions.ts';
 import { UTILITY_TASKS, type UtilityTask } from '../../src/utility/prompts.ts';
 import { applyConfig, previewConfig, readProfileConfig, testMcpServer } from '../agents/profileConfig.ts';
+import { copyProfileFolder, profileFolder } from '../agents/profileFolder.ts';
 import { accountsState, addAccount, agentSettings, apiKeyState, linkAccount, removeAccount, renameAccount, setApiKey, updateAgentSettings } from '../agents/config.ts';
 import { detect, latestVersion, updateHarness } from '../settings/detect.ts';
 import { noteLogin } from '../agents/models.ts';
 import { isNewerVersion } from '../../src/settings/parse.ts';
-import { integer, MAX_MODEL_CHARS, record, string, type Handlers } from './handlers.ts';
+import { integer, MAX_MODEL_CHARS, record, spaceIdOf, string, type Handlers } from './handlers.ts';
 
 export const settings = {
   async get() {
@@ -67,6 +68,12 @@ export const settings = {
     }
     return apiKeyState(id);
   },
+  async profileFolder(_sender, spaceId) {
+    return profileFolder(spaceIdOf(spaceId));
+  },
+  async copyProfileFolder(_sender, fromId, toId) {
+    await copyProfileFolder(spaceIdOf(fromId), spaceIdOf(toId));
+  },
   async agentConfig(_sender, spaceId, projectRoot) {
     return readProfileConfig(string(spaceId, 'spaceId', 128), projectRoot === undefined ? undefined : absolutePath(projectRoot, 'projectRoot') || undefined);
   },
@@ -85,7 +92,6 @@ export const settings = {
 
 // Large enough for the default account's `.claude.json`, which also holds Claude Code's per-project history.
 const MAX_CONFIG_CHARS = 8 * 1024 * 1024;
-const PARTS: ConfigPart[] = ['instructions', 'mcp', 'skills'];
 
 function validChanges(value: unknown): ConfigChange[] {
   if (!Array.isArray(value) || value.length > 20) throw new TypeError('changes must be a list of up to 20');
@@ -93,8 +99,6 @@ function validChanges(value: unknown): ConfigChange[] {
     const c = record(v, `changes[${n}]`);
     const provider = validProvider(c.provider);
     switch (c.kind) {
-      case 'instructions':
-        return { kind: 'instructions', provider, text: string(c.text, 'text', 256 * 1024) };
       case 'mcp-set': {
         const raw = record(c.server, 'server');
         const server = fromClaude(serverName(raw.name), raw);
@@ -109,11 +113,6 @@ function validChanges(value: unknown): ConfigChange[] {
         return { kind: c.kind, provider, name: c.kind === 'mcp-enabled' ? serverName(c.name) : string(c.name, 'name', 128), enabled: c.enabled };
       case 'skill-import':
         return { kind: 'skill-import', provider, folder: absolutePath(c.folder, 'folder') };
-      case 'import': {
-        const from = record(c.from, 'from');
-        const parts = Array.isArray(c.parts) ? c.parts.filter((p): p is ConfigPart => PARTS.includes(p as ConfigPart)) : [];
-        return { kind: 'import', provider, from: { spaceId: string(from.spaceId, 'from.spaceId', 128), provider: validProvider(from.provider) }, parts };
-      }
       default:
         throw new TypeError(`Unknown change ${String(c.kind)}`);
     }

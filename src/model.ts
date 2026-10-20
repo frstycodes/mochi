@@ -659,8 +659,6 @@ export interface Space {
   plans: Record<Provider, string>;
   /** The gh login this profile pushes and opens pull requests as (`login`, or `host/login` off github.com); empty means gh's active account and your own git credentials. */
   github: string;
-  /** Saving instructions writes the same text to the Claude account's CLAUDE.md and the Codex account's AGENTS.md. */
-  syncInstructions?: boolean;
   /** Claude Code's and Codex's own items this profile leaves out of Mochi threads, by `NativeItem.id`; the tools themselves keep loading them (PROFILES-UX.md). */
   nativeOff?: string[];
   /** What items that appear in a harness later do in this profile: load (the default) or arrive off ("Only what I add"). */

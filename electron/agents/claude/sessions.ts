@@ -19,6 +19,7 @@ import { approvalEvent, commandsFrom, createMapper, HIDDEN_PLAN_TOOLS, mcpServer
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
 import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
+import { profileInstructions } from '../profileFolder.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -198,7 +199,7 @@ async function launch(session: Session) {
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
     const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
-    const [library, connectors, toolRules, native] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId), sessionToolRules(options.spaceId), nativeOffSettings(options)]);
+    const [library, connectors, toolRules, native, profileText] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId), sessionToolRules(options.spaceId), nativeOffSettings(options), profileInstructions(options.spaceId, 'claude')]);
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     const { forkAt, isMissing } = await takeForkAt(session);
@@ -211,7 +212,8 @@ async function launch(session: Session) {
       options: {
         pathToClaudeCodeExecutable: install.path,
         // A settings chat isn't Claude Code: no coding preset, no built-in tools, none of the profile's plugins or servers.
-        systemPrompt: options.isSettingsChat ? mochiInstructions(options) : { type: 'preset', preset: 'claude_code', append: mochiInstructions(options) },
+        // The profile's own instructions (its folder's mochi.md and claude.md) follow Mochi's; the account's CLAUDE.md loads as usual.
+        systemPrompt: options.isSettingsChat ? mochiInstructions(options) : { type: 'preset', preset: 'claude_code', append: [mochiInstructions(options), profileText].filter(Boolean).join('\n\n') },
         ...(options.isSettingsChat && { tools: [] }),
         // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
         // The profile's turned-off native items join the flag layer here; nothing is written to the account's own files.

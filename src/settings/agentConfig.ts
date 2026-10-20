@@ -43,17 +43,13 @@ export interface SkillEntry {
   enabled: boolean;
 }
 
-export type ConfigPart = 'instructions' | 'mcp' | 'skills';
-
 /** Every write the settings page can ask for; the main process turns a list of these into file edits. */
 export type ConfigChange =
-  | { kind: 'instructions'; provider: Provider; text: string }
   | { kind: 'mcp-set'; provider: Provider; server: McpServerDef }
   | { kind: 'mcp-remove'; provider: Provider; name: string }
   | { kind: 'mcp-enabled'; provider: Provider; name: string; enabled: boolean }
   | { kind: 'skill-enabled'; provider: Provider; name: string; enabled: boolean }
-  | { kind: 'skill-import'; provider: Provider; folder: string }
-  | { kind: 'import'; from: { spaceId: string; provider: Provider }; provider: Provider; parts: ConfigPart[] };
+  | { kind: 'skill-import'; provider: Provider; folder: string };
 
 export const INSTRUCTIONS_FILE = { claude: 'CLAUDE.md', codex: 'AGENTS.md' } satisfies Record<Provider, string>;
 
