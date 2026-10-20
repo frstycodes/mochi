@@ -95,7 +95,7 @@ export function MochiWidget({ item }: { item: QueueItem }) {
           </ul>
         )}
         {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
-        {!!item.code && isCodeOpen && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
+        {!!item.code && isCodeOpen && <pre className="-mx-(--card-spacing) max-h-48 overflow-auto bg-muted/40 px-(--card-spacing) py-2 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
         {kind === 'choose' && (
           <RadioGroup value={options[0] ?? ''} onValueChange={(v) => setOptions([v])} aria-label={item.title} className="gap-2">
             {item.tool?.options?.map((o) => (

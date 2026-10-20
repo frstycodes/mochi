@@ -27,8 +27,8 @@ export const SnapshotCard = memo(function SnapshotCard({ snap, className }: { sn
             <span className="line-clamp-2">{snap.lastMessage.text}</span>
           </p>
         )}
-        {!!snap.preview && <PreviewFrame threadId={snap.id} tabId={snap.preview.tabId} url={snap.preview.url} />}
       </div>
+      {!!snap.preview && <PreviewFrame threadId={snap.id} tabId={snap.preview.tabId} url={snap.preview.url} />}
     </div>
   );
 });
@@ -55,8 +55,8 @@ function PreviewFrame({ threadId, tabId, url }: { threadId: string; tabId: strin
   }, [hostId]);
 
   return (
-    <div className="mt-auto flex min-h-0 flex-col overflow-hidden rounded-md bg-sidebar ring-1 ring-border">
-      <span className="flex items-center gap-1 px-1.5 py-0.5 font-mono type-caption text-subtle-foreground">
+    <div className="flex min-h-0 shrink flex-col overflow-hidden bg-sidebar">
+      <span className="flex items-center gap-1 px-3 py-1 font-mono type-caption text-subtle-foreground">
         <GlobeAlt className="size-3 shrink-0" />
         <span className="truncate">{url}</span>
       </span>

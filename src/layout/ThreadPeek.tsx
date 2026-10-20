@@ -72,7 +72,7 @@ function PreviewThumb({ thread }: { thread: Thread }) {
   if (!pane || !tab) return null;
   const Content = PANE_TABS.browser.component;
   return (
-    <div aria-hidden inert className="pointer-events-none h-40 overflow-hidden rounded-lg bg-sidebar ring-1 ring-border">
+    <div aria-hidden inert className="pointer-events-none -mx-3 h-40 overflow-hidden bg-sidebar">
       <div className="origin-top-left" style={{ width: `${100 / THUMB_SCALE}%`, height: `${100 / THUMB_SCALE}%`, scale: THUMB_SCALE }}>
         <Content thread={thread} pane={pane} tab={tab} />
       </div>
