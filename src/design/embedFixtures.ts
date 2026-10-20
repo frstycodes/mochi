@@ -1,4 +1,4 @@
-/** Agent-written widgets for the embed frame mockups: a small game and a list taller than the frame allows. */
+/** Agent-written widgets for the Embeds section: a small game and a long list. */
 export const TICTACTOE_WIDGET = `<style>
 .g{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px 16px}
 .t{font-size:20px;font-weight:650;letter-spacing:-0.02em}
@@ -23,14 +23,6 @@ export const TALL_WIDGET = `<style>
 .d{width:6px;height:6px;border-radius:50%;background:var(--success)}
 </style><div class="l">${ROWS.map((name, i) => `<div class="r"><span class="d"></span><span>${name}</span><span>p95 ${120 + ((i * 37) % 260)} ms</span></div>`).join('')}</div>`;
 
-export const CODE_PREVIEW = `export function retryAfter(res: Response) {
-  const header = res.headers.get('Retry-After');
-  if (!header) return null;
-  const seconds = Number(header);
-  if (Number.isFinite(seconds)) return seconds * 1000;
-  const date = Date.parse(header);
-  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
-}`;
+export const CHART_FENCE = JSON.stringify({ type: 'bar', title: 'Deploys per day', x: 'day', series: ['deploys'], data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day, i) => ({ day, deploys: [4, 7, 3, 9, 6][i] })) });
 
-/** What the reported widget did: drew its own bordered card inside the host's padded card. */
-export const CARDED_TICTACTOE_WIDGET = `<div style="border:1px solid var(--border);border-radius:24px">${TICTACTOE_WIDGET}</div>`;
+export const BROKEN_CHART_FENCE = '{ "type": "bar", "x": "day", "data": [ { "day": "Mon", ';
