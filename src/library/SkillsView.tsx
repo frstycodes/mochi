@@ -10,6 +10,7 @@ import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../set
 import { ProviderMark } from '../ui';
 import { AddSkillsDialog } from './AddSkillsDialog';
 import { LibraryPage, type PagePart } from './LibraryPage';
+import { NativeSections } from './NativeSections';
 import { CatalogErrorRow, EmptyRow, filterBy, InstalledList, LibraryRow, PAGE } from './LibraryParts';
 import { SKILLS_SH } from './skillsSh';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
@@ -36,24 +37,27 @@ export function SkillsView() {
 
 function InstalledSkills({ library, query, showDiscover }: Parameters<PagePart>[0]) {
   return (
-    <SettingsSection>
-      <InstalledList
-        entries={library.entries?.filter((e) => e.kind === 'skill')}
-        library={library}
-        query={query}
-        empty={
-          <SettingsRow
-            label="No skills yet"
-            description="Skills teach agents how to do a kind of task. Add some from skills.sh or a GitHub repository."
-            control={
-              <Button variant="outline" size="sm" onClick={showDiscover}>
-                Discover skills
-              </Button>
-            }
-          />
-        }
-      />
-    </SettingsSection>
+    <>
+      <SettingsSection title="In Mochi">
+        <InstalledList
+          entries={library.entries?.filter((e) => e.kind === 'skill')}
+          library={library}
+          query={query}
+          empty={
+            <SettingsRow
+              label="No skills yet"
+              description="Skills teach agents how to do a kind of task. Add some from skills.sh or a GitHub repository."
+              control={
+                <Button variant="outline" size="sm" onClick={showDiscover}>
+                  Discover skills
+                </Button>
+              }
+            />
+          }
+        />
+      </SettingsSection>
+      <NativeSections kind="skill" query={query} />
+    </>
   );
 }
 

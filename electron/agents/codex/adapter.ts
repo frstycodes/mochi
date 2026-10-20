@@ -97,12 +97,12 @@ export class CodexAdapter {
   private accountFor: AccountFor;
   private findCodex: FindCodex;
   private toolsUrl?: (threadId: string, isGoalsOff?: boolean) => Promise<string>;
-  private libraryConfig?: (spaceId: string) => Promise<Record<string, unknown>>;
+  private libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>;
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
-  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library as config overrides. */
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, isGoalsOff?: boolean) => Promise<string>, libraryConfig?: (spaceId: string) => Promise<Record<string, unknown>>) {
+  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. */
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, isGoalsOff?: boolean) => Promise<string>, libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>) {
     this.emit = emit;
     this.accountFor = accountFor;
     this.findCodex = findCodex;
@@ -348,7 +348,7 @@ export class CodexAdapter {
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId, options.isGoalsOff) };
-    const library = await this.libraryConfig?.(options.spaceId);
+    const library = await this.libraryConfig?.(options);
     const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: mochiInstructions(options.isGoalsOff), config: { ...GOALS_OFF, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)

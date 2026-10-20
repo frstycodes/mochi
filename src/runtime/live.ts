@@ -101,7 +101,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const controls = agent.provider === thread.providers[0] ? controlsOf(thread) : DEFAULT_CONTROLS[agent.provider];
       // Its own worktree branches off the thread's branch, so it starts from the thread's work.
       const workspace: StartWorkspace | undefined = agent.hasOwnWorktree && thread.repo ? { mode: 'worktree', branch: `${thread.repo.branch}-${agent.id}`, base: thread.repo.branch } : undefined;
-      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider), ...(agent.model && { model: agent.model }), ...(workspace && { workspace }) };
+      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider, thread.spaceId), ...(agent.model && { model: agent.model }), ...(workspace && { workspace }) };
       return [{ method: 'start', threadId: backgroundSession(thread.id, agent.id), options }];
     }
     case 'bg-stop': {
@@ -132,7 +132,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
-  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
+  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider, thread.spaceId), ...extra } }];
 }
 
 /** A new thread's first start: its branch is its own, and main names it from the first message before the agent starts. */
@@ -152,7 +152,7 @@ export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'
   const provider = thread.session?.provider ?? thread.providers[0];
   if (cwd === undefined) return;
   const workspace = isUnstarted(thread) ? firstWorkspace(thread) : startWorkspace(thread.repo);
-  return { provider, spaceId: thread.spaceId, cwd, workspace, ...agentOptions(controlsOf(thread), provider) };
+  return { provider, spaceId: thread.spaceId, cwd, workspace, ...agentOptions(controlsOf(thread), provider, thread.spaceId) };
 }
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */

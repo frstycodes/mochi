@@ -72,6 +72,7 @@ import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
 import { ImagesSection } from './sections/images';
+import { NativeItemsSection } from './sections/native-items';
 import { McpAppFrame } from '../chat/McpAppCard';
 import { MOBBIN_RESOURCE, MOBBIN_WIDGET } from './mcpAppFixtures';
 import { PhotoViewer } from '../photo/PhotoViewer';
@@ -92,6 +93,7 @@ const SECTIONS = [
   ['conversation', 'Conversation'],
   ['images', 'Images'],
   ['recipes', 'Recipes'],
+  ['profiles', 'Profiles'],
   ['rules', 'Do and don’t'],
 ] as const;
 
@@ -115,6 +117,7 @@ export function DesignPage() {
               <Conversation />
               <ImagesSection />
               <Recipes />
+              <NativeItemsSection />
               <Rules />
             </main>
           </ScrollArea>
