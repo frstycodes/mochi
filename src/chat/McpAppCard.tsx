@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { WarningAlt } from '@/icons';
+import { Grid, WarningAlt } from '@/icons';
 import { AppBridge, buildAllowAttribute, PostMessageTransport, type McpUiHostContext, type McpUiResourceCsp, type McpUiResourcePermissions } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { withCsp } from './mcpApps';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +9,7 @@ import { namesNow, useLibraryNames } from '../library/names';
 import type { McpWidget, McpWidgetResource } from '../model';
 import type { ThemeSlot } from '../themes/model';
 import { useColorTheme } from '../themes/store';
+import { EmbedFrame } from '../viz/EmbedFrame';
 
 const HOST = { name: 'Mochi', version: '1' };
 /** Before the view reports its size. */
@@ -20,9 +21,13 @@ const START_HEIGHT = 160;
  */
 export function McpAppCard({ threadId, widget }: { threadId: string; widget: McpWidget }) {
   const { resource, error } = useWidgetResource(threadId, widget);
-  if (error) return <WidgetError server={widget.server} error={error} />;
-  if (!resource) return <Skeleton style={{ height: START_HEIGHT }} className="w-full rounded-xl" />;
-  return <McpAppFrame widget={widget} resource={resource} />;
+  const { title } = useLibraryNames().server(widget.server);
+  if (error) return <WidgetError title={title} error={error} />;
+  return (
+    <EmbedFrame icon={Grid} title={title}>
+      {resource ? <McpAppFrame widget={widget} resource={resource} /> : <Skeleton style={{ height: START_HEIGHT }} className="w-full rounded-none" />}
+    </EmbedFrame>
+  );
 }
 
 function useWidgetResource(threadId: string, { server, uri }: McpWidget) {
@@ -76,8 +81,7 @@ export function McpAppFrame({ widget, resource }: { widget: McpWidget; resource:
 
 const hostContext = (theme: ThemeSlot): McpUiHostContext => ({ theme, displayMode: 'inline', availableDisplayModes: ['inline'], platform: 'desktop', locale: navigator.language, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
 
-function WidgetError({ server, error }: { server: string; error: string }) {
-  const { title } = useLibraryNames().server(server);
+function WidgetError({ title, error }: { title: string; error: string }) {
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
       <WarningAlt aria-hidden className="mt-px size-3.5 shrink-0" />
