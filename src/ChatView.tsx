@@ -43,7 +43,7 @@ import { showsVerdictCard } from './goals/report';
 import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
 import { AutofixEventRow, ReceivedMessageRow } from './chat/ThreadMessage';
-import { turnChanges } from './chat/turnChanges';
+import { openTurn } from './chat/turnChanges';
 import { hasGoal } from './drift';
 import { Shortcut } from './Shortcut';
 import { isMod, MOD_KEY } from './keys';
@@ -272,10 +272,13 @@ function AgentReply({ thread, index, isLive }: { thread: Thread; index: number; 
   );
 }
 
-/** Finished turns' file changes: the turn still running gets its card once it ends, and a turn with a report lists its files there instead. */
+/**
+ * The last turn's file changes, until you send your next message: the turn still running gets its card once it ends, and a
+ * turn with a report lists its files there instead. Earlier turns' cards are gone; their edits stay in the work log.
+ */
 function shownTurnChanges(thread: Thread, isRunning: boolean) {
-  const isOpenTurnHidden = isRunning || showsVerdictCard(thread);
-  return turnChanges(thread.activity).filter((t) => t.end < thread.activity.length - 1 || !isOpenTurnHidden);
+  const turn = openTurn(thread.activity);
+  return turn && !isRunning && !showsVerdictCard(thread) ? [turn] : [];
 }
 
 /** One rail item per prompt you sent; a prompt whose message (or a passage in it) is pinned carries those pins into the hover card. */

@@ -45,6 +45,7 @@ export const Clock = solar(Linear.ClockCircleIcon, Bold.ClockCircleIcon);
 export const ClockCircle = solar(Linear.StopwatchIcon, Bold.StopwatchIcon);
 export const Code = solar(Linear.CodeIcon, Bold.CodeIcon);
 export const Coffee = solar(Linear.CupHotIcon, Bold.CupHotIcon);
+export const Coin = solar(Linear.DollarIcon, Bold.DollarIcon);
 export const Columns = solar(Linear.PanelLeftIcon, Bold.PanelLeftIcon);
 export const Command = solar(Linear.CommandIcon, Bold.CommandIcon);
 export const Compass = solar(Linear.CompassIcon, Bold.CompassIcon);
@@ -210,7 +211,7 @@ export const XCircle = solar(Linear.CloseCircleIcon, Bold.CloseCircleIcon);
 export const XSquare = solar(Linear.CloseSquareIcon, Bold.CloseSquareIcon);
 export const ZoomIn = solar(Linear.MagnifierZoomInIcon, Bold.MagnifierZoomInIcon);
 export const ZoomOut = solar(Linear.MagnifierZoomOutIcon, Bold.MagnifierZoomOutIcon);
-// Solar has no Shift or Option key glyph.
+// Solar has no Shift or Option key glyph, nor a git commit.
 export const Shift = customIcon('Shift', `<path d="M12 3.75 3.75 12.25h4.5v7.5h7.5v-7.5h4.5L12 3.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`);
 // Mochi's library concepts as stroke glyphs, the same shapes as their lit objects (`src/icons/ObjectIcons.tsx`): a bulb
 // for skills, a puzzle piece for plugins, a wrench for connectors (MCP servers). Solar ships the bulb only.
@@ -220,6 +221,7 @@ export const Connector = customIcon('Connector', `<g transform="rotate(-45 12 12
 // A drag handle: two columns of three dots. Solar has none.
 export const Grip = customIcon('Grip', `<g fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></g>`);
 export const Option = customIcon('Option', `<path d="M3.75 6.75h4.5l7.5 10.5h4.5M14.25 6.75h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);
+export const Commit = customIcon('Commit', `<circle cx="12" cy="12" r="3.25" stroke="currentColor" stroke-width="1.5"/><path d="M2.75 12h6M15.25 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`);
 export const Control = solar(Linear.AltArrowUpIcon, Bold.AltArrowUpIcon);
 // Solar has no Return key glyph either; drawn on the same 24px grid at the same stroke.
 export const Return = customIcon('Return', `<path d="M18.75 5.25v6a3 3 0 0 1-3 3h-10.5m0 0 3.75-3.75M5.25 14.25 9 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);

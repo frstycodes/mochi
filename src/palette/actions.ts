@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import { Archive, Connector, ExternalLink, Plugin, Skill, Flag, Link, SearchAlt, ArrowLeft, ArrowRight, Clock, Scale, ArrowLeftRight, XSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, Folder, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, MagicStar, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Columns, Rows, Settings, Sidebar, SidebarRight, Sun, TaskSquare, Transfer, VideoPlay, Share, X, type IconComponent } from '@/icons';
+import { Archive, Chart, Connector, ExternalLink, Plugin, Skill, Flag, Link, SearchAlt, ArrowLeft, ArrowRight, Clock, Scale, ArrowLeftRight, XSquare, Copy, Edit, ExitFullscreen, Eye, EyeSlash, Folder, FolderOpen, Fullscreen, Grid, Hierarchy2, History, Inbox, MagicStar, Monitor, Moon, Pause, Pin, PinOff, Pip, Play, Refresh, Rotation, Route, Columns, Rows, Settings, Sidebar, SidebarRight, Sun, TaskSquare, Transfer, VideoPlay, Share, X, type IconComponent } from '@/icons';
 import { ForkIcon } from '../ui';
 import { toast } from '../toast/store.ts';
 import { getPage, openFind, pageKey, reloadPage } from '../browser/pages';
@@ -73,6 +73,7 @@ export const ACTIONS = [
   { id: 'go-queue', group: 'Go to', title: 'Queue', icon: Inbox, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'queue' } }) },
   { id: 'go-review', group: 'Go to', title: 'Review mode', icon: TaskSquare, keywords: 'inbox approve', when: when.reviews, run: ({ openReview }) => openReview() },
   { id: 'go-board', group: 'Go to', title: 'Board', icon: Route, run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'board' } }) },
+  { id: 'go-usage', group: 'Go to', title: 'Usage', icon: Chart, keywords: 'tokens cost spend stats share commits pull requests', run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'usage' } }) },
   { id: 'go-projects', group: 'Go to', title: 'Projects', icon: Folder, keywords: 'folder repository clone add', run: ({ dispatch }) => dispatch({ type: 'go', view: { kind: 'projects' } }) },
   { id: 'go-skills', group: 'Go to', title: 'Skills', icon: Skill, keywords: 'library skill install github', run: () => openSettings('skills') },
   { id: 'go-plugins', group: 'Go to', title: 'Plugins', icon: Plugin, keywords: 'library plugin marketplace install', run: () => openSettings('plugins') },
