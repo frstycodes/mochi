@@ -58,6 +58,7 @@ import { SummaryGoalBlock } from './sections/summary-goal';
 import { ThreadRowVariantsBlock } from './sections/thread-rows';
 import { SubThreadsBlock } from './sections/sub-threads';
 import { SubThreadGroupingBlock } from './sections/sub-thread-grouping';
+import { ThreadProposalsBlock } from './sections/thread-proposals';
 import { ProposalCard } from '../goals/ProposalCard';
 import { SummaryPanel } from '../SummaryPanel';
 import { ChatView } from '../ChatView';
@@ -771,6 +772,7 @@ function Recipes() {
         <ThreadRowVariantsBlock rl={rl} />
         <SubThreadsBlock rl={rl} />
         <SubThreadGroupingBlock rl={rl} />
+        <ThreadProposalsBlock />
         {verdictFixtures(rl).map(({ label, thread }) => (
           <Block key={label} title={`Verdict · ${label}`} use="The end-of-turn card: Mochi's verdict, the agent's summary, one line of evidence, gaps as call rows, then one question with the move as the primary with its shortcut, and one other answer." wide>
             <VizThreadProvider value={rl.id}>

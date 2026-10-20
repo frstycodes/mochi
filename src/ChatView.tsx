@@ -39,6 +39,7 @@ import { GoalCard } from './goals/GoalCard';
 import { ReportCard } from './goals/ReportCard';
 import { NextMoveRecord, ThreadPlan, useNextMove } from './goals/NextMove';
 import { SubThreadResultRow } from './goals/SubThreads';
+import { ProposalEntry } from './chat/ThreadProposals';
 import { showsVerdictCard } from './goals/report';
 import { ProposalCard } from './goals/ProposalCard';
 import { TurnChangesCard } from './chat/TurnChangesCard';
@@ -198,6 +199,7 @@ const ChatRowView = memo(function ChatRowView({ thread, row, slashItems, isLive,
   if (row.kind === 'event' && row.entry.isLimit) return <LimitEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.nextMove) return <NextMoveRecord record={row.entry.nextMove} />;
   if (row.kind === 'event' && row.entry.subThread) return <SubThreadResultRow entry={row.entry} result={row.entry.subThread} />;
+  if (row.kind === 'event' && row.entry.proposals) return <ProposalEntry thread={thread} entry={row.entry} />;
   if (row.kind === 'event' && row.entry.handoff) return <HandoffRow handoff={row.entry.handoff} at={row.entry.at} />;
   if (row.kind === 'event' && row.entry.compaction) return <CompactionRow compaction={row.entry.compaction} at={row.entry.at} provider={thread.session?.provider ?? thread.providers[0]} />;
   if (row.kind === 'event') return row.entry.card ? <CardEntry entry={row.entry} card={row.entry.card} /> : <EventLine text={row.entry.text} detail={row.entry.detail} at={row.entry.at} glyph={row.entry.glyph} site={row.entry.site} />;

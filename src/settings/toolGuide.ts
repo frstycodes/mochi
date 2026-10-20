@@ -19,7 +19,8 @@ export const TOOL_GUIDE = {
   unpin_thread: { group: 'Threads', label: 'Unpin threads', description: 'Move pinned threads back into the regular list.' },
   reorder_threads: { group: 'Threads', label: 'Reorder the sidebar', description: 'Move threads up or down in the sidebar, or set the order of the pinned ones.' },
   watch_thread: { group: 'Threads', label: 'Watch threads', description: "Start or stop watching a thread, so its events toast for you." },
-  create_thread: { group: 'Threads', label: 'Start threads', description: 'Start a new thread in the same project with its own agent working on a prompt. You stay where you are and can undo it.' },
+  create_thread: { group: 'Threads', label: 'Start threads', description: 'Start a thread you asked for, or suggest one as a card you start or dismiss. You stay where you are and can undo a start.' },
+  dismiss_thread_proposal: { group: 'Threads', label: 'Withdraw thread suggestions', description: 'Withdraw a thread card it suggested that went stale, with the reason on the card.' },
   send_to_thread: { group: 'Threads', label: 'Message other threads', description: "Send a message to another thread's agent, as if you typed it in that thread." },
   delete_thread: { group: 'Threads', label: 'Delete threads', description: 'Delete threads for good: stops their agents and removes their history, and optionally their worktrees.' },
 

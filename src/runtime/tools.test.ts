@@ -7,10 +7,9 @@ import { singleLayout } from '../layout/tree.ts';
 import type { LibraryEntry } from '../library/library.ts';
 import type { SetupResult } from '../library/recipes.ts';
 import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
-import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
+import { DEFAULT_SPACES, firstPrompt, PROPOSAL_TTL, type Provider, type Space, type Thread } from '../model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../settings/agentConfig.ts';
-import { driftPending } from '../chat/outbox.ts';
 import { DEFAULT_PREFS, setPrefs, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
@@ -237,7 +236,7 @@ test('only deletes and settings ask; everything else runs without a widget', () 
 
 test('auto tools never wait: creating and messaging threads run straight through, no widget', async () => {
   const t = setup();
-  const created = await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' });
+  const created = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add a rate limit dashboard' });
   await t.ok('send_to_thread', { threadId: 'adm', text: 'Use the new limits table' });
   await t.ok('rename_thread', { threadId: 'adm', title: 'Admin usage page' });
   assert.ok(t.thread(created.id));
@@ -246,7 +245,7 @@ test('auto tools never wait: creating and messaging threads run straight through
 
 test('create_thread starts each thread on a temp branch of its own, for its title to name', async () => {
   const t = setup();
-  const [a, b] = [await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' }), await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' })];
+  const [a, b] = [await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add a rate limit dashboard' }), await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add a rate limit dashboard' })];
   const [first, second] = [t.thread(a.id).repo!, t.thread(b.id).repo!];
   assert.match(first.branch, /^mochi\/[0-9a-f]{8}$/);
   assert.equal(first.autoBranch, first.branch);
@@ -258,7 +257,7 @@ test('create_thread gives the new thread its own worktree even when your Worktre
   t.env.prefs.set({ workspaceMode: 'folder' });
   setPrefs({ workspaceMode: 'folder' });
   try {
-    const created = await t.ok('create_thread', { prompt: 'Fix the login bug' });
+    const created = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Fix the login bug' });
     assert.notEqual(t.thread(created.id)?.repo?.mode, 'folder');
     assert.match(t.thread(created.id)?.repo?.branch ?? '', /^mochi\/[0-9a-f]{8}$/);
   } finally {
@@ -279,24 +278,24 @@ test('new tasks and subtasks inherit the running session and honor user-named mo
     for (const isTopLevel of [false, true]) {
       for (const picked of [{}, { model: other }, { effort: 'max' }, { model: other, effort: 'max' }]) {
         // Every pick here runs above the session (another model, or max over low), so it waits on your approval.
-        const pending = picked.model || picked.effort ? await t.asking('create_thread', { prompt: 'Fix login', isTopLevel, ...picked }) : null;
+        const pending = picked.model || picked.effort ? await t.asking('create_thread', { initiation: 'user_asked', prompt: 'Fix login', isTopLevel, ...picked }) : null;
         if (pending) decideTool(pending.card.id, { isApproved: true });
-        const r = pending ? await pending.result : await t.call('create_thread', { prompt: 'Fix login', isTopLevel, ...picked });
+        const r = pending ? await pending.result : await t.call('create_thread', { initiation: 'user_asked', prompt: 'Fix login', isTopLevel, ...picked });
         assert.ok(!r.isError, r.text);
         const created = JSON.parse(r.text);
         assert.deepEqual(t.thread(created.id).controls, { model: picked.model ?? model, effort: picked.effort ?? 'low', speed: '', access: 'Manual' });
         assert.equal(!!t.thread(created.id).parent, !isTopLevel);
       }
     }
-    assert.match(await t.err('create_thread', { prompt: 'x', model: 'unavailable' }), /isn't offered/);
-    assert.match(await t.err('create_thread', { prompt: 'x', effort: 'invalid' }), /effort isn't offered/);
+    assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x', model: 'unavailable' }), /isn't offered/);
+    assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x', effort: 'invalid' }), /effort isn't offered/);
   }
 });
 
 test('create_thread reads current controls after approval, not at tool invocation', async () => {
   const t = setup();
   t.env.prefs.set({ toolPolicies: { create_thread: 'ask' } });
-  const pending = await t.asking('create_thread', { prompt: 'Fix login' });
+  const pending = await t.asking('create_thread', { initiation: 'user_asked', prompt: 'Fix login' });
   t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
   decideTool(pending.card.id, { isApproved: true });
   const result = await pending.result;
@@ -306,15 +305,15 @@ test('create_thread reads current controls after approval, not at tool invocatio
 
 test('create_thread resolves unset models, isolates provider changes, and passes choices through when no catalog is available', async () => {
   const t = setup();
-  const inherited = await t.ok('create_thread', { prompt: 'No saved controls' });
+  const inherited = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'No saved controls' });
   assert.equal(t.thread(inherited.id).controls?.model, 'claude-opus-5-5');
   t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
   t.env.models = async () => [{ id: 'gpt-6-sol', name: 'Sol', description: '', efforts: ['high', 'max'], defaultEffort: 'high', speeds: [], isDefault: true }];
-  const switched = await t.ok('create_thread', { prompt: 'Use Codex', provider: 'codex' });
+  const switched = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Use Codex', provider: 'codex' });
   assert.deepEqual(t.thread(switched.id).controls, { model: 'gpt-6-sol', effort: 'high', speed: '', access: 'Auto' });
   t.env.models = async () => [];
   // Without a catalog nothing ranks the pick, so another model asks first.
-  const pending = await t.asking('create_thread', { prompt: 'Use a user-named model', model: 'custom-model', effort: 'custom-effort' });
+  const pending = await t.asking('create_thread', { initiation: 'user_asked', prompt: 'Use a user-named model', model: 'custom-model', effort: 'custom-effort' });
   decideTool(pending.card.id, { isApproved: true });
   const unlisted = JSON.parse((await pending.result).text);
   assert.deepEqual(t.thread(unlisted.id).controls, { model: 'custom-model', effort: 'custom-effort', speed: '', access: 'Auto' });
@@ -322,33 +321,35 @@ test('create_thread resolves unset models, isolates provider changes, and passes
 
 test('create_thread nests under the calling thread by default, and isTopLevel starts it on its own', async () => {
   const t = setup();
-  const nested = await t.ok('create_thread', { prompt: 'Add the retry header' });
+  const nested = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add the retry header' });
   assert.deepEqual(t.thread(nested.id).parent, { threadId: 'rl' });
   assert.equal(t.thread(nested.id).repo?.base, 'feat/api-rate-limits', 'it branches from the parent');
-  const own = await t.ok('create_thread', { prompt: 'Unrelated cleanup', isTopLevel: true });
+  const own = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Unrelated cleanup', isTopLevel: true });
   assert.equal(t.thread(own.id).parent, undefined);
-  assert.match(await t.err('create_thread', { prompt: 'x', isTopLevel: true, criterionId: 'c' }), /leave out isTopLevel/);
+  assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x', isTopLevel: true, criterionId: 'c' }), /leave out isTopLevel/);
 });
 
 test("a new thread can't run above its parent: higher picks ask first, lower ones and permissions pass straight through", async () => {
   const t = setup();
   t.env.models = async (provider) => (provider === 'codex' ? [{ id: 'gpt-6-sol', name: 'Sol', description: '', efforts: ['low', 'high'], speeds: [], isDefault: true }] : [{ id: 'claude-opus-5-5', name: 'Opus', description: '', efforts: ['low', 'high', 'max'], speeds: [], isDefault: true }]);
   t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-opus-5-5', effort: 'high', speed: '', access: 'Manual' } });
-  const lower = await t.ok('create_thread', { prompt: 'Cheap check', effort: 'low' });
+  const lower = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Cheap check', effort: 'low' });
   assert.equal(t.thread(lower.id).controls?.effort, 'low');
-  const pending = await t.asking('create_thread', { prompt: 'Think hard', effort: 'max' });
+  const pending = await t.asking('create_thread', { initiation: 'user_asked', prompt: 'Think hard', effort: 'max' });
   assert.match(pending.card.detail ?? '', /max effort, above this thread/);
   decideTool(pending.card.id, { isApproved: false });
   assert.match((await pending.result).text, /denied/);
-  const switched = await t.ok('create_thread', { prompt: 'Use Codex', provider: 'codex' });
+  const switched = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Use Codex', provider: 'codex' });
   assert.equal(t.thread(switched.id).controls?.access, 'Manual', "switching harness keeps the parent's permissions");
 });
 
 test("a sub-thread's new thread waits on you, then nests under it: a two-level tree", async () => {
   const t = setup();
-  const sub = await t.ok('create_thread', { prompt: 'Piece of the work' });
+  const sub = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Piece of the work' });
+  // Its first turn is the parent's brief, not your request: you ask it here.
+  t.env.dispatch({ type: 'send', threadId: sub.id, text: 'Split this further', reason: '' });
   const queued = t.state().queue.length;
-  const result = t.call('create_thread', { prompt: 'Another piece' }, sub.id);
+  const result = t.call('create_thread', { initiation: 'user_asked', prompt: 'Another piece' }, sub.id);
   for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
   const card = t.state().queue.at(-1)!;
   assert.match(card.detail ?? '', /is a sub-thread/);
@@ -357,7 +358,7 @@ test("a sub-thread's new thread waits on you, then nests under it: a two-level t
   assert.deepEqual(t.thread(created.id).parent, { threadId: sub.id });
   assert.deepEqual(t.thread(sub.id).parent, { threadId: 'rl' });
   const before = t.state().queue.length;
-  const own = t.call('create_thread', { prompt: 'Unrelated', isTopLevel: true }, sub.id);
+  const own = t.call('create_thread', { initiation: 'user_asked', prompt: 'Unrelated', isTopLevel: true }, sub.id);
   for (let i = 0; i < 20 && t.state().queue.length === before; i++) await new Promise((r) => setTimeout(r, 0));
   decideTool(t.state().queue.at(-1)!.id, { isApproved: true });
   assert.equal(t.thread(JSON.parse((await own).text).id).parent, undefined, 'isTopLevel still starts one on its own');
@@ -443,7 +444,7 @@ test("deletes can't be set to run on their own: a saved Allow is ignored and the
 
 test('changes runs everything that doesn’t ask, and blocks deletes and settings without showing their widget', async () => {
   const t = setup({ control: 'changes' });
-  await t.ok('create_thread', { prompt: 'x' });
+  await t.ok('create_thread', { initiation: 'user_asked', prompt: 'x' });
   assert.match(await t.err('delete_thread', { threadIds: ['e2e'] }), /Everything, asking before deletes and settings/);
   assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }], reason: 'x' }), /Everything/);
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no tool widget was shown');
@@ -557,7 +558,7 @@ test('watch_thread toggles only when needed', async () => {
 
 test('create_thread creates in the same project without moving your view, and Undo removes it', async () => {
   const t = setup();
-  const r = await t.ok('create_thread', { prompt: 'Add a rate limit dashboard', provider: 'codex' });
+  const r = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add a rate limit dashboard', provider: 'codex' });
   const created = t.thread(r.id);
   assert.deepEqual([firstPrompt(created), created.providers[0], created.repo?.project], ['Add a rate limit dashboard', 'codex', 'latitude']);
   assert.deepEqual(t.state().views, { latitude: { kind: 'thread', id: 'rl' } });
@@ -1245,15 +1246,10 @@ test("update_plan is the thread's plan, even read-only: resent lists move steps 
   assert.match(await t.err('update_plan', {}), /advance/);
 });
 
-test('update_plan needs a scope with items; new_task shows no plan and offers your message for a new thread', async () => {
+test('update_plan needs a scope with items, and new_task is gone: unrelated work is a create_thread offer', async () => {
   const t = setup({ control: 'read' });
-  const steps = t.thread('rl').steps.length;
   assert.match(await t.err('update_plan', { items: [{ title: 'Read the limiter', status: 'in_progress' }] }), /scope/);
-  const result = await t.call('update_plan', { scope: 'new_task', items: [{ title: 'Write the billing page', status: 'in_progress' }] });
-  assert.match(result.text, /Don't start it/);
-  assert.equal(t.thread('rl').steps.length, steps, 'no plan for work that may move');
-  const asked = t.thread('rl').activity.findLast((e) => e.who === 'you' && e.kind === 'message');
-  assert.deepEqual([driftPending('rl')?.text, driftPending('rl')?.isFromAgent], [asked?.text, true]);
+  assert.match(await t.err('update_plan', { scope: 'new_task', items: [{ title: 'Write the billing page', status: 'in_progress' }] }), /scope/);
 });
 
 test('claim_criterion records evidence; report and get_report give the turn as data', async () => {
@@ -1344,7 +1340,7 @@ test('propose_goal waits for Accept by default; Keep leaves the draft; Apply wit
 
 test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and report_turn wait for propose_goal", async () => {
   const t = setup();
-  const { id } = await t.ok('create_thread', { prompt: 'Something is off with sum' });
+  const { id } = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Something is off with sum' });
   t.env.dispatch({ type: 'goal-drafted', threadId: id, outcome: 'sum returns correct results', criteria: [{ text: 'Tests pass', command: 'npm test' }] });
   const drafted = await t.ok('get_goal', {}, id);
   assert.equal(drafted.isDraft, true);
@@ -1394,7 +1390,7 @@ test('dev MCP starts tasks from an empty build and exposes paginated evidence an
 
 test('new tasks await a researched working-agent goal and can report while acceptance is pending', async () => {
   const t = setup();
-  const { id } = await t.ok('create_thread', { prompt: 'Fix the retry bug after investigating the transport' });
+  const { id } = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Fix the retry bug after investigating the transport' });
   const empty = await t.ok('get_goal', {}, id);
   assert.equal(empty.goal, '');
   assert.deepEqual(empty.criteria, []);
@@ -1416,4 +1412,112 @@ test('report_turn works with goals off, on a thread with no goal', async () => {
   Object.assign(t.thread('rl'), { goal: undefined, proposal: undefined });
   await t.ok('report_turn', { summary: 'Built the wheel', decisions: [], left: [] });
   assert.equal(t.thread('rl').report?.summary, 'Built the wheel');
+});
+
+// {THREAD PROPOSALS}
+
+const cardsOf = (thread: Thread) => thread.activity.flatMap((e) => e.proposals ?? []);
+const brief = (title: string) => ({ title, prompt: `${title}: in src/limits, done when its test passes` });
+
+test('create_thread user_asked starts the thread now, nested under yours, with no card', async () => {
+  const t = setup();
+  const created = await t.ok('create_thread', { initiation: 'user_asked', prompt: 'Add the RateLimit headers' });
+  assert.deepEqual(t.thread(created.id).parent, { threadId: 'rl' });
+  assert.deepEqual(cardsOf(t.thread('rl')), []);
+  assert.match(await t.err('create_thread', { prompt: 'x' }), /initiation/);
+});
+
+test('own_initiative proposes a card and starts nothing; Start creates it nested under the caller', async () => {
+  const t = setup();
+  const threads = t.state().threads.length;
+  const r = await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Share the token bucket') });
+  assert.equal(r.state, 'pending');
+  assert.match(r.note, /nothing runs until they start it/);
+  assert.equal(t.state().threads.length, threads, 'no thread yet');
+  const [card] = cardsOf(t.thread('rl'));
+  assert.deepEqual([card.id, card.initiation, card.title, card.state, card.create.parent], [r.taskId, 'own_initiative', 'Share the token bucket', 'pending', { threadId: 'rl' }]);
+  assert.match(await t.err('create_thread', { initiation: 'own_initiative', prompt: 'x' }), /title/);
+  t.env.dispatch({ type: 'proposal-start', threadId: 'rl', proposalId: r.taskId });
+  const started = cardsOf(t.thread('rl'))[0];
+  assert.equal(started.state, 'started');
+  assert.deepEqual(t.thread(started.threadId!).parent, { threadId: 'rl' });
+  assert.equal(firstPrompt(t.thread(started.threadId!)), started.brief);
+  assert.deepEqual(t.state().views.latitude, { kind: 'thread', id: 'rl' }, 'you stay where you are');
+  assert.match(await t.err('create_thread', { proposalId: r.taskId }), /already started/);
+});
+
+test('the agent starts a card by its proposalId when you tell it to', async () => {
+  const t = setup();
+  const { taskId } = await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Document the limits') });
+  t.env.dispatch({ type: 'send', threadId: 'rl', text: 'start it', reason: '' });
+  const created = await t.ok('create_thread', { proposalId: taskId });
+  assert.equal(cardsOf(t.thread('rl'))[0].threadId, created.id);
+  assert.match(await t.err('create_thread', { proposalId: 'rl-p9' }), /No proposal/);
+});
+
+test('offer waits for New thread or Do it here, and answering it is final', async () => {
+  const t = setup();
+  const threads = t.state().threads.length;
+  const r = await t.ok('create_thread', { initiation: 'offer', ...brief('Migrate the limiter to Redis') });
+  assert.match(r.note, /end your turn now/);
+  assert.equal(t.state().threads.length, threads);
+  assert.equal(cardsOf(t.thread('rl'))[0].initiation, 'offer');
+  t.env.dispatch({ type: 'proposal-answer', threadId: 'rl', proposalId: r.taskId, state: 'here' });
+  assert.equal(cardsOf(t.thread('rl'))[0].state, 'here');
+  t.env.dispatch({ type: 'proposal-start', threadId: 'rl', proposalId: r.taskId });
+  assert.equal(t.state().threads.length, threads, 'an answered offer never starts');
+});
+
+test('a turn proposes at most 3 threads, paged on one card; your next message starts a new turn', async () => {
+  const t = setup();
+  for (const title of ['One', 'Two', 'Three']) await t.ok('create_thread', { initiation: 'own_initiative', ...brief(title) });
+  assert.match(await t.err('create_thread', { initiation: 'own_initiative', ...brief('Four') }), /already proposed 3/);
+  await t.ok('create_thread', { initiation: 'offer', ...brief('An offer is not capped') });
+  assert.equal(t.thread('rl').activity.filter((e) => e.proposals).length, 1, "one turn's proposals share one card");
+  t.env.dispatch({ type: 'send', threadId: 'rl', text: 'thanks, what else?', reason: '' });
+  await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Four') });
+  assert.equal(t.thread('rl').activity.filter((e) => e.proposals).length, 2, 'a new turn gets a new card');
+});
+
+test('dismiss_thread_proposal withdraws a pending card with its reason, once', async () => {
+  const t = setup();
+  const { taskId } = await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Fix the flaky test') });
+  await t.ok('dismiss_thread_proposal', { taskId, reason: 'done in this thread' });
+  assert.deepEqual([cardsOf(t.thread('rl'))[0].state, cardsOf(t.thread('rl'))[0].reason], ['dismissed', 'done in this thread']);
+  assert.match(await t.err('dismiss_thread_proposal', { taskId }), /already dismissed/);
+  assert.match(await t.err('create_thread', { proposalId: taskId }), /already dismissed/);
+  assert.match(await t.err('dismiss_thread_proposal', { taskId: 'nope' }), /No proposal/);
+});
+
+test('a pending card expires after 7 days: it no longer starts or dismisses', async () => {
+  const t = setup();
+  const { taskId } = await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Bump the SDK') });
+  // Backdates the card a week: the app clock only moves by the minute.
+  t.thread('rl').activity.find((e) => e.proposals)!.at -= PROPOSAL_TTL;
+  const threads = t.state().threads.length;
+  t.env.dispatch({ type: 'proposal-start', threadId: 'rl', proposalId: taskId });
+  assert.equal(t.state().threads.length, threads);
+  assert.match(await t.err('create_thread', { proposalId: taskId }), /expired after 7 days/);
+  assert.match(await t.err('dismiss_thread_proposal', { taskId }), /expired/);
+});
+
+test("a turn another thread or an automated event began can only propose", async () => {
+  const t = setup();
+  const { taskId } = await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Earlier card') });
+  t.env.dispatch({ type: 'send', threadId: 'rl', text: 'Ship the fix', reason: '', from: { threadId: 'e2e', title: 'Fix e2e' } });
+  assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x' }), /can't start threads/);
+  assert.match(await t.err('create_thread', { initiation: 'offer', ...brief('x') }), /can't start threads/);
+  assert.match(await t.err('create_thread', { proposalId: taskId }), /can't start threads/);
+  await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Proposed from a message') });
+  t.env.dispatch({ type: 'send', threadId: 'rl', text: 'PR #9 checks failed', reason: '', autofix: { kind: 'ci', pr: 9, title: 'Checks failed' } });
+  assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x' }), /can't start threads/);
+});
+
+test("an agent-started thread's first turn can only propose, until you write to it", async () => {
+  const t = setup();
+  const sub = await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Child') }).then(({ taskId }) => (t.env.dispatch({ type: 'proposal-start', threadId: 'rl', proposalId: taskId }), cardsOf(t.thread('rl'))[0].threadId!));
+  assert.match(await t.err('create_thread', { initiation: 'user_asked', prompt: 'x' }, sub), /can't start threads/);
+  await t.ok('create_thread', { initiation: 'own_initiative', ...brief('Grandchild idea') }, sub);
+  t.env.dispatch({ type: 'send', threadId: sub, text: 'go ahead and split it', reason: '' });
+  assert.equal(t.thread(sub).turn?.isAgentDriven, undefined);
 });
