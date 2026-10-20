@@ -12,6 +12,7 @@ import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
 import { useHarness } from '../store';
 import { hasGoal } from '../drift';
+import { duration } from '../progress';
 import { agentAsk, moveContext, moveFor, questionFor } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { turnReport, verdictHeading, verdictTiles, type Verdict } from './verdict';
@@ -121,14 +122,15 @@ export function NextMoveActions({ labels, onPick }: { labels: string[]; onPick: 
 export interface PlanItem {
   title: string;
   status: 'done' | 'running' | 'pending';
+  /** On Mochi's clock (`state.now`), from start to done or to now; none until it starts. */
+  minutes?: number;
 }
 
-/** The agent's own to-do list, kept visible after completion. The running step spins only while `isWorking`. */
+/** The agent's own to-do list, each step with how long it took; kept visible after completion. The running step spins only while `isWorking`. */
 export function PlanList({ items, slot, isWorking }: { items: PlanItem[]; slot: LineSlot; isWorking: boolean }) {
   if (!items.length) return null;
   return (
-    <CallList aria-label="Plan">
-      <li className="px-3 py-2 type-meta font-medium">Plan</li>
+    <CallList aria-label="Plan" className="divide-y-0 py-1">
       {items.map((item) => (
         <PlanRow key={item.title} item={item} slot={slot} isWorking={isWorking} />
       ))}
@@ -141,19 +143,25 @@ function PlanRow({ item, slot, isWorking }: { item: PlanItem; slot: LineSlot; is
     <li className="flex h-9 min-w-0 items-center gap-2.5 px-3 type-meta">
       <PlanIcon status={item.status} slot={slot} isWorking={isWorking} />
       {item.status === 'running' ? (
-        <Shimmer as="span" className="min-w-0 truncate">
+        <Shimmer as="span" className="min-w-0 flex-1 truncate">
           {item.title}
         </Shimmer>
       ) : (
-        <span className={cn('min-w-0 truncate', item.status === 'done' ? 'text-muted-foreground' : 'text-foreground/75')}>{item.title}</span>
+        <span className={cn('min-w-0 flex-1 truncate', item.status === 'done' ? 'text-muted-foreground' : 'text-foreground/75')}>{item.title}</span>
       )}
       <span className="sr-only">{STATUS_LABEL[item.status]}</span>
+      {item.minutes !== undefined && <span className={cn('shrink-0 tabular-nums', item.status === 'running' ? 'text-foreground/75' : 'text-subtle-foreground')}>{planDuration(item.minutes)}</span>}
     </li>
   );
 }
 
+function planDuration(minutes: number) {
+  const whole = Math.round(minutes);
+  return whole < 1 ? '<1m' : duration(whole);
+}
+
 function PlanIcon({ status, slot, isWorking }: { status: PlanItem['status']; slot: LineSlot; isWorking: boolean }) {
-  if (status === 'done') return <CheckCircle aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
+  if (status === 'done') return <CheckCircle filled aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
   if (status === 'running') return <ProgressRing met={0} total={1} slot={slot} size={14} isWorking={isWorking} />;
   return <span aria-hidden className="m-px size-3 shrink-0 rounded-full border border-dashed border-subtle-foreground" />;
 }
