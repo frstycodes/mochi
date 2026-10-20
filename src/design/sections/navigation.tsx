@@ -113,7 +113,7 @@ export function NavigationSection() {
                   </MenubarItem>
                   <MenubarItem>Second opinion</MenubarItem>
                   <MenubarSeparator />
-                  <MenubarItem variant="destructive">Settle thread</MenubarItem>
+                  <MenubarItem variant="destructive">Archive thread</MenubarItem>
                 </MenubarGroup>
               </MenubarContent>
             </MenubarMenu>

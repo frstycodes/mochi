@@ -14,7 +14,7 @@ export function statusAt(step: Step, t: number): StepStatus | null {
 
 export type Phase = 'planning' | 'building' | 'verifying' | 'ready' | 'settled';
 
-export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Settled' } satisfies Record<Phase, string>;
+export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Archived' } satisfies Record<Phase, string>;
 
 /**
  * The ring: criteria met out of the goal's criteria (what done means); no criteria, no count. Steps never count: they aren't

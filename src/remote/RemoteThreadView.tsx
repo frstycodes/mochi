@@ -174,7 +174,7 @@ function RemoteHeader({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem disabled={!canManage} onSelect={() => void run(machine.id, { type: 'settle', threadId: thread.id, isSettled: !isSettled })}>
-            {isSettled ? 'Reactivate' : 'Settle'}
+            {isSettled ? 'Unarchive' : 'Archive'}
           </DropdownMenuItem>
           {!isSettled && (
             <DropdownMenuItem

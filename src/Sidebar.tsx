@@ -240,7 +240,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
         <ThreadList pinned={pinned} remotePins={useRemotePins()} active={active} row={row} selectedIds={selection.ids} />
 
         {settled.length > 0 && (
-          <FoldGroup label="Settled" count={settled.length}>
+          <FoldGroup label="Archived" count={settled.length}>
             {settled.map((t) => (
               <ThreadRowMenu key={t.id} threadId={t.id} selectedIds={selection.ids}>
                 <SidebarMenuItem data-thread-row={t.id}>{row(t)}</SidebarMenuItem>
@@ -281,7 +281,7 @@ function MachineThreads() {
           {label}
         </SidebarGroup>
       );
-    // Settled folds below as its own group, level with the machine's, as this computer's own does.
+    // Archived folds below as its own group, level with the machine's, as this computer's own does.
     return (
       <RemoteScope key={machine.id} machine={machine} state={state}>
         <SidebarGroup>
@@ -291,7 +291,7 @@ function MachineThreads() {
             {active.length === 0 && <li className="px-2 type-caption text-subtle-foreground">No active threads</li>}
           </SidebarMenu>
         </SidebarGroup>
-        {settled.length > 0 && <FoldGroup label="Settled" count={settled.length}>{settled.map(row)}</FoldGroup>}
+        {settled.length > 0 && <FoldGroup label="Archived" count={settled.length}>{settled.map(row)}</FoldGroup>}
       </RemoteScope>
     );
   });
@@ -473,7 +473,7 @@ const localRow = (group: ThreadGroup): ListRow => ({ rowId: group.thread.id, ...
 const NEST_TARGET =
   "after:pointer-events-none after:absolute after:inset-0 after:rounded-md after:border after:border-transparent data-nest-target:after:border-foreground/20 data-nest-target:[&_[data-sidebar=menu-button]]:bg-sidebar-accent";
 
-/** "2 sub-threads done": the end of a parent's guide once some have finished; they're listed under Settled. */
+/** "2 sub-threads done": the end of a parent's guide once some have finished; they're listed under Archived. */
 function SettledSubs({ count, glide }: { count: number; glide: MotionProps }) {
   return (
     <motion.li {...glide} className="relative pl-[27px]">

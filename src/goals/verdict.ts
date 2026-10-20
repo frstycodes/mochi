@@ -194,7 +194,7 @@ function doneLine(thread: Thread, prs: RefState[]): Pick<Verdict, 'chip' | 'reas
   // No folder, so no branch or PR to come: done is the end.
   if (!thread.repo) return { chip: 'Done', reason: 'Nothing left open' };
   const step = nextStep(prs.map((p) => p.status));
-  if (step === 'settle') return { chip: 'Merged', reason: 'Settle thread' };
+  if (step === 'settle') return { chip: 'Merged', reason: 'Archive thread' };
   const review = prs.find((p) => p.status === 'open' || p.status === 'draft');
   if (step === 'review' && review) return { chip: 'Done', reason: `In review · ${prName(review)}` };
   return { chip: 'Done', reason: 'Open pull request' };

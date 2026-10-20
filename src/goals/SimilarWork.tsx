@@ -53,6 +53,6 @@ function SimilarRow({ thread, similar, other }: { thread: Thread; similar: Simil
 
 function statusLine(other: Thread) {
   const pr = other.prs.at(-1);
-  const state = other.status === 'settled' ? 'Settled' : other.status === 'review' || isGoalMet(other) ? 'Ready for review' : 'In progress';
+  const state = other.status === 'settled' ? 'Archived' : other.status === 'review' || isGoalMet(other) ? 'Ready for review' : 'In progress';
   return pr ? `${state}, PR #${pr.number} ${pr.state}` : state;
 }
