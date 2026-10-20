@@ -12,7 +12,7 @@ import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
 import { useHarness } from '../store';
 import { hasGoal } from '../drift';
-import { planDuration, planItems, type PlanItem } from './plan';
+import { isPlanComplete, planDuration, planItems, type PlanItem } from './plan';
 import { agentAsk, moveContext, moveFor, questionFor } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { turnReport, verdictHeading, verdictTiles, type Verdict } from './verdict';
@@ -148,9 +148,9 @@ function useNowMs(isTicking: boolean) {
   return nowMs;
 }
 
-/** The agent's own to-do list, each step with how long it took; kept visible after completion. The running step spins only while `isWorking`. */
+/** The agent's own to-do list, each step with how long it took; hidden once every step is done. The running step spins only while `isWorking`. */
 export function PlanList({ items, slot, isWorking }: { items: PlanItem[]; slot: LineSlot; isWorking: boolean }) {
-  if (!items.length) return null;
+  if (isPlanComplete(items)) return null;
   return (
     <CallList aria-label="Plan" className="divide-y-0 py-1">
       {items.map((item) => (

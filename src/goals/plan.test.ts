@@ -5,7 +5,7 @@ import type { Step } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { planDuration, planItems, stepElapsedMs } from './plan.ts';
+import { isPlanComplete, planDuration, planItems, stepElapsedMs } from './plan.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const step = (rest: Partial<Step>): Step => ({ id: 's', title: 's', status: 'running', addedAt: 0, addedBy: 'claude', ...rest });
@@ -49,4 +49,11 @@ test('an agent action stamps the steps it starts and finishes with its wall-cloc
   s = threadsReducer(s, { type: 'agent', event: { threadId: 'rl', type: 'plan', items }, ms: 9_000 });
   rl = byId(s);
   assert.equal(rl.get('rl6')!.startedMs, 1_000, 'a repeat plan keeps the first stamp');
+});
+
+test('a plan is complete only when no step is pending or running', () => {
+  assert.equal(isPlanComplete([]), true);
+  assert.equal(isPlanComplete([{ title: 'a', status: 'done' }, { title: 'b', status: 'done' }]), true);
+  assert.equal(isPlanComplete([{ title: 'a', status: 'done' }, { title: 'b', status: 'running' }]), false);
+  assert.equal(isPlanComplete([{ title: 'a', status: 'done' }, { title: 'b', status: 'pending' }]), false);
 });

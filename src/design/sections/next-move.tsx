@@ -7,7 +7,7 @@ import { authorName, type NextOption, type Thread } from '../../model';
 import { ComposerCard } from '../../Composer';
 import { Evidence, GapList } from '../../goals/ReportCard';
 import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveRecord, NextMoveSummary, PlanList, useNextMove } from '../../goals/NextMove';
-import type { PlanItem } from '../../goals/plan';
+import { isPlanComplete, type PlanItem } from '../../goals/plan';
 import { VizThreadProvider } from '../../viz/WidgetVisual';
 import { Block } from '../layout';
 import { verdictFixtures } from '../verdictFixtures';
@@ -34,9 +34,9 @@ export function NextMoveBlock({ rl }: { rl: Thread }) {
 
 function PlanMock({ rl }: { rl: Thread }) {
   const [items, setItems] = useState(PLAN);
-  const isDone = items.every((i) => i.status === 'done');
+  const isDone = isPlanComplete(items);
   return (
-    <MockFrame label="Working · the plan stays last until it's done" control={isDone ? <Button size="xs" variant="outline" onClick={() => setItems(PLAN)}>Reset</Button> : <Button size="xs" variant="outline" onClick={() => setItems(advance)}>Finish a step</Button>}>
+    <MockFrame label="Working · the plan stays last until it's done, then hides" control={isDone ? <Button size="xs" variant="outline" onClick={() => setItems(PLAN)}>Reset</Button> : <Button size="xs" variant="outline" onClick={() => setItems(advance)}>Finish a step</Button>}>
       <p className="type-prose">Adding Retry-After to the 429 path first, then the burst test.</p>
       <WorkLine>Edited rate-limit.ts</WorkLine>
       <PlanList items={items} slot={rl.line} isWorking={!isDone} />

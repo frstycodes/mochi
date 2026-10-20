@@ -17,6 +17,11 @@ export function planItems(steps: Step[], now: number, nowMs: number): PlanItem[]
   });
 }
 
+/** Every step done: the plan has nothing left to show. An empty plan counts as complete. */
+export function isPlanComplete(items: PlanItem[]) {
+  return items.every((i) => i.status === 'done');
+}
+
 /** Wall-clock ms for a step the agent stamped; a demo step, or one finished by an action without `ms`, has only Mochi's minute clock. */
 export function stepElapsedMs(step: Step, now: number, nowMs: number) {
   const { startedMs, doneAt, doneMs } = step;
