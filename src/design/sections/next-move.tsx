@@ -16,7 +16,7 @@ export function NextMoveBlock({ rl }: { rl: Thread }) {
   return (
     <Block
       title="Next move"
-      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat until every item is done: no header, steps joined by a rail, each with how long it took (the running one ticks). When it stops: Mochi's verdict, the agent's summary, Mochi's evidence, then the agent's question with its own answers as buttons; each sends the agent's written reply, or fills the message box. Mochi picks a move only when the agent wrote none. Answer it and the card stays as a record of what you chose."
+      use="In the chat, never the composer. While the agent works, its own to-do list is the last thing in the chat until every item is done: no header, no dividers, each step with how long it took on Mochi's clock. When it stops: Mochi's verdict, the agent's summary, Mochi's evidence, then the agent's question with its own answers as buttons; each sends the agent's written reply, or fills the message box. Mochi picks a move only when the agent wrote none. Answer it and the card stays as a record of what you chose."
       wide
     >
       <VizThreadProvider value={rl.id}>
@@ -32,10 +32,10 @@ export function NextMoveBlock({ rl }: { rl: Thread }) {
 }
 
 function PlanMock({ rl }: { rl: Thread }) {
-  const [items, setItems] = useState(plan);
+  const [items, setItems] = useState(PLAN);
   const isDone = items.every((i) => i.status === 'done');
   return (
-    <MockFrame label="Working · the plan stays last until it's done" control={isDone ? <Button size="xs" variant="outline" onClick={() => setItems(plan())}>Reset</Button> : <Button size="xs" variant="outline" onClick={() => setItems(advance)}>Finish a step</Button>}>
+    <MockFrame label="Working · the plan stays last until it's done" control={isDone ? <Button size="xs" variant="outline" onClick={() => setItems(PLAN)}>Reset</Button> : <Button size="xs" variant="outline" onClick={() => setItems(advance)}>Finish a step</Button>}>
       <p className="type-prose">Adding Retry-After to the 429 path first, then the burst test.</p>
       <WorkLine>Edited rate-limit.ts</WorkLine>
       <PlanList items={items} slot={rl.line} />
@@ -46,8 +46,7 @@ function PlanMock({ rl }: { rl: Thread }) {
 
 function advance(items: PlanItem[]): PlanItem[] {
   const i = items.findIndex((x) => x.status === 'running');
-  const now = Date.now();
-  return items.map((x, j) => (j === i ? { ...x, status: 'done', doneAt: now } : j === i + 1 ? { ...x, status: 'running', startedAt: now } : x));
+  return items.map((x, j) => (j === i ? { ...x, status: 'done' } : j === i + 1 ? { ...x, status: 'running', minutes: 0 } : x));
 }
 
 type Answer = { label: string; draft?: string; isMove?: boolean; reply?: string };
@@ -133,15 +132,12 @@ function ComposerStub({ placeholder, draft }: { placeholder: string; draft?: str
   );
 }
 
-function plan(): PlanItem[] {
-  const now = Date.now();
-  return [
-    { title: 'Read the rate limiter and its tests', status: 'done', startedAt: now - 180_000, doneAt: now - 138_000 },
-    { title: 'Add Retry-After to every 429', status: 'running', startedAt: now - 138_000 },
-    { title: 'Cover the burst case in rate-limit.test.ts', status: 'pending' },
-    { title: 'Typecheck, test, then check the headers with curl', status: 'pending' },
-  ];
-}
+const PLAN: PlanItem[] = [
+  { title: 'Read the rate limiter and its tests', status: 'done', minutes: 4 },
+  { title: 'Add Retry-After to every 429', status: 'running', minutes: 12 },
+  { title: 'Cover the burst case in rate-limit.test.ts', status: 'pending' },
+  { title: 'Typecheck, test, then check the headers with curl', status: 'pending' },
+];
 
 interface NextMoveFixture {
   label: string;
