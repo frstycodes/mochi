@@ -3,8 +3,7 @@ import { test } from 'node:test';
 import type { Thread } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { threadsReducer } from '../store/threads.ts';
-import { nextStep, showsVerdictCard } from './report.ts';
-import { turnReport } from './verdict.ts';
+import { currentReport, nextStep, showsVerdictCard, turnReport } from './report.ts';
 
 test('a met goal waits on opening a PR, then on its review, then on settling once merged', () => {
   assert.equal(nextStep([]), 'open-pr');
@@ -44,4 +43,5 @@ test("a quick turn without its own report doesn't bring back the last turn's que
   assert.equal(turnReport(first)?.next, 'Wait for it?');
   const [second] = threadsReducer(at(5, first), { type: 'idle-start', threadId: 't' }).threads;
   assert.equal(turnReport(second), undefined);
+  assert.equal(currentReport(second), null, 'the sidebar drops it too');
 });

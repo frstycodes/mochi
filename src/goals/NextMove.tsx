@@ -15,7 +15,8 @@ import { hasGoal } from '../drift';
 import { planDuration, planItems, type PlanItem } from './plan';
 import { agentAsk, moveContext, moveFor, questionFor } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
-import { turnReport, verdictHeading, verdictTiles, type Verdict } from './verdict';
+import { turnReport } from './report';
+import { verdictHeading, verdictTiles, type Verdict } from './verdict';
 
 /**
  * The end of a turn, in the chat after the agent's last call: Mochi's verdict, the agent's own summary, Mochi's evidence, then

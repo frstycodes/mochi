@@ -18,8 +18,8 @@ import { CallList, Expand } from '../WorkLog';
 import { continuePrompt, withUnseenGaps, type Move } from './moves';
 import { SubThreadLineage, SubThreadList } from './SubThreads';
 import { NextMoveActions, NextMoveAsk, NextMoveCard, NextMoveContent, NextMoveHeader, NextMoveSummary, useNextMove } from './NextMove';
-import { showsVerdictCard } from './report';
-import { bareStates, idleVerdict, turnReport, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
+import { showsVerdictCard, turnReport } from './report';
+import { bareStates, idleVerdict, type Gap, type Tile, type TileTone, type Verdict } from './verdict';
 
 /**
  * The end of a turn, in the chat: Mochi's verdict, the agent's summary, Mochi's evidence and gaps, then the agent's question with

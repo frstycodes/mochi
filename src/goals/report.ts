@@ -4,7 +4,7 @@ import type { RefStatus } from '../chat/refs.ts';
 
 /** The latest report while it still describes the thread: it isn't working, and you haven't written since. */
 export function currentReport(t: Thread) {
-  const { report } = t;
+  const report = turnReport(t);
   if (!report || t.live?.isWorking) return null;
   const lastYou = t.activity.findLast((e) => e.who === 'you' && e.kind === 'message');
   if (lastYou && lastYou.at > report.at) return null;
@@ -12,6 +12,16 @@ export function currentReport(t: Thread) {
   const met = criteria.filter((c) => isMet(c, t.idle?.isConfirmed)).length;
   return { report, criteria, met, isReady: criteria.length > 0 && met === criteria.length, changes: openTurn(t.activity) };
 }
+
+/** The agent's report_turn from the turn that just ended; an older one describes a turn your later message already answered. */
+export function turnReport(thread: Thread) {
+  const { report, idle } = thread;
+  if (report?.turn !== undefined && idle?.turn !== undefined) return report.turn === idle.turn ? report : undefined;
+  return report && report.at >= (idle?.at ?? 0) - TURN_SLACK ? report : undefined;
+}
+
+// The agent reports just before its turn ends, so its report lands a moment before Mochi's idle record.
+const TURN_SLACK = 1;
 
 /** Whether the end-of-turn card shows: a thread gone idle, with a turn Mochi checked or the agent reported, nothing from you since, and its card not answered yet. */
 export function showsVerdictCard(t: Thread) {

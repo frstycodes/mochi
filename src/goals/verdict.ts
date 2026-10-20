@@ -3,7 +3,7 @@ import { bareState, type RefState, type RefTone } from '../chat/refs.ts';
 import { resetLabel } from '../usage/limits.ts';
 import { subThreadsOf } from '../reorder.ts';
 import { getPrefs } from '../settings/prefs.ts';
-import { nextStep } from './report.ts';
+import { nextStep, turnReport } from './report.ts';
 
 export type VerdictKind = 'checking' | 'done' | 'needs-you' | 'gaps' | 'stalled' | 'waiting' | 'idle';
 export type GapSeverity = 'critical' | 'unverified';
@@ -171,16 +171,6 @@ function asked(thread: Thread) {
   const question = thread.idle?.audit?.question ?? turnReport(thread)?.question;
   return question ? { chip: 'Question', text: question } : null;
 }
-
-/** The agent's report_turn from the turn that just ended; an older one describes a turn your later message already answered. */
-export function turnReport(thread: Thread) {
-  const { report, idle } = thread;
-  if (report?.turn !== undefined && idle?.turn !== undefined) return report.turn === idle.turn ? report : undefined;
-  return report && report.at >= (idle?.at ?? 0) - TURN_SLACK ? report : undefined;
-}
-
-// The agent reports just before its turn ends, so its report lands a moment before Mochi's idle record.
-const TURN_SLACK = 1;
 
 function limitReason(limit: NonNullable<NonNullable<Thread['live']>['limit']>) {
   const window = limit.label ? `${limit.label} limit` : 'Usage limit';

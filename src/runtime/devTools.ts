@@ -1,5 +1,6 @@
 import type { AgentToolCall, AgentToolResult } from '../host/types/agent.ts';
-import { bareStates, idleVerdict, subThreadVerdicts, turnReport } from '../goals/verdict.ts';
+import { turnReport } from '../goals/report.ts';
+import { bareStates, idleVerdict, subThreadVerdicts } from '../goals/verdict.ts';
 import { moveContext, moveFor, questionFor } from '../goals/moves.ts';
 import { authorName } from '../model.ts';
 import { summary, type ToolEnv } from './tools.ts';
