@@ -3,15 +3,22 @@ import { CheckBadge, Download, Login, Refresh, Trash } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
+import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
+import { OpenFileItems } from '../files/OpenFileItems';
 import { IconImage } from '../IconImage';
+import type { Space } from '../model';
 import { useProfiles } from '../profiles';
 import { timeAgo } from '../progress';
 import { SettingsCard, SettingsRow, SkeletonRows } from '../settings/parts';
-import { OverflowIcon, SpaceIcon } from '../ui';
+import { HARNESSES } from '../settings/harnesses';
+import { OverflowIcon, ProviderMark, SpaceIcon } from '../ui';
 import { isSameServer } from './connectors';
+import { useLibraryScope } from './libraryScope';
 import { STANDALONE_PLUGIN, type LibraryEntry } from './library';
+import { similarNativeSkills, type SimilarSkill } from './similarSkills';
+import { useNativeItems } from './useNativeItems';
 import type { Library } from './useLibrary';
 
 /** What the Skills, Plugins and Connectors pages share: the installed list, item rows with their icon, install buttons. */
@@ -37,12 +44,22 @@ export const countOf = (n: number, noun: string) => `${n} ${PLURAL.select(n) ===
 const KIND_LABELS = { skill: 'Skill', plugin: 'Plugin', server: 'Local server', connector: 'Connector' } satisfies Record<LibraryEntry['kind'], string>;
 
 export function EntryRow({ entry, library }: { entry: LibraryEntry; library: Library }) {
-  return <LibraryRow name={entry.title} icon={entry.icon} description={entry.description} meta={entryMeta(entry)} notes={entryNotes(entry, library.entries ?? [])} actions={<EntryActions entry={entry} library={library} />} />;
+  const { profile } = useLibraryScope();
+  const isOff = !!profile && isHandedOut(entry) && !entry.profileIds.includes(profile.id);
+  return <LibraryRow name={entry.title} icon={entry.icon} description={entry.description} meta={entryMeta(entry)} notes={entryNotes(entry, library.entries ?? [], !profile)} isDimmed={isOff} actions={<EntryActions entry={entry} library={library} />} />;
 }
 
-/** Sign in (a signed-out account), the profiles that get it, and the ⋯ menu: what every installed item can do. */
+// A skill written to an agent's own folders loads wherever that account does, so it isn't handed to profiles.
+const isHandedOut = (entry: LibraryEntry) => !entry.placements.length || !!entry.profileIds.length;
+
+/**
+ * Sign in (a signed-out account), whether it's in the profile the page shows (a switch) or which profiles get it (All
+ * profiles), and the ⋯ menu: what every installed item can do.
+ */
 export function EntryActions({ entry, library }: { entry: LibraryEntry; library: Library }) {
+  const { profile } = useLibraryScope();
   const [isSigningIn, setSigningIn] = useState(false);
+  const placed = entry.kind === 'skill' ? entry.placements[0] : undefined;
   const signIn = () => {
     setSigningIn(true);
     void library.signIn(entry).finally(() => setSigningIn(false));
@@ -55,7 +72,7 @@ export function EntryActions({ entry, library }: { entry: LibraryEntry; library:
           Sign in
         </Button>
       )}
-      {(!entry.placements.length || !!entry.profileIds.length) && <ProfilesMenu entry={entry} library={library} />}
+      {isHandedOut(entry) && (profile ? <ProfileSwitch entries={[entry]} name={entry.title} profile={profile} library={library} /> : <ProfilesMenu entries={[entry]} name={entry.title} library={library} />)}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon-sm" aria-label={`${entry.title} actions`}>
@@ -63,6 +80,13 @@ export function EntryActions({ entry, library }: { entry: LibraryEntry; library:
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
+          {/* Written to the agents' folders, it's files you can open; a library-only skill lives inside library.json. */}
+          {!!placed && (
+            <>
+              <OpenFileItems file={{ root: placed.dir, path: 'SKILL.md' }} />
+              <DropdownMenuSeparator />
+            </>
+          )}
           {entry.autoUpdate !== null && (
             <>
               <DropdownMenuItem onSelect={() => void library.update(entry)}>
@@ -96,11 +120,11 @@ function entryMeta(entry: LibraryEntry) {
 
 const tildePath = (dir: string) => dir.replace(/^\/(Users|home)\/[^/]+/, '~');
 
-function entryNotes(entry: LibraryEntry, entries: LibraryEntry[]) {
+function entryNotes(entry: LibraryEntry, entries: LibraryEntry[], isAllProfiles: boolean) {
   const missing = entry.remotes.filter((remote) => !entries.some((e) => e.kind === 'connector' && !!e.source && isSameServer(e.source, remote.url)));
   return [
     ...(entry.isLinked === false ? ['Signed out: its tools are left out of threads until you sign in'] : []),
-    ...(!entry.profileIds.length && !entry.placements.length ? ['In no profile yet: pick which profiles get it'] : []),
+    ...(isAllProfiles && !entry.profileIds.length && !entry.placements.length ? ['In no profile yet: pick which profiles get it'] : []),
     ...(missing.length ? [`Connect ${LIST.format(missing.map((r) => r.name))} under Connectors for its tools`] : []),
     ...(entry.unsupported.length ? [`Left out: ${LIST.format(entry.unsupported)}`] : []),
     ...(entry.kind === 'plugin' && !entry.contents && !entry.remotes.length ? ['Nothing in it loads into threads'] : []),
@@ -157,14 +181,14 @@ export function EmptyRow({ text }: { text: string }) {
   return <p className="px-4 py-6 text-center type-meta text-muted-foreground">{text}</p>;
 }
 
-/** Install, or a quiet "Installed" once it's in the library; which profiles get it is chosen there. */
+/** Install, or a quiet "In library" once it's there; which profiles get it is chosen there. */
 export function InstallControl({ entry, name, install }: { entry: LibraryEntry | undefined; name: string; install: () => Promise<boolean> }) {
   const [isBusy, setBusy] = useState(false);
   if (entry)
     return (
       <span className="flex h-7 w-24 items-center justify-end gap-1 type-meta text-muted-foreground">
         <CheckBadge aria-hidden className="size-3.5 text-success" />
-        Installed
+        In library
       </span>
     );
   return (
@@ -212,16 +236,50 @@ export function CategoryChips({ categories, value, onChange }: { categories: str
 }
 
 
-/** The profiles an item (or one connector account) is handed to: their icons on the button, a checkbox each in the menu. */
-export function ProfilesMenu({ entry, library }: { entry: LibraryEntry; library: Library }) {
+/** A group's control (every skill of a repo): its switch for the profile the page shows, else which profiles get all of it. */
+export function GroupControl({ entries, name, library }: { entries: LibraryEntry[]; name: string; library: Library }) {
+  const { profile } = useLibraryScope();
+  const handed = entries.filter(isHandedOut);
+  if (!handed.length) return null;
+  return profile ? <ProfileSwitch entries={handed} name={name} profile={profile} library={library} /> : <ProfilesMenu entries={handed} name={name} library={library} />;
+}
+
+/** On when the profile has every one of `entries`; flipping it sets them all. Several, partly in, says how many. */
+function ProfileSwitch({ entries, name, profile, library }: { entries: LibraryEntry[]; name: string; profile: Space; library: Library }) {
+  const on = entries.filter((e) => e.profileIds.includes(profile.id)).length;
+  const setAll = async (isIn: boolean) => {
+    for (const entry of entries) if (entry.profileIds.includes(profile.id) !== isIn) await library.setInProfile(entry, profile.id, isIn);
+  };
+  return (
+    <>
+      {on > 0 && on < entries.length && (
+        <span className="type-caption text-subtle-foreground tabular">
+          {on} of {entries.length}
+        </span>
+      )}
+      <Switch checked={on === entries.length} onCheckedChange={(next) => void setAll(next)} aria-label={`${name} in ${profile.name}`} />
+    </>
+  );
+}
+
+/**
+ * The profiles an item (one connector account, or every skill of a repo) is handed to: their icons on the button, a
+ * checkbox each in the menu. For several items a profile is ticked once it has all of them, and says so when it has some.
+ */
+export function ProfilesMenu({ entries, name, library }: { entries: LibraryEntry[]; name: string; library: Library }) {
   const profiles = useProfiles();
-  const members = profiles.filter((p) => entry.profileIds.includes(p.id));
-  const label = !members.length ? 'No profiles' : members.length === profiles.length ? 'All profiles' : members.length === 1 ? members[0].name : `${members.length} profiles`;
+  const countIn = (profileId: string) => entries.filter((e) => e.profileIds.includes(profileId)).length;
+  const members = profiles.filter((p) => countIn(p.id) === entries.length);
+  const isMixed = profiles.some((p) => countIn(p.id) > 0 && countIn(p.id) < entries.length);
+  const label = isMixed ? 'Mixed' : !members.length ? 'No profiles' : members.length === profiles.length ? 'All profiles' : members.length === 1 ? members[0].name : `${members.length} profiles`;
+  const setIn = async (profileId: string, isIn: boolean) => {
+    for (const entry of entries) if (entry.profileIds.includes(profileId) !== isIn) await library.setInProfile(entry, profileId, isIn);
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className={cn('max-w-40', !members.length && 'text-muted-foreground')} aria-label={`Profiles that get ${entry.title}: ${label}`}>
-          {members.length > 0 && members.length < profiles.length && (
+        <Button variant="outline" size="sm" className={cn('max-w-40', !members.length && !isMixed && 'text-muted-foreground')} aria-label={`Profiles that get ${name}: ${label}`}>
+          {!isMixed && members.length > 0 && members.length < profiles.length && (
             <span className="flex -space-x-0.5">
               {members.slice(0, 3).map((p) => (
                 <SpaceIcon key={p.id} space={p} className="size-3.5" />
@@ -231,15 +289,40 @@ export function ProfilesMenu({ entry, library }: { entry: LibraryEntry; library:
           <span className="truncate">{label}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Profiles that get it</DropdownMenuLabel>
-        {profiles.map((p) => (
-          <DropdownMenuCheckboxItem key={p.id} checked={entry.profileIds.includes(p.id)} onSelect={(e) => e.preventDefault()} onCheckedChange={(isIn) => void library.setInProfile(entry, p.id, isIn)}>
-            <SpaceIcon space={p} className="size-3.5" />
-            {p.name}
-          </DropdownMenuCheckboxItem>
-        ))}
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel>{entries.length > 1 ? `Profiles that get all ${entries.length}` : 'Profiles that get it'}</DropdownMenuLabel>
+        {profiles.map((p) => {
+          const count = countIn(p.id);
+          return (
+            <DropdownMenuCheckboxItem key={p.id} checked={count === entries.length} onSelect={(e) => e.preventDefault()} onCheckedChange={(isIn) => void setIn(p.id, isIn)}>
+              <SpaceIcon space={p} className="size-3.5" />
+              <span className="flex-1 truncate">{p.name}</span>
+              {count > 0 && count < entries.length && <span className="type-caption text-subtle-foreground tabular">{count} of {entries.length}</span>}
+            </DropdownMenuCheckboxItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/** A Claude Code or Codex skill of a like name: installing this one may only add a second copy of it. */
+export function SimilarNote({ similar }: { similar: SimilarSkill[] }) {
+  if (!similar.length) return null;
+  const [first] = similar;
+  return (
+    <span className="flex items-center gap-1 type-caption text-warning">
+      <ProviderMark provider={first.provider} size={12} />
+      <span className="truncate">
+        Similar to {HARNESSES[first.provider].name}’s {first.name}
+        {similar.length > 1 && ` and ${similar.length - 1} more`}
+      </span>
+    </span>
+  );
+}
+
+/** Looks a name up against every account's Claude Code and Codex skills, read once for the caller. */
+export function useSimilarNative() {
+  const accounts = useNativeItems();
+  return (name: string) => similarNativeSkills(name, accounts);
 }

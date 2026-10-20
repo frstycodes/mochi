@@ -26,6 +26,12 @@ export interface FsHost {
   entries(path: string): Promise<{ path: string; dirs: string[]; files: string[] } | null>;
 }
 
+/** A file on disk as the fs host takes it: a folder (`~` allowed) and a path inside it, '' for the folder itself. */
+export interface DiskFile {
+  root: string;
+  path: string;
+}
+
 export type FileContent = { kind: 'text'; text: string; mtimeMs: number } | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
 
 export type WriteResult = { status: 'saved'; mtimeMs: number } | { status: 'conflict'; text: string; mtimeMs: number };

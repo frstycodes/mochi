@@ -2,11 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/toast/store';
 import { host } from '../host';
 import type { Provider } from '../model';
+import { useLibraryScope } from './libraryScope';
 import { setLibraryNames } from './names';
 import type { CatalogPlugin, CatalogSkill, LibraryEntry, Marketplace, SkillDestination } from './library';
 
-/** The profile's library entries, and every change to them; a failed change toasts and leaves the list as it was. */
+/**
+ * The profile's library entries, and every change to them; a failed change toasts and leaves the list as it was. What an
+ * install adds goes to the profiles the library pages are scoped to (`useLibraryScope`).
+ */
 export function useLibrary(spaceId: string) {
+  const { installTo } = useLibraryScope();
   const [entries, setListed] = useState<LibraryEntry[] | null>(null);
   const setEntries = useCallback((list: LibraryEntry[]) => {
     setListed(list);
@@ -34,19 +39,29 @@ export function useLibrary(spaceId: string) {
         return false;
       },
     );
+  // The host adds a new item to the profile it's called for; the other profiles get it here, then the list is read again.
+  const installed = async (install: (profileId: string) => Promise<LibraryEntry[]>) => {
+    const before = new Set((entries ?? (await host.library.list(spaceId))).map((e) => e.id));
+    const [first, ...rest] = installTo;
+    const added = (await install(first)).filter((e) => !before.has(e.id));
+    for (const profileId of rest) for (const entry of added) await host.library.setEnabled(profileId, entry.id, true);
+    return host.library.list(spaceId);
+  };
   return {
     entries,
+    installTo,
     setEnabled: (entry: LibraryEntry, isEnabled: boolean) => apply(`${entry.title} not changed`)(host.library.setEnabled(spaceId, entry.id, isEnabled)),
     /** Hands an item to a profile, or takes it away; the list stays the one for `spaceId`. */
     setInProfile: (entry: LibraryEntry, profileId: string, isIn: boolean) =>
       apply(`${entry.title} not changed`)(host.library.setEnabled(profileId, entry.id, isIn).then(() => host.library.list(spaceId))),
     remove: (entry: LibraryEntry) => apply(`${entry.title} not removed`)(host.library.remove(spaceId, entry.id)),
-    /** `source` is what the catalog was browsed from, so install reads the same (cached) repo. */
-    installSkill: (source: string, skill: CatalogSkill, destination?: SkillDestination) => apply(`${skill.name} not installed`)(host.library.installSkill(spaceId, source, skill.name, destination)),
-    installPlugin: (marketplace: string, plugin: CatalogPlugin) => apply(`${plugin.title ?? plugin.name} not installed`)(host.library.installPlugin(spaceId, marketplace, plugin.name)),
+    /** `source` is what the catalog was browsed from, so install reads the same (cached) repo. A reinstall keeps its profiles. */
+    installSkill: (source: string, skill: CatalogSkill, destination?: SkillDestination) =>
+      apply(`${skill.name} not installed`)(installed((profileId) => host.library.installSkill(profileId, source, skill.name, destination))),
+    installPlugin: (marketplace: string, plugin: CatalogPlugin) => apply(`${plugin.title ?? plugin.name} not installed`)(installed((profileId) => host.library.installPlugin(profileId, marketplace, plugin.name))),
     /** Rejects with the reason instead of toasting, for the review dialog to show inline. */
     installUpload: (file: PluginFile, choice: Parameters<typeof host.library.installUpload>[2]) => host.library.installUpload(spaceId, file, choice).then(setEntries),
-    addConnector: (account: NewConnector) => apply(`${account.alias} not connected`)(host.library.addConnector(spaceId, account)),
+    addConnector: (account: NewConnector) => apply(`${account.alias} not connected`)(installed((profileId) => host.library.addConnector(profileId, account))),
     /** Names the connector `key`, every account on it. */
     renameConnector: (key: string, name: string) => apply(`${name} not renamed`)(host.library.renameConnector(spaceId, key, name)),
     signIn: (entry: LibraryEntry) => apply(`${entry.title} not signed in`)(host.library.signIn(spaceId, entry.id)),

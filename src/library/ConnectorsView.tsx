@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { CheckCircle, ChevronRight, Plus } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { openSubpage } from '../settings/open';
 import { SettingsCard, SettingsRow, SettingsSection, SkeletonRows } from '../settings/parts';
 import { ConnectAccountDialog } from './ConnectDialog';
 import { CONNECTORS, connectorIcon, connectorKey, isSameServer, type Connector } from './connectors';
+import { useLibraryScope } from './libraryScope';
 import { serviceName } from './names';
 import type { LibraryEntry } from './library';
 import { NativeSections } from './NativeSections';
@@ -101,9 +103,14 @@ function byService(accounts: LibraryEntry[]): Service[] {
   return [...groups].map(([url, list]) => ({ url, key: URL.canParse(url) ? connectorKey(url) : url, name: serviceName(list[0]), icon: list[0].icon, accounts: list }));
 }
 
-/** One service as a settings row that opens its own page: tile, name and accounts, then its status beside the chevron. */
+/**
+ * One service as a settings row that opens its own page: tile, name and accounts, then its status beside the chevron;
+ * for a picked profile, how many of its accounts that profile reaches (accounts are switched on the service's page).
+ */
 function ServiceRow({ service }: { service: Service }) {
   const { accounts } = service;
+  const { profile } = useLibraryScope();
+  const inProfile = profile && accounts.filter((a) => a.profileIds.includes(profile.id)).length;
   const aliases = accounts.flatMap((a) => (a.alias ? [a.alias] : []));
   const signedOut = accounts.filter((a) => a.isLinked === false).length;
   return (
@@ -112,14 +119,17 @@ function ServiceRow({ service }: { service: Service }) {
       onClick={() => openSubpage('connectors', service.key)}
       className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
     >
-      <LibraryIcon key={service.icon} url={service.icon} letter={service.name} />
+      <span className={cn('flex', inProfile === 0 && 'opacity-60')}>
+        <LibraryIcon key={service.icon} url={service.icon} letter={service.name} />
+      </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate type-body font-medium">{service.name}</span>
+        <span className={cn('truncate type-body font-medium', inProfile === 0 && 'text-muted-foreground')}>{service.name}</span>
         <span className="truncate type-caption text-subtle-foreground">
           {countOf(accounts.length, 'account')} · {LIST.format(aliases)}
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-2">
+        {!!profile && inProfile !== accounts.length && <span className="type-meta text-muted-foreground tabular">{inProfile ? `${inProfile} of ${accounts.length} in ${profile.name}` : `Off in ${profile.name}`}</span>}
         {signedOut ? <span className="type-meta text-warning">{signedOut} signed out</span> : <CheckCircle aria-label="Every account signed in" className="size-4 text-muted-foreground" />}
         <ChevronRight aria-hidden className="size-4 text-subtle-foreground" />
       </span>

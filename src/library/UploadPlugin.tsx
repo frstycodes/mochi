@@ -11,7 +11,6 @@ import type { Provider } from '../model';
 import { useProfiles } from '../profiles';
 import { ipcMessage } from '../settings/AgentSettings';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
-import { useHarness } from '../store';
 import { ProviderMark, SpaceIcon } from '../ui';
 import type { PluginReview } from './library';
 import { countOf, LibraryIcon, LIST } from './LibraryParts';
@@ -166,10 +165,9 @@ function UploadErrorState({ name, message, onPickAnother, onClose }: { name: str
 }
 
 function ReviewForm({ review, file, library, onDone }: { review: PluginReview; file: { name: string; bytes: Uint8Array }; library: Library; onDone: () => void }) {
-  const { spaceId } = useHarness().state;
   const profiles = useProfiles();
   const [targets, setTargets] = useState<Provider[]>(() => HARNESS_IDS.filter((p) => !!review.loads[p]));
-  const [profileIds, setProfileIds] = useState<string[]>([spaceId]);
+  const [profileIds, setProfileIds] = useState<string[]>(library.installTo);
   const [error, setError] = useState<string | null>(null);
   const [isInstalling, setInstalling] = useState(false);
   const runs = review.hooks.filter((h) => h.type === 'command').length + review.servers.length;

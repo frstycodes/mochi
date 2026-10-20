@@ -1,6 +1,7 @@
 import type { Account, ProviderConfig } from '../host/types/settings.ts';
 import type { McpServerDef } from '../settings/agentConfig.ts';
 import type { Provider } from '../model.ts';
+import type { DiskFile } from '../host/types/fs.ts';
 
 export type NativeKind = 'skill' | 'plugin' | 'server';
 
@@ -15,8 +16,8 @@ export interface NativeItem {
   description: string;
   /** Muted meta: where it lives. */
   where: string;
-  /** A file or folder to reveal; null when the item has no path of its own (a plugin, a server entry). */
-  path: string | null;
+  /** The file it's written in, to open or reveal: a skill's SKILL.md, a server's config file; null for a plugin. */
+  file: DiskFile | null;
   /** Why the tool can't start it as configured, verbatim enough to act on. */
   problem?: string;
   /** Turned off in the tool's own config, so no session loads it whatever the profile says. */
@@ -39,7 +40,7 @@ export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
     name: skill.name,
     description: skill.description,
     where: tilde(skill.dir),
-    path: skill.dir,
+    file: { root: skill.dir, path: 'SKILL.md' },
     isOffNatively: !skill.enabled,
   }));
   const plugins = config.plugins.map((name) => ({
@@ -49,7 +50,7 @@ export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
     name,
     description: '',
     where: name,
-    path: null,
+    file: null,
     isOffNatively: false,
   }));
   const servers = config.mcpServers.map(({ def, scope, enabled, needs }) => ({
@@ -63,7 +64,8 @@ export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
       def.type,
       def.url ?? [def.command, ...(def.args ?? [])].filter(Boolean).join(' '),
     ].join(' · '),
-    path: null,
+    // A project's .mcp.json is opened from the project, not from here.
+    file: scope === 'project' ? null : serverConfigFile(account),
     ...(needs.length && { problem: `Needs ${LIST.format(needs)} set to start` }),
     isOffNatively: !enabled,
     def,
@@ -81,6 +83,10 @@ export function withOff(off: readonly string[] | undefined, ids: readonly string
   const rest = (off ?? []).filter((id) => !ids.includes(id));
   return isOff ? [...rest, ...ids] : rest;
 }
+
+/** Where the account's own servers are written: Claude's `.claude.json` beside its config folder (in the home folder by default), Codex's config.toml. */
+const serverConfigFile = (account: Account): DiskFile =>
+  account.provider === 'codex' ? { root: accountDir(account), path: 'config.toml' } : { root: account.configDir ?? '~', path: '.claude.json' };
 
 const serverFile = (account: Account) =>
   account.provider === 'codex' ? `${accountDir(account)}/config.toml` : account.configDir ? `${tilde(account.configDir)}/.claude.json` : '~/.claude.json';

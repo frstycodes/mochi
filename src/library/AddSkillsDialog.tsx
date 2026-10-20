@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { ChevronDown, Code, Download, FileText, Folder, Link, ShieldAlert, Skill, UserCircle, type IconComponent } from '@/icons';
+import { ChevronDown, Code, Download, FileText, Folder, Link, ShieldAlert, Skill, UserCircle, Users, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupSeparator } from '@/components/ui/button-group';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -19,9 +19,10 @@ import { useProjects } from '../projects';
 import { HARNESS_IDS, HARNESSES } from '../settings/harnesses';
 import { SettingsSelect } from '../settings/parts';
 import { useHarness, useSpaceThreads } from '../store';
-import { ProviderMark } from '../ui';
+import { ProviderMark, SpaceIcon } from '../ui';
+import { useLibraryScope } from './libraryScope';
 import { TRUSTED_SKILL_OWNERS, type CatalogSkill, type SkillDestination } from './library';
-import { CatalogErrorRow, countOf } from './LibraryParts';
+import { CatalogErrorRow, countOf, SimilarNote, useSimilarNative } from './LibraryParts';
 import { parseSkillSource } from './skillSource';
 import { installedEntry, useLoaded, type Library } from './useLibrary';
 
@@ -73,6 +74,7 @@ function AddSkillsForm({ initialSource, library, onDone }: { initialSource: stri
     });
     setFocused(name);
   };
+  const toggleAll = (isOn: boolean) => setChosen(isOn ? found.map((s) => s.name) : []);
   const browse = () => {
     setChosen(null);
     setFocused(null);
@@ -120,13 +122,13 @@ function AddSkillsForm({ initialSource, library, onDone }: { initialSource: stri
           <EmptyBody text={`No SKILL.md in ${source}`} />
         ) : (
           <>
-            <SkillList found={found} isLoading={state.status === 'loading'} picked={picked} shown={shown} library={library} onToggle={toggle} onShow={setFocused} />
+            <SkillList found={found} isLoading={state.status === 'loading'} picked={picked} shown={shown} library={library} onToggle={toggle} onToggleAll={toggleAll} onShow={setFocused} />
             {shown ? <SkillFiles key={shown.source} source={source} skill={shown} owner={owner} /> : <div className="flex-1" />}
           </>
         )}
       </div>
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-3 border-t px-5 py-3">
-        {destination.scope !== 'library' && <DestinationFields destination={destination} onChange={setDestination} />}
+        {destination.scope === 'library' ? <ScopeNote /> : <DestinationFields destination={destination} onChange={setDestination} />}
         <div className="ml-auto flex items-center gap-2">
           <Button type="button" variant="ghost" onClick={onDone}>
             Cancel
@@ -143,10 +145,20 @@ function EmptyBody({ text }: { text: string }) {
 }
 
 /** The skills found, a checkbox each; the row you last touched is the one whose files show. */
-function SkillList({ found, isLoading, picked, shown, library, onToggle, onShow }: { found: CatalogSkill[]; isLoading: boolean; picked: string[]; shown: CatalogSkill | undefined; library: Library; onToggle: (name: string, isOn: boolean) => void; onShow: (name: string) => void }) {
+function SkillList({ found, isLoading, picked, shown, library, onToggle, onToggleAll, onShow }: { found: CatalogSkill[]; isLoading: boolean; picked: string[]; shown: CatalogSkill | undefined; library: Library; onToggle: (name: string, isOn: boolean) => void; onToggleAll: (isOn: boolean) => void; onShow: (name: string) => void }) {
+  const similarTo = useSimilarNative();
+  const isAllPicked = !!found.length && picked.length === found.length;
   return (
     <aside className="flex max-h-64 shrink-0 flex-col border-b sm:max-h-none sm:w-72 sm:border-r sm:border-b-0">
-      <p className="px-4 pt-3 pb-1.5 type-caption text-muted-foreground">{isLoading ? 'Looking for SKILL.md…' : `${countOf(found.length, 'skill')} · ${picked.length} picked`}</p>
+      {isLoading || found.length < 2 ? (
+        <p className="px-4 pt-3 pb-1.5 type-caption text-muted-foreground">{isLoading ? 'Looking for SKILL.md…' : `${countOf(found.length, 'skill')} · ${picked.length} picked`}</p>
+      ) : (
+        // The CLI's "select all"; a repo has no way to say which of its skills it recommends.
+        <label className="flex cursor-pointer items-center gap-2.5 px-4 pt-3 pb-1.5 type-caption text-muted-foreground">
+          <Checkbox checked={isAllPicked || (!!picked.length && 'indeterminate')} onCheckedChange={() => onToggleAll(!isAllPicked)} aria-label="Pick every skill" />
+          {countOf(found.length, 'skill')} · {picked.length} picked
+        </label>
+      )}
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-px px-2 pb-2">
           {isLoading && Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="mx-2 my-2 h-9" />)}
@@ -161,6 +173,7 @@ function SkillList({ found, isLoading, picked, shown, library, onToggle, onShow 
                     {!!installedEntry(library.entries, 'skill', skill.name) && <span className="shrink-0 type-caption text-muted-foreground">installed</span>}
                   </span>
                   <span className="line-clamp-2 type-caption text-muted-foreground">{skill.description}</span>
+                  <SimilarNote similar={similarTo(skill.name)} />
                 </button>
               </div>
             );
@@ -280,6 +293,17 @@ function InstallButton({ count, destination, onChange, isReady, isBusy }: { coun
         </DropdownMenuContent>
       </DropdownMenu>
     </ButtonGroup>
+  );
+}
+
+/** Where a library install goes: the profile the page shows, or every profile; changed at the top of the page. */
+function ScopeNote() {
+  const { profile } = useLibraryScope();
+  return (
+    <span className="flex items-center gap-1.5 type-meta text-muted-foreground">
+      {profile ? <SpaceIcon space={profile} className="size-3.5" /> : <Users aria-hidden className="size-3.5" />}
+      {profile ? `Adds to ${profile.name}` : 'Adds to every profile'}
+    </span>
   );
 }
 

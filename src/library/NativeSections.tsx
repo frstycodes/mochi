@@ -1,5 +1,6 @@
-import { Copy, FolderOpen } from '@/icons';
+import { Copy } from '@/icons';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -10,9 +11,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { toast } from '@/toast/store';
+import { OpenFileItems } from '../files/OpenFileItems';
 import { copyText } from '../clipboard';
-import { host } from '../host';
 import type { Space } from '../model';
 import { updateProfile, useProfiles } from '../profiles';
 import { HARNESSES } from '../settings/harnesses';
@@ -21,6 +21,7 @@ import { useHarness } from '../store';
 import { OverflowIcon, ProviderMark, SpaceIcon } from '../ui';
 import { EmptyRow, filterBy, LibraryRow, LIST } from './LibraryParts';
 import { accountDir, NATIVE_KIND_LABELS, withOff, type NativeItem, type NativeKind } from './nativeItems';
+import { useLibraryScope } from './libraryScope';
 import { setAllOff } from './nativeOff';
 import { useNativeItems, type NativeAccount } from './useNativeItems';
 
@@ -30,7 +31,10 @@ import { useNativeItems, type NativeAccount } from './useNativeItems';
  */
 export function NativeSections({ kind, query }: { kind: NativeKind; query: string }) {
   const accounts = useNativeItems();
-  const spaceId = useHarness().state.spaceId;
+  const scope = useLibraryScope();
+  const current = useHarness().state.spaceId;
+  // All profiles still sorts by the one you're in; a picked profile's accounts come first and its switches show.
+  const spaceId = scope.profile?.id ?? current;
   if (!accounts) return null;
   // The accounts the profile you're in runs on come first; the others' items can't load there.
   const sorted = accounts.toSorted((a, b) => Number(b.profileIds.includes(spaceId)) - Number(a.profileIds.includes(spaceId)));
@@ -46,6 +50,7 @@ export function NativeSections({ kind, query }: { kind: NativeKind; query: strin
         all={all}
         shown={shown}
         spaceId={spaceId}
+        isAllProfiles={!scope.profile}
         hasSeveral={accounts.filter((a) => a.account.provider === native.account.provider && a.profileIds.length).length > 1}
       />
     );
@@ -57,12 +62,14 @@ function AccountSection({
   all,
   shown,
   spaceId,
+  isAllProfiles,
   hasSeveral,
 }: {
   native: NativeAccount;
   all: NativeItem[];
   shown: NativeItem[];
   spaceId: string;
+  isAllProfiles: boolean;
   hasSeveral: boolean;
 }) {
   const { account, profileIds } = native;
@@ -87,6 +94,7 @@ function AccountSection({
         </span>
       }
       action={
+        !isAllProfiles &&
         isMine &&
         !!switchable.length && (
           <Button variant="ghost" size="xs" onClick={() => setAllOff(profile, switchable, !isAllOff, harness)}>
@@ -95,7 +103,9 @@ function AccountSection({
         )
       }
       footer={
-        isMine
+        isAllProfiles
+          ? `${usedBy} Turning one off leaves it out of Mochi threads only; ${harness} keeps loading it.`
+          : isMine
           ? `${usedBy} Turning one off leaves it out of Mochi threads only; ${harness} keeps loading it.`
           : `${usedBy} ${profile.name} runs on another ${harness} account, so none of these load there.`
       }
@@ -103,7 +113,7 @@ function AccountSection({
       <SettingsCard>
         {native.error && <EmptyRow text={`Couldn’t read all of ${accountDir(account)}: ${native.error}`} />}
         {shown.map((item) => (
-          <NativeRow key={item.id} item={item} harness={harness} eligible={users} profile={profile} isMine={isMine} />
+          <NativeRow key={item.id} item={item} harness={harness} eligible={users} profile={profile} isMine={isMine} isAllProfiles={isAllProfiles} />
         ))}
       </SettingsCard>
     </SettingsSection>
@@ -111,8 +121,8 @@ function AccountSection({
 }
 
 /** A library row for a native item: where it lives, the one line explaining a non-default state, where it's off, and where it lives on disk. */
-function NativeRow({ item, harness, eligible, profile, isMine }: { item: NativeItem; harness: string; eligible: Space[]; profile: Space; isMine: boolean }) {
-  const isOffHere = isMine && !!profile.nativeOff?.includes(item.id);
+function NativeRow({ item, harness, eligible, profile, isMine, isAllProfiles }: { item: NativeItem; harness: string; eligible: Space[]; profile: Space; isMine: boolean; isAllProfiles: boolean }) {
+  const isOffHere = !isAllProfiles && isMine && !!profile.nativeOff?.includes(item.id);
   return (
     <LibraryRow
       name={item.name}
@@ -124,7 +134,12 @@ function NativeRow({ item, harness, eligible, profile, isMine }: { item: NativeI
       status={item.isOffNatively ? `Off in ${harness} itself, so no thread loads it` : isOffHere && `Off in Mochi for ${profile.name}. Still on in ${harness}.`}
       actions={
         <>
-          {!item.isOffNatively && <NativeProfilesMenu item={item} harness={harness} eligible={eligible} />}
+          {!item.isOffNatively &&
+            (isAllProfiles ? (
+              <NativeProfilesMenu item={item} harness={harness} eligible={eligible} />
+            ) : (
+              isMine && <Switch checked={!isOffHere} onCheckedChange={(isOn) => updateProfile(profile.id, { nativeOff: withOff(profile.nativeOff, [item.id], !isOn) })} aria-label={`${item.name} in ${profile.name}`} />
+            ))}
           <NativeItemMenu item={item} />
         </>
       }
@@ -189,8 +204,8 @@ function NativeProfilesMenu({ item, harness, eligible }: { item: NativeItem; har
 
 /** Mochi never removes or updates a native item, so its menu only leads to where it lives. */
 function NativeItemMenu({ item }: { item: NativeItem }) {
-  const { path } = item;
-  if (!path) return null;
+  const { file } = item;
+  if (!file) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -199,13 +214,8 @@ function NativeItemMenu({ item }: { item: NativeItem }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
-        {host.isDesktop && (
-          <DropdownMenuItem onSelect={() => void host.fs.reveal(path, '').catch((e: Error) => toast.error('Couldn’t show it', { description: e.message }))}>
-            <FolderOpen />
-            Show folder
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onSelect={() => copyText(path, 'Path copied')}>
+        <OpenFileItems file={file} />
+        <DropdownMenuItem onSelect={() => copyText(`${file.root}/${file.path}`, 'Path copied')}>
           <Copy />
           Copy path
         </DropdownMenuItem>
