@@ -41,15 +41,15 @@ export function ThreadStatusDot({ row, isActive, className }: { row: ThreadRow; 
   if (row.isWorking)
     return (
       <span role="img" aria-label="Working" className={cn('flex shrink-0', className)}>
-        <LiveDot className="text-muted-foreground" />
+        <LiveDot className="size-1.5 text-muted-foreground" />
       </span>
     );
   const dot = row.tone === 'warning' || row.tone === 'destructive' ? row.tone : row.isUnread && !isActive ? 'unread' : null;
   if (!dot) return null;
-  return <span role="img" aria-label={dot === 'unread' ? 'Unread' : row.status} className={cn('size-2 shrink-0 rounded-full', DOT_BG[dot], className)} />;
+  return <span role="img" aria-label={dot === 'unread' ? 'Unread' : row.status} className={cn('size-1.5 shrink-0 rounded-full', DOT_BG[dot], className)} />;
 }
 
-const DOT_BG = { warning: 'bg-warning', destructive: 'bg-destructive', unread: 'bg-info' } satisfies Record<string, string>;
+const DOT_BG = { warning: 'bg-warning', destructive: 'bg-destructive', unread: 'bg-unread' } satisfies Record<string, string>;
 
 /** How many background agents the thread has running; nothing when none do. */
 export function AgentsBadge({ thread }: { thread: Thread }) {
