@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, LimitWindow } from '../../../src/host/types/agent.ts';
+import type { AgentEvent, AgentModel, AgentPlanItem, AgentSubagentEvent, AgentTaskEvent, LimitWindow } from '../../../src/host/types/agent.ts';
 import type { AgentCommand, AgentInfo, GeneratedImage, McpServer, WebLink } from '../../../src/model.ts';
 import { codexWindows, hottest, mergeWindows } from '../../../src/usage/limits.ts';
 import { posixPath } from '../../platform.ts';
@@ -13,6 +13,12 @@ export interface ThreadState {
   streamed: Set<string>;
   /** fileChange items by id, so a file approval can name the files it touches. */
   changes: Map<string, string[]>;
+  /** commandExecution items still running, by id, with the command the agent typed. One still running at `turn/completed` outlived its tool call: a background terminal. */
+  commands: Map<string, string>;
+  /** Background terminals reported as `task`s; their `item/completed` comes when the process exits, after the turn. */
+  background: Set<string>;
+  /** Background terminals the user asked to stop: their end reads `stopped`, not the 137 Codex reports as failed. */
+  stopping: Set<string>;
   /** Last cumulative token totals; usage events carry the difference because the store adds them up. Null after a resume, when the history's totals aren't ours to count again. */
   total: Totals | null;
   /** The Codex account the thread runs on; it prefixes request ids so answers route back to that account's server. */
@@ -31,7 +37,7 @@ export interface AccountLimits {
 }
 
 export function threadState(threadId: string, cwd: string, { isResumed = false, account = 'default', limits = {} as AccountLimits, saveImage }: { isResumed?: boolean; account?: string; limits?: AccountLimits; saveImage?: SaveImage } = {}): ThreadState {
-  return { threadId, cwd, streamed: new Set(), changes: new Map(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits, saveImage };
+  return { threadId, cwd, streamed: new Set(), changes: new Map(), commands: new Map(), background: new Set(), stopping: new Set(), total: isResumed ? null : { input: 0, output: 0, cached: 0 }, account, limits, saveImage };
 }
 
 /** Folds an `account/rateLimits/updated` snapshot in. Updates are sparse: a missing window keeps what was known. */
@@ -77,10 +83,11 @@ export function mapNotification(method: string, params: unknown, s: ThreadState)
       if (!status) return [];
       const error = obj(turn?.error);
       const end: AgentEvent = { threadId, type: 'turn-end', status, ...(typeof error?.message === 'string' && { error: apiMessage(error.message) }) };
+      const tasks = backgroundTasks(s);
       // The thread waits on the same account until the reset; moving it to another account is never automatic.
-      if (error?.codexErrorInfo !== 'usageLimitExceeded' && error?.codexErrorInfo !== 'rateLimitExceeded') return [end];
+      if (error?.codexErrorInfo !== 'usageLimitExceeded' && error?.codexErrorInfo !== 'rateLimitExceeded') return [...tasks, end];
       const binding = hottest(s.limits.windows ?? []);
-      return [{ threadId, type: 'limit', ...(binding?.resetsAt && { resetsAt: binding.resetsAt }), ...(binding && { label: binding.label }) }, end];
+      return [...tasks, { threadId, type: 'limit', ...(binding?.resetsAt && { resetsAt: binding.resetsAt }), ...(binding && { label: binding.label }) }, end];
     }
     case 'mcpServer/startupStatus/updated': {
       const status = STARTUP_STATUS[p.status as keyof typeof STARTUP_STATUS];
@@ -214,6 +221,14 @@ const TURN_STATUS = { completed: 'done', interrupted: 'interrupted', failed: 'fa
 const AGENT_END = { completed: 'done', errored: 'failed', interrupted: 'stopped', shutdown: 'stopped' } as const;
 const OUTPUT_MAX = 4000;
 
+/** Verified on 0.163.0: a command the agent left running (unified exec with a short yield) is still in progress at `turn/completed`; it completes when the process exits. */
+function backgroundTasks(s: ThreadState): AgentTaskEvent[] {
+  const tasks = [...s.commands].map(([id, command]): AgentTaskEvent => ({ threadId: s.threadId, type: 'task', id, phase: 'start', kind: 'shell', command }));
+  for (const [id] of s.commands) s.background.add(id);
+  s.commands.clear();
+  return tasks;
+}
+
 function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'end', s: ThreadState): AgentEvent[] {
   if (!item || typeof item.id !== 'string') return [];
   const threadId = s.threadId;
@@ -234,7 +249,12 @@ function mapItem(item: Record<string, unknown> | undefined, phase: 'start' | 'en
       const actions = Array.isArray(item.commandActions) ? item.commandActions : [];
       const typed = actions.length === 1 ? obj(actions[0])?.command : undefined;
       const text = typeof typed === 'string' ? typed : item.command;
-      return [{ threadId, type: 'tool', id, phase, text, ...(phase === 'end' && exitCode !== undefined && { exitCode }), ...(phase === 'end' && output !== undefined && { output }) }];
+      const tool: AgentEvent = { threadId, type: 'tool', id, phase, text, ...(phase === 'end' && exitCode !== undefined && { exitCode }), ...(phase === 'end' && output !== undefined && { output }) };
+      if (phase === 'start') s.commands.set(id, text);
+      else s.commands.delete(id);
+      if (phase === 'start' || !s.background.delete(id)) return [tool];
+      const status = s.stopping.delete(id) ? 'stopped' : item.status === 'completed' ? 'done' : 'failed';
+      return [tool, { threadId, type: 'task', id, phase: 'end', status, ...(exitCode !== undefined && { exitCode }) }];
     }
     case 'fileChange': {
       const files = Array.isArray(item.changes) ? item.changes.flatMap((c) => (typeof obj(c)?.path === 'string' ? [relative(s.cwd, obj(c)!.path as string)] : [])) : [];

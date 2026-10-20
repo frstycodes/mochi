@@ -185,7 +185,7 @@ export const agent = {
     string(threadId, 'threadId', 256);
     string(taskId, 'taskId', 256);
     if (hasClaudeSession(threadId as string)) return stopClaudeTask(threadId as string, taskId as string);
-    if (codex.owns(threadId as string)) return codex.stopSubagent(threadId as string, taskId as string);
+    if (codex.owns(threadId as string)) return codex.stopTask(threadId as string, taskId as string);
     // Its parent's process is gone, so the task already stopped with it.
   },
   async warm(_sender, spaceId) {

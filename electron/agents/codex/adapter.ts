@@ -213,6 +213,23 @@ export class CodexAdapter {
     if (!isAnswering && live.server.rpc === rpc) live.server.restart('stopped answering');
   }
 
+  /** Stops a background terminal (its end then reads `stopped`) or a spawned agent. */
+  async stopTask(threadId: string, taskId: string) {
+    const live = this.threads.get(threadId);
+    if (!live?.state.background.has(taskId)) return this.stopSubagent(threadId, taskId);
+    const rpc = live.server.rpc;
+    if (!rpc) throw new Error('That command is not running');
+    // ponytail: first page only; a thread with more background terminals than one page holds can't stop the rest.
+    const listed = (await rpc.request('thread/backgroundTerminals/list', { threadId: live.codexId })) as { data?: { itemId?: unknown; processId?: unknown }[] };
+    const processId = listed.data?.find((t) => t.itemId === taskId)?.processId;
+    if (typeof processId !== 'string') throw new Error('That command is not running');
+    live.state.stopping.add(taskId);
+    const { terminated } = (await rpc.request('thread/backgroundTerminals/terminate', { threadId: live.codexId, processId })) as { terminated?: boolean };
+    if (terminated) return;
+    live.state.stopping.delete(taskId);
+    throw new Error('That command is not running');
+  }
+
   /** Interrupts a spawned agent's turn; it then reports `stopped`. */
   async stopSubagent(threadId: string, subagentId: string) {
     const live = this.threads.get(threadId);
@@ -235,9 +252,13 @@ export class CodexAdapter {
     const live = this.threads.get(threadId);
     if (!live) return;
     await this.interrupt(threadId).catch(() => {});
-    this.forget(threadId);
     const rpc = live.server.rpc;
-    if (rpc && live.gen === live.server.gen) await rpc.request('thread/unsubscribe', { threadId: live.codexId }).catch(() => {});
+    const isCurrent = rpc && live.gen === live.server.gen;
+    // Verified on 0.163.0: unsubscribing leaves the thread's background terminals running; `clean` kills them.
+    if (isCurrent && live.state.background.size) await rpc.request('thread/backgroundTerminals/clean', { threadId: live.codexId }).catch(() => {});
+    this.endTasks(live);
+    this.forget(threadId);
+    if (isCurrent) await rpc.request('thread/unsubscribe', { threadId: live.codexId }).catch(() => {});
   }
 
   /**
@@ -429,10 +450,20 @@ export class CodexAdapter {
       this.emit({ threadId: p.threadId, type: 'resolved', requestId });
     }
     for (const [threadId, live] of this.threads) {
-      if (live.server !== server || !live.turnId) continue;
+      if (live.server !== server) continue;
+      // Verified on 0.163.0: the app-server's background terminals die with it.
+      this.endTasks(live);
+      if (!live.turnId) continue;
       live.turnId = undefined;
       this.emit({ threadId, type: 'turn-end', status: 'failed', error: message });
     }
+  }
+
+  /** Background terminals that won't report their own end report `stopped`; commands cut off mid-turn are forgotten. */
+  private endTasks(live: Live) {
+    for (const id of live.state.background) this.emit({ threadId: live.state.threadId, type: 'task', id, phase: 'end', status: 'stopped' });
+    live.state.background.clear();
+    live.state.commands.clear();
   }
 
   private notification(server: CodexServer, method: string, params: unknown) {
@@ -561,7 +592,8 @@ class CodexServer {
     child.on('exit', (code, signal) => this.exited(gen, code ?? signal));
 
     try {
-      await rpc.request('initialize', { clientInfo: { name: 'harness', title: 'Harness', version: '0.0.0' }, capabilities: null });
+      // `thread/backgroundTerminals/*` (stopping a command the agent left running) answer only with experimentalApi on.
+      await rpc.request('initialize', { clientInfo: { name: 'harness', title: 'Harness', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } });
     } catch (error) {
       // An app-server that never answered initialize would otherwise live on beside the next boot's.
       killTree(child);
