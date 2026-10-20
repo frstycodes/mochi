@@ -1,4 +1,4 @@
-import type { AgentImage, AgentQuestion, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
+import type { AgentImage, AgentQuestion, BackgroundTaskKind, SubagentStatus, WorktreeSetup } from './host/types/agent.ts';
 import type { AutofixEvent } from './git/autofix.ts';
 import type { Mention } from './chat/mentions.ts';
 import type { FileEdit } from './host/types/settings.ts';
@@ -397,6 +397,8 @@ export interface Thread {
   reviews?: Review[];
   /** Agents this thread's agent started, oldest first. */
   subagents?: Subagent[];
+  /** Commands and other non-agent tasks its agent left running in the background, oldest first (`src/runtime/tasks.ts`). */
+  backgroundTasks?: BackgroundTask[];
   /** Messages you wrote while the agent worked, sent one per turn end, first first (`src/chat/outbox.ts`). */
   queued?: QueuedMessage[];
   /** Why the queue stopped sending; cleared by your next send or Resume. */
@@ -456,6 +458,20 @@ export interface Subagent {
   hasOwnWorktree?: boolean;
   /** Mochi agents: it ended on its own and its report hasn't reached this thread's agent yet (`dueReports`). */
   isReportDue?: boolean;
+}
+
+export interface BackgroundTask {
+  id: string;
+  kind: BackgroundTaskKind;
+  provider: Provider;
+  title: string;
+  command?: string;
+  status: SubagentStatus;
+  /** Wall-clock ms, for elapsed time. */
+  startedAt: number;
+  endedAt?: number;
+  exitCode?: number;
+  outputFile?: string;
 }
 
 export interface SubagentStep {

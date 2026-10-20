@@ -19,7 +19,7 @@ export type AgentCall =
   | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string; steer?: boolean }
   | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop' | 'settle' | 'keepTitle'; threadId: string }
-  | { method: 'stopSubagent'; threadId: string; subagentId: string };
+  | { method: 'stopTask'; threadId: string; taskId: string };
 
 /** The `host.agent` calls an action makes for live threads; demo threads make none. `next` is the state after the action. */
 export function agentCalls(state: State, action: Action, next: () => State): AgentCall[] {
@@ -108,7 +108,11 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const subagent = state.threads.find((t) => t.id === action.threadId)?.subagents?.find((s) => s.id === action.subagentId);
       if (!subagent || !isRunning(subagent)) return [];
       if (subagent.sessionId) return [{ method: 'stop', threadId: subagent.sessionId }];
-      return hasAgent(state, action.threadId) ? [{ method: 'stopSubagent', threadId: action.threadId, subagentId: subagent.id }] : [];
+      return hasAgent(state, action.threadId) ? [{ method: 'stopTask', threadId: action.threadId, taskId: subagent.id }] : [];
+    }
+    case 'task-stop': {
+      const task = state.threads.find((t) => t.id === action.threadId)?.backgroundTasks?.find((t) => t.id === action.taskId);
+      return task?.status === 'running' && hasAgent(state, action.threadId) ? [{ method: 'stopTask', threadId: action.threadId, taskId: task.id }] : [];
     }
     case 'delegate-report': {
       const subagent = state.threads.find((t) => t.id === action.threadId)?.subagents?.find((s) => s.id === action.subagentId);

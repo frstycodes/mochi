@@ -52,6 +52,7 @@ const RECORDED = [
   'handoff-fail',
   'bg-start',
   'bg-stop',
+  'task-stop',
   'delegate-report',
   'rewind',
   'rewind-message',

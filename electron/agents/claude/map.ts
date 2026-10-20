@@ -1,6 +1,6 @@
 import path from 'node:path';
-import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
-import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentSubagentEvent } from '../../../src/host/types/agent.ts';
+import type { McpServerStatus, ModelInfo, PermissionMode, PermissionResult, SDKCompactBoundaryMessage, SDKMessage, SDKStatusMessage, SDKRateLimitInfo, SDKSystemMessage, SDKTaskNotificationMessage, SDKTaskProgressMessage, SDKTaskStartedMessage, SDKTaskUpdatedMessage, SDKUserMessage, SlashCommand } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentDecision, AgentEvent, AgentImage, AgentModel, AgentSubagentEvent, AgentTaskEvent, BackgroundTaskKind } from '../../../src/host/types/agent.ts';
 import type { AgentInput, AgentOutput, WebFetchOutput, WebSearchOutput } from '@anthropic-ai/claude-agent-sdk/sdk-tools';
 import { getToolUiResourceUri } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { ACCOUNT_ARGUMENT } from '../../../src/library/connectors.ts';
@@ -21,6 +21,8 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
   const tools = new Map<string, { name: string; input: Record<string, unknown> }>();
   /** Subagents by the Agent tool call that started them, with the task id Claude Code gives them for `stopTask`. */
   const agents = new Map<string, { taskId?: string }>();
+  /** Shells, workflows and monitors by task id; `isBackground` false while one still blocks its call (Claude Code may background it later). */
+  const tasks = new Map<string, { kind: BackgroundTaskKind; title: string; command?: string; isBackground: boolean }>();
   const reported = { input: 0, output: 0, cached: 0, costUsd: 0 };
   let context = { used: 0, max: 0 };
   let isNewBlock = false;
@@ -67,6 +69,7 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     if (!tool) return [];
     tools.delete(block.tool_use_id);
     if (AGENT_TOOLS.has(tool.name)) return agentEnd(block, result);
+    const backgrounded = backgroundOutput(block, result);
     if (tool.name === IMAGE_CALL) return [{ threadId, type: 'tool', id: block.tool_use_id, phase: 'end', text: 'Generate image', generated: imageCard(tool.input, { text: resultText(block), isError: block.is_error }) }];
     const end: Extract<AgentEvent, { type: 'tool' }> = { threadId, type: 'tool', id: block.tool_use_id, phase: 'end', ...toolOutcome(tool, block, result) };
     const links = block.is_error ? undefined : webLinks(tool.name, tool.input, result);
@@ -76,7 +79,39 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
     if (images.length) end.images = images;
     const widget = widgets.get(tool.name);
     if (widget && !block.is_error) end.widget = { ...widget, input: tool.input, result: widgetResult(block, result) };
-    return [end];
+    return backgrounded ? [end, backgrounded] : [end];
+  }
+
+  /** A backgrounded Bash call's receipt names the task and the file its output goes to. */
+  function backgroundOutput(block: ToolResultBlock, result: unknown): AgentTaskEvent | undefined {
+    const id = (result as { backgroundTaskId?: unknown } | undefined)?.backgroundTaskId;
+    const outputFile = /Output is being written to: (\S+?)\.(?:\s|$)/.exec(resultText(block))?.[1];
+    if (typeof id !== 'string' || !tasks.get(id)?.isBackground || !outputFile) return undefined;
+    return { threadId, type: 'task', id, phase: 'progress', outputFile };
+  }
+
+  /** Claude Code's non-agent tasks (`local_bash`, `local_workflow`, monitors), from the moment they run in the background; ambient housekeeping is left out. */
+  function mapBackgroundTask(message: SDKTaskStartedMessage | SDKTaskUpdatedMessage | SDKTaskProgressMessage | SDKTaskNotificationMessage): AgentEvent[] {
+    const task = (fields: Omit<AgentTaskEvent, 'threadId' | 'type' | 'id'>): AgentTaskEvent => ({ threadId, type: 'task', id: message.task_id, ...fields });
+    const known = tasks.get(message.task_id);
+    if (message.subtype === 'task_started') {
+      if (message.ambient || message.task_type === 'local_agent') return [];
+      const command = message.tool_use_id && tools.get(message.tool_use_id)?.input.command;
+      const entry = { kind: TASK_KINDS[message.task_type ?? ''] ?? 'monitor', title: message.description || message.workflow_name || (typeof command === 'string' ? command : 'Task'), ...(typeof command === 'string' && { command }), isBackground: message.is_backgrounded !== false };
+      tasks.set(message.task_id, entry);
+      return entry.isBackground ? [taskStart(task, entry)] : [];
+    }
+    if (!known) return [];
+    if (message.subtype === 'task_updated') {
+      if (known.isBackground || !message.patch.is_backgrounded) return [];
+      known.isBackground = true;
+      return [taskStart(task, known)];
+    }
+    if (message.subtype !== 'task_notification') return [];
+    tasks.delete(message.task_id);
+    if (!known.isBackground) return [];
+    const exit = /exit code (\d+)/i.exec(message.summary)?.[1];
+    return [task({ phase: 'end', status: TASK_STATUS[message.status], outputFile: message.output_file, ...(exit !== undefined && { exitCode: Number(exit) }) })];
   }
 
   /** What a finished call reports, the thread's own or a subagent's: its line, edited files, a command's exit code and output tail, an edit's patch. */
@@ -126,10 +161,12 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
   /** Claude Code's task bookends for a subagent (`task_started` … `task_notification`), joined to its Agent call by `tool_use_id`. */
   function mapTask(message: Extract<SDKMessage, { type: 'system' }>): AgentEvent[] {
     if (message.subtype === 'task_updated') {
+      if (tasks.has(message.task_id)) return mapBackgroundTask(message);
       const id = [...agents].find(([, a]) => a.taskId === message.task_id)?.[0];
       return id && message.patch.is_backgrounded !== undefined ? [subagent(id, 'progress', { isBackground: message.patch.is_backgrounded })] : [];
     }
     if (message.subtype !== 'task_started' && message.subtype !== 'task_progress' && message.subtype !== 'task_notification') return [];
+    if (tasks.has(message.task_id) || (message.subtype === 'task_started' && message.task_type !== 'local_agent')) return mapBackgroundTask(message);
     const id = message.tool_use_id;
     const agent = id && agents.get(id);
     if (!id || !agent) return [];
@@ -246,8 +283,8 @@ export function createMapper(threadId: string, cwd: string, saveImage?: SaveImag
       if (name) typed.push(name);
       return typedSkills();
     },
-    /** The task id `query.stopTask` takes for a subagent, once Claude Code has registered it. */
-    taskOf: (subagentId: string) => agents.get(subagentId)?.taskId,
+    /** The task id `query.stopTask` takes: a subagent's once Claude Code has registered it (by its Agent call's id), a shell's own. */
+    taskOf: (id: string) => agents.get(id)?.taskId ?? (tasks.has(id) ? id : undefined),
     /** `message` ends a call to an MCP server whose tools haven't been read yet: `learnWidgets` must run before it's mapped. */
     needsWidgets(message: SDKMessage) {
       if (message.type !== 'user' || typeof message.message.content === 'string') return false;
@@ -345,6 +382,11 @@ const EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit']);
 // `Task` is the Agent tool's name in Claude Code before 2.1.
 const AGENT_TOOLS = new Set(['Agent', 'Task']);
 const TASK_STATUS = { completed: 'done', failed: 'failed', stopped: 'stopped' } as const;
+// ponytail: task types other than these two (monitors, backgrounded MCP calls) all read as a monitor; name them once a run shows their task_type.
+const TASK_KINDS: Record<string, BackgroundTaskKind> = { local_bash: 'shell', local_workflow: 'workflow' };
+
+const taskStart = (task: (fields: Omit<AgentTaskEvent, 'threadId' | 'type' | 'id'>) => AgentTaskEvent, { kind, title, command }: { kind: BackgroundTaskKind; title: string; command?: string }) =>
+  task({ phase: 'start', kind, title, ...(command && { command }) });
 
 /** Mochi's update_plan is the plan; Claude Code's own task list would be a second one nobody sees. */
 export const HIDDEN_PLAN_TOOLS = ['TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TodoWrite'];

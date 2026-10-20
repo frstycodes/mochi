@@ -142,11 +142,11 @@ export async function claudeRewindPoint(threadId: string, text: string) {
   return forkPoint(session.sent, index, await transcriptUuids(session.account.configDir, session.sessionId));
 }
 
-/** Stops one subagent (Agent tool task) of a live session; Claude Code then reports it `stopped`. */
-export async function stopClaudeSubagent(threadId: string, subagentId: string) {
+/** Stops one background task of a live session: a subagent (by its Agent call's id) or a shell, workflow or monitor (by its task id); Claude Code then reports it `stopped`. */
+export async function stopClaudeTask(threadId: string, id: string) {
   const session = sessions.get(threadId);
-  const taskId = session?.mapper.taskOf(subagentId);
-  if (!session?.query || !taskId) throw new Error('That subagent is not running in a live Claude session');
+  const taskId = session?.mapper.taskOf(id);
+  if (!session?.query || !taskId) throw new Error('That task is not running in a live Claude session');
   await session.query.stopTask(taskId);
 }
 

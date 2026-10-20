@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeybo
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
-import { Archive, Chat, DiagramTree, Edit, Eye, Hierarchy, Menu, Search, TaskSquare, Undo } from '@/icons';
+import { Archive, Chat, DiagramTree, Edit, BackgroundTask, Eye, Menu, Search, TaskSquare, Undo } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -50,7 +50,7 @@ import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
 import { SpaceIcon, TooltipIconButton, UnreadDot } from './ui';
 import { isUnread } from './store/seen';
 import { workingLabel } from './agentPhase';
-import { runningBackground } from './runtime/subagents';
+import { runningTasks } from './runtime/tasks';
 import { BoundShortcut } from './Shortcut';
 import { spaceCommand } from './keymap';
 import { remoteDecisions, remoteThreads } from './remote/mirror';
@@ -784,26 +784,26 @@ function RowDetail({ thread, row, machine }: { thread: Thread; row: ReturnType<t
       {row.isWorking ? <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer> : <span className="min-w-0 flex-1 truncate">{row.detail}</span>}
       {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
       <PrStack thread={thread} />
-      <AgentsBadge thread={thread} />
+      <TasksBadge thread={thread} />
       <NextRunBadge threadId={thread.id} />
     </span>
   );
 }
 
-/** How many background agents the thread has running; nothing when none do. */
-function AgentsBadge({ thread }: { thread: Thread }) {
-  const running = runningBackground(thread);
+/** How many background tasks (commands, agents) the thread has running; nothing when none do. */
+function TasksBadge({ thread }: { thread: Thread }) {
+  const running = runningTasks(thread);
   if (!running) return null;
-  const label = AGENTS_LABEL.select(running) === 'one' ? '1 background agent running' : `${running} background agents running`;
+  const label = TASKS_LABEL.select(running) === 'one' ? '1 background task running' : `${running} background tasks running`;
   return (
     <span aria-label={label} title={label} className="flex shrink-0 items-center gap-0.5 tabular text-muted-foreground">
-      <Hierarchy aria-hidden className="size-3" />
+      <BackgroundTask aria-hidden className="size-3" />
       {running}
     </span>
   );
 }
 
-const AGENTS_LABEL = new Intl.PluralRules('en');
+const TASKS_LABEL = new Intl.PluralRules('en');
 
 /** A row's one status (`useThreadStatus`) and the line under its title: the verdict's reason when idle, else the step in flight or what it waits for. */
 function useThreadRow(thread: Thread) {

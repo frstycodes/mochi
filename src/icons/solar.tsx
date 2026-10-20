@@ -14,6 +14,8 @@ export const ArrowRight = solar(Linear.ArrowRightIcon, Bold.ArrowRightIcon);
 export const ArrowUp = solar(Linear.ArrowUpIcon, Bold.ArrowUpIcon);
 export const ArrowUpRight = solar(Linear.ArrowRightUpIcon, Bold.ArrowRightUpIcon);
 export const Ban = solar(Linear.ForbiddenIcon, Bold.ForbiddenIcon);
+// A play mark in a turning ring: work running on its own. Layers (spaces), Cpu (a Settings page), Stopwatch (time) and Structure (sub-agents) already mean something else.
+export const BackgroundTask = solar(Linear.PlaybackSpeedIcon, Bold.PlaybackSpeedIcon);
 export const Bell = solar(Linear.BellIcon, Bold.BellIcon);
 export const BellOff = solar(Linear.BellOffIcon, Bold.BellOffIcon);
 export const Bolt = solar(Linear.BoltIcon, Bold.BoltIcon);
