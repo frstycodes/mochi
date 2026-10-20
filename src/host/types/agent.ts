@@ -117,7 +117,7 @@ export type BackgroundTaskKind = 'shell' | 'workflow' | 'monitor';
 export interface AgentTaskEvent {
   threadId: string;
   type: 'task';
-  /** Claude: the task id Claude Code gives it (`stopTask` takes it); Codex: the background terminal's process id. */
+  /** Claude: the task id Claude Code gives it (`stopTask` takes it); Codex: the background terminal's commandExecution item id. */
   id: string;
   phase: 'start' | 'progress' | 'end';
   kind?: BackgroundTaskKind;
