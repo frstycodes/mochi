@@ -24,6 +24,9 @@ const reason = z.string().min(1).max(240).describe('Why, in a sentence the user 
 /** The MCP server Mochi's tools are on: agents see them as `mcp__mochi__<tool>`. */
 export const MOCHI_SERVER = 'mochi';
 
+/** `update_plan`'s scope: this thread's first task, more of the same work, or unrelated work Mochi offers to move to a new thread. */
+export const PLAN_SCOPES = ['first_task', 'continuation', 'new_task'] as const;
+
 export const TOOL_TABLE = {
   // {THREADS}
   list_threads: {
@@ -154,7 +157,7 @@ export const TOOL_TABLE = {
   update_plan: {
     tier: 'read',
     description:
-      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply.',
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. Every {"items"} call says in "scope" what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, this one) or "new_task" (unrelated work a fresh thread would do as well from the user\'s words alone). With "new_task", Mochi asks the user whether to move the request to a new thread and shows no plan: don\'t start the work, end your turn with one short line.',
     shape: {
       items: z
         .array(z.object({ title: z.string().min(1).max(120).describe('A short step, like "Add the parser test"'), status: z.enum(['pending', 'in_progress', 'completed']) }))
@@ -163,6 +166,7 @@ export const TOOL_TABLE = {
         .optional()
         .describe('The whole plan, in order; replaces the previous one, and steps left out are dropped'),
       advance: z.boolean().optional().describe('Complete the in_progress step and start the next pending one; ignored with items'),
+      scope: z.enum(PLAN_SCOPES).optional().describe('Required with items: what this request is to the thread'),
     },
   },
   delegate_task: {
@@ -443,6 +447,11 @@ export const isGoalTool = (name: string) => (GOAL_TOOLS as readonly string[]).in
 export const tierOf = (name: ToolName): Tier => TOOL_TABLE[name].tier;
 
 export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
+
+/** Called every turn, each with its own surface (the plan list, the end-of-turn card): always loaded for Claude, never deferred behind tool search, and no work-log row. */
+export const TURN_TOOLS = ['update_plan', 'report_turn'] as const satisfies ToolName[];
+
+export const isTurnTool = (name: string) => (TURN_TOOLS as readonly string[]).includes(name);
 
 export const asks = (tier: Tier) => (ASKING_TIERS as readonly Tier[]).includes(tier);
 

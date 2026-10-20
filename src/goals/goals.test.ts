@@ -5,6 +5,10 @@ import { initialQueue } from '../store/queue.ts';
 import type { State } from '../store/index.tsx';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
 import { applyDraft, draftFrom, revisionDiff } from './edit.ts';
+import { setPrefs } from '../settings/prefs.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 

@@ -10,6 +10,7 @@ import type { FileEdit, SettingsHost } from '../host/types/settings.ts';
 import type { RemoteHost } from '../host/types/remote.ts';
 import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
+import { setDriftPending } from '../chat/outbox.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
 import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread } from '../model.ts';
 import { projectRef } from '../projects.ts';
@@ -579,6 +580,8 @@ const AGENT_SPECS = {
   update_plan: {
     run: ({ caller, args, dispatch }) => {
       if (!args.items && !args.advance) throw new Error('Pass {"items": [...]} (the whole plan) or {"advance": true}');
+      if (args.items && !args.scope) throw new Error('Pass "scope" with "items": "first_task", "continuation" or "new_task"');
+      if (args.scope === 'new_task') return offerNewThread(caller);
       const items = args.items ? args.items.map((i) => ({ title: i.title.trim(), status: PLAN_STATUS[i.status] })) : advanced(caller.steps);
       dispatch({ type: 'agent', event: { threadId: caller.id, type: 'plan', items } });
       return { result: `Plan shown (${items.length} steps).` };
@@ -708,6 +711,15 @@ const DRAFT_NEXT = "This goal is Mochi's guess from the user's first message, no
 const DRAFT_REFUSAL = `Call propose_goal first. ${DRAFT_NEXT}`;
 
 const PLAN_STATUS = { pending: 'pending', in_progress: 'running', completed: 'done' } as const;
+
+/** The agent called the request unrelated work: your message goes on the card above the composer, to move to a new thread or keep here. */
+function offerNewThread(thread: Thread) {
+  const asked = thread.activity.findLast((e) => e.who === 'you' && e.kind === 'message');
+  if (!asked) throw new Error('There is no message from the user to move to a new thread; use scope "continuation"');
+  const agent = authorName(thread.providers[0]);
+  setDriftPending(thread.id, { text: asked.text, verdict: { kind: 'off-goal', reason: `${agent} says it's unrelated to the work here` }, isFromAgent: true });
+  return { result: "Mochi asked the user whether to move this request to a new thread. Don't start it: end your turn now with one short line. If they keep it here, they'll tell you." };
+}
 
 /** The thread's plan one step on: the running step done, the next open one running. */
 function advanced(steps: Step[]): AgentPlanItem[] {

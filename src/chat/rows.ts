@@ -1,5 +1,6 @@
 import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
+import { isTurnCall } from './mochiCalls.ts';
 import type { TurnChanges } from './turnChanges.ts';
 
 export type ChatRow =
@@ -40,6 +41,7 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       turn = undefined;
       return rows.push({ kind: 'image', key, entry });
     }
+    if (entry.kind === 'tool' && isTurnCall(entry)) return;
     if (entry.kind === 'tool' || entry.kind === 'reasoning') {
       isMidWork = true;
       if (turn) turn.entries.push(entry);

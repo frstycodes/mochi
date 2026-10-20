@@ -139,3 +139,9 @@ test("an MCP App view gets its own row after its call's group, and the turn goes
     ['work(Search Mobbin, Search screens)', 'widget:Search screens', 'work(Read a.ts)', 'message:Done.'],
   );
 });
+
+test('plan and turn-report calls have their own surfaces, so they get no work-log row', () => {
+  const mochi = (tool: string): ActivityEntry => ({ ...e('tool', 'claude', `Mcp mochi: ${tool}`), mcp: { server: 'mochi', tool } });
+  assert.deepEqual(shape([mochi('update_plan'), e('tool', 'claude', 'Read src/a.ts'), mochi('update_plan'), e('message', 'claude', 'Done.'), mochi('report_turn')]), ['work(Read src/a.ts)', 'Done.']);
+  assert.deepEqual(shape([mochi('rename_thread')]), ['work(Mcp mochi: rename_thread)'], 'other Mochi calls keep their rows');
+});
