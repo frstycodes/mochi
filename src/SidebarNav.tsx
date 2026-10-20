@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Clock, Connector, Folder, Inbox, Plugin, Route, Skill, type IconComponent } from '@/icons';
+import { Chart, Clock, Connector, Folder, Inbox, Plugin, Route, Skill, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -68,6 +68,7 @@ export const SIDEBAR_ITEMS = [
   { id: 'queue', label: 'Queue', icon: Inbox, view: { kind: 'queue' } },
   { id: 'board', label: 'Board', icon: Route, view: { kind: 'board' } },
   { id: 'projects', label: 'Projects', icon: Folder, view: { kind: 'projects' } },
+  { id: 'usage', label: 'Usage', icon: Chart, view: { kind: 'usage' } },
   { id: 'skills', label: 'Skills', icon: Skill, section: 'skills' },
   { id: 'plugins', label: 'Plugins', icon: Plugin, section: 'plugins' },
   { id: 'connectors', label: 'Connectors', icon: Connector, section: 'connectors' },

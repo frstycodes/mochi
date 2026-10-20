@@ -18,9 +18,10 @@ import { settings } from './settings.ts';
 import { sim } from './sim.ts';
 import { themes } from './themes.ts';
 import { updates } from './updates.ts';
+import { usage } from './usage.ts';
 import { windows } from './windows.ts';
 
-const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, remote, account, updates, projects, library } satisfies {
+const handlers = { pty, git, fs, ports, sim, browser, notify, windows, agent, settings, data, schedule, themes, remote, account, updates, projects, library, usage } satisfies {
   [K in Namespace]: Handlers<HostBridge[K]>;
 };
 

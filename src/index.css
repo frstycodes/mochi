@@ -341,6 +341,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Big figures (usage totals): the system face, heavier than Inter reads at display sizes. */
+@utility figure {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Desktop title bar: `hiddenInset` (macOS) and `titleBarOverlay` (Windows) leave no native one, so the 44px headers drag the window. Gated on `data-window-drag`, which is off on the web and in full screen. Drag regions swallow every pointer event, so controls inside them or after a `DragStrip`, and overlays that can sit over them, opt back out. */
 @utility app-drag {
   :root[data-window-drag] & {
