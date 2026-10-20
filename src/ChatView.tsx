@@ -556,7 +556,7 @@ function useRecordUnanswered(thread: Thread) {
 
 /** The agent's plan as the chat's to-do list; dropped items leave it. */
 function planItems(thread: Thread): PlanItem[] {
-  return thread.steps.flatMap((s) => (s.status === 'dropped' ? [] : [{ title: s.title, status: PLAN_STATUS[s.status] }]));
+  return thread.steps.flatMap((s) => (s.status === 'dropped' ? [] : [{ title: s.title, status: PLAN_STATUS[s.status], startedAt: s.startedAt, doneAt: s.doneAt }]));
 }
 
 const PLAN_STATUS = { done: 'done', running: 'running', ready: 'pending', blocked: 'pending' } satisfies Record<Exclude<StepStatus, 'dropped'>, PlanItem['status']>;
