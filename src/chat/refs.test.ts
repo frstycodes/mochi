@@ -42,6 +42,18 @@ test('file paths in prose, with or without a line, but not URL paths or owner/re
   assert.deepEqual(refs('frstycodes/mochi.js#4').map((s) => s.type), ['ref']);
 });
 
+test('`@` file mentions from the composer, but not handles or emails', () => {
+  assert.deepEqual(refs('see @src/SidePane.tsx and @../other/x.ts.'), [
+    { type: 'path', text: '@src/SidePane.tsx' },
+    { type: 'path', text: '@../other/x.ts' },
+  ]);
+  assert.deepEqual(refs('read @"~/my notes.md" and @~/dev/'), [
+    { type: 'path', text: '@"~/my notes.md"' },
+    { type: 'path', text: '@~/dev/' },
+  ]);
+  assert.deepEqual(refs('ask @claude or mail me@x.dev'), []);
+});
+
 test('the thread repo shows as #n, others as owner/repo#n', () => {
   assert.equal(refLabel({ owner: 'FrstyCodes', repo: 'Mochi', number: 4 }, home), '#4');
   assert.equal(refLabel({ owner: 'o', repo: 'r', number: 4 }, home), 'o/r#4');

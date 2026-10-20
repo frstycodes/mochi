@@ -22,6 +22,8 @@ export interface FsHost {
   pickFolder(defaultPath?: string): Promise<string | null>;
   /** The folder at `path` (`~` allowed) as an absolute path with its subfolders' names, hidden ones left out; null when it isn't a folder. */
   folders(path: string): Promise<{ path: string; names: string[] } | null>;
+  /** The folder at `path` (`~` allowed) as an absolute path with its subfolders and files by name, hidden ones included; null when it isn't a folder. */
+  entries(path: string): Promise<{ path: string; dirs: string[]; files: string[] } | null>;
 }
 
 export type FileContent = { kind: 'text'; text: string; mtimeMs: number } | { kind: 'binary'; bytes: Uint8Array; mtimeMs: number };
@@ -79,4 +81,5 @@ export const fsMethods = {
   reveal: 'invoke',
   pickFolder: 'invoke',
   folders: 'invoke',
+  entries: 'invoke',
 } satisfies Manifest<FsHost>;

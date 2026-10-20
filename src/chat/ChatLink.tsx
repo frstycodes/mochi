@@ -1,16 +1,17 @@
 import { isValidElement, useContext, type ComponentProps, type ReactNode } from 'react';
-import { FileIcon } from '@react-symbols/icons/utils';
 import { defaultComponents, type ExtraProps } from 'streamdown';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { copyText } from '../clipboard';
 import { worktreeLink } from '../files/kinds';
 import { RemoteFilesContext, useWorktreeFiles } from '../files/useWorktreeFiles';
-import { useThreadFiles } from '../files/viewer';
+import { openFiles, useThreadFiles } from '../files/viewer';
 import { fileLink } from '../terminal/links';
 import { useGithubScope } from '../git/useThreadPrs';
 import { useHarness, useThread } from '../store';
 import { useVizThreadId } from '../viz/WidgetVisual';
+import { FileMark } from './FileMark';
+import { mentionTarget } from './fileMentions';
 import { RefHoverCard, RefIcon } from './RefHoverCard';
 import { refDescription, refFromUrl, refLabel, refTone, refUrl, type GithubRef } from './refs';
 import { REF_CHIP_CLASS } from '@/icons/github';
@@ -82,14 +83,43 @@ export function RefChip({ githubRef, children }: { githubRef: GithubRef; childre
   );
 }
 
+const PATH_LINK_CLASS = 'font-medium underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground';
+
 /** A path that exists in the thread's folder opens the viewer at its line; anything else stays plain text. */
 function PathLink({ path, children }: { path: string; children: ReactNode }) {
   const link = useWorktreeLink(path);
+  if (path.startsWith('@')) return <MentionLink label={path.slice(1)}>{children}</MentionLink>;
   if (!link) return children;
   return (
-    <FileLinkButton link={link} className="font-medium underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground">
+    <FileLinkButton link={link} className={PATH_LINK_CLASS}>
       {children}
     </FileLinkButton>
+  );
+}
+
+/**
+ * A file you picked from `@`, shown without its `@` (the icon stands in): one in the worktree opens like any chat path, one
+ * outside it opens the viewer on its own folder. A folder, or a path that names nothing here, stays text.
+ */
+function MentionLink({ label, children }: { label: string; children: ReactNode }) {
+  const base = useThreadFiles();
+  const target = base ? mentionTarget(base.root, label) : null;
+  const link = useWorktreeLink(target && !target.isOutside ? target.path : '');
+  const shown = textOf(children).replace(/^@"?|"$/g, '');
+  if (link)
+    return (
+      <FileLinkButton link={link} className={PATH_LINK_CLASS}>
+        {shown}
+      </FileLinkButton>
+    );
+  if (!base || !target?.isOutside || label.endsWith('/')) return children;
+  const cut = target.path.lastIndexOf('/');
+  // ponytail: not checked for existence (that would list a folder per link); a missing file opens the viewer's error state.
+  const open = () => openFiles({ files: [{ source: 'workspace', threadId: base.threadId, root: target.path.slice(0, cut) || '/', path: target.path.slice(cut + 1) }], index: 0 });
+  return (
+    <FileButton name={target.path.slice(cut + 1)} onClick={open} title={target.path} className={PATH_LINK_CLASS}>
+      {shown}
+    </FileButton>
   );
 }
 
@@ -108,8 +138,16 @@ export function FileLinkButton({ link, className, children }: { link: string; cl
   const { dispatch } = useHarness();
   const file = fileLink(link);
   return (
-    <button type="button" data-file-link={link} onClick={() => dispatch({ type: 'pane-open-tab', threadId, kind: 'files', file })} className={cn('inline-flex max-w-full cursor-pointer items-baseline gap-1 text-left align-baseline', className)}>
-      <FileIcon fileName={file.path.split('/').pop()!} autoAssign aria-hidden className="size-3.5 shrink-0 self-center" />
+    <FileButton name={file.path.split('/').pop()!} data-file-link={link} onClick={() => dispatch({ type: 'pane-open-tab', threadId, kind: 'files', file })} className={className}>
+      {children}
+    </FileButton>
+  );
+}
+
+function FileButton({ name, className, children, ...props }: ComponentProps<'button'> & { name: string }) {
+  return (
+    <button type="button" className={cn('inline-flex max-w-full cursor-pointer items-baseline gap-1 text-left align-baseline', className)} {...props}>
+      <FileMark name={name} className="size-3.5 self-center" />
       {children}
     </button>
   );
