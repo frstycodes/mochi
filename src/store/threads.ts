@@ -10,7 +10,7 @@ import { sourcePrompt } from '../sources.ts';
 import { hasGoal, KEEPS_TO_MUTE, type DriftKind } from '../drift.ts';
 import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { goalProgress } from '../progress.ts';
-import { nestBlocker, pinAt, reorderThreads, subThreadsOf } from '../reorder.ts';
+import { nestBlocker, openSubtree, pinAt, reorderThreads } from '../reorder.ts';
 import { applyAgentEvent, applyAgentEvents } from '../runtime/apply.ts';
 import { demoEvents } from '../runtime/demo.ts';
 import { startBackground, type BackgroundStart } from '../runtime/subagents.ts';
@@ -134,7 +134,9 @@ export type ThreadsAction =
   /** Stops a background command (or workflow, monitor); it ends when its harness reports it stopped, or here when no harness is live to. */
   | { type: 'task-stop'; threadId: string; taskId: string }
   /** A finished delegated task's report goes to the thread's agent: steered into its turn, or starting one (`dueReports`). */
-  | { type: 'delegate-report'; threadId: string; subagentId: string };
+  | { type: 'delegate-report'; threadId: string; subagentId: string }
+  /** Its sub-threads are idle and left notes: the notes are the agent's next message (`dueWakes`). */
+  | { type: 'subthread-wake'; threadId: string };
 
 /** The demo's fixture threads when shown, then your own threads from the last launch (desktop). */
 export function initialThreads(saved = getRestored(), isDemo = showsDemoData()): ThreadsState {
@@ -175,8 +177,8 @@ function reduce(state: State, action: Action): State {
     case 'agent-starting':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.live ? { ...t, live: { ...t.live, starting: action.provider } } : t)) };
     case 'settle': {
-      // A parent settles with its open sub-threads: they were parts of its goal.
-      const ids = new Set([action.threadId, ...subThreadsOf(state.threads, action.threadId).filter((t) => t.status !== 'settled').map((t) => t.id)]);
+      // A parent settles with its open sub-threads at every depth: they were parts of its goal. A settled one's subtree already stands on its own.
+      const ids = new Set([action.threadId, ...openSubtree(state.threads, action.threadId).map((t) => t.id)]);
       return {
         ...state,
         // Settling stops the agent process; the next message after reactivating starts it again with `resume`.
@@ -342,6 +344,13 @@ function reduce(state: State, action: Action): State {
           ...(t.live && { status: 'running', live: { ...t.live, isWorking: true, isDetached: undefined, notes: undefined, restart: undefined } }),
           subagents: t.subagents?.map((s) => (s.id === action.subagentId ? { ...s, isReportDue: undefined } : s)),
         })),
+      };
+    case 'subthread-wake':
+      return {
+        ...state,
+        threads: mapThread(state.threads, action.threadId, (t) =>
+          t.live ? log({ ...t, status: 'running', live: { ...t.live, isWorking: true, isDetached: undefined, notes: undefined, restart: undefined } }, { at: state.now, who: 'harness', kind: 'event', text: 'Sub-threads idle: sent their notes to the agent' }) : t,
+        ),
       };
     case 'handoff-draft':
       return handoffDraft(state, action.threadId, action.to);

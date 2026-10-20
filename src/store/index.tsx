@@ -12,6 +12,7 @@ import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
 import { dueReports } from '../runtime/subagents.ts';
+import { dueWakes } from '../runtime/subThreadNotes.ts';
 import { runTool } from '../runtime/tools.ts';
 import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
@@ -164,6 +165,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [dispatch]);
   useQueueRunner(state, dispatch);
   useDelegatedReports(state.threads, dispatch);
+  useSubThreadWakes(state, dispatch);
   useCompactInstructions(state.threads);
   useRemoteBridge(state, dispatch);
   useLimitResumes(state.threads, dispatch);
@@ -207,6 +209,21 @@ function useDelegatedReports(threads: Thread[], dispatch: Dispatch<Action>) {
       dispatch({ type: 'delegate-report', threadId: thread.id, subagentId: subagent.id });
     }
   }, [threads, dispatch]);
+}
+
+/** Starts each idle parent on its sub-threads' notes once they're all idle; `dueWakes` says which. */
+function useSubThreadWakes(state: State, dispatch: Dispatch<Action>) {
+  // The wake applies on the next render; until then the same parent is still due.
+  const woken = useRef(new Set<string>());
+  useEffect(() => {
+    const due = dueWakes(state);
+    for (const id of woken.current) if (!due.some((t) => t.id === id)) woken.current.delete(id);
+    for (const { id } of due) {
+      if (woken.current.has(id)) continue;
+      woken.current.add(id);
+      dispatch({ type: 'subthread-wake', threadId: id });
+    }
+  }, [state, dispatch]);
 }
 
 /** Resumes threads you set to Resume at reset once their reset passes; one timer for the earliest. */

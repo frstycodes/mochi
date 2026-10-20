@@ -35,7 +35,7 @@ import { useIsMultiSplit } from './SidebarToggle';
 import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
 import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
-import { dropAt, dropPin, lastActivityAt, nestBlocker, orderBetween, pinnedThreads, pinOrderOf, sidebarGroups, stepPin, type DropAt, type ThreadGroup } from './reorder';
+import { dropAt, dropPin, lastActivityAt, nestBlocker, orderBetween, rootOf, pinnedThreads, pinOrderOf, sidebarGroups, stepPin, type DropAt, type ThreadGroup } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { NavItem, SidebarNav } from './SidebarNav';
 import { useSettle } from './useSettle';
@@ -668,12 +668,13 @@ function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string
   const label = list.querySelector<HTMLElement>('[data-threads-label]')!;
   const rows = [...list.querySelectorAll<HTMLElement>('[data-row-id]')].map((el) => ({ id: el.dataset.rowId!, top: el.offsetTop, height: el.offsetHeight, isPinned: el.dataset.pinned !== undefined, ...(el.dataset.subOf && { parentId: el.dataset.subOf }) }));
   const isFull = !row.remote && pinnedIds.filter((id) => id !== row.rowId).length >= PIN_SLOTS.length;
-  const canNest = (parentId: string) => !row.remote && threads.some((t) => t.id === parentId) && !nestBlocker(threads, row.thread.id, parentId);
-  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: row.rowId, ...(row.thread.parent && { parentId: row.thread.parent.threadId }) }, y - box.top, isFull, canNest);
+  const canNest = (parentId: string) => !row.remote && parentId !== row.thread.parent?.threadId && threads.some((t) => t.id === parentId) && !nestBlocker(threads, row.thread.id, parentId);
+  const root = row.remote ? row.thread : rootOf(threads, row.thread);
+  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: row.rowId, ...(root.id !== row.thread.id && { parentId: root.id }) }, y - box.top, isFull, canNest);
 }
 
 /**
- * A thread's sidebar row: its one status ring and title, then the project, what it's doing or why it stopped, and its badges.
+ * A thread's sidebar row: its title and one status dot, then the project, what it's doing or why it stopped, and its badges.
  * `isSub`: a sub-thread under its parent, one line unless it asks for you. `machine`: the computer it runs on, for another
  * computer's thread among this one's (Pinned).
  */

@@ -11,6 +11,7 @@ import { createdPr } from '../git/prs.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
+import { noteParent } from './subThreadNotes.ts';
 import { applyTask } from './tasks.ts';
 
 const MAIN_EVENTS = new Set<AgentEvent['type']>(['worktree', 'setup', 'branch', 'title']);
@@ -90,7 +91,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
       const ended = thread.live ? update((t) => closeCompaction({ ...t, live: { ...t.live!, isWorking: false, turnEnd: event.status, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
       if (isLimitEnd(thread)) return ended;
-      return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
+      return noteParent(endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event), thread, event.status);
     }
   }
 }
