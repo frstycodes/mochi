@@ -65,6 +65,7 @@ export const TOOL_GUIDE = {
   open_changes: { group: 'Your screen', label: 'Show changes', description: "Open the thread's diff in the side pane." },
 
   ask_side_chat: { group: 'Reaching you', label: 'Ask the side chat', description: 'Open the side chat with a question for you, answered by a separate model. The agent doesn’t see the answer.' },
+  open_settings_chat: { group: 'Reaching you', label: 'Hand you to the settings chat', description: 'Draft a request about Mochi’s own settings in Settings › Ask Mochi, with a toast to open it. Only the settings chat can read or suggest settings.' },
   notify_user: { group: 'Reaching you', label: 'Notify you', description: 'Send you a toast and a system notification for something that needs you now. At most once a minute per thread.' },
 
   get_settings: { group: 'Settings and profiles', label: 'Read settings', description: 'Read Mochi’s settings and their values. Secrets are never included.' },

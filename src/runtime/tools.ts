@@ -12,7 +12,7 @@ import type { LibraryHost } from '../host/types/library.ts';
 import type { ThemesHost } from '../host/types/themes.ts';
 import { setDriftPending } from '../chat/outbox.ts';
 import { receivedPrompt } from '../chat/threadMessages.ts';
-import { authorName, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread } from '../model.ts';
+import { authorName, isListed, PIN_SLOTS, type EventGlyph, type Provider, type QueueItem, type Space, type Step, type Thread } from '../model.ts';
 import { projectRef } from '../projects.ts';
 import { activeThreads, dropPin, parentOf, pinnedThreads, subThreadsOf } from '../reorder.ts';
 import { redactSecrets, type ConfigChange } from '../settings/agentConfig.ts';
@@ -37,6 +37,8 @@ export interface ToolEnv {
   /** A toast for a change; `onUndo` set when it can be undone. */
   toast: (text: string, onUndo?: () => void) => void;
   notify: (title: string, body: string) => void;
+  /** Drafts `prompt` in the profile's settings chat and toasts an Open; never moves the user there. */
+  openSettingsChat: (spaceId: string, prompt: string) => void;
   /** Removes a thread's worktree from disk after a delete; resolves when done. */
   removeWorktree: (threadId: string) => Promise<void>;
   /** The browser tabs' pages (`src/browser/pages.ts`) and main's native views behind them. */
@@ -282,7 +284,7 @@ const THREAD_SPECS = {
   list_threads: {
     run: ({ state, caller, args }) => ({
       result: state()
-        .threads.filter((t) => t.spaceId === caller.spaceId)
+        .threads.filter((t) => t.spaceId === caller.spaceId && isListed(t))
         .filter((t) => !args.status || t.status === args.status)
         .filter((t) => args.pinned === undefined || isPinned(t) === args.pinned)
         .filter((t) => !args.project || t.repo?.project === args.project)
@@ -577,6 +579,12 @@ const USER_SPECS = {
       return { changed: `notified you: ${args.title}`, result: { notified: true }, isFinal: true };
     },
   },
+  open_settings_chat: {
+    run: ({ caller, args, env }) => {
+      env.openSettingsChat(caller.spaceId, args.prompt);
+      return { changed: 'drafted a request in the settings chat', result: { note: 'Drafted in Settings › Ask Mochi; the user has a toast to open it. Tell them it is there; you will not see the outcome.' }, isFinal: true };
+    },
+  },
 } satisfies Partial<Specs>;
 
 const AGENT_SPECS = {
@@ -627,7 +635,7 @@ async function runBatch(ctx: ToolContext<Args<'browser_batch'>>): Promise<Outcom
 /** A thread in the caller's profile; another profile's thread is not found. */
 export function target(state: State, caller: Thread, threadId: string | undefined) {
   if (threadId === undefined) return caller;
-  const thread = state.threads.find((t) => t.id === threadId && t.spaceId === caller.spaceId);
+  const thread = state.threads.find((t) => t.id === threadId && t.spaceId === caller.spaceId && (isListed(t) || t.id === caller.id));
   if (!thread) throw new Error(`No thread ${threadId} in this profile; list_threads lists them`);
   return thread;
 }

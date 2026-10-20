@@ -10,6 +10,9 @@ Status: **now** = a value exists in code today (hardcoded or local state) and on
 
 ## Mochi
 
+### Ask Mochi
+The page Settings opens on (⌘, and every `openSettings()` without a section): the profile's settings chat. Before the first message, a title, one line on how it works, the composer (Settings › Models' side chat model, locked to its harness) and four starters; after it, the chat fills the column like a thread, with "New chat" in the title bar. Its agent is the only one with Mochi's settings tools and reads every request as about Mochi first ("default model" is Mochi's, not Claude Code's or Codex's own); suggestions show as the usual settings widgets in the chat (RUNTIME.md › Mochi tools › Settings chat). This computer only: no computer picker on this page.
+
 ### Account
 Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.tsx`). Your Mochi account (Clerk), for linking computers (DEVICES.md); not a Claude or Codex login. Signed out: Sign in, which opens your browser (OAuth code + PKCE, loopback redirect, `electron/account/`). Signing in: Cancel sign-in. Signed in: avatar, name, email, Manage account (Clerk's hosted Account Portal `/user` in your browser: profile, email, password, connected accounts, delete), Sign out (revokes the refresh token, best effort). The refresh token lives only in main, encrypted with `safeStorage`; the renderer gets `{ status, user, isPersistent }`. Linux without a secret service keeps the session for this run only and says so. Builds without a Clerk app (and the web build) show no account items. Done.
 

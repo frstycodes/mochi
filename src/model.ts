@@ -272,6 +272,9 @@ export interface WebLink {
 }
 
 /** What you first asked: the agent's opening prompt and a schedule's default, whatever the goal became. */
+/** Shown with the other threads (sidebar, palette, queue, list_threads); a settings chat lives only in Settings. */
+export const isListed = (thread: Thread) => !thread.isSettingsChat;
+
 export function firstPrompt(thread: Thread) {
   return thread.activity.find((e) => e.who === 'you' && e.kind === 'message')?.text ?? thread.goal;
 }
@@ -406,6 +409,8 @@ export interface Thread {
   queued?: QueuedMessage[];
   /** Why the queue stopped sending; cleared by your next send or Resume. */
   queuePause?: QueuePause;
+  /** The profile's settings chat (Settings › Ask Mochi): one per profile, never listed with the other threads (`isListed`). */
+  isSettingsChat?: true;
   /** How many `activity` entries you had seen when you last had it open, on any device; more now is unread. */
   seenActivity?: number;
 }

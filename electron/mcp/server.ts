@@ -12,7 +12,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ImageGenHarness } from '../../src/host/types/settings.ts';
 import type { GeneratedImage } from '../../src/model.ts';
 import { IMAGE_SIZES, IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, imageResultText, type ImageSize } from '../../src/runtime/imageTool.ts';
-import { isGoalTool, isTurnTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
+import { isTurnTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, servedTools, TOOL_NAMES, TOOL_TABLE, type MochiScope } from '../../src/runtime/toolTable.ts';
 import { agentSettings } from '../agents/config.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
@@ -23,8 +23,7 @@ import { toolCalls } from './calls.ts';
  */
 export const SERVER = MOCHI_SERVER;
 
-const TOOLS = TOOL_NAMES.map((name) => ({ name, ...TOOL_TABLE[name] }));
-const NO_GOAL_TOOLS = TOOLS.filter((t) => !isGoalTool(t.name));
+const toolsFor = (scope: MochiScope) => servedTools(scope).map((name) => ({ name, ...TOOL_TABLE[name] }));
 
 /** Shown to the model as the server's instructions (MCP `initialize`); the same for every thread, so it reads its own goal. */
 const INSTRUCTIONS =
@@ -32,6 +31,10 @@ const INSTRUCTIONS =
 
 /** With goals off (always, now goals are retired), nothing about goals: the main instructions say the rest. */
 const NO_GOAL_INSTRUCTIONS = 'Mochi runs this thread and shows the user what its tools do.';
+
+const SETTINGS_CHAT_INSTRUCTIONS = "These tools read and suggest Mochi's own settings. Call get_settings before answering.";
+
+const instructionsFor = ({ isGoalsOff, isSettingsChat }: MochiScope) => (isSettingsChat ? SETTINGS_CHAT_INSTRUCTIONS : isGoalsOff ? NO_GOAL_INSTRUCTIONS : INSTRUCTIONS);
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
 export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SERVER}__${name}`);
@@ -41,10 +44,11 @@ export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SE
  * is Claude's only (Codex generates natively) and runs here in main, not in the renderer; a session started while it was
  * off in Settings doesn't get it.
  */
-export function claudeServer(thread: string, spaceId: string, cwd: string, isGoalsOff?: boolean) {
-  const tools = (isGoalsOff ? NO_GOAL_TOOLS : TOOLS).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args), { alwaysLoad: isTurnTool(t.name) }));
+export function claudeServer(thread: string, spaceId: string, cwd: string, scope: MochiScope = {}) {
+  const tools = toolsFor(scope).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args), { alwaysLoad: !!scope.isSettingsChat || isTurnTool(t.name) }));
   const image = tool(IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, (args, extra) => generateImage(spaceId, cwd, args, (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal));
-  return createSdkMcpServer({ name: SERVER, instructions: isGoalsOff ? NO_GOAL_INSTRUCTIONS : INSTRUCTIONS, tools: agentSettings().imageGen === 'off' ? tools : [...tools, image] });
+  const isImageOff = scope.isSettingsChat || agentSettings().imageGen === 'off';
+  return createSdkMcpServer({ name: SERVER, instructions: instructionsFor(scope), tools: isImageOff ? tools : [...tools, image] });
 }
 
 type GenerateImage = (spaceId: string, prompt: string, signal: AbortSignal) => Promise<GeneratedImage>;
@@ -78,9 +82,10 @@ async function generateImage(spaceId: string, cwd: string, args: { prompt: strin
 }
 
 /** Codex: a streamable-HTTP URL on localhost for its `mcp_servers` config, one path per thread behind a per-launch secret. */
-export async function codexUrl(thread: string, isGoalsOff?: boolean) {
+export async function codexUrl(thread: string, { isGoalsOff, isSettingsChat }: MochiScope = {}) {
   const { port } = (await listening()).address() as AddressInfo;
-  return `http://127.0.0.1:${port}/mcp/${SECRET}/${thread}${isGoalsOff ? '?goals=off' : ''}`;
+  const query = new URLSearchParams({ ...(isGoalsOff && { goals: 'off' }), ...(isSettingsChat && { kind: 'settings' }) }).toString();
+  return `http://127.0.0.1:${port}/mcp/${SECRET}/${thread}${query && `?${query}`}`;
 }
 
 /**
@@ -123,15 +128,16 @@ function listening() {
     // Stateless: each POST gets a fresh server and transport, so nothing is kept between Codex's calls.
     const server = createServer(async (req, res) => {
       if (await routed(req, res)) return;
-      const match = req.url?.match(/^\/mcp\/(\w+)\/([\w-]+)(\?goals=off)?$/);
+      const match = req.url?.match(/^\/mcp\/(\w+)\/([\w-]+)(?:\?([\w=&]*))?$/);
       if (!match || match[1] !== SECRET) return void res.writeHead(404).end();
       // Codex sends no Origin; a browser page always does, so this keeps web pages off the port even if they learn the URL.
       if (req.headers.origin !== undefined) return void res.writeHead(403).end();
-      const isGoalsOff = !!match[3];
+      const query = new URLSearchParams(match[3]);
+      const scope: MochiScope = { isGoalsOff: query.get('goals') === 'off', isSettingsChat: query.get('kind') === 'settings' };
       const isDev = !app.isPackaged && process.env.MOCHI_DEV_MCP === '1' && match[2] === '__dev__';
-      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: isDev ? 'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.' : isGoalsOff ? NO_GOAL_INSTRUCTIONS : INSTRUCTIONS });
+      const mcp = new McpServer({ name: SERVER, version: '1.0.0' }, { instructions: isDev ? 'This is an opted-in Mochi dev build. Start test tasks, inspect their progress and transcript, and continue them to reproduce issues. These are real agents using the selected profile account. Never mark a criterion verified on the agent’s word.' : instructionsFor(scope) });
       if (isDev) registerDevTools(mcp);
-      else for (const t of isGoalsOff ? NO_GOAL_TOOLS : TOOLS) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
+      else for (const t of toolsFor(scope)) mcp.registerTool(t.name, { description: t.description, inputSchema: t.shape }, (args: Record<string, unknown>) => callMochi(match[2], t.name, args));
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
       res.on('close', () => void transport.close().then(() => mcp.close()));
       await mcp.connect(transport);

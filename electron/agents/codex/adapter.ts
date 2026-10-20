@@ -9,7 +9,7 @@ import { apiMessage, childEvents, generatedImage, codexModels, codexThreadId, co
 import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
 import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '../instructions.ts';
 import { killTree, spawnable } from '../../platform.ts';
-import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { MOCHI_TIMEOUT_MS, type MochiScope } from '../../../src/runtime/toolTable.ts';
 import { CHEAP_MODELS } from '../../../src/utility/prompts.ts';
 
 interface Live {
@@ -96,13 +96,13 @@ export class CodexAdapter {
   private emit: (event: AgentEvent) => void;
   private accountFor: AccountFor;
   private findCodex: FindCodex;
-  private toolsUrl?: (threadId: string, isGoalsOff?: boolean) => Promise<string>;
+  private toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>;
   private libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>;
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
   /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. */
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, isGoalsOff?: boolean) => Promise<string>, libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>) {
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>, libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>) {
     this.emit = emit;
     this.accountFor = accountFor;
     this.findCodex = findCodex;
@@ -368,9 +368,11 @@ export class CodexAdapter {
     const prior = this.threads.get(threadId);
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
-    const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId, options.isGoalsOff) };
-    const library = await this.libraryConfig?.(options);
-    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: mochiInstructions(options.isGoalsOff), config: { ...GOALS_OFF, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId, options) };
+    // A settings chat gets Mochi's settings tools and nothing else: none of the profile's servers, nothing that writes or asks.
+    const library = options.isSettingsChat ? undefined : await this.libraryConfig?.(options);
+    const policy = POLICIES[options.isSettingsChat ? 'review' : (options.permissionMode ?? '')];
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: mochiInstructions(options), config: { ...GOALS_OFF, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...policy };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume

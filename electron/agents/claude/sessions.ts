@@ -210,7 +210,9 @@ async function launch(session: Session) {
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: mochiInstructions(options.isGoalsOff) },
+        // A settings chat isn't Claude Code: no coding preset, no built-in tools, none of the profile's plugins or servers.
+        systemPrompt: options.isSettingsChat ? mochiInstructions(options) : { type: 'preset', preset: 'claude_code', append: mochiInstructions(options) },
+        ...(options.isSettingsChat && { tools: [] }),
         // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
         // The profile's turned-off native items join the flag layer here; nothing is written to the account's own files.
         settings: { ...native, skillOverrides: { ...CLAUDE_SKILLS_OFF, ...native.skillOverrides }, permissions: connectorRules, ...(options.speed && { fastMode: true }) },
@@ -229,11 +231,11 @@ async function launch(session: Session) {
         enableFileCheckpointing: true,
         abortController: abort,
         canUseTool: approve(threadId),
-        plugins: library.pluginDirs.map((path) => ({ type: 'local' as const, path })),
+        plugins: options.isSettingsChat ? [] : library.pluginDirs.map((path) => ({ type: 'local' as const, path })),
         mcpServers: {
-          ...Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig])),
-          ...Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }])),
-          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, options.isGoalsOff),
+          ...(!options.isSettingsChat && Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig]))),
+          ...(!options.isSettingsChat && Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }]))),
+          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, options),
         },
         hooks: { ...compactHooks(threadId), PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)] },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],

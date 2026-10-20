@@ -1,4 +1,4 @@
-import { isMochiCard, type LiveRun, type Provider, type QueueItem, type Thread } from '../model.ts';
+import { isListed, isMochiCard, type LiveRun, type Provider, type QueueItem, type Thread } from '../model.ts';
 import { resetLabel } from '../usage/limits.ts';
 import { bareStates, idleVerdict, subThreadVerdicts, type Verdict, type VerdictKind } from '../goals/verdict.ts';
 import { parentOf } from '../reorder.ts';
@@ -106,7 +106,7 @@ export function diffNotices(prev: { threads: Thread[]; queue: QueueItem[] }, nex
 
   for (const t of next.threads) {
     const p = before.get(t.id);
-    if (!p || p === t) continue;
+    if (!p || p === t || !isListed(t)) continue;
     const limit = t.live?.limit;
     const was = p.live?.limit;
     if (limit && !was) add({ id: `limit-${t.id}`, kind: 'limit', threadId: t.id, title: limit.isTurnHeld ? `${t.title} is waiting` : `${t.title} stopped`, body: limitBody(t.providers[0], limit) });

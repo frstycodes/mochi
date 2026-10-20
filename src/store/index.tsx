@@ -5,7 +5,7 @@ import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
 import { NO_AGENT_PROCESS, type AgentEvent, type AgentToolCall, type AttachedAgent, type SeqAgentEvent } from '../host/types/agent.ts';
-import type { QueueItem, Thread } from '../model.ts';
+import { isListed, type QueueItem, type Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
@@ -281,13 +281,13 @@ export function useThread(id: string) {
 export function useSpaceThreads(spaceId?: string) {
   const { state } = useHarness();
   const id = spaceId ?? state.spaceId;
-  return state.threads.filter((t) => t.spaceId === id);
+  return state.threads.filter((t) => t.spaceId === id && isListed(t));
 }
 
 export function useSpaceQueue(spaceId?: string) {
   const { state } = useHarness();
   const id = spaceId ?? state.spaceId;
-  const ids = new Set(state.threads.filter((t) => t.spaceId === id).map((t) => t.id));
+  const ids = new Set(state.threads.filter((t) => t.spaceId === id && isListed(t)).map((t) => t.id));
   return rankQueue(state.queue.filter((q) => ids.has(q.threadId)));
 }
 

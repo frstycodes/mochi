@@ -54,6 +54,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const answers: boolean[] = [];
   const pushes: string[] = [];
   const opened: string[] = [];
+  const drafted: { spaceId: string; prompt: string }[] = [];
   const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
   let prefs: Prefs = { ...DEFAULT_PREFS, goals: true, agentControl: control };
@@ -69,6 +70,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     prefs: { get: () => prefs, set: (patch) => void (prefs = { ...prefs, ...patch }) },
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
+    openSettingsChat: (spaceId, prompt) => void drafted.push({ spaceId, prompt }),
     removeWorktree: async (id) => void removed.push(id),
     pages: {
       get: (k) => pages.get(k),
@@ -146,7 +148,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, connects, setupRuns, setupResults };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, drafted, connects, setupRuns, setupResults };
   return t;
 }
 
@@ -425,6 +427,15 @@ test('another profile is out of reach and bad args are errors, not throws', asyn
 });
 
 // {THREADS}
+
+test('the settings chat is invisible to other threads, and open_settings_chat drafts into it', async () => {
+  const t = setup();
+  t.state().threads.push({ ...t.thread('rl'), id: 'settings', title: 'Change the model', orbitSlot: undefined, isSettingsChat: true });
+  assert.ok(!(await t.ok('list_threads')).some((x: { id: string }) => x.id === 'settings'));
+  assert.match(await t.err('rename_thread', { threadId: 'settings', title: 'x' }), /No thread settings/);
+  await t.ok('open_settings_chat', { prompt: 'use opus by default' });
+  assert.deepEqual(t.drafted, [{ spaceId: 'latitude', prompt: 'use opus by default' }]);
+});
 
 test('list_threads filters by status, pinned and project inside the profile', async () => {
   const t = setup();

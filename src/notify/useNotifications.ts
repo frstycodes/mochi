@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { toast } from '../toast/store.ts';
 import { queueToast } from '../QueueToast';
 import { host } from '../host';
+import { isListed } from '../model';
 import { threadCwd } from '../host/cwd';
 import type { WatchConfig } from '../host/types/notify';
 import { getProfiles } from '../profiles';
@@ -125,7 +126,7 @@ function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: stri
   const { muted, quiet } = state.notifications;
   // Another computer's threads count toward the badge too, keyed by machine so ids never collide with this one's.
   const remoteNeedsYou = machines.flatMap(({ machine, state }) => (state?.threads ?? []).filter((t) => t.status === 'needs-you').map((t) => `${machine.id}/${t.id}`));
-  return { threads, autofix, kinds: alertKinds, quiet, muted, needsYou: [...state.threads.filter((t) => t.status === 'needs-you').map((t) => t.id), ...remoteNeedsYou], dockBadge };
+  return { threads, autofix, kinds: alertKinds, quiet, muted, needsYou: [...state.threads.filter((t) => t.status === 'needs-you' && isListed(t)).map((t) => t.id), ...remoteNeedsYou], dockBadge };
 }
 
 /** Opens what a notice is about: its queue item while that's still open, else its thread. */

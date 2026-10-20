@@ -3,6 +3,7 @@ import type { Action, State } from '../store/index.tsx';
 import { mirrorState, reducer } from '../store/root.ts';
 import type { Saved } from '../store/persist.ts';
 import { rankQueue } from '../store/queue.ts';
+import { isListed } from '../model.ts';
 import { lastActivityAt, pinnedThreads } from '../reorder.ts';
 
 /** Another computer's store as this one follows it: rebuilt from its snapshot, then each of its actions in order. */
@@ -35,6 +36,6 @@ export function remoteDecisions(state: State) {
 /** A machine's threads for its sidebar group, latest activity first: active ones, and settled ones folded below. Its pins show in Pinned. */
 export function remoteThreads(state: State) {
   const pinned = new Set(pinnedThreads(state.threads, state.spaceId).map((t) => t.id));
-  const threads = state.threads.filter((t) => !pinned.has(t.id)).sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
+  const threads = state.threads.filter((t) => !pinned.has(t.id) && isListed(t)).sort((a, b) => lastActivityAt(b) - lastActivityAt(a));
   return { active: threads.filter((t) => t.status !== 'settled'), settled: threads.filter((t) => t.status === 'settled') };
 }

@@ -15,7 +15,7 @@ let nonce = 0;
 const listeners = new Set<() => void>();
 
 /** Opens the settings page (⌘, / Ctrl+,, the palette, the profile menu); `settingId` scrolls to that row and flashes it. */
-export function openSettings(section: SectionId = 'general', settingId?: string) {
+export function openSettings(section: SectionId = 'chat', settingId?: string) {
   set({ section, settingId, nonce: ++nonce });
 }
 
