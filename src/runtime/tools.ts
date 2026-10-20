@@ -129,8 +129,8 @@ export type Args<K extends ToolName> = z.infer<z.ZodObject<(typeof TOOL_TABLE)[K
 
 export interface ToolSpec<K extends ToolName> {
   run: (ctx: ToolContext<Args<K>>, options: string[]) => Outcome | Promise<Outcome>;
-  /** Tools in an asking tier: what the widget says. */
-  ask?: (ctx: ToolContext<Args<K>>) => Approval | Promise<Approval>;
+  /** Tools in an asking tier: what the widget says. Undefined: this call doesn't ask. */
+  ask?: (ctx: ToolContext<Args<K>>) => Approval | undefined | Promise<Approval | undefined>;
 }
 
 type Specs = { [K in ToolName]: ToolSpec<K> };
@@ -156,9 +156,10 @@ export async function runTool(call: AgentToolCall, env: ToolEnv, deadline = Date
     if (isChosen && policy === 'off') throw new Error(`The user turned ${name} off for agents in Settings › Mochi access. Don't call it again unless they turn it back on.`);
     if (isGoalTool(name) && !env.prefs.get().goals) throw new Error('Mochi has no goals any more. Carry on without one and don\'t call goal tools again.');
     if (!isChosen) gate(ctx, name, LEVEL[tier]);
-    const approval = spec.ask?.(ctx) ?? (policy === 'ask' ? approvalFor(ctx, name) : undefined);
+    const asked = spec.ask?.(ctx);
+    const approval = (asked instanceof Promise ? await asked : asked) ?? (policy === 'ask' ? approvalFor(ctx, name) : undefined);
     // A sync ask opens its widget before runTool yields, so the widget is in the queue as soon as the call returns.
-    const options = approval ? await ask(ctx, approval instanceof Promise ? await approval : approval) : [];
+    const options = approval ? await ask(ctx, approval) : [];
     const before = env.getState();
     const outcome = await Promise.resolve()
       .then(() => spec.run(ctx, options))
@@ -381,6 +382,13 @@ const THREAD_SPECS = {
     },
   },
   create_thread: {
+    // A sub-thread's new threads, and picks above this thread's run, wait on the user: an agent can't raise what it was started with.
+    ask: async ({ env, caller, args }) => {
+      const raised = await raisedControls(env, caller, providerOf(args.provider, caller), args);
+      if (!caller.parent && !raised.length) return undefined;
+      const reasons = [caller.parent && 'This thread is a sub-thread, so the threads it starts wait on you.', raised.length && `It would run ${raised.join(' at ')}, above this thread.`];
+      return { title: `${authorName(caller.providers[0])} wants to start a thread`, detail: reasons.filter(Boolean).join(' '), code: args.prompt, denied: "Didn't start the thread" };
+    },
     run: async ({ state, caller, args, dispatch, env }) => {
       const prompt = args.prompt.trim();
       if (!prompt) throw new Error('prompt is required');
@@ -663,10 +671,10 @@ const isPinned = (t: Thread) => t.orbitSlot !== undefined && t.status !== 'settl
 
 const providerOf = (provider: Provider | undefined, caller: Thread) => provider ?? caller.providers[0];
 
-/** The link a sub-thread starts with: to the caller and the criterion it covers. One level deep, so a sub-thread can't start one. */
-function subThreadLink(caller: Thread, args: { criterionId?: string; isSubThread?: boolean }) {
-  if (!args.criterionId && !args.isSubThread) return undefined;
-  if (caller.parent) throw new Error('This thread is a sub-thread itself; sub-threads nest one level deep. Do the work here, or ask its parent thread to start another');
+/** The link a new thread starts with: to the caller and the criterion it covers, at any depth; none for `isTopLevel`. */
+function subThreadLink(caller: Thread, args: { criterionId?: string; isTopLevel?: boolean }) {
+  if (args.isTopLevel && args.criterionId) throw new Error('A criterion goes to a sub-thread; leave out isTopLevel');
+  if (args.isTopLevel) return undefined;
   if (args.criterionId && !caller.criteria?.some((c) => c.id === args.criterionId)) throw new Error(`No criterion ${args.criterionId}; get_goal lists them`);
   return { threadId: caller.id, ...(args.criterionId && { criterionId: args.criterionId }) };
 }
@@ -689,13 +697,37 @@ async function newThreadControls(env: ToolEnv, caller: Thread, provider: Provide
   const origin = env.getState().threads.find((t) => t.id === caller.id) ?? caller;
   const sameProvider = provider === origin.providers[0];
   const current = sameProvider ? controlsOf(origin) : DEFAULT_CONTROLS[provider];
-  const model = picked.model ?? (sameProvider ? origin.agent?.model ?? current.model : current.model);
-  const effort = picked.effort ?? (sameProvider ? origin.agent?.effort ?? current.effort : current.effort);
+  const running = callerRun(origin);
+  const model = picked.model ?? (sameProvider ? running.model : current.model);
+  const effort = picked.effort ?? (sameProvider ? running.effort : current.effort);
   if (picked.model && models.length && !models.some((m) => m.id === picked.model)) throw new Error(`${picked.model} isn't offered; use one of ${models.map((m) => m.id).join(', ')}`);
   const resolved = resolveRun(models, model, effort, current.speed);
   const offered = models.find((m) => m.id === resolved.model);
   if (picked.effort && offered && !offered.efforts.includes(picked.effort)) throw new Error(`${picked.effort} effort isn't offered by ${offered.id}; use one of ${offered.efforts.join(', ') || 'the model default'}`);
-  return { ...current, model: resolved.model ?? '', effort: resolved.effort ?? '' };
+  // Permissions always follow the caller's, so switching harness can't loosen them.
+  return { ...current, model: resolved.model ?? '', effort: resolved.effort ?? '', access: controlsOf(origin).access };
+}
+
+/** The model and effort the caller's agent runs: its live session's, else its controls'. */
+function callerRun(caller: Thread) {
+  const controls = controlsOf(caller);
+  return { model: caller.agent?.model ?? controls.model, effort: caller.agent?.effort ?? controls.effort };
+}
+
+/** What a pick runs above the caller: another model, or an effort past the caller's in the model's list. GAP: models carry no rank, so any other model counts. */
+async function raisedControls(env: ToolEnv, caller: Thread, provider: Provider, picked: { model?: string; effort?: string }) {
+  if (!picked.model && !picked.effort) return [];
+  const origin = env.getState().threads.find((t) => t.id === caller.id) ?? caller;
+  const running = callerRun(origin);
+  const own = await env.models(origin.providers[0], caller.spaceId);
+  const runModel = resolveRun(own, running.model, running.effort, '').model ?? running.model;
+  const models = provider === origin.providers[0] ? own : await env.models(provider, caller.spaceId);
+  const model = picked.model ?? (provider === origin.providers[0] ? runModel : undefined);
+  const efforts = models.find((m) => m.id === model)?.efforts ?? [];
+  // A model the account doesn't offer isn't asked about: the run refuses it.
+  const isModelRaised = !!picked.model && picked.model !== runModel && (!models.length || models.some((m) => m.id === picked.model));
+  const isEffortRaised = !!picked.effort && picked.effort !== running.effort && efforts.indexOf(picked.effort) > efforts.indexOf(running.effort);
+  return [...(isModelRaised ? [picked.model!] : []), ...(isEffortRaised ? [`${picked.effort} effort`] : [])];
 }
 
 const count = (threads: Thread[]) => (threads.length === 1 ? `"${threads[0].title}"` : `${threads.length} threads`);

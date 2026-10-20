@@ -173,6 +173,18 @@ test('adding a source tells a live agent in your name; a demo thread only logs i
   assert.deepEqual(calls(base(), { type: 'source-add', threadId: 'adm', source: { kind: 'file', label: 'docs/x.md' } }), []);
 });
 
+test("settling a parent stops its open sub-threads' agents too", () => {
+  let s = run(base(), { type: 'create', title: 'Split the work', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const parent = s.threads.at(-1)!.id;
+  s = run(s, { type: 'create', title: 'Piece A', provider: 'claude', project: '/Users/me/dev/app', isLive: true, parent: { threadId: parent } });
+  const sub = s.threads.at(-1)!.id;
+  s = run(s, { type: 'create', title: 'Piece A.1', provider: 'claude', project: '/Users/me/dev/app', isLive: true, parent: { threadId: sub } });
+  const grand = s.threads.at(-1)!.id;
+  const stopped = calls(s, { type: 'settle', threadId: parent });
+  assert.deepEqual(stopped.map((c) => c.method), ['settle', 'settle', 'settle']);
+  assert.deepEqual(stopped.map((c) => c.threadId).sort(), [parent, sub, grand].sort(), 'a grandchild stops too');
+});
+
 test('settling stops the agent once; after reactivating, the next message restarts it with resume instead of sending to a gone process', () => {
   const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: '/Users/me/dev/app', isLive: true };
   let s = run(base(), create);

@@ -10,6 +10,7 @@ import { startTitleRequest } from '../utility/titles.ts';
 import type { Action, State } from '../store/index.tsx';
 import { autofixSend } from '../schedule/slice.ts';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
+import { WAKE_PROMPT } from './subThreadNotes.ts';
 import { backgroundPrompt, backgroundSession, isRunning, reportOf, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
@@ -86,9 +87,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       return threadId && hasAgent(state, threadId) ? [{ method: 'stop', threadId }] : [];
     }
     // Main shuts down everything the thread started (its agents, terminals, dev servers), running or not.
+    // Its open sub-threads at every depth settle with it (`threads.ts`), so their agents stop too.
     case 'settle': {
-      const thread = state.threads.find((t) => t.id === action.threadId);
-      return thread?.live && thread.status !== 'settled' ? [{ method: 'settle', threadId: thread.id }] : [];
+      const after = next().threads;
+      return state.threads.filter((t) => t.live && t.status !== 'settled' && after.find((n) => n.id === t.id)?.status === 'settled').map((t) => ({ method: 'settle' as const, threadId: t.id }));
     }
     case 'delete':
       return action.threadIds.filter((id) => isLive(state, id)).map((threadId) => ({ method: 'settle' as const, threadId }));
@@ -121,6 +123,8 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const report = agentCalls(state, { type: 'send', threadId: action.threadId, text: reportOf(subagent), reason: '', steers: true }, next);
       return [{ method: 'stop', threadId: subagent.sessionId }, ...report];
     }
+    case 'subthread-wake':
+      return agentCalls(state, { type: 'send', threadId: action.threadId, text: WAKE_PROMPT, reason: '' }, next);
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.
       const thread = state.threads.find((t) => t.id === action.threadId);

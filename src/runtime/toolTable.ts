@@ -67,11 +67,11 @@ export const TOOL_TABLE = {
   create_thread: {
     tier: 'change',
     description:
-      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Honor any model or effort the user explicitly named. Otherwise leave that field out: the new thread inherits the originating session's model and effort when it starts. Do not choose a different model or effort on your own. As a sub-thread (`criterionId`, or `isSubThread`) it works on one piece of your goal: it nests under this thread, branches from your branch, opens its PR into it, and hands its result back here.",
+      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Honor any model or effort the user explicitly named. Otherwise leave that field out: the new thread inherits the originating session's model and effort when it starts. Do not choose a different model or effort on your own. It nests under this thread as a sub-thread: it branches from your branch, opens its PR into it, and each turn it ends comes back to you as a note; you are started with the notes once all your sub-threads are idle. Pass `criterionId` to hand it one piece of your goal. Pass `isTopLevel` for work that stands on its own, like an unrelated task the user wants as a separate thread. From a sub-thread, it nests under that sub-thread and waits on the user's approval, as does any model or effort above this thread's.",
     shape: {
       prompt: z.string(),
       criterionId: z.string().optional().describe('Hand this criterion of your goal (an id from get_goal) to the new thread as a sub-thread; its result claims it when handed back'),
-      isSubThread: z.boolean().optional().describe('A sub-thread with no criterion of its own: part of your work, nested under this thread'),
+      isTopLevel: z.boolean().optional().describe('Start it at the top of the sidebar, not nested under this thread'),
       provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
       model: z.string().optional().describe("A model id the account offers, like \"claude-sonnet-5-5\"; defaults to this thread's"),
       effort: z.string().optional().describe("A provider-supported effort id; defaults to the originating session's at start"),

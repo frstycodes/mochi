@@ -276,11 +276,16 @@ test('new tasks and subtasks inherit the running session and honor user-named mo
     t.env.dispatch({ type: 'agent', event: { threadId: 'rl', type: 'info', info: { model, effort: 'low' } } });
     // These composer choices apply on the next start, not to the running session.
     t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: other, effort: 'high', speed: '', access: 'Manual' } });
-    for (const isSubThread of [false, true]) {
+    for (const isTopLevel of [false, true]) {
       for (const picked of [{}, { model: other }, { effort: 'max' }, { model: other, effort: 'max' }]) {
-        const created = await t.ok('create_thread', { prompt: 'Fix login', isSubThread, ...picked });
+        // Every pick here runs above the session (another model, or max over low), so it waits on your approval.
+        const pending = picked.model || picked.effort ? await t.asking('create_thread', { prompt: 'Fix login', isTopLevel, ...picked }) : null;
+        if (pending) decideTool(pending.card.id, { isApproved: true });
+        const r = pending ? await pending.result : await t.call('create_thread', { prompt: 'Fix login', isTopLevel, ...picked });
+        assert.ok(!r.isError, r.text);
+        const created = JSON.parse(r.text);
         assert.deepEqual(t.thread(created.id).controls, { model: picked.model ?? model, effort: picked.effort ?? 'low', speed: '', access: 'Manual' });
-        assert.equal(!!t.thread(created.id).parent, isSubThread);
+        assert.equal(!!t.thread(created.id).parent, !isTopLevel);
       }
     }
     assert.match(await t.err('create_thread', { prompt: 'x', model: 'unavailable' }), /isn't offered/);
@@ -291,7 +296,7 @@ test('new tasks and subtasks inherit the running session and honor user-named mo
 test('create_thread reads current controls after approval, not at tool invocation', async () => {
   const t = setup();
   t.env.prefs.set({ toolPolicies: { create_thread: 'ask' } });
-  const pending = await t.asking('create_thread', { prompt: 'Fix login', isSubThread: true });
+  const pending = await t.asking('create_thread', { prompt: 'Fix login' });
   t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
   decideTool(pending.card.id, { isApproved: true });
   const result = await pending.result;
@@ -308,8 +313,54 @@ test('create_thread resolves unset models, isolates provider changes, and passes
   const switched = await t.ok('create_thread', { prompt: 'Use Codex', provider: 'codex' });
   assert.deepEqual(t.thread(switched.id).controls, { model: 'gpt-6-sol', effort: 'high', speed: '', access: 'Auto' });
   t.env.models = async () => [];
-  const unlisted = await t.ok('create_thread', { prompt: 'Use a user-named model', model: 'custom-model', effort: 'custom-effort' });
+  // Without a catalog nothing ranks the pick, so another model asks first.
+  const pending = await t.asking('create_thread', { prompt: 'Use a user-named model', model: 'custom-model', effort: 'custom-effort' });
+  decideTool(pending.card.id, { isApproved: true });
+  const unlisted = JSON.parse((await pending.result).text);
   assert.deepEqual(t.thread(unlisted.id).controls, { model: 'custom-model', effort: 'custom-effort', speed: '', access: 'Auto' });
+});
+
+test('create_thread nests under the calling thread by default, and isTopLevel starts it on its own', async () => {
+  const t = setup();
+  const nested = await t.ok('create_thread', { prompt: 'Add the retry header' });
+  assert.deepEqual(t.thread(nested.id).parent, { threadId: 'rl' });
+  assert.equal(t.thread(nested.id).repo?.base, 'feat/api-rate-limits', 'it branches from the parent');
+  const own = await t.ok('create_thread', { prompt: 'Unrelated cleanup', isTopLevel: true });
+  assert.equal(t.thread(own.id).parent, undefined);
+  assert.match(await t.err('create_thread', { prompt: 'x', isTopLevel: true, criterionId: 'c' }), /leave out isTopLevel/);
+});
+
+test("a new thread can't run above its parent: higher picks ask first, lower ones and permissions pass straight through", async () => {
+  const t = setup();
+  t.env.models = async (provider) => (provider === 'codex' ? [{ id: 'gpt-6-sol', name: 'Sol', description: '', efforts: ['low', 'high'], speeds: [], isDefault: true }] : [{ id: 'claude-opus-5-5', name: 'Opus', description: '', efforts: ['low', 'high', 'max'], speeds: [], isDefault: true }]);
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-opus-5-5', effort: 'high', speed: '', access: 'Manual' } });
+  const lower = await t.ok('create_thread', { prompt: 'Cheap check', effort: 'low' });
+  assert.equal(t.thread(lower.id).controls?.effort, 'low');
+  const pending = await t.asking('create_thread', { prompt: 'Think hard', effort: 'max' });
+  assert.match(pending.card.detail ?? '', /max effort, above this thread/);
+  decideTool(pending.card.id, { isApproved: false });
+  assert.match((await pending.result).text, /denied/);
+  const switched = await t.ok('create_thread', { prompt: 'Use Codex', provider: 'codex' });
+  assert.equal(t.thread(switched.id).controls?.access, 'Manual', "switching harness keeps the parent's permissions");
+});
+
+test("a sub-thread's new thread waits on you, then nests under it: a two-level tree", async () => {
+  const t = setup();
+  const sub = await t.ok('create_thread', { prompt: 'Piece of the work' });
+  const queued = t.state().queue.length;
+  const result = t.call('create_thread', { prompt: 'Another piece' }, sub.id);
+  for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
+  const card = t.state().queue.at(-1)!;
+  assert.match(card.detail ?? '', /is a sub-thread/);
+  decideTool(card.id, { isApproved: true });
+  const created = JSON.parse((await result).text);
+  assert.deepEqual(t.thread(created.id).parent, { threadId: sub.id });
+  assert.deepEqual(t.thread(sub.id).parent, { threadId: 'rl' });
+  const before = t.state().queue.length;
+  const own = t.call('create_thread', { prompt: 'Unrelated', isTopLevel: true }, sub.id);
+  for (let i = 0; i < 20 && t.state().queue.length === before; i++) await new Promise((r) => setTimeout(r, 0));
+  decideTool(t.state().queue.at(-1)!.id, { isApproved: true });
+  assert.equal(t.thread(JSON.parse((await own).text).id).parent, undefined, 'isTopLevel still starts one on its own');
 });
 
 test('a delete always waits on its widget, and Cancel leaves everything as it was', async () => {

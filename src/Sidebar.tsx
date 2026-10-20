@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { cn } from '@/lib/utils';
 import { PrStack } from './git/PrStack';
-import { StatusRing, useThreadStatus } from './goals/VerdictChip';
+import { useThreadStatus } from './goals/VerdictChip';
 import { SubThreadGuide } from './goals/SubThreads';
 import { nestWithUndo, unnestWithUndo } from './subThreadActions';
 import { PIN_SLOTS, type Thread } from './model';
@@ -35,7 +35,7 @@ import { useIsMultiSplit } from './SidebarToggle';
 import { extendSelection, selectRange, toggleSelected, type Selection } from './selection';
 import { isMod } from './keys';
 import { NotificationBell } from './notify/NotificationBell';
-import { dropAt, dropPin, lastActivityAt, nestBlocker, orderBetween, pinnedThreads, pinOrderOf, sidebarGroups, stepPin, type DropAt, type ThreadGroup } from './reorder';
+import { dropAt, dropPin, lastActivityAt, nestBlocker, orderBetween, rootOf, pinnedThreads, pinOrderOf, sidebarGroups, stepPin, type DropAt, type ThreadGroup } from './reorder';
 import { SidebarResizer } from './SidebarResizer';
 import { NavItem, SidebarNav } from './SidebarNav';
 import { useSettle } from './useSettle';
@@ -47,7 +47,7 @@ import { useHarness, useSpace, useSpaceQueue, useSpaceThreads, useView, type Sta
 import { endRename, startRename, titleToSave, useRenameSurface } from './rename';
 import type { FollowedMachine } from './host/types/remote';
 import { NEXT_STEP_TITLES, reportHeadline } from './goals/report';
-import { SpaceIcon, TooltipIconButton, UnreadDot } from './ui';
+import { LiveDot, SpaceIcon, TooltipIconButton } from './ui';
 import { isUnread } from './store/seen';
 import { workingLabel } from './agentPhase';
 import { runningTasks } from './runtime/tasks';
@@ -668,12 +668,13 @@ function dropOver(list: HTMLUListElement | null, row: ListRow, pinnedIds: string
   const label = list.querySelector<HTMLElement>('[data-threads-label]')!;
   const rows = [...list.querySelectorAll<HTMLElement>('[data-row-id]')].map((el) => ({ id: el.dataset.rowId!, top: el.offsetTop, height: el.offsetHeight, isPinned: el.dataset.pinned !== undefined, ...(el.dataset.subOf && { parentId: el.dataset.subOf }) }));
   const isFull = !row.remote && pinnedIds.filter((id) => id !== row.rowId).length >= PIN_SLOTS.length;
-  const canNest = (parentId: string) => !row.remote && threads.some((t) => t.id === parentId) && !nestBlocker(threads, row.thread.id, parentId);
-  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: row.rowId, ...(row.thread.parent && { parentId: row.thread.parent.threadId }) }, y - box.top, isFull, canNest);
+  const canNest = (parentId: string) => !row.remote && parentId !== row.thread.parent?.threadId && threads.some((t) => t.id === parentId) && !nestBlocker(threads, row.thread.id, parentId);
+  const root = row.remote ? row.thread : rootOf(threads, row.thread);
+  return dropAt(rows, label.offsetTop + label.offsetHeight / 2, { id: row.rowId, ...(root.id !== row.thread.id && { parentId: root.id }) }, y - box.top, isFull, canNest);
 }
 
 /**
- * A thread's sidebar row: its one status ring and title, then the project, what it's doing or why it stopped, and its badges.
+ * A thread's sidebar row: its title and one status dot, then the project, what it's doing or why it stopped, and its badges.
  * `isSub`: a sub-thread under its parent, one line unless it asks for you. `machine`: the computer it runs on, for another
  * computer's thread among this one's (Pinned).
  */
@@ -685,15 +686,14 @@ export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSel
   const body = (
     <>
       <span className="flex min-w-0 items-center gap-2">
-        <StatusRing met={row.progress.met} total={row.progress.total} tone={row.tone} isWorking={row.isWorking} slot={thread.line} label={row.status} />
         {isRenaming ? <RowTitleField thread={thread} /> : <span className={cn('min-w-0 flex-1 truncate', (isActive || row.isUnread) && 'text-foreground')}>{thread.title}</span>}
-        {row.isUnread && !isActive && <UnreadDot className="shrink-0" />}
         {isSub && <PrStack thread={thread} />}
+        {!isRenaming && <RowStatusDot row={row} isActive={isActive} />}
         {/* Room for the Settle / Reactivate chip while it shows, so the title truncates before the chip instead of under it. */}
         {!isRenaming && <span aria-hidden className={cn('shrink-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')} />}
       </span>
       {isSub ? (
-        asks && <span className={cn('truncate pl-6 type-caption', row.tone === 'destructive' ? 'text-destructive' : 'text-warning')}>{row.detail}</span>
+        asks && <span className={cn('truncate type-caption', row.tone === 'destructive' ? 'text-destructive' : 'text-warning')}>{row.detail}</span>
       ) : (
         <RowDetail thread={thread} row={row} machine={machine} />
       )}
@@ -721,6 +721,25 @@ export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSel
     </>
   );
 }
+
+/**
+ * The row's one status, at the title line's end: a quiet pulse while working, else a dot for what asks for you (needs you, failed),
+ * else blue for unread; nothing for an idle thread you've seen. The hover Settle chip takes its place.
+ */
+function RowStatusDot({ row, isActive }: { row: ReturnType<typeof useThreadRow>; isActive: boolean }) {
+  const hide = 'group-focus-within/menu-item:hidden group-hover/menu-item:hidden';
+  if (row.isWorking)
+    return (
+      <span role="img" aria-label="Working" className={cn('flex shrink-0', hide)}>
+        <LiveDot className="text-muted-foreground" />
+      </span>
+    );
+  const dot = row.tone === 'warning' || row.tone === 'destructive' ? row.tone : row.isUnread && !isActive ? 'unread' : null;
+  if (!dot) return null;
+  return <span role="img" aria-label={dot === 'unread' ? 'Unread' : row.status} className={cn('size-2 shrink-0 rounded-full', DOT_BG[dot], hide)} />;
+}
+
+const DOT_BG = { warning: 'bg-warning', destructive: 'bg-destructive', unread: 'bg-info' } satisfies Record<string, string>;
 
 /** The row's title as a field: Enter or leaving it saves, Esc keeps the old title. */
 function RowTitleField({ thread }: { thread: Thread }) {
@@ -771,7 +790,7 @@ function RowDetail({ thread, row, machine }: { thread: Thread; row: ReturnType<t
   const project = useProjectAt(thread.spaceId, thread.repo?.path);
   // overflow-visible: the PR discs are 4px taller than the line, and the button truncates its last line.
   return (
-    <span className="flex min-w-0 items-center gap-1.5 overflow-visible! pl-6 type-caption text-subtle-foreground">
+    <span className="flex min-w-0 items-center gap-1.5 overflow-visible! type-caption text-subtle-foreground">
       {!!machine && (
         <>
           <DeviceIcon kind={machine.kind} className="size-3.5 shrink-0" />
@@ -781,7 +800,7 @@ function RowDetail({ thread, row, machine }: { thread: Thread; row: ReturnType<t
       <span className="flex size-3.5 shrink-0 items-center justify-center [&>*]:scale-[0.875]" title={thread.repo?.project ?? 'No project'}>
         {thread.repo ? <ProjectIcon name={thread.repo.project} icon={project?.icon} /> : <Chat aria-label="No project" className="size-4 shrink-0" />}
       </span>
-      {row.isWorking ? <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer> : <span className="min-w-0 flex-1 truncate">{row.detail}</span>}
+      {row.isWorking ? <Shimmer as="span" className="min-w-0 flex-1 truncate">{row.detail}</Shimmer> : <span className={cn('min-w-0 flex-1 truncate', row.tone === 'warning' && 'text-warning', row.tone === 'destructive' && 'text-destructive')}>{row.detail}</span>}
       {row.isWatched && <Eye aria-label="Watched" className="size-3 shrink-0" />}
       <PrStack thread={thread} />
       <TasksBadge thread={thread} />

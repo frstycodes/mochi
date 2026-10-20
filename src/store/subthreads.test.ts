@@ -9,11 +9,12 @@ const start = (threads: Thread[]) => ({ now: 9, threads, queue: [], checkpoints:
 const run = (state: State, ...actions: Action[]) => actions.reduce(threadsReducer, state);
 const byId = (state: State, id: string) => state.threads.find((t) => t.id === id)!;
 
-test('nesting unpins the sub-thread and refuses a second level', () => {
+test('nesting unpins the sub-thread, goes a second level deep, and refuses a cycle', () => {
   const s = run(start([thread('p'), thread('c', { orbitSlot: 1 }), thread('x')]), { type: 'nest', threadId: 'c', parentId: 'p' }, { type: 'nest', threadId: 'x', parentId: 'c' });
   assert.deepEqual(byId(s, 'c').parent, { threadId: 'p' });
   assert.equal(byId(s, 'c').orbitSlot, undefined);
-  assert.equal(byId(s, 'x').parent, undefined);
+  assert.deepEqual(byId(s, 'x').parent, { threadId: 'c' });
+  assert.deepEqual(byId(run(s, { type: 'nest', threadId: 'p', parentId: 'x' }), 'p').parent, undefined, 'p under its own grandchild: refused');
   assert.equal(byId(run(s, { type: 'unnest', threadId: 'c' }), 'c').parent, undefined);
 });
 
@@ -32,4 +33,17 @@ test('settling a parent settles its open sub-threads; deleting it frees them', (
   assert.deepEqual(settled.threads.map((t) => t.status), ['settled', 'settled', 'running']);
   const deleted = run(start(threads), { type: 'delete', threadIds: ['p'] });
   assert.equal(byId(deleted, 'c').parent, undefined);
+});
+
+test("settling cascades down a two-level tree, stopping at a settled sub-thread whose subtree already stands alone", () => {
+  const threads = [
+    thread('p'),
+    thread('c', { parent: { threadId: 'p' } }),
+    thread('g', { parent: { threadId: 'c' } }),
+    thread('done', { status: 'settled', settledAt: 1, parent: { threadId: 'p' } }),
+    thread('loose', { parent: { threadId: 'done' } }),
+  ];
+  const s = run(start(threads), { type: 'settle', threadId: 'p' });
+  assert.deepEqual(s.threads.map((t) => [t.id, t.status]), [['p', 'settled'], ['c', 'settled'], ['g', 'settled'], ['done', 'settled'], ['loose', 'running']]);
+  assert.equal(byId(s, 'done').settledAt, 1, 'an already settled one keeps its time');
 });

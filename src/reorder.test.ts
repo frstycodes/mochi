@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Thread } from './model.ts';
-import { activeThreads, dropAt, dropPin, nestBlocker, orderBetween, parentOf, pinAt, pinMany, pinnedThreads, pinOrderOf, reorderThreads, sidebarGroups, stepPin, togglePin } from './reorder.ts';
+import { activeThreads, descendantsOf, dropAt, dropPin, flattenGroups, nestBlocker, rootOf, orderBetween, parentOf, pinAt, pinMany, pinnedThreads, pinOrderOf, reorderThreads, sidebarGroups, stepPin, togglePin } from './reorder.ts';
 
 const t = (id: string, orbitSlot?: number, lastAt = 0) => ({ id, orbitSlot, spaceId: 's', status: 'running', startedAt: 0, activity: lastAt ? [{ at: lastAt }] : [] }) as unknown as Thread;
 
@@ -68,12 +68,32 @@ test('a sub-thread nests under a live parent in its space and stands alone once 
   assert.equal(parentOf([{ ...parent, spaceId: 'other' } as Thread, child], child), undefined);
 });
 
-test('nesting is one level deep and never under itself', () => {
-  const threads = [t('p'), { ...t('c'), parent: { threadId: 'p' } } as Thread, t('x')];
+test('nesting goes any depth but never under itself or its own subtree', () => {
+  const threads = [t('p'), { ...t('c'), parent: { threadId: 'p' } } as Thread, { ...t('g'), parent: { threadId: 'c' } } as Thread, t('x')];
   assert.equal(nestBlocker(threads, 'x', 'p'), null);
+  assert.equal(nestBlocker(threads, 'x', 'c'), null, 'under a sub-thread');
+  assert.equal(nestBlocker(threads, 'x', 'g'), null, 'under a sub-sub-thread');
+  assert.equal(nestBlocker(threads, 'p', 'x'), null, 'a parent nests with its tree');
   assert.equal(nestBlocker(threads, 'x', 'x'), 'Not a thread to nest under');
-  assert.equal(nestBlocker(threads, 'x', 'c'), 'Sub-threads nest one level deep');
-  assert.equal(nestBlocker(threads, 'p', 'x'), 'It has sub-threads of its own');
+  assert.equal(nestBlocker(threads, 'p', 'c'), 'It is one of its own sub-threads');
+  assert.equal(nestBlocker(threads, 'p', 'g'), 'It is one of its own sub-threads', 'a cycle two levels down');
+  assert.deepEqual(descendantsOf(threads, 'p').map((d) => d.id), ['c', 'g']);
+});
+
+test('a two-level tree shows one level deep: the whole open subtree under its top-level row, depth first, settled ones counted at any level', () => {
+  const threads = [
+    t('p'),
+    { ...t('a'), startedAt: 1, parent: { threadId: 'p' } },
+    { ...t('a1'), startedAt: 3, parent: { threadId: 'a' } },
+    { ...t('a2'), status: 'settled', parent: { threadId: 'a' } },
+    { ...t('b'), startedAt: 2, parent: { threadId: 'p' } },
+    t('x'),
+  ] as Thread[];
+  const { active } = sidebarGroups(threads, 's');
+  assert.deepEqual(active.map((g) => [g.thread.id, g.subs.map((s) => s.id), g.settledSubs]), [['p', ['a', 'a1', 'b'], 1], ['x', [], 0]]);
+  assert.deepEqual(flattenGroups(active).map((x) => x.id), ['p', 'a', 'a1', 'b', 'x']);
+  assert.equal(rootOf(threads, threads[2]).id, 'p', 'a grandchild shows in its top-level row’s group');
+  assert.deepEqual(threads[2].parent, { threadId: 'a' }, 'while its parent stays the thread that started it');
 });
 
 test('the sidebar nests open sub-threads under their parent, pinned or not, and only counts settled ones', () => {
@@ -98,6 +118,21 @@ test('a drag reorders on the edges of a row and nests in its middle; a sub-threa
   assert.deepEqual(dropAt(rows, 50, { id: 'c', parentId: 'a' }, 115, false, yes), { slot: null, nestUnder: null }, 'within its own group: stays');
   assert.deepEqual(dropAt(rows, 50, { id: 'c', parentId: 'a' }, 175, false, yes), { slot: { toPinned: false, index: 2 }, nestUnder: null }, 'below b: out, after it');
   assert.deepEqual(dropAt(rows, 50, { id: 'b' }, 45, false, yes), { slot: { toPinned: true, index: 1 }, nestUnder: null }, 'above the label: pinned, as before');
+});
+
+test('a drag nests under a sub-thread row, and a grandchild stays put anywhere in its group', () => {
+  // The sidebar shows c (under p) and g (under c) one level deep, both rows of p's group.
+  const rows = [
+    { id: 'p', top: 0, height: 40, isPinned: false },
+    { id: 'c', top: 40, height: 40, isPinned: false, parentId: 'p' },
+    { id: 'g', top: 80, height: 40, isPinned: false, parentId: 'p' },
+    { id: 'x', top: 120, height: 40, isPinned: false },
+  ];
+  const yes = () => true;
+  assert.deepEqual(dropAt(rows, -10, { id: 'x' }, 60, false, yes), { slot: null, nestUnder: 'c' }, 'middle of a sub-thread: nest under it');
+  assert.deepEqual(dropAt(rows, -10, { id: 'x' }, 100, false, (id) => id !== 'g'), { slot: { toPinned: false, index: 1 }, nestUnder: null }, 'refused (a cycle): only reorders');
+  assert.deepEqual(dropAt(rows, -10, { id: 'g', parentId: 'p' }, 70, false, (id) => id !== 'c'), { slot: null, nestUnder: null }, 'over its own parent, in its group: stays');
+  assert.deepEqual(dropAt(rows, -10, { id: 'g', parentId: 'p' }, 155, false, yes), { slot: { toPinned: false, index: 2 }, nestUnder: null }, 'past the group: out');
 });
 
 const keyed = (id: string, orbitSlot: number, pinOrder: number) => ({ ...t(id, orbitSlot), pinOrder }) as Thread;
