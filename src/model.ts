@@ -25,6 +25,9 @@ export interface Step {
   addedBy: Author;
   startedAt?: number;
   doneAt?: number;
+  /** Wall-clock epoch ms of `startedAt`/`doneAt`, stamped from the agent action; demo steps have only Mochi's minute clock. */
+  startedMs?: number;
+  doneMs?: number;
   droppedAt?: number;
   /** Why it's blocked or was dropped. */
   note?: string;

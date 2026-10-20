@@ -16,7 +16,7 @@ export function demoRecording(thread: Thread): Recording | null {
     ...thread,
     status: 'running',
     activity: [first],
-    steps: steps.map((s) => ({ ...s, status: 'ready', progress: 0, startedAt: undefined, doneAt: undefined, note: undefined })),
+    steps: steps.map((s) => ({ ...s, status: 'ready', progress: 0, startedAt: undefined, startedMs: undefined, doneAt: undefined, doneMs: undefined, note: undefined })),
     live: { isWorking: true },
   };
 
