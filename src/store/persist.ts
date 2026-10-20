@@ -3,6 +3,7 @@ import { migrateReceived } from '../chat/threadMessages.ts';
 import { LIMIT_DEMO_IDS } from '../usage/limitDemo.ts';
 import { host } from '../host/index.ts';
 import type { AttachedAgent, WorktreeSetup } from '../host/types/agent.ts';
+import type { SavedFiles } from '../host/types/data.ts';
 import type { QueueItem, Thread } from '../model.ts';
 import type { Checkpoint } from '../rewind/checkpoints.ts';
 import type { Fork } from '../rewind/fork.ts';
@@ -19,6 +20,17 @@ export interface Saved {
   checkpoints: Record<string, Checkpoint[]>;
   checkpointSeq: number;
   forks: Record<string, Fork>;
+}
+
+/** On disk the save is split so each write touches only the threads that changed (`electron/ipc/threadStore.ts`). */
+interface SavedIndex extends Omit<Saved, 'threads' | 'checkpoints' | 'forks'> {
+  threadIds: string[];
+}
+
+interface SavedThread {
+  thread: Thread;
+  checkpoints?: Checkpoint[];
+  fork?: Fork;
 }
 
 export function toSaved(state: State): Saved {
@@ -45,14 +57,13 @@ export type Attached = Map<string, boolean>;
  * they were waiting on are gone. After a window reload the agents in `attached` are still running in main and stay attached.
  */
 export function parseSaved(json: string | null, attached: Attached = new Map()): Saved | null {
-  const saved = readSaved(json);
+  const saved = json ? readSaved(() => JSON.parse(json) as Saved) : null;
   return saved && restoreSavedThreads(saved, attached);
 }
 
-function readSaved(json: string | null): Saved | null {
-  if (!json) return null;
+function readSaved(parse: () => Saved): Saved | null {
   try {
-    const saved = JSON.parse(json) as Saved;
+    const saved = parse();
     if (saved?.version !== 1 || !Array.isArray(saved.threads) || !Array.isArray(saved.queue)) return null;
     return { ...saved, threads: saved.threads.filter((t) => typeof t?.id === 'string' && t.live) };
   } catch {
@@ -116,9 +127,9 @@ let restored: Saved | null = null;
 let isSaveBlocked = false;
 
 /** Called once with the saved file before the store is created (`src/main.tsx`). */
-export async function restoreSaved(json: string | null) {
-  const saved = readSaved(json);
-  if (json && !saved) return restoreFailed(new Error('threads.json is not a save this version can read'));
+export async function restoreSaved(files: SavedFiles | null) {
+  const saved = files && readSaved(() => joinSaved(files));
+  if (files && !saved) return restoreFailed(new Error('The saved threads are not a save this version can read'));
   if (!saved) return;
   // The events they sent meanwhile are replayed once the store mounts (`src/store/index.tsx`).
   const live = await host.agent.attached(saved.threads.map((t) => ({ threadId: t.id }))).catch((): AttachedAgent[] => []);
@@ -138,7 +149,9 @@ export function getRestored() {
 const SAVE_DELAY_MS = 500;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let pending: State | null = null;
-let last = '';
+let lastIndex = '';
+/** Each thread's file as the last save that landed wrote it. */
+const written = new Map<string, string>();
 
 /** Debounced; a no-op in the web build. Flushed when the window unloads, so quitting right after a message keeps it. */
 export function saveThreads(state: State) {
@@ -151,11 +164,56 @@ export function saveThreads(state: State) {
 function flush() {
   clearTimeout(timer);
   if (!pending) return;
-  const json = JSON.stringify(toSaved(pending));
+  const { index, threads } = splitSaved(toSaved(pending));
   pending = null;
-  if (json === last) return;
-  last = json;
-  host.data.save(json).catch((error: unknown) => console.error('Saving threads failed', error));
+  const changed = Object.fromEntries(Object.entries(threads).filter(([id, json]) => written.get(id) !== json));
+  if (index === lastIndex && !Object.keys(changed).length) return;
+  lastIndex = index;
+  host.data.save(index, changed).then(
+    () => {
+      for (const [id, json] of Object.entries(changed)) written.set(id, json);
+      for (const id of written.keys()) if (!(id in threads)) written.delete(id);
+    },
+    (error: unknown) => {
+      lastIndex = '';
+      console.error('Saving threads failed', error);
+    },
+  );
 }
 
 if (typeof window !== 'undefined') window.addEventListener('beforeunload', flush);
+
+export function splitSaved({ threads, checkpoints, forks, ...rest }: Saved) {
+  const index = JSON.stringify({ ...rest, threadIds: threads.map((t) => t.id) } satisfies SavedIndex);
+  return { index, threads: Object.fromEntries(threads.map((t) => [t.id, encodeThread(t, checkpoints[t.id], forks[t.id])])) };
+}
+
+/** A `threads.json` from before the split comes back as the index, its threads still inside it. */
+export function joinSaved({ index, threads }: SavedFiles): Saved {
+  const head = JSON.parse(index) as Partial<Saved>;
+  const parts = threads.flatMap((text): SavedThread[] => {
+    try {
+      return [JSON.parse(text) as SavedThread];
+    } catch {
+      // A thread file is written whole or not at all; one that still won't parse costs that thread, not the others.
+      return [];
+    }
+  });
+  return {
+    ...(head as Saved),
+    threads: [...(head.threads ?? []), ...parts.map((p) => p.thread)],
+    checkpoints: { ...head.checkpoints, ...Object.fromEntries(parts.flatMap((p) => (p.checkpoints ? [[p.thread.id, p.checkpoints]] : []))) },
+    forks: { ...head.forks, ...Object.fromEntries(parts.flatMap((p) => (p.fork ? [[p.thread.id, p.fork]] : []))) },
+  };
+}
+
+// Reducers replace a thread only when it changes, so an unchanged thread skips JSON.stringify and compares as the same string.
+const encoded = new WeakMap<Thread, SavedThread & { json: string }>();
+
+function encodeThread(thread: Thread, checkpoints: Checkpoint[] | undefined, fork: Fork | undefined): string {
+  const hit = encoded.get(thread);
+  if (hit && hit.checkpoints === checkpoints && hit.fork === fork) return hit.json;
+  const json = JSON.stringify({ thread, checkpoints, fork } satisfies SavedThread);
+  encoded.set(thread, { thread, checkpoints, fork, json });
+  return json;
+}
