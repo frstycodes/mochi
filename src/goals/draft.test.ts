@@ -68,9 +68,11 @@ test('a report counts until you write again; rewording a criterion drops its cla
   const [first] = s.threads.at(-1)!.criteria!;
   s = threadsReducer(s, { type: 'criterion-claim', threadId: id, criterionId: first.id, evidence: 'curl shows it', by: 'claude' });
   s = threadsReducer(s, { type: 'report', threadId: id, report: { by: 'claude', decisions: [], left: ['Tests'] } });
+  s = threadsReducer(s, { type: 'idle-start', threadId: id });
   const idle = (t: (typeof s.threads)[number]) => ({ ...t, live: { ...t.live!, isWorking: false } });
   assert.equal(reportHeadline(idle(s.threads.at(-1)!)), '1 of 2 criteria done');
-  s = threadsReducer({ ...s, now: s.now + 1 }, { type: 'send', threadId: id, text: 'also log it', reason: '' });
+  s = threadsReducer(s, { type: 'send', threadId: id, text: 'also log it', reason: '' });
+  s = threadsReducer(s, { type: 'idle-start', threadId: id });
   assert.equal(currentReport(idle(s.threads.at(-1)!)), null, 'your newer message starts a turn the report no longer describes');
   assert.deepEqual(s.threads.at(-1)!.report?.left, ['Tests'], 'the report stays on the thread for the goal popover');
   const draft = draftFrom(s.threads.at(-1)!);

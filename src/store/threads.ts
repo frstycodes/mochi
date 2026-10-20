@@ -278,13 +278,13 @@ function reduce(state: State, action: Action): State {
     case 'goal-proposal':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => decideProposal(t, action.decision, state.now)) };
     case 'idle-start':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, idle: { at: state.now, accepted: [], isGathering: true } })) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, idle: { at: state.now, turn: (t.idle?.turn ?? 0) + 1, accepted: [], isGathering: true } })) };
     case 'next-move-record':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => log({ ...t, idle: { ...(t.idle ?? { at: state.now, accepted: [] }), isMoveAnswered: true } }, { at: state.now, who: 'harness', kind: 'event', text: action.record.question, nextMove: action.record })) };
     case 'idle-update':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.idle ? { ...t, idle: { ...t.idle, ...action.patch } } : t)) };
     case 'report':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now } })) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now, turn: (t.idle?.turn ?? 0) + 1 } })) };
     case 'simplified':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => mapEntry(t, action.index, (e) => ({ ...e, simplified: { text: action.text, rulesKey: action.rulesKey, isShown: true } }))) };
     case 'simplify-toggle':
