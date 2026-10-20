@@ -66,7 +66,7 @@ import { MessageImages } from './chat/MessageImages';
 import { toast } from '@/toast/store';
 import { QueueTray } from './chat/QueueTray';
 import { usePrefs, type Prefs } from './settings/prefs';
-import { MentionChips, MentionMenu, useMentionMenu } from './chat/MentionMenu';
+import { MentionChips, MentionMenu, useMentionMenu, useThreadMentionFiles } from './chat/MentionMenu';
 import type { Mention } from './chat/mentions';
 import { projectRef } from './projects';
 import { askInSideChat } from './sidechat/AskInSideChat';
@@ -357,7 +357,7 @@ function Composer({
   const setControls = (next: typeof controls) => dispatch({ type: 'controls', threadId: thread.id, controls: next });
   const provider = thread.providers[0];
   const root = projectRef(thread.repo);
-  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent));
+  const mention = useMentionMenu(thread.id, useThreadSkills(provider, thread.spaceId, root, thread.agent), useThreadServers(provider, thread.spaceId, root, thread.agent), useThreadMentionFiles(thread));
   const drift = useDriftGuard(thread, mention.clear);
   const compact = compactGate(thread, decisions.length > 0);
   const offReason = compact.kind === 'off' ? compact.reason : undefined;
@@ -414,6 +414,7 @@ function Composer({
               isLocked={!!thread.live}
               onControlsChange={setControls}
               slashItems={items}
+              inlineMentions={mention.inlineMentions}
               onStop={thread.live?.isWorking ? () => dispatch({ type: 'interrupt', threadId: thread.id }) : undefined}
               submitLabel={isQueueing ? 'Queue message' : 'Send'}
               meter={<ContextRing provider={provider} spaceId={thread.spaceId} context={thread.context} usage={threadUsage(thread)} />}

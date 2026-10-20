@@ -11,7 +11,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ComposerCard, ComposerInput, ComposerMeta, HANDOFF_TRANSITION, PermissionsMenu, handOffComposer, newComposerLayoutId } from './Composer';
 import { useSplit } from './layout/SplitContext';
 import { ProjectChooser, ProjectPicker, type PickerProject } from './ProjectPicker';
-import { projectName, takeRequestedProject, useProjects, useRequestedProject } from './projects';
+import { projectName, repoFor, takeRequestedProject, useProjects, useRequestedProject } from './projects';
+import { projectRoot } from './host/cwd';
 import { host } from './host';
 import { getDraft, newThreadDraftKey } from './chat/drafts';
 import { MachineModelsContext, useDefaultModels } from './ModelControls';
@@ -73,7 +74,8 @@ function NewThread() {
   const slashItems = useSlashItems(provider, spaceId, project).filter((i) => i.source !== 'mochi');
   const slash = useSlashMenu(slashItems);
   // No thread is this page's own, so none is left out.
-  const mention = useMentionMenu(layoutId, useThreadSkills(provider, spaceId, project), useThreadServers(provider, spaceId, project));
+  const mentionFiles = useMemo(() => ({ root: project && projectRoot(repoFor(project, '')), recent: [] }), [project]);
+  const mention = useMentionMenu(layoutId, useThreadSkills(provider, spaceId, project), useThreadServers(provider, spaceId, project), mentionFiles);
   // Slash tracks the caret always; the open menu owns the listbox attributes.
   const menuProps = { ...slash.editorProps, ...(mention.isOpen && mention.editorProps) };
   useEffect(() => {
@@ -198,6 +200,7 @@ function NewThread() {
                     provider={provider}
                     onControlsChange={setControls}
                     slashItems={slashItems}
+                    inlineMentions={mention.inlineMentions}
                     {...menuProps}
                     onKeyDown={(e, view) => {
                       mention.editorProps.onKeyDown(e);
