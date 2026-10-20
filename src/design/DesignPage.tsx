@@ -72,6 +72,7 @@ import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
 import { ImagesSection } from './sections/images';
+import { EmbedFramesSection } from './sections/embed-frames';
 import { McpAppFrame } from '../chat/McpAppCard';
 import { MOBBIN_RESOURCE, MOBBIN_WIDGET } from './mcpAppFixtures';
 import { PhotoViewer } from '../photo/PhotoViewer';
@@ -91,6 +92,7 @@ const SECTIONS = [
   ['overlays', 'Overlays'],
   ['conversation', 'Conversation'],
   ['images', 'Images'],
+  ['embed-frames', 'Embed frames'],
   ['recipes', 'Recipes'],
   ['rules', 'Do and don’t'],
 ] as const;
@@ -114,6 +116,7 @@ export function DesignPage() {
               <OverlaysSection />
               <Conversation />
               <ImagesSection />
+              <EmbedFramesSection />
               <Recipes />
               <Rules />
             </main>
