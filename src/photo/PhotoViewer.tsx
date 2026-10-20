@@ -27,6 +27,8 @@ export function PhotoViewer() {
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-background/50 backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 motion-reduce:animate-none" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
+          // Radix would focus the first toolbar button, opening its tooltip, which then takes the first Escape.
+          onOpenAutoFocus={(e) => (e.preventDefault(), (e.currentTarget as HTMLElement).focus())}
           onKeyDown={(e) => {
             if (e.key === 'ArrowLeft') go(-1);
             if (e.key === 'ArrowRight') go(1);
