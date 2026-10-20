@@ -160,7 +160,7 @@ function planDuration(minutes: number) {
 }
 
 function PlanIcon({ status, slot, isWorking }: { status: PlanItem['status']; slot: LineSlot; isWorking: boolean }) {
-  if (status === 'done') return <CheckCircle aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
+  if (status === 'done') return <CheckCircle filled aria-hidden className="size-3.5 shrink-0 text-subtle-foreground" />;
   if (status === 'running') return <ProgressRing met={0} total={1} slot={slot} size={14} isWorking={isWorking} />;
   return <span aria-hidden className="m-px size-3 shrink-0 rounded-full border border-dashed border-subtle-foreground" />;
 }
