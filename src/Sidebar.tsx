@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
-import { Archive, Chat, DiagramTree, Edit, Eye, Menu, Search, TaskSquare, Undo } from '@/icons';
+import { Archive, Chat, DiagramTree, Edit, Eye, Menu, Search, TaskSquare, Unarchive } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -684,8 +684,8 @@ export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSel
         {isRenaming ? <RowTitleField thread={thread} /> : <span className={cn('min-w-0 flex-1 truncate', (isActive || row.isUnread) && 'text-foreground')}>{thread.title}</span>}
         {isSub && <PrStack thread={thread} />}
         {!isRenaming && <ThreadStatusDot row={row} isActive={isActive} className="group-focus-within/menu-item:hidden group-hover/menu-item:hidden" />}
-        {/* Room for the Settle / Reactivate chip while it shows, so the title truncates before the chip instead of under it. */}
-        {!isRenaming && <span aria-hidden className={cn('shrink-0', isSettled ? 'group-focus-within/menu-item:min-w-20 group-hover/menu-item:min-w-20' : 'group-focus-within/menu-item:min-w-14 group-hover/menu-item:min-w-14')} />}
+        {/* Room for the Archive / Unarchive button while it shows, so the title truncates before the button instead of under it. */}
+        {!isRenaming && <span aria-hidden className="shrink-0 group-focus-within/menu-item:min-w-5 group-hover/menu-item:min-w-5" />}
       </span>
       {isSub ? (
         asks && <span className={cn('truncate type-caption', row.tone === 'destructive' ? 'text-destructive' : 'text-warning')}>{row.detail}</span>
@@ -709,10 +709,13 @@ export function ThreadItem({ thread, isSub, machine, isActive, isSelected, onSel
       >
         {isRenaming ? <div>{body}</div> : body}
       </SidebarMenuButton>
-      {!isRenaming && <SidebarMenuAction showOnHover onClick={settle} aria-label={isSettled ? `Reactivate ${thread.title}` : `Settle ${thread.title}`} className="top-1.5! aspect-auto h-5 w-auto gap-1 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] px-1.5 type-caption [&>svg]:size-3.5">
-        {isSettled ? <Undo /> : <Archive />}
-        {isSettled ? 'Reactivate' : 'Settle'}
-      </SidebarMenuAction>}
+      {!isRenaming && (
+        <SidebarMenuAction showOnHover asChild className="top-1.5! right-2 size-5 bg-sidebar bg-[linear-gradient(var(--sidebar-accent),var(--sidebar-accent))] [&>svg]:size-3.5">
+          <TooltipIconButton label={isSettled ? 'Unarchive' : 'Archive'} hint={isSettled ? 'Moves it back to the active list.' : 'Stops its agent, terminals and dev servers, and files it under Archived.'} onClick={settle}>
+            {isSettled ? <Unarchive /> : <Archive />}
+          </TooltipIconButton>
+        </SidebarMenuAction>
+      )}
     </>
   );
 }
