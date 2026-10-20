@@ -130,6 +130,7 @@ export interface ProviderConfig {
   skills: SkillEntry[];
   /** What `/name` also runs, read-only: the project's skills and commands, the account's commands, enabled plugins' skills and commands. */
   commands: (AgentCommand & { isSkill: boolean })[];
+  /** `<name>@<marketplace>`, the id both tools' settings key plugins by. */
   plugins: string[];
   /** The project's own instructions file, when the project has one; the tool reads it next to the account's. */
   projectInstructions: string | null;

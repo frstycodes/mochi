@@ -11,6 +11,7 @@ import { host } from '../host';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect, SkeletonRows } from '../settings/parts';
 import { OverflowIcon } from '../ui';
 import { FEATURED_MARKETPLACES, type MarketplaceCatalog } from './library';
+import { NativeSections } from './NativeSections';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { ALL, CatalogErrorRow, CategoryChips, EmptyRow, filterBy, InstallControl, InstalledList, LibraryRow, PAGE } from './LibraryParts';
 import { PluginDropZone, UploadPluginDialog } from './UploadPlugin';
@@ -35,22 +36,27 @@ export function PluginsView() {
 
 function InstalledPlugins({ library, query, showDiscover }: Parameters<PagePart>[0]) {
   return (
-    <InstalledList
-      entries={library.entries?.filter((e) => e.kind === 'plugin')}
-      library={library}
-      query={query}
-      empty={
-        <SettingsRow
-          label="No plugins yet"
-          description="A plugin bundles skills, agents, hooks and servers. Mochi unpacks it into this profile’s threads. Drop a .plugin, .zip or .tgz file here to upload one."
-          control={
-            <Button variant="outline" size="sm" onClick={showDiscover}>
-              Discover plugins
-            </Button>
+    <>
+      <SettingsSection title="In Mochi">
+        <InstalledList
+          entries={library.entries?.filter((e) => e.kind === 'plugin')}
+          library={library}
+          query={query}
+          empty={
+            <SettingsRow
+              label="No plugins yet"
+              description="A plugin bundles skills, agents, hooks and servers. Mochi unpacks it into this profile’s threads. Drop a .plugin, .zip or .tgz file here to upload one."
+              control={
+                <Button variant="outline" size="sm" onClick={showDiscover}>
+                  Discover plugins
+                </Button>
+              }
+            />
           }
         />
-      }
-    />
+      </SettingsSection>
+      <NativeSections kind="plugin" query={query} />
+    </>
   );
 }
 

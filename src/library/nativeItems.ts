@@ -1,0 +1,90 @@
+import type { Account, ProviderConfig } from '../host/types/settings.ts';
+import type { McpServerDef } from '../settings/agentConfig.ts';
+import type { Provider } from '../model.ts';
+
+export type NativeKind = 'skill' | 'plugin' | 'server';
+
+/** One of Claude Code's or Codex's own items, as an account's config loads it. Mochi never changes it; a profile can only leave it out (PROFILES-UX.md). */
+export interface NativeItem {
+  /** Stable across reads: harness, account, kind, scope and name. A profile's `nativeOff` holds these. */
+  id: string;
+  provider: Provider;
+  accountId: string;
+  kind: NativeKind;
+  name: string;
+  description: string;
+  /** Muted meta: where it lives. */
+  where: string;
+  /** A file or folder to reveal; null when the item has no path of its own (a plugin, a server entry). */
+  path: string | null;
+  /** Why the tool can't start it as configured, verbatim enough to act on. */
+  problem?: string;
+  /** Turned off in the tool's own config, so no session loads it whatever the profile says. */
+  isOffNatively: boolean;
+  /** A server's own entry, so a session can block exactly it by command or URL, never another server with its name. */
+  def?: McpServerDef;
+}
+
+export const NATIVE_KIND_LABELS = { skill: 'Skill', plugin: 'Plugin', server: 'MCP server' } satisfies Record<NativeKind, string>;
+
+/** Every item one account's config loads, skills, then plugins, then servers. */
+export function nativeItemsOf(config: ProviderConfig): NativeItem[] {
+  const { provider, account } = config;
+  const base = { provider, accountId: account.id };
+  const id = (kind: NativeKind, scope: string, name: string) => `${provider}:${account.id}:${kind}:${scope}:${name}`;
+  const skills = config.skills.map((skill) => ({
+    ...base,
+    id: id('skill', 'user', skill.name),
+    kind: 'skill' as const,
+    name: skill.name,
+    description: skill.description,
+    where: tilde(skill.dir),
+    path: skill.dir,
+    isOffNatively: !skill.enabled,
+  }));
+  const plugins = config.plugins.map((name) => ({
+    ...base,
+    id: id('plugin', 'user', name),
+    kind: 'plugin' as const,
+    name,
+    description: '',
+    where: name,
+    path: null,
+    isOffNatively: false,
+  }));
+  const servers = config.mcpServers.map(({ def, scope, enabled, needs }) => ({
+    ...base,
+    id: id('server', scope, def.name),
+    kind: 'server' as const,
+    name: def.name,
+    description: '',
+    where: [
+      scope === 'project' ? 'Project · .mcp.json' : serverFile(account),
+      def.type,
+      def.url ?? [def.command, ...(def.args ?? [])].filter(Boolean).join(' '),
+    ].join(' · '),
+    path: null,
+    ...(needs.length && { problem: `Needs ${LIST.format(needs)} set to start` }),
+    isOffNatively: !enabled,
+    def,
+  }));
+  return [...skills, ...plugins, ...servers];
+}
+
+/** The account's own folder, as the user would type it. */
+export function accountDir(account: Account) {
+  return account.configDir ? tilde(account.configDir) : account.provider === 'claude' ? '~/.claude' : '~/.codex';
+}
+
+/** `off` with `ids` added (isOff) or taken out, each once. */
+export function withOff(off: readonly string[] | undefined, ids: readonly string[], isOff: boolean): string[] {
+  const rest = (off ?? []).filter((id) => !ids.includes(id));
+  return isOff ? [...rest, ...ids] : rest;
+}
+
+const serverFile = (account: Account) =>
+  account.provider === 'codex' ? `${accountDir(account)}/config.toml` : account.configDir ? `${tilde(account.configDir)}/.claude.json` : '~/.claude.json';
+
+const tilde = (path: string) => path.replace(/^\/(Users|home)\/[^/]+/, '~');
+
+const LIST = new Intl.ListFormat('en', { type: 'conjunction' });
