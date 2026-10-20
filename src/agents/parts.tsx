@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { AgentLoader, type MochiFlavor } from '../AgentLoader';
 import { toolLabel, toolPhase } from '../agentPhase';
 import type { Provider, Subagent, Thread } from '../model';
+import { formatElapsed } from '../progress';
 import { oneLine } from '../runtime/subagents';
 import { useModels } from '../ModelControls';
 import { optionFor } from '../runtime/models';
@@ -89,10 +90,3 @@ export function useElapsed(startedAt: number, endedAt?: number) {
   return Math.max(0, (endedAt ?? now) - startedAt);
 }
 
-export function formatElapsed(ms: number) {
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}

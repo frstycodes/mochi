@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { CheckCircle } from '@/icons';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
 import { useHarness } from '../store';
 import { hasGoal } from '../drift';
-import { duration } from '../progress';
+import { planDuration, planItems, type PlanItem } from './plan';
 import { agentAsk, moveContext, moveFor, questionFor } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { turnReport, verdictHeading, verdictTiles, type Verdict } from './verdict';
@@ -119,11 +119,33 @@ export function NextMoveActions({ labels, onPick }: { labels: string[]; onPick: 
   );
 }
 
-export interface PlanItem {
-  title: string;
-  status: 'done' | 'running' | 'pending';
-  /** On Mochi's clock (`state.now`), from start to done or to now; none until it starts. */
-  minutes?: number;
+/** The thread's plan in the chat; a running step's time ticks every second while the window is visible. */
+export function ThreadPlan({ thread, isWorking }: { thread: Thread; isWorking: boolean }) {
+  const { state } = useHarness();
+  const nowMs = useNowMs(thread.steps.some((s) => s.status === 'running'));
+  return <PlanList items={planItems(thread.steps, state.now, nowMs)} slot={thread.line} isWorking={isWorking} />;
+}
+
+/** One clock for the whole list: ticks each second while `isTicking` and the document is visible, idle otherwise. */
+function useNowMs(isTicking: boolean) {
+  const [nowMs, setNowMs] = useState(Date.now);
+  useEffect(() => {
+    if (!isTicking) return;
+    let id: number | undefined;
+    const sync = () => {
+      window.clearInterval(id);
+      if (document.hidden) return;
+      setNowMs(Date.now());
+      id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, [isTicking]);
+  return nowMs;
 }
 
 /** The agent's own to-do list, each step with how long it took; kept visible after completion. The running step spins only while `isWorking`. */
@@ -150,14 +172,9 @@ function PlanRow({ item, slot, isWorking }: { item: PlanItem; slot: LineSlot; is
         <span className={cn('min-w-0 flex-1 truncate', item.status === 'done' ? 'text-muted-foreground' : 'text-foreground/75')}>{item.title}</span>
       )}
       <span className="sr-only">{STATUS_LABEL[item.status]}</span>
-      {item.minutes !== undefined && <span className={cn('shrink-0 tabular-nums', item.status === 'running' ? 'text-foreground/75' : 'text-subtle-foreground')}>{planDuration(item.minutes)}</span>}
+      {item.ms !== undefined && <span className={cn('shrink-0 tabular-nums', item.status === 'running' ? 'text-foreground/75' : 'text-subtle-foreground')}>{planDuration(item.ms, item.status === 'running')}</span>}
     </li>
   );
-}
-
-function planDuration(minutes: number) {
-  const whole = Math.round(minutes);
-  return whole < 1 ? '<1m' : duration(whole);
 }
 
 function PlanIcon({ status, slot, isWorking }: { status: PlanItem['status']; slot: LineSlot; isWorking: boolean }) {
