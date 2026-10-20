@@ -2,19 +2,20 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { McpServerStatus, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, planFromTodos, userContent, withPlanTools } from './map.ts';
+import { approvalEvent, callDescription, claudeModels, commandsFrom, createMapper, describeTool, mcpServersFromStatus, patchOf, permissionResult, userContent } from './map.ts';
 import { parsePatchFiles } from '@pierre/diffs';
 import { FIXTURE } from './fixture.ts';
 import { claudeFast } from '../../../src/runtime/models.ts';
+import { toolCall } from '../../../src/summary.ts';
 
 const CWD = '/repo';
 
-test('maps a turn to session, message deltas, tools, plan, usage and turn end', () => {
+test('maps a turn to session, message deltas, tools, usage and turn end', () => {
   const { map } = createMapper('t1', CWD);
   const events = FIXTURE.flatMap((m) => map(m as SDKMessage));
   assert.deepEqual(
     events.map((e) => e.type),
-    ['session', 'info', 'message', 'message', 'tool', 'plan', 'tool', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
+    ['session', 'info', 'message', 'message', 'tool', 'tool', 'tool', 'tool', 'message', 'usage', 'turn-end'],
   );
   const [, , first, second] = events;
   assert.deepEqual([first, second], [
@@ -30,8 +31,8 @@ test('maps a turn to session, message deltas, tools, plan, usage and turn end', 
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'done' });
 });
 
-test('init lists tools, MCP servers with their tool counts, skills, plugins and slash commands', () => {
-  const { map } = createMapper('t1', CWD);
+test('init lists tools, MCP servers with their tool counts, skills, plugins, slash commands and the running effort', () => {
+  const { map } = createMapper('t1', CWD, undefined, 'max');
   const init = {
     type: 'system',
     subtype: 'init',
@@ -58,6 +59,7 @@ test('init lists tools, MCP servers with their tool counts, skills, plugins and 
       type: 'info',
       info: {
         model: 'claude-opus-5-5',
+        effort: 'max',
         cwd: '/repo',
         permissionMode: 'acceptEdits',
         version: '2.3.0',
@@ -91,35 +93,6 @@ test('a result after interrupt ends the turn as interrupted, not failed', () => 
   mapper.markInterrupting();
   const events = mapper.map({ type: 'result', subtype: 'error_during_execution', errors: [], total_cost_usd: 0, modelUsage: {} } as unknown as SDKMessage);
   assert.deepEqual(events.at(-1), { threadId: 't1', type: 'turn-end', status: 'interrupted' });
-});
-
-test('TaskCreate and TaskUpdate build the plan once the created task has an id', () => {
-  const { map } = createMapper('t1', CWD);
-  const use = (id: string, name: string, input: object) => ({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input }] } }) as unknown as SDKMessage;
-  const done = (id: string, result: unknown) => ({ type: 'user', parent_tool_use_id: null, tool_use_result: result, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } }) as unknown as SDKMessage;
-  map(use('a', 'TaskCreate', { subject: 'Write the parser', description: '' }));
-  assert.deepEqual(map(done('a', { task: { id: '1', subject: 'Write the parser' } })).at(-1), { threadId: 't1', type: 'plan', items: [{ title: 'Write the parser', status: 'pending' }] });
-  assert.deepEqual(map(use('b', 'TaskUpdate', { taskId: '1', status: 'in_progress' })).at(-1), { threadId: 't1', type: 'plan', items: [{ title: 'Write the parser', status: 'running' }] });
-  assert.deepEqual(map(use('c', 'TaskUpdate', { taskId: '1', status: 'deleted' })).at(-1), { threadId: 't1', type: 'plan', items: [] });
-});
-
-test('plan from TodoWrite maps statuses and skips malformed items', () => {
-  assert.deepEqual(
-    planFromTodos({
-      todos: [
-        { content: 'Read the code', status: 'completed', activeForm: 'Reading' },
-        { content: 'Fix the bug', status: 'in_progress', activeForm: 'Fixing' },
-        { content: 'Add a test', status: 'pending', activeForm: 'Adding' },
-        { status: 'pending' },
-      ],
-    }),
-    [
-      { title: 'Read the code', status: 'done' },
-      { title: 'Fix the bug', status: 'running' },
-      { title: 'Add a test', status: 'pending' },
-    ],
-  );
-  assert.deepEqual(planFromTodos({}), []);
 });
 
 test('subagent messages are skipped', () => {
@@ -173,10 +146,6 @@ test("Claude's limit states pass through as Claude Code reports them: held turn,
   assert.deepEqual(rejected, [{ threadId: 't2', type: 'limit-notice', text: 'Claude is past its weekly limit and using extra usage, billed per use' }], 'extra usage keeps running: no pause');
 });
 
-test('sessions turn on the TaskCreate/TaskUpdate tools the plan is read from, keeping the rest of the env', () => {
-  assert.deepEqual(withPlanTools({ PATH: '/bin' }), { PATH: '/bin', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' });
-});
-
 test('WebSearch ends with its hits as links, WebFetch with the page it read', () => {
   const { map } = createMapper('t1', CWD);
   const call = (id: string, name: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name, input }] } } as unknown as SDKMessage);
@@ -222,6 +191,46 @@ test('a background Agent call becomes a subagent with its own steps, tokens and 
   assert.deepEqual(events.filter((e) => e.type === 'turn-end').length, 2, 'the background report starts a turn of its own');
 });
 
+test('backgrounded Bash calls become background tasks that end done, failed (with the exit code) or stopped (real 0.3.296 trace)', () => {
+  const trace = readFileSync(new URL('./fixtures/background.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as SDKMessage);
+  const mapper = createMapper('t1', '/tmp/scratch');
+  const events = trace.flatMap(mapper.map);
+  const tasks = events.filter((e) => e.type === 'task');
+  assert.deepEqual(
+    tasks.filter((e) => e.phase === 'start'),
+    [
+      { threadId: 't1', type: 'task', id: 'brpnuwjdw', phase: 'start', kind: 'shell', title: 'Wait a minute', command: 'sleep 60' },
+      { threadId: 't1', type: 'task', id: 'bh9bd7gcs', phase: 'start', kind: 'shell', title: 'Say hi later', command: 'sleep 3 && echo hi' },
+      { threadId: 't1', type: 'task', id: 'bg27tw88d', phase: 'start', kind: 'shell', title: 'Fail fast', command: 'exit 3' },
+    ],
+  );
+  assert.ok(tasks.some((e) => e.phase === 'progress' && e.id === 'brpnuwjdw' && e.outputFile === '/tmp/tasks/brpnuwjdw.output'), "the call's receipt names the output file");
+  assert.deepEqual(
+    tasks.filter((e) => e.phase === 'end').map((e) => [e.id, e.status, e.exitCode]),
+    [
+      ['bg27tw88d', 'failed', 3],
+      ['brpnuwjdw', 'stopped', undefined],
+      ['bh9bd7gcs', 'done', 0],
+    ],
+  );
+  assert.deepEqual(events.filter((e) => e.type === 'subagent'), [], 'shells are not subagents');
+  assert.equal(mapper.taskOf('brpnuwjdw'), undefined, 'an ended task has nothing left to stop');
+});
+
+test('a shell task is stoppable by its own id while it runs, and only joins once it is backgrounded', () => {
+  const mapper = createMapper('t1', CWD);
+  const base = { session_id: 's', uuid: 'u' };
+  const started = mapper.map({ ...base, type: 'system', subtype: 'task_started', task_id: 'b1', description: 'Build', task_type: 'local_bash', is_backgrounded: false } as unknown as SDKMessage);
+  assert.deepEqual(started, [], 'a foreground command is the call row, not a background task');
+  assert.equal(mapper.taskOf('b1'), 'b1');
+  const moved = mapper.map({ ...base, type: 'system', subtype: 'task_updated', task_id: 'b1', patch: { is_backgrounded: true } } as unknown as SDKMessage);
+  assert.deepEqual(moved, [{ threadId: 't1', type: 'task', id: 'b1', phase: 'start', kind: 'shell', title: 'Build' }]);
+  const ambient = mapper.map({ ...base, type: 'system', subtype: 'task_started', task_id: 'w1', description: 'Watch', task_type: 'local_workflow', ambient: true } as unknown as SDKMessage);
+  assert.deepEqual(ambient, [], 'ambient housekeeping is not activity');
+  const workflow = mapper.map({ ...base, type: 'system', subtype: 'task_started', task_id: 'w2', description: '', workflow_name: 'spec', task_type: 'local_workflow' } as unknown as SDKMessage);
+  assert.deepEqual(workflow, [{ threadId: 't1', type: 'task', id: 'w2', phase: 'start', kind: 'workflow', title: 'spec' }]);
+});
+
 test('a foreground Agent call ends with its answer from the tool result; a failed one with the error', () => {
   const { map } = createMapper('t1', CWD);
   const base = { parent_tool_use_id: null, session_id: 's', uuid: 'u' };
@@ -258,6 +267,9 @@ test('work-group rows: Bash keeps its own description, file paths read relative 
   assert.equal(patch, 'diff --git a/math.js b/math.js\n--- a/math.js\n+++ b/math.js\n@@ -1,1 +1,2 @@\n a\n+b');
   assert.equal(parsePatchFiles(patch!)[0].files[0].type, 'change');
   assert.equal(patchOf({ file_path: '/repo/math.js' }, { structuredPatch: [] }), undefined);
+  const created = patchOf({ file_path: '/repo/new.ts' }, { type: 'create', content: 'a\nb\nc\n', structuredPatch: [] });
+  assert.equal(created, 'diff --git a/new.ts b/new.ts\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1,3 @@\n+a\n+b\n+c');
+  assert.deepEqual(toolCall({ text: 'Write new.ts', patch: created }), { verb: 'Write', target: 'new.ts', added: 3, removed: 0 });
 });
 
 test('a Skill call is a skill load and an mcp__ call names its server and tool, read back through init', () => {
@@ -273,6 +285,8 @@ test('a Skill call is a skill load and an mcp__ call names its server and tool, 
   assert.deepEqual(github.type === 'tool' && github.mcp, { server: 'github', tool: 'list_prs' }, 'the longer server name wins over a prefix of it');
   const unknown = call('m3', 'mcp__later__do_it', {})[0];
   assert.deepEqual(unknown.type === 'tool' && unknown.mcp, { server: 'later', tool: 'do_it' }, 'a server init did not list splits at its first __');
+  const account = call('m4', 'mcp__github__list_prs', { __mochi_account: 'work' })[0];
+  assert.deepEqual(account.type === 'tool' && account.mcp, { server: 'github', tool: 'list_prs', account: 'work' }, 'a connector call keeps the account it acted as');
   assert.deepEqual(call('b1', 'Skill', {})[0], { threadId: 't1', type: 'tool', id: 'b1', phase: 'start', text: 'Skill' }, 'no skill name, no skill load');
 });
 
@@ -353,4 +367,19 @@ test('an MCP tool that declares a ui:// view carries it, with its input and text
   assert.equal(mapper.needsWidgets(result('s1')), true, 'a server still connecting is read again');
   call('b1', 'Bash');
   assert.equal(mapper.needsWidgets(result('b1')), false, 'not an MCP call');
+});
+
+test("Mochi's generate_image maps to the image card: running at the asked aspect, then done with the file or failed with why", () => {
+  const { map } = createMapper('t1', CWD);
+  const call = (id: string, input: Record<string, unknown>) => map({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name: 'mcp__mochi__generate_image', input }] } } as unknown as SDKMessage);
+  const result = (id: string, content: string, is_error?: boolean) => map({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, content: [{ type: 'text', text: content }], is_error }] } } as unknown as SDKMessage);
+
+  assert.deepEqual(call('i1', { prompt: 'a fox', size: 'landscape' }), [{ threadId: 't1', type: 'tool', id: 'i1', phase: 'start', text: 'Generate image', generated: { status: 'running', prompt: 'a fox', aspect: 1.5 } }]);
+  assert.deepEqual(result('i1', 'Image file: /tmp/fox.png\nSaved to public/fox.png'), [
+    { threadId: 't1', type: 'tool', id: 'i1', phase: 'end', text: 'Generate image', generated: { status: 'done', prompt: 'a fox', aspect: 1.5, src: '/tmp/fox.png' } },
+  ]);
+
+  call('i2', { prompt: 'a cat' });
+  const [failed] = result('i2', 'Image generation limit reached.', true);
+  assert.deepEqual(failed?.type === 'tool' && failed.generated, { status: 'failed', prompt: 'a cat', aspect: 1, error: 'Image generation limit reached.' });
 });

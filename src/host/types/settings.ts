@@ -1,7 +1,9 @@
 import type { AgentCommand, Provider } from '../../model.ts';
 import { HARNESS_IDS, HARNESSES } from '../../settings/harnesses.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../../settings/agentConfig.ts';
+import type { ProfileFolder } from '../../settings/instructionFiles.ts';
 import { CHEAP_MODELS, UTILITY_TASKS, type UtilityTask } from '../../utility/prompts.ts';
+import type { AppIcon } from '../../settings/settingOptions.ts';
 import type { Manifest } from './manifest.ts';
 
 /** What the user's own install reports. Never carries credentials, emails or key material: only method and plan names. */
@@ -45,7 +47,14 @@ export interface AgentSettings {
   sideChatModel: ModelChoice;
   /** Per background task (titles, commit and PR drafts…), the model tried first; `utilityCandidates` adds the fallbacks. */
   utilityModels: Record<UtilityTask, ModelChoice>;
+  /** The harness Claude's `generate_image` tool runs on (`electron/mcp/server.ts`); `off` hides the tool. */
+  imageGen: ImageGenHarness;
+  /** The Dock and window icon, set at launch and on change (`electron/appIcon.ts`). */
+  appIcon: AppIcon;
 }
+
+export const IMAGE_GEN_HARNESSES = ['codex', 'off'] as const;
+export type ImageGenHarness = (typeof IMAGE_GEN_HARNESSES)[number];
 
 export interface ModelChoice {
   provider: Provider;
@@ -88,6 +97,10 @@ export interface SettingsHost {
   set(patch: AgentSettingsPatch): Promise<AgentSettings>;
   /** The install plus the login it reports for this account's config folder. */
   detect(accountId: AccountId): Promise<AgentInstall>;
+  /** Latest published version, or null when the registry cannot be reached. */
+  latestVersion(provider: Provider): Promise<string | null>;
+  /** Runs the installed harness's own updater and returns the detected install. */
+  updateHarness(provider: Provider): Promise<AgentInstall>;
   accounts(): Promise<AccountsState>;
   /** Creates the account's config folder; the user then signs in with `signInCommand`. */
   addAccount(provider: Provider, name: string): Promise<AccountsState>;
@@ -99,6 +112,10 @@ export interface SettingsHost {
   apiKey(provider: Provider): Promise<ApiKeyState>;
   /** Pass null to remove the stored key. */
   setApiKey(provider: Provider, key: string | null): Promise<ApiKeyState>;
+  /** The profile's own folder and its instruction files (made empty the first time), for Settings to open. */
+  profileFolder(spaceId: string): Promise<ProfileFolder>;
+  /** Copies one profile's folder into another's (Duplicate profile). */
+  copyProfileFolder(fromId: string, toId: string): Promise<void>;
   /** What each of the profile's accounts carries in its own config folder; `projectRoot` adds that project's `.mcp.json`. */
   agentConfig(spaceId: string, projectRoot?: string): Promise<ProfileConfig>;
   /** The file edits `changes` would make, for the user to review; nothing is written. */
@@ -118,6 +135,7 @@ export interface ProviderConfig {
   skills: SkillEntry[];
   /** What `/name` also runs, read-only: the project's skills and commands, the account's commands, enabled plugins' skills and commands. */
   commands: (AgentCommand & { isSkill: boolean })[];
+  /** `<name>@<marketplace>`, the id both tools' settings key plugins by. */
   plugins: string[];
   /** The project's own instructions file, when the project has one; the tool reads it next to the account's. */
   projectInstructions: string | null;
@@ -146,6 +164,8 @@ export const settingsMethods = {
   get: 'invoke',
   set: 'invoke',
   detect: 'invoke',
+  latestVersion: 'invoke',
+  updateHarness: 'invoke',
   accounts: 'invoke',
   addAccount: 'invoke',
   renameAccount: 'invoke',
@@ -153,6 +173,8 @@ export const settingsMethods = {
   linkAccount: 'invoke',
   apiKey: 'invoke',
   setApiKey: 'invoke',
+  profileFolder: 'invoke',
+  copyProfileFolder: 'invoke',
   agentConfig: 'invoke',
   previewConfig: 'invoke',
   applyConfig: 'invoke',
@@ -169,11 +191,13 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   worktreeInclude: '.env*',
   setupCommands: {},
   sideChatModel: { provider: 'claude', model: 'claude-sonnet-5-5' },
+  appIcon: 'graphite',
   utilityModels: {
     ...(Object.fromEntries(UTILITY_TASKS.map((task) => [task, { provider: 'claude', model: CHEAP_MODELS.claude }])) as AgentSettings['utilityModels']),
     // Measured on 20 finished turns: Haiku flagged things the agent never said it skipped (54 gaps, 10+ false); Sonnet 38, none false.
     audit: { provider: 'claude', model: 'claude-sonnet-5-5' },
   },
+  imageGen: 'codex',
 };
 
 /** Saved settings from before side chat could run on Codex held a bare Claude model id. */

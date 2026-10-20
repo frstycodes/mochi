@@ -3,6 +3,10 @@ import { test } from 'node:test';
 import { bareState, type RefState } from '../chat/refs.ts';
 import type { Criterion, Step, Thread } from '../model.ts';
 import { failureLine, idleVerdict, verdictTiles } from './verdict.ts';
+import { setPrefs } from '../settings/prefs.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 const met = (id: string, command?: string): Criterion => ({ id, text: id, command, check: { status: 'passed', at: 1 } });
 const failed = (id: string, command: string): Criterion => ({ id, text: id, command, check: { status: 'failed', at: 1, output: '5 failed' } });
@@ -10,7 +14,7 @@ const step = (id: string, status: Step['status']) => ({ id, title: id, status })
 const pr = (status: RefState['status'], extra: Partial<RefState> = {}): RefState => ({ ...bareState('pr', status, 'PR', 'https://github.com/o/r/pull/135'), ...extra });
 
 const thread = (t: Partial<Thread> = {}) =>
-  ({ id: 't', goal: 'Ship it', status: 'running', steps: [], criteria: [met('a'), met('b')], activity: [], prs: [], live: { isWorking: false }, ...t }) as Thread;
+  ({ id: 't', goal: 'Ship it', repo: { project: 'harness', branch: 'fix/x' }, status: 'running', steps: [], criteria: [met('a'), met('b')], activity: [], prs: [], live: { isWorking: false }, ...t }) as Thread;
 
 test('a working thread has no verdict', () => {
   assert.equal(idleVerdict(thread({ live: { isWorking: true } }), []), null);
@@ -19,7 +23,7 @@ test('a working thread has no verdict', () => {
 test('every criterion met reads done, and names what comes next from the PR', () => {
   assert.deepEqual(pick(idleVerdict(thread(), [])), ['done', 'Done', 'Open pull request']);
   assert.deepEqual(pick(idleVerdict(thread(), [pr('open')])), ['done', 'Done', 'In review · #135']);
-  assert.deepEqual(pick(idleVerdict(thread(), [pr('merged')])), ['done', 'Merged', 'Settle thread']);
+  assert.deepEqual(pick(idleVerdict(thread(), [pr('merged')])), ['done', 'Merged', 'Archive thread']);
 });
 
 test('a failing check is a critical gap even when the agent claimed the criterion', () => {
@@ -114,4 +118,67 @@ test("a question from an earlier turn's report is answered: once you replied and
   const report = { by: 'claude' as const, decisions: [], left: [], question: 'Commit it as fix(sum)?', at: 862 };
   assert.deepEqual(pick(idleVerdict(thread({ report, idle: { at: 862, accepted: [] } }), [])), ['needs-you', 'Question', 'Commit it as fix(sum)?'], 'asked this turn');
   assert.deepEqual(pick(idleVerdict(thread({ report, idle: { at: 864, accepted: [], audit: { unverified: [] } } }), [])), ['done', 'Done', 'Open pull request']);
+});
+
+const judged = (id: string): Criterion => ({ id, text: id });
+const claim = { evidence: 'all pass', at: 1, by: 'claude' as const };
+
+test('a folderless lookup whose drafted criteria nobody can check reads Your call, not Stopped, and shows only the facts that apply', () => {
+  const benq = thread({ repo: null, criteria: [judged('Order found'), judged('Current location reported'), judged('Delivery date given')], idle: { at: 1, accepted: [] } });
+  const v = idleVerdict(benq, [])!;
+  assert.deepEqual(pick(v), ['needs-you', 'Your call', 'Did this get you what you wanted?']);
+  assert.deepEqual(verdictTiles(benq, [], v).map((x) => [x.name, x.value]), [['Criteria', '0 of 3']], 'no Git, PR or Checks without a folder or commands; no Agent said when nothing was read');
+  const confirmed = idleVerdict({ ...benq, idle: { at: 1, accepted: [], isConfirmed: true } }, [])!;
+  assert.deepEqual(pick(confirmed), ['done', 'Done', 'Nothing left open']);
+});
+
+test('a goal with no criteria and nothing open is your call, never "every criterion met"', () => {
+  assert.deepEqual(pick(idleVerdict(thread({ criteria: [] }), [])), ['needs-you', 'Your call', 'Did this get you what you wanted?']);
+});
+
+test('stopped needs evidence: an open plan item, or the agent saying work is left', () => {
+  const report = { by: 'claude' as const, decisions: [], left: ['Wire the empty state'], at: 2 };
+  assert.deepEqual(pick(idleVerdict(thread({ criteria: [judged('b')], report, idle: { at: 2, accepted: [] } }), [])), ['stalled', 'Stopped', 'Stopped with "Wire the empty state" left, asked nothing']);
+});
+
+test("a criterion with a command isn't met on the agent's word: unchecked, it's a gap you can accept", () => {
+  const unchecked = { id: 'tests', text: 'pnpm test passes', command: 'pnpm test', claim };
+  const t = thread({ criteria: [met('a'), unchecked], idle: { at: 1, accepted: [], audit: { unverified: [] } } });
+  const v = idleVerdict(t, [])!;
+  assert.deepEqual(pick(v), ['gaps', '1 gap', 'Not checked']);
+  assert.equal(verdictTiles(t, [], v).find((x) => x.id === 'agent')?.value, 'nothing open', "a check that never ran isn't something the agent admitted");
+  assert.equal(idleVerdict(thread({ criteria: [met('a'), unchecked], idle: { at: 1, accepted: [v.gaps[0].id] } }), [])!.kind, 'done');
+  assert.equal(idleVerdict(thread({ criteria: [met('a'), { ...unchecked, check: { status: 'passed', at: 1 } }] }), [])!.kind, 'done');
+});
+
+test('a parent with a sub-thread out waits quietly, and its covered criterion is no gap meanwhile', () => {
+  const covered = { id: 'load', text: 'Holds 2k req/s', command: 'k6 run load.js' };
+  const parent = thread({ criteria: [met('a'), covered] });
+  const child = thread({ id: 'c', parent: { threadId: 't', criterionId: 'load' }, live: { isWorking: true } });
+  const v = idleVerdict(parent, [], [{ thread: child, verdict: null }])!;
+  assert.deepEqual([v.kind, v.reason, v.tone], ['waiting', 'Waiting on 1 sub-thread', 'muted']);
+  assert.equal(v.gaps.length, 0);
+});
+
+test('a sub-thread that needs you, or finished and waits to be handed back, makes its parent need you', () => {
+  const parent = thread({ criteria: [met('a')] });
+  const child = thread({ id: 'c', title: 'Docs', parent: { threadId: 't' } });
+  const gapsVerdict = { kind: 'gaps' as const, chip: '1 gap', tone: 'warning' as const, reason: 'Not checked', gaps: [{ id: 'g', severity: 'unverified' as const, label: 'x', text: 'x', isAccepted: false }] };
+  const asks = idleVerdict(parent, [], [{ thread: child, verdict: gapsVerdict }])!;
+  assert.deepEqual([asks.kind, asks.reason, asks.subThread], ['needs-you', 'Docs: Not checked', { id: 'c', title: 'Docs', kind: 'gaps', openGaps: 1 }]);
+  const finished = idleVerdict(parent, [], [{ thread: child, verdict: { ...gapsVerdict, kind: 'done', gaps: [] } }])!;
+  assert.equal(finished.reason, 'Docs is finished: hand it back');
+  const handedBack = { ...child, parent: { threadId: 't', handedBackAt: 5 } };
+  assert.equal(idleVerdict(parent, [], [{ thread: handedBack, verdict: { ...gapsVerdict, kind: 'done', gaps: [] } }])!.kind, 'done', 'once handed back it no longer holds the parent');
+});
+
+
+test('completed criteria cannot hide unfinished plan items or reported work', () => {
+  assert.equal(idleVerdict(thread({ steps: [step('Open the PR', 'ready')] }), [])?.kind, 'stalled');
+  assert.equal(idleVerdict(thread({ report: { at: 1, by: 'codex', decisions: [], left: ['Check the preview'] }, idle: { at: 1, accepted: [] } }), [])?.kind, 'stalled');
+});
+
+test('evidence distinguishes work done from verified criteria', () => {
+  const t = thread({ criteria: [{ id: 'a', text: 'a', claim }, met('b')] });
+  assert.deepEqual(verdictTiles(t, [], idleVerdict(t, [])!)[0].bars, ['info', 'success']);
 });

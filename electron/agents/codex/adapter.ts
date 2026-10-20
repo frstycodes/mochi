@@ -1,15 +1,16 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { hooksEnv } from '../../git/hooks.ts';
 import os from 'node:os';
 import { saveImage } from '../images.ts';
+import type { GeneratedImage } from '../../../src/model.ts';
 import { NO_PENDING_REQUEST, type AgentDecision, type AgentEvent, type AgentImage, type AgentModel, type AgentRunOptions, type LimitWindow } from '../../../src/host/types/agent.ts';
 import { codexWindows } from '../../../src/usage/limits.ts';
 import { accountEnv, accountFor as defaultAccountFor, findCodex as defaultFindCodex, type AccountFor, type CodexAccount, type FindCodex } from './account.ts';
-import { apiMessage, childEvents, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
+import { apiMessage, childEvents, generatedImage, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits, type AccountLimits, type ThreadState } from './map.ts';
 import { RpcClient, RpcTimeoutError, type RpcId } from './rpc.ts';
-import { CODEX_BROWSER_FEATURES_OFF, MOCHI_INSTRUCTIONS } from '../instructions.ts';
+import { CODEX_BROWSER_PLUGINS_OFF, mochiInstructions } from '../instructions.ts';
 import { killTree, spawnable } from '../../platform.ts';
-import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
+import { MOCHI_TIMEOUT_MS, type MochiScope } from '../../../src/runtime/toolTable.ts';
+import { CHEAP_MODELS } from '../../../src/utility/prompts.ts';
 
 interface Live {
   codexId: string;
@@ -52,8 +53,8 @@ export const POLICIES: Record<string, { approvalPolicy: string; sandbox: string;
   /** Second opinions: nothing can write, and nothing asks; a command that needs more simply fails. */
   review: { approvalPolicy: 'never', sandbox: 'read-only' },
 };
-/** Codex's plan tool is off unless configured; Harness maps its plans onto goal steps, so its threads always get it. Verified against 0.155.1: without it `turn/plan/updated` never fires. */
-const PLAN_TOOL = { 'tools.update_plan.enabled': true };
+/** Mochi has no goals; Codex's own (`features.goals`, stable and on in 0.163.0) would bring them back under its name. */
+const GOALS_OFF = { 'features.goals': false };
 /**
  * Side chat's thread: nothing saved, nothing writable, nothing to approve, and the tool features the installed codex lists
  * (`codex features list`, 0.155.1) switched off, so it only answers from the context it is given.
@@ -64,6 +65,9 @@ const ASK_THREAD = {
   approvalPolicy: 'never',
   config: Object.fromEntries(['shell_tool', 'unified_exec', 'apps', 'plugins', 'multi_agent', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'goals'].map((f) => [`features.${f}`, false])),
 };
+/** Claude's `generate_image`: the side chat's lockdown with image generation back on, so the turn can only make the image. */
+const IMAGE_THREAD = { ...ASK_THREAD, config: { ...ASK_THREAD.config, 'features.image_generation': true } };
+const IMAGE_INSTRUCTIONS = 'Generate exactly one image for the prompt with your image generation tool, then reply with one short line. Do nothing else.';
 /**
  * Mirrors Claude's `AUTO_ALLOWED` (`electron/mcp/server.ts`): Mochi asks with its own card, so Codex never prompts, and a
  * call may wait on that card as long as main does. `tool_timeout_sec` read in 0.155.1's binary; the approval key was verified against its config schema.
@@ -92,16 +96,20 @@ export class CodexAdapter {
   private emit: (event: AgentEvent) => void;
   private accountFor: AccountFor;
   private findCodex: FindCodex;
-  private toolsUrl?: (threadId: string) => Promise<string>;
+  private toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>;
+  private libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>;
+  private profileText?: (spaceId: string) => Promise<string>;
   /** Each account's plan windows as `account/rateLimits/updated` reports them (sparse). */
   onLimits?: (accountId: string, windows: LimitWindow[]) => void;
 
-  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. */
-  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string) => Promise<string>) {
+  /** `toolsUrl` is the thread's Mochi tools server (`electron/mcp`); without it threads get no Mochi tools. `libraryConfig` is the profile's library, and its turned-off native items, as config overrides. `profileText` is the profile's own instructions for Codex (its folder's mochi.md and codex.md). */
+  constructor(emit: (event: AgentEvent) => void, accountFor: AccountFor = defaultAccountFor, findCodex: FindCodex = defaultFindCodex, toolsUrl?: (threadId: string, scope: MochiScope) => Promise<string>, libraryConfig?: (options: AgentRunOptions) => Promise<Record<string, unknown>>, profileText?: (spaceId: string) => Promise<string>) {
     this.emit = emit;
     this.accountFor = accountFor;
     this.findCodex = findCodex;
     this.toolsUrl = toolsUrl;
+    this.libraryConfig = libraryConfig;
+    this.profileText = profileText;
   }
 
   owns(threadId: string) {
@@ -207,6 +215,23 @@ export class CodexAdapter {
     if (!isAnswering && live.server.rpc === rpc) live.server.restart('stopped answering');
   }
 
+  /** Stops a background terminal (its end then reads `stopped`) or a spawned agent. */
+  async stopTask(threadId: string, taskId: string) {
+    const live = this.threads.get(threadId);
+    if (!live?.state.background.has(taskId)) return this.stopSubagent(threadId, taskId);
+    const rpc = live.server.rpc;
+    if (!rpc) throw new Error('That command is not running');
+    // ponytail: first page only; a thread with more background terminals than one page holds can't stop the rest.
+    const listed = (await rpc.request('thread/backgroundTerminals/list', { threadId: live.codexId })) as { data?: { itemId?: unknown; processId?: unknown }[] };
+    const processId = listed.data?.find((t) => t.itemId === taskId)?.processId;
+    if (typeof processId !== 'string') throw new Error('That command is not running');
+    live.state.stopping.add(taskId);
+    const { terminated } = (await rpc.request('thread/backgroundTerminals/terminate', { threadId: live.codexId, processId })) as { terminated?: boolean };
+    if (terminated) return;
+    live.state.stopping.delete(taskId);
+    throw new Error('That command is not running');
+  }
+
   /** Interrupts a spawned agent's turn; it then reports `stopped`. */
   async stopSubagent(threadId: string, subagentId: string) {
     const live = this.threads.get(threadId);
@@ -229,9 +254,13 @@ export class CodexAdapter {
     const live = this.threads.get(threadId);
     if (!live) return;
     await this.interrupt(threadId).catch(() => {});
-    this.forget(threadId);
     const rpc = live.server.rpc;
-    if (rpc && live.gen === live.server.gen) await rpc.request('thread/unsubscribe', { threadId: live.codexId }).catch(() => {});
+    const isCurrent = rpc && live.gen === live.server.gen;
+    // Verified on 0.163.0: unsubscribing leaves the thread's background terminals running; `clean` kills them.
+    if (isCurrent && live.state.background.size) await rpc.request('thread/backgroundTerminals/clean', { threadId: live.codexId }).catch(() => {});
+    this.endTasks(live);
+    this.forget(threadId);
+    if (isCurrent) await rpc.request('thread/unsubscribe', { threadId: live.codexId }).catch(() => {});
   }
 
   /**
@@ -256,6 +285,39 @@ export class CodexAdapter {
       yield* answer.drain(abort.signal);
     } finally {
       abort.signal.removeEventListener('abort', stop);
+      server.asks.delete(codexId);
+      void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
+    }
+  }
+
+  /**
+   * One image on the profile's Codex account, for Claude's `generate_image` (`electron/mcp/imageGen.ts`): an ephemeral
+   * thread with nothing on but image generation. Resolves to its `imageGeneration` item as the card shows it; throws a
+   * message the calling agent can relay.
+   */
+  async generateImage(spaceId: string, prompt: string, signal: AbortSignal): Promise<GeneratedImage> {
+    const server = this.server(await this.accountFor(spaceId, 'codex'));
+    const rpc = await server.client();
+    await server.requireLogin(rpc);
+    // Never the user's config default: it can name a model their login doesn't serve (an API-only id on a ChatGPT account).
+    const model = imageModel(await this.models(spaceId));
+    const result = await rpc.request('thread/start', { ...IMAGE_THREAD, cwd: os.tmpdir(), model, developerInstructions: IMAGE_INSTRUCTIONS }, THREAD_TIMEOUT_MS);
+    const codexId = (result as { thread?: { id?: unknown } })?.thread?.id;
+    if (typeof codexId !== 'string') throw new Error('codex thread/start returned no thread id');
+    const inbox = new Inbox();
+    server.asks.set(codexId, inbox);
+    let turnId: string | undefined;
+    const stop = () => turnId && void rpc.request('turn/interrupt', { threadId: codexId, turnId }).catch(() => {});
+    signal.addEventListener('abort', stop, { once: true });
+    try {
+      const turn = await rpc.request('turn/start', { threadId: codexId, input: [{ type: 'text', text: prompt, text_elements: [] }] });
+      turnId = turnIdOf(turn) as string | undefined;
+      for await (const _ of inbox.drain(signal));
+      if (signal.aborted) throw new Error('Image generation was stopped');
+      if (!inbox.image) throw new Error('Codex finished without generating an image.');
+      return generatedImage(inbox.image, 'end', { saveImage });
+    } finally {
+      signal.removeEventListener('abort', stop);
       server.asks.delete(codexId);
       void rpc.request('thread/unsubscribe', { threadId: codexId }).catch(() => {});
     }
@@ -308,8 +370,13 @@ export class CodexAdapter {
     const prior = this.threads.get(threadId);
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
     this.forget(threadId);
-    const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId) };
-    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: MOCHI_INSTRUCTIONS, config: { ...PLAN_TOOL, ...CODEX_BROWSER_FEATURES_OFF, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId, options) };
+    // A settings chat gets Mochi's settings tools and nothing else: none of the profile's servers, nothing that writes or asks.
+    const library = options.isSettingsChat ? undefined : await this.libraryConfig?.(options);
+    const policy = POLICIES[options.isSettingsChat ? 'review' : (options.permissionMode ?? '')];
+    // The profile's own instructions follow Mochi's; the account's AGENTS.md loads as usual.
+    const profileText = options.isSettingsChat ? '' : await this.profileText?.(options.spaceId);
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: [mochiInstructions(options), profileText].filter(Boolean).join('\n\n'), config: { ...GOALS_OFF, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...policy };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume
@@ -323,7 +390,7 @@ export class CodexAdapter {
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
-    this.emit({ threadId, type: 'info', info: infoFromStart(result) });
+    this.emit({ threadId, type: 'info', info: { ...infoFromStart(result), ...(options.effort && { effort: options.effort }) } });
     void this.discover(rpc, threadId, codexId, options.cwd);
   }
 
@@ -389,10 +456,20 @@ export class CodexAdapter {
       this.emit({ threadId: p.threadId, type: 'resolved', requestId });
     }
     for (const [threadId, live] of this.threads) {
-      if (live.server !== server || !live.turnId) continue;
+      if (live.server !== server) continue;
+      // Verified on 0.163.0: the app-server's background terminals die with it.
+      this.endTasks(live);
+      if (!live.turnId) continue;
       live.turnId = undefined;
       this.emit({ threadId, type: 'turn-end', status: 'failed', error: message });
     }
+  }
+
+  /** Background terminals that won't report their own end report `stopped`; commands cut off mid-turn are forgotten. */
+  private endTasks(live: Live) {
+    for (const id of live.state.background) this.emit({ threadId: live.state.threadId, type: 'task', id, phase: 'end', status: 'stopped' });
+    live.state.background.clear();
+    live.state.commands.clear();
   }
 
   private notification(server: CodexServer, method: string, params: unknown) {
@@ -505,7 +582,7 @@ class CodexServer {
     const install = await this.hooks.findCodex();
     if (!install) throw new Error(NOT_FOUND);
     const target = spawnable(install.path, ['app-server']);
-    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: hooksEnv(accountEnv(this.account, install.env)), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
+    const child = spawn(target.file, target.args, { cwd: os.homedir(), env: accountEnv(this.account, install.env), stdio: ['pipe', 'pipe', 'pipe'], shell: target.shell, windowsHide: true });
     const gen = ++this.gen;
     this.child = child;
     this.stderr = '';
@@ -521,7 +598,8 @@ class CodexServer {
     child.on('exit', (code, signal) => this.exited(gen, code ?? signal));
 
     try {
-      await rpc.request('initialize', { clientInfo: { name: 'harness', title: 'Harness', version: '0.0.0' }, capabilities: null });
+      // `thread/backgroundTerminals/*` (stopping a command the agent left running) answer only with experimentalApi on.
+      await rpc.request('initialize', { clientInfo: { name: 'harness', title: 'Harness', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } });
     } catch (error) {
       // An app-server that never answered initialize would otherwise live on beside the next boot's.
       killTree(child);
@@ -544,8 +622,9 @@ class CodexServer {
   }
 }
 
-/** One side chat answer: its thread's notifications in, text chunks out, ending at `turn/completed`. */
+/** One side chat answer: its thread's notifications in, text chunks out, ending at `turn/completed`. `image`: the turn's last finished `imageGeneration` item. */
 class Inbox {
+  image?: Record<string, unknown>;
   private chunks: string[] = [];
   private streamed = new Set<string>();
   private end?: { error?: string };
@@ -559,6 +638,7 @@ class Inbox {
     }
     // A message that never streamed arrives whole.
     if (method === 'item/completed' && p.item?.type === 'agentMessage' && typeof p.item.text === 'string' && !this.streamed.has(String(p.item.id))) this.chunks.push(p.item.text);
+    if (method === 'item/completed' && p.item?.type === 'imageGeneration') this.image = p.item;
     if (method === 'turn/completed') {
       const error = p.turn?.error?.message;
       this.end = p.turn?.status === 'failed' ? { error: typeof error === 'string' ? apiMessage(error) : 'Codex stopped without an answer' } : {};
@@ -580,6 +660,11 @@ class Inbox {
       else await Promise.race([new Promise<void>((resolve) => (this.wake = resolve)), aborted]);
     }
   }
+}
+
+/** The image thread's model from the account's own list: the cheap one (it only calls the image tool), else the account's default. Null leaves it to Codex. */
+export function imageModel(models: AgentModel[]) {
+  return (models.find((m) => m.id === CHEAP_MODELS.codex) ?? models.find((m) => m.isDefault) ?? models[0])?.id ?? null;
 }
 
 const turnIdOf = (result: unknown) => (result as { turn?: { id?: unknown } } | null)?.turn?.id;

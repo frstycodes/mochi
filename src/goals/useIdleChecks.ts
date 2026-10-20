@@ -18,9 +18,17 @@ export function useIdleChecks(threads: Thread[], dispatch: Dispatch<Action>) {
       const isWorking = !!t.live?.isWorking;
       const was = wasWorking.get(t.id);
       wasWorking.set(t.id, isWorking);
-      if (was && !isWorking && t.live) void gather(t, dispatch);
+      if (!was || isWorking || !t.live) continue;
+      if (getPrefs().goals) void gather(t, dispatch);
+      else markIdle(t, dispatch);
     }
   }, [threads, dispatch]);
+}
+
+/** Without goals there is nothing to gather, but each turn still needs its own idle record: the end-of-turn card reads it. */
+function markIdle(t: Thread, dispatch: Dispatch<Action>) {
+  dispatch({ type: 'idle-start', threadId: t.id });
+  dispatch({ type: 'idle-update', threadId: t.id, patch: { isGathering: false } });
 }
 
 async function gather(t: Thread, dispatch: Dispatch<Action>) {
@@ -32,8 +40,10 @@ async function gather(t: Thread, dispatch: Dispatch<Action>) {
 /** One at a time: two test suites at once in one worktree fight over ports and temp files. */
 async function runChecks(t: Thread, dispatch: Dispatch<Action>) {
   const when = getPrefs().idleChecks;
-  // Only a turn that could have changed files can have changed a check's result; one after a plain question keeps the last results.
-  if (!t.goal || when === 'off' || (when === 'edited' && !mayHaveEdited(t.activity))) return;
+  // Only a turn that could have changed files can have changed a check's result; one after a plain question keeps the last
+  // results, unless a check has never run: a criterion with a command isn't met until it has.
+  const isUnchecked = (t.criteria ?? []).some((c) => c.command && !c.check);
+  if (!t.goal || when === 'off' || (when === 'edited' && !mayHaveEdited(t.activity) && !isUnchecked)) return;
   for (const c of t.criteria ?? []) if (c.command) await runCriterionCheck(dispatch, t, c);
 }
 

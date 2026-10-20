@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ChatView, type MessageBar } from '../ChatView';
 import { copyText } from '../clipboard';
 import { cn } from '@/lib/utils';
@@ -23,8 +24,8 @@ import type { Thread } from '../model';
 import { QueueDecision } from '../QueueView';
 import { useHarness, useView } from '../store';
 import { TitleBar } from '../TitleBar';
-import { DeviceIndicator } from '../ThreadView';
 import { ForkIcon, OverflowIcon, TooltipIconButton } from '../ui';
+import { DeviceIcon } from './DeviceIcon';
 import { closeRemoteThread, useRemoteThreadRoute } from './open';
 import { remoteDecisions } from './mirror';
 import { MachinePresence } from './MachinePresence';
@@ -173,7 +174,7 @@ function RemoteHeader({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem disabled={!canManage} onSelect={() => void run(machine.id, { type: 'settle', threadId: thread.id, isSettled: !isSettled })}>
-            {isSettled ? 'Reactivate' : 'Settle'}
+            {isSettled ? 'Unarchive' : 'Archive'}
           </DropdownMenuItem>
           {!isSettled && (
             <DropdownMenuItem
@@ -447,6 +448,24 @@ function RemoteComposer({ machine, thread }: { machine: FollowedMachine; thread:
         </form>
       </ComposerCard>
     </div>
+  );
+}
+
+/** Where the agent runs. A thread stays where it started. */
+function DeviceIndicator({ machine }: { machine: Pick<FollowedMachine, 'name' | 'kind'> }) {
+  const label = `Runs on ${machine.name}`;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} aria-label={label} className="-mr-1 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground">
+          <DeviceIcon kind={machine.kind} className="size-4" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="flex-col items-start gap-0.5">
+        <span className="block font-medium">{label}</span>
+        <span className="block opacity-80">The agent works in this thread's folder on {machine.name}; this computer steers it</span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

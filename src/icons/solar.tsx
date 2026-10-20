@@ -14,6 +14,8 @@ export const ArrowRight = solar(Linear.ArrowRightIcon, Bold.ArrowRightIcon);
 export const ArrowUp = solar(Linear.ArrowUpIcon, Bold.ArrowUpIcon);
 export const ArrowUpRight = solar(Linear.ArrowRightUpIcon, Bold.ArrowRightUpIcon);
 export const Ban = solar(Linear.ForbiddenIcon, Bold.ForbiddenIcon);
+// A play mark in a turning ring: work running on its own. Layers (spaces), Cpu (a Settings page), Stopwatch (time) and Structure (sub-agents) already mean something else.
+export const BackgroundTask = solar(Linear.PlaybackSpeedIcon, Bold.PlaybackSpeedIcon);
 export const Bell = solar(Linear.BellIcon, Bold.BellIcon);
 export const BellOff = solar(Linear.BellOffIcon, Bold.BellOffIcon);
 export const Bolt = solar(Linear.BoltIcon, Bold.BoltIcon);
@@ -60,6 +62,7 @@ export const ExitFullscreen = solar(Linear.QuitFullScreenIcon, Bold.QuitFullScre
 export const ExitPip = solar(Linear.QuitPipIcon, Bold.QuitPipIcon);
 export const Expand = solar(Linear.MaximizeIcon, Bold.MaximizeIcon);
 export const ExternalLink = solar(Linear.SquareArrowRightUpIcon, Bold.SquareArrowRightUpIcon);
+export const DiagramTree = solar(Linear.DiagramDownIcon, Bold.DiagramDownIcon);
 export const Eye = solar(Linear.EyeIcon, Bold.EyeIcon);
 export const EyeOff = solar(Linear.EyeClosedIcon, Bold.EyeClosedIcon);
 export const EyeSlash = solar(Linear.EyeClosedIcon, Bold.EyeClosedIcon);
@@ -95,10 +98,12 @@ export const Inbox = solar(Linear.InboxIcon, Bold.InboxIcon);
 export const InboxIn = solar(Linear.InboxInIcon, Bold.InboxInIcon);
 export const InboxOut = solar(Linear.InboxOutIcon, Bold.InboxOutIcon);
 export const Info = solar(Linear.InfoCircleIcon, Bold.InfoCircleIcon);
+export const Key = solar(Linear.KeyIcon, Bold.KeyIcon);
 export const Keyboard = solar(Linear.KeyboardIcon, Bold.KeyboardIcon);
 export const Layers = solar(Linear.LayersIcon, Bold.LayersIcon);
 export const Layout = solar(Linear.Widget2Icon, Bold.Widget2Icon);
 export const Link = solar(Linear.LinkIcon, Bold.LinkIcon);
+export const List = solar(Linear.ListIcon, Bold.ListIcon);
 export const Loader = solar(Linear.RefreshCircleIcon, Bold.RefreshCircleIcon);
 export const Lock = solar(Linear.LockIcon, Bold.LockIcon);
 export const LockKeyhole = solar(Linear.LockKeyholeIcon, Bold.LockKeyholeIcon);
@@ -138,6 +143,7 @@ export const Plus = solar(Linear.AddIcon, Bold.AddIcon);
 export const PlusBold = solar(Linear.AddCircleIcon, Bold.AddCircleIcon);
 export const Power = solar(Linear.PowerIcon, Bold.PowerIcon);
 export const Pushpin = solar(Linear.PinIcon, Bold.PinIcon);
+export const RaisedHand = solar(Linear.UserHandUpIcon, Bold.UserHandUpIcon);
 export const Record = solar(Linear.ZipFileIcon, Bold.ZipFileIcon);
 export const RecordCircle = solar(Linear.RecordCircleIcon, Bold.RecordCircleIcon);
 export const Redo = solar(Linear.UndoRightIcon, Bold.UndoRightIcon);
@@ -188,7 +194,9 @@ export const TextTool = solar(Linear.TextFieldIcon, Bold.TextFieldIcon);
 export const Transfer = solar(Linear.TransferHorizontalIcon, Bold.TransferHorizontalIcon);
 export const Trash = solar(Linear.TrashBinMinimalisticIcon, Bold.TrashBinMinimalisticIcon);
 export const Undo = solar(Linear.UndoLeftIcon, Bold.UndoLeftIcon);
+export const Unarchive = solar(Linear.ArchiveUpIcon, Bold.ArchiveUpIcon);
 export const Unlink = solar(Linear.UnlinkIcon, Bold.UnlinkIcon);
+export const Upload = solar(Linear.UploadIcon, Bold.UploadIcon);
 export const UserCheck = solar(Linear.UserCheckRoundedIcon, Bold.UserCheckRoundedIcon);
 export const UserCircle = solar(Linear.UserCircleIcon, Bold.UserCircleIcon);
 export const UserEdit = solar(Linear.UserHandUpIcon, Bold.UserHandUpIcon);
@@ -205,9 +213,18 @@ export const ZoomIn = solar(Linear.MagnifierZoomInIcon, Bold.MagnifierZoomInIcon
 export const ZoomOut = solar(Linear.MagnifierZoomOutIcon, Bold.MagnifierZoomOutIcon);
 // Solar has no Shift or Option key glyph, nor a git commit.
 export const Shift = customIcon('Shift', `<path d="M12 3.75 3.75 12.25h4.5v7.5h7.5v-7.5h4.5L12 3.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`);
+// Mochi's library concepts as stroke glyphs, the same shapes as their lit objects (`src/icons/ObjectIcons.tsx`): a bulb
+// for skills, a puzzle piece for plugins, a wrench for connectors (MCP servers). Solar ships the bulb only.
+export const Skill = solar(Linear.LightbulbIcon, Bold.LightbulbIcon);
+export const Plugin = customIcon('Plugin', `<path d="M6.7 8h2.9a2.3 2.3 0 1 1 3.6 0h3a1.5 1.5 0 0 1 1.5 1.5V12a2.3 2.3 0 1 1 0 3.6V18a1.5 1.5 0 0 1-1.5 1.5H6.7A1.5 1.5 0 0 1 5.2 18V9.5A1.5 1.5 0 0 1 6.7 8Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`);
+export const Connector = customIcon('Connector', `<g transform="rotate(-45 12 12)" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.6 10.7a4.3 4.3 0 1 1 0 2.6"/><path d="M1.6 10.7h3.2v2.6H1.6"/><path d="M9.8 10.8h11a1.2 1.2 0 0 1 0 2.4h-11"/></g>`);
+// A drag handle: two columns of three dots. Solar has none.
+export const Grip = customIcon('Grip', `<g fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></g>`);
 export const Option = customIcon('Option', `<path d="M3.75 6.75h4.5l7.5 10.5h4.5M14.25 6.75h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);
 export const Commit = customIcon('Commit', `<circle cx="12" cy="12" r="3.25" stroke="currentColor" stroke-width="1.5"/><path d="M2.75 12h6M15.25 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`);
 export const Control = solar(Linear.AltArrowUpIcon, Bold.AltArrowUpIcon);
+// Solar has no Return key glyph either; drawn on the same 24px grid at the same stroke.
+export const Return = customIcon('Return', `<path d="M18.75 5.25v6a3 3 0 0 1-3 3h-10.5m0 0 3.75-3.75M5.25 14.25 9 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);
 
 function solar(Outline: (props: SolarProps) => React.ReactNode, Filled: (props: SolarProps) => React.ReactNode): IconComponent {
   return forwardRef<SVGSVGElement, IconProps>(({ filled, ...props }, ref) => {

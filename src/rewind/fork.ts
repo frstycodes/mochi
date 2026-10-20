@@ -32,8 +32,7 @@ export function forkThread(state: State, threadId: string, point: ForkPoint): St
     orbitSlot: undefined,
     status: base.status === 'settled' ? 'running' : base.status,
     prs: [],
-    // Links and shared keys belong to the parent's agreements with other threads; the fork starts without them.
-    steps: base.steps.map(({ link: _, sharedKey: __, ...s }) => ({ ...s, id: `${s.id}-f${state.seq}` })),
+    steps: base.steps.map((s) => ({ ...s, id: `${s.id}-f${state.seq}` })),
     revisions: [...base.revisions, { n: revision, at: now, label: `Forked from "${parent.title}"`, by: 'you' }],
     activity: [...base.activity, { at: now, who: 'harness', kind: 'event', text: `Forked from "${parent.title}" at ${from.label}` }],
   };
@@ -69,7 +68,7 @@ export function keepFork(state: State, keepId: string, dropId: string): State {
   const drop = state.threads.find((t) => t.id === dropId);
   if (!keep || !drop || keepId === dropId) return state;
   const now = state.now;
-  let threads = mapThread(state.threads, dropId, (t) => log({ ...t, status: 'settled', settledAt: now }, { at: now, who: 'harness', kind: 'event', text: `Settled: you kept "${keep.title}"` }));
+  let threads = mapThread(state.threads, dropId, (t) => log({ ...t, status: 'settled', settledAt: now }, { at: now, who: 'harness', kind: 'event', text: `Archived: you kept "${keep.title}"` }));
   threads = mapThread(threads, keepId, (t) => log(t, { at: now, who: 'harness', kind: 'event', text: `Kept over "${drop.title}", which settled` }));
   return { ...state, threads, queue: state.queue.filter((q) => q.threadId !== dropId) };
 }

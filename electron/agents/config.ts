@@ -32,8 +32,8 @@ const listeners = new Set<(settings: AgentSettings) => void>();
 let stored: Stored | undefined;
 
 export function agentSettings(): AgentSettings {
-  const { concurrency, harnesses, worktreeRoot, shell, prDrafts, prepareWorktrees, worktreeInclude, setupCommands, sideChatModel, utilityModels } = load();
-  return { concurrency, harnesses, worktreeRoot, shell, prDrafts, prepareWorktrees, worktreeInclude, setupCommands, sideChatModel, utilityModels };
+  const { concurrency, harnesses, worktreeRoot, shell, prDrafts, prepareWorktrees, worktreeInclude, setupCommands, sideChatModel, utilityModels, imageGen, appIcon } = load();
+  return { concurrency, harnesses, worktreeRoot, shell, prDrafts, prepareWorktrees, worktreeInclude, setupCommands, sideChatModel, utilityModels, imageGen, appIcon };
 }
 
 /** Where new thread worktrees go: the user's folder (`~` expanded), else `~/.mochi/worktrees`. */

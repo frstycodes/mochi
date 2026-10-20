@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Brush, Clock, Compass, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
+import { Brush, Chat, Clock, Connector, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -7,26 +7,32 @@ import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
 import { IDLE_ALERTS } from '../settingOptions';
 import { AboutSection } from './about';
+import { SettingsChat } from '../SettingsChat';
+import { ConnectorsView } from '../../library/ConnectorsView';
+import { ConnectorPage } from '../../library/ConnectorPage';
+import { PluginsView } from '../../library/PluginsView';
+import { SkillsView } from '../../library/SkillsView';
 import { AccessSection, toolRowId } from './access';
-import { TOOL_NAMES } from '../../runtime/toolTable';
+import { isGoalTool, TOOL_NAMES } from '../../runtime/toolTable';
 import { TOOL_GUIDE } from '../toolGuide';
 import { AppearanceSection } from './appearance';
 import { BrowserSection } from './browser';
 import { DataSection } from './data';
 import { GeneralSection } from './general';
 import { GitSection } from './git';
-import { GoalsSection } from './goals';
 import { HarnessesSection } from './harnesses';
 import { KeyboardSection, shortcutRowId, shownCommands } from './keyboard';
 import { ModelsSection } from './models';
 import { NotificationsSection } from './notifications';
+import { ProfilePage } from './profilePage';
 import { ProfilesSection } from './profiles';
 import { RemoteSection } from './remote';
 import { SchedulesSection } from './schedules';
 import { SimplifySection } from './simplify';
 import { TerminalSection } from './terminal';
+import { ANIMATIONS } from '../settingOptions';
 
-export const SECTION_GROUPS = ['Mochi', 'Agents', 'Workspace', 'System'] as const;
+export const SECTION_GROUPS = ['Mochi', 'Agents', 'Customize', 'Workspace', 'System'] as const;
 
 export interface SettingsSection {
   id: string;
@@ -34,12 +40,22 @@ export interface SettingsSection {
   title: string;
   icon: IconComponent;
   component: ComponentType;
+  /** One item's own page in this section (`openSubpage`), shown instead of the section under its own header. */
+  subpage?: ComponentType<{ id: string }>;
   /** Every row's id and label, for search and deep links; the section renders the rows. Rows that need the desktop app say so in the section. */
   settings: { id: string; label: string; keywords?: string }[];
 }
 
 /** The settings page in sidebar order (SETTINGS.md). */
 export const SETTINGS_SECTIONS = [
+  {
+    id: 'chat',
+    group: 'Mochi',
+    title: 'Ask Mochi',
+    icon: Chat,
+    component: SettingsChat,
+    settings: [],
+  },
   {
     id: 'general',
     group: 'Mochi',
@@ -65,6 +81,11 @@ export const SETTINGS_SECTIONS = [
     settings: [
       { id: 'theme', label: 'Theme', keywords: 'appearance dark light system mode' },
       { id: 'reduceMotion', label: 'Reduce motion', keywords: 'animation accessibility' },
+      { id: 'appIcon', label: 'App icon', keywords: 'dock icon logo variant' },
+      ...Object.entries(ANIMATIONS).flatMap(([area, { label, items }]) => [
+        { id: `animations${area[0]!.toUpperCase()}${area.slice(1)}`, label, keywords: 'animation motion transition slide' },
+        ...items.map((item) => ({ id: `animation-${item.value}`, label: item.label, keywords: `${label} animation motion` })),
+      ]),
       { id: 'lightTheme', label: 'Light theme', keywords: 'color theme vs code' },
       { id: 'darkTheme', label: 'Dark theme', keywords: 'color theme vs code' },
       { id: 'installedThemes', label: 'Installed themes', keywords: 'uninstall remove color theme' },
@@ -103,6 +124,7 @@ export const SETTINGS_SECTIONS = [
     title: 'Profiles',
     icon: Users,
     component: ProfilesSection,
+    subpage: ProfilePage,
     // A getter: the rows follow the profiles, so search finds "Personal GitHub account" right after a rename.
     get settings() {
       return [
@@ -125,7 +147,8 @@ export const SETTINGS_SECTIONS = [
     settings: HARNESS_IDS.flatMap((id) => {
       const { name, apiKey } = HARNESSES[id];
       return [
-        { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check' },
+        { id: `${id}Install`, label: `${name} install`, keywords: 'version path detected check update upgrade' },
+        { id: `${id}Update`, label: `${name} update`, keywords: 'upgrade latest version' },
         { id: `${id}Path`, label: `${name} custom path`, keywords: 'executable binary' },
         { id: `${id}Accounts`, label: `${name} accounts`, keywords: 'login sign in plan config folder add rename remove' },
         { id: `${id}Profiles`, label: `${name} account per profile`, keywords: 'space link' },
@@ -151,22 +174,9 @@ export const SETTINGS_SECTIONS = [
         ];
       }),
       { id: 'sideChatModel', label: 'Side chat model', keywords: 'aside question claude codex gpt sonnet opus haiku' },
+      { id: 'imageGen', label: 'Image generation', keywords: 'image picture generate codex gpt-image draw' },
       { id: 'backgroundModel', label: 'Background model', keywords: 'background utility cheap model haiku luna every task all' },
-      ...UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr goal steps handoff summary audit transcript verdict' })),
-    ],
-  },
-  {
-    id: 'goals',
-    group: 'Agents',
-    title: 'Goals and checks',
-    icon: Compass,
-    component: GoalsSection,
-    settings: [
-      { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
-      { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
-      { id: 'proposedGoals', label: 'Agent-proposed goals', keywords: 'propose goal accept apply undo agent writes criteria' },
-      { id: 'idleChecks', label: 'Run criterion checks', keywords: 'idle verdict check test turn end' },
-      { id: 'prGaps', label: 'Gaps when opening a pull request', keywords: 'open_pr gate block critical warn open anyway' },
+      ...UTILITY_TASKS.map((task) => ({ id: `utility-${task}`, label: `${UTILITY_TASK_LABELS[task]} model`, keywords: 'background utility cheap model haiku luna generate draft title goal outcome criteria commit pull request pr handoff summary audit transcript verdict' })),
     ],
   },
   {
@@ -191,8 +201,7 @@ export const SETTINGS_SECTIONS = [
     component: AccessSection,
     settings: [
       { id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' },
-      { id: 'threadModels', label: 'Models for threads agents start', keywords: 'tools model effort cheaper start thread' },
-      ...TOOL_NAMES.map((name) => ({ id: toolRowId(name), label: TOOL_GUIDE[name].label, keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent` })),
+      ...TOOL_NAMES.filter((name) => !isGoalTool(name)).map((name) => ({ id: toolRowId(name), label: TOOL_GUIDE[name].label, keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent` })),
     ],
   },
   {
@@ -202,6 +211,37 @@ export const SETTINGS_SECTIONS = [
     icon: Clock,
     component: SchedulesSection,
     settings: [{ id: 'schedules', label: 'Scheduled and background threads', keywords: 'cron nightly trigger pull request pause resume run' }],
+  },
+  {
+    id: 'skills',
+    group: 'Customize',
+    title: 'Skills',
+    icon: Skill,
+    component: SkillsView,
+    settings: [{ id: 'skillsLibrary', label: 'Installed skills and their profiles', keywords: 'skill install github anthropics openai discover library profile' }],
+  },
+  {
+    id: 'plugins',
+    group: 'Customize',
+    title: 'Plugins',
+    icon: Plugin,
+    component: PluginsView,
+    settings: [{ id: 'pluginsLibrary', label: 'Installed plugins and their profiles', keywords: 'plugin marketplace install discover library profile' }],
+  },
+  {
+    id: 'connectors',
+    group: 'Customize',
+    title: 'Connectors',
+    icon: Connector,
+    component: ConnectorsView,
+    subpage: ConnectorPage,
+    settings: [
+      {
+        id: 'connectorsLibrary',
+        label: 'Connected accounts, their profiles, and each connector’s tools',
+        keywords: 'connector account mcp server sign in oauth custom gmail linear github discover library profile tool permission allow ask deny off disable enable approval read only destructive',
+      },
+    ],
   },
   {
     id: 'git',

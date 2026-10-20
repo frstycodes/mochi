@@ -1,84 +1,212 @@
-import { useEffect, useState } from 'react';
-import { Plus, Trash } from '@/icons';
+import { Fragment, useEffect, useState } from 'react';
+import { ChevronRight, Plus } from '@/icons';
 import { toast } from '@/toast/store';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { useConfirm } from '../../git/useConfirm';
 import { formatGithubAccount, GITHUB_COM } from '../../git/github';
 import { gitError } from '../../git/useGit';
 import type { GhAccount } from '../../host/types/git';
 import { host } from '../../host';
 import { keyName } from '../../keys';
 import { SPACE_ICON_NAMES, type Provider, type Space, type SpaceIconName } from '../../model';
-import { addProfile, getProfiles, MAX_PROFILES, removeProfile, updateProfile, useProfiles } from '../../profiles';
+import { addProfile, MAX_PROFILES, useProfiles } from '../../profiles';
 import { useHarness } from '../../store';
-import { SPACE_ICONS, SpaceIcon } from '../../ui';
-import { AgentConfigRows } from '../ProfileAgentConfig';
+import { ProviderMark, SPACE_ICONS, SpaceIcon } from '../../ui';
+import { countOf } from '../../library/LibraryParts';
+import { useLibrary } from '../../library/useLibrary';
+import { linkedAccountId } from '../accounts';
 import { useAgentSettings } from '../AgentSettings';
 import { HARNESS_IDS } from '../harnesses';
-import { CatalogRow } from '../CatalogRow';
-import { useLinkedTab } from '../open';
-import { DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
+import { openSubpage, useSettingsRoute } from '../open';
+import { SettingsCard, SettingsSection, SettingsSelect } from '../parts';
 
-/** One profile at a time behind a tab per profile: what it's called, how it looks in the sidebar, and what it signs in with. */
+/** Settings › Profiles: every profile as a row opening its own page (Settings › Profiles › <profile>), and a way to add one. */
 export function ProfilesSection() {
   const profiles = useProfiles();
-  const gh = useGhAccounts();
-  const { confirm, dialog } = useConfirm();
-  const [shownId, setShownId] = useShownProfile(profiles);
-  const shown = profiles.find((p) => p.id === shownId) ?? profiles[0];
+  const [isAdding, setAdding] = useState(false);
+  const isFull = profiles.length >= MAX_PROFILES;
+  useOpenLinkedProfile(profiles);
   return (
     <div className="flex flex-col gap-10">
-      <p className="type-meta text-muted-foreground">Each profile is a space in the sidebar with its own threads, agent accounts and browser logins. Switch with the icons at the bottom of the sidebar.</p>
-      {!host.isDesktop && <DesktopOnlyNotice what="Choosing GitHub and agent accounts and clearing browsing data need the Mochi desktop app." />}
-      <Tabs value={shown.id} onValueChange={setShownId} className="gap-4">
-        <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+      <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-start sm:justify-between">
+        <p className="type-meta text-pretty text-muted-foreground">Each profile is a space in the sidebar with its own threads, agent accounts, skills and browser logins. Switch with the icons at the bottom of the sidebar.</p>
+        <Button size="xs" className="shrink-0" disabled={isFull} onClick={() => setAdding(true)}>
+          <Plus />
+          Add profile
+        </Button>
+      </div>
+      <SettingsSection id="addProfile" footer={isFull && `Mochi holds up to ${MAX_PROFILES} profiles, one per ${keyName('nav')} + number shortcut.`}>
+        <SettingsCard>
           {profiles.map((profile) => (
-            <TabsTrigger key={profile.id} value={profile.id} className="flex-none px-2">
-              <SpaceIcon space={profile} className="size-3.5" />
-              {profile.name}
-            </TabsTrigger>
+            <ProfileListRow key={profile.id} profile={profile} />
           ))}
-        </TabsList>
-        <TabsContent value={shown.id}>
-          <ProfileGroup key={shown.id} profile={shown} isLast={profiles.length === 1} gh={gh} confirm={confirm} />
-        </TabsContent>
-      </Tabs>
-      <AddProfileGroup isFull={profiles.length >= MAX_PROFILES} onAdded={setShownId} />
-      {dialog}
+        </SettingsCard>
+      </SettingsSection>
+      <NewProfileDialog open={isAdding} onClose={() => setAdding(false)} />
     </div>
   );
 }
 
-/** The profile on screen: the one a deep link names (`<profileId>-<row>`), else the one you're in. */
-function useShownProfile(profiles: Space[]) {
-  const { state } = useHarness();
-  return useLinkedTab((settingId) => profiles.find((p) => settingId.startsWith(`${p.id}-`))?.id, state.spaceId);
+/** A deep link to one profile's row (`<profileId>-<row>`, from search or a thread) opens that profile's page on it. */
+function useOpenLinkedProfile(profiles: Space[]) {
+  const route = useSettingsRoute();
+  useEffect(() => {
+    const settingId = route?.settingId;
+    const linked = settingId && profiles.find((p) => settingId.startsWith(`${p.id}-`));
+    if (linked) openSubpage('profiles', linked.id, settingId);
+  }, [route?.nonce, route?.settingId]);
 }
 
-function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast: boolean; gh: GhAccountsState; confirm: ReturnType<typeof useConfirm>['confirm'] }) {
-  const { id } = profile;
+/** One profile as a settings row that opens its page: its icon, name, the accounts it runs on and what it loads. */
+function ProfileListRow({ profile }: { profile: Space }) {
+  const { state } = useHarness();
+  const meta = useProfileMeta(profile);
   return (
-    <SettingsGroup id={`${id}-profile`}>
-      <CatalogRow settingKey="profile.name" profile={profile} />
-      <CatalogRow settingKey="profile.icon" profile={profile} />
-      {host.isDesktop && <GitHubAccountRow profile={profile} gh={gh} />}
-      {host.isDesktop && HARNESS_IDS.map((provider) => <CatalogRow key={provider} settingKey={`profile.${provider}Account`} profile={profile} />)}
-      <AgentConfigRows profile={profile} />
-      {host.isDesktop && <ClearBrowsingRow profile={profile} confirm={confirm} />}
-      <RemoveProfileRow profile={profile} isLast={isLast} />
-    </SettingsGroup>
+    <button
+      type="button"
+      onClick={() => openSubpage('profiles', profile.id)}
+      className="relative flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors not-first:before:absolute not-first:before:inset-x-4 not-first:before:top-0 not-first:before:h-px not-first:before:bg-border first:rounded-t-xl last:rounded-b-xl hover:bg-accent/40 focus-visible:bg-accent/40"
+    >
+      <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background">
+        <SpaceIcon space={profile} className="size-5" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate type-body font-medium">{profile.name}</span>
+          {state.spaceId === profile.id && <Badge variant="secondary">Current</Badge>}
+        </span>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 type-caption text-subtle-foreground">
+          {meta.map((part, i) => (
+            <Fragment key={i}>
+              {i > 0 && <span aria-hidden>·</span>}
+              <span className="flex items-center gap-1 whitespace-nowrap">{part}</span>
+            </Fragment>
+          ))}
+        </span>
+      </span>
+      <ChevronRight aria-hidden className="size-4 shrink-0 text-subtle-foreground" />
+    </button>
   );
 }
 
-type GhAccountsState = { accounts?: GhAccount[]; error?: string };
+/** The row's muted line: the agent account each harness runs on, what it loads from the library, its threads. */
+function useProfileMeta(profile: Space) {
+  const { accounts } = useAgentSettings();
+  const { entries } = useLibrary(profile.id);
+  const loaded = entries?.filter((e) => e.profileIds.includes(profile.id)).length;
+  const { state } = useHarness();
+  const threadCount = state.threads.filter((t) => t.spaceId === profile.id).length;
+  const accountNames = HARNESS_IDS.flatMap((provider) => {
+    const id = accounts && linkedAccountId(accounts.links, profile.id, provider);
+    const name = accounts?.accounts.find((a) => a.id === id)?.name;
+    return name ? [{ provider, name }] : [];
+  });
+  const meta = [
+    ...accountNames.map(({ provider, name }) => (
+      <>
+        <ProviderMark provider={provider} size={12} />
+        {name}
+      </>
+    )),
+    ...(loaded === undefined ? [] : [`${countOf(loaded, 'item')} from the library`]),
+    countOf(threadCount, 'thread'),
+  ];
+  return meta;
+}
+
+// Radix Select can't hold ''.
+const EMPTY = 'empty';
+
+/**
+ * Adds a profile, empty or as a copy of another (`from` starts it there, the page's Duplicate). A copy takes the source's
+ * agent accounts, GitHub login, library items and native choices; threads and browser logins stay where they are.
+ */
+export function NewProfileDialog({ open, from, onClose }: { open: boolean; from?: Space; onClose: () => void }) {
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-md">{open && <NewProfileForm from={from} onDone={onClose} />}</DialogContent>
+    </Dialog>
+  );
+}
+
+// Inside the dialog's content, which unmounts on close, so each opening starts fresh.
+function NewProfileForm({ from, onDone }: { from?: Space; onDone: () => void }) {
+  const profiles = useProfiles();
+  const { dispatch } = useHarness();
+  const copyProfile = useCopyProfile();
+  const [name, setName] = useState(from ? `${from.name} copy` : '');
+  const [sourceId, setSourceId] = useState(from?.id ?? EMPTY);
+  const [isBusy, setBusy] = useState(false);
+  const source = profiles.find((p) => p.id === sourceId);
+  const create = async () => {
+    setBusy(true);
+    const profile = addProfile(name.trim(), source);
+    if (source) await copyProfile(source, profile).catch((error: Error) => toast.error(`Not everything was copied from ${source.name}`, { description: error.message }));
+    onDone();
+    openSubpage('profiles', profile.id);
+    toast(`${profile.name} added`, { action: { label: 'Switch to it', onClick: () => dispatch({ type: 'space', id: profile.id }) } });
+  };
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (name.trim() && !isBusy) void create();
+      }}
+    >
+      <DialogHeader>
+        <DialogTitle>{from ? `Duplicate ${from.name}` : 'Add profile'}</DialogTitle>
+        <DialogDescription>A space in the sidebar with its own threads and a fresh browser session.</DialogDescription>
+      </DialogHeader>
+      <Field>
+        <FieldLabel htmlFor="new-profile-name">Name</FieldLabel>
+        <Input id="new-profile-name" autoFocus placeholder="Side project" value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="new-profile-from">Start from</FieldLabel>
+        <SettingsSelect id="new-profile-from" value={sourceId} options={[{ value: EMPTY, label: 'An empty profile' }, ...profiles.map((p) => ({ value: p.id, label: `A copy of ${p.name}` }))]} onChange={setSourceId} className="w-full" />
+        <FieldDescription>
+          {source
+            ? `Copies ${source.name}’s agent accounts, GitHub login, instructions, skills, plugins and connectors, and what it turns off from Claude Code and Codex. Threads and browser logins stay with ${source.name}.`
+            : 'Starts on the default agent accounts with nothing from the library; add skills, plugins and connectors on its page.'}
+        </FieldDescription>
+      </Field>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!name.trim() || isBusy}>
+          {source ? 'Duplicate profile' : 'Add profile'}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/** Gives `to` what lives outside the profile record: `from`'s agent account links, its folder (instructions) and its library items. */
+function useCopyProfile() {
+  const { accounts, linkAccount } = useAgentSettings();
+  return async (from: Space, to: Space) => {
+    if (accounts)
+      for (const provider of HARNESS_IDS) {
+        const id = linkedAccountId(accounts.links, from.id, provider);
+        if (id !== linkedAccountId(accounts.links, to.id, provider)) await linkAccount(to.id, provider, id);
+      }
+    await host.settings.copyProfileFolder(from.id, to.id);
+    const entries = await host.library.list(from.id);
+    for (const entry of entries) if (entry.profileIds.includes(from.id)) await host.library.setEnabled(to.id, entry.id, true);
+  };
+}
+
+export type GhAccountsState = { accounts?: GhAccount[]; error?: string };
 
 /** gh's logins, read when the page opens and again when the window regains focus (after a `gh auth login` in a terminal). */
-function useGhAccounts(isNeeded = true): GhAccountsState {
+export function useGhAccounts(isNeeded = true): GhAccountsState {
   const [state, setState] = useState<GhAccountsState>({});
   useEffect(() => {
     if (!host.isDesktop || !isNeeded) return;
@@ -92,24 +220,6 @@ function useGhAccounts(isNeeded = true): GhAccountsState {
 
 // Radix Select can't hold '' (the profile's "use gh's active account").
 const ACTIVE = 'gh-active';
-
-function GitHubAccountRow({ profile, gh }: { profile: Space; gh: GhAccountsState }) {
-  const rowId = `${profile.id}-github`;
-  const isMissing = !!profile.github && !!gh.accounts && !gh.accounts.some((a) => a.isValid && formatGithubAccount(a) === profile.github);
-  const description = gh.error
-    ? `Couldn't ask gh for its logins: ${gh.error}`
-    : isMissing
-      ? `gh has no working login for ${profile.github}. Run gh auth login, then come back.`
-      : 'This profile’s threads push and open pull requests as this account. Add one with gh auth login.';
-  return (
-    <SettingsRow
-      id={rowId}
-      label="GitHub account"
-      description={<span className={cn(isMissing && 'text-warning')}>{description}</span>}
-      control={<GitHubAccountSelect id={rowId} value={profile.github} gh={gh} onChange={(github) => updateProfile(profile.id, { github })} />}
-    />
-  );
-}
 
 /** gh's working logins plus "Active account" (stored as ''); pass `gh` when the caller already reads them. */
 export function GitHubAccountSelect({ id, value, gh: given, onChange }: { id: string; value: string; gh?: GhAccountsState; onChange: (github: string) => void }) {
@@ -168,99 +278,3 @@ export function AccountSelect({ id, provider, value, onChange }: { id: string; p
   return <SettingsSelect id={id} value={value} options={own.map((a) => ({ value: a.id, label: a.name }))} onChange={onChange} disabled={!accounts} />;
 }
 
-function ClearBrowsingRow({ profile, confirm }: { profile: Space; confirm: ReturnType<typeof useConfirm>['confirm'] }) {
-  const rowId = `${profile.id}-browsing`;
-  const clear = async () => {
-    const isConfirmed = await confirm({
-      title: `Clear ${profile.name}'s browsing data?`,
-      description: 'Cookies, logins, site storage and cache in this profile’s browser tabs go. Open pages stay open, signed out. Other profiles keep theirs.',
-      confirm: 'Clear browsing data',
-      cancel: 'Keep it',
-      isDestructive: true,
-    });
-    if (!isConfirmed) return;
-    host.browser.clearData(profile.id).then(
-      () => toast(`${profile.name}'s browsing data cleared`),
-      (error: Error) => toast.error('Browsing data not cleared', { description: error.message }),
-    );
-  };
-  return (
-    <SettingsRow
-      id={rowId}
-      label="Browser"
-      description="Its own cookies and logins, apart from other profiles."
-      control={
-        <Button id={settingControlId(rowId)} variant="outline" size="sm" onClick={() => void clear()}>
-          Clear browsing data
-        </Button>
-      }
-    />
-  );
-}
-
-function RemoveProfileRow({ profile, isLast }: { profile: Space; isLast: boolean }) {
-  const { state, dispatch } = useHarness();
-  const threadCount = state.threads.filter((t) => t.spaceId === profile.id).length;
-  const block = isLast ? 'The last profile stays.' : threadCount ? `${threadCount} ${THREADS.select(threadCount) === 'one' ? 'thread lives' : 'threads live'} here; delete or move them first.` : undefined;
-  const remove = () => {
-    const undo = removeProfile(profile.id);
-    if (state.spaceId === profile.id) dispatch({ type: 'space', id: getProfiles()[0].id });
-    toast(`${profile.name} removed`, { duration: UNDO_MS, action: { label: 'Undo', onClick: undo } });
-  };
-  return (
-    <SettingsRow
-      label={<span className="text-muted-foreground">{block ?? 'Removes it from the sidebar. Its agent accounts and browser data stay on disk.'}</span>}
-      control={
-        <Button variant="outline" size="sm" disabled={!!block} onClick={remove}>
-          <Trash data-icon="inline-start" className="text-destructive" />
-          Remove profile
-        </Button>
-      }
-    />
-  );
-}
-
-const THREADS = new Intl.PluralRules('en');
-
-function AddProfileGroup({ isFull, onAdded }: { isFull: boolean; onAdded: (id: string) => void }) {
-  const { dispatch } = useHarness();
-  const [name, setName] = useState<string | null>(null);
-  const create = (value: string) => {
-    const profile = addProfile(value);
-    setName(null);
-    onAdded(profile.id);
-    toast(`${profile.name} added`, { action: { label: 'Open', onClick: () => dispatch({ type: 'space', id: profile.id }) } });
-  };
-  return (
-    <SettingsGroup id="addProfile" footer={isFull ? `Mochi holds up to ${MAX_PROFILES} profiles, one per ${keyName('nav')} + number shortcut.` : 'A new profile starts empty, on the default accounts, with a fresh browser session.'}>
-      {name === null ? (
-        <SettingsRow
-          label={
-            <button type="button" disabled={isFull} onClick={() => setName('')} className="flex items-center gap-1.5 text-foreground enabled:hover:underline enabled:hover:underline-offset-4 disabled:text-muted-foreground">
-              <Plus aria-hidden className="size-4" />
-              Add profile…
-            </button>
-          }
-        />
-      ) : (
-        <SettingsRow
-          label="New profile"
-          control={
-            <form
-              className="flex w-full items-center gap-2 sm:w-auto"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (name.trim()) create(name.trim());
-              }}
-            >
-              <Input autoFocus aria-label="Profile name" placeholder="Side project" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setName(null)} className="sm:w-52" />
-              <Button type="submit" variant="outline" disabled={!name.trim()}>
-                Add
-              </Button>
-            </form>
-          }
-        />
-      )}
-    </SettingsGroup>
-  );
-}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { rehypeRefs, rehypeRelativeLinks } from './rehypeRefs.ts';
+import { rehypeRefs, rehypeRelativeLinks, rehypeSlashTokens } from './rehypeRefs.ts';
 
 const text = (value: string) => ({ type: 'text', value });
 const el = (tagName: string, ...children: unknown[]) => ({ type: 'element', tagName, properties: {}, children });
@@ -35,4 +35,12 @@ test('bare relative link targets get ./ so harden keeps them; URLs, roots and an
     tree.children[0].children.map((a) => (a as { properties: { href: string } }).properties.href),
     ['./src/a.ts', 'https://x.dev', '/abs/a.ts', '../a.ts', '#top', 'mailto:a@b.c'],
   );
+});
+
+test('known /names in prose turn into coloured spans; unknown names, links and code stay as they are', () => {
+  const tree = { type: 'root', children: [el('p', text('/ui on '), el('a', text('/ui')), text(' then /nope and a/ui, /run')), el('p', el('code', text('/ui')))] };
+  rehypeSlashTokens(['ui', 'run'])(tree as never);
+  const span = (value: string) => ({ type: 'element', tagName: 'span', properties: { className: ['text-info'] }, children: [text(value)] });
+  assert.deepEqual(tree.children[0].children, [span('/ui'), text(' on '), el('a', text('/ui')), text(' then /nope and a/ui, '), span('/run')]);
+  assert.deepEqual(tree.children[1], el('p', el('code', text('/ui'))));
 });

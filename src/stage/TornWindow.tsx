@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { host } from '@/host';
 import { cn } from '@/lib/utils';
 import { LeafView } from '../layout/Workspace';
+import { useLibraryNamesLoader } from '../library/useLibrary';
 import { useThread } from '../store';
 import { DragStrip } from '../TitleBar';
 import { MirrorProvider } from './windowSync';
@@ -22,6 +23,7 @@ export function TornWindow({ threadId }: { threadId: string }) {
 
 function TornThread({ threadId }: { threadId: string }) {
   const thread = useThread(threadId);
+  useLibraryNamesLoader(thread?.spaceId);
   useEffect(() => {
     if (thread) document.title = thread.title;
   }, [thread?.title]); // eslint-disable-line react-hooks/exhaustive-deps

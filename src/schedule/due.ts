@@ -1,3 +1,4 @@
+import type { AgentEvent, StartWorkspace } from '../host/types/agent.ts';
 import type { PrEvent, ScheduleRun, Trigger } from '../host/types/schedule.ts';
 import { describeCron, nextRun } from './cron.ts';
 
@@ -99,3 +100,16 @@ const MAX_RUNS = 20;
 export function withRun(runs: ScheduleRun[], run: ScheduleRun) {
   return [...runs.filter((r) => r.id !== run.id), run].slice(-MAX_RUNS);
 }
+
+/**
+ * The trigger after its thread's agent `event`: a session means the first run started, so later runs resume it and neither name
+ * the thread again nor refuse their own branch (`isNew`); a worktree branch renamed after the title is the one later runs check out.
+ */
+export function triggerAfter(trigger: Trigger, event: AgentEvent): Trigger {
+  const { workspace } = trigger.start;
+  if (event.type === 'session') return { ...trigger, sessionId: event.sessionId, start: { ...trigger.start, workspace: workspace && laterRun(workspace) } };
+  if (event.type === 'branch' && workspace?.mode === 'worktree') return { ...trigger, start: { ...trigger.start, workspace: { ...workspace, branch: event.branch } } };
+  return trigger;
+}
+
+const laterRun = ({ isNew: _, titlePrompt: __, ...workspace }: StartWorkspace): StartWorkspace => workspace;

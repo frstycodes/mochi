@@ -4,10 +4,13 @@ import type { Page } from '../browser/pages.ts';
 import type { BrowserAct } from '../host/types/browser.ts';
 import { draftFrom } from '../goals/edit.ts';
 import { singleLayout } from '../layout/tree.ts';
+import type { LibraryEntry } from '../library/library.ts';
+import type { SetupResult } from '../library/recipes.ts';
 import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../host/types/settings.ts';
 import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../settings/agentConfig.ts';
+import { driftPending } from '../chat/outbox.ts';
 import { DEFAULT_PREFS, setPrefs, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
@@ -19,6 +22,10 @@ import { CLAUDE_DEMO_MODELS } from './models.ts';
 import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
+import { runDevTool } from './devTools.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidechatReducer];
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
@@ -47,26 +54,39 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const answers: boolean[] = [];
   const pushes: string[] = [];
   const opened: string[] = [];
+  const drafted: { spaceId: string; prompt: string }[] = [];
   const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
-  let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
+  let prefs: Prefs = { ...DEFAULT_PREFS, goals: true, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
   const settings = fakeSettings();
+  const connects: { spaceId: string; account: unknown; options: unknown }[] = [];
+  const setupRuns: { connector: string; viewId: string; options: unknown }[] = [];
+  const setupResults: SetupResult[] = [];
+  const authorizeListeners = new Set<(page: { url: string; authorizationUrl: string }) => void>();
   const env: ToolEnv = {
     getState: () => state,
     dispatch: (a) => void (state = reduce(state, a)),
     prefs: { get: () => prefs, set: (patch) => void (prefs = { ...prefs, ...patch }) },
     toast: (text, undo) => void toasts.push({ text, undo }),
     notify: (title) => void notices.push(title),
+    openSettingsChat: (spaceId, prompt) => void drafted.push({ spaceId, prompt }),
     removeWorktree: async (id) => void removed.push(id),
-    pages: { get: (k) => pages.get(k), update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }), open: (k) => void opened.push(k) },
+    pages: {
+      get: (k) => pages.get(k),
+      update: (k, patch) => void pages.set(k, { ...(pages.get(k) as Page), ...patch }),
+      open: (k, url) => {
+        opened.push(k);
+        if (!pages.has(k)) pages.set(k, { hostId: `view-${++nextView}`, url, title: '', isLoading: false, canGoBack: false, canGoForward: false, error: null } as Page);
+      },
+    },
     browser: {
       navigate: async (_id, to) => void pages.set('rl/tab-1', { ...pages.get('rl/tab-1')!, url: to }),
       command: async (_id, c) => void commands.push(c),
       capture: async () => 'data:image/png;base64,iVBORw0KGgo=',
       snapshot: async () => ({
         text: '- heading "Dev" [level=1]\n- button "Save" [ref=e1]\n- textbox "Email" [ref=e2]',
-        refs: { e1: { role: 'button', name: 'Save', isSubmit: true, isPassword: false }, e2: { role: 'textbox', name: 'Email', isSubmit: false, isPassword: false } },
+        refs: { e1: { role: 'button', name: 'Save', isSubmit: true, isPassword: false }, e2: { role: 'textbox', name: 'Email', isSubmit: false, isPassword: false }, e3: { role: 'button', name: 'Delete project', isSubmit: false, isPassword: false }, e4: { role: 'textbox', name: 'Password', isSubmit: false, isPassword: true } },
       }),
       act: async (_id, a) => (acts.push(a), a.kind === 'scroll' ? { note: 'Scrolled to 0, 600 of 2000' } : {}),
       logs: async () => [{ level: 'error', message: 'boom', source: 'http://localhost:5173/main.js', line: 3 }],
@@ -84,6 +104,21 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     theme: () => 'system',
     settings: settings.host,
     themes: { list: async () => [] },
+    library: {
+      list: async () => [connectorEntry('linear', 'https://mcp.linear.app/mcp', 'work')],
+      oauthApps: async () => ['github'],
+      ownAppRedirect: async () => 'https://relay.test/oauth/callback',
+      // Main sends the sign-in page, then keeps waiting for the agent to approve it.
+      addConnector: (spaceId, account, options) => {
+        connects.push({ spaceId, account, options });
+        queueMicrotask(() => authorizeListeners.forEach((l) => l({ url: account.url, authorizationUrl: 'https://slack.com/oauth/v2_user/authorize?client_id=x' })));
+        return new Promise(() => {});
+      },
+      onAuthorize: (listener) => (authorizeListeners.add(listener), () => void authorizeListeners.delete(listener)),
+      onDeviceCode: () => () => {},
+      runSetup: async (connector, viewId, options) => (setupRuns.push({ connector, viewId, options }), setupResults.shift()!),
+      updateSetupStep: async (_connector, stepId, target) => ({ before: { role: 'button', name: stepId }, after: target }),
+    },
     remote: { status: async () => ({ settings: { isEnabled: false, allowsNetwork: false, machineName: '', reachesAnywhere: false, keepsAwake: true }, hostName: 'mac', addresses: [], devices: [], members: [], isRemoved: false, relay: { status: 'off' }, isOnBattery: false }) },
     isDesktop: true,
     git: {
@@ -113,7 +148,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
     for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
     return { result, card: t.state().queue.at(-1)! };
   };
-  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened };
+  const t = { env, call, ok, err, asking, thread, card, state: () => state, prefs: () => prefs, profiles: () => profiles, settings, toasts, notices, acts, commands, removed, evals, answers, pages, pushes, prs, opened, drafted, connects, setupRuns, setupResults };
   return t;
 }
 
@@ -147,10 +182,9 @@ function fakeSettings() {
     plugins: [],
     projectInstructions: null,
   });
-  const pathOf = (c: ConfigChange) => `/acct/${c.provider}/${c.kind === 'instructions' ? 'instructions' : c.kind.startsWith('skill') ? 'settings.json' : '.claude.json'}`;
+  const pathOf = (c: ConfigChange) => `/acct/${c.provider}/${c.kind.startsWith('skill') ? 'settings.json' : '.claude.json'}`;
   const apply = (c: ConfigChange) => {
     const own = config[c.provider];
-    if (c.kind === 'instructions') own.instructions = c.text;
     if (c.kind === 'mcp-set') own.servers = [...own.servers, { def: c.server, enabled: true, scope: 'user', needs: [] }];
     if (c.kind === 'mcp-remove') own.servers = own.servers.filter((s) => s.def.name !== c.name);
     if (c.kind === 'mcp-enabled') own.servers = own.servers.map((s) => (s.def.name === c.name ? { ...s, enabled: c.enabled } : s));
@@ -162,7 +196,7 @@ function fakeSettings() {
     get: async () => DEFAULT_SETTINGS,
     agentConfig: async (spaceId) => ({ claude: providerConfig(spaceId, 'claude'), codex: providerConfig(spaceId, 'codex') }),
     previewConfig: async (_spaceId, changes) => ({
-      edits: changes.map((c) => ({ path: pathOf(c), before: files.get(pathOf(c)) ?? '', after: c.kind === 'instructions' ? c.text : JSON.stringify(c) })),
+      edits: changes.map((c) => ({ path: pathOf(c), before: files.get(pathOf(c)) ?? '', after: JSON.stringify(c) })),
       copies: [],
       notes: [],
     }),
@@ -210,13 +244,13 @@ test('auto tools never wait: creating and messaging threads run straight through
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no widget was shown');
 });
 
-test('create_thread names the branch from its prompt, unique among the repo branches, and falls back to the prompt alone without git', async () => {
-  const named = setup({ gitBranches: ['main', 'feat/rate-limit-dashboard'] });
-  const created = await named.ok('create_thread', { prompt: 'Add a rate limit dashboard' });
-  assert.equal(named.thread(created.id)?.repo?.branch, 'feat/rate-limit-dashboard-2');
-  const offline = setup();
-  const fallback = await offline.ok('create_thread', { prompt: 'Fix the login bug' });
-  assert.equal(offline.thread(fallback.id)?.repo?.branch, 'fix/login-bug');
+test('create_thread starts each thread on a temp branch of its own, for its title to name', async () => {
+  const t = setup();
+  const [a, b] = [await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' }), await t.ok('create_thread', { prompt: 'Add a rate limit dashboard' })];
+  const [first, second] = [t.thread(a.id).repo!, t.thread(b.id).repo!];
+  assert.match(first.branch, /^mochi\/[0-9a-f]{8}$/);
+  assert.equal(first.autoBranch, first.branch);
+  assert.notEqual(second.branch, first.branch, 'the same prompt never clashes');
 });
 
 test('create_thread gives the new thread its own worktree even when your Worktree box is unticked', async () => {
@@ -226,25 +260,107 @@ test('create_thread gives the new thread its own worktree even when your Worktre
   try {
     const created = await t.ok('create_thread', { prompt: 'Fix the login bug' });
     assert.notEqual(t.thread(created.id)?.repo?.mode, 'folder');
-    assert.equal(t.thread(created.id)?.repo?.branch, 'fix/login-bug');
+    assert.match(t.thread(created.id)?.repo?.branch ?? '', /^mochi\/[0-9a-f]{8}$/);
   } finally {
     setPrefs({ workspaceMode: DEFAULT_PREFS.workspaceMode });
   }
 });
 
-test('create_thread takes a model and effort at or below the default, and refuses dearer ones unless the setting allows', async () => {
+test('new tasks and subtasks inherit the running session and honor user-named model and effort independently', async () => {
+  for (const provider of ['claude', 'codex'] as const) {
+    const t = setup();
+    const [model, other] = provider === 'claude' ? ['claude-sonnet-5-5', 'claude-opus-5-5'] : ['gpt-6-luna', 'gpt-6-sol'];
+    t.env.models = async () => [model, other].map((id) => ({ id, name: id, description: '', efforts: ['low', 'high', 'max'], speeds: [], isDefault: id === other }));
+    t.thread('rl').providers = [provider];
+    t.env.dispatch({ type: 'agent', event: { threadId: 'rl', type: 'session', provider, sessionId: 'running' } });
+    t.env.dispatch({ type: 'agent', event: { threadId: 'rl', type: 'info', info: { model, effort: 'low' } } });
+    // These composer choices apply on the next start, not to the running session.
+    t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: other, effort: 'high', speed: '', access: 'Manual' } });
+    for (const isTopLevel of [false, true]) {
+      for (const picked of [{}, { model: other }, { effort: 'max' }, { model: other, effort: 'max' }]) {
+        // Every pick here runs above the session (another model, or max over low), so it waits on your approval.
+        const pending = picked.model || picked.effort ? await t.asking('create_thread', { prompt: 'Fix login', isTopLevel, ...picked }) : null;
+        if (pending) decideTool(pending.card.id, { isApproved: true });
+        const r = pending ? await pending.result : await t.call('create_thread', { prompt: 'Fix login', isTopLevel, ...picked });
+        assert.ok(!r.isError, r.text);
+        const created = JSON.parse(r.text);
+        assert.deepEqual(t.thread(created.id).controls, { model: picked.model ?? model, effort: picked.effort ?? 'low', speed: '', access: 'Manual' });
+        assert.equal(!!t.thread(created.id).parent, !isTopLevel);
+      }
+    }
+    assert.match(await t.err('create_thread', { prompt: 'x', model: 'unavailable' }), /isn't offered/);
+    assert.match(await t.err('create_thread', { prompt: 'x', effort: 'invalid' }), /effort isn't offered/);
+  }
+});
+
+test('create_thread reads current controls after approval, not at tool invocation', async () => {
   const t = setup();
-  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-sonnet-5-5', effort: 'high', speed: '', access: 'Auto' } });
-  const cheaper = await t.ok('create_thread', { prompt: 'Rename a variable', model: 'claude-haiku-5-5', effort: 'low' });
-  assert.deepEqual(t.thread(cheaper.id).controls, { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' });
-  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-opus-5-5' }), /claude-opus-5-5 costs more/);
-  assert.match(await t.err('create_thread', { prompt: 'x', effort: 'max' }), /max effort costs more/);
-  assert.match(await t.err('create_thread', { prompt: 'x', model: 'gpt-9' }), /isn't offered/);
-  t.env.prefs.set({ threadModels: 'any' });
-  await t.ok('create_thread', { prompt: 'x', model: 'claude-opus-5-5', effort: 'max' });
-  t.env.prefs.set({ threadModels: 'default' });
-  assert.match(await t.err('create_thread', { prompt: 'x', model: 'claude-haiku-5-5' }), /Always the default/);
-  await t.ok('create_thread', { prompt: 'no choice still works' });
+  t.env.prefs.set({ toolPolicies: { create_thread: 'ask' } });
+  const pending = await t.asking('create_thread', { prompt: 'Fix login' });
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
+  decideTool(pending.card.id, { isApproved: true });
+  const result = await pending.result;
+  assert.ok(!result.isError, result.text);
+  assert.deepEqual(t.thread(JSON.parse(result.text).id).controls, { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' });
+});
+
+test('create_thread resolves unset models, isolates provider changes, and passes choices through when no catalog is available', async () => {
+  const t = setup();
+  const inherited = await t.ok('create_thread', { prompt: 'No saved controls' });
+  assert.equal(t.thread(inherited.id).controls?.model, 'claude-opus-5-5');
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-haiku-5-5', effort: 'low', speed: '', access: 'Auto' } });
+  t.env.models = async () => [{ id: 'gpt-6-sol', name: 'Sol', description: '', efforts: ['high', 'max'], defaultEffort: 'high', speeds: [], isDefault: true }];
+  const switched = await t.ok('create_thread', { prompt: 'Use Codex', provider: 'codex' });
+  assert.deepEqual(t.thread(switched.id).controls, { model: 'gpt-6-sol', effort: 'high', speed: '', access: 'Auto' });
+  t.env.models = async () => [];
+  // Without a catalog nothing ranks the pick, so another model asks first.
+  const pending = await t.asking('create_thread', { prompt: 'Use a user-named model', model: 'custom-model', effort: 'custom-effort' });
+  decideTool(pending.card.id, { isApproved: true });
+  const unlisted = JSON.parse((await pending.result).text);
+  assert.deepEqual(t.thread(unlisted.id).controls, { model: 'custom-model', effort: 'custom-effort', speed: '', access: 'Auto' });
+});
+
+test('create_thread nests under the calling thread by default, and isTopLevel starts it on its own', async () => {
+  const t = setup();
+  const nested = await t.ok('create_thread', { prompt: 'Add the retry header' });
+  assert.deepEqual(t.thread(nested.id).parent, { threadId: 'rl' });
+  assert.equal(t.thread(nested.id).repo?.base, 'feat/api-rate-limits', 'it branches from the parent');
+  const own = await t.ok('create_thread', { prompt: 'Unrelated cleanup', isTopLevel: true });
+  assert.equal(t.thread(own.id).parent, undefined);
+  assert.match(await t.err('create_thread', { prompt: 'x', isTopLevel: true, criterionId: 'c' }), /leave out isTopLevel/);
+});
+
+test("a new thread can't run above its parent: higher picks ask first, lower ones and permissions pass straight through", async () => {
+  const t = setup();
+  t.env.models = async (provider) => (provider === 'codex' ? [{ id: 'gpt-6-sol', name: 'Sol', description: '', efforts: ['low', 'high'], speeds: [], isDefault: true }] : [{ id: 'claude-opus-5-5', name: 'Opus', description: '', efforts: ['low', 'high', 'max'], speeds: [], isDefault: true }]);
+  t.env.dispatch({ type: 'controls', threadId: 'rl', controls: { model: 'claude-opus-5-5', effort: 'high', speed: '', access: 'Manual' } });
+  const lower = await t.ok('create_thread', { prompt: 'Cheap check', effort: 'low' });
+  assert.equal(t.thread(lower.id).controls?.effort, 'low');
+  const pending = await t.asking('create_thread', { prompt: 'Think hard', effort: 'max' });
+  assert.match(pending.card.detail ?? '', /max effort, above this thread/);
+  decideTool(pending.card.id, { isApproved: false });
+  assert.match((await pending.result).text, /denied/);
+  const switched = await t.ok('create_thread', { prompt: 'Use Codex', provider: 'codex' });
+  assert.equal(t.thread(switched.id).controls?.access, 'Manual', "switching harness keeps the parent's permissions");
+});
+
+test("a sub-thread's new thread waits on you, then nests under it: a two-level tree", async () => {
+  const t = setup();
+  const sub = await t.ok('create_thread', { prompt: 'Piece of the work' });
+  const queued = t.state().queue.length;
+  const result = t.call('create_thread', { prompt: 'Another piece' }, sub.id);
+  for (let i = 0; i < 20 && t.state().queue.length === queued; i++) await new Promise((r) => setTimeout(r, 0));
+  const card = t.state().queue.at(-1)!;
+  assert.match(card.detail ?? '', /is a sub-thread/);
+  decideTool(card.id, { isApproved: true });
+  const created = JSON.parse((await result).text);
+  assert.deepEqual(t.thread(created.id).parent, { threadId: sub.id });
+  assert.deepEqual(t.thread(sub.id).parent, { threadId: 'rl' });
+  const before = t.state().queue.length;
+  const own = t.call('create_thread', { prompt: 'Unrelated', isTopLevel: true }, sub.id);
+  for (let i = 0; i < 20 && t.state().queue.length === before; i++) await new Promise((r) => setTimeout(r, 0));
+  decideTool(t.state().queue.at(-1)!.id, { isApproved: true });
+  assert.equal(t.thread(JSON.parse((await own).text).id).parent, undefined, 'isTopLevel still starts one on its own');
 });
 
 test('a delete always waits on its widget, and Cancel leaves everything as it was', async () => {
@@ -347,10 +463,9 @@ test('changes log in the caller, toast with Undo, and Undo puts back only what s
 
 test('quiet tools log but never toast', async () => {
   const t = setup();
-  const step = t.thread('rl').steps.find((s) => s.status === 'ready')!;
-  await t.ok('set_step_status', { stepId: step.id, status: 'running' });
+  await t.ok('report_turn', { decisions: ['Kept the cookie name'], left: [] });
   assert.equal(t.toasts.length, 0);
-  assert.equal(lastLog(t.thread('rl')), `Claude marked "${step.title}" running`);
+  assert.equal(lastLog(t.thread('rl')), 'Claude reported');
 });
 
 test('another profile is out of reach and bad args are errors, not throws', async () => {
@@ -363,6 +478,15 @@ test('another profile is out of reach and bad args are errors, not throws', asyn
 
 // {THREADS}
 
+test('the settings chat is invisible to other threads, and open_settings_chat drafts into it', async () => {
+  const t = setup();
+  t.state().threads.push({ ...t.thread('rl'), id: 'settings', title: 'Change the model', orbitSlot: undefined, isSettingsChat: true });
+  assert.ok(!(await t.ok('list_threads')).some((x: { id: string }) => x.id === 'settings'));
+  assert.match(await t.err('rename_thread', { threadId: 'settings', title: 'x' }), /No thread settings/);
+  await t.ok('open_settings_chat', { prompt: 'use opus by default' });
+  assert.deepEqual(t.drafted, [{ spaceId: 'latitude', prompt: 'use opus by default' }]);
+});
+
 test('list_threads filters by status, pinned and project inside the profile', async () => {
   const t = setup();
   assert.deepEqual((await t.ok('list_threads')).map((x: { id: string }) => x.id), ['rl', 'limit', 'adm', 'e2e', 'auth', 'onb', 'viz']);
@@ -371,10 +495,11 @@ test('list_threads filters by status, pinned and project inside the profile', as
   assert.equal((await t.ok('list_threads', { project: 'nope' })).length, 0);
 });
 
-test('get_thread returns goal, steps, last activity, PRs and what waits on you', async () => {
+test("get_thread returns goal, its agent's plan, last activity, PRs and what waits on you", async () => {
   const r = await setup().ok('get_thread', { threadId: 'e2e' });
   assert.equal(r.id, 'e2e');
-  assert.ok(r.steps.length && r.lastActivity.length <= 5 && Array.isArray(r.pullRequests) && Array.isArray(r.waitingOnUser));
+  assert.ok(r.plan.length && r.lastActivity.length <= 5 && Array.isArray(r.pullRequests) && Array.isArray(r.waitingOnUser));
+  assert.deepEqual(Object.keys(r.plan[0]), ['title', 'status']);
 });
 
 test('rename_thread renames and says from what', async () => {
@@ -472,56 +597,18 @@ test('delete_thread with approval removes the thread everywhere, and the worktre
 
 // {GOALS}
 
-test('get_goal returns step ids', async () => {
+test("get_goal returns the goal and what done means, not the agent's plan", async () => {
   const r = await setup().ok('get_goal');
   assert.equal(r.threadId, 'rl');
-  assert.ok(r.steps.some((s: { id: string }) => s.id === 'rl5'));
+  assert.ok(r.goal && Array.isArray(r.criteria));
+  assert.equal(r.steps, undefined);
 });
 
-test('set_step_status sets the status as the agent and rejects unknown steps', async () => {
-  const t = setup();
-  await t.ok('set_step_status', { stepId: 'rl5', status: 'done' });
-  assert.equal(t.thread('rl').steps.find((s) => s.id === 'rl5')!.status, 'done');
-  assert.match(await t.err('set_step_status', { stepId: 'nope', status: 'done' }), /No step nope/);
-});
-
-test('add_step lands as a plan step by the agent, not a goal revision', async () => {
-  const t = setup();
-  const before = t.thread('rl').revisions.length;
-  await t.ok('add_step', { title: 'Document the limits' });
-  const added = t.thread('rl').steps.find((s) => s.title === 'Document the limits')!;
-  assert.deepEqual([added.addedBy, t.thread('rl').revisions.length], ['claude', before]);
-});
-
-test('edit_goal changes the goal text and criteria as one revision', async () => {
-  const t = setup();
-  const before = t.thread('rl').revisions.length;
-  await t.ok('edit_goal', { goal: 'Rate limits on every public route', criteria: [{ stepId: 'rl6', text: 'Returns 429', command: 'pnpm test' }] });
-  assert.equal(t.thread('rl').goal, 'Rate limits on every public route');
-  assert.deepEqual(t.thread('rl').steps.find((s) => s.id === 'rl6')!.acceptance, { text: 'Returns 429', command: 'pnpm test' });
-  assert.equal(t.thread('rl').revisions.length, before + 1);
-  assert.match(await t.err('edit_goal', { goal: 'Rate limits on every public route' }), /Nothing changed/);
-});
-
-test('reorder_steps puts listed steps first', async () => {
-  const t = setup();
-  await t.ok('reorder_steps', { order: ['rl9', 'rl8'] });
-  const open = t.thread('rl').steps.filter((s) => s.status === 'ready').map((s) => s.id);
-  assert.deepEqual(open.slice(0, 2), ['rl9', 'rl8']);
-});
-
-test('drop_step drops an open step and refuses a done one', async () => {
-  const t = setup();
-  await t.ok('drop_step', { stepId: 'rl9', reason: 'out of scope' });
-  assert.equal(t.thread('rl').steps.find((s) => s.id === 'rl9')!.status, 'dropped');
-  assert.match(await t.err('drop_step', { stepId: 'rl1' }), /done steps stay/);
-});
-
-test('settle_goal drops the open steps and settles the thread', async () => {
+test('settle_goal settles the thread with the reason', async () => {
   const t = setup();
   await t.ok('settle_goal', { threadId: 'adm', reason: 'Shipped elsewhere' });
   assert.equal(t.thread('adm').status, 'settled');
-  assert.ok(t.thread('adm').steps.filter((s) => s.id !== 'ad1').every((s) => s.status === 'dropped'));
+  assert.ok(t.thread('adm').activity.some((a) => a.text === 'Goal settled by Claude: Shipped elsewhere'));
 });
 
 // {LAYOUT}
@@ -586,14 +673,13 @@ test('browser_tabs lists only the caller’s browser tabs', async () => {
   assert.deepEqual(await t.ok('browser_tabs', {}, 'adm'), [], 'adm has no tabs in this setup');
 });
 
-test('browser_open navigates the active tab; a non-local origin is logged and toasted', async () => {
+test('browser_open navigates the active tab; a non-local origin is logged, never toasted', async () => {
   const t = setup();
   const r = await t.ok('browser_open', { url: 'localhost:5173/settings' });
   assert.equal(r.url, 'http://localhost:5173/settings');
-  assert.equal(t.toasts.length, 0, 'local: no toast');
   const out = await t.ok('browser_open', { url: 'example.com' });
   assert.match(out.changed, /outside your machine/);
-  assert.match(t.toasts.at(-1)!.text, /opened example.com/);
+  assert.equal(t.toasts.length, 0);
 });
 
 test('browser tools drive an off-screen thread without moving the user', async () => {
@@ -617,27 +703,33 @@ test('browser_click needs a snapshot ref, and clicks locally without asking', as
   assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }]);
 });
 
-test('browser_click on a submit button on a non-local origin asks first', async () => {
+test('browser_click asks only before an irreversible click on another site, and not again once the site is trusted', async () => {
   const t = setup({ url: 'https://shop.example.com/' });
   await t.ok('browser_snapshot');
-  const pending = t.call('browser_click', { ref: 'e1' });
+  await t.ok('browser_click', { ref: 'e1' });
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'an ordinary submit (Save) just goes');
+  const pending = t.call('browser_click', { ref: 'e3' });
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(t.card().title, /Submit a form on shop.example.com/);
-  assert.deepEqual(t.acts, [], 'nothing clicked yet');
-  decideTool(t.card().tool!.callId, { isApproved: true });
+  assert.equal(t.card().title, 'Click "Delete project" on shop.example.com?');
+  assert.equal(t.card().detail, 'Claude wants to click "Delete project" on shop.example.com. It may not be undoable there.');
+  assert.deepEqual(t.card().tool!.options, [{ id: 'trust', label: "Don't ask again on shop.example.com in this thread" }]);
+  decideTool(t.card().tool!.callId, { isApproved: true, options: ['trust'] });
   await pending;
-  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }]);
+  await t.ok('browser_snapshot');
+  await t.ok('browser_click', { ref: 'e3' });
+  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }, { kind: 'click', ref: 'e3' }, { kind: 'click', ref: 'e3' }], 'trusted: the second one went without a card');
 });
 
-test('browser_type types locally, asks on other origins, and is blocked there under Changes', async () => {
+test('browser_type fills fields anywhere without asking; only a password on another site asks, which Changes blocks', async () => {
   const t = setup();
   await t.ok('browser_snapshot');
   await t.ok('browser_type', { ref: 'e2', text: 'me@example.com', submit: true });
   assert.deepEqual(t.acts, [{ kind: 'type', ref: 'e2', text: 'me@example.com' }, { kind: 'press', key: 'Enter' }]);
   const remote = setup({ url: 'https://example.com/', control: 'changes' });
   await remote.ok('browser_snapshot');
-  assert.match(await remote.err('browser_type', { ref: 'e2', text: 'x' }), /Everything, asking before deletes and settings/);
-  assert.deepEqual(remote.acts, []);
+  await remote.ok('browser_type', { ref: 'e2', text: 'x' });
+  assert.match(await remote.err('browser_type', { ref: 'e4', text: 'hunter2' }), /Everything, asking before deletes and settings/);
+  assert.deepEqual(remote.acts, [{ kind: 'type', ref: 'e2', text: 'x' }]);
 });
 
 test('browser_press sends the key', async () => {
@@ -721,7 +813,7 @@ test('browser_upload takes worktree files directly and asks for anything outside
 
 test('browser_eval runs on a local page without asking and logs the origin and the script', async () => {
   const t = setup();
-  const r = await t.ok('browser_eval', { script: 'window.store.getState().count' });
+  const r = await t.ok('browser_eval', { purpose: 'Read the page', script: 'window.store.getState().count' });
   assert.equal(r.value, '42');
   assert.deepEqual(t.evals, ['window.store.getState().count']);
   assert.equal(t.state().queue.some((q) => q.tool), false, 'no card');
@@ -729,33 +821,105 @@ test('browser_eval runs on a local page without asking and logs the origin and t
   assert.equal(t.toasts.length, 0);
 });
 
-test('browser_eval on another origin needs approval and shows the whole script', async () => {
+test('browser_eval on another origin needs approval, saying in words what it does, then the whole script', async () => {
   const t = setup({ url: 'https://bank.example.com/' });
-  const pending = t.call('browser_eval', { script: 'document.cookie' });
+  const pending = t.call('browser_eval', { purpose: 'Read the page', script: 'document.cookie' });
   await new Promise((r) => setTimeout(r, 0));
-  assert.match(t.card().title, /Run a script on https:\/\/bank.example.com\?/);
+  assert.equal(t.card().title, 'Read the page');
+  assert.match(t.card().detail, /bank\.example\.com, run as you, signed in/);
   assert.equal(t.card().code, 'document.cookie');
   assert.deepEqual(t.evals, [], 'nothing ran while the card waits');
   decideTool(t.card().tool!.callId, { isApproved: false });
   assert.match((await pending).text, /denied/);
   assert.deepEqual(t.evals, []);
-  const again = t.call('browser_eval', { script: 'document.title' });
+  const again = t.call('browser_eval', { purpose: 'Read the page', script: 'document.title' });
   await new Promise((r) => setTimeout(r, 0));
   decideTool(t.card().tool!.callId, { isApproved: true });
   assert.equal(JSON.parse((await again).text).value, '42');
 });
 
 test('browser_eval is blocked under Read only, and under Changes on other origins', async () => {
-  assert.match(await setup({ control: 'read' }).err('browser_eval', { script: '1' }), /Read only/);
+  assert.match(await setup({ control: 'read' }).err('browser_eval', { purpose: 'Read the page', script: '1' }), /Read only/);
   const remote = setup({ url: 'https://example.com/', control: 'changes' });
-  assert.match(await remote.err('browser_eval', { script: '1' }), /Everything, asking before deletes and settings/);
+  assert.match(await remote.err('browser_eval', { purpose: 'Read the page', script: '1' }), /Everything, asking before deletes and settings/);
   assert.deepEqual(remote.evals, []);
 });
 
 test('browser_eval passes the page error back and still logs the run', async () => {
   const t = setup();
-  assert.match(await t.err('browser_eval', { script: 'throw new Error("nope")' }), /nope/);
+  assert.match(await t.err('browser_eval', { purpose: 'Read the page', script: 'throw new Error("nope")' }), /nope/);
   assert.match(lastLog(t.thread('rl')), /\(threw\)$/);
+});
+
+test('browser_batch runs its steps in order as their own calls, logged in the thread, and stops at the first failure', async () => {
+  const t = setup();
+  const r = await t.ok('browser_batch', { actions: [{ name: 'browser_snapshot' }, { name: 'browser_click', input: { ref: 'e1' } }, { name: 'browser_screenshot' }] });
+  assert.deepEqual(r.steps.map((s: { name: string }) => s.name), ['browser_snapshot', 'browser_click', 'browser_screenshot']);
+  assert.deepEqual(r.image, { data: 'iVBORw0KGgo=', mimeType: 'image/png' });
+  assert.equal(lastLog(t.thread('rl')), 'Claude clicked "Save"');
+  const failed = JSON.parse(await t.err('browser_batch', { actions: [{ name: 'browser_press', input: { key: 'Tab' } }, { name: 'browser_forward' }, { name: 'browser_press', input: { key: 'Enter' } }] }));
+  assert.deepEqual([failed.steps.length, failed.failed], [1, { step: 2, name: 'browser_forward', error: 'Nothing to go forward to in this tab' }]);
+  assert.deepEqual(t.acts, [{ kind: 'click', ref: 'e1' }, { kind: 'press', key: 'Tab' }], 'Enter never ran');
+});
+
+test('browser_batch steps ask where they would alone; a denial stops the batch', async () => {
+  const t = setup({ url: 'https://store.example.org/' });
+  await t.ok('browser_snapshot');
+  const pending = t.call('browser_batch', { actions: [{ name: 'browser_click', input: { ref: 'e3' } }, { name: 'browser_press', input: { key: 'Enter' } }] });
+  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  assert.equal(t.card().title, 'Click "Delete project" on store.example.org?');
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  const result = await pending;
+  assert.equal(result.isError, true);
+  assert.match(JSON.parse(result.text).failed.error, /denied/);
+  assert.deepEqual(t.acts, [], 'neither the click nor Enter ran');
+});
+
+test('browser_handoff gives you the tab with a card, keeps the agent off it, and returns when you click Done', async () => {
+  const t = setup();
+  const pending = t.call('browser_handoff', { task: 'Sign in to GitHub' });
+  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual([t.card().title, t.card().detail, t.card().tool!.isHandoff], ['Sign in to GitHub', 'Claude carries on when you click Done.', true]);
+  assert.deepEqual([t.pages.get('rl/tab-1')!.hasTakenOver, t.pages.get('rl/tab-1')!.handoff], [true, 'Sign in to GitHub']);
+  assert.match(await t.err('browser_snapshot'), /The user has this tab for "Sign in to GitHub"/);
+  decideTool(t.card().tool!.callId, { isApproved: true });
+  const r = JSON.parse((await pending).text);
+  assert.deepEqual([r.done, r.url], ['you', 'http://localhost:5173/']);
+  assert.equal(lastLog(t.thread('rl')), 'Finished: Sign in to GitHub');
+  assert.deepEqual([t.pages.get('rl/tab-1')!.hasTakenOver, t.pages.get('rl/tab-1')!.handoff], [false, null]);
+  await t.ok('browser_snapshot');
+});
+
+test('browser_handoff returns by itself once doneWhen holds, and refuses one that already does', async () => {
+  const t = setup();
+  assert.match(await t.err('browser_handoff', { task: 'Sign in', doneWhen: { text: 'Hello' } }), /already holds/);
+  let isSignedIn = false;
+  t.env.browser.waitFor = async () => ({ isMet: isSignedIn, waitedMs: 1 });
+  const pending = t.call('browser_handoff', { task: 'Sign in', doneWhen: { url: '/dashboard' } });
+  await new Promise((r) => setTimeout(r, 600));
+  assert.equal(t.state().queue.some((q) => q.tool?.isHandoff), true, 'still waiting');
+  isSignedIn = true;
+  assert.equal(JSON.parse((await pending).text).done, 'detected');
+  assert.equal(t.state().queue.some((q) => q.tool), false, 'the card closed itself');
+});
+
+test('browser_handoff returns when you give the tab back in the pane; Cancel tells the agent', async () => {
+  const t = setup();
+  const given = t.call('browser_handoff', { task: 'Enter the code' });
+  await new Promise((r) => setTimeout(r, 0));
+  t.env.pages.update('rl/tab-1', { hasTakenOver: false });
+  assert.equal(JSON.parse((await given).text).done, 'you');
+  const cancelled = t.call('browser_handoff', { task: 'Enter the code' });
+  for (let i = 0; i < 20 && !t.state().queue.some((q) => q.tool); i++) await new Promise((r) => setTimeout(r, 0));
+  decideTool(t.card().tool!.callId, { isApproved: false });
+  assert.equal((await cancelled).isError, true);
+  assert.equal(lastLog(t.thread('rl')), 'Stopped waiting: Enter the code');
+  assert.equal(t.pages.get('rl/tab-1')!.handoff, null);
+});
+
+test('browser_batch refuses nesting and non-browser tools before running them', async () => {
+  const t = setup();
+  for (const name of ['browser_batch', 'settle_thread']) assert.match(JSON.parse(await t.err('browser_batch', { actions: [{ name, input: {} }] })).failed.error, /browser_\* tools other than browser_batch/);
 });
 
 test('names in the table are verb_noun', () => {
@@ -788,13 +952,13 @@ test('get_settings reads every app setting and your profile’s, with values, al
   assert.equal(byKey(r, 'alert.needs-you').value, 'true');
   assert.equal(byKey(r, 'quietFrom').value, '22');
   assert.deepEqual([byKey(r, 'permissions').section, byKey(r, 'permissions').group], ['general', 'New threads'], 'the page and its titled section');
-  assert.deepEqual([byKey(r, 'idleAlert.gaps').section, byKey(r, 'idleAlert.gaps').group], ['notifications', 'Idle threads']);
-  for (const key of ['agentControl', 'permissions', 'threadModels', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
+  assert.deepEqual([byKey(r, 'idleAlert.needs-you').section, byKey(r, 'idleAlert.needs-you').group], ['notifications', 'Idle threads']);
+  for (const key of ['agentControl', 'permissions', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
   assert.equal(byKey(r, 'profile.name').value, 'Latitude');
   assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');
   assert.equal(byKey(r, 'profile.claude.mcp.github').value, 'true');
   assert.equal(byKey(r, 'profile.claude.skill.review').value, 'true');
-  assert.match(byKey(r, 'profile.claude.instructions').value!, /^Be brief\.\nAPI_TOKEN=\[redacted\]/);
+  assert.equal(r.settings.some((s: SettingView) => s.key.endsWith('.instructions')), false, 'instructions are files in the profile folder, not a setting');
   assert.deepEqual(byKey(r, 'profile.claude.mcp.linear').server!.needs, ['needs LINEAR_TOKEN']);
   assert.equal(byKey(r, 'profile.claude.mcp.github').server!.tools, undefined, 'servers start only for section: profile');
   for (const secret of SECRETS) assert.doesNotMatch(JSON.stringify(r), new RegExp(secret), 'secret leaked');
@@ -826,26 +990,23 @@ test('update_settings puts one live widget in the thread with every suggestion g
       { key: 'diffStyle', value: 'split' },
       { key: 'profile.name', value: 'Latitude HQ' },
       { key: 'profile.claude.mcp.github', value: 'false' },
-      { key: 'profile.claude.instructions', value: 'Be brief.\nRun pnpm test before you push.\n' },
     ],
     reason: 'Set up this profile for the refactor',
   });
-  assert.deepEqual(r.shown, ['Diffs', 'Name', 'MCP server github', 'CLAUDE.md']);
+  assert.deepEqual(r.shown, ['Diffs', 'Name', 'MCP server github']);
   assert.match(r.note, /won't get their answer/);
   assert.equal(r.changed, undefined, 'nothing changed, so no log line or toast');
   const { settings, title, kind } = widget(t);
   assert.equal(kind, 'setting');
-  assert.equal(title, 'Claude suggests 4 setting changes');
+  assert.equal(title, 'Claude suggests 3 setting changes');
   assert.equal(settings!.reason, 'Set up this profile for the refactor');
   assert.deepEqual(settings!.changes.map((c) => [c.key, c.profileId]), [
     ['diffStyle', undefined],
     ['profile.name', 'latitude'],
     ['profile.claude.mcp.github', 'latitude'],
-    ['profile.claude.instructions', 'latitude'],
   ]);
   assert.equal(settings!.before.diffStyle, 'unified');
   assert.equal(settings!.before['latitude/profile.name'], 'Latitude');
-  assert.match(settings!.before['latitude/profile.claude.instructions'], /^\d+:-?\d+$/, 'instructions are kept as a hash, never their text');
   assert.equal(t.thread('rl').activity.at(-1)!.card!.id, widget(t).id, 'it sits in the thread where the agent asked');
   assert.equal(t.prefs().diffStyle, 'unified');
   assert.equal(t.profiles()[0].name, 'Latitude');
@@ -867,7 +1028,7 @@ test('update_settings validates every change before showing anything', async () 
   assert.match(await one('claude.path', '/tmp/evil'), /the user's alone/);
   assert.match(await one('diffStyle', 'split', 'latitude'), /isn't a profile setting/);
   assert.match(await one('profile.icon', 'skull'), /isn't a value of profile.icon/);
-  assert.match(await one('profile.claude.instructions', 'API_TOKEN=[redacted]'), /still holds \[redacted\]/);
+  assert.match(await one('profile.claude.instructions', 'Be brief.'), /No setting profile.claude.instructions/);
   assert.match(await one('claude.model', 'claude-gpt-9'), /isn't offered/);
   assert.match(await t.err('update_settings', { changes: [{ key: 'diffStyle', value: 'split' }, { key: 'diffStyle', value: 'split' }], reason: 'x' }), /appears twice/);
   assert.equal(t.state().queue.length, 0, 'no widget for a bad call');
@@ -946,6 +1107,68 @@ test('add_mcp_server fills the server into a live widget, refusing anything that
   assert.equal(t.settings.config.claude.servers.length, 2, 'nothing added');
 });
 
+test('connect_account connects in the agent\'s tab with the secret read by main; list_connectors reads accounts and the directory', async () => {
+  const t = setup();
+  const list = await t.ok('list_connectors');
+  assert.deepEqual(list.accounts, [{ service: 'Linear', url: 'https://mcp.linear.app/mcp', account: 'work', isSignedIn: true, isOnProfile: true }]);
+  const byId = (id: string) => list.directory.find((c: { id: string }) => c.id === id);
+  assert.equal(byId('linear').needsOwnApp, undefined, 'registers itself');
+  assert.equal(byId('github').needsOwnApp, undefined, "Mochi's own app");
+  assert.equal(byId('google-workspace').needsOwnApp, true);
+  assert.equal(byId('slack').setup.openUrl, 'https://api.slack.com/apps');
+  const fallback = decodeURIComponent(byId('slack').setup.steps.at(-1).match(/manifest_json=(\S+)/)[1]);
+  assert.deepEqual(JSON.parse(fallback).oauth_config.redirect_urls, ['https://relay.test/oauth/callback']);
+  assert.equal(JSON.parse(fallback).settings.is_mcp_enabled, true);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: 'GOCSPX-abc' }), /looks like a client secret/);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '7575573b1c2a4400de6115a61b557acc' }), /looks like a client secret/);
+  assert.match(await t.err('connect_account', { connector: 'slack', clientId: '8325458480016.12371342152640' }), /Pass secretRef/);
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'work' }), /already a work account on Linear/);
+  assert.match(await t.err('connect_account', { connector: 'http://evil.example/mcp' }), /neither a directory id/);
+  assert.equal(t.connects.length, 0);
+  await t.ok('browser_snapshot');
+  const r = await t.ok('connect_account', { connector: 'slack', alias: 'acme', clientId: '8325458480016.12371342152640', secretRef: 'e2' });
+  assert.deepEqual(t.connects[0], { spaceId: 'latitude', account: { url: 'https://mcp.slack.com/mcp', alias: 'acme', clientId: '8325458480016.12371342152640' }, options: { inPane: true, secretFrom: { viewId: t.pages.get('rl/tab-1')!.hostId, ref: 'e2' } } });
+  assert.equal(r.url, 'https://slack.com/oauth/v2_user/authorize?client_id=x');
+  assert.match(r.next, /list_connectors/);
+  assert.equal(JSON.stringify(r).includes('secret"'), false, 'no secret in the result');
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', configTokenRef: 'e1' }), /Slack only/);
+  await t.ok('connect_account', { connector: 'slack', alias: 'beta', configTokenRef: 'e1', tabId: 'tab-1' });
+  assert.deepEqual(t.connects[1], { spaceId: 'latitude', account: { url: 'https://mcp.slack.com/mcp', alias: 'beta' }, options: { inPane: true, slackTokenFrom: { viewId: t.pages.get('rl/tab-1')!.hostId, ref: 'e1' } } });
+});
+
+test('run_setup runs the recipe on the agent\'s tab and says what comes next for each outcome; update_setup_step logs the change', async () => {
+  const t = setup();
+  assert.match(await t.err('run_setup', { connector: 'linear' }), /no setup recipe for linear/);
+  t.setupResults.push(
+    { status: 'needs', stepId: 'workspace', param: 'workspace', question: 'Which Slack workspace?', options: ['Acme', 'Myself'] },
+    { status: 'done', captured: ['slackConfigToken'], params: { workspace: 'Acme' } },
+    { status: 'stopped', stepId: 'generate', note: 'Opens the dialog', kind: 'click', target: { role: 'button', name: 'Generate Token' }, nextStepId: 'workspace', reason: 'Timeout', params: { workspace: 'Acme' } },
+    { status: 'stopped', stepId: 'project-ready', note: 'Waits', kind: 'wait', nextStepId: 'next', reason: 'Google shows no project mochi-123456.', params: { suffix: '123456' }, isExpected: true },
+    { status: 'needs', stepId: 'owner', param: 'owner', question: 'Which Google account should own your Mochi app?', options: [] },
+  );
+  // Several workspaces: Mochi asks on its own card with one-of options, then resumes from the step that asked.
+  const { result, card } = await t.asking('run_setup', { connector: 'slack' });
+  assert.equal(card.title, 'Which Slack workspace?');
+  assert.equal(card.tool!.pick, 'one');
+  assert.deepEqual(card.tool!.options, [{ id: 'Acme', label: 'Acme' }, { id: 'Myself', label: 'Myself' }]);
+  decideTool(card.tool!.callId, { isApproved: true, options: ['Acme'] });
+  const done = JSON.parse((await result).text);
+  assert.match(done.next, /connect_account with connector "slack".*fromSetup: true/);
+  assert.equal(t.setupRuns[0].viewId, t.pages.get('rl/tab-1')!.hostId, "the agent's active tab");
+  assert.deepEqual(t.setupRuns[1].options, { params: { workspace: 'Acme' }, fromStep: 'workspace' });
+  assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => e.text === 'Which Slack workspace? Acme'), 'the card records the answer');
+  const stopped = await t.ok('run_setup', { connector: 'slack', params: { workspace: 'Acme' } });
+  assert.match(stopped.next, /Do step "generate".*update_setup_step.*fromStep "workspace".*params \{"workspace":"Acme"\}/);
+  const expected = await t.ok('run_setup', { connector: 'slack' });
+  assert.match(expected.next, /^Google shows no project mochi-123456\. Tell the user.*params \{"suffix":"123456"\} each time/, "the recipe's own reason, said as is");
+  const owner = await t.ok('run_setup', { connector: 'slack' });
+  assert.match(owner.next, /^Ask the user in chat: Which Google account should own your Mochi app\?\. Then run_setup again with params\.owner/, 'nothing to pick from: the agent asks, no card');
+  const fixed = await t.ok('update_setup_step', { connector: 'slack', stepId: 'generate', target: { role: 'button', name: 'Generate new token' } });
+  assert.deepEqual(fixed.after, { role: 'button', name: 'Generate new token' });
+  assert.ok(t.state().threads.find((th) => th.id === 'rl')!.activity.some((e) => /updated slack's setup step "generate": button "generate" → button "Generate new token"/.test(e.text)));
+  assert.match(await t.err('connect_account', { connector: 'linear', alias: 'x', fromSetup: true }), /for Slack and Google Workspace only/);
+});
+
 test('remove_mcp_server asks on a delete card naming the server, with the diff, and writes through the stale check', async () => {
   const t = setup();
   const denied = await t.asking('remove_mcp_server', { name: 'linear' });
@@ -1005,6 +1228,34 @@ test('Read only and Changes block every settings suggestion and delete with no w
   }
 });
 
+test("update_plan is the thread's plan, even read-only: resent lists move steps on and drop what's left out", async () => {
+  const t = setup({ control: 'read' });
+  const plan = () => t.thread('rl').steps.filter((s) => s.status !== 'dropped').map((s) => [s.title, s.status]);
+  await t.ok('update_plan', { scope: 'continuation', items: [{ title: 'Read the limiter', status: 'in_progress' }, { title: 'Add Retry-After', status: 'pending' }, { title: 'Run the tests', status: 'pending' }] });
+  assert.deepEqual(plan().slice(0, 3), [['Read the limiter', 'running'], ['Add Retry-After', 'ready'], ['Run the tests', 'ready']]);
+  await t.ok('update_plan', { scope: 'continuation', items: [{ title: 'Read the limiter', status: 'completed' }, { title: 'Add Retry-After', status: 'in_progress' }] });
+  assert.deepEqual(plan().slice(0, 2), [['Read the limiter', 'done'], ['Add Retry-After', 'running']]);
+  assert.equal(t.thread('rl').steps.find((s) => s.title === 'Run the tests')?.status, 'dropped');
+  await t.ok('update_plan', { scope: 'continuation', items: [{ title: 'Add Retry-After', status: 'in_progress' }, { title: 'Run the tests', status: 'pending' }] });
+  const status = (title: string) => t.thread('rl').steps.find((s) => s.title === title && s.status !== 'dropped')?.status;
+  await t.ok('update_plan', { advance: true });
+  assert.deepEqual([status('Add Retry-After'), status('Run the tests')], ['done', 'running']);
+  await t.ok('update_plan', { advance: true });
+  assert.deepEqual([status('Add Retry-After'), status('Run the tests')], ['done', 'done'], 'advance after the last step finishes the plan');
+  assert.match(await t.err('update_plan', {}), /advance/);
+});
+
+test('update_plan needs a scope with items; new_task shows no plan and offers your message for a new thread', async () => {
+  const t = setup({ control: 'read' });
+  const steps = t.thread('rl').steps.length;
+  assert.match(await t.err('update_plan', { items: [{ title: 'Read the limiter', status: 'in_progress' }] }), /scope/);
+  const result = await t.call('update_plan', { scope: 'new_task', items: [{ title: 'Write the billing page', status: 'in_progress' }] });
+  assert.match(result.text, /Don't start it/);
+  assert.equal(t.thread('rl').steps.length, steps, 'no plan for work that may move');
+  const asked = t.thread('rl').activity.findLast((e) => e.who === 'you' && e.kind === 'message');
+  assert.deepEqual([driftPending('rl')?.text, driftPending('rl')?.isFromAgent], [asked?.text, true]);
+});
+
 test('claim_criterion records evidence; report and get_report give the turn as data', async () => {
   const t = setup();
   t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: { ...draftFrom(t.thread('rl')), criteria: [{ text: '429s carry Retry-After' }] } });
@@ -1017,6 +1268,8 @@ test('claim_criterion records evidence; report and get_report give the turn as d
   assert.equal(r.threadId, 'adm');
   const mine = await t.ok('get_report');
   assert.deepEqual([mine.criteria[0].claimed, mine.report.question, mine.report.decisions], ['curl -i shows Retry-After: 30', 'Switch the 429 body to JSON?', ['Kept the old 429 body']]);
+  await t.ok('report_turn', { decisions: [], left: [], next: 'Commit the Retry-After fix?', options: [{ label: ' Commit ', reply: 'Commit it.' }, { label: 'Change the plan', reply: 'First:', isDraft: true }] });
+  assert.deepEqual(t.thread('rl').report?.options, [{ label: 'Commit', reply: 'Commit it.' }, { label: 'Change the plan', reply: 'First:', isDraft: true }], "the agent's own buttons, trimmed");
 });
 
 test('open_pr pushes, then opens a PR whose body Mochi writes from the goal and its checks', async () => {
@@ -1070,7 +1323,9 @@ test('propose_goal waits for Accept by default; Keep leaves the draft; Apply wit
       ['Chip #133 shows its state in the app', undefined],
     ],
   );
-  assert.match(await t.err('propose_goal', proposal), /already has the goal you proposed/);
+  // What done means can change later: a new proposal waits for you again, the accepted goal stands meanwhile.
+  assert.match((await t.ok('propose_goal', { ...proposal, goal: 'Only the home folder reads PR state' })).status, /Waiting for the user/);
+  assert.deepEqual([t.thread('rl').goal, t.thread('rl').proposal?.goal], [proposal.goal, 'Only the home folder reads PR state']);
 
   const kept = setup();
   await kept.ok('propose_goal', proposal);
@@ -1102,4 +1357,63 @@ test("a goal only Mochi drafted is flagged in get_goal, and claim_criterion and 
   await t.ok('report_turn', { decisions: ['Fixed a - b'], left: [] }, id);
   t.env.dispatch({ type: 'edit-goal', threadId: 'rl', draft: draftFrom(t.thread('rl')) });
   assert.equal((await t.ok('get_goal')).isDraft, undefined, 'a goal you wrote is never a draft');
+});
+
+function connectorEntry(name: string, url: string, alias: string): LibraryEntry {
+  return { id: `${name}-${alias}`, kind: 'connector', name, title: name[0].toUpperCase() + name.slice(1), description: '', targets: ['claude', 'codex'], isEnabled: true, profileIds: ['latitude'], source: url, icon: null, contents: null, remotes: [], unsupported: [], isLinked: true, alias, autoUpdate: null, updatedAt: null, commit: null, placements: [] };
+}
+
+
+test('dev MCP starts tasks from an empty build and exposes paginated evidence and next moves', async () => {
+  const t = setup();
+  const call = (name: string, args: Record<string, unknown>) => runDevTool({ id: 'dev', threadId: '__dev__', name, args }, t.env);
+  t.env.dispatch({ type: 'delete', threadIds: t.state().threads.map((s) => s.id) });
+  assert.deepEqual(JSON.parse((await call('inspect', {})).text).threads, []);
+  const started = await call('start_task', { prompt: 'Explain 2 + 2', provider: 'codex' });
+  assert.ok(!started.isError, started.text);
+  const { id } = JSON.parse(started.text);
+  const first = await call('inspect', { threadId: id, limit: 1 });
+  const detail = JSON.parse(first.text);
+  assert.equal(detail.transcript[0].text, 'Explain 2 + 2');
+  assert.ok('verdict' in detail && 'nextAction' in detail && 'plan' in detail);
+  assert.equal((await call('continue_task', { threadId: id, text: 'Continue' })).isError, true, 'cannot steer a running task');
+  t.env.dispatch({ type: 'agent', event: { threadId: id, type: 'turn-end', status: 'done' } });
+  const sent = await call('continue_task', { threadId: id, text: 'Now explain 3 + 3' });
+  assert.ok(!sent.isError, sent.text);
+  assert.ok(t.thread(id).activity.some((e) => e.text === 'Now explain 3 + 3'));
+  assert.equal((await call('inspect', { threadId: id, offset: -1 })).isError, true);
+  assert.equal((await call('inspect', { threadId: 'missing' })).isError, true);
+  assert.equal((await call('delete_thread', {})).isError, true);
+  assert.equal((await call('accept_goal', { threadId: id })).isError, true);
+  t.env.dispatch({ type: 'goal-propose', threadId: id, goal: 'Explain addition', criteria: [{ text: 'Addition explained' }], by: 'codex', isApplied: false });
+  assert.ok(!(await call('accept_goal', { threadId: id })).isError);
+  assert.equal(t.thread(id).proposal?.state, 'accepted');
+  assert.equal(t.thread(id).criteria?.[0].check, undefined);
+});
+
+
+test('new tasks await a researched working-agent goal and can report while acceptance is pending', async () => {
+  const t = setup();
+  const { id } = await t.ok('create_thread', { prompt: 'Fix the retry bug after investigating the transport' });
+  const empty = await t.ok('get_goal', {}, id);
+  assert.equal(empty.goal, '');
+  assert.deepEqual(empty.criteria, []);
+  assert.match(empty.next, /research.*propose_goal/);
+  await t.ok('propose_goal', { goal: 'Reconnect the transport without duplicate retries', criteria: [{ text: 'Reconnect retries once' }] }, id);
+  assert.equal(t.thread(id).goal, '', 'only the user accepts a waiting proposal');
+  assert.match((await t.ok('get_goal', {}, id)).next, /waiting for acceptance/);
+  await t.ok('report_turn', { summary: 'Fixed duplicate retries', decisions: [], left: [] }, id);
+  t.env.dispatch({ type: 'goal-proposal', threadId: id, decision: 'accept' });
+  const criterion = t.thread(id).criteria![0];
+  await t.ok('claim_criterion', { criterionId: criterion.id, evidence: 'Transport retry check passed' }, id);
+  assert.equal(t.thread(id).goal, 'Reconnect the transport without duplicate retries');
+});
+
+test('report_turn works with goals off, on a thread with no goal', async () => {
+  const t = setup();
+  t.env.prefs.set({ goals: false });
+  // Every demo thread has a goal; a thread started since goals retired has none.
+  Object.assign(t.thread('rl'), { goal: undefined, proposal: undefined });
+  await t.ok('report_turn', { summary: 'Built the wheel', decisions: [], left: [] });
+  assert.equal(t.thread('rl').report?.summary, 'Built the wheel');
 });

@@ -133,7 +133,6 @@ function ScopeToggles({ member }: { member: MemberInfo }) {
       type="multiple"
       size="sm"
       variant="outline"
-      spacing={1}
       value={member.scopes}
       aria-label={`What ${member.name} may do here`}
       onValueChange={(next) => void host.remote.setDeviceScopes(member.id, SCOPES.filter((s) => next.includes(s))).catch((e: Error) => toast.error('Couldn’t change what it may do', { description: ipcMessage(e) }))}

@@ -42,3 +42,14 @@ test('the last profile stays and the list stops at the cap', () => {
   while (getProfiles().length < MAX_PROFILES) addProfile('More');
   assert.throws(() => addProfile('One too many'), /up to 9/);
 });
+
+test('a copy keeps the source’s GitHub login and native choices under its own id and icon', () => {
+  for (const p of getProfiles().slice(1)) removeProfile(p.id);
+  const from = getProfiles()[0];
+  updateProfile(from.id, { github: 'octo', nativeOff: ['claude:default:skill:user:ui'] });
+  const copy = addProfile('Copy', getProfiles()[0]);
+  assert.notEqual(copy.id, from.id);
+  assert.equal(copy.github, 'octo');
+  assert.deepEqual(copy.nativeOff, ['claude:default:skill:user:ui']);
+  assert.equal(addProfile('Empty').github, '');
+});

@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { MotionConfig } from 'motion/react';
 import { ThemeProvider } from 'next-themes';
-import { toast } from '@/toast/store';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/toast/Toaster';
-import { queueToast, useResolvedQueueToasts } from './QueueToast';
+import { useResolvedQueueToasts } from './QueueToast';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { DesignPage } from './design/DesignPage';
 import { Orbit } from './Orbit';
@@ -24,10 +23,12 @@ import { ReviewView } from './review/ReviewView';
 import { useSettingsRoute } from './settings/open';
 import { usePrefs } from './settings/prefs';
 import { SettingsPage } from './settings/SettingsPage';
+import { AgentSettingsProvider } from './settings/AgentSettings';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { useSettingsShortcut } from './settings/useSettingsShortcut';
 import { HarnessProvider, useHarness } from './store';
 import { ScheduleLayer } from './schedule/ScheduleDialog';
+import { RenameLayer } from './RenameDialog';
 import { GoalEditorLayer } from './goals/GoalEditor';
 import { useIdleScrollbars } from './useIdleScrollbars';
 import { useCheckoutRecovery, useWorktreeManager, useWorktreeCleanup } from './git/useWorktreeManager';
@@ -39,6 +40,7 @@ import { DeviceApprovalLayer } from './remote/DeviceApproval';
 import { useRemoteThreadRoute } from './remote/open';
 import { RemoteThreadView } from './remote/RemoteThreadView';
 import { MachinesProvider } from './remote/useMachines';
+import { useLibraryNamesLoader } from './library/useLibrary';
 
 // An exported replay page (`src/replay/page.ts`): the app shows only that replay, with no store of its own.
 const embeddedReplay = readEmbeddedReplay();
@@ -68,6 +70,7 @@ export function App() {
               <PhotoViewer />
               <FileViewer />
               <ScheduleLayer />
+              <RenameLayer />
               <GoalEditorLayer />
               <DeviceApprovalLayer />
               <Toaster />
@@ -86,12 +89,18 @@ function AppZoomChip() {
   return <ZoomChip zoom={zoom} onReset={() => void host.windows.resetZoom()} className="fixed top-2 left-1/2 z-50 -translate-x-1/2 app-no-drag" />;
 }
 
-/** Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css). */
+/**
+ * Settings › Appearance's Reduce motion: Motion components through MotionConfig, CSS through `data-reduce-motion` (the `motion-*` variants in index.css).
+ * Its Animations go to CSS as `data-animations`.
+ */
 function ReducedMotion({ children }: { children: React.ReactNode }) {
-  const { reduceMotion } = usePrefs();
+  const { reduceMotion, animations } = usePrefs();
   useEffect(() => {
     document.documentElement.dataset.reduceMotion = reduceMotion;
   }, [reduceMotion]);
+  useEffect(() => {
+    document.documentElement.dataset.animations = animations.join(' ');
+  }, [animations]);
   return <MotionConfig reducedMotion={MOTION_CONFIG[reduceMotion]}>{children}</MotionConfig>;
 }
 
@@ -112,7 +121,7 @@ function Shell() {
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
   const toggleSearch = useCallback(() => setSearchOpen((o) => !o), []);
   useGlobalKeys(toggleSearch);
-  useOverlapToasts();
+  useLibraryNamesLoader(useHarness().state.spaceId);
   useResolvedQueueToasts();
   useWorktreeManager();
   useCheckoutRecovery();
@@ -123,7 +132,7 @@ function Shell() {
   const isRemoteOpen = !!useRemoteThreadRoute();
   useSettingsShortcut();
 
-  return (
+  const content = (
     <SidebarProvider className="h-svh min-h-0" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
       {/* `isolate`: the page's own z-indexed layers stay under the fixed sidebar while it slides over them; dialogs portal to body, outside it. */}
       <SidebarInset className="isolate order-last min-h-0 overflow-hidden">
@@ -143,17 +152,5 @@ function Shell() {
       <CommandPalette open={isSearchOpen} onOpenChange={setSearchOpen} />
     </SidebarProvider>
   );
-}
-
-function useOverlapToasts() {
-  const { state } = useHarness();
-  const seen = useRef(new Set(state.queue.map((q) => q.id)));
-  useEffect(() => {
-    for (const q of state.queue) {
-      if (seen.current.has(q.id)) continue;
-      seen.current.add(q.id);
-      if (q.kind !== 'overlap') continue;
-      toast('Overlap caught before any duplicate work', { description: q.title, ...queueToast(q.id) });
-    }
-  }, [state.queue]);
+  return isSettingsOpen ? <AgentSettingsProvider>{content}</AgentSettingsProvider> : content;
 }

@@ -46,8 +46,8 @@ export async function rewindThread(
   }
   dispatch(
     target.kind === 'message'
-      ? { type: 'rewind-message', threadId, index: target.index, mode, forkAt }
-      : { type: 'rewind', threadId, n: target.n, mode, forkAt },
+      ? { type: 'rewind-message', threadId, index: target.index, mode, forkAt, ms: Date.now() }
+      : { type: 'rewind', threadId, n: target.n, mode, forkAt, ms: Date.now() },
   );
   return { checkpoint, entry };
 }

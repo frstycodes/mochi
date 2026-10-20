@@ -2,12 +2,16 @@ import { agentImage } from '../chat/images.ts';
 import { projectRoot, threadCwd } from '../host/cwd.ts';
 import type { AgentImage, AgentStartOptions, StartWorkspace } from '../host/types/agent.ts';
 import { firstPrompt, type Provider, type Thread } from '../model.ts';
-import { startWorkspace, workspaceMode } from '../git/workspace.ts';
+import { handoffBlocker } from '../rewind/handoff.ts';
+import { isUnstarted, startWorkspace, workspaceMode } from '../git/workspace.ts';
 import { worktreePath } from '../git/worktrees.ts';
 import { sourcePrompt } from '../sources.ts';
+import { startTitleRequest } from '../utility/titles.ts';
 import type { Action, State } from '../store/index.tsx';
+import { autofixSend } from '../schedule/slice.ts';
 import { agentOptions, controlsOf, DEFAULT_CONTROLS, type ThreadControls } from './controls.ts';
-import { backgroundPrompt, backgroundSession, isRunning, withNotes } from './subagents.ts';
+import { WAKE_PROMPT } from './subThreadNotes.ts';
+import { backgroundPrompt, backgroundSession, isRunning, reportOf, withNotes } from './subagents.ts';
 
 export const CONTINUE_PROMPT = 'Continue where you left off.';
 
@@ -15,8 +19,8 @@ export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
   | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string; steer?: boolean }
   | { method: 'compact'; threadId: string; focus: string }
-  | { method: 'interrupt' | 'stop' | 'settle'; threadId: string }
-  | { method: 'stopSubagent'; threadId: string; subagentId: string };
+  | { method: 'interrupt' | 'stop' | 'settle' | 'keepTitle'; threadId: string }
+  | { method: 'stopTask'; threadId: string; taskId: string };
 
 /** The `host.agent` calls an action makes for live threads; demo threads make none. `next` is the state after the action. */
 export function agentCalls(state: State, action: Action, next: () => State): AgentCall[] {
@@ -32,8 +36,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const images = sent.length > 0 ? { images: sent } : {};
       return next()
         .threads.filter((t) => t.live && !state.threads.some((s) => s.id === t.id))
-        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: startWorkspace(t.repo), ...(first.skills && { skills: first.skills }), ...images }));
+        .flatMap((t) => start(t, t.providers[0], controlsOf(t), first.prompt ?? firstPrompt(t), { workspace: firstWorkspace(t), ...(first.skills && { skills: first.skills }), ...images }));
     }
+    case 'rename':
+      return state.threads.find((t) => t.id === action.threadId)?.live ? [{ method: 'keepTitle', threadId: action.threadId }] : [];
     case 'send': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (!thread?.live) return [];
@@ -48,6 +54,16 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
     }
     case 'compact':
       return hasAgent(state, action.threadId) ? [{ method: 'compact', threadId: action.threadId, focus: action.focus }] : [];
+    case 'autofix':
+    case 'autofix-set': {
+      // Only what the reducer turned into a message (an event while Auto-fix is on, or turning it on) goes to the agent.
+      const before = state.threads.find((t) => t.id === action.threadId);
+      const said = next().threads.find((t) => t.id === action.threadId)?.activity.at(-1);
+      if (!before || !said?.autofix || said === before.activity.at(-1)) return [];
+      const event = action.type === 'autofix' ? action.event : { kind: 'enabled' as const, pr: action.pr, url: before.prs.find((p) => p.number === action.pr)?.url };
+      const sent = event.kind !== 'stopped' && autofixSend(state, action.threadId, event);
+      return sent ? agentCalls(state, sent, next) : [];
+    }
     case 'source-add': {
       const thread = state.threads.find((t) => t.id === action.threadId);
       if (thread?.sources.some((s) => s.label === action.source.label)) return [];
@@ -71,9 +87,10 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       return threadId && hasAgent(state, threadId) ? [{ method: 'stop', threadId }] : [];
     }
     // Main shuts down everything the thread started (its agents, terminals, dev servers), running or not.
+    // Its open sub-threads at every depth settle with it (`threads.ts`), so their agents stop too.
     case 'settle': {
-      const thread = state.threads.find((t) => t.id === action.threadId);
-      return thread?.live && thread.status !== 'settled' ? [{ method: 'settle', threadId: thread.id }] : [];
+      const after = next().threads;
+      return state.threads.filter((t) => t.live && t.status !== 'settled' && after.find((n) => n.id === t.id)?.status === 'settled').map((t) => ({ method: 'settle' as const, threadId: t.id }));
     }
     case 'delete':
       return action.threadIds.filter((id) => isLive(state, id)).map((threadId) => ({ method: 'settle' as const, threadId }));
@@ -86,26 +103,32 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       const controls = agent.provider === thread.providers[0] ? controlsOf(thread) : DEFAULT_CONTROLS[agent.provider];
       // Its own worktree branches off the thread's branch, so it starts from the thread's work.
       const workspace: StartWorkspace | undefined = agent.hasOwnWorktree && thread.repo ? { mode: 'worktree', branch: `${thread.repo.branch}-${agent.id}`, base: thread.repo.branch } : undefined;
-      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider), ...(agent.model && { model: agent.model }), ...(workspace && { workspace }) };
+      const options: AgentStartOptions = { provider: agent.provider, spaceId: thread.spaceId, cwd, prompt: backgroundPrompt(agent), ...agentOptions(controls, agent.provider, thread.spaceId), ...(agent.model && { model: agent.model }), ...(workspace && { workspace }) };
       return [{ method: 'start', threadId: backgroundSession(thread.id, agent.id), options }];
     }
     case 'bg-stop': {
       const subagent = state.threads.find((t) => t.id === action.threadId)?.subagents?.find((s) => s.id === action.subagentId);
       if (!subagent || !isRunning(subagent)) return [];
       if (subagent.sessionId) return [{ method: 'stop', threadId: subagent.sessionId }];
-      return hasAgent(state, action.threadId) ? [{ method: 'stopSubagent', threadId: action.threadId, subagentId: subagent.id }] : [];
+      return hasAgent(state, action.threadId) ? [{ method: 'stopTask', threadId: action.threadId, taskId: subagent.id }] : [];
     }
-    case 'agent': {
-      // A background agent's session ends with its first turn: the report is in, nobody will send it more.
-      const { event } = action;
-      if (event.type !== 'turn-end' && event.type !== 'limit') return [];
-      const isBackground = state.threads.some((t) => t.subagents?.some((s) => s.sessionId === event.threadId && isRunning(s)));
-      return isBackground ? [{ method: 'stop', threadId: event.threadId }] : [];
+    case 'task-stop': {
+      const task = state.threads.find((t) => t.id === action.threadId)?.backgroundTasks?.find((t) => t.id === action.taskId);
+      return task?.status === 'running' && hasAgent(state, action.threadId) ? [{ method: 'stopTask', threadId: action.threadId, taskId: task.id }] : [];
     }
+    case 'delegate-report': {
+      const subagent = state.threads.find((t) => t.id === action.threadId)?.subagents?.find((s) => s.id === action.subagentId);
+      if (!subagent?.sessionId) return [];
+      // Its session ends with its first turn: the report is in, nobody will send it more.
+      const report = agentCalls(state, { type: 'send', threadId: action.threadId, text: reportOf(subagent), reason: '', steers: true }, next);
+      return [{ method: 'stop', threadId: subagent.sessionId }, ...report];
+    }
+    case 'subthread-wake':
+      return agentCalls(state, { type: 'send', threadId: action.threadId, text: WAKE_PROMPT, reason: '' }, next);
     case 'handoff': {
       // GAP: a one-step handoff keeps the thread's agent; one agent per thread can't run a single step elsewhere yet.
       const thread = state.threads.find((t) => t.id === action.threadId);
-      if (action.stepId || !thread?.live || thread.providers[0] === action.to) return [];
+      if (!thread?.live || handoffBlocker(thread, action.to)) return [];
       // No model: the adapter picks the Settings default (Claude) or the harness's own (Codex).
       return [...(thread.live.isDetached ? [] : [{ method: 'stop' as const, threadId: thread.id }]), ...start(thread, action.to, DEFAULT_CONTROLS[action.to], action.summary, { model: undefined })];
     }
@@ -117,15 +140,27 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
 function start(thread: Thread, provider: Provider, controls: ThreadControls, prompt: string, extra?: Partial<Pick<AgentStartOptions, 'cwd'>> & Pick<AgentStartOptions, 'model' | 'resume' | 'forkAt' | 'useApiKey' | 'workspace' | 'images' | 'skills'>): AgentCall[] {
   const cwd = runFolder(thread);
   if (cwd === undefined) return [];
-  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider), ...extra } }];
+  return [{ method: 'start', threadId: thread.id, options: { provider, spaceId: thread.spaceId, cwd, prompt, ...agentOptions(controls, provider, thread.spaceId), ...(thread.isSettingsChat && { isSettingsChat: true }), ...extra } }];
 }
 
-/** How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder. Undefined when it can't run. */
+/** A new thread's first start: its branch is its own, and main names it from the first message before the agent starts. */
+function firstWorkspace(thread: Thread): StartWorkspace | undefined {
+  const workspace = startWorkspace(thread.repo);
+  if (workspace?.mode !== 'worktree' || workspace.isExisting) return workspace;
+  const titlePrompt = startTitleRequest(thread);
+  return { ...workspace, isNew: true, ...(titlePrompt && { titlePrompt }) };
+}
+
+/**
+ * How the scheduler starts this thread's agent: as a first start would, in the thread's worktree or project folder, named from its
+ * first message before its first run (`triggerAfter` drops that once a run started). Undefined when it can't run.
+ */
 export function scheduledStart(thread: Thread): Omit<AgentStartOptions, 'prompt'> | undefined {
   const cwd = runFolder(thread);
   const provider = thread.session?.provider ?? thread.providers[0];
   if (cwd === undefined) return;
-  return { provider, spaceId: thread.spaceId, cwd, workspace: startWorkspace(thread.repo), ...agentOptions(controlsOf(thread), provider) };
+  const workspace = isUnstarted(thread) ? firstWorkspace(thread) : startWorkspace(thread.repo);
+  return { provider, spaceId: thread.spaceId, cwd, workspace, ...agentOptions(controlsOf(thread), provider, thread.spaceId) };
 }
 
 /** A project with no folder on disk can't run (undefined); a folderless chat (null) runs in a folder main makes for it. */

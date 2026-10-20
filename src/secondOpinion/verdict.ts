@@ -1,5 +1,5 @@
 import type { GitDiff } from '../host/types/git.ts';
-import type { Provider, Thread } from '../model.ts';
+import { isMet, type Provider, type Thread } from '../model.ts';
 
 export const VERDICTS = ['approve', 'concerns', 'block'] as const;
 export const SEVERITIES = ['high', 'medium', 'low'] as const;
@@ -100,16 +100,16 @@ function extractJson(text: string): unknown {
 }
 
 /** The review prompt: goal, open criteria and the diff against base, cut at `maxChars` with a note saying so. */
-export function reviewPrompt(thread: Pick<Thread, 'title' | 'goal' | 'steps'>, diff: Pick<GitDiff, 'base' | 'branch' | 'files'>, maxChars = MAX_DIFF_CHARS) {
+export function reviewPrompt(thread: Pick<Thread, 'title' | 'goal' | 'criteria'>, diff: Pick<GitDiff, 'base' | 'branch' | 'files'>, maxChars = MAX_DIFF_CHARS) {
   const patch = diff.files.map((f) => (f.binary ? `Binary file ${f.path} changed\n` : f.patch)).join('\n');
   const isTruncated = patch.length > maxChars;
   const shown = isTruncated ? patch.slice(0, maxChars) : patch;
-  const criteria = thread.steps.filter((s) => s.status !== 'dropped').map((s) => `- [${s.status === 'done' ? 'x' : ' '}] ${s.title}${s.acceptance ? ` (accept: ${s.acceptance.text})` : ''}`);
+  const criteria = (thread.criteria ?? []).map((c) => `- [${isMet(c) ? 'x' : ' '}] ${c.text}${c.command ? ` (checked by \`${c.command}\`)` : ''}`);
   const prompt = [
     'You are giving a second opinion on another coding agent\'s work. You are read-only: do not edit files or run commands that change anything.',
     `Thread: ${thread.title}`,
     `Goal: ${thread.goal}`,
-    criteria.length ? `Goal steps:\n${criteria.join('\n')}` : '',
+    criteria.length ? `Done when:\n${criteria.join('\n')}` : '',
     `Diff of ${diff.branch} against ${diff.base} (${diff.files.length} files):`,
     isTruncated ? `NOTE: the diff is truncated to its first ${maxChars} characters; read the remaining files in the working tree if they matter.` : '',
     `\`\`\`diff\n${shown || '(no changes)'}\n\`\`\``,

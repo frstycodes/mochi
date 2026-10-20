@@ -19,7 +19,8 @@ import { askSideChat } from '../sidechat/ask.ts';
 import { chatFor } from '../store/sidechat.ts';
 import { closeShell, openShell, readShell, shellOf } from './terminals.ts';
 import { pinAt, pinnedThreads, togglePin } from '../reorder.ts';
-import { handoffSummary } from '../rewind/handoff.ts';
+import { handoffBlocker } from '../rewind/handoff.ts';
+import { handOffHere } from '../rewind/runHandoff.ts';
 import type { Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { answeredBy, markAnswered } from './tap.ts';
@@ -61,10 +62,12 @@ export async function runRemoteCommand(command: RemoteCommand, env: CommandEnv):
     case 'fork':
       dispatch({ type: 'fork', threadId: thread.id, point: command.point });
       return ok;
-    case 'handoff':
-      if (thread.providers[0] === command.to) return fail('The thread is already on that agent');
-      dispatch({ type: 'handoff', threadId: thread.id, to: command.to, summary: handoffSummary(thread, command.to, undefined, null) });
+    case 'handoff': {
+      const blocker = handoffBlocker(thread, command.to);
+      if (blocker) return fail(blocker);
+      handOffHere(thread, dispatch, command.to);
       return ok;
+    }
     case 'rename':
       dispatch({ type: 'rename', threadId: thread.id, title: command.title });
       return ok;

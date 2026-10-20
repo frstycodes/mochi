@@ -1,47 +1,21 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Plus, Download, Flash, FolderOpen, Info, Trash } from '@/icons';
+import { Info } from '@/icons';
 import { toast } from '@/toast/store';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { host } from '../host';
-import type { ConfigPreview, ProfileConfig, ProviderConfig } from '../host/types/settings';
+import type { ConfigPreview, ProfileConfig } from '../host/types/settings';
 import type { Provider, Space } from '../model';
-import { useProfiles, updateProfile } from '../profiles';
 import { useHarness, useView } from '../store';
-import { OverflowIcon, ProviderMark } from '../ui';
-import { INSTRUCTIONS_FILE, parseServerCommand, parseServerJson, serverSummary, toClaude, type ConfigChange, type McpEntry, type McpServerDef } from './agentConfig';
+import { parseServerCommand, parseServerJson, toClaude, type ConfigChange, type McpServerDef } from './agentConfig';
 import { ipcMessage } from './AgentSettings';
 import { FileDiffs } from './FileDiffs';
-import { HARNESS_IDS, HARNESSES } from './harnesses';
-import { takeRequestedHarness, useSettingsRoute } from './open';
+import { HARNESSES } from './harnesses';
 import { SettingsRow } from './parts';
-
-/**
- * A profile's instructions, MCP servers and skills, read from and written to its accounts' own config files so Claude
- * Code and Codex load them natively. Every write is shown as a diff first and backed up.
- */
-export function AgentConfigRows({ profile }: { profile: Space }) {
-  const { config, error, reload } = useProfileConfig(profile.id);
-  const { review, dialog } = useConfigWriter(profile.id, reload);
-  if (error) return <SettingsRow label="Agent setup" description={<span className="text-destructive">{error}</span>} />;
-  return (
-    <>
-      <InstructionsRow profile={profile} config={config} review={review} />
-      <McpRow profile={profile} config={config} review={review} />
-      <SkillsRow profile={profile} config={config} review={review} />
-      <ImportRow profile={profile} review={review} />
-      {dialog}
-    </>
-  );
-}
 
 export type Review = (title: string, changes: ConfigChange[]) => Promise<boolean>;
 
@@ -106,176 +80,6 @@ export function useConfigWriter(spaceId: string, onWritten: () => void) {
 
 // {ROWS}
 
-/** `proposal` starts `provider`'s editor open on that text, unsaved; `children` show under the editor. */
-export function InstructionsRow({ profile, config, review, provider: first = 'claude', proposal, children }: { profile: Space; config?: ProfileConfig; review: Review; provider?: Provider; proposal?: string; children?: ReactNode }) {
-  const isSynced = !!profile.syncInstructions;
-  const [provider, setProvider] = useState<Provider>(first);
-  const [drafts, setDrafts] = useState<Partial<Record<Provider, string>>>(proposal === undefined ? {} : { [first]: proposal });
-  const shown = isSynced ? 'claude' : provider;
-  const saved = config?.[shown].instructions.text ?? '';
-  const text = drafts[shown] ?? saved;
-  const isEdited = drafts[shown] !== undefined && drafts[shown] !== saved;
-  const differs = !!config && config.claude.instructions.text !== config.codex.instructions.text;
-  const save = async () => {
-    const targets = isSynced ? HARNESS_IDS : [provider];
-    const isWritten = await review(`Save ${targets.map((p) => INSTRUCTIONS_FILE[p]).join(' and ')}`, targets.map((p) => ({ kind: 'instructions', provider: p, text })));
-    if (isWritten) setDrafts({});
-  };
-  const project = config?.[shown].projectInstructions;
-  return (
-    <ExpandRow
-      id={`${profile.id}-instructions`}
-      isOpenAtFirst={proposal !== undefined}
-      label="Instructions"
-      description={!config ? 'Reading…' : isSynced ? 'CLAUDE.md and AGENTS.md, kept the same' : <PerHarness text={(p) => `${INSTRUCTIONS_FILE[p]} ${lineCount(config[p].instructions.text)}`} />}
-    >
-      {!isSynced && <HarnessPicker value={provider} onChange={setProvider} />}
-      <Textarea
-        aria-label={`${INSTRUCTIONS_FILE[shown]} for ${profile.name}`}
-        value={text}
-        onChange={(e) => setDrafts((d) => ({ ...d, [shown]: e.target.value }))}
-        placeholder={`No ${INSTRUCTIONS_FILE[shown]} yet. What should every ${HARNESSES[shown].name} session in ${profile.name} know?`}
-        spellCheck={false}
-        className="max-h-96 min-h-40 font-mono text-xs leading-5"
-      />
-      <p className="type-caption text-muted-foreground [overflow-wrap:anywhere]">
-        {isSynced ? `${config?.claude.instructions.path ?? ''} and ${config?.codex.instructions.path ?? ''}` : config?.[shown].instructions.path}
-        {!!project && `. The project adds ${project}.`}
-      </p>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <label className="flex flex-1 items-center gap-2 type-meta">
-          <Switch checked={isSynced} onCheckedChange={(on) => updateProfile(profile.id, { syncInstructions: on })} />
-          Keep CLAUDE.md and AGENTS.md the same
-        </label>
-        {isEdited && (
-          <Button variant="ghost" size="sm" onClick={() => setDrafts({})}>
-            Discard edits
-          </Button>
-        )}
-        <Button variant="outline" size="sm" disabled={!config || (!isEdited && !(isSynced && differs))} onClick={() => void save()}>
-          {isSynced && differs && !isEdited ? 'Sync files…' : 'Review and save…'}
-        </Button>
-      </div>
-      {isSynced && differs && <p className="type-caption text-warning">The two files differ. Saving writes this text (from CLAUDE.md) to both.</p>}
-      {children}
-    </ExpandRow>
-  );
-}
-
-function McpRow({ profile, config, review }: { profile: Space; config?: ProfileConfig; review: Review }) {
-  const rowId = `${profile.id}-mcp`;
-  const [provider, setProvider] = useRequestedHarness(rowId);
-  const [isAdding, setAdding] = useState(false);
-  const current = config?.[provider];
-  const other = HARNESS_IDS.find((p) => p !== provider)!;
-  return (
-    <ExpandRow id={rowId} label="MCP servers" description={!config ? 'Reading…' : <PerHarness text={(p) => countLabel(config[p].mcpServers.filter((s) => s.scope === 'user').length, 'server')} />}>
-      <HarnessPicker value={provider} onChange={setProvider} />
-      {!!current && <AccountNote config={current} />}
-      {!!current?.mcpServers.length && (
-        <ul className="flex flex-col gap-1">
-          {current.mcpServers.map((server) => (
-            <McpServerItem key={`${server.scope}-${server.def.name}`} spaceId={profile.id} provider={provider} server={server} review={review} />
-          ))}
-        </ul>
-      )}
-      {current && !current.mcpServers.length && <p className="type-meta text-muted-foreground">No MCP servers on this account yet.</p>}
-      {isAdding && <AddServerForm provider={provider} taken={current?.mcpServers.map((s) => s.def.name) ?? []} review={review} onDone={() => setAdding(false)} />}
-      <div className="flex flex-wrap gap-2">
-        {!isAdding && (
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
-            <Plus data-icon="inline-start" />
-            Add server
-          </Button>
-        )}
-        <Button variant="ghost" size="sm" onClick={() => void review(`Import MCP servers from ${HARNESSES[other].name}`, [{ kind: 'import', from: { spaceId: profile.id, provider: other }, provider, parts: ['mcp'] }])}>
-          <Download data-icon="inline-start" />
-          Import from <ProviderMark provider={other} size={14} />
-          {HARNESSES[other].name}
-        </Button>
-      </div>
-    </ExpandRow>
-  );
-}
-
-function McpServerItem({ spaceId, provider, server, review }: { spaceId: string; provider: Provider; server: McpEntry; review: Review }) {
-  const { def, enabled, scope, needs } = server;
-  const [test, setTest] = useState<{ state: 'running' } | { state: 'ok'; tools: string[] } | { state: 'failed'; error: string }>();
-  const isProject = scope === 'project';
-  const run = () => {
-    setTest({ state: 'running' });
-    host.settings.testMcp(spaceId, provider, def.name).then(
-      ({ tools }) => setTest({ state: 'ok', tools }),
-      (e: Error) => setTest({ state: 'failed', error: ipcMessage(e) }),
-    );
-  };
-  return (
-    <li>
-      <Item variant="muted" size="xs" className="flex-wrap">
-        <ItemContent className="min-w-0">
-          <ItemTitle className="flex w-full min-w-0 flex-wrap items-center gap-1.5">
-            <span className="truncate">{def.name}</span>
-            {isProject && <Badge variant="outline">Project</Badge>}
-          </ItemTitle>
-          {!!needs.length && <ItemDescription className="line-clamp-none text-warning [overflow-wrap:anywhere]">Needs {needs.join(', ')} in the environment</ItemDescription>}
-          <ItemDescription className="truncate font-mono text-xs" title={serverSummary(def)}>
-            {serverSummary(def)}
-          </ItemDescription>
-        </ItemContent>
-        <ItemActions>
-          <Switch
-            aria-label={`${def.name} on`}
-            checked={enabled}
-            disabled={isProject}
-            onCheckedChange={(on) => void review(`${on ? 'Turn on' : 'Turn off'} ${def.name}`, [{ kind: 'mcp-enabled', provider, name: def.name, enabled: on }])}
-          />
-          {!isProject && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={`${def.name} actions`}>
-                  <OverflowIcon vertical />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={run}>
-                  <Flash />
-                  Test connection
-                </DropdownMenuItem>
-                <DropdownMenuItem variant="destructive" onSelect={() => void review(`Remove ${def.name}`, [{ kind: 'mcp-remove', provider, name: def.name }])}>
-                  <Trash />
-                  Remove server
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </ItemActions>
-        {!!test && <TestResult test={test} />}
-      </Item>
-    </li>
-  );
-}
-
-function TestResult({ test }: { test: { state: 'running' } | { state: 'ok'; tools: string[] } | { state: 'failed'; error: string } }) {
-  if (test.state === 'running') return <p className="basis-full type-caption text-muted-foreground">Starting the server…</p>;
-  if (test.state === 'failed') return <p className="basis-full font-mono text-xs whitespace-pre-wrap text-destructive [overflow-wrap:anywhere]">{test.error}</p>;
-  return (
-    <div className="flex basis-full flex-col gap-1">
-      <p className="type-caption text-success">Connected, {countLabel(test.tools.length, 'tool')}</p>
-      {!!test.tools.length && (
-        <ul className="flex flex-wrap gap-1">
-          {test.tools.map((t) => (
-            <li key={t}>
-              <Badge variant="secondary" className="font-mono">
-                {t}
-              </Badge>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /** An MCP server an agent suggested, in Settings' add form as JSON (so its env and headers come along), until it's added. */
 export function SuggestedServerRow({ profile, provider, server, children }: { profile: Space; provider: Provider; server: McpServerDef; children?: ReactNode }) {
   const { config, reload } = useProfileConfig(profile.id);
@@ -321,7 +125,7 @@ function AddServerForm({ provider, taken, review, onDone, initialJson }: { provi
         void submit();
       }}
     >
-      <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
+      <ToggleGroup type="single" size="sm" variant="outline" value={mode} onValueChange={(v) => v && setMode(v as typeof mode)}>
         <ToggleGroupItem value="command">Command</ToggleGroupItem>
         <ToggleGroupItem value="json">JSON</ToggleGroupItem>
       </ToggleGroup>
@@ -347,179 +151,7 @@ function AddServerForm({ provider, taken, review, onDone, initialJson }: { provi
   );
 }
 
-function SkillsRow({ profile, config, review }: { profile: Space; config?: ProfileConfig; review: Review }) {
-  const rowId = `${profile.id}-skills`;
-  const [provider, setProvider] = useRequestedHarness(rowId);
-  const current = config?.[provider];
-  const other = HARNESS_IDS.find((p) => p !== provider)!;
-  const importFolder = () =>
-    host.fs.pickFolder(current?.instructions.path).then(
-      (folder) => folder && void review(`Import ${folder.split(/[\\/]/).pop()}`, [{ kind: 'skill-import', provider, folder }]),
-      (e: Error) => toast.error('Could not open the folder picker', { description: e.message }),
-    );
-  return (
-    <ExpandRow id={rowId} label="Skills" description={!config ? 'Reading…' : <PerHarness text={(p) => countLabel(config[p].skills.length, 'skill')} />}>
-      <HarnessPicker value={provider} onChange={setProvider} />
-      {!!current && <AccountNote config={current} />}
-      {!!current?.skills.length && (
-        <ul className="flex max-h-96 flex-col gap-1 overflow-y-auto">
-          {current.skills.map((skill) => (
-            <li key={skill.dir}>
-              <Item variant="muted" size="xs">
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="w-full truncate">{skill.name}</ItemTitle>
-                  {!!skill.description && <ItemDescription className="truncate">{skill.description}</ItemDescription>}
-                </ItemContent>
-                <ItemActions>
-                  <Switch
-                    aria-label={`${skill.name} on`}
-                    checked={skill.enabled}
-                    onCheckedChange={(on) => void review(`${on ? 'Turn on' : 'Turn off'} ${skill.name}`, [{ kind: 'skill-enabled', provider, name: skill.name, enabled: on }])}
-                  />
-                </ItemActions>
-              </Item>
-            </li>
-          ))}
-        </ul>
-      )}
-      {current && !current.skills.length && <p className="type-meta text-muted-foreground">No skills on this account yet.</p>}
-      {!!current?.plugins.length && <p className="type-caption text-muted-foreground">Plugins (managed in {HARNESSES[provider].name}): {current.plugins.join(', ')}</p>}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => void importFolder()} disabled={!host.isDesktop}>
-          <FolderOpen data-icon="inline-start" />
-          Import folder…
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => void review(`Import skills from ${HARNESSES[other].name}`, [{ kind: 'import', from: { spaceId: profile.id, provider: other }, provider, parts: ['skills'] }])}>
-          <Download data-icon="inline-start" />
-          Import from <ProviderMark provider={other} size={14} />
-          {HARNESSES[other].name}
-        </Button>
-      </div>
-    </ExpandRow>
-  );
-}
-
-const ALL_PARTS: ['instructions', 'mcp', 'skills'] = ['instructions', 'mcp', 'skills'];
-
-function ImportRow({ profile, review }: { profile: Space; review: Review }) {
-  const others = useProfiles().filter((p) => p.id !== profile.id);
-  const between = (from: Provider, to: Provider): ConfigChange => ({ kind: 'import', from: { spaceId: profile.id, provider: from }, provider: to, parts: ALL_PARTS });
-  const fromProfile = (other: Space) => HARNESS_IDS.map((provider): ConfigChange => ({ kind: 'import', from: { spaceId: other.id, provider }, provider, parts: ALL_PARTS }));
-  return (
-    <SettingsRow
-      label="Import"
-      description="Copies instructions, MCP servers and skills this profile lacks. Secrets stay behind."
-      control={
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Download data-icon="inline-start" />
-              Import from…
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuGroup>
-              {HARNESS_IDS.map((from) => {
-                const to = HARNESS_IDS.find((p) => p !== from)!;
-                return (
-                  <DropdownMenuItem key={from} onSelect={() => void review(`Import from ${HARNESSES[from].name} into ${HARNESSES[to].name}`, [between(from, to)])}>
-                    {HARNESSES[from].name}, into {HARNESSES[to].name}
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuGroup>
-            {!!others.length && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Another profile</DropdownMenuLabel>
-                {others.map((other) => (
-                  <DropdownMenuItem key={other.id} onSelect={() => void review(`Import from ${other.name}`, fromProfile(other))}>
-                    {other.name}
-                  </DropdownMenuItem>
-                ))}
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      }
-    />
-  );
-}
-
 // {PARTS}
-
-/** A row whose editor opens under it; a deep link to the row opens it too. */
-function ExpandRow({ id, label, description, isOpenAtFirst = false, children }: { id: string; label: string; description: ReactNode; isOpenAtFirst?: boolean; children: ReactNode }) {
-  const route = useSettingsRoute();
-  const [isOpen, setOpen] = useState(isOpenAtFirst);
-  useEffect(() => {
-    if (route?.settingId === id) setOpen(true);
-  }, [route?.nonce, route?.settingId, id]);
-  return (
-    <SettingsRow
-      id={id}
-      label={label}
-      description={description}
-      control={
-        <Button id={`setting-${id}`} variant="outline" size="sm" aria-expanded={isOpen} onClick={() => setOpen(!isOpen)}>
-          {isOpen ? 'Done' : 'Edit'}
-        </Button>
-      }
-    >
-      {isOpen && <div className="flex min-w-0 flex-col gap-2.5">{children}</div>}
-    </SettingsRow>
-  );
-}
-
-function useRequestedHarness(rowId: string) {
-  const route = useSettingsRoute();
-  const [provider, setProvider] = useState<Provider>('claude');
-  useEffect(() => {
-    if (route?.settingId !== rowId) return;
-    const requested = takeRequestedHarness();
-    if (requested) setProvider(requested);
-  }, [route?.nonce, route?.settingId, rowId]);
-  return [provider, setProvider] as const;
-}
-
-/** One summary per harness, each led by the harness's mark instead of its name. */
-function PerHarness({ text }: { text: (provider: Provider) => string }) {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-      {HARNESS_IDS.map((p) => (
-        <span key={p} className="inline-flex items-center gap-1">
-          <ProviderMark provider={p} size={12} />
-          {text(p)}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function HarnessPicker({ value, onChange }: { value: Provider; onChange: (provider: Provider) => void }) {
-  return (
-    <ToggleGroup type="single" size="sm" variant="outline" spacing={1} value={value} onValueChange={(v) => v && onChange(v as Provider)}>
-      {HARNESS_IDS.map((id) => (
-        <ToggleGroupItem key={id} value={id}>
-          <ProviderMark provider={id} size={14} />
-          {HARNESSES[id].name}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
-
-/** Which account the list belongs to: edits land in that account, so every profile linked to it sees them. */
-function AccountNote({ config }: { config: ProviderConfig }) {
-  return (
-    <>
-      <p className="type-caption text-muted-foreground">
-        {config.account.name} account{config.account.configDir ? ` in ${config.account.configDir}` : ''}. Changes apply to every profile on this account.
-      </p>
-      {!!config.error && <p className="type-caption text-destructive">{config.error}</p>}
-    </>
-  );
-}
 
 function ReviewDialog({ pending, isWriting, onWrite, onCancel }: { pending: { title: string; preview: ConfigPreview } | null; isWriting: boolean; onWrite: () => void; onCancel: () => void }) {
   const preview = pending?.preview;
@@ -570,5 +202,4 @@ function ReviewDialog({ pending, isWriting, onWrite, onCancel }: { pending: { ti
 
 const PLURAL = new Intl.PluralRules('en');
 const countLabel = (n: number, noun: string) => `${n} ${PLURAL.select(n) === 'one' ? noun : `${noun}s`}`;
-const lineCount = (text: string) => (text.trim() ? countLabel(text.trimEnd().split('\n').length, 'line') : 'empty');
 const writeLabel = ({ edits, copies }: ConfigPreview) => [edits.length && `Write ${countLabel(edits.length, 'file')}`, copies.length && `copy ${countLabel(copies.length, 'skill')}`].filter(Boolean).join(', ').replace(/^c/, 'C');

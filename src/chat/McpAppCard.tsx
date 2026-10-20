@@ -1,13 +1,15 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { WarningAlt } from '@/icons';
+import { Grid, WarningAlt } from '@/icons';
 import { AppBridge, buildAllowAttribute, PostMessageTransport, type McpUiHostContext, type McpUiResourceCsp, type McpUiResourcePermissions } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { withCsp } from './mcpApps';
 import { Skeleton } from '@/components/ui/skeleton';
 import { openExternally } from '../browser/systemBrowser';
 import { host } from '../host';
+import { namesNow, useLibraryNames } from '../library/names';
 import type { McpWidget, McpWidgetResource } from '../model';
 import type { ThemeSlot } from '../themes/model';
 import { useColorTheme } from '../themes/store';
+import { EmbedFrame } from '../viz/EmbedFrame';
 
 const HOST = { name: 'Mochi', version: '1' };
 /** Before the view reports its size. */
@@ -19,9 +21,13 @@ const START_HEIGHT = 160;
  */
 export function McpAppCard({ threadId, widget }: { threadId: string; widget: McpWidget }) {
   const { resource, error } = useWidgetResource(threadId, widget);
-  if (error) return <WidgetError server={widget.server} error={error} />;
-  if (!resource) return <Skeleton style={{ height: START_HEIGHT }} className="w-full rounded-xl" />;
-  return <McpAppFrame widget={widget} resource={resource} />;
+  const { title } = useLibraryNames().server(widget.server);
+  if (error) return <WidgetError title={title} error={error} />;
+  return (
+    <EmbedFrame icon={Grid} title={title}>
+      {resource ? <McpAppFrame widget={widget} resource={resource} /> : <Skeleton style={{ height: START_HEIGHT }} className="w-full rounded-none" />}
+    </EmbedFrame>
+  );
 }
 
 function useWidgetResource(threadId: string, { server, uri }: McpWidget) {
@@ -70,17 +76,17 @@ export function McpAppFrame({ widget, resource }: { widget: McpWidget; resource:
 
   useEffect(() => bridge.current?.setHostContext(hostContext(mode)), [mode]);
 
-  return <iframe ref={frame} title={`${widget.server} view`} sandbox="allow-scripts allow-forms" allow={buildAllowAttribute(ui?.permissions)} srcDoc={withCsp(resource.html, ui?.csp)} style={{ height }} className="block w-full" />;
+  return <iframe ref={frame} title={`${namesNow().server(widget.server).title} view`} sandbox="allow-scripts allow-forms" allow={buildAllowAttribute(ui?.permissions)} srcDoc={withCsp(resource.html, ui?.csp)} style={{ height }} className="block w-full" />;
 }
 
 const hostContext = (theme: ThemeSlot): McpUiHostContext => ({ theme, displayMode: 'inline', availableDisplayModes: ['inline'], platform: 'desktop', locale: navigator.language, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
 
-function WidgetError({ server, error }: { server: string; error: string }) {
+function WidgetError({ title, error }: { title: string; error: string }) {
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
       <WarningAlt aria-hidden className="mt-px size-3.5 shrink-0" />
       <p className="min-w-0">
-        Couldn't open {server}'s view
+        Couldn't open {title}'s view
         <span className="block text-subtle-foreground">{error}</span>
       </p>
     </div>

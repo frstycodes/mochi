@@ -26,18 +26,12 @@ export interface PickerProject {
 export function ProjectPicker({ value, projects, machine, onChange, onAdded }: { value: string | null; projects: PickerProject[]; machine?: FollowedMachine; onChange: (project: string | null) => void; onAdded?: () => void }) {
   const spaceId = useHarness().state.spaceId;
   const [isOpen, setOpen] = useState(false);
-  const [isAdding, setAdding] = useState(false);
   const chosen = projects.find((p) => p.ref === value);
   const name = value && (chosen?.name ?? value);
 
   const choose = (project: string | null) => {
     onChange(project);
     setOpen(false);
-    setAdding(false);
-  };
-  const added = (project: AddedProject) => {
-    onAdded?.();
-    choose(project.ref);
   };
 
   return (
@@ -45,7 +39,6 @@ export function ProjectPicker({ value, projects, machine, onChange, onAdded }: {
       open={isOpen}
       onOpenChange={(open) => {
         setOpen(open);
-        if (!open) setAdding(false);
         if (open && !machine) refreshProjects(spaceId);
       }}
     >
@@ -58,16 +51,27 @@ export function ProjectPicker({ value, projects, machine, onChange, onAdded }: {
         </MetaChip>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-0">
-        {isAdding ? <AddProject machine={machine} onBack={() => setAdding(false)} onAdded={added} /> : <ProjectList projects={projects} value={value} onChoose={choose} onAdd={() => setAdding(true)} />}
+        <ProjectChooser value={value} projects={projects} machine={machine} onChoose={choose} onAdded={onAdded} />
       </PopoverContent>
     </Popover>
   );
 }
 
-function ProjectList({ projects, value, onChoose, onAdd }: { projects: PickerProject[]; value: string | null; onChoose: (project: string | null) => void; onAdd: () => void }) {
+/** The searchable list with Add project… in place: the picker's popover, and the new-thread page's first step. */
+export function ProjectChooser({ value, projects, machine, placeholder = 'Search projects', onChoose, onAdded }: { value: string | null; projects: PickerProject[]; machine?: FollowedMachine; placeholder?: string; onChoose: (project: string | null) => void; onAdded?: () => void }) {
+  const [isAdding, setAdding] = useState(false);
+  const added = (project: AddedProject) => {
+    onAdded?.();
+    onChoose(project.ref);
+  };
+  if (isAdding) return <AddProject machine={machine} onBack={() => setAdding(false)} onAdded={added} />;
+  return <ProjectList projects={projects} value={value} placeholder={placeholder} onChoose={onChoose} onAdd={() => setAdding(true)} />;
+}
+
+function ProjectList({ projects, value, placeholder, onChoose, onAdd }: { projects: PickerProject[]; value: string | null; placeholder: string; onChoose: (project: string | null) => void; onAdd: () => void }) {
   return (
-    <Command>
-      <CommandInput placeholder="Search projects" />
+    <Command defaultValue={value ?? 'No project'}>
+      <CommandInput autoFocus placeholder={placeholder} />
       <CommandList className="max-h-72">
         <CommandEmpty>No project matches.</CommandEmpty>
         {projects.length > 0 && (

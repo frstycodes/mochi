@@ -5,13 +5,14 @@ import { toast } from '@/toast/store';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { sendMessage, setDriftPending, useDriftPending } from '../chat/outbox';
-import type { DriftKind } from '../drift';
+import { hasGoal, type DriftKind } from '../drift';
 import type { QueuedMessage, Thread } from '../model';
 import { isMod, isNav } from '../keys';
 import { goalProgress } from '../progress';
 import { setPrefs, usePrefs } from '../settings/prefs';
 import { Shortcut } from '../Shortcut';
 import { snapshot, useHarness } from '../store';
+import { openGoalEditor } from './GoalEditor';
 
 type BranchFrom = 'current' | 'base';
 
@@ -39,10 +40,16 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
   const keepHere = () => {
     if (!pending) return;
     resolve('off-goal', `${pending.verdict.reason}. You chose Keep here`);
-    dispatch({ type: 'drift-keep', threadId: thread.id });
+    // The agent stopped to ask, so it needs the answer; your own keeps instead teach the guard to go quiet.
+    if (pending.isFromAgent) dispatch({ type: 'send', threadId: thread.id, text: 'Do it here.', reason: 'Do it here from the new-thread suggestion' });
+    else dispatch({ type: 'drift-keep', threadId: thread.id });
   };
 
-  const addToGoal = () => resolve('scope-add', 'You chose Add to goal');
+  // The message already went to the agent; what's left is saying what done now means, in the goal's own editor.
+  const addToGoal = () => {
+    resolve('scope-add', 'You chose Add to goal');
+    openGoalEditor(thread.id);
+  };
 
   const newThread = () => {
     if (!pending) return;
@@ -52,7 +59,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
     if (thread.live?.isWorking) dispatch({ type: 'interrupt', threadId: thread.id });
     dispatch({ type: 'drift-new-thread', threadId: thread.id, prompt: pending.text, branchFrom });
     setPending(null);
-    toast(isGoalDone ? `Settled "${thread.title}" and started a new thread` : 'Started a new thread', {
+    toast(isGoalDone ? `Archived "${thread.title}" and started a new thread` : 'Started a new thread', {
       duration: UNDO_MS,
       description: isGoalDone ? 'Its goal was done.' : undefined,
       action: {
@@ -71,7 +78,7 @@ export function useDriftGuard(thread: Thread, onSent?: () => void) {
 export type DriftGuard = ReturnType<typeof useDriftGuard>;
 
 function isDone(thread: Thread) {
-  return goalProgress(thread).phase === 'ready';
+  return hasGoal(thread) && goalProgress(thread).phase === 'ready';
 }
 
 // Undo covers two changes at once, so it stays up longer than a plain toast.
@@ -85,7 +92,7 @@ function useRememberedBranchFrom() {
 
 /**
  * A quiet suggestion above the composer for a message that already went out. It never takes focus or keys from the
- * composer; once you Tab into it, 1 2 3 pick the buttons in order and Esc keeps the message here.
+ * composer; once you Tab into it, 1 2 3 pick the buttons in order and Esc keeps the message here (not for the agent's own suggestion).
  */
 export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread }) {
   const { pending } = guard;
@@ -93,7 +100,7 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (isMod(e) || isNav(e) || e.altKey) return;
-    const run = ({ 1: guard.newThread, 2: guard.keepHere, 3: guard.addToGoal, Escape: guard.keepHere } as Record<string, () => void>)[e.key];
+    const run = ({ 1: guard.newThread, 2: guard.keepHere, ...(hasGoal(thread) && { 3: guard.addToGoal }), ...(!pending?.isFromAgent && { Escape: guard.keepHere }) } as Record<string, () => void>)[e.key];
     if (!run) return;
     e.preventDefault();
     run();
@@ -128,14 +135,17 @@ export function DriftCard({ guard, thread }: { guard: DriftGuard; thread: Thread
               Move to new thread
               <CardShortcut keys={['1']} />
             </Button>
-            <Button variant="ghost" size="sm" onClick={guard.keepHere} aria-keyshortcuts="2 Escape">
-              Keep here
+            {/* Esc sends nothing: Do it here messages the agent, too much for a dismiss key. */}
+            <Button variant="ghost" size="sm" onClick={guard.keepHere} aria-keyshortcuts={pending.isFromAgent ? '2' : '2 Escape'}>
+              {pending.isFromAgent ? 'Do it here' : 'Keep here'}
               <CardShortcut keys={['2']} />
             </Button>
-            <Button variant="ghost" size="sm" onClick={guard.addToGoal} aria-keyshortcuts="3">
-              Add to goal
-              <CardShortcut keys={['3']} />
-            </Button>
+            {hasGoal(thread) && (
+              <Button variant="ghost" size="sm" onClick={guard.addToGoal} aria-keyshortcuts="3">
+                Add to goal…
+                <CardShortcut keys={['3']} />
+              </Button>
+            )}
             {!!thread.repo && (
               <ToggleGroup type="single" size="sm" variant="outline" value={guard.branchFrom} onValueChange={(v) => v && guard.setBranchFrom(v as BranchFrom)} aria-label="New thread branches from" className="ml-auto">
                 <ToggleGroupItem value="current" className="max-w-40 type-caption">

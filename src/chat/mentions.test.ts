@@ -7,6 +7,7 @@ import { agentCalls } from '../runtime/live.ts';
 import type { Thread } from '../model.ts';
 import { mentionFor, mentionGroups, mentionOptions, mentionQuery, withoutQuery, withReferences, type Mention } from './mentions.ts';
 import { slashItems, typedSkills } from './slash.ts';
+import { fileMentionFor, worktreeMention } from './fileMentions.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const calls = (s: State, action: Action) => agentCalls(s, action, () => threadsReducer(s, action));
@@ -62,16 +63,27 @@ test('a thread reference becomes a digest and a window reference its screenshot,
     { kind: 'thread', id: 'auth', title: other.title },
     { kind: 'window', id: 'window:1', title: 'Safari — Docs', image: shot },
   ];
-  const ref = withReferences('why does it loop?', mentions, [other]);
-  assert.equal(ref.text, '@Fix "login" redirect @Safari — Docs\n\nwhy does it loop?');
+  const ref = withReferences(`why does @${other.title} loop?`, mentions, [other]);
+  assert.equal(ref.text, `@Safari — Docs\n\nwhy does @${other.title} loop?`, 'the thread stays inline where it was typed; only the window becomes a tag');
   assert.match(ref.prompt, /<thread title="Fix &quot;login&quot; redirect">\nGoal: Users land back where they signed in\nStatus: running, 1\/2 steps done, web on fix\/login\nyou: Keep the return URL in state\nclaude: Done\. x+…\n<\/thread>/);
   assert.doesNotMatch(ref.prompt, /Edit src\/auth\.ts/, 'tool calls stay out of the digest');
-  assert.match(ref.prompt, /<window title="Safari — Docs">Screenshot of this window attached\.<\/window>\n\nwhy does it loop\?$/);
+  assert.match(ref.prompt, /<window title="Safari — Docs">Screenshot of this window attached\.<\/window>\n\nwhy does "Fix "login" redirect" loop\?$/);
 
   const send: Action = { type: 'send', threadId: id, text: ref.text, drift: 'on-goal', reason: '', prompt: ref.prompt, images: ref.images };
   assert.deepEqual(calls(s, send), [{ method: 'send', threadId: id, text: ref.prompt, images: [shot], speed: '' }]);
   const said = threadsReducer(s, send).threads.find((t) => t.id === id)!.activity.at(-1)!;
   assert.equal(said.text, ref.text, 'the transcript keeps your message, not the injected context');
+});
+
+test('file tokens stay where typed in the transcript; the agent gets each in its harness\'s form', () => {
+  const inside = worktreeMention('src/SidePane.tsx');
+  const outside = fileMentionFor('/Users/me/dev/harness', '../other/', '/Users/me/dev/other', 'x.ts', false);
+  const message = 'compare @src/SidePane.tsx with @../other/x.ts';
+  assert.deepEqual(withReferences(message, [inside, outside], [], { provider: 'claude' }), { text: message, prompt: 'compare @src/SidePane.tsx with @/Users/me/dev/other/x.ts', images: [], skills: [] });
+  assert.equal(withReferences(message, [inside, outside], [], { provider: 'codex' }).prompt, 'compare src/SidePane.tsx with /Users/me/dev/other/x.ts');
+  const withThread = withReferences(`${message} like @${other.title}`, [inside, { kind: 'thread', id: 'auth', title: other.title }], [other], { provider: 'claude' });
+  assert.equal(withThread.text, `${message} like @${other.title}`, 'no tags: files and threads are already in the text');
+  assert.match(withThread.prompt, /<\/thread>\n\ncompare @src\/SidePane\.tsx with @\.\.\/other\/x\.ts like "Fix "login" redirect"$/, 'a file token without its mention is sent as typed');
 });
 
 test('no references leaves the message alone', () => {
@@ -105,7 +117,7 @@ test('a skill reference asks the agent to load it, an MCP reference to prefer it
     { kind: 'mcp', id: 'mcp:claude.ai Linear', title: 'claude.ai Linear' },
   ];
   const claude = withReferences('fix the header', mentions, [other], { provider: 'claude' });
-  assert.equal(claude.text, '@Fix "login" redirect @ui @claude.ai Linear\n\nfix the header');
+  assert.equal(claude.text, '@ui @claude.ai Linear\n\nfix the header', 'a thread is inline, never a tag');
   assert.match(claude.prompt, /<\/thread>\n\nFor this message, use the "ui" skill: load it with the Skill tool before you start\.\nFor this message, prefer the tools of the "claude\.ai Linear" MCP server \(mcp__claude_ai_Linear__\*\) over other ways to do the same thing\.\n\nfix the header$/);
   assert.deepEqual(claude.skills, ['ui']);
 

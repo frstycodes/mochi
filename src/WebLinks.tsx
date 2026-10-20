@@ -3,6 +3,8 @@ import { ArrowUpRight, CopyStack, Globe } from '@/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { cn } from '@/lib/utils';
 import { hostname } from './agentPhase';
+import { faviconUrl } from './favicon';
+import { IconImage } from './IconImage';
 import { copyText } from './clipboard';
 import type { WebLink } from './model';
 import { usePaneOpeners } from './terminal/usePaneOpeners';
@@ -70,30 +72,9 @@ export function LinkRow({ link, className }: { link: WebLink; className?: string
 }
 
 /** The page's favicon over `fallback` (a globe) that shows until it loads, and stays when it never does; fixed size, so nothing shifts. */
-export function Favicon({ host, fallback = <Globe className="size-3.5 text-subtle-foreground" /> }: { host: string; fallback?: ReactNode }) {
-  const [state, setState] = useState<'loading' | 'shown' | 'failed'>('loading');
-  return (
-    <span aria-hidden className="relative flex size-4 shrink-0 items-center justify-center">
-      {state !== 'shown' && fallback}
-      {state !== 'failed' && (
-        <img
-          src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onLoad={(e) => setState(isDefaultIcon(e.currentTarget) ? 'failed' : 'shown')}
-          onError={() => setState('failed')}
-          className={cn('absolute inset-0 size-4 rounded-xs', state === 'loading' && 'opacity-0')}
-        />
-      )}
-    </span>
-  );
+export function Favicon({ host, fallback = <Globe className="size-3.5 text-subtle-foreground" />, className }: { host: string; fallback?: ReactNode; className?: string }) {
+  return <IconImage src={faviconUrl(host)} fallback={fallback} className={cn('size-4 rounded-xs', className)} />;
 }
-
-// Google answers an unknown domain with its own 16px globe, which loads like any image; asked for 32px, real icons come back larger.
-// GAP: a site whose only favicon is 16px also reads as missing and gets the globe.
-const isDefaultIcon = (img: HTMLImageElement) => img.naturalWidth <= 16;
 
 function pathOf(url: string) {
   try {

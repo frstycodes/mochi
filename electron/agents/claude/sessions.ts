@@ -1,19 +1,25 @@
 import { randomUUID } from 'node:crypto';
-import { hooksEnv } from '../../git/hooks.ts';
-import { PR_GUARD } from './prGuard.ts';
+import { goalNudge } from './goalNudge.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
-import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import type { McpWidgetResource } from '../../../src/model.ts';
 import { accountFor, type ClaudeAccount } from './account.ts';
 import { HARNESSES } from '../../../src/settings/harnesses.ts';
+import { toClaude } from '../../../src/settings/agentConfig.ts';
+import { sessionConnectors, sessionToolRules } from '../../library/connectors.ts';
+import { claudePermissions } from '../../../src/library/connectorTools.ts';
+import { sessionLibrary } from '../../library/store.ts';
+import { claudeNativeSettings, offItems } from '../../../src/library/nativeOverrides.ts';
+import { readProfileConfig } from '../profileConfig.ts';
 import { warmClaude } from './oneshot.ts';
-import { approvalEvent, commandsFrom, createMapper, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent, withPlanTools } from './map.ts';
+import { approvalEvent, commandsFrom, createMapper, HIDDEN_PLAN_TOOLS, mcpServersFromStatus, PERMISSION_MODES, permissionOptions, permissionResult, userContent } from './map.ts';
 import { AUTO_ALLOWED, claudeServer, SERVER } from '../../mcp/server.ts';
 import { emitAgentEvent } from '../events.ts';
-import { HIDDEN_CLAUDE_SKILLS, MOCHI_INSTRUCTIONS } from '../instructions.ts';
+import { CLAUDE_SKILLS_OFF, mochiInstructions } from '../instructions.ts';
+import { profileInstructions } from '../profileFolder.ts';
 import { recordLimits } from '../limits.ts';
 import { claudeEventWindow } from '../../../src/usage/limits.ts';
 import { MOCHI_TIMEOUT_MS } from '../../../src/runtime/toolTable.ts';
@@ -64,7 +70,7 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.speed && options.speed !== 'fast') throw new TypeError('speed must be fast');
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd, saveImage), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd, saveImage, options.effort), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
   sessions.set(threadId, session);
   void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
@@ -137,11 +143,11 @@ export async function claudeRewindPoint(threadId: string, text: string) {
   return forkPoint(session.sent, index, await transcriptUuids(session.account.configDir, session.sessionId));
 }
 
-/** Stops one subagent (Agent tool task) of a live session; Claude Code then reports it `stopped`. */
-export async function stopClaudeSubagent(threadId: string, subagentId: string) {
+/** Stops one background task of a live session: a subagent (by its Agent call's id) or a shell, workflow or monitor (by its task id); Claude Code then reports it `stopped`. */
+export async function stopClaudeTask(threadId: string, id: string) {
   const session = sessions.get(threadId);
-  const taskId = session?.mapper.taskOf(subagentId);
-  if (!session?.query || !taskId) throw new Error('That subagent is not running in a live Claude session');
+  const taskId = session?.mapper.taskOf(id);
+  if (!session?.query || !taskId) throw new Error('That task is not running in a live Claude session');
   await session.query.stopTask(taskId);
 }
 
@@ -158,6 +164,13 @@ export function resolveClaude(requestId: string, decision: AgentDecision) {
 app.on('before-quit', () => {
   for (const threadId of [...sessions.keys()]) stopClaude(threadId);
 });
+
+/** The profile's turned-off native items as flag-layer settings, read from the account's config (the thread's project included, for its `.mcp.json`). */
+async function nativeOffSettings(options: AgentRunOptions) {
+  if (!options.nativeOff?.length) return {};
+  const config = await readProfileConfig(options.spaceId, options.cwd);
+  return claudeNativeSettings(offItems(config.claude, options.nativeOff));
+}
 
 async function schedule(session: Session) {
   const cap = (await config()).concurrencyCap() || DEFAULT_CAP;
@@ -180,29 +193,36 @@ async function launch(session: Session) {
     const install = await (await import('../../settings/detect.ts')).detect({ id: session.account.id, provider: 'claude', name: session.account.id, configDir });
     if (!install.path) throw new Error(`Claude Code is not installed. Install it (\`${HARNESSES.claude.install}\`) or set its path in Settings, then send again.`);
     // A consequential Mochi call waits on the user's card; Claude Code's own MCP timeout would cut it short.
-    const base = withPlanTools({ ...hooksEnv(accountEnv('claude', configDir)), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) });
+    const base = { ...accountEnv('claude', configDir), PATH: await userPath(), MCP_TOOL_TIMEOUT: String(MOCHI_TIMEOUT_MS) };
     // The key moves billing off the account's plan, so it is set only for a thread the user switched to it.
     const key = options.useApiKey ? apiKeyFor('claude') : undefined;
     if (options.useApiKey && !key) throw new Error('No Anthropic API key is stored. Add one in Settings, then try again.');
     const env = key ? { ...base, ANTHROPIC_API_KEY: key } : base;
     if (install.login.state === 'logged-out' && !key) throw new Error(session.account.configDir ? `The Claude account for this profile is logged out. Run \`CLAUDE_CONFIG_DIR=${session.account.configDir} claude auth login\` in a terminal, then send again.` : 'Claude Code is logged out. Run `claude auth login` in a terminal, then send again.');
+    const [library, connectors, toolRules, native, profileText] = await Promise.all([sessionLibrary(options.spaceId, 'claude'), sessionConnectors(options.spaceId), sessionToolRules(options.spaceId), nativeOffSettings(options), profileInstructions(options.spaceId, 'claude')]);
     if (sessions.get(threadId) !== session) return;
     session.abort = abort;
     const { forkAt, isMissing } = await takeForkAt(session);
     if (isMissing) emit({ threadId, type: 'notice', text: FORK_MISSING_NOTICE });
     const mode = (options.permissionMode as PermissionMode | undefined) ?? 'default';
     const permissions = permissionOptions(mode);
+    const connectorRules = claudePermissions(toolRules);
     session.query = query({
       prompt: inbox(session, abort.signal),
       options: {
         pathToClaudeCodeExecutable: install.path,
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: MOCHI_INSTRUCTIONS },
-        settings: { skillOverrides: HIDDEN_CLAUDE_SKILLS },
+        // A settings chat isn't Claude Code: no coding preset, no built-in tools, none of the profile's plugins or servers.
+        // The profile's own instructions (its folder's mochi.md and claude.md) follow Mochi's; the account's CLAUDE.md loads as usual.
+        systemPrompt: options.isSettingsChat ? mochiInstructions(options) : { type: 'preset', preset: 'claude_code', append: [mochiInstructions(options), profileText].filter(Boolean).join('\n\n') },
+        ...(options.isSettingsChat && { tools: [] }),
+        // The flag layer is also the Agent SDK's opt-in for fast mode: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
+        // The profile's turned-off native items join the flag layer here; nothing is written to the account's own files.
+        settings: { ...native, skillOverrides: { ...CLAUDE_SKILLS_OFF, ...native.skillOverrides }, permissions: connectorRules, ...(options.speed && { fastMode: true }) },
+        // Claude in Chrome would otherwise wire itself when CLAUDE_CODE_ENABLE_CFC=1 is in the user's environment.
+        extraArgs: { 'no-chrome': null },
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
-        // The flag layer is also the Agent SDK's opt-in: without `fastMode` there, Claude Code reports `sdk_opt_in_required`.
-        ...(options.speed && { settings: { fastMode: true } }),
         ...permissions,
         // Never `continue`: it picks the cwd's latest session, which can belong to another thread.
         ...(session.sessionId && { resume: session.sessionId }),
@@ -213,9 +233,16 @@ async function launch(session: Session) {
         enableFileCheckpointing: true,
         abortController: abort,
         canUseTool: approve(threadId),
-        mcpServers: { [SERVER]: claudeServer(threadId) },
-        hooks: { ...PR_GUARD, ...compactHooks(threadId) },
+        plugins: options.isSettingsChat ? [] : library.pluginDirs.map((path) => ({ type: 'local' as const, path })),
+        mcpServers: {
+          ...(!options.isSettingsChat && Object.fromEntries(library.servers.map((def) => [def.name, toClaude(def) as McpServerConfig]))),
+          ...(!options.isSettingsChat && Object.fromEntries(connectors.map(([name, url]) => [name, { type: 'http' as const, url }]))),
+          [SERVER]: claudeServer(threadId, options.spaceId, options.cwd, options),
+        },
+        hooks: { ...compactHooks(threadId), PreToolUse: options.isGoalsOff ? [] : [goalNudge(threadId)] },
         allowedTools: [...AUTO_ALLOWED, ...permissions.allowedTools],
+        // Deny rules alone only refuse a call; disallowedTools also takes an Off tool out of the model's context (sdk.d.ts).
+        disallowedTools: [...HIDDEN_PLAN_TOOLS, ...connectorRules.deny],
       },
     });
     for await (const message of session.query) {

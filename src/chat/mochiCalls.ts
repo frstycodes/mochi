@@ -1,4 +1,5 @@
-import { MOCHI_SERVER, type ToolName } from '../runtime/toolTable.ts';
+import type { ActivityEntry } from '../model.ts';
+import { isTurnTool, MOCHI_SERVER, type ToolName } from '../runtime/toolTable.ts';
 
 /**
  * Each Mochi tool in words, like Claude's own tools: while it runs, then in its work-group row. What it changed is the
@@ -8,7 +9,7 @@ export const MOCHI_CALLS = {
   list_threads: ['Looking through your threads', 'Looked through your threads'],
   get_thread: ['Reading a thread', 'Read a thread'],
   rename_thread: ['Renaming a thread', 'Renamed a thread'],
-  settle_thread: ['Settling threads', 'Settled threads'],
+  settle_thread: ['Archiving threads', 'Archived threads'],
   reactivate_thread: ['Bringing threads back', 'Brought threads back'],
   pin_thread: ['Pinning threads', 'Pinned threads'],
   unpin_thread: ['Unpinning threads', 'Unpinned threads'],
@@ -18,20 +19,14 @@ export const MOCHI_CALLS = {
   send_to_thread: ['Messaging a thread', 'Messaged a thread'],
   delete_thread: ['Asking to delete a thread', 'Asked to delete a thread'],
   get_goal: ['Reading the goal', 'Read the goal'],
-  set_step_status: ['Updating a step', 'Updated a step'],
-  add_step: ['Adding a step', 'Added a step'],
-  edit_goal: ['Editing the goal', 'Edited the goal'],
-  reorder_steps: ['Reordering the steps', 'Reordered the steps'],
-  drop_step: ['Dropping a step', 'Dropped a step'],
   open_pr: ['Opening a pull request', 'Opened a pull request'],
   propose_goal: ['Proposing the goal', 'Proposed the goal'],
   claim_criterion: ['Checking off a criterion', 'Checked off a criterion'],
   report_turn: ['Reporting progress', 'Reported progress'],
   get_report: ['Reading the progress report', 'Read the progress report'],
   settle_goal: ['Settling the goal', 'Settled the goal'],
-  start_background_agent: ['Starting a background agent', 'Started a background agent'],
-  list_background_agents: ['Checking the background agents', 'Checked the background agents'],
-  stop_background_agent: ['Stopping a background agent', 'Stopped a background agent'],
+  update_plan: ['Updating the plan', 'Updated the plan'],
+  delegate_task: ['Delegating a task', 'Delegated a task'],
   browser_tabs: ['Looking at the browser tabs', 'Looked at the browser tabs'],
   browser_open: ['Opening a page', 'Opened a page'],
   browser_snapshot: ['Reading the page', 'Read the page'],
@@ -52,6 +47,8 @@ export const MOCHI_CALLS = {
   browser_reload: ['Reloading the page', 'Reloaded the page'],
   browser_dialog: ['Answering a page dialog', 'Answered a page dialog'],
   browser_set_device: ['Changing the device size', 'Changed the device size'],
+  browser_handoff: ['Waiting on you in the browser', 'Waited on you in the browser'],
+  browser_batch: ['Running browser steps', 'Ran browser steps'],
   open_pane_tab: ['Opening a side pane tab', 'Opened a side pane tab'],
   split_with: ['Opening a split', 'Opened a split'],
   close_pane: ['Closing the side pane', 'Closed the side pane'],
@@ -59,15 +56,23 @@ export const MOCHI_CALLS = {
   open_changes: ['Opening the changes', 'Opened the changes'],
   ask_side_chat: ['Asking the side chat', 'Asked the side chat'],
   notify_user: ['Notifying you', 'Notified you'],
+  open_settings_chat: ['Handing this to the settings chat', 'Drafted in the settings chat'],
   get_settings: ['Reading your settings', 'Read your settings'],
   update_settings: ['Suggesting setting changes', 'Suggested setting changes'],
   get_keybindings: ['Reading your shortcuts', 'Read your shortcuts'],
   set_keybinding: ['Suggesting a shortcut', 'Suggested a shortcut'],
   list_profiles: ['Looking at your profiles', 'Looked at your profiles'],
   add_mcp_server: ['Suggesting an MCP server', 'Suggested an MCP server'],
+  list_connectors: ['Looking at your connectors', 'Looked at your connectors'],
+  connect_account: ['Suggesting a connector account', 'Suggested a connector account'],
+  run_setup: ['Running a setup', 'Ran a setup'],
+  update_setup_step: ['Fixing a setup step', 'Fixed a setup step'],
   remove_mcp_server: ['Asking to remove an MCP server', 'Asked to remove an MCP server'],
   remove_profile: ['Asking to remove a profile', 'Asked to remove a profile'],
 } satisfies Record<ToolName, [live: string, done: string]>;
+
+/** A Mochi call whose result has its own surface (the plan list, the end-of-turn card), so it gets no work-log row or live title. */
+export const isTurnCall = (entry: Pick<ActivityEntry, 'mcp'>) => entry.mcp?.server === MOCHI_SERVER && isTurnTool(entry.mcp.tool);
 
 /** A call's target (`mochi: rename_thread`) is Mochi's own. */
 export const isMochiTarget = (target: string) => target.startsWith(`${MOCHI_SERVER}: `);

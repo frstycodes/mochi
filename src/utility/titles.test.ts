@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { Action, State } from '../store/index.tsx';
 import { initialQueue } from '../store/queue.ts';
 import { initialThreads, threadsReducer } from '../store/threads.ts';
-import { titleRequest } from './titles.ts';
+import { hasTempBranch, startTitleRequest, titleRequest } from './titles.ts';
 
 const demoState = () => ({ ...initialThreads(null, true), ...initialQueue(null, true), spaceId: 'personal', views: {} }) as unknown as State;
 const run = (s: State, action: Action) => threadsReducer(s, action);
@@ -31,4 +31,25 @@ test('a thread started with "hi" waits for a real goal before it is named', () =
   let s = run(demoState(), { type: 'create', title: 'hi', provider: 'claude', project: null, isLive: true });
   const t = s.threads.at(-1)!;
   assert.equal(titleRequest({ ...t, live: { isWorking: false }, activity: [...t.activity, { at: 1, who: 'claude', kind: 'message', text: 'Hello! What are we building?' }] }), null);
+});
+
+test('a new worktree thread is named from its first message before it starts, unless that message is small talk', () => {
+  const create = (title: string, workspace?: { mode: 'worktree'; branch?: string }) => run(demoState(), { type: 'create', title, provider: 'claude', project: '/app', isLive: true, workspace }).threads.at(-1)!;
+  const t = create('I still have issues with the login redirect', { mode: 'worktree' });
+  assert.match(t.repo!.branch, /^mochi\/[0-9a-f]{8}$/, 'a temp name first');
+  assert.equal(t.repo!.autoBranch, t.repo!.branch);
+  assert.equal(startTitleRequest(t), 'User: I still have issues with the login redirect', 'the first message alone');
+  assert.equal(startTitleRequest(create('hi', { mode: 'worktree' })), undefined, 'vague: named after the first exchange instead');
+  assert.equal(startTitleRequest(create('Fix login', { mode: 'worktree', branch: 'my-name' })), undefined, 'a branch you named stays');
+  assert.equal(startTitleRequest({ ...t, isTitleRenamed: true }), undefined);
+});
+
+test('only a branch still on its temp name may be renamed after the title', () => {
+  const t = run(demoState(), { type: 'create', title: 'Fix login', provider: 'claude', project: '/app', isLive: true, workspace: { mode: 'worktree' } }).threads.at(-1)!;
+  assert.equal(hasTempBranch(t), true);
+  for (const change of [{ autoBranch: undefined }, { branch: 'my-branch' }, { mode: 'folder' as const }, { isExisting: true }, { isDetached: true }]) {
+    assert.equal(hasTempBranch({ ...t, repo: { ...t.repo!, ...change } }), false, JSON.stringify(change));
+  }
+  const named = run(demoState(), { type: 'create', title: 'Fix login', provider: 'claude', project: '/app', workspace: { mode: 'worktree', branch: 'my-name' } }).threads.at(-1)!;
+  assert.equal(named.repo!.autoBranch, undefined);
 });

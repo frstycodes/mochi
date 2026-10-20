@@ -95,6 +95,13 @@ test('Send now steers the turn in flight with that message instead of interrupti
   assert.equal(thread(s, id).activity.at(-1)!.text, 'first');
 });
 
+test('a message sent now steers a working turn; to an idle agent it starts a turn of its own', () => {
+  const { s, id } = working();
+  assert.deepEqual(sendCollecting(s, id, message('use pnpm')).calls, [{ method: 'send', threadId: id, text: 'use pnpm', steer: true }]);
+  const idle = event(s, { threadId: id, type: 'turn-end', status: 'done' });
+  assert.deepEqual(sendCollecting(idle, id, message('next')).calls, [{ method: 'send', threadId: id, text: 'next' }]);
+});
+
 test('Edit takes a message out of the queue', () => {
   const { s, id } = working();
   const edited = run(s, { type: 'queued-remove', threadId: id, id: thread(s, id).queued![1].id });
@@ -150,4 +157,16 @@ test('attached images reach the agent call on a send, a queued send and a new th
   assert.deepEqual(queued.calls, [{ method: 'send', threadId: id, text: 'what is this?', images: [agentImage] }], 'queued send');
   assert.equal(thread(queued.s, id).activity.at(-1)!.wasQueued, true);
   assert.deepEqual(thread(queued.s, id).queued ?? [], []);
+});
+
+test('the transcript keeps the original of an image you sent when it was saved, so the viewer shows it full size', () => {
+  const kept = { ...IMAGE, original: '/userData/images/abc.png' };
+  const base = { ...initialThreads(undefined, false), ...initialQueue(), spaceId: 'latitude', views: {} } as unknown as State;
+  const created = run(base, { type: 'create', title: 'look', images: [kept], provider: 'codex', project: null, isLive: true });
+  const id = created.threads.at(-1)!.id;
+  assert.deepEqual(thread(created, id).activity.at(-1)!.images, [kept.original], 'new thread');
+
+  const message = queuedMessage('and this?', { images: [kept], mentions: [], isCommand: false, typedSkills: [] });
+  const sent = sendCollecting(event(created, { threadId: id, type: 'turn-end', status: 'done' }), id, message);
+  assert.deepEqual(thread(sent.s, id).activity.at(-1)!.images, [kept.original], 'send');
 });

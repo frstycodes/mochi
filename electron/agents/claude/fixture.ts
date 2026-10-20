@@ -11,8 +11,6 @@ export const FIXTURE = [
   stream({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Adding' } }),
   stream({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ' a test.' } }),
   assistant([{ type: 'text', text: 'Adding a test.' }]),
-  assistant([{ type: 'tool_use', id: 'todo', name: 'TodoWrite', input: { todos: [{ content: 'Add a test', status: 'in_progress', activeForm: 'Adding a test' }] } }]),
-  toolResult('todo', 'Todos have been modified successfully'),
   assistant([{ type: 'tool_use', id: 'edit', name: 'Edit', input: { file_path: '/repo/src/a.ts', old_string: 'a', new_string: 'b' } }]),
   toolResult('edit', 'The file /repo/src/a.ts has been updated.'),
   assistant([{ type: 'tool_use', id: 'bash', name: 'Bash', input: { command: 'pnpm test', description: 'Run tests' } }]),

@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { toast } from '../toast/store.ts';
 import { queueToast } from '../QueueToast';
 import { host } from '../host';
+import { isListed } from '../model';
 import { threadCwd } from '../host/cwd';
 import type { WatchConfig } from '../host/types/notify';
 import { getProfiles } from '../profiles';
@@ -13,7 +14,7 @@ import { useRemoteAlerts } from './useRemoteAlerts';
 import { useMachines, type FollowedView } from '../remote/useMachines';
 
 /** For watched threads main shows these itself (`electron/notify/watch.ts`), so the renderer doesn't alert them twice. */
-const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'review', 'ci'];
+const MAIN_ALERTS: NoticeKind[] = ['needs-you', 'limit', 'ci'];
 
 /** Side effects of the notification center: OS notifications while the window is in the background, toasts for watched threads while it's focused, main's watch config (OS alerts, CI, dock badge), and click-to-jump. */
 export function useNotifications() {
@@ -116,10 +117,16 @@ function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: stri
   const threads = state.threads
     .filter((t) => state.watched.includes(t.id))
     .map((t) => ({ id: t.id, title: t.title, cwd: threadCwd(t) ?? undefined, githubUser: profiles.find((p) => p.id === t.spaceId)?.github || undefined }));
+  const autofix = state.threads.flatMap((t) => {
+    const cwd = threadCwd(t);
+    if (!t.live || t.status === 'settled' || !cwd) return [];
+    const githubUser = profiles.find((p) => p.id === t.spaceId)?.github || undefined;
+    return t.prs.flatMap((pr) => (pr.autofixSince && pr.state !== 'merged' ? [{ threadId: t.id, title: t.title, pr: pr.number, cwd, githubUser, since: pr.autofixSince }] : []));
+  });
   const { muted, quiet } = state.notifications;
   // Another computer's threads count toward the badge too, keyed by machine so ids never collide with this one's.
   const remoteNeedsYou = machines.flatMap(({ machine, state }) => (state?.threads ?? []).filter((t) => t.status === 'needs-you').map((t) => `${machine.id}/${t.id}`));
-  return { threads, kinds: alertKinds, quiet, muted, needsYou: [...state.threads.filter((t) => t.status === 'needs-you').map((t) => t.id), ...remoteNeedsYou], dockBadge };
+  return { threads, autofix, kinds: alertKinds, quiet, muted, needsYou: [...state.threads.filter((t) => t.status === 'needs-you' && isListed(t)).map((t) => t.id), ...remoteNeedsYou], dockBadge };
 }
 
 /** Opens what a notice is about: its queue item while that's still open, else its thread. */

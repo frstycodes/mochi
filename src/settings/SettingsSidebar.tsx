@@ -21,12 +21,15 @@ import { Shortcut } from '../Shortcut';
 import { SidebarResizer } from '../SidebarResizer';
 import { closeSettings, openSettings, useSettingsRoute } from './open';
 import { SECTION_GROUPS, searchSettings, type SectionId } from './sections';
+import { HARNESS_IDS } from './harnesses';
+import { useAgentSettings } from './AgentSettings';
 
 /** Takes the app sidebar's place, width and toggle while settings are open. */
 export function SettingsSidebar({ width, onResize }: { width: number; onResize: (px: number) => void }) {
   const route = useSettingsRoute();
   const [query, setQuery] = useState('');
   const { setOpenMobile } = useSidebar();
+  const { isUpdateAvailable } = useAgentSettings();
   const results = searchSettings(query);
   const go = (section: SectionId, settingId?: string) => {
     openSettings(section, settingId);
@@ -57,6 +60,7 @@ export function SettingsSidebar({ width, onResize }: { width: number; onResize: 
                     <SidebarMenuButton isActive={route?.section === section.id} onClick={() => go(section.id)}>
                       <section.icon />
                       {section.title}
+                      {section.id === 'harnesses' && HARNESS_IDS.some(isUpdateAvailable) && <span className="ml-auto size-1.5 rounded-full bg-warning" aria-label="Update available" />}
                     </SidebarMenuButton>
                     {settings.length > 0 && (
                       <SidebarMenuSub>

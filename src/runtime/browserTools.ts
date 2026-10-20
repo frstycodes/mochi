@@ -2,8 +2,8 @@ import type { Page } from '../browser/pages.ts';
 import { DEVICES, RESPONSIVE } from '../browser/devices.ts';
 import { dialogNote } from '../browser/dialog.ts';
 import { displayUrl, normalizeUrl } from '../browser/url.ts';
-import type { BrowserAct, BrowserSnapshot } from '../host/types/browser.ts';
-import { authorName, type PaneTab } from '../model.ts';
+import type { BrowserAct, BrowserSnapshot, BrowserWait } from '../host/types/browser.ts';
+import { authorName, type EventGlyph, type PaneTab } from '../model.ts';
 import type { ToolContext, ToolSpec } from './tools.ts';
 import type { ToolName } from './toolTable.ts';
 
@@ -15,7 +15,8 @@ const POLL_MS = 100;
 // Claude rejects images over 5 MB; base64 runs 4/3 of that (same cap as `electron/ipc/agent.ts`).
 const MAX_IMAGE_CHARS = 6_900_000;
 
-type BrowserToolName = Extract<ToolName, `browser_${string}`>;
+// browser_batch runs these through `runTool`, so it lives beside it (`tools.ts`).
+type BrowserToolName = Exclude<Extract<ToolName, `browser_${string}`>, 'browser_batch'>;
 
 /** The in-app browser tools: only the caller's own pane tabs, through `env.browser` (main's native views). */
 export const BROWSER_TOOLS = {
@@ -44,9 +45,7 @@ export const BROWSER_TOOLS = {
       const { key } = await live(ctx, tab);
       const page = await loaded(ctx, key);
       const isLocal = isLocalUrl(url);
-      // browser_open is quiet; leaving the machine is the one navigation the user should hear about.
-      if (!isLocal) env.toast(`${name(ctx)} opened ${displayUrl(url)} in the browser`);
-      return { changed: `opened ${displayUrl(url)}${isLocal ? '' : ' (outside your machine)'}`, isFinal: true, result: pageResult(tab, page) };
+      return { changed: isLocal ? 'opened a page' : 'opened a page outside your machine', glyph: 'browse', site: url, isFinal: true, result: pageResult(tab, page) };
     },
   },
   browser_snapshot: {
@@ -60,47 +59,47 @@ export const BROWSER_TOOLS = {
   browser_click: {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
-      if (ref.meta.isSubmit && !isLocalUrl(ref.page.url))
-        await ctx.confirm({ title: `Submit a form on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to click "${ref.meta.name || ref.meta.role}" on ${displayUrl(ref.page.url)}, which sends the form to that site.` });
-      return act(ctx, { kind: 'click', ref: ctx.args.ref }, `clicked "${ref.meta.name || ref.meta.role}"`);
+      const label = ref.meta.name || ref.meta.role;
+      if (!isLocalUrl(ref.page.url) && IRREVERSIBLE.test(label))
+        await askOnSite(ctx, ref.page.url, { title: `Click "${short(label)}" on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to click "${short(label)}" on ${host(ref.page.url)}. It may not be undoable there.` });
+      return act(ctx, { kind: 'click', ref: ctx.args.ref }, `clicked "${short(ref.meta.name || ref.meta.role)}"`, 'click');
     },
   },
   browser_type: {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
       const label = ref.meta.name || ref.meta.role;
-      const shown = ref.meta.isPassword ? 'a password' : `"${ctx.args.text.slice(0, 120)}"`;
-      if (!isLocalUrl(ref.page.url))
-        await ctx.confirm({ title: `Type into "${label}" on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to type ${shown} on ${displayUrl(ref.page.url)}${ctx.args.submit ? ' and press Enter, which sends it to that site' : ''}.` });
+      // Only a password leaves with what's typed; other fields are ordinary form filling, which the user watches in the pane.
+      if (ref.meta.isPassword && !isLocalUrl(ref.page.url))
+        await askOnSite(ctx, ref.page.url, { title: `Type a password into "${short(label)}" on ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to type a password on ${host(ref.page.url)}${ctx.args.submit ? ' and send it' : ''}.` });
       await act(ctx, { kind: 'type', ref: ctx.args.ref, text: ctx.args.text }, '');
-      return ctx.args.submit ? act(ctx, { kind: 'press', key: 'Enter' }, `typed into "${label}" and pressed Enter`) : { changed: `typed into "${label}"`, isFinal: true, result: { typed: ref.meta.isPassword ? '••••' : ctx.args.text } };
+      return ctx.args.submit ? act(ctx, { kind: 'press', key: 'Enter' }, `typed into "${short(label)}" and pressed Enter`, 'type') : { changed: `typed into "${short(label)}"`, glyph: 'type', site: ref.page.url, isFinal: true, result: { typed: ref.meta.isPassword ? '••••' : ctx.args.text } };
     },
   },
   browser_press: {
     run: async (ctx) => {
-      const { page } = await live(ctx, tabFor(ctx));
-      if (ctx.args.key === 'Enter' && !isLocalUrl(page.url)) await ctx.confirm({ title: `Press Enter on ${host(page.url)}?`, detail: `That can send a form on ${displayUrl(page.url)} to that site.` });
-      return act(ctx, { kind: 'press', key: ctx.args.key }, `pressed ${ctx.args.key}`);
+      await live(ctx, tabFor(ctx));
+      return act(ctx, { kind: 'press', key: ctx.args.key }, `pressed ${ctx.args.key}`, 'type');
     },
   },
   browser_scroll: { run: (ctx) => act(ctx, { kind: 'scroll', ref: ctx.args.ref, dx: ctx.args.dx ?? 0, dy: ctx.args.dy ?? 600 }, '') },
   browser_hover: {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
-      return act(ctx, { kind: 'hover', ref: ctx.args.ref }, `hovered "${ref.meta.name || ref.meta.role}"`);
+      return act(ctx, { kind: 'hover', ref: ctx.args.ref }, `hovered "${short(ref.meta.name || ref.meta.role)}"`, 'click');
     },
   },
   browser_select: {
     run: async (ctx) => {
       const ref = refIn(ctx, ctx.args.ref);
-      return act(ctx, { kind: 'select', ref: ctx.args.ref, value: ctx.args.value }, `picked "${ctx.args.value}" in "${ref.meta.name || ref.meta.role}"`);
+      return act(ctx, { kind: 'select', ref: ctx.args.ref, value: ctx.args.value }, `picked "${short(ctx.args.value)}" in "${short(ref.meta.name || ref.meta.role)}"`, 'click');
     },
   },
   browser_drag: {
     run: async (ctx) => {
       const from = refIn(ctx, ctx.args.from);
       const to = refIn(ctx, ctx.args.to);
-      return act(ctx, { kind: 'drag', from: ctx.args.from, to: ctx.args.to }, `dragged "${from.meta.name || from.meta.role}" onto "${to.meta.name || to.meta.role}"`);
+      return act(ctx, { kind: 'drag', from: ctx.args.from, to: ctx.args.to }, `dragged "${short(from.meta.name || from.meta.role)}" onto "${short(to.meta.name || to.meta.role)}"`, 'click');
     },
   },
   browser_upload: {
@@ -109,7 +108,7 @@ export const BROWSER_TOOLS = {
       const root = ctx.env.cwdOf(ctx.caller);
       const path = resolvePath(root, ctx.args.path);
       if (!path) throw new Error('A relative path needs a worktree, and this thread has none; pass an absolute path');
-      if (!root || !isInside(root, path)) await ctx.confirm({ title: `Upload a file from outside the worktree to ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to put ${path} into "${ref.meta.name || 'the file field'}" on ${displayUrl(ref.page.url)}.` });
+      if (!root || !isInside(root, path)) await ctx.confirm({ title: `Upload a file from outside the worktree to ${host(ref.page.url)}?`, detail: `${name(ctx)} wants to put ${path} into "${short(ref.meta.name || 'the file field')}" on ${host(ref.page.url)}.` });
       return act(ctx, { kind: 'upload', ref: ctx.args.ref, path }, `put ${path.split('/').pop()} into "${ref.meta.name || 'a file field'}"`);
     },
   },
@@ -126,7 +125,7 @@ export const BROWSER_TOOLS = {
       const { key, tab, page } = await live(ctx, tabFor(ctx));
       const origin = originOf(page.url);
       if (!isLocalUrl(page.url))
-        await ctx.confirm({ title: `Run a script on ${origin}?`, detail: `It runs with your signed-in session on ${origin} (cookies, storage) and can do anything you can do there.`, code: ctx.args.script });
+        await ctx.confirm({ title: ctx.args.purpose, detail: `A script on ${host(page.url)}, run as you, signed in: it can do anything you can do there.`, code: ctx.args.script });
       const changed = `ran a script on ${origin}: ${preview(ctx.args.script)}`;
       try {
         const { value, isTruncated } = await ctx.env.browser.eval(page.hostId!, ctx.args.script);
@@ -176,6 +175,29 @@ export const BROWSER_TOOLS = {
       return { changed: `set the browser to ${device?.label ?? 'responsive'}${ctx.args.rotated ? ', rotated' : ''}`, isFinal: true, result: { tabId: tab.id, device: device ?? RESPONSIVE } };
     },
   },
+  browser_handoff: {
+    run: async (ctx) => {
+      const { key, tab, page } = await live(ctx, tabFor(ctx));
+      const { task, doneWhen } = ctx.args;
+      if (doneWhen && (await holds(ctx, page.hostId!, doneWhen))) throw new Error('doneWhen already holds on this page; pick something that only becomes true once they finish, or leave it out');
+      ctx.dispatch({ type: 'pane-select-tab', threadId: ctx.caller.id, tabId: tab.id });
+      ctx.env.pages.update(key, { hasTakenOver: true, handoff: task });
+      try {
+        const [done = 'you'] = await ctx.waitOn({
+          title: task,
+          detail: `${name(ctx)} carries on ${doneWhen ? "once the page shows you're done, or " : ''}when you click Done.`,
+          isHandoff: true,
+          approved: `Finished: ${task}`,
+          denied: `Stopped waiting: ${task}`,
+          until: (signal) => handedBack(ctx, key, doneWhen, signal),
+        });
+        if (!ctx.env.pages.get(key)) throw new Error('The tab was closed while the user had it');
+        return { result: { ...pageResult(tab, await loaded(ctx, key)), done } };
+      } finally {
+        if (ctx.env.pages.get(key)) ctx.env.pages.update(key, { hasTakenOver: false, handoff: null });
+      }
+    },
+  },
 } satisfies { [K in BrowserToolName]: ToolSpec<K> };
 
 /** Local means this machine or a dev domain: the agent browses those freely; anything else is logged, and forms there ask. */
@@ -195,6 +217,45 @@ export const pageKey = (threadId: string, tabId: string) => `${threadId}/${tabId
 const lastRefs = new Map<string, { hostId: string; url: string; refs: BrowserSnapshot['refs'] }>();
 
 type Ctx = ToolContext<{ tabId?: string; [arg: string]: unknown }>;
+
+/**
+ * Clicks that may not be undoable on someone else's site ask first: paying, sending, publishing, deleting. Ordinary steps
+ * (Next, Create, Save, Continue, Allow, Sign in) go through; the user watches them in the pane.
+ */
+const IRREVERSIBLE = /\b(pay|buy|purchase|order|checkout|check out|subscribe|send|publish|post|delete|remove|transfer|merge|deploy|withdraw|cancel (my )?(subscription|account)|close (my )?account)\b/i;
+
+// Sites the user said not to ask about again, per thread, for this run of Mochi.
+const trusted = new Map<string, Set<string>>();
+
+/** Asks on a card unless the user already trusted this site for the thread; the card offers that trust. */
+async function askOnSite(ctx: ToolContext<unknown>, url: string, approval: { title: string; detail: string }) {
+  const site = host(url);
+  const thread = ctx.caller.id;
+  if (trusted.get(thread)?.has(site)) return;
+  const options = await ctx.confirm({ ...approval, options: [{ id: 'trust', label: `Don't ask again on ${site} in this thread` }] });
+  if (options.includes('trust')) trusted.set(thread, new Set([...(trusted.get(thread) ?? []), site]));
+}
+
+/** Opens `url` in a new background tab of the caller's pane, loaded, for a tool that hands the agent a page to act on. */
+export async function openInNewTab(ctx: ToolContext<unknown>, url: string) {
+  const c = ctx as Ctx;
+  c.dispatch({ type: 'pane-open-tab', threadId: c.caller.id, kind: 'browser', url, isBackground: true });
+  const tab = browserTabs(c).at(-1)!;
+  const { key } = await live(c, tab);
+  return pageResult(tab, await loaded(c, key));
+}
+
+/** The view behind one of the caller's browser tabs (`tabId`, else the active one), opening one at `url` when it has none. */
+export async function tabView(ctx: ToolContext<unknown>, tabId: string | undefined, url: string) {
+  const c = ctx as Ctx;
+  const id = tabId ?? activeBrowserTab(c)?.id ?? (await openInNewTab(ctx, url)).tabId;
+  return (await live(c, tabFor({ ...c, args: { tabId: id } }))).page.hostId!;
+}
+
+/** The view behind `ref` from the latest snapshot of one of the caller's tabs, for main to read that element itself. */
+export function refView(ctx: ToolContext<unknown>, ref: string, tabId?: string) {
+  return refIn({ ...ctx, args: { tabId } } as Ctx, ref).page.hostId!;
+}
 
 function browserTabs({ state, caller }: Pick<Ctx, 'state' | 'caller'>) {
   return state().panes.find((p) => p.threadId === caller.id)?.tabs.filter((t) => t.kind === 'browser') ?? [];
@@ -222,8 +283,36 @@ function tabFor(ctx: Ctx) {
 async function live(ctx: Ctx, tab: PaneTab) {
   const found = await shown(ctx, tab);
   if (found.page.dialog) throw new Error(dialogNote(found.page.dialog));
+  // What they type there (a password, a code) is theirs: nothing reads or acts on the tab until they're done.
+  if (found.page.handoff) throw new Error(`The user has this tab for "${found.page.handoff}"; browser_handoff returns once they're done`);
   return found;
 }
+
+const HANDOFF_POLL_MS = 500;
+
+/**
+ * 'you' once they give the tab back in the pane; 'detected' once `doneWhen` holds on a loaded page two polls running, so
+ * a redirect passing through doesn't count. Rejects once the card is answered.
+ */
+async function handedBack(ctx: Ctx, key: string, doneWhen: Omit<BrowserWait, 'timeoutMs'> | undefined, signal: AbortSignal) {
+  let wasMet = false;
+  while (!signal.aborted) {
+    await new Promise((r) => setTimeout(r, HANDOFF_POLL_MS));
+    const page = ctx.env.pages.get(key);
+    if (!page?.hasTakenOver) return 'you';
+    const isMet = !!doneWhen && !page.isLoading && (await holds(ctx, page.hostId!, doneWhen));
+    if (isMet && wasMet) return 'detected';
+    wasMet = isMet;
+  }
+  throw new Error('The card was answered');
+}
+
+/** Whether `until` holds right now; a page mid-navigation, or a bad selector, reads as not yet. */
+const holds = (ctx: Ctx, hostId: string, until: Omit<BrowserWait, 'timeoutMs'>) =>
+  ctx.env.browser.waitFor(hostId, { ...until, timeoutMs: 1 }).then(
+    (r) => r.isMet,
+    () => false,
+  );
 
 /** Marks the tab as driven, so it floats unless it's already in front, and waits for its native view. Off screen, the view is opened hidden: CDP drives and captures it without a window. */
 async function shown(ctx: Ctx, tab: PaneTab) {
@@ -254,12 +343,13 @@ function refIn(ctx: Ctx, ref: string) {
   return { meta, page };
 }
 
-async function act(ctx: Ctx, action: BrowserAct, changed: string) {
+async function act(ctx: Ctx, action: BrowserAct, changed: string, glyph?: EventGlyph) {
   const { key, tab, page } = await live(ctx, tabFor(ctx));
   const { note } = await ctx.env.browser.act(page.hostId!, action);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
   const after = await loaded(ctx, key);
-  return { ...(changed && { changed: `${changed} on ${displayUrl(after.url)}` }), isFinal: true, result: { ...pageResult(tab, after), ...(note && { note }) } };
+  // The page shows as its favicon and host on the line (`EventLine`), never its full URL.
+  return { ...(changed && { changed, site: after.url, ...(glyph && { glyph }) }), isFinal: true, result: { ...pageResult(tab, after), ...(note && { note }) } };
 }
 
 async function command(ctx: Ctx, which: 'back' | 'forward' | 'reload', changed: string) {
@@ -267,7 +357,14 @@ async function command(ctx: Ctx, which: 'back' | 'forward' | 'reload', changed: 
   if ((which === 'back' && !page.canGoBack) || (which === 'forward' && !page.canGoForward)) throw new Error(`Nothing to go ${which} to in this tab`);
   await ctx.env.browser.command(page.hostId!, which);
   await new Promise((r) => setTimeout(r, SETTLE_MS));
-  return { changed, isFinal: true, result: pageResult(tab, await loaded(ctx, key)) };
+  const after = await loaded(ctx, key);
+  return { changed, glyph: 'browse' as const, site: after.url, isFinal: true, result: pageResult(tab, after) };
+}
+
+/** An element's name as a line quotes it: accessible names can run long (a whole account card), so the first 40 characters. */
+function short(name: string) {
+  const line = name.replace(/\s+/g, ' ').trim();
+  return line.length > 40 ? `${line.slice(0, 39).trimEnd()}…` : line;
 }
 
 function pageResult(tab: PaneTab, page: Page) {

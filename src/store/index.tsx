@@ -5,13 +5,16 @@ import { setDriftClassifier } from '../drift.ts';
 import { host } from '../host/index.ts';
 import { showsDemoData } from '../demoData.ts';
 import { NO_AGENT_PROCESS, type AgentEvent, type AgentToolCall, type AttachedAgent, type SeqAgentEvent } from '../host/types/agent.ts';
-import type { QueueItem, Thread } from '../model.ts';
+import { isListed, type QueueItem, type Thread } from '../model.ts';
 import { useProfiles } from '../profiles.ts';
 import { resolution, undelivered } from '../runtime/apply.ts';
 import { setWorktreePath } from '../git/worktrees.ts';
 import { agentCalls, resumeAfterLostProcess, type AgentCall } from '../runtime/live.ts';
 import { dueResumes, nextResumeAt } from '../runtime/limits.ts';
+import { dueReports } from '../runtime/subagents.ts';
+import { dueWakes } from '../runtime/subThreadNotes.ts';
 import { runTool } from '../runtime/tools.ts';
+import { runDevTool } from '../runtime/devTools.ts';
 import { toolEnv } from '../runtime/toolEnv.ts';
 import type { ToolUndo } from '../runtime/undo.ts';
 import type { LayoutAction, LayoutState } from './layout.ts';
@@ -32,13 +35,11 @@ import { recordAction } from '../replay/recorder.ts';
 import { tapAction } from '../remote/tap.ts';
 import { useRemoteBridge } from '../remote/useRemoteBridge.ts';
 import { useAutoTitles } from '../utility/useAutoTitles.ts';
-import { useGoalDrafts } from '../goals/useGoalDrafts.ts';
 import { useIdleChecks } from '../goals/useIdleChecks';
 import { useAutoSimplify } from '../simplify/useSimplify.ts';
 import { usePrSync } from '../git/usePrSync.ts';
 
 export type { View } from './layout.ts';
-export type { OverlapMode } from './threads.ts';
 export { rankQueue };
 export { mirrorState, reducer } from './root.ts';
 
@@ -137,6 +138,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onSchedule = (event: ScheduleEvent) => {
       if (event.type === 'agent') return apply({ type: 'agent', event: event.event });
+      if (event.type === 'autofix') return apply({ type: 'autofix', threadId: event.threadId, event: event.event });
       apply(event.type === 'ci' ? { type: 'ci-result', event } : { type: 'schedule-run', event });
     };
     const off = host.schedule.onEvent(onSchedule);
@@ -154,7 +156,7 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
           latest.current = reducer(latest.current, action);
         },
       );
-      void runTool(call, env).then((result) => host.agent.toolResult(call.id, result));
+      void (import.meta.env.DEV && call.threadId === '__dev__' ? runDevTool(call, env) : runTool(call, env)).then((result) => host.agent.toolResult(call.id, result));
     };
     const off = host.agent.onToolCall(onToolCall);
     // Asked only once listening, so a call main sends meanwhile arrives once, by one route or the other.
@@ -162,6 +164,8 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
     return off;
   }, [dispatch]);
   useQueueRunner(state, dispatch);
+  useDelegatedReports(state.threads, dispatch);
+  useSubThreadWakes(state, dispatch);
   useCompactInstructions(state.threads);
   useRemoteBridge(state, dispatch);
   useLimitResumes(state.threads, dispatch);
@@ -170,7 +174,6 @@ export function HarnessProvider({ children }: { children: ReactNode }) {
   }, [state.panes]);
   useEffect(() => saveSideChats(state.sidechats), [state.sidechats]);
   useAutoTitles(state.threads, dispatch);
-  useGoalDrafts(state.threads, dispatch);
   useIdleChecks(state.threads, dispatch);
   useAutoSimplify(state.threads, dispatch);
   usePrSync(state.threads, dispatch);
@@ -190,6 +193,35 @@ function useQueueRunner(state: State, dispatch: Dispatch<Action>) {
       const focus = compactFocus(message.draft);
       if (focus !== null) dispatch({ type: 'compact', threadId: thread.id, focus, queuedId: message.id });
       else sendMessage(dispatch, state, thread, message, { queuedId: message.id });
+    }
+  }, [state, dispatch]);
+}
+
+/** Sends each finished delegated task's report to its thread's agent right away, steering a turn in flight; `dueReports` says which. */
+function useDelegatedReports(threads: Thread[], dispatch: Dispatch<Action>) {
+  // The report applies on the next render; until then the same one is still due.
+  const sent = useRef(new Set<string>());
+  useEffect(() => {
+    for (const { thread, subagent } of dueReports(threads)) {
+      const key = `${thread.id}:${subagent.id}`;
+      if (sent.current.has(key)) continue;
+      sent.current.add(key);
+      dispatch({ type: 'delegate-report', threadId: thread.id, subagentId: subagent.id });
+    }
+  }, [threads, dispatch]);
+}
+
+/** Starts each idle parent on its sub-threads' notes once they're all idle; `dueWakes` says which. */
+function useSubThreadWakes(state: State, dispatch: Dispatch<Action>) {
+  // The wake applies on the next render; until then the same parent is still due.
+  const woken = useRef(new Set<string>());
+  useEffect(() => {
+    const due = dueWakes(state);
+    for (const id of woken.current) if (!due.some((t) => t.id === id)) woken.current.delete(id);
+    for (const { id } of due) {
+      if (woken.current.has(id)) continue;
+      woken.current.add(id);
+      dispatch({ type: 'subthread-wake', threadId: id });
     }
   }, [state, dispatch]);
 }
@@ -222,7 +254,7 @@ function callAgent(call: AgentCall) {
     if (call.method === 'start') return host.agent.start(call.threadId, call.options);
     if (call.method === 'send') return host.agent.send(call.threadId, call.text, call.images, call.skills, call.speed, call.steer);
     if (call.method === 'compact') return host.agent.compact(call.threadId, call.focus);
-    if (call.method === 'stopSubagent') return host.agent.stopSubagent(call.threadId, call.subagentId);
+    if (call.method === 'stopTask') return host.agent.stopTask(call.threadId, call.taskId);
     return host.agent[call.method](call.threadId);
   };
   const next = pending.then(run);
@@ -266,13 +298,13 @@ export function useThread(id: string) {
 export function useSpaceThreads(spaceId?: string) {
   const { state } = useHarness();
   const id = spaceId ?? state.spaceId;
-  return state.threads.filter((t) => t.spaceId === id);
+  return state.threads.filter((t) => t.spaceId === id && isListed(t));
 }
 
 export function useSpaceQueue(spaceId?: string) {
   const { state } = useHarness();
   const id = spaceId ?? state.spaceId;
-  const ids = new Set(state.threads.filter((t) => t.spaceId === id).map((t) => t.id));
+  const ids = new Set(state.threads.filter((t) => t.spaceId === id && isListed(t)).map((t) => t.id));
   return rankQueue(state.queue.filter((q) => ids.has(q.threadId)));
 }
 

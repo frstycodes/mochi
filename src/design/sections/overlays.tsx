@@ -81,7 +81,7 @@ export function OverlaysSection() {
                   </DropdownMenuItem>
                   <DropdownMenuItem>Open in editor</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive">Settle thread</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive">Archive thread</DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -94,7 +94,7 @@ export function OverlaysSection() {
                   </ContextMenuItem>
                   <ContextMenuItem>Move to space</ContextMenuItem>
                   <ContextMenuSeparator />
-                  <ContextMenuItem variant="destructive">Settle thread</ContextMenuItem>
+                  <ContextMenuItem variant="destructive">Archive thread</ContextMenuItem>
                 </ContextMenuGroup>
               </ContextMenuContent>
             </ContextMenu>

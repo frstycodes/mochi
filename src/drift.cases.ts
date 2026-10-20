@@ -8,7 +8,7 @@ export interface DriftCase {
   name: string;
   turns: Turn[];
   /** The agent's plan, as it stands when `prompt` is typed. */
-  steps?: { title: string; files?: string[] }[];
+  steps?: { title: string }[];
   prompt: string;
   isOffGoal: boolean;
 }
@@ -16,13 +16,13 @@ export interface DriftCase {
 type Turn = string | { agent: string };
 
 const RATE_LIMIT_PLAN = [
-  { title: 'Token bucket middleware', files: ['src/middleware/rateLimit.ts'] },
-  { title: 'Per-key overrides from config', files: ['src/config/limits.ts'] },
-  { title: 'Tests for 429 responses', files: ['src/middleware/rateLimit.test.ts'] },
+  { title: 'Token bucket middleware' },
+  { title: 'Per-key overrides from config' },
+  { title: 'Tests for 429 responses' },
 ];
 const LOGIN_PLAN = [
-  { title: 'Find why the session cookie is dropped', files: ['src/auth/session.ts'] },
-  { title: 'Fix the redirect after login', files: ['src/pages/login.tsx'] },
+  { title: 'Find why the session cookie is dropped' },
+  { title: 'Fix the redirect after login' },
 ];
 
 export const DRIFT_CASES: DriftCase[] = [
@@ -87,7 +87,7 @@ export function replay(c: DriftCase) {
   };
   s = draft(s);
   if (c.steps) {
-    const steps = c.steps.map((st, i) => ({ id: `${id}-p${i}`, title: st.title, size: 1 as const, status: 'ready' as const, progress: 0, footprint: st.files ?? [], addedAt: s.now, addedBy: 'claude' as const, revision: 1 }));
+    const steps = c.steps.map((st, i) => ({ id: `${id}-p${i}`, title: st.title, status: 'ready' as const, addedAt: s.now, addedBy: 'claude' as const }));
     s = { ...s, threads: mapThread(s.threads, id, (t) => ({ ...t, steps })) };
   }
   for (const turn of rest)

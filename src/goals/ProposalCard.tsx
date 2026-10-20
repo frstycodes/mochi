@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { TerminalIcon } from '@/icons/panes';
 import { authorName, type GoalProposal, type Thread } from '../model';
+import { usePrefs } from '../settings/prefs';
 import { useHarness } from '../store';
 import { ProviderMark } from '../ui';
 import { CallList } from '../WorkLog';
@@ -14,6 +15,7 @@ import { openGoalEditor } from './GoalEditor';
  */
 export function ProposalCard({ thread }: { thread: Thread }) {
   const { proposal } = thread;
+  if (!usePrefs().goals) return null;
   if (proposal?.state === 'waiting') return <WaitingProposal thread={thread} proposal={proposal} />;
   if (proposal?.state === 'applied' && !hasWrittenSince(thread, proposal.at)) return <AppliedProposal thread={thread} proposal={proposal} />;
   return null;

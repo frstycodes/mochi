@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import type { AgentEvent } from '../../../src/host/types/agent.ts';
-import { CodexAdapter, reply } from './adapter.ts';
+import { CodexAdapter, imageModel, reply } from './adapter.ts';
 import { changesPatch, codexModels, codexThreadId, commandsFromSkills, infoFromLists, infoFromStart, mapNotification, mapRequest, requestKey, skillEvents, skillInputs, threadState, updateLimits } from './map.ts';
 import { parseMessage, RpcClient, type RpcId } from './rpc.ts';
 
-// Fixtures are real `codex app-server` 0.155.1 output (gpt-6-luna, approval policy `untrusted`), noisy methods filtered out.
+// Fixtures are real `codex app-server` output, noisy methods filtered out: 0.155.1 (gpt-6-luna, approval policy `untrusted`), and 0.163.0 for `background*` (approval policy `never`).
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}.jsonl`, import.meta.url), 'utf8');
 
 /** Replays a recording through the RPC client in odd-sized chunks, then maps it the way the adapter does. */
@@ -170,11 +170,13 @@ test('a thread runs at the speed it started with, and a message changes it for i
   const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
   const fake = fakeCodex(home, TIER_CODEX);
   const log = path.join(home, 'tiers.log');
-  const codex = new CodexAdapter(() => {}, async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
+  const events: AgentEvent[] = [];
+  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, TIER_LOG: log } }));
   // Lets each turn end before the next send.
   const settle = () => new Promise((r) => setTimeout(r, 150));
   try {
-    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority' });
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'hi', speed: 'priority', effort: 'max' });
+    assert.ok(events.some((e) => e.type === 'info' && e.info.effort === 'max'));
     await settle();
     await codex.send('t', 'again');
     await settle();
@@ -436,6 +438,53 @@ test('a spawned agent becomes a subagent of its thread with its own steps, resul
   }
 });
 
+test('a command still running when the turn ends is a background task that ends with its exit (real 0.163.0 trace)', () => {
+  const { events } = replay('background');
+  const id = 'exec-5d520426-9a8e-4ff3-911c-41db88751dee';
+  const tail = events.filter((e) => e.type === 'task' || e.type === 'turn-end');
+  assert.deepEqual(tail, [
+    { threadId: 'h1', type: 'task', id, phase: 'start', kind: 'shell', command: "sh -c 'sleep 25; echo finished; exit 3'" },
+    { threadId: 'h1', type: 'turn-end', status: 'done' },
+    { threadId: 'h1', type: 'task', id, phase: 'end', status: 'failed', exitCode: 3 },
+  ]);
+  assert.equal(replay('plan').events.filter((e) => e.type === 'task').length, 0, 'a command that finished inside its turn is no task');
+});
+
+test('stopping a background task terminates its terminal and ends it stopped, not failed (real 0.163.0 trace)', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = fakeCodex(home, STOP_CODEX);
+  const events: AgentEvent[] = [];
+  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, FIXTURE: fileURLToPath(new URL('./fixtures/background-stop.jsonl', import.meta.url)) } }));
+  const id = 'exec-aaec80e8-e146-42a6-babd-b605b1490725';
+  const ended = () => events.find((e) => e.type === 'task' && e.phase === 'end');
+  try {
+    await codex.start('h1', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'Start sleep 600 in the background' });
+    for (let i = 0; i < 50 && !events.some((e) => e.type === 'turn-end'); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.ok(events.some((e) => e.type === 'task' && e.phase === 'start' && e.id === id));
+    assert.equal(ended(), undefined, 'still running after the turn');
+    await codex.stopTask('h1', id);
+    for (let i = 0; i < 50 && !ended(); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(ended(), { threadId: 'h1', type: 'task', id, phase: 'end', status: 'stopped', exitCode: 137 });
+  } finally {
+    codex.dispose();
+  }
+});
+
+/** Replays a background-terminal trace (`FIXTURE`) but holds its last line, the terminal's exit, until `thread/backgroundTerminals/terminate`. */
+const STOP_CODEX = `#!/usr/bin/env node
+const lines = require('fs').readFileSync(process.env.FIXTURE, 'utf8').split('\\n').filter(Boolean);
+const exit = JSON.parse(lines.pop()).params.item;
+let buf = '';
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+  if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: JSON.parse(lines[0]).params.threadId } } });
+  else if (m.method === 'turn/start') { send({ id: m.id, result: { turn: { id: 't' } } }); for (const l of lines) process.stdout.write(l + '\\n'); }
+  else if (m.method === 'thread/backgroundTerminals/list') send({ id: m.id, result: { data: [{ itemId: exit.id, processId: exit.processId }], nextCursor: null } });
+  else if (m.method === 'thread/backgroundTerminals/terminate') { const ok = m.params.processId === exit.processId; send({ id: m.id, result: { terminated: ok } }); if (ok) send({ method: 'item/completed', params: { item: exit, threadId: m.params.threadId } }); }
+  else if (m.id !== undefined) send({ id: m.id, result: m.method === 'account/read' ? { account: { type: 'chatgpt' }, requiresOpenaiAuth: true } : {} });
+} });
+`;
+
 /** A stand-in `codex` that answers a turn by replaying a recorded trace (`FIXTURE`), under the recorded parent thread id. */
 const REPLAY_CODEX = `#!/usr/bin/env node
 const lines = require('fs').readFileSync(process.env.FIXTURE, 'utf8').split('\\n').filter(Boolean);
@@ -505,4 +554,12 @@ test("a completed file change carries one patch with a section per file, so each
     ].join('\n'),
   );
   assert.equal(changesPatch([{ path: '/repo/x.ts', kind: { type: 'update', move_path: null }, diff: '' }], '/repo'), '', 'an update without hunks adds nothing');
+});
+
+test("image generation runs on a model the account lists: the cheap one, else its default, never the user's config default", () => {
+  const model = (id: string, isDefault = false) => ({ id, name: id, description: '', efforts: [], speeds: [], isDefault });
+  assert.equal(imageModel([model('gpt-6-astra', true), model('gpt-6-luna')]), 'gpt-6-luna');
+  assert.equal(imageModel([model('gpt-6-nova'), model('gpt-6-astra', true)]), 'gpt-6-astra');
+  assert.equal(imageModel([model('gpt-6-nova')]), 'gpt-6-nova');
+  assert.equal(imageModel([]), null);
 });

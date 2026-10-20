@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Command, Control, Option, Shift, type IconComponent } from '@/icons';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Command, Control, Option, Return, Shift, type IconComponent } from '@/icons';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { IS_MAC, keyName, orderKeys, shortcutText, type Key } from './keys';
 import { bindingOf, type CommandId } from './keymap';
@@ -31,5 +31,5 @@ function KeyCap({ name }: { name: Key }) {
   return <Kbd aria-hidden>{Icon ? <Icon /> : keyName(name)}</Kbd>;
 }
 
-const MAC_ICONS = { mod: Command, shift: Shift, alt: Option, nav: Control } satisfies Record<string, IconComponent>;
+const MAC_ICONS = { mod: Command, shift: Shift, alt: Option, nav: Control, Enter: Return } satisfies Record<string, IconComponent>;
 const ARROW_ICONS = { up: ArrowUp, down: ArrowDown, left: ArrowLeft, right: ArrowRight } satisfies Record<string, IconComponent>;

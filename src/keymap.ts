@@ -32,10 +32,11 @@ const ARROWS = { left: 'left', right: 'right', up: 'up', down: 'down' } as const
 export const COMMANDS = {
   palette: { title: 'Command palette', group: 'General', scope: 'global', keys: ['mod', 'K'] },
   'go-settings': { title: 'Settings', group: 'General', scope: 'global', keys: ['mod', ','] },
-  'go-new': { title: 'New thread', group: 'General', scope: 'global', keys: ['N'] },
+  'go-new': { title: 'New thread', group: 'General', scope: 'global', keys: ['mod', 'N'] },
   'layout-overview': { title: 'Show all sessions', group: 'General', scope: 'global', keys: ['mod', 'up'] },
 
   'thread-pin': { title: 'Pin or unpin thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', 'P'] },
+  'thread-rename': { title: 'Rename thread', group: 'Threads', scope: 'global', keys: ['F2'] },
   'pinned-previous': { title: 'Previous pinned thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', '['] },
   'pinned-next': { title: 'Next pinned thread', group: 'Threads', scope: 'global', keys: ['mod', 'shift', ']'] },
   ...numbered(PINS, (n) => [`pinned-${n}`, { title: `Pinned thread ${n}`, group: 'Threads', scope: 'global', keys: ['mod', String(n)] }]),
@@ -91,7 +92,7 @@ export const FIXED_KEYS: { keys: Key[]; what: string }[] = [
   { keys: ['mod', 'Z'], what: 'Undo while annotating a page (Shift for redo)' },
   { keys: ['left', 'right'], what: 'Step through files, photos and replays' },
   { keys: ['1'], what: 'Answer a drift card (1 to 3)' },
-  { keys: ['mod', 'Enter'], what: 'Send a review comment or a note on a change' },
+  { keys: ['mod', 'Enter'], what: 'Take the next move from an empty composer; send a review comment or a note on a change' },
   { keys: ['mod', 'C'], what: 'Text editing, and every key inside a terminal or the simulator' },
 ];
 

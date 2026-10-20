@@ -2,18 +2,22 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Step, Thread } from './model.ts';
 import { boardColumns, similarity, statusAt, timeAgo, goalProgress, progressLabel } from './progress.ts';
+import { setPrefs } from './settings/prefs.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 function step(id: string, rest: Partial<Step> = {}): Step {
-  return { id, title: id, size: 1, status: 'ready', progress: 0, footprint: [], addedAt: 0, addedBy: 'you', revision: 1, ...rest };
+  return { id, title: id, status: 'ready', addedAt: 0, addedBy: 'you', ...rest };
 }
 
 const thread = {
   startedAt: 0,
   steps: [
-    step('a', { status: 'done', startedAt: 0, doneAt: 10, size: 2 }),
-    step('b', { status: 'running', startedAt: 10, progress: 0.5, size: 2 }),
+    step('a', { status: 'done', startedAt: 0, doneAt: 10 }),
+    step('b', { status: 'running', startedAt: 10 }),
     step('c', { status: 'dropped', droppedAt: 5 }),
-    step('d', { addedAt: 20, size: 1 }),
+    step('d', { addedAt: 20 }),
   ],
 } as Thread;
 
@@ -40,13 +44,16 @@ test('the ring counts criteria only, never steps or a percent, and the phase fol
   assert.equal(progressLabel(noCriteria), 'Building');
 });
 
-test('shared steps align to one column and push later stations right', () => {
-  const lineA = [step('a1'), step('a2', { sharedKey: 'redis' }), step('a3')];
-  const lineB = [step('b1'), step('b2'), step('b3'), step('b4', { sharedKey: 'redis' })];
-  const cols = boardColumns([lineA, lineB]);
-  assert.equal(cols.get('a2'), 3);
-  assert.equal(cols.get('b4'), 3);
-  assert.equal(cols.get('a3'), 4);
+test('judged criteria you confirmed count as met, so the ring agrees with the goal panel', () => {
+  const goal = { ...thread, goal: 'Calm pane', status: 'running' as const, activity: [], criteria: [{ id: 'c1', text: 'Typecheck', command: 'pnpm typecheck', check: { status: 'passed' as const, at: 1 } }, { id: 'c2', text: 'Looks calm' }, { id: 'c3', text: 'Both themes' }] };
+  assert.equal(progressLabel(goalProgress(goal)), 'Verifying · 1/3');
+  const confirmed = { ...goal, idle: { at: 2, accepted: [], isConfirmed: true } };
+  assert.equal(progressLabel(goalProgress(confirmed)), 'Ready for review · 3/3');
+});
+
+test("a step sits in its own plan's column on the board", () => {
+  const cols = boardColumns([[step('a1'), step('a2')], [step('b1')]]);
+  assert.deepEqual([cols.get('a1'), cols.get('a2'), cols.get('b1')], [0, 1, 0]);
 });
 
 test('similarity matches near-identical step titles only', () => {

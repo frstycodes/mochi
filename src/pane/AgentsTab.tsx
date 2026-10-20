@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { formatElapsed, SubagentAvatar, SubagentLine, SubagentMeta, SubagentModel, subagentPersona, TOKENS, useElapsed } from '../agents/parts';
+import { formatElapsed } from '../progress';
+import { SubagentAvatar, SubagentLine, SubagentMeta, SubagentModel, subagentPersona, TOKENS, useElapsed } from '../agents/parts';
 import { useThreadFiles } from '../files/viewer';
 import { reportOf } from '../runtime/subagents';
 import { VIZ_COMPONENTS, VIZ_PLUGINS, VIZ_REHYPE_PLUGINS } from '../viz/FenceVisual';
@@ -273,7 +274,7 @@ function NoAgents() {
           <Hierarchy />
         </EmptyMedia>
         <EmptyTitle>No agents yet</EmptyTitle>
-        <EmptyDescription>Subagents and background agents this thread's agent starts show here, with their logs and changes.</EmptyDescription>
+        <EmptyDescription>Subagents and delegated tasks this thread's agent starts show here, with their logs and changes.</EmptyDescription>
       </EmptyHeader>
     </Empty>
   );

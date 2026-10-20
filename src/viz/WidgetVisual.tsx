@@ -40,7 +40,7 @@ export function WidgetVisual({ source, title }: { source: string; title: string 
       sandbox="allow-scripts"
       srcDoc={srcDoc}
       onLoad={postTheme}
-      className="block w-full rounded-md border-0 bg-transparent"
+      className="block w-full border-0 bg-transparent"
       style={{ height, colorScheme: scheme }}
     />
   );

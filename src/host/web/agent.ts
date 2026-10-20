@@ -26,6 +26,7 @@ export const agent: AgentHost = {
   settle: endTurn,
   async resolve() {},
   async setupChoice() {},
+  async keepTitle() {},
   onEvent(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -56,7 +57,7 @@ export const agent: AgentHost = {
   async readWidget() {
     throw new Error('MCP App views need the desktop app.');
   },
-  async stopSubagent() {},
+  async stopTask() {},
   async attached() {
     return [];
   },

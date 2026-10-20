@@ -17,10 +17,8 @@ const tick = (s: State, n = 1) => {
 };
 const live = (s: State, id: string): State => ({ ...s, threads: s.threads.map((t) => (t.id === id ? { ...t, session: { provider: t.providers[0], id: 'sess-1' } } : t)) });
 
-test('a plan matches steps by title, starts and completes them, and keeps provided-by links resolving', () => {
+test('a plan matches steps by title, starts and completes them', () => {
   let s = base();
-  const linked = { mode: 'provided-by' as const, threadId: 'rl', stepId: 'rl5' };
-  s = { ...s, threads: s.threads.map((t) => (t.id === 'adm' ? { ...t, steps: t.steps.map((x) => (x.id === 'ad4' ? { ...x, status: 'waiting' as const, link: linked } : x)) } : t)) };
   const items = titles(s, 'rl').filter((_, i) => i !== 2).map((title): AgentPlanItem => ({ title, status: 'pending' }));
   items[3] = { title: 'add a redis client', status: 'done' };
   items[4] = { title: 'Token bucket middleware', status: 'running' };
@@ -29,7 +27,6 @@ test('a plan matches steps by title, starts and completes them, and keeps provid
   assert.equal(rl.steps.find((x) => x.id === 'rl5')!.status, 'done', 'fuzzy title still matches');
   assert.equal(rl.steps.find((x) => x.id === 'rl6')!.status, 'running');
   assert.equal(rl.steps.length, 9, 'no scope added');
-  assert.equal(thread(s, 'adm').steps.find((x) => x.id === 'ad4')!.status, 'done', 'provided-by link resolved through completeStep');
 });
 
 test('an unknown plan item lands as a plan step, no revision, after the item it follows', () => {
@@ -41,12 +38,12 @@ test('an unknown plan item lands as a plan step, no revision, after the item it 
   const adm = thread(s, 'adm');
   const added = adm.steps[1];
   assert.equal(added.title, 'Index api_usage_daily by key');
-  assert.deepEqual([added.addedBy, added.status, added.revision], ['codex', 'ready', adm.revisions.length]);
+  assert.deepEqual([added.addedBy, added.status], ['codex', 'ready']);
   assert.equal(adm.revisions, before);
   assert.equal(adm.activity.at(-1)!.text, 'Plan: Codex added "Index api_usage_daily by key"');
 });
 
-test('a step the agent drops is marked dropped; steps you added stay', () => {
+test("the steps mirror the agent's plan: one it no longer lists is dropped, whoever added it", () => {
   let s = base();
   const items = titles(s, 'rl')
     .filter((title) => title !== 'Load test at 2k req/s' && title !== 'Per-key overrides')
@@ -56,7 +53,57 @@ test('a step the agent drops is marked dropped; steps you added stay', () => {
   const rl8 = rl.steps.find((x) => x.id === 'rl8')!;
   assert.equal(rl8.status, 'dropped');
   assert.equal(rl8.note, 'Dropped by Claude');
-  assert.equal(rl.steps.find((x) => x.id === 'rl7')!.status, 'ready', 'your step is canonical');
+  assert.equal(rl.steps.find((x) => x.id === 'rl7')!.status, 'dropped', 'a step added by hand before steps became a mirror goes too');
+});
+
+test('a shorter plan leaves no stale step, done or not', () => {
+  for (const status of ['done', 'pending'] as const) {
+    let s = base();
+    const four = ['Read the code', 'Write the fix', 'Add tests', 'Ship it'];
+    s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items: four.map((title) => ({ title, status })), isFresh: true });
+    s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items: four.slice(0, 3).map((title) => ({ title, status: 'done' as const })) });
+    const shown = thread(s, 'rl').steps.filter((x) => x.status !== 'dropped').map((x) => x.title);
+    assert.deepEqual(shown, four.slice(0, 3), status);
+  }
+});
+
+test('a revised step keeps its id and start but shows the new title', () => {
+  let s = base();
+  const step = thread(s, 'rl').steps.find((x) => x.id === 'rl5')!;
+  const items = thread(s, 'rl').steps.filter((x) => x.status !== 'dropped').map((x): AgentPlanItem => ({ title: x.id === 'rl5' ? 'add a redis client' : x.title, status: 'pending' }));
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items });
+  const revised = thread(s, 'rl').steps.find((x) => x.id === 'rl5')!;
+  assert.notEqual(step.title, 'add a redis client');
+  assert.deepEqual([revised.title, revised.startedAt], ['add a redis client', step.startedAt]);
+});
+
+test('a first_task plan starts a fresh list', () => {
+  let s = base();
+  const before = thread(s, 'rl').steps;
+  const items = before.filter((x) => x.status !== 'dropped').map((x): AgentPlanItem => ({ title: x.title, status: 'pending' }));
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items, isFresh: true });
+  const rl = thread(s, 'rl');
+  const ids = new Set(before.map((x) => x.id));
+  assert.ok(rl.steps.filter((x) => ids.has(x.id)).every((x) => x.status === 'dropped'), 'the previous plan leaves, done steps too');
+  assert.deepEqual(rl.steps.filter((x) => !ids.has(x.id)).map((x) => [x.title, x.status]), items.map((i) => [i.title, 'ready']));
+});
+
+test('the plan shows in the order and with the statuses the agent last sent', () => {
+  let s = base();
+  const four = ['Read the code', 'Write the fix', 'Add tests', 'Ship it'];
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items: four.map((title) => ({ title, status: 'done' as const })), isFresh: true });
+  const items: AgentPlanItem[] = [
+    { title: 'Ship it', status: 'pending' },
+    { title: 'Read the code', status: 'running' },
+    { title: 'Write the fix', status: 'done' },
+  ];
+  s = applyAgentEvent(s, { threadId: 'rl', type: 'plan', items });
+  const shown = thread(s, 'rl').steps.filter((x) => x.status !== 'dropped');
+  assert.deepEqual(shown.map((x) => [x.title, x.status, x.doneAt !== undefined]), [
+    ['Ship it', 'ready', false],
+    ['Read the code', 'running', false],
+    ['Write the fix', 'done', true],
+  ]);
 });
 
 test('an approval goes to the queue, blocks the running step, and its answer resolves back to the agent', () => {
@@ -130,45 +177,30 @@ test('info merges into the thread, MCP servers by name, and a new session starts
   assert.deepEqual(thread(s, 'rl').agent, {});
 });
 
-test('the demo adapter raises the overlap at the scripted minute, as the tick did', () => {
-  let s = tick(base(), SCRIPT.overlapAt - NOW0 - 1);
-  assert.ok(!s.queue.some((q) => q.kind === 'overlap'));
-  s = tick(s);
-  const item = s.queue.find((q) => q.kind === 'overlap')!;
-  assert.equal(s.now, SCRIPT.overlapAt);
-  assert.deepEqual([item.threadId, item.overlap!.otherThreadId, item.overlap!.otherStepId], ['adm', 'rl', 'rl5']);
-  assert.deepEqual(item.overlap!.sharedFiles, ['packages/cache/redis.ts']);
-  const adm = thread(s, 'adm');
-  const held = adm.steps[2];
-  assert.deepEqual([held.title, held.status, held.addedBy, held.id], ['Add Redis client', 'waiting', 'codex', item.overlap!.stepId]);
-  assert.ok(adm.activity.some((a) => a.who === 'codex' && a.text.startsWith('Usage queries take 1.8s')));
-  assert.equal(tick(s, 3).queue.filter((q) => q.kind === 'overlap').length, 1, 'fires once');
-});
-
 test('the demo adapter adds rl scope at the scripted minute', () => {
   let s = tick(base(), SCRIPT.scopeAt - NOW0);
   const rl = thread(s, 'rl');
-  const added = rl.steps.slice(-2);
-  assert.deepEqual(added.map((x) => [x.title, x.size, x.addedBy]), [
-    ['Return RateLimit-* headers', 1, 'claude'],
-    ['Stricter limits for /search', 2, 'claude'],
+  const added = rl.steps.filter((x) => x.status !== 'dropped').slice(-2);
+  assert.deepEqual(added.map((x) => [x.title, x.addedBy]), [
+    ['Return RateLimit-* headers', 'claude'],
+    ['Stricter limits for /search', 'claude'],
   ]);
   assert.equal(rl.activity.findLast((e) => e.text.startsWith('Plan:'))!.text, 'Plan: Claude found 2 more steps');
   s = tick(s, 5);
   assert.equal(thread(s, 'rl').steps.length, rl.steps.length, 'fires once');
 });
 
-test('demo threads progress, log tools, grow context and end in review', () => {
+test('demo threads log tools, grow context and work through their plan; a finished plan is not a finished goal', () => {
   let s = base();
   const before = thread(s, 'adm');
   s = tick(s, 4);
   const adm = thread(s, 'adm');
-  assert.ok(adm.steps.find((x) => x.id === 'ad2')!.progress > before.steps.find((x) => x.id === 'ad2')!.progress);
   assert.ok(adm.activity.some((a) => a.kind === 'tool' && a.at > NOW0));
   assert.ok(adm.context.used > before.context.used);
-  for (let i = 0; i < 2000 && thread(s, 'rl').status !== 'review'; i++) s = tick(s);
-  assert.equal(thread(s, 'rl').status, 'review');
-  assert.equal(s.queue.some((q) => q.id === 'q-review-rl'), false, 'the report card says what is next, not a queue card');
+  const isOpen = () => thread(s, 'rl').steps.some((x) => x.status !== 'done' && x.status !== 'dropped');
+  for (let i = 0; i < 2000 && isOpen(); i++) s = tick(s);
+  assert.equal(isOpen(), false);
+  assert.equal(thread(s, 'rl').status, 'running', 'readiness is the idle verdict’s, never the plan’s');
 });
 
 test("a tool's end with links fills in the entry its start logged", () => {

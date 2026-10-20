@@ -55,8 +55,18 @@ function sortTree(nodes: TreeNode[]): TreeNode[] {
     .sort((a, b) => Number(!a.children) - Number(!b.children) || a.name.localeCompare(b.name));
 }
 
+/** Folders whose only child is a folder merge into one row (`host/types`), like VS Code's compact folders. */
+export function compactTree(nodes: TreeNode[]): TreeNode[] {
+  return nodes.map((node) => {
+    if (!node.children) return node;
+    const [only, ...rest] = node.children;
+    if (only?.children && rest.length === 0) return compactTree([{ ...only, name: `${node.name}/${only.name}` }])[0];
+    return { ...node, children: compactTree(node.children) };
+  });
+}
+
 /** The rows on screen, top to bottom: every folder open when `expanded` is `'all'`. */
-export function visibleRows(nodes: TreeNode[], expanded: Set<string> | 'all', depth = 0): TreeRow[] {
+export function visibleRows(nodes: TreeNode[], expanded: Pick<Set<string>, 'has'> | 'all', depth = 0): TreeRow[] {
   return nodes.flatMap((node) => [{ node, depth }, ...(node.children && (expanded === 'all' || expanded.has(node.path)) ? visibleRows(node.children, expanded, depth + 1) : [])]);
 }
 

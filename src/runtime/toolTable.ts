@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { STEP_STATUSES } from '../host/types/agent.ts';
 import { SETTING_SECTIONS } from '../settings/settingSections.ts';
 
 /**
@@ -16,7 +15,6 @@ export const ASKING_TIERS = ['destructive', 'setting'] as const satisfies Tier[]
 const threadId = z.string().optional().describe('A thread in this profile (ids come from list_threads); defaults to your own thread');
 const otherThread = z.string().describe('A thread in this profile; ids come from list_threads');
 const threadIds = z.array(z.string()).min(1).describe('Threads in this profile; ids come from list_threads');
-const stepId = z.string().describe('A step id from get_goal');
 const tabId = z.string().optional().describe("One of your thread's browser tabs from browser_tabs; defaults to the active one");
 const ref = z.string().describe('An element ref like "g3-e12" from the latest browser_snapshot');
 const profileId = z.string().optional().describe('A profile id from list_profiles; defaults to your own');
@@ -25,6 +23,9 @@ const reason = z.string().min(1).max(240).describe('Why, in a sentence the user 
 
 /** The MCP server Mochi's tools are on: agents see them as `mcp__mochi__<tool>`. */
 export const MOCHI_SERVER = 'mochi';
+
+/** `update_plan`'s scope: this thread's first task, more of the same work, or unrelated work Mochi offers to move to a new thread. */
+export const PLAN_SCOPES = ['first_task', 'continuation', 'new_task'] as const;
 
 export const TOOL_TABLE = {
   // {THREADS}
@@ -39,7 +40,7 @@ export const TOOL_TABLE = {
   },
   get_thread: {
     tier: 'read',
-    description: "Read one thread in detail: goal, steps with status, its last activity, pull requests, and anything it's waiting on you for.",
+    description: "Read one thread in detail: goal, its agent's plan (title and status of each item), its last activity, pull requests, and anything it's waiting on you for.",
     shape: { threadId },
   },
   rename_thread: { tier: 'change', description: "Rename a thread. Shows the user an Undo toast.", shape: { threadId, title: z.string().min(1).max(120) } },
@@ -66,12 +67,14 @@ export const TOOL_TABLE = {
   create_thread: {
     tier: 'change',
     description:
-      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Leave model and effort out unless the user named them, or the task is clearly simple enough for a cheaper model or lower effort; never pick something more expensive than the default on your own. The user's setting may refuse a choice; relay its reason.",
+      "Start a new thread in the same project, with its own agent working on `prompt`. The user stays on the view they are on and can undo it from a toast. Honor any model or effort the user explicitly named. Otherwise leave that field out: the new thread inherits the originating session's model and effort when it starts. Do not choose a different model or effort on your own. It nests under this thread as a sub-thread: it branches from your branch, opens its PR into it, and each turn it ends comes back to you as a note; you are started with the notes once all your sub-threads are idle. Pass `criterionId` to hand it one piece of your goal. Pass `isTopLevel` for work that stands on its own, like an unrelated task the user wants as a separate thread. From a sub-thread, it nests under that sub-thread and waits on the user's approval, as does any model or effort above this thread's.",
     shape: {
       prompt: z.string(),
+      criterionId: z.string().optional().describe('Hand this criterion of your goal (an id from get_goal) to the new thread as a sub-thread; its result claims it when handed back'),
+      isTopLevel: z.boolean().optional().describe('Start it at the top of the sidebar, not nested under this thread'),
       provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
       model: z.string().optional().describe("A model id the account offers, like \"claude-sonnet-5-5\"; defaults to this thread's"),
-      effort: z.string().optional().describe("low, medium, high, xhigh or max; defaults to this thread's"),
+      effort: z.string().optional().describe("A provider-supported effort id; defaults to the originating session's at start"),
     },
   },
   send_to_thread: {
@@ -85,36 +88,11 @@ export const TOOL_TABLE = {
     shape: { threadIds },
   },
   // {GOALS}
-  get_goal: { tier: 'read', description: "Read a thread's goal (empty for a question or chat), what done means (criteria), and its steps with each step's id, status, size and acceptance criteria.", shape: { threadId } },
-  set_step_status: {
-    tier: 'change',
-    quiet: true,
-    description: "Set a goal step's status. Mark steps running when you start them and done when finished, so the user sees progress.",
-    shape: { stepId, status: z.enum(STEP_STATUSES), threadId },
-  },
-  add_step: {
-    tier: 'change',
-    quiet: true,
-    description: "Add a step to a thread's plan. Plan changes don't change the goal's version.",
-    shape: { title: z.string(), threadId },
-  },
-  edit_goal: {
-    tier: 'change',
-    description: "Change a thread's goal text and/or steps' acceptance criteria, as one new goal revision.",
-    shape: {
-      threadId,
-      goal: z.string().optional().describe('The new goal text'),
-      criteria: z
-        .array(z.object({ stepId, text: z.string().describe('What done means; empty removes it'), command: z.string().optional().describe('A command that checks it, like "pnpm test"') }))
-        .optional(),
-    },
-  },
-  reorder_steps: { tier: 'change', description: 'Reorder goal steps. List step ids top first; steps left out keep their place after them.', shape: { threadId, order: z.array(z.string()).min(1) } },
-  drop_step: { tier: 'change', description: "Drop a step that's no longer needed. Done steps can't be dropped.", shape: { threadId, stepId, reason: z.string().optional() } },
+  get_goal: { tier: 'read', description: "Read a thread's goal (empty until a researched working-agent goal is accepted, or for a chat) and what done means: its criteria, each with its id, its check command when Mochi runs one, your claim and Mochi's check result.", shape: { threadId } },
   open_pr: {
     tier: 'change',
     description:
-      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first. Use this instead of `gh pr create`.',
+      'Open the pull request for your branch: Mochi pushes it and writes the description from your report, so give only a title and one line of why. Commit first.',
     shape: {
       title: z.string().min(1).max(72).describe('Conventional Commits style, like "fix(auth): keep the session cookie"'),
       why: z.string().min(1).max(300).describe('One sentence: why this change'),
@@ -124,7 +102,7 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      "After your first look at the code, propose this thread's goal: the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. Once per task; the user accepts it, or Mochi applies it with an undo. Keep working while it waits.",
+      "Mochi writes no goal for you. For a task with a checkable outcome, after your first look at the code, propose this thread's goal (skip it for a question, a chat or a small one-step change): the concrete outcome you found the user is asking for, and 2 to 4 criteria that prove it, each with a command when one would. The user accepts it, or Mochi applies it with an undo. Call it again only when what done means has to change; it replaces the whole goal. Keep working while it waits.",
     shape: {
       goal: z.string().min(1).max(120).describe('What will be true when this is done, specific to what you found'),
       criteria: z
@@ -144,11 +122,25 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'At the end of a turn where you changed anything for a goal, report once so the user can skip reading your reply: decisions you made, what is left, and at most one question that needs them. Short lines, no prose.',
+      'At the end of a turn where you changed anything, report once so the user can skip reading your reply: what changed, decisions you made, what is left, at most one question that needs them, and, when the user has a real choice to make, the next move as a question with the answers you offer as buttons. Short lines, no prose.',
     shape: {
+      summary: z.string().max(360).optional().describe('What changed, in the user\'s terms, 1 to 3 sentences'),
       decisions: z.array(z.string().max(160)).max(5).describe('Choices you made that the user should know about'),
       left: z.array(z.string().max(160)).max(5).describe('What is still not done'),
       question: z.string().max(240).optional().describe('The one thing you need from the user, if anything'),
+      next: z.string().max(160).optional().describe('The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi\'s own UI. Leave it out when nothing waits on them, like a running sub-thread: its notes come back without a message'),
+      options: z
+        .array(
+          z.object({
+            label: z.string().min(1).max(32).describe('The button, like "Commit" or "Only the tests"'),
+            reply: z.string().min(1).max(300).describe('What the button sends you as the user\'s message, in their words, like "Commit the cookie fix and its test."'),
+            isDraft: z.boolean().optional().describe('Put reply in the message box for the user to finish instead of sending it, like "Before you continue, I want to change the plan:"'),
+          }),
+        )
+        .min(1)
+        .max(3)
+        .optional()
+        .describe('The answers to next, your pick first; written for this turn, not generic'),
     },
   },
   get_report: {
@@ -158,29 +150,38 @@ export const TOOL_TABLE = {
   },
   settle_goal: {
     tier: 'change',
-    description: 'Close out a goal: drops every open step with your reason and settles the thread. Use when the goal is met or no longer wanted. Not your own thread.',
+    description: 'Close out a goal and settle the thread, with your reason. Use when the goal is met or no longer wanted. Not your own thread.',
     shape: { threadId: otherThread, reason: z.string().min(1) },
   },
   // {AGENTS}
-  start_background_agent: {
+  update_plan: {
+    tier: 'read',
+    description:
+      'Keep the plan Mochi shows under your latest message; the user follows your progress there. Every request that edits files or runs more than one command gets one; a single-command answer or pure conversation does not. Never spend a message on this tool alone: send it in the same message as another tool call. First call: with the turn\'s very first tool call, even one that only reads, {"items": [...]}: the whole plan in order, short imperative steps (about 7 words, no numbering), the step you start in_progress, the rest pending; if you must look around first, step one is that look. Next step: {"advance": true} alongside the call that begins it (completes the in_progress step, starts the next pending one); after the last step, advance once more. Plan changed, or the user redirected you: {"items": [...]} again, the new whole list. Keep exactly one step in_progress while working and none when everything is done. Don\'t also write the plan as a list in your reply. Every {"items"} call says in "scope" what this request is to the thread: "first_task" until you have finished a task here; after that "continuation" (anything that builds on what was done, found or decided here, including a follow-up, a fix or going ahead with what you suggested; when unsure, this one) or "new_task" (unrelated work a fresh thread would do as well from the user\'s words alone). With "new_task", Mochi asks the user whether to move the request to a new thread and shows no plan: don\'t start the work, end your turn with one short line.',
+    shape: {
+      items: z
+        .array(z.object({ title: z.string().min(1).max(120).describe('A short step, like "Add the parser test"'), status: z.enum(['pending', 'in_progress', 'completed']) }))
+        .min(1)
+        .max(12)
+        .optional()
+        .describe('The whole plan, in order; replaces the previous one, and steps left out are dropped'),
+      advance: z.boolean().optional().describe('Complete the in_progress step and start the next pending one; ignored with items'),
+      scope: z.enum(PLAN_SCOPES).optional().describe('Required with items: what this request is to the thread'),
+    },
+  },
+  delegate_task: {
     tier: 'change',
     quiet: true,
     description:
-      "Start a background agent that works on its own while you keep going: in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new). It runs on this profile's account and counts toward the concurrency cap. When it finishes, its report comes to you with the user's next message. For work that needs no answer from you mid-way; for a quick lookup use your own subagents.",
+      "Run a task on the other provider (Codex from a Claude thread, Claude from a Codex thread), or on a model your own subagent tool doesn't offer. Prefer your native subagent tool for same-provider work whenever it supports the model you want. The child sees only the prompt, nothing of this conversation. It runs in your worktree (worktree: same, the default; it sees and edits your files) or a fresh worktree on a new branch (worktree: new), on this profile's account. Returns at once; when it finishes, its report comes to you as a message, steered into your turn if you're working. Don't poll or wait for it.",
     shape: {
       prompt: z.string().min(1).max(20_000).describe('The whole task: it sees nothing of this conversation'),
       name: z.string().min(1).max(60).describe('A few words the user sees, like "Fix flaky checkout test"'),
+      provider: z.enum(['claude', 'codex']),
+      model: z.string().optional().describe("A model id the account offers; defaults to the provider's"),
       worktree: z.enum(['same', 'new']).optional(),
-      provider: z.enum(['claude', 'codex']).optional().describe("Defaults to this thread's agent"),
-      model: z.string().optional().describe("A model id the account offers; defaults to this thread's"),
     },
   },
-  list_background_agents: {
-    tier: 'read',
-    description: "List this thread's subagents and background agents: id, name, status, origin (mochi: started with start_background_agent; native: your own), tokens, elapsed, and the result of finished ones.",
-    shape: { status: z.enum(['running', 'done', 'failed', 'stopped']).optional() },
-  },
-  stop_background_agent: { tier: 'change', quiet: true, description: 'Stop one of your running background agents (ids from list_background_agents). Its partial work stays in its worktree.', shape: { id: z.string() } },
   // {BROWSER}
   browser_tabs: { tier: 'read', description: "List your thread's browser tabs in the side pane: tabId, url, title, loading, active.", shape: {} },
   browser_open: {
@@ -238,7 +239,11 @@ export const TOOL_TABLE = {
     quiet: true,
     description:
       "Run JavaScript in the page's own context, where it can read the app's state; top-level await works. Returns the last expression as JSON (capped at 20k chars), or the error. Stops after 10s. Runs on your local dev pages directly; on any other site it asks the user first, since it runs with their signed-in session there. Prefer the other browser tools when they can do it.",
-    shape: { tabId, script: z.string().min(1).max(100_000) },
+    shape: {
+      tabId,
+      purpose: z.string().min(1).max(160).describe("For the user, who approves it on other sites: what the script does and why, in plain words starting with a verb, no code, no trailing period. Like \"Read the app's publishing status to check it went live\""),
+      script: z.string().min(1).max(100_000),
+    },
   },
   browser_screenshot: { tier: 'read', description: 'A PNG of the page as the user sees it, or the whole scrollable page.', shape: { tabId, fullPage: z.boolean().optional() } },
   browser_console: { tier: 'read', description: "The page's recent console messages (all levels), newest last.", shape: { tabId } },
@@ -256,6 +261,33 @@ export const TOOL_TABLE = {
     quiet: true,
     description: 'Emulate a device size: responsive (fills the pane), iphone-se, iphone-16, iphone-16-pro-max, pixel-9, ipad-mini, ipad-pro, laptop.',
     shape: { tabId, device: z.string(), rotated: z.boolean().optional() },
+  },
+  browser_handoff: {
+    tier: 'read',
+    description:
+      "Hand the tab to the user for something only they can do (sign in, a 2-step code, a captcha, a choice only they can make) and wait until they're done, then go on with your plan in the same turn. Mochi brings the tab to the front and shows them a card with Done. With doneWhen, it also returns on its own once that holds on a page that finished loading; pick something that only becomes true after they finish, like the URL you land on after signing in, not the 2-step page. Other browser tools on this tab fail until it returns. Returns done: 'detected' or 'you', and the page; snapshot again before acting.",
+    shape: {
+      tabId,
+      task: z.string().min(1).max(120).describe('What they should do, as the card\'s title, like "Sign in to GitHub"'),
+      doneWhen: z
+        .object({
+          url: z.string().optional().describe('Done once the URL contains this'),
+          text: z.string().optional().describe('Done once the page shows this text'),
+          selector: z.string().optional().describe('Done once an element matches this CSS selector'),
+        })
+        .optional(),
+    },
+  },
+  browser_batch: {
+    tier: 'read',
+    description:
+      "Run several browser tool calls in one round trip, in order, stopping at the first that fails. Each step is {name, input}, with input exactly as that tool takes it, and runs as if called on its own: it asks the user where that tool would, and shows in the thread. Refs come from the snapshot before the batch, so batch the steps you can predict (open, type, press Enter, screenshot) and snapshot again once the page changes. Only the last screenshot comes back as an image.",
+    shape: {
+      actions: z
+        .array(z.object({ name: z.string().describe('A browser_* tool, not browser_batch'), input: z.record(z.string(), z.unknown()).optional() }))
+        .min(1)
+        .max(20),
+    },
   },
   // {LAYOUT}
   open_pane_tab: {
@@ -285,6 +317,13 @@ export const TOOL_TABLE = {
     quiet: true,
     description: 'Tell the user something that needs their attention now, as a toast and an OS notification. At most one per minute per thread; say why in `reason`.',
     shape: { title: z.string().min(1).max(80), reason: z.string().min(1).max(240) },
+  },
+  open_settings_chat: {
+    tier: 'change',
+    quiet: true,
+    description:
+      "Hand a request about Mochi itself (its settings, default model, theme, permissions, shortcuts, MCP servers, profiles) to Mochi's settings chat: it is drafted there and the user gets a toast to open it. You have no settings tools; this is the only way to change Mochi. Not for Claude Code's or Codex's own config files.",
+    shape: { prompt: z.string().min(1).max(2000).describe("The user's request, in their words") },
   },
   // {SETTINGS}
   get_settings: {
@@ -347,6 +386,50 @@ export const TOOL_TABLE = {
       reason,
     },
   },
+  list_connectors: {
+    tier: 'read',
+    description:
+      "List connectors (remote MCP services in Mochi's library): each account with its service, its name (agents pick it by this), whether it's signed in and whether the profile has it; and the directory of services you can connect with connect_account. A service with needsOwnApp signs in through an app of the user's own: do its setup steps yourself in your browser tab (browser_open, browser_snapshot, browser_click), then connect_account with the Client ID and secretRef. Ask the user in chat only for what you can't decide or clear yourself (signing in to a site, 2-step verification, which workspace or account); don't end your turn until the account is signed in or you've hit a blocker, which you report.",
+    shape: { profileId },
+  },
+  connect_account: {
+    tier: 'change',
+    description:
+      "Connect an account on a service (a directory id from list_connectors, or a remote MCP server's https URL) and open its sign-in page in a new tab of your browser, returned here: approve it there yourself, then call list_connectors until the account isSignedIn. With the user's own app, pass its Client ID and secretRef: Mochi reads the secret from the page itself and keeps it in the keychain; you never see it. New threads in the profile get the account's tools.",
+    shape: {
+      connector: z.string().min(1).describe('A directory id from list_connectors, or an https MCP server URL'),
+      alias: z.string().regex(/^[a-z0-9-]{1,32}$/).optional().describe('The account name, like work or personal; defaults to the first free one'),
+      clientId: z.string().min(1).max(200).optional().describe("The Client ID of the user's own app, from the service's setup steps"),
+      secretRef: z.string().optional().describe("The ref of the Client Secret on the page, or of its Copy button, from your latest browser_snapshot. Never the secret itself"),
+      fromSetup: z.boolean().optional().describe("Slack and Google Workspace: use what your last run_setup captured (an existing app's credentials, a token Mochi makes the app from, or Google's new client)"),
+      configTokenRef: z.string().optional().describe("Slack only: the ref of a generated app configuration token's Access Token on api.slack.com/apps, or of its Copy button. Mochi creates the app from it, MCP on; no Client ID needed"),
+      tabId,
+      profileId,
+    },
+  },
+  run_setup: {
+    tier: 'change',
+    description:
+      "Run a service's setup recipe in your browser tab in seconds: Mochi does the known steps itself (for Slack: generates an app configuration token and keeps it, never showing it to you). Its result's next says what to do: connect_account with fromSetup when done; ask the user and pass params when it needs a value; do a step yourself and fix it with update_setup_step when a page changed.",
+    shape: {
+      connector: z.string().min(1).describe('A directory id with a recipe, like slack'),
+      params: z.record(z.string(), z.string()).optional().describe('Answers to what an earlier run asked, like { "workspace": "Acme" }'),
+      fromStep: z.string().optional().describe('Resume from this step id, after doing earlier steps yourself'),
+      tabId,
+    },
+  },
+  update_setup_step: {
+    tier: 'change',
+    description:
+      "Fix one step of a service's setup recipe for this user after its element changed: the ARIA role and accessible name of the element that worked when you did the step yourself (from browser_snapshot). Only the element changes; the step's kind, URLs and allowed sites never do. The change shows in your thread.",
+    shape: {
+      connector: z.string().min(1),
+      stepId: z.string().min(1).describe('The step id a run stopped at'),
+      target: z
+        .object({ role: z.string(), name: z.string(), exact: z.boolean().optional(), within: z.object({ role: z.string(), name: z.string(), exact: z.boolean().optional() }).optional() })
+        .describe('The element: role like button, name its accessible name; within an enclosing element like a row'),
+    },
+  },
   remove_mcp_server: {
     tier: 'destructive',
     description: "Remove an MCP server from a profile's account config. The user approves on a delete card showing the file diff; the file is backed up first.",
@@ -363,9 +446,35 @@ export type ToolName = keyof typeof TOOL_TABLE;
 
 export const TOOL_NAMES = Object.keys(TOOL_TABLE) as ToolName[];
 
-export const tierOf = (name: ToolName): Tier => TOOL_TABLE[name].tier;
+/** Only served while goals are on, and goals are retired: agents never see them. */
+export const GOAL_TOOLS = ['get_goal', 'propose_goal', 'claim_criterion', 'get_report', 'settle_goal'] as const satisfies ToolName[];
+
+export const isGoalTool = (name: string) => (GOAL_TOOLS as readonly string[]).includes(name);
+
+/** Served only in a profile's settings chat (Settings › Ask Mochi), which gets nothing else; every other thread gets everything but these. */
+export const SETTINGS_CHAT_TOOLS = ['get_settings', 'update_settings', 'get_keybindings', 'set_keybinding', 'list_profiles', 'add_mcp_server', 'remove_mcp_server'] as const satisfies ToolName[];
+
+/** What kind of session a Mochi server serves; read at session start. */
+export interface MochiScope {
+  isGoalsOff?: boolean;
+  isSettingsChat?: boolean;
+}
+
+const isSettingsChatTool = (name: ToolName) => (SETTINGS_CHAT_TOOLS as readonly string[]).includes(name);
+
+export function servedTools({ isGoalsOff, isSettingsChat }: MochiScope): ToolName[] {
+  if (isSettingsChat) return [...SETTINGS_CHAT_TOOLS];
+  return TOOL_NAMES.filter((name) => !isSettingsChatTool(name) && !(isGoalsOff && isGoalTool(name)));
+}
+
+export const tierOf =(name: ToolName): Tier => TOOL_TABLE[name].tier;
 
 export const isQuiet = (name: ToolName) => 'quiet' in TOOL_TABLE[name];
+
+/** Called every turn, each with its own surface (the plan list, the end-of-turn card): always loaded for Claude, never deferred behind tool search, and no work-log row. */
+export const TURN_TOOLS = ['update_plan', 'report_turn'] as const satisfies ToolName[];
+
+export const isTurnTool = (name: string) => (TURN_TOOLS as readonly string[]).includes(name);
 
 export const asks = (tier: Tier) => (ASKING_TIERS as readonly Tier[]).includes(tier);
 

@@ -1,4 +1,5 @@
 import type { AgentImage } from '../host/types/agent.ts';
+import type { DataHost } from '../host/types/data.ts';
 import type { SentImage } from '../model.ts';
 
 // Claude's image block takes exactly these (`ImageBlockParam` in @anthropic-ai/sdk); Codex's `image` input takes a data URL.
@@ -24,12 +25,26 @@ export function imageProblem(files: Attached[]) {
   return null;
 }
 
-/** `files` carry data URLs: PromptInput converts its blob URLs on submit. Check them with `imageProblem` first. */
-export function sentImages(files: Attached[]): Promise<SentImage[]> {
-  return Promise.all(files.map(async (f) => ({ mediaType: f.mediaType as AgentImage['mediaType'], data: base64Of(f.url), thumb: await thumbnail(f.url) })));
+/**
+ * `files` carry data URLs: PromptInput converts its blob URLs on submit. Check them with `imageProblem` first. `saveImage` is
+ * the host's, passed in so main (which imports this file's limits) never loads the renderer host.
+ */
+export function sentImages(files: Attached[], saveImage: DataHost['saveImage']): Promise<SentImage[]> {
+  return Promise.all(
+    files.map(async (f) => {
+      const mediaType = f.mediaType as AgentImage['mediaType'];
+      const data = base64Of(f.url);
+      // Keeping the original is for the viewer only; the message still goes out with the thumb if it can't be saved.
+      const [thumb, original] = await Promise.all([thumbnail(f.url), saveImage(mediaType, data).catch(() => undefined)]);
+      return { mediaType, data, thumb, ...(original && { original }) };
+    }),
+  );
 }
 
 export const agentImage = ({ mediaType, data }: SentImage): AgentImage => ({ mediaType, data });
+
+/** What the transcript keeps for an image you sent: the original when it was kept, so the viewer shows it full size. */
+export const shownImage = (image: SentImage) => image.original ?? image.thumb;
 
 /** A queued message's images back as composer attachments (Edit). */
 export const imageFiles = (images: SentImage[]) => images.map((i, n) => new File([Uint8Array.from(atob(i.data), (c) => c.charCodeAt(0))], `image-${n + 1}.${i.mediaType.split('/')[1]}`, { type: i.mediaType }));
@@ -37,7 +52,7 @@ export const imageFiles = (images: SentImage[]) => images.map((i, n) => new File
 const isImageType = (type: string): type is AgentImage['mediaType'] => (IMAGE_TYPES as readonly string[]).includes(type);
 const base64Of = (url: string) => url.slice(url.indexOf(',') + 1);
 
-// The transcript keeps a small copy: the full image would land in threads.json with every message.
+// A small copy for where the original can't be kept: the full image would land in threads.json with every message.
 async function thumbnail(url: string) {
   const bitmap = await createImageBitmap(await (await fetch(url)).blob());
   const scale = Math.min(1, THUMB_PX / Math.max(bitmap.width, bitmap.height));

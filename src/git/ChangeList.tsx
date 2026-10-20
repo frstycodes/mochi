@@ -2,15 +2,14 @@ import { useState, type CSSProperties } from 'react';
 import { useDiffTheme } from '../themes/highlight';
 import { PatchDiff } from '@pierre/diffs/react';
 import { FileIcon } from '@react-symbols/icons/utils';
-import { ChevronRight, Folder, MessageText, Minus, PlusBold, Undo } from '@/icons';
+import { ChevronDown, MessageText, Minus, PlusBold, Undo } from '@/icons';
 import { Button } from '@/components/ui/button';
-import { Item, ItemActions, ItemContent, ItemMedia } from '@/components/ui/item';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { ChangeKind, ChangeTarget, DiffFile, DiffHunk } from '../host/types/git';
+import type { ChangeTarget, DiffFile, DiffHunk } from '../host/types/git';
 import { DiffStat } from '../WorkLog';
-import { fileKey, groupByDir, hunkCovers } from './files';
+import { fileKey, hunkCovers, type ChangeSection } from './files';
 import { isMod } from '../keys';
 
 export type DiffStyle = 'unified' | 'split';
@@ -40,43 +39,31 @@ export interface ChangeActions {
   dropNote(note: LineNote): void;
 }
 
-export function ChangeList({ files, actions }: { files: DiffFile[]; actions: ChangeActions }) {
-  const [openKeys, setOpenKeys] = useState(() => new Set(files.slice(0, 1).map(fileKey)));
+// Files this big start folded, so opening the pane doesn't render thousands of diff lines at once.
+const FOLDED_LINES = 400;
+
+/** Every changed file's diff, stacked in tree order under a sticky header; a header folds its file. */
+export function ChangeList({ sections, actions }: { sections: ChangeSection[]; actions: ChangeActions }) {
+  const [folded, setFolded] = useState(() => new Set(sections.flatMap((s) => s.files).filter((f) => f.added + f.removed > FOLDED_LINES).map(fileKey)));
   const toggle = (key: string) =>
-    setOpenKeys((keys) => {
+    setFolded((keys) => {
       const next = new Set(keys);
       if (!next.delete(key)) next.add(key);
       return next;
     });
-  const sections = actions.canStage
-    ? [
-        { title: 'Staged', files: files.filter((f) => f.staged) },
-        { title: 'Changes', files: files.filter((f) => !f.staged) },
-      ].filter((s) => s.files.length > 0)
-    : [{ title: null, files }];
 
   return (
-    <div className="flex flex-col gap-3 px-2 pb-3">
+    <div className="flex flex-col pb-3">
       {sections.map((section) => (
-        <section key={section.title ?? 'all'} className="flex flex-col gap-0.5" aria-label={section.title ?? 'Changed files'}>
+        <section key={section.title ?? 'all'} aria-label={section.title ?? 'Changed files'}>
           {!!section.title && (
-            <h3 className="flex h-6 items-center gap-1.5 px-2 type-caption font-medium text-subtle-foreground">
+            <h3 className="flex h-7 items-center gap-1.5 px-3 type-caption text-subtle-foreground">
               {section.title}
               <span className="tabular">{section.files.length}</span>
             </h3>
           )}
-          {groupByDir(section.files).map((group) => (
-            <div key={group.dir} className="flex flex-col gap-0.5">
-              {!!group.dir && (
-                <div className="flex h-6 min-w-0 items-center gap-1.5 px-2 font-mono text-xs text-subtle-foreground">
-                  <Folder className="size-3.5 shrink-0" aria-hidden />
-                  <span className="truncate">{group.dir}</span>
-                </div>
-              )}
-              {group.files.map((file) => (
-                <FileEntry key={fileKey(file)} file={file} isNested={!!group.dir} isOpen={openKeys.has(fileKey(file))} onToggle={() => toggle(fileKey(file))} actions={actions} />
-              ))}
-            </div>
+          {section.files.map((file) => (
+            <FileDiff key={fileKey(file)} file={file} isOpen={!folded.has(fileKey(file))} onToggle={() => toggle(fileKey(file))} actions={actions} />
           ))}
         </section>
       ))}
@@ -84,53 +71,32 @@ export function ChangeList({ files, actions }: { files: DiffFile[]; actions: Cha
   );
 }
 
-function FileEntry({ file, isNested, isOpen, onToggle, actions }: { file: DiffFile; isNested: boolean; isOpen: boolean; onToggle: () => void; actions: ChangeActions }) {
-  const name = file.path.slice(file.path.lastIndexOf('/') + 1);
+function FileDiff({ file, isOpen, onToggle, actions }: { file: DiffFile; isOpen: boolean; onToggle: () => void; actions: ChangeActions }) {
+  const slash = file.path.lastIndexOf('/');
+  const name = file.path.slice(slash + 1);
+  const dir = file.path.slice(0, Math.max(slash, 0));
   const target = { path: file.path, staged: file.staged, untracked: file.kind === 'untracked' };
   return (
-    <div className="flex flex-col">
-      <Item size="xs" className={cn('relative isolate h-7 gap-1.5 rounded-md py-0 pr-1.5 hover:bg-accent/60', isNested ? 'pl-5' : 'pl-1.5')}>
-        <ItemMedia className="gap-1">
-          <ChevronRight className={cn('size-3.5 text-subtle-foreground transition-transform duration-150', isOpen && 'rotate-90')} aria-hidden />
-          <FileIcon fileName={name} autoAssign aria-hidden className="size-3.5" />
-        </ItemMedia>
-        <ItemContent className="min-w-0">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <button type="button" aria-expanded={isOpen} onClick={onToggle} className="min-w-0 truncate text-left font-mono text-xs text-foreground outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50" title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}>
-              {name}
-            </button>
-            <KindLetter kind={file.kind} />
+    <div data-file-key={fileKey(file)} className="group/file border-b">
+      <div className="sticky top-0 z-10 flex h-8 items-center gap-1.5 bg-card pr-1.5 pl-2">
+        <button type="button" aria-expanded={isOpen} onClick={onToggle} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+          <ChevronDown aria-hidden className={cn('size-3 shrink-0 text-subtle-foreground transition-transform duration-150', !isOpen && '-rotate-90')} />
+          <FileIcon fileName={name} autoAssign aria-hidden className="size-3.5 shrink-0" />
+          <span className={cn('shrink-0 type-meta text-foreground', file.kind === 'deleted' && 'line-through decoration-subtle-foreground')}>{name}</span>
+          {!!dir && <span className="min-w-0 truncate type-caption text-subtle-foreground">{dir}</span>}
+          <span className="shrink-0">
+            <DiffStat added={file.added} removed={file.removed} />
           </span>
-        </ItemContent>
-        <ItemActions className="relative z-10 gap-0.5">
-          {actions.canStage && (
-            <span className="flex gap-0.5 opacity-0 group-hover/item:opacity-100 focus-within:opacity-100">
-              {!file.staged && <IconAction label="Revert file" icon={Undo} onClick={() => actions.revert(target)} />}
-              {file.staged ? <IconAction label="Unstage file" icon={Minus} onClick={() => actions.unstage(target)} /> : <IconAction label="Stage file" icon={PlusBold} onClick={() => actions.stage(target)} />}
-            </span>
-          )}
-          <DiffStat added={file.added} removed={file.removed} />
-        </ItemActions>
-      </Item>
+        </button>
+        {actions.canStage && (
+          <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/file:opacity-100 focus-within:opacity-100">
+            {!file.staged && <IconAction label="Revert file" icon={Undo} onClick={() => actions.revert(target)} />}
+            {file.staged ? <IconAction label="Unstage file" icon={Minus} onClick={() => actions.unstage(target)} /> : <IconAction label="Stage file" icon={PlusBold} onClick={() => actions.stage(target)} />}
+          </span>
+        )}
+      </div>
       {isOpen && <FileBody file={file} actions={actions} />}
     </div>
-  );
-}
-
-const KIND = {
-  modified: { letter: 'M', label: 'Modified', className: 'text-warning' },
-  added: { letter: 'A', label: 'Added', className: 'text-success' },
-  untracked: { letter: 'U', label: 'Untracked', className: 'text-success' },
-  deleted: { letter: 'D', label: 'Deleted', className: 'text-destructive' },
-  renamed: { letter: 'R', label: 'Renamed', className: 'text-subtle-foreground' },
-} satisfies Record<ChangeKind, { letter: string; label: string; className: string }>;
-
-function KindLetter({ kind }: { kind: ChangeKind }) {
-  const { letter, label, className } = KIND[kind];
-  return (
-    <span className={cn('shrink-0 font-mono type-caption font-medium', className)} title={label} aria-label={label}>
-      {letter}
-    </span>
   );
 }
 
@@ -148,26 +114,19 @@ function IconAction({ label, icon: Icon, onClick }: { label: string; icon: typeo
 }
 
 function FileBody({ file, actions }: { file: DiffFile; actions: ChangeActions }) {
-  const isEmpty = file.hunks.length === 0;
-  return (
-    <div className="my-1 mr-1 ml-6 overflow-hidden rounded-xl border bg-card">
-      {isEmpty && <p className="px-3 py-2 type-meta text-subtle-foreground">{file.binary ? 'Binary file changed' : file.oldPath ? `Renamed from ${file.oldPath}` : 'No content changes'}</p>}
-      {file.hunks.map((hunk, i) => (
-        <HunkBlock key={hunk.header + i} file={file} hunk={hunk} isFirst={i === 0} actions={actions} />
-      ))}
-    </div>
-  );
+  if (file.hunks.length === 0) return <p className="px-3 pb-2 type-meta text-subtle-foreground">{file.binary ? 'Binary file changed' : file.oldPath ? `Renamed from ${file.oldPath}` : 'No content changes'}</p>;
+  return file.hunks.map((hunk, i) => <HunkBlock key={hunk.header + i} file={file} hunk={hunk} actions={actions} />);
 }
 
-function HunkBlock({ file, hunk, isFirst, actions }: { file: DiffFile; hunk: DiffHunk; isFirst: boolean; actions: ChangeActions }) {
+function HunkBlock({ file, hunk, actions }: { file: DiffFile; hunk: DiffHunk; actions: ChangeActions }) {
   const target = { path: file.path, staged: file.staged, untracked: file.kind === 'untracked', patch: hunk.patch };
   const key = fileKey(file);
   return (
-    <div className={cn(!isFirst && 'border-t')}>
-      <div className="flex h-7 items-center gap-2 bg-muted/40 pr-1 pl-3">
+    <div className="group/hunk">
+      <div className="flex h-6 items-center gap-2 pr-1.5 pl-3">
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-subtle-foreground">{hunk.header}</span>
         {actions.canStage && (
-          <span className="flex shrink-0 gap-0.5">
+          <span className="flex shrink-0 gap-0.5 opacity-0 group-hover/hunk:opacity-100 focus-within:opacity-100">
             {!file.staged && (
               <Button variant="ghost" size="xs" onClick={() => actions.revert(target)} className="text-muted-foreground">
                 Revert

@@ -33,6 +33,8 @@ interface Entry extends Automated {
   /** Counts snapshots; an agent ref carries the one it came from. */
   snapshotGeneration: number;
   dialog: BrowserDialog | null;
+  /** The page's own icon (http(s) or data URL), for its tab; dropped when the main frame navigates until the new page names one. */
+  favicon: string | null;
 }
 
 const DEVTOOLS_SHARE = 0.45;
@@ -73,7 +75,7 @@ const HARDENED = { sandbox: true, contextIsolation: true, nodeIntegration: false
 
 function register(view: WebContentsView, owner: WebContents, win: BrowserWindow) {
   const id = `view-${++nextId}`;
-  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false, automation: null, snapshotGeneration: 0, dialog: null };
+  const entry: Entry = { view, win, owner, bounds: null, mirror: null, emulation: null, zoom: 1, devtools: null, error: null, logs: [], stopAutoReload: null, scroll: new ScrollMemory(), loadedAt: 0, hmrAt: 0, holdScrollUntil: 0, isFinding: false, automation: null, snapshotGeneration: 0, dialog: null, favicon: null };
   views.set(id, entry);
   view.setVisible(false);
   win.contentView.addChildView(view);
@@ -350,6 +352,89 @@ export async function snapshotView(owner: WebContents, id: string): Promise<Brow
   return { text, refs: Object.fromEntries(refs.map(({ ref, role, name }, i) => [ref, { role, name, ...flags[i]! }])) };
 }
 
+/** `ref`'s value (an input's) or text, for main alone: Mochi stores a secret from the page without handing it to the agent. */
+export async function readRefValue(owner: WebContents, id: string, ref: string) {
+  const entry = get(owner, id);
+  const target = await locate(entry, await pageFor(entry), ref);
+  const value = await target.evaluate((el) => (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el.value : (el.textContent ?? '')), undefined, { timeout: ACTION_TIMEOUT_MS });
+  return value.trim();
+}
+
+/**
+ * What clicking `ref` (a Copy button) copies, caught in the page for main alone, like `readRefValue`: some sites (Slack's
+ * configuration tokens) never put a secret in the page, only behind Copy. For the one click the async clipboard API and
+ * copy events are wrapped to keep the text instead of writing it, so it never lands on the user's clipboard either.
+ */
+export async function copiedByRef(owner: WebContents, id: string, ref: string) {
+  const entry = get(owner, id);
+  const page = await pageFor(entry);
+  return copiedBy(page, await locate(entry, page, ref));
+}
+
+/** The Playwright page behind a view, for main's own scripted steps (setup recipes) on the agent's tab. */
+export function pageOfView(owner: WebContents, id: string) {
+  return pageFor(get(owner, id));
+}
+
+/** What clicking `target` copies, caught as `copiedByRef` describes. */
+export async function copiedBy(page: Page, target: Locator) {
+  await page.evaluate(catchCopy);
+  try {
+    await target.click({ timeout: ACTION_TIMEOUT_MS });
+    for (const deadline = Date.now() + COPY_WAIT_MS; Date.now() < deadline; await new Promise((r) => setTimeout(r, 100))) {
+      const text = await page.evaluate(() => (window as CopyCatcher).__mochiCopied);
+      if (text) return text.trim();
+    }
+    return '';
+  } finally {
+    await page.evaluate(releaseCopy).catch(() => {});
+  }
+}
+
+const COPY_WAIT_MS = 2000;
+
+type CopyCatcher = Window & { __mochiCopied?: string; __mochiRelease?: () => void };
+
+// Runs in the page, so it can only use what's in its own body.
+function catchCopy() {
+  const w = window as CopyCatcher;
+  if (w.__mochiRelease) return;
+  const clipboard = navigator.clipboard as Clipboard | undefined;
+  const setData = Object.getOwnPropertyDescriptor(DataTransfer.prototype, 'setData')!;
+  // A copy through a hidden field (execCommand) selects text that `getSelection` doesn't report in Chromium; cancelling
+  // the event keeps it off the clipboard.
+  const onCopy = (event: Event) => {
+    const field = document.activeElement;
+    const selected = field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement ? field.value.slice(field.selectionStart ?? 0, field.selectionEnd ?? 0) : '';
+    w.__mochiCopied ??= selected || getSelection()?.toString() || undefined;
+    event.preventDefault();
+  };
+  if (clipboard) {
+    clipboard.writeText = async (text: string) => void (w.__mochiCopied = String(text));
+    clipboard.write = async (items: ClipboardItems) => {
+      for (const item of items) if (item.types.includes('text/plain')) w.__mochiCopied = await (await item.getType('text/plain')).text();
+    };
+  }
+  DataTransfer.prototype.setData = function (type: string, data: string) {
+    if (type === 'text/plain' || type === 'text') w.__mochiCopied = String(data);
+  };
+  addEventListener('copy', onCopy, true);
+  w.__mochiCopied = undefined;
+  w.__mochiRelease = () => {
+    // Own properties shadowed the prototype's methods; deleting them brings those back.
+    delete (clipboard as Partial<Clipboard> | undefined)?.writeText;
+    delete (clipboard as Partial<Clipboard> | undefined)?.write;
+    Object.defineProperty(DataTransfer.prototype, 'setData', setData);
+    removeEventListener('copy', onCopy, true);
+    w.__mochiCopied = undefined;
+    w.__mochiRelease = undefined;
+  };
+}
+
+function releaseCopy() {
+  (window as CopyCatcher).__mochiRelease?.();
+}
+
 /** Whether clicking the element sends its form, and whether it takes a password: the agent asks or masks before acting. */
 function formFlags(target: Locator) {
   return target
@@ -577,6 +662,7 @@ function wire(id: string, entry: Entry) {
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
       error: entry.error,
+      favicon: entry.favicon,
     });
 
   // Before `state` so the new load reports no stale error.
@@ -589,6 +675,11 @@ function wire(id: string, entry: Entry) {
     if (!pos) return;
     entry.holdScrollUntil = Date.now() + SCROLL_HOLD_MS;
     void wc.executeJavaScriptInIsolatedWorld(AGENT_WORLD, [{ code: restoreScrollScript(pos) }]).catch(() => {});
+  });
+  wc.on('did-navigate', () => (entry.favicon = null));
+  wc.on('page-favicon-updated', (_event, favicons) => {
+    entry.favicon = favicons.find((url) => /^(https?|data):/.test(url)) ?? null;
+    state();
   });
   for (const name of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(name as 'did-start-loading', state);
   const closeDialog = watchDialogs(id, entry, emit);

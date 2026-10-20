@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClipboardCheck, Clock, CopyStack, Hierarchy3, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
+import { ClipboardCheck, Clock, CopyStack, Inbox, MessageQuestion as MessageCircleQuestion, Route, Settings, ShieldCheck, Edit as SquarePen, type IconComponent as LucideIcon } from '@/icons';
 import { singleChoice, type QueueItem, type QueueKind, type Thread } from './model';
 import { goalProgress, progressLabel } from './progress';
+import { hasGoal } from './drift';
 import { useHarness, useSpaceQueue, useSpaceThreads, type View } from './store';
 import { Kbd } from '@/components/ui/kbd';
 import { GitPullRequestIcon } from '@/icons/github';
@@ -27,7 +28,6 @@ const QUEUE_ICONS = {
   question: MessageCircleQuestion,
   review: ClipboardCheck,
   ci: GitPullRequestIcon,
-  overlap: Hierarchy3,
   collision: CopyStack,
   run: Clock,
   setting: Settings,
@@ -58,11 +58,6 @@ export function Orbit() {
     if (selected?.ring !== 'inner') return false;
     const item = selected.item;
     answered.current = true;
-    if (item.kind === 'overlap') {
-      const mode = (['link', 'extract', 'race', 'related'] as const)[digit - 1];
-      if (mode) dispatch({ type: 'overlap', queueId: item.id, mode });
-      return true;
-    }
     if (item.kind === 'question') {
       const options = singleChoice(item);
       if (!options) return (answered.current = false);
@@ -194,8 +189,7 @@ function InnerNode({ item, isSelected }: { item: Extract<OrbitItem, { ring: 'inn
   return (
     <div
       className={cn(
-        'flex size-11 items-center justify-center rounded-full border-2 bg-background shadow-[var(--elev-popover)]',
-        item.item.kind === 'overlap' ? 'text-warning' : 'text-foreground',
+        'flex size-11 items-center justify-center rounded-full border-2 bg-background text-foreground shadow-[var(--elev-popover)]',
         isSelected ? 'border-foreground' : 'border-transparent',
       )}
       style={{ outline: `2px solid ${lineColor(item.thread.line)}`, outlineOffset: -6 }}
@@ -242,7 +236,7 @@ function Peek({ item, center }: { item: OrbitItem; center: { x: number; y: numbe
 }
 
 function QueuePeek({ item, thread }: { item: QueueItem; thread: Thread }) {
-  const choices = item.kind === 'overlap' ? ['Link', 'Extract', 'Race', 'Keep both'] : item.kind === 'question' ? (singleChoice(item) ?? []) : [item.kind === 'review' ? 'Mark done' : item.kind === 'collision' ? 'Keep both' : 'Approve'];
+  const choices = item.kind === 'question' ? (singleChoice(item) ?? []) : [item.kind === 'review' ? 'Mark done' : item.kind === 'collision' ? 'Keep both' : 'Approve'];
   return (
     <>
       <PeekHeader thread={thread} />
@@ -269,7 +263,7 @@ function ThreadPeek({ thread }: { thread: Thread }) {
       <PeekHeader thread={thread} />
       <div className="flex items-center gap-2">
         <ProgressRing met={progress.met} total={progress.total} slot={thread.line} size={18} isWorking={isWorking(thread)} />
-        <span className="tabular font-medium text-foreground">{progressLabel(progress)}</span>
+        {hasGoal(thread) && <span className="tabular font-medium text-foreground">{progressLabel(progress)}</span>}
         <span className="truncate text-muted-foreground">{running ? running.title : 'Nothing running'}</span>
       </div>
       {last && <div className="line-clamp-2 text-xs text-subtle-foreground">{last.text}</div>}

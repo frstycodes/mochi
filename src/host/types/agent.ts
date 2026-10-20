@@ -1,5 +1,5 @@
 import type { DriftVerdict } from '../../drift.ts';
-import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Size, StepStatus, Thread, ThreadRef, WebLink } from '../../model.ts';
+import type { AgentInfo, GeneratedImage, McpCall, McpWidget, McpWidgetResource, Provider, Thread, ThreadRef, WebLink } from '../../model.ts';
 import type { Manifest } from './manifest.ts';
 import type { UtilityTask } from '../../utility/prompts.ts';
 
@@ -27,6 +27,12 @@ export interface AgentStartOptions {
   forkAt?: string;
   /** Bill the stored API key instead of the account's plan. Only ever set on the user's explicit per-thread choice. */
   useApiKey?: boolean;
+  /** Goals are off (always, now they're retired): the session gets no goal instructions, tools or nudge. Read at session start. */
+  isGoalsOff?: boolean;
+  /** The profile's settings chat (Settings › Ask Mochi): only the settings tools and their instructions, no files, shell or browser. */
+  isSettingsChat?: boolean;
+  /** The profile's turned-off Claude Code or Codex items for this harness (`NativeItem.id`); main leaves them out of this session only. Read at session start. */
+  nativeOff?: string[];
 }
 
 export type SeqAgentEvent = AgentEvent & { seq?: number };
@@ -42,8 +48,10 @@ export type AgentEvent =
   | { threadId: string; type: 'worktree'; path: string }
   /** Main is preparing the new worktree before the agent's first turn; each event carries the whole setup so far. */
   | { threadId: string; type: 'setup'; setup: WorktreeSetup }
-  /** A project folder thread's agent runs on this branch of the project's checkout. */
+  /** The thread's agent runs on this branch: a project folder thread's checkout, or a worktree's temp branch named after its title. */
   | { threadId: string; type: 'branch'; branch: string; isDetached?: boolean }
+  /** Main named a new thread from its first message (`StartWorkspace.titlePrompt`) before its agent started. */
+  | { threadId: string; type: 'title'; title: string }
   | { threadId: string; type: 'session'; provider: Provider; sessionId: string }
   /** Merged into what the thread knows; `mcpServers` merge by name, so one server's status change can come alone. */
   | { threadId: string; type: 'info'; info: AgentInfo }
@@ -56,9 +64,12 @@ export type AgentEvent =
    * `output` (commands, tail-capped) and `patch` (edits, unified diff) come with `end`.
    */
   | { threadId: string; type: 'tool'; id: string; phase: 'start' | 'end'; text: string; description?: string; files?: string[]; exitCode?: number; output?: string; patch?: string; links?: WebLink[]; skill?: string; mcp?: McpCall; /** Replays only: the message a `send_to_thread` call delivered, which live runs record when the tool runs. */ sent?: ThreadRef & { text: string }; /** End: images the call returned (a screenshot), saved by main; absolute paths. */ images?: string[]; /** An image the call is making (Codex image generation); start and end both carry it. */ generated?: GeneratedImage; /** End: the MCP App view the tool declared, with what to hand it. */ widget?: McpWidget }
-  | { threadId: string; type: 'plan'; items: AgentPlanItem[] }
+  /** `items` is the whole plan. `isFresh`: a new request's plan, so none of the previous plan's steps carry over. */
+  | { threadId: string; type: 'plan'; items: AgentPlanItem[]; isFresh?: boolean }
   /** A subagent the thread's agent started (Claude's Agent tool, a Codex spawn) or a Mochi background agent: its own steps, tokens and result, never flattened into the parent's log. Fields are sparse after `start`. */
   | AgentSubagentEvent
+  /** A command (or workflow, monitor) the agent left running in the background: Claude's `run_in_background` Bash and its other non-agent tasks, a Codex background terminal. */
+  | AgentTaskEvent
   | { threadId: string; type: 'approval'; requestId: string; kind: 'command' | 'edit' | 'tool'; title: string; detail: string; code?: string }
   | { threadId: string; type: 'question'; requestId: string; questions: AgentQuestion[] }
   /** The agent withdrew an approval or question (interrupt, timeout, answered elsewhere): its queue card goes away. */
@@ -104,6 +115,25 @@ export interface AccountLimits {
 
 export type SubagentStatus = 'running' | 'done' | 'failed' | 'stopped';
 
+export type BackgroundTaskKind = 'shell' | 'workflow' | 'monitor';
+
+export interface AgentTaskEvent {
+  threadId: string;
+  type: 'task';
+  /** Claude: the task id Claude Code gives it (`stopTask` takes it); Codex: the background terminal's commandExecution item id. */
+  id: string;
+  phase: 'start' | 'progress' | 'end';
+  kind?: BackgroundTaskKind;
+  /** The agent's own description of it, else the command. */
+  title?: string;
+  command?: string;
+  /** Where its output goes, once the harness says. */
+  outputFile?: string;
+  /** `end` only. */
+  status?: Exclude<SubagentStatus, 'running'>;
+  exitCode?: number;
+}
+
 export interface AgentSubagentEvent {
   threadId: string;
   type: 'subagent';
@@ -146,6 +176,10 @@ export interface StartWorkspace {
   branch: string;
   base?: string;
   isExisting?: boolean;
+  /** The thread's first start: its new branch must not exist yet. A restart after cleanup checks out the one it left. */
+  isNew?: boolean;
+  /** With `isNew`, on a temp branch: main asks for a title while the worktree is set up and renames the branch after it before the agent starts. */
+  titlePrompt?: string;
 }
 
 /**
@@ -197,9 +231,6 @@ export interface AgentQuestion {
 export interface AgentPlanItem {
   title: string;
   status: 'pending' | 'running' | 'done';
-  progress?: number;
-  size?: Size;
-  files?: string[];
 }
 
 /** `forSession` allows the same kind of action for the rest of the session; `interrupt` denies and ends the turn. `answers` holds each question's picked labels and typed text, in question order; empty means skipped. */
@@ -269,9 +300,6 @@ export interface AgentReviewRequest {
 /** A review's stream under the id `review` returned: what it is doing (`step`), then one `done` with its answer (structured output or text) or one `error`. */
 export type AgentReviewEvent = { id: string; type: 'step'; text: string } | { id: string; type: 'done'; result: unknown } | { id: string; type: 'error'; text: string };
 
-/** The statuses an agent may set on a step through Mochi's tools. */
-export const STEP_STATUSES = ['ready', 'running', 'waiting', 'blocked', 'done', 'dropped'] as const satisfies readonly StepStatus[];
-
 /** A Mochi tool an agent called (`electron/mcp`); the renderer runs it on the store and answers with `toolResult`. */
 export interface AgentToolCall {
   id: string;
@@ -302,6 +330,8 @@ export interface AgentHost {
   interrupt(threadId: string): Promise<void>;
   /** After a failed setup step: run the failed step again, or start the agent without the rest of the setup. */
   setupChoice(threadId: string, choice: SetupChoice): Promise<void>;
+  /** You named the thread: a start still naming it (`titlePrompt`) leaves its title and branch as they are. */
+  keepTitle(threadId: string): Promise<void>;
   resolve(requestId: string, decision: AgentDecision): Promise<void>;
   stop(threadId: string): Promise<void>;
   /** Shuts down everything the thread started: its agent and background agents, its terminals (and the dev servers in them), its compare server. */
@@ -329,8 +359,8 @@ export interface AgentHost {
   rewindPoint(threadId: string, text: string): Promise<string | null>;
   /** A tool's MCP App view (`ui://`), read through a live Claude session's own connection to `server`; the last read is kept on disk for when none is live. */
   readWidget(threadId: string, server: string, uri: string): Promise<McpWidgetResource>;
-  /** Stops one of a thread's native subagents (Claude task, Codex spawned agent); it ends with status `stopped`. */
-  stopSubagent(threadId: string, subagentId: string): Promise<void>;
+  /** Stops one of a thread's native background tasks (a Claude subagent or shell task, a Codex spawned agent or background terminal); it ends with status `stopped`. */
+  stopTask(threadId: string, taskId: string): Promise<void>;
   /** Parks a Claude Code process for the profile's account so the next side question or classify starts fast. Best effort. */
   warm(spaceId: string): Promise<void>;
   /** The models `provider` offers the profile's account; cached per account, refetched when its login changes. */
@@ -351,6 +381,7 @@ export const agentMethods = {
   compactInstructions: 'invoke',
   interrupt: 'invoke',
   setupChoice: 'invoke',
+  keepTitle: 'invoke',
   resolve: 'invoke',
   stop: 'invoke',
   settle: 'invoke',
@@ -365,7 +396,7 @@ export const agentMethods = {
   rewindFiles: 'invoke',
   rewindPoint: 'invoke',
   readWidget: 'invoke',
-  stopSubagent: 'invoke',
+  stopTask: 'invoke',
   warm: 'invoke',
   models: 'invoke',
   limits: 'invoke',

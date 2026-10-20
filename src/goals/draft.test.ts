@@ -68,9 +68,11 @@ test('a report counts until you write again; rewording a criterion drops its cla
   const [first] = s.threads.at(-1)!.criteria!;
   s = threadsReducer(s, { type: 'criterion-claim', threadId: id, criterionId: first.id, evidence: 'curl shows it', by: 'claude' });
   s = threadsReducer(s, { type: 'report', threadId: id, report: { by: 'claude', decisions: [], left: ['Tests'] } });
+  s = threadsReducer(s, { type: 'idle-start', threadId: id });
   const idle = (t: (typeof s.threads)[number]) => ({ ...t, live: { ...t.live!, isWorking: false } });
   assert.equal(reportHeadline(idle(s.threads.at(-1)!)), '1 of 2 criteria done');
-  s = threadsReducer({ ...s, now: s.now + 1 }, { type: 'send', threadId: id, text: 'also log it', reason: '' });
+  s = threadsReducer(s, { type: 'send', threadId: id, text: 'also log it', reason: '' });
+  s = threadsReducer(s, { type: 'idle-start', threadId: id });
   assert.equal(currentReport(idle(s.threads.at(-1)!)), null, 'your newer message starts a turn the report no longer describes');
   assert.deepEqual(s.threads.at(-1)!.report?.left, ['Tests'], 'the report stays on the thread for the goal popover');
   const draft = draftFrom(s.threads.at(-1)!);
@@ -96,4 +98,18 @@ test('a failed check outweighs a claim; a passed one meets the criterion; changi
   draft.criteria[0].command = 'pnpm vitest run';
   s = threadsReducer(s, { type: 'edit-goal', threadId: id, draft });
   assert.deepEqual(s.threads.at(-1)!.criteria![0], { id: c.id, text: 'Tests pass', command: 'pnpm vitest run' });
+});
+
+test('the drafter is told when a thread has no folder, so a lookup there reads as a chat', () => {
+  const rl = initialThreads().threads.find((t) => t.id === 'rl')!;
+  const benq = { ...rl, repo: null, goal: '', activity: [{ at: 1, who: 'you' as const, kind: 'message' as const, text: 'can you check my email for the benq monitor and see where it is right now' }] };
+  assert.match(goalDraftRequest(benq)!.prompt, /^No project folder\n/);
+  assert.match(goalDraftRequest({ ...benq, repo: rl.repo })!.prompt, /^Project: /);
+});
+
+test("a claim meets a criterion you judge, but one with a command only once its check passes", () => {
+  const claim = { evidence: 'looks right', at: 1, by: 'claude' as const };
+  assert.equal(isMet({ id: 'a', text: 'Copy reads well', claim }), true);
+  assert.equal(isMet({ id: 'b', text: 'Tests pass', command: 'pnpm test', claim }), false);
+  assert.equal(isMet({ id: 'b', text: 'Tests pass', command: 'pnpm test', claim, check: { status: 'passed', at: 2 } }), true);
 });

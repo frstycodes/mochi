@@ -115,7 +115,7 @@ export interface BrowserLog {
 }
 
 export type BrowserEvent =
-  | { id: string; type: 'state'; url: string; title: string; isLoading: boolean; canGoBack: boolean; canGoForward: boolean; error: string | null }
+  | { id: string; type: 'state'; url: string; title: string; isLoading: boolean; canGoBack: boolean; canGoForward: boolean; error: string | null; favicon: string | null }
   | { id: string; type: 'console'; level: 'error' | 'warning'; message: string; source: string; line: number }
   /** The page's `window.open` made view `viewId`, which keeps `window.opener`; it needs a tab of its own. */
   | { id: string; type: 'popup'; viewId: string; url: string }

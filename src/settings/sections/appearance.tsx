@@ -20,8 +20,9 @@ import { installExtension, removeCustomTheme, uninstallPackage, useApplyTheme, u
 import { OverflowIcon, TooltipIconButton } from '../../ui';
 import { CatalogRow } from '../CatalogRow';
 import { useLinkedTab } from '../open';
-import { SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId } from '../parts';
+import { ListIcon, SettingsCard, SettingsGroup, SettingsRow, SettingsSection, settingControlId, SkeletonRows } from '../parts';
 import { setPrefs, toggleStar, usePrefs } from '../prefs';
+import { ANIMATIONS, type AnimationArea } from '../settingOptions';
 import { ThemePicker, ThemeSwatch, useChosenTheme, useThemeColors } from '../ThemePicker';
 
 export function AppearanceSection() {
@@ -33,6 +34,16 @@ export function AppearanceSection() {
         <CatalogRow settingKey="theme" />
         <CatalogRow settingKey="reduceMotion" />
       </SettingsGroup>
+      <SettingsGroup title="App icon">
+        <CatalogRow settingKey="appIcon" label="Dock icon" />
+      </SettingsGroup>
+      <SettingsSection id="animations" title="Animations" footer="Off until you turn them on. Reduce motion stops these too.">
+        <div className="flex flex-col gap-3">
+          {(Object.keys(ANIMATIONS) as AnimationArea[]).map((area) => (
+            <AnimationAreaCard key={area} area={area} />
+          ))}
+        </div>
+      </SettingsSection>
       <SettingsSection id="colorTheme" title="Color theme" footer="Arrow through or hover a theme to preview it; nothing changes until you pick one.">
         <div className="@container">
           <div className="grid gap-3 @md:grid-cols-2">
@@ -43,6 +54,31 @@ export function AppearanceSection() {
       </SettingsSection>
       <ThemesTabs />
     </div>
+  );
+}
+
+/** An area's switch for all its animations, with one switch per animation folded under it (open when a deep link names one). */
+function AnimationAreaCard({ area }: { area: AnimationArea }) {
+  const { items } = ANIMATIONS[area];
+  const [disclosure, setDisclosure] = useLinkedTab((settingId) => (items.some((item) => settingId === `animation-${item.value}`) ? 'open' : undefined), 'closed');
+  const isOpen = disclosure === 'open';
+  return (
+    <SettingsCard>
+      <CatalogRow settingKey={`animations.${area}`} />
+      <Collapsible open={isOpen} onOpenChange={(open) => setDisclosure(open ? 'open' : 'closed')} className="relative before:absolute before:inset-x-4 before:top-0 before:h-px before:bg-border">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center gap-1.5 px-4 py-2.5 type-meta text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground">
+            <ChevronDown aria-hidden className={cn('size-3.5 transition-transform duration-200', !isOpen && '-rotate-90')} />
+            Choose each animation
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {items.map((item) => (
+            <CatalogRow key={item.value} settingKey={`animation.${item.value}`} />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    </SettingsCard>
   );
 }
 
@@ -548,7 +584,7 @@ function ExtensionRow({ extension }: { extension: MarketplaceExtension }) {
     <SettingsRow
       label={
         <span ref={ref} className="flex min-w-0 items-center gap-2.5">
-          <ExtensionIcon url={extension.iconUrl} />
+          <ListIcon url={extension.iconUrl} />
           <span className="truncate">{extension.displayName}</span>
         </span>
       }
@@ -630,12 +666,6 @@ function Swatches({
   );
 }
 
-function ExtensionIcon({ url }: { url?: string }) {
-  const [isBroken, setBroken] = useState(false);
-  if (!url || isBroken) return <span aria-hidden className="size-8 shrink-0 rounded-lg bg-muted" />;
-  return <img src={url} alt="" loading="lazy" onError={() => setBroken(true)} className="size-8 shrink-0 rounded-lg object-contain" />;
-}
-
 function SwatchSkeletons({ count }: { count: number }) {
   return (
     <div className="flex items-center gap-1">
@@ -646,18 +676,3 @@ function SwatchSkeletons({ count }: { count: number }) {
   );
 }
 
-const SKELETON_WIDTHS = ['w-40', 'w-28', 'w-48', 'w-32'];
-
-function SkeletonRows({ count }: { count: number }) {
-  return Array.from({ length: count }, (_, i) => (
-    <SettingsRow
-      key={i}
-      label={
-        <span className="flex items-center gap-2.5">
-          <Skeleton className="size-8 rounded-lg" />
-          <Skeleton className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`} />
-        </span>
-      }
-    />
-  ));
-}

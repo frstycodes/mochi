@@ -115,6 +115,8 @@ export interface SwitchOptions {
 export interface WorktreeOptions {
   base?: string;
   isExisting?: boolean;
+  /** Refuse a branch that already exists instead of checking it out. */
+  isNew?: boolean;
 }
 
 export interface SyncResult {
@@ -143,7 +145,8 @@ export interface GitHost {
   /** With `githubUser`, pushes over HTTPS as that account (the profile's GitHub account); without, with your own git credentials. */
   push(cwd: string, githubUser?: string): Promise<void>;
   /** `githubUser` (`login` on github.com, `host/login` elsewhere) runs gh as the profile's GitHub account; omitted, gh's active account. */
-  createPr(cwd: string, pr: { title: string; body: string }, githubUser?: string): Promise<string>;
+  /** `base`: the branch it merges into; unset, GitHub's default branch. */
+  createPr(cwd: string, pr: { title: string; body: string; base?: string }, githubUser?: string): Promise<string>;
   pr(cwd: string, githubUser?: string): Promise<PrInfo | null>;
   /**
    * The open, draft and merged PRs from the branch each of `worktrees` (one repo's) has checked out now, which the agent may have
@@ -167,6 +170,8 @@ export interface GitHost {
   branchNameError(root: string, name: string): Promise<string | null>;
   /** Switches the project checkout to `branch` now; refuses a branch checked out elsewhere, naming where. */
   switchBranch(root: string, branch: string, options: SwitchOptions): Promise<void>;
+  /** Renames the temp branch `expected` after the thread's title, unless HEAD changed or it was published. Returns the unique name, or null. */
+  renameAutoBranch(cwd: string, expected: string, title: string): Promise<string | null>;
   worktrees(root: string): Promise<Worktree[]>;
   /** What the checkout at `cwd` (a worktree or the project folder) has checked out now. */
   head(cwd: string): Promise<Head>;
@@ -228,6 +233,7 @@ export const gitMethods = {
   branches: 'invoke',
   branchNameError: 'invoke',
   switchBranch: 'invoke',
+  renameAutoBranch: 'invoke',
   worktrees: 'invoke',
   head: 'invoke',
   removeWorktree: 'invoke',

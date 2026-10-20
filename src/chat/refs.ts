@@ -24,6 +24,8 @@ export interface RefState {
   hasConflicts: boolean;
   /** Null when the PR has no checks, and for issues. */
   checks: ChecksState | null;
+  /** Checks that passed (skipped and neutral count) out of all of them; null when unread or there are none. */
+  checkCounts: { passed: number; total: number } | null;
   review: ReviewState | null;
   /** Issues closed as not planned read as muted, not done. */
   isNotPlanned: boolean;
@@ -38,7 +40,7 @@ export interface RefState {
 
 /** A state with only what's known without GitHub: the thread's own record of a PR, demo fixtures. */
 export function bareState(kind: RefKind, status: RefState['status'], title: string, url: string): RefState {
-  return { kind, status, title, url, hasConflicts: false, checks: null, review: null, isNotPlanned: false, author: null, updatedAt: null, branch: null, diff: null };
+  return { kind, status, title, url, hasConflicts: false, checks: null, checkCounts: null, review: null, isNotPlanned: false, author: null, updatedAt: null, branch: null, diff: null };
 }
 
 /** The thread's own repository, for bare `#123` and for showing its refs without the `owner/repo` prefix. */
@@ -56,6 +58,10 @@ const TEXT_REF = /(?<![\w/#&.-])(?:([\w.-]+)\/([\w.-]+))?#(\d+)(?![\w-])/g;
 
 // A relative path with at least one `/` and an extension, optionally `:line[:col]` (as in the terminal's link finder), but
 // not the path part of a URL or an `owner/repo` that's followed by `#n`.
+// A file picked from `@` in the composer, as it reads in the sent message: `@src/a.ts`, `@../x/`, `@"~/my notes.md"`. Needs a
+// `/` or `.` so a handle (`@claude`) stays text; a trailing full stop is the sentence's.
+const FILE_MENTION = /(?<!\S)@(?:"[^"\n]+"|[\w.~/-]+)/g;
+
 const TEXT_PATH = /(?<![\w:/.@#-])(?:\.{1,2}\/)?(?:[\w@.-]+\/)+[\w.-]+\.[A-Za-z0-9]+(?::\d+){0,2}(?![\w/#])/g;
 
 // "our #1 priority", "the #2 spot": a single-digit bare ref between a determiner and a word is a ranking, not an issue
@@ -95,6 +101,11 @@ export function splitRefs(text: string, home: RepoSlug | null): RefSegment[] {
     if (!owner && (!home || isRanking(text, m.index))) continue;
     const ref = owner ? { owner, repo, number: Number(number) } : { ...home!, number: Number(number) };
     hits.push({ start: m.index, end: m.index + whole.length, segment: { type: 'ref', text: whole, ref } });
+  }
+  for (const m of text.matchAll(FILE_MENTION)) {
+    const whole = m[0].startsWith('@"') ? m[0] : m[0].replace(/\.+$/, '');
+    if (!/[/.]/.test(whole.slice(1)) || hits.some((h) => m.index < h.end && m.index + whole.length > h.start)) continue;
+    hits.push({ start: m.index, end: m.index + whole.length, segment: { type: 'path', text: whole } });
   }
   for (const m of text.matchAll(TEXT_PATH)) {
     if (hits.some((h) => m.index < h.end && m.index + m[0].length > h.start)) continue;

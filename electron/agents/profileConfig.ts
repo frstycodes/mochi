@@ -23,7 +23,6 @@ import {
   setCodexServerEnabled,
   setCodexSkillEnabled,
   skillMeta,
-  stripSecrets,
   type ConfigChange,
   type McpEntry,
   type McpServerDef,
@@ -233,7 +232,7 @@ async function enabledPlugins(dir: string, settings: string) {
 async function claudePlugins(dir: string): Promise<string[]> {
   try {
     const { plugins } = JSON.parse(await readText(join(dir, 'plugins', 'installed_plugins.json'))) as { plugins?: Record<string, unknown> };
-    return Object.keys(plugins ?? {}).map((id) => id.split('@')[0]);
+    return Object.keys(plugins ?? {});
   } catch {
     return [];
   }
@@ -242,7 +241,7 @@ async function claudePlugins(dir: string): Promise<string[]> {
 function codexPlugins(configToml: string): string[] {
   const plugins = parseToml(configToml).doc.plugins;
   if (typeof plugins !== 'object' || plugins === null) return [];
-  return Object.entries(plugins).flatMap(([id, p]) => ((p as { enabled?: unknown })?.enabled === false ? [] : [id.split('@')[0]]));
+  return Object.entries(plugins).flatMap(([id, p]) => ((p as { enabled?: unknown })?.enabled === false ? [] : [id]));
 }
 
 // {PLAN}
@@ -255,8 +254,6 @@ async function plan(spaceId: string, change: ConfigChange, planner: Planner): Pr
   const files = paths(change.provider, account);
   const isClaude = change.provider === 'claude';
   switch (change.kind) {
-    case 'instructions':
-      return edit(files.instructions, () => change.text);
     case 'mcp-set':
       return edit(files.servers, (t) => (isClaude ? setClaudeServer(t, change.server) : setCodexServer(t, change.server)));
     case 'mcp-remove':
@@ -273,36 +270,7 @@ async function plan(spaceId: string, change: ConfigChange, planner: Planner): Pr
       if (!(await readText(join(change.folder, 'SKILL.md')))) throw new Error(`${basename(change.folder)} has no SKILL.md, so it isn't a skill folder`);
       return copySkill(change.folder, files.skills, preview);
     }
-    case 'import':
-      return planImport(spaceId, change, files, planner);
   }
-}
-
-/** Copies what the source account has and this one lacks. Secrets never travel: they become `${VAR}` and a note. */
-async function planImport(spaceId: string, change: Extract<ConfigChange, { kind: 'import' }>, files: ReturnType<typeof paths>, planner: Planner) {
-  const { edit, preview } = planner;
-  const [source, target] = await Promise.all([readProvider(change.from.spaceId, change.from.provider), readProvider(spaceId, change.provider)]);
-  const from = `${HARNESSES[change.from.provider].name} (${source.account.name})`;
-  if (source.account.id === target.account.id) return void preview.notes.push(`${from} is this profile's own account: nothing to import.`);
-  if (source.error) throw new Error(`Couldn't read ${from}: ${source.error}`);
-  if (change.parts.includes('instructions') && source.instructions.text.trim() && source.instructions.text !== target.instructions.text)
-    await edit(files.instructions, () => source.instructions.text);
-  if (change.parts.includes('mcp'))
-    for (const { def, scope } of source.mcpServers) {
-      if (scope !== 'user') continue;
-      if (target.mcpServers.some((s) => s.def.name === def.name)) {
-        preview.notes.push(`${def.name}: skipped, ${HARNESSES[change.provider].name} already has a server with that name.`);
-        continue;
-      }
-      const clean = stripSecrets(def);
-      if (clean.stripped.length) preview.notes.push(`${def.name}: ${clean.stripped.join(', ')} not copied. Set ${clean.stripped.length === 1 ? 'it' : 'them'} in your environment, or enter ${clean.stripped.length === 1 ? 'it' : 'them'} in ${HARNESSES[change.provider].name}.`);
-      await edit(files.servers, (t) => (change.provider === 'claude' ? setClaudeServer(t, clean.def) : setCodexServer(t, clean.def)));
-    }
-  if (change.parts.includes('skills'))
-    for (const skill of source.skills) {
-      if (target.skills.some((s) => s.name === skill.name)) continue;
-      await copySkill(skill.dir, files.skills, preview);
-    }
 }
 
 async function copySkill(folder: string, skillsDir: string, preview: ConfigPreview) {
@@ -344,6 +312,6 @@ async function writeAtomic(path: string, text: string) {
   await rename(tmp, path);
 }
 
-const expand = (value: string) => value.replace(/\$\{(\w+)(?::-([^}]*))?\}/g, (_, name: string, fallback?: string) => process.env[name] ?? fallback ?? '');
-const expandAll = (map: Record<string, string> | undefined) => map && Object.fromEntries(Object.entries(map).map(([k, v]) => [k, expand(v)]));
+export const expand = (value: string) => value.replace(/\$\{(\w+)(?::-([^}]*))?\}/g, (_, name: string, fallback?: string) => process.env[name] ?? fallback ?? '');
+export const expandAll = (map: Record<string, string> | undefined) => map && Object.fromEntries(Object.entries(map).map(([k, v]) => [k, expand(v)]));
 const stringEnv = () => Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string'));

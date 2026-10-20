@@ -1,17 +1,19 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Flag, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
+import { ChevronRight, Cursor, Flag, Globe, Hand, Keyboard, MessageQuestion, Settings, ShieldCheck, Trash, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldLabel } from '@/components/ui/field';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
-import { authorName, settingRef, type ActivityEntry, type QueueItem, type SettingsSuggestion, type Space } from '../model';
+import { authorName, settingRef, type ActivityEntry, type EventGlyph, type QueueItem, type SettingsSuggestion, type Space } from '../model';
+import { Favicon } from '../WebLinks';
 import { host } from '../host';
 import { useProfiles } from '../profiles';
 import { clock } from '../progress';
 import { decideTool } from '../runtime/tools';
 import { AgentSettingsProvider } from '../settings/AgentSettings';
-import { findSetting, recordValue, settingsCatalog, valueLabel } from '../settings/catalog';
+import { findSetting, settingsCatalog, valueLabel } from '../settings/catalog';
 import { CatalogRow, isConfigKey, useSettingSources } from '../settings/CatalogRow';
 import { FileDiffs } from '../settings/FileDiffs';
 import { SettingsRow } from '../settings/parts';
@@ -26,15 +28,27 @@ export function CardEntry({ entry, card }: { entry: ActivityEntry; card: NonNull
   if (item?.settings) return <SettingsWidget item={item} settings={item.settings} />;
   if (item) return <MochiWidget item={item} />;
   // Open with no card behind it: Mochi quit while it waited, and the call ended with it.
-  return <EventLine text={card.isOpen ? `Not answered before Mochi quit: ${entry.text}` : entry.text} at={entry.at} />;
+  return <EventLine text={card.isOpen ? `Not answered before Mochi quit: ${entry.text}` : entry.text} at={entry.at} glyph={entry.glyph} site={entry.site} />;
 }
 
-export function EventLine({ text, detail, at }: { text: string; detail?: string; at: number }) {
+export function EventLine({ text, detail, at, glyph, site }: { text: string; detail?: string; at: number; glyph?: EventGlyph; site?: string }) {
+  const Icon = glyph ? GLYPHS[glyph] : Flag;
+  const host = site && hostOf(site);
   return (
     <div className="flex gap-2 type-caption text-muted-foreground">
-      <Flag aria-hidden className="mt-px size-3.5 shrink-0" />
-      <p className="min-w-0">
+      <Icon aria-hidden className="mt-px size-3.5 shrink-0" />
+      {/* Anything unbroken (a long name, a host) wraps inside the chat's width instead of pushing past it. */}
+      <p className="min-w-0 [overflow-wrap:anywhere]">
         {text}
+        {!!host && (
+          <>
+            {' on '}
+            <span className="text-foreground" title={site}>
+              <Favicon host={host} fallback={<Globe className="size-3 text-subtle-foreground" />} className="mr-1 inline-flex size-3 align-[-2px]" />
+              {host}
+            </span>
+          </>
+        )}
         {/* The separator travels with the time, so a wrap never leaves it dangling. */}
         <span className="whitespace-nowrap tabular text-subtle-foreground"> · {clock(at)}</span>
         {!!detail && <span className="block text-subtle-foreground">{detail}</span>}
@@ -43,29 +57,36 @@ export function EventLine({ text, detail, at }: { text: string; detail?: string;
   );
 }
 
+const GLYPHS = { click: Cursor, type: Keyboard, browse: Globe } satisfies Record<EventGlyph, IconComponent>;
+
+const hostOf = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
+
 const KIND = {
   delete: { icon: Trash, label: "Can't be undone", approve: 'Delete', deny: 'Cancel' },
   confirm: { icon: ShieldCheck, label: 'Approval', approve: 'Allow', deny: 'Deny' },
+  choose: { icon: MessageQuestion, label: 'Question', approve: 'Continue', deny: 'Cancel' },
+  handoff: { icon: Hand, label: 'Your turn', approve: 'Done', deny: 'Cancel' },
 } satisfies Record<string, { icon: IconComponent; label: string; approve: string; deny: string }>;
 
-/** A call waiting on you: a delete or a browser escalation. Enter works on whichever button has focus; Esc anywhere inside says no. */
-function MochiWidget({ item }: { item: QueueItem }) {
+/** A call waiting on you: a delete, a browser escalation, a question with one answer, or a handoff. Enter works on whichever button has focus; Esc anywhere inside says no. */
+export function MochiWidget({ item }: { item: QueueItem }) {
   const [options, setOptions] = useState<string[]>([]);
-  const kind = item.tool?.isDestructive ? 'delete' : 'confirm';
+  const [isCodeOpen, setCodeOpen] = useState(false);
+  const kind = item.tool?.isDestructive ? 'delete' : item.tool?.pick === 'one' ? 'choose' : item.tool?.isHandoff ? 'handoff' : 'confirm';
   const { icon: Icon, label, approve, deny } = KIND[kind];
   const decide = (isApproved: boolean, chosen?: string[]) => (item.tool ? decideTool(item.tool.callId, { isApproved, options: chosen }) : undefined);
   const toggle = (id: string, on: boolean) => setOptions((o) => (on ? [...o, id] : o.filter((x) => x !== id)));
   return (
     <WidgetCard item={item} onEscape={() => decide(false)}>
-      <CardHeader>
+      <CardHeader className="gap-2">
         <CardDescription className={cn('flex items-center gap-1 type-caption font-medium', kind === 'delete' ? 'text-destructive' : 'text-foreground')}>
           <Icon aria-hidden className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="text-pretty">{item.title}</CardTitle>
+        <CardTitle className="text-pretty [overflow-wrap:anywhere]">{item.title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {!!item.detail && <p className="type-body text-muted-foreground text-pretty">{item.detail}</p>}
+        {!!item.detail && <p className="type-body text-muted-foreground text-pretty [overflow-wrap:anywhere]">{item.detail}</p>}
         {!!item.tool?.notes?.length && (
           <ul className="flex flex-col gap-1 type-caption text-muted-foreground">
             {item.tool.notes.map((n) => (
@@ -74,8 +95,20 @@ function MochiWidget({ item }: { item: QueueItem }) {
           </ul>
         )}
         {!!item.tool?.edits && <FileDiffs edits={item.tool.edits} />}
-        {!!item.code && <pre className="max-h-48 overflow-auto rounded-md bg-muted px-2.5 py-1.5 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
-        {item.tool?.options?.map((o) => (
+        {!!item.code && isCodeOpen && <pre className="-mx-(--card-spacing) max-h-48 overflow-auto bg-muted/40 px-(--card-spacing) py-2 font-mono type-caption whitespace-pre-wrap">{item.code}</pre>}
+        {kind === 'choose' && (
+          <RadioGroup value={options[0] ?? ''} onValueChange={(v) => setOptions([v])} aria-label={item.title} className="gap-2">
+            {item.tool?.options?.map((o) => (
+              <Field key={o.id} orientation="horizontal">
+                <RadioGroupItem id={`${item.id}-${o.id}`} value={o.id} />
+                <FieldLabel htmlFor={`${item.id}-${o.id}`} className="font-normal break-all">
+                  {o.label}
+                </FieldLabel>
+              </Field>
+            ))}
+          </RadioGroup>
+        )}
+        {kind !== 'choose' && item.tool?.options?.map((o) => (
           <Field key={o.id} orientation="horizontal">
             <Checkbox id={`${item.id}-${o.id}`} checked={options.includes(o.id)} onCheckedChange={(on) => toggle(o.id, on === true)} />
             <FieldLabel htmlFor={`${item.id}-${o.id}`} className="font-normal break-all">
@@ -85,14 +118,24 @@ function MochiWidget({ item }: { item: QueueItem }) {
         ))}
       </CardContent>
       <CardFooter className="flex-wrap justify-end gap-2 border-t-0 bg-transparent pt-0">
+        {!!item.code && <ShowCodeButton isOpen={isCodeOpen} onToggle={() => setCodeOpen((o) => !o)} />}
         <Button variant="outline" size="sm" onClick={() => decide(false)}>
           {deny}
         </Button>
-        <Button variant={kind === 'delete' ? 'danger' : 'default'} size="sm" onClick={() => decide(true, options)}>
+        <Button variant={kind === 'delete' ? 'danger' : 'default'} size="sm" disabled={kind === 'choose' && !options.length} onClick={() => decide(true, options)}>
           {approve}
         </Button>
       </CardFooter>
     </WidgetCard>
+  );
+}
+
+function ShowCodeButton({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
+  return (
+    <Button variant="ghost" size="xs" aria-expanded={isOpen} onClick={onToggle} className="-ms-2 me-auto text-muted-foreground">
+      {isOpen ? 'Hide code' : 'Show code'}
+      <ChevronRight aria-hidden data-icon="inline-end" className={cn('size-3 transition-transform', isOpen && 'rotate-90')} />
+    </Button>
   );
 }
 
@@ -125,7 +168,7 @@ function SettingsWidget({ item, settings }: { item: QueueItem; settings: Setting
   return (
     <AgentSettingsProvider isDetecting={false}>
       <WidgetCard item={item} onEscape={() => void close()}>
-        <CardHeader>
+        <CardHeader className="gap-2">
           <CardDescription className="flex items-center gap-1 type-caption font-medium text-foreground">
             <Settings aria-hidden className="size-3.5" />
             Settings
@@ -170,8 +213,8 @@ function SuggestionGroup({ item, profile, profileId, changes, settings, readers 
     return changes.flatMap((c) => {
       const setting = findSetting(catalog, c.key);
       const value = setting?.read(now);
-      if (!setting || value === undefined || recordValue(setting, value) === settings.before[settingRef(c)]) return [];
-      return [setting.control.type === 'instructions' ? `saved ${setting.label}` : `set ${setting.label} to ${valueLabel(setting, value)}`];
+      if (!setting || value === undefined || value === settings.before[settingRef(c)]) return [];
+      return [`set ${setting.label} to ${valueLabel(setting, value)}`];
     });
   });
   if (profileId && !profile) return <SettingsRow label="That profile was removed" />;

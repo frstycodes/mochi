@@ -19,6 +19,8 @@ export const settings: SettingsHost = {
     const provider = DEFAULT_ACCOUNTS.find((a) => a.id === accountId)?.provider ?? 'claude';
     return { provider, accountId, path: null, version: null, login: { state: 'unknown', reason: 'Needs the desktop app' } };
   },
+  latestVersion: desktopOnly,
+  updateHarness: desktopOnly,
   async accounts() {
     return { accounts: DEFAULT_ACCOUNTS, links: {} };
   },
@@ -30,6 +32,10 @@ export const settings: SettingsHost = {
     return { isSet: false, canStore: false };
   },
   setApiKey: desktopOnly,
+  async profileFolder() {
+    return { dir: '~/Library/Application Support/Mochi/profiles/latitude', files: [{ name: 'mochi.md', provider: null, lines: 4 }, { name: 'claude.md', provider: 'claude', lines: 0 }, { name: 'codex.md', provider: 'codex', lines: 0 }] };
+  },
+  copyProfileFolder: desktopOnly,
   async agentConfig() {
     return DEMO_CONFIG;
   },
@@ -62,7 +68,7 @@ const DEMO_CONFIG: ProfileConfig = {
       { name: 'ponytail:ponytail', description: 'Forces the simplest solution that actually works', isSkill: true },
       { name: 'ponytail:ponytail-review', description: 'Review the diff for over-engineering', isSkill: true },
     ],
-    plugins: ['figma', 'ponytail'],
+    plugins: ['figma@claude-plugins-official', 'ponytail@ponytail'],
     projectInstructions: null,
   },
   codex: {

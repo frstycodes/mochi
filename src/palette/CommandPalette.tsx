@@ -1,4 +1,5 @@
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandShortcut } from '@/components/ui/command';
+import { isListed } from '../model';
 import { profileById } from '../profiles';
 import { useHarness } from '../store';
 import { StepStatusIcon, ThreadStatusIcon, lineColor } from '../ui';
@@ -42,7 +43,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </CommandGroup>
           ))}
           <CommandGroup heading="Threads">
-            {state.threads.map((t) => (
+            {state.threads.filter(isListed).map((t) => (
               <CommandItem key={t.id} value={`${t.title} ${t.repo?.branch ?? ''} ${t.id}`} onSelect={() => go(t.id)}>
                 <ThreadStatusIcon status={t.status} />
                 <span className="truncate">{t.title}</span>

@@ -173,7 +173,7 @@ function NoPorts() {
 function usePortsTab(thread: Thread, pane: Pane, cwd: string) {
   const { dispatch } = useHarness();
   const openers = usePaneOpeners(thread.id);
-  const listening = usePorts(thread.id, cwd, openers.openPort);
+  const listening = usePorts(thread.id, cwd);
   const [targets, setTargets] = useState<RunTarget[]>();
   const [threadPort, setThreadPort] = useState<number>();
   useEffect(() => {

@@ -1,5 +1,4 @@
-import type { ReactNode } from 'react';
-import { CodeBlock, defaultRehypePlugins, type Components, type CustomRendererProps, type PluginConfig, type StreamdownProps } from 'streamdown';
+import { defaultRehypePlugins, type Components, type CustomRendererProps, type PluginConfig, type StreamdownProps } from 'streamdown';
 import { WarningAlt } from '@/icons';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHarness } from '../store';
@@ -9,7 +8,8 @@ import { metaTitle, parseFence, VIZ_LANGUAGES, type VizLanguage, type VizSpecs }
 import { DiffVisual, MetroVisual } from './HarnessVisuals';
 import { ImageVisual } from './ImageVisual';
 import { SortableTable } from './SortableTable';
-import { VisualFrame, type VisualSource } from './VisualFrame';
+import { EmbedFrame } from './EmbedFrame';
+import { VISUAL_ICONS, VisualFrame, type VisualSource } from './VisualFrame';
 import { WidgetVisual } from './WidgetVisual';
 import { FileCode } from '../files/FileCode';
 import { ChatLink } from '../chat/ChatLink';
@@ -41,7 +41,7 @@ function FenceVisual({ code, isIncomplete, language, meta }: CustomRendererProps
 /** One fenced visual from its source: a placeholder while it streams, the source on error. The side pane's visual tabs render it again. */
 export function VisualContent({ language, code, isIncomplete = false, title }: { language: VizLanguage; code: string; isIncomplete?: boolean; title?: string }) {
   const fence = parseFence(language, code, isIncomplete);
-  if (fence.status === 'pending') return <PendingVisual label={PENDING_LABELS[language]} />;
+  if (fence.status === 'pending') return <PendingVisual language={language} />;
   if (fence.status === 'error') return <BrokenVisual language={language} code={code} message={fence.message} />;
   return <ReadyVisual language={language} spec={fence.spec} source={SOURCES[language](code)} code={code} title={title} />;
 }
@@ -108,29 +108,23 @@ const PENDING_LABELS = {
   'harness-diff': 'Summing changes',
 } satisfies Record<VizLanguage, string>;
 
-function PendingVisual({ label }: { label: string }) {
+function PendingVisual({ language }: { language: VizLanguage }) {
   return (
-    <Placeholder>
-      <span className="type-caption text-subtle-foreground">{label}…</span>
-      <Skeleton className="h-40 w-full rounded-lg" />
-    </Placeholder>
+    <EmbedFrame icon={VISUAL_ICONS[language]} title={`${PENDING_LABELS[language]}…`} className="my-3">
+      <Skeleton className="h-40 w-full rounded-none" />
+    </EmbedFrame>
   );
 }
 
 function BrokenVisual({ language, code, message }: { language: VizLanguage; code: string; message: string }) {
   return (
-    <Placeholder>
-      <span role="alert" className="flex items-center gap-1.5 type-caption text-muted-foreground">
-        <WarningAlt aria-hidden className="size-3.5 shrink-0 text-warning" />
-        Couldn't render this {language.replace('harness-', '')}: {message}
-      </span>
-      <CodeBlock code={code} language={SOURCES[language](code).ext} />
-    </Placeholder>
+    <EmbedFrame icon={WarningAlt} iconClassName="text-warning" title={`Couldn't render this ${language.replace('harness-', '')}`} className="my-3">
+      <p role="alert" className="px-3 pt-3 type-caption text-muted-foreground">
+        {message}
+      </p>
+      <pre className="max-h-60 overflow-auto p-3 font-mono type-caption whitespace-pre-wrap">{code}</pre>
+    </EmbedFrame>
   );
-}
-
-function Placeholder({ children }: { children: ReactNode }) {
-  return <div className="my-3 flex flex-col gap-2 rounded-xl bg-card p-3 ring-1 ring-border">{children}</div>;
 }
 
 function capitalize(text: string) {

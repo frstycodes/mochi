@@ -6,16 +6,20 @@ import { getThreadPins } from '../chat/pins.ts';
 import { pauseQueue } from '../chat/outbox.ts';
 import { similarity } from '../progress.ts';
 import type { Action, State } from '../store/index.tsx';
-import { completeStep, hasOpenWork, log, mapStep, mapThread, seePrs } from '../store/threads.ts';
+import { completeStep, log, mapStep, mapThread, seePrs, withGeneratedTitle } from '../store/threads.ts';
 import { createdPr } from '../git/prs.ts';
 import { withHead } from '../git/workspace.ts';
 import { clearLimit, hitLimit, isLimitEnd } from './limits.ts';
 import { applySubagent, fromBackground } from './subagents.ts';
+import { noteParent } from './subThreadNotes.ts';
+import { applyTask } from './tasks.ts';
 
-/** Folds one agent event into the store. The harness goal stays canonical: plans are reconciled onto it, never replace it. */
+const MAIN_EVENTS = new Set<AgentEvent['type']>(['worktree', 'setup', 'branch', 'title']);
+
+/** Folds one agent event into the store. The goal is Mochi's and yours; the agent's plan is mirrored as its steps, never the goal. */
 export function applyAgentEvent(state: State, event: AgentEvent): State {
-  // Any word from the agent means it's up; its folder being made and set up is main's, not the agent's.
-  if (event.type !== 'worktree' && event.type !== 'setup' && state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
+  // Any word from the agent means it's up; its folder being made, set up and named is main's, not the agent's.
+  if (!MAIN_EVENTS.has(event.type) && state.threads.find((t) => t.id === event.threadId)?.live?.starting) {
     state = { ...state, threads: mapThread(state.threads, event.threadId, (t) => ({ ...t, live: { ...t.live!, starting: undefined } })) };
   }
   const thread = state.threads.find((t) => t.id === event.threadId);
@@ -32,6 +36,8 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       return update((t) => ({ ...t, setup: event.setup, status: event.setup.status === 'failed' ? 'needs-you' : t.setup?.status === 'failed' && t.status === 'needs-you' ? 'running' : t.status }));
     case 'branch':
       return update((t) => ({ ...t, repo: t.repo && withHead(t.repo, { branch: event.branch, isDetached: !!event.isDetached }, false) }));
+    case 'title':
+      return update((t) => withGeneratedTitle(t, event.title));
     case 'session':
       return update((t) => ({ ...t, session: { ...t.session, provider: event.provider, id: event.sessionId }, agent: {} }));
     case 'info':
@@ -49,13 +55,13 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       if (event.phase === 'start') return update((t) => log(t, { at: now, who, kind: 'tool', text: event.text, toolId: event.id, ...(event.description && { description: event.description }), ...(event.links && { links: event.links }), ...(event.skill && { skill: event.skill }), ...(event.mcp && { mcp: event.mcp }), ...(event.sent && { sent: event.sent }), ...(event.generated && { generated: event.generated }) }));
       state = update((t) => ({ ...t, activity: t.activity.map((e) => (e.toolId === event.id ? { ...e, ...toolEnd(event) } : e)) }));
       state = recordCreatedPr(state, thread, event);
-      if (!event.files?.length) return state;
-      if (event.patch) state = noteCollisions(state, thread.id);
-      return update((t) => ({ ...t, steps: t.steps.map((s) => (s.status === 'running' ? { ...s, footprint: [...new Set([...s.footprint, ...event.files!])] } : s)) }));
+      return event.files?.length && event.patch ? noteCollisions(state, thread.id) : state;
     case 'plan':
-      return applyPlan(state, thread, event.items);
+      return applyPlan(state, thread, event.items, event.isFresh);
     case 'subagent':
       return applySubagent(state, thread, event, who);
+    case 'task':
+      return applyTask(state, thread, event, who);
     case 'approval':
       return waitOnYou(state, thread, { id: `q-${event.requestId}`, kind: 'approval', title: event.title, detail: event.detail, code: event.code, requestId: event.requestId }, 'Paused for your approval');
     case 'question': {
@@ -85,7 +91,7 @@ export function applyAgentEvent(state: State, event: AgentEvent): State {
       // A held turn's end (you stopped it, or it ended past the reset) ends its limit too.
       const ended = thread.live ? update((t) => closeCompaction({ ...t, live: { ...t.live!, isWorking: false, turnEnd: event.status, ...(t.live!.limit?.isTurnHeld && { limit: undefined }) } }, event)) : state;
       if (isLimitEnd(thread)) return ended;
-      return endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event);
+      return noteParent(endTurn(event.status === 'done' ? ended : { ...ended, threads: mapThread(ended.threads, thread.id, (t) => pauseQueue(t, event.status === 'failed' ? 'failed' : 'interrupted')) }, thread, event), thread, event.status);
     }
   }
 }
@@ -166,13 +172,18 @@ export function undelivered({ title, decision }: Resolution, error: unknown): Om
 }
 
 const MATCH = 0.6;
-const OVERLAP = 0.8;
 
-function applyPlan(state: State, thread: Thread, items: AgentPlanItem[]): State {
+/**
+ * The agent's to-do list, mirrored the way Claude Code shows its todos: `items` is the whole plan, shown as sent (order, titles,
+ * statuses). An item keeps its step (and when it started) by title or a close one; a step it no longer lists is dropped, done
+ * or not. A fresh plan matches nothing, so the previous plan's steps all drop.
+ */
+function applyPlan(state: State, thread: Thread, items: AgentPlanItem[], isFresh = false): State {
   const now = state.now;
   const provider = actor(thread);
   const claimed = new Set<string>();
   const matches = items.map((item) => {
+    if (isFresh) return undefined;
     const open = thread.steps.filter((s) => s.status !== 'dropped' && !claimed.has(s.id));
     const step = open.find((s) => s.title === item.title) ?? bestMatch(open, item.title);
     if (step) claimed.add(step.id);
@@ -182,28 +193,35 @@ function applyPlan(state: State, thread: Thread, items: AgentPlanItem[]): State 
   let threads = state.threads;
   items.forEach((item, i) => {
     const step = matches[i];
-    if (!step || item.status === 'pending') return;
+    if (!step) return;
+    if (step.title !== item.title) threads = mapThread(threads, thread.id, (t) => mapStep(t, step.id, (s) => ({ ...s, title: item.title })));
     if (item.status === 'done') {
       if (step.status !== 'done') threads = completeStep(threads, thread.id, step.id, now);
       return;
     }
-    if (step.status !== 'ready' && step.status !== 'running') return;
+    // A blocked step waits on you; the harness, not the plan, unblocks it.
+    if (step.status === 'blocked') return;
+    if (item.status === 'pending') {
+      threads = mapThread(threads, thread.id, (t) => mapStep(t, step.id, (s) => ({ ...s, status: 'ready', doneAt: undefined, doneMs: undefined })));
+      return;
+    }
     threads = mapThread(threads, thread.id, (t) => ({
-      ...mapStep(t, step.id, (s) => ({ ...s, status: 'running', startedAt: s.startedAt ?? now, progress: item.progress ?? s.progress })),
+      ...mapStep(t, step.id, (s) => ({ ...s, status: 'running', startedAt: s.startedAt ?? now, doneAt: undefined, doneMs: undefined })),
       status: t.status === 'needs-you' ? t.status : 'running',
     }));
   });
 
-  const dropped = thread.steps.filter((s) => !claimed.has(s.id) && s.addedBy === provider && !s.link && s.status !== 'done' && s.status !== 'dropped');
+  const dropped = thread.steps.filter((s) => !claimed.has(s.id) && s.status !== 'dropped');
   for (const step of dropped) {
-    threads = mapThread(threads, thread.id, (t) =>
-      log(mapStep(t, step.id, (s) => ({ ...s, status: 'dropped', droppedAt: now, note: `Dropped by ${NAMES[provider]}` })), { at: now, who: 'harness', kind: 'event', text: `${NAMES[provider]} dropped "${step.title}"` }),
-    );
+    const drop = (t: Thread) => mapStep(t, step.id, (s) => ({ ...s, status: 'dropped', droppedAt: now, note: isFresh ? 'Earlier plan' : `Dropped by ${NAMES[provider]}` }));
+    threads = mapThread(threads, thread.id, (t) => (isFresh ? drop(t) : log(drop(t), { at: now, who: 'harness', kind: 'event', text: `${NAMES[provider]} dropped "${step.title}"` })));
   }
 
-  const added = items.flatMap((item, i) => (matches[i] ? [] : [{ item, after: matches.slice(0, i).findLast(Boolean) }]));
-  const next = { ...state, threads };
-  return added.length ? addScope(next, thread.id, provider, added) : next;
+  const added = items.filter((_, i) => !matches[i]);
+  if (added.length) threads = addSteps(threads, thread.id, provider, added, now);
+  let k = thread.steps.length;
+  const order = matches.map((m) => m?.id ?? `${thread.id}-s${k++}`);
+  return { ...state, threads: mapThread(threads, thread.id, (t) => ({ ...t, steps: inPlanOrder(t.steps, order) })) };
 }
 
 function bestMatch(steps: Step[], title: string) {
@@ -218,73 +236,30 @@ function bestMatch(steps: Step[], title: string) {
   return best;
 }
 
-/** Steps the agent planned that the goal doesn't have yet: plan changes, logged, never a goal revision. */
-function addScope(state: State, threadId: string, provider: Provider, added: { item: AgentPlanItem; after?: Step }[]): State {
-  const now = state.now;
-  const thread = state.threads.find((t) => t.id === threadId)!;
-  const revision = thread.revisions.at(-1)?.n ?? 1;
-  let steps = thread.steps;
-  const created: Step[] = [];
-  added.forEach(({ item, after }, k) => {
-    const step: Step = {
-      id: `${thread.id}-s${steps.length}`,
-      title: item.title,
-      size: item.size ?? 1,
-      status: item.status === 'pending' ? 'ready' : item.status,
-      progress: item.status === 'done' ? 1 : (item.progress ?? 0),
-      footprint: item.files ?? [],
-      addedAt: now,
-      addedBy: provider,
-      revision,
-      ...(item.status !== 'pending' && { startedAt: now }),
-      ...(item.status === 'done' && { doneAt: now }),
-    };
-    const anchor = k > 0 && added[k - 1].after === after ? created.at(-1) : after;
-    const at = anchor ? steps.findIndex((s) => s.id === anchor.id) + 1 : 0;
-    steps = [...steps.slice(0, at), step, ...steps.slice(at)];
-    created.push(step);
+/** Items the agent planned that the mirror doesn't have yet, appended and logged as plan changes. */
+function addSteps(threads: Thread[], threadId: string, provider: Provider, added: AgentPlanItem[], now: number): Thread[] {
+  return mapThread(threads, threadId, (t) => {
+    const created = added.map(
+      (item, k): Step => ({
+        id: `${t.id}-s${t.steps.length + k}`,
+        title: item.title,
+        status: item.status === 'pending' ? 'ready' : item.status,
+        addedAt: now,
+        addedBy: provider,
+        ...(item.status !== 'pending' && { startedAt: now }),
+        ...(item.status === 'done' && { doneAt: now }),
+      }),
+    );
+    const label = created.length === 1 ? `${NAMES[provider]} added "${created[0].title}"` : `${NAMES[provider]} found ${created.length} more steps`;
+    return log({ ...t, steps: [...t.steps, ...created] }, { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` });
   });
-  const label = created.length === 1 ? `${NAMES[provider]} added "${created[0].title}"` : `${NAMES[provider]} found ${created.length} more steps`;
-  let next: State = {
-    ...state,
-    threads: mapThread(state.threads, threadId, (t) =>
-      log({ ...t, steps }, { at: now, who: 'harness', kind: 'event', text: `Plan: ${label}` }),
-    ),
-  };
-  for (const step of created) next = holdOverlap(next, threadId, step);
-  return next;
 }
 
-/** A step another thread already has goes on hold, and the choice of how to share it goes to the queue. */
-function holdOverlap(state: State, threadId: string, step: Step): State {
-  const thread = state.threads.find((t) => t.id === threadId)!;
-  const other = state.threads
-    .filter((t) => t.id !== threadId && t.spaceId === thread.spaceId && t.status !== 'settled')
-    .flatMap((t) => t.steps.filter((s) => s.status !== 'dropped' && !s.link && similarity(step.title, s.title) >= OVERLAP).map((s) => ({ thread: t, step: s })))[0];
-  if (!other || step.status === 'done') return state;
-  const now = state.now;
-  const shared = other.step.footprint.filter((f) => step.footprint.includes(f));
-  const isBusy = other.step.status === 'running';
-  const item: QueueItem = {
-    id: `q-overlap-${state.seq}`,
-    kind: 'overlap',
-    threadId,
-    title: `Two threads want to ${step.title.charAt(0).toLowerCase()}${step.title.slice(1)}`,
-    detail: isBusy
-      ? `${NAMES[step.addedBy as Provider] ?? 'The agent'} just planned it here. ${NAMES[actor(other.thread)]} is already working on the same step in "${other.thread.title}".`
-      : `${NAMES[step.addedBy as Provider] ?? 'The agent'} just planned it here. "${other.thread.title}" has the same step.`,
-    blocks: { steps: 1, threads: 2 },
-    overlap: { threadId, stepId: step.id, otherThreadId: other.thread.id, otherStepId: other.step.id, sharedFiles: shared.length ? shared : other.step.footprint },
-    createdAt: now,
-  };
-  return {
-    ...state,
-    seq: state.seq + 1,
-    queue: [...state.queue, item],
-    threads: mapThread(state.threads, threadId, (t) =>
-      log(mapStep(t, step.id, (s) => ({ ...s, status: 'waiting', startedAt: undefined, note: 'Held until you choose how to share it' })), { at: now, who: 'harness', kind: 'event', text: `Overlap with "${other.thread.title}" sent to your queue` }),
-    ),
-  };
+/** The plan's steps in the order the agent listed them, then the dropped ones as they were. */
+function inPlanOrder(steps: Step[], order: string[]): Step[] {
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const planned = new Set(order);
+  return [...order.map((id) => byId.get(id)!), ...steps.filter((s) => !planned.has(s.id))];
 }
 
 function waitOnYou(state: State, thread: Thread, item: Omit<QueueItem, 'threadId' | 'blocks' | 'createdAt'>, note: string): State {
@@ -323,15 +298,13 @@ function endTurn(state: State, thread: Thread, event: Extract<AgentEvent, { type
   const update = (fn: (t: Thread) => Thread): State => ({ ...state, threads: mapThread(state.threads, thread.id, fn) });
   if (event.status === 'interrupted') return update((t) => log(t, { at: now, who: 'harness', kind: 'event', text: 'Turn interrupted' }));
   if (event.status === 'failed') return update((t) => log({ ...t, status: 'needs-you' }, { at: now, who: 'harness', kind: 'event', text: `Turn failed${event.error ? `: ${event.error}` : ''}` }));
-  // A turn with no plan (a plain question) has nothing to review.
-  if (hasOpenWork(thread) || thread.status === 'review' || thread.status === 'settled' || !thread.steps.length) return state;
-  // The report card says what's next (open a PR, its review, settle); no queue card repeats it.
-  return update((t) => ({ ...t, status: 'review' }));
+  // Whether the goal is met is the idle verdict's to say (`src/goals/verdict.ts`), once Mochi has checked the turn.
+  return state;
 }
 
-/** Who speaks for a thread right now: its live session, else the owner of the step in flight, else its first provider. */
+/** Who speaks for a thread right now: its live session, else its first provider. */
 function actor(thread: Thread): Provider {
-  return thread.session?.provider ?? thread.steps.find((s) => s.status === 'running')?.owner ?? thread.providers[0];
+  return thread.session?.provider ?? thread.providers[0];
 }
 
 function mergeInfo(info: AgentInfo = {}, update: AgentInfo): AgentInfo {

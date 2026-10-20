@@ -56,7 +56,9 @@ export function threadAt(thread: Thread, t: number): Thread {
     const status = statusAt(s, t);
     if (!status) return [];
     const isLater = (at?: number) => at !== undefined && at > t;
-    return [{ ...s, status, progress: progressAt(s, status, t), startedAt: isLater(s.startedAt) ? undefined : s.startedAt, doneAt: isLater(s.doneAt) ? undefined : s.doneAt, droppedAt: isLater(s.droppedAt) ? undefined : s.droppedAt }];
+    const isStarted = !isLater(s.startedAt);
+    const isDone = !isLater(s.doneAt);
+    return [{ ...s, status, startedAt: isStarted ? s.startedAt : undefined, startedMs: isStarted ? s.startedMs : undefined, doneAt: isDone ? s.doneAt : undefined, doneMs: isDone ? s.doneMs : undefined, droppedAt: isLater(s.droppedAt) ? undefined : s.droppedAt }];
   });
   return {
     ...thread,
@@ -66,13 +68,6 @@ export function threadAt(thread: Thread, t: number): Thread {
     activity: thread.activity.filter((a) => a.at <= t),
     revisions: thread.revisions.filter((r) => r.at <= t),
   };
-}
-
-function progressAt(step: Step, status: Step['status'], t: number) {
-  if (status === 'done') return 1;
-  if (status !== 'running' || step.startedAt === undefined) return 0;
-  if (step.doneAt === undefined) return step.progress;
-  return Math.min(0.99, (t - step.startedAt) / Math.max(1, step.doneAt - step.startedAt));
 }
 
 function statusFor(steps: Step[]): ThreadStatus {
@@ -126,18 +121,18 @@ function yourNewMessages(prev: Thread, next: Thread) {
 const isYourMessage = (e: ActivityEntry) => e.who === 'you' && e.kind === 'message';
 
 /** Puts the thread's steps, transcript and goal back to checkpoint `n` and drops later checkpoints and queue items; one undo is kept. */
-export function rewind(state: State, threadId: string, n: number, mode: RewindMode = 'files', forkAt?: string | null): State {
+export function rewind(state: State, threadId: string, n: number, mode: RewindMode = 'files', forkAt?: string | null, ms?: number): State {
   const list = state.checkpoints[threadId] ?? [];
   const index = list.findIndex((c) => c.n === n);
   if (index < 0) return state;
-  return restore(state, threadId, list[index].thread, index, checkpointPhrase(list[index]), mode, forkAt);
+  return restore(state, threadId, list[index].thread, index, checkpointPhrase(list[index]), mode, forkAt, ms);
 }
 
 /**
  * Back to just before the message at `index` in the thread's activity: the transcript stops before it, steps and goal are rebuilt for that moment,
  * and the worktree's files come from the latest checkpoint at or before it (the closest saved files).
  */
-export function rewindToMessage(state: State, threadId: string, index: number, mode: RewindMode = 'files', forkAt?: string | null): State {
+export function rewindToMessage(state: State, threadId: string, index: number, mode: RewindMode = 'files', forkAt?: string | null, ms?: number): State {
   const current = state.threads.find((t) => t.id === threadId);
   const entry = current?.activity[index];
   const list = state.checkpoints[threadId] ?? [];
@@ -145,7 +140,7 @@ export function rewindToMessage(state: State, threadId: string, index: number, m
   const cpIndex = list.indexOf(checkpointForMessage(state, threadId, index)!);
   // Times are whole minutes and a message often shares its minute with the step it added: rebuild from just before it. The transcript is cut by position.
   const before = { ...threadAt(current, entry.at - 0.001), activity: current.activity.slice(0, index) };
-  return restore(state, threadId, before, cpIndex, `before "${excerpt(entry.text)}"`, mode, forkAt);
+  return restore(state, threadId, before, cpIndex, `before "${excerpt(entry.text)}"`, mode, forkAt, ms);
 }
 
 /** The point a message sits at for rewinding: the checkpoint saved just before it, else the latest one before it. */
@@ -162,7 +157,7 @@ export function firstDroppedMessage(current: Thread, keptLength: number) {
   return current.activity.slice(keptLength).find(isYourMessage);
 }
 
-function restore(state: State, threadId: string, base: Thread, cpIndex: number, phrase: string, mode: RewindMode, forkAt?: string | null): State {
+function restore(state: State, threadId: string, base: Thread, cpIndex: number, phrase: string, mode: RewindMode, forkAt?: string | null, ms?: number): State {
   const current = state.threads.find((t) => t.id === threadId);
   const list = state.checkpoints[threadId] ?? [];
   const cp = list[cpIndex];
@@ -171,7 +166,7 @@ function restore(state: State, threadId: string, base: Thread, cpIndex: number, 
   const restored: Thread = {
     ...base,
     // Work resumes now: a step that was running at the checkpoint restarts its clock instead of claiming the hours since.
-    steps: base.steps.map((s) => (s.status === 'running' ? { ...s, startedAt: state.now } : s)),
+    steps: base.steps.map((s) => (s.status === 'running' ? { ...s, startedAt: state.now, startedMs: ms } : s)),
     title: current.title,
     line: current.line,
     orbitSlot: current.orbitSlot,

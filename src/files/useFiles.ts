@@ -4,16 +4,19 @@ import type { FileContent } from '@/host/types/fs';
 
 const RELIST_DELAY_MS = 300;
 
+// The last listing per root, so a second view of the same folder (the `@` menu beside the Files tab) starts from it.
+const listings = new Map<string, string[]>();
+
 /** The root's file list, re-listed shortly after anything under it changes. */
 export function useFileList(root: string | null) {
-  const [files, setFiles] = useState<string[] | null>(null);
+  const [files, setFiles] = useState<string[] | null>(() => (root && listings.get(root)) || null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!root) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const relist = () =>
       host.fs.list(root).then(
-        (list) => (setFiles(list), setError(null)),
+        (list) => (listings.set(root, list), setFiles(list), setError(null)),
         (e: Error) => setError(e.message),
       );
     void relist();

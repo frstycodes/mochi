@@ -70,7 +70,7 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
   };
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 px-3 pt-2 pb-3">
+    <div className="flex shrink-0 flex-col gap-2 px-2 pt-2 pb-2">
       {canCommit && (
         <form
           className="flex flex-col gap-2"
@@ -99,11 +99,11 @@ export function ShipBar({ thread, cwd, diff, canCommit, run, confirm }: ShipBarP
         </form>
       )}
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={push}>
+        <Button variant="ghost" size="sm" onClick={push} className="text-muted-foreground">
           <ArrowUp data-icon="inline-start" />
           Push
         </Button>
-        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading}>Create pull request</Button>}
+        {pr ? <PrLink thread={thread} pr={pr} /> : <Button variant="ghost" size="sm" onClick={() => setPrOpen(true)} disabled={prQuery.isLoading} className="text-muted-foreground">Create pull request</Button>}
         {!!pr && pr.checks.length > 0 && <ChecksSummary checks={pr.checks} isOpen={isChecksOpen} onToggle={() => setChecksOpen((o) => !o)} />}
       </div>
       {!!pr && isChecksOpen && <CheckList checks={pr.checks} />}

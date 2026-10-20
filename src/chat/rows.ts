@@ -1,5 +1,6 @@
 import type { ActivityEntry, Author } from '../model.ts';
 import type { Review } from '../secondOpinion/verdict.ts';
+import { isTurnCall } from './mochiCalls.ts';
 import type { TurnChanges } from './turnChanges.ts';
 
 export type ChatRow =
@@ -13,7 +14,7 @@ export type ChatRow =
   | { kind: 'widget'; key: string; entry: ActivityEntry }
   /** A subagent where it was started (`entry.subagentId`). */
   | { kind: 'subagent'; key: string; entry: ActivityEntry }
-  /** A message another thread's agent sent (`entry.from`): a line in the log, not a bubble. It still starts a turn like yours. */
+  /** A message another thread's agent sent (`entry.from`) or an Auto-fix event (`entry.autofix`): a line in the log, not a bubble. It still starts a turn like yours. */
   | { kind: 'thread-message'; key: string; entry: ActivityEntry; index: number }
   /** The files a finished turn changed, after its last row. */
   | { kind: 'changes'; key: string; turn: TurnChanges };
@@ -40,6 +41,7 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       turn = undefined;
       return rows.push({ kind: 'image', key, entry });
     }
+    if (entry.kind === 'tool' && isTurnCall(entry)) return;
     if (entry.kind === 'tool' || entry.kind === 'reasoning') {
       isMidWork = true;
       if (turn) turn.entries.push(entry);
@@ -55,15 +57,15 @@ export function chatRows(activity: ActivityEntry[], reviews: Review[] = [], chan
       return rows.push({ kind: 'subagent', key, entry });
     }
     if (entry.kind === 'event') {
-      const isWidget = !!entry.card || !!entry.isLimit || !!entry.compaction;
+      const isWidget = !!entry.card || !!entry.isLimit || !!entry.compaction || !!entry.handoff || !!entry.nextMove || !!entry.subThread;
       if (turn && isMidWork && !isWidget) return turn.entries.push(entry);
-      // Mochi's widgets (a delete or settings approval, a usage limit, a compaction) stay in view: the turn continues in a new accordion after one.
+      // Mochi's widgets (a delete or settings approval, a usage limit, a compaction, a handoff, an answered next move, a sub-thread's result) stay in view: the turn continues in a new accordion after one.
       if (isWidget) turn = undefined;
       return rows.push({ kind: 'event', key, entry });
     }
     turn = undefined;
     isMidWork = false;
-    if (entry.from) return rows.push({ kind: 'thread-message', key, entry, index: i });
+    if (entry.from || entry.autofix) return rows.push({ kind: 'thread-message', key, entry, index: i });
     const previous = rows.findLast((r) => r.kind === 'work' || r.kind === 'message');
     const previousWho = previous?.kind === 'work' ? previous.who : previous?.kind === 'message' ? previous.entry.who : undefined;
     rows.push({ kind: 'message', key, entry, index: i, showAuthor: previousWho !== entry.who });

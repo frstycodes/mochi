@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { QueueItem, Step, Thread } from './model';
+import type { Step, Thread } from './model';
 import { isWorking } from './agentPhase';
 import { boardColumns, goalProgress, progressLabel } from './progress';
-import { useHarness, useSpaceQueue, useSpaceThreads } from './store';
+import { hasGoal } from './drift';
+import { useHarness, useSpaceThreads } from './store';
 import { ProgressRing, ProviderMarks, ThreadStatusIcon, lineColor, stepLabel } from './ui';
 
 const ROW = 112;
@@ -24,9 +25,8 @@ interface Hovered {
 export function BoardView() {
   const { dispatch } = useHarness();
   const threads = useSpaceThreads().filter((t) => t.status !== 'settled');
-  const queue = useSpaceQueue();
   const [hovered, setHovered] = useState<Hovered | null>(null);
-  const layout = useBoardLayout(threads, queue);
+  const layout = useBoardLayout(threads);
 
   if (threads.length === 0) return <EmptyBoard />;
 
@@ -37,8 +37,7 @@ export function BoardView() {
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold">Board</h1>
           <p className="text-sm text-muted-foreground">
-            {threads.length} active threads · {layout.interchanges.length} shared {layout.interchanges.length === 1 ? 'step' : 'steps'}
-            {layout.pending.length > 0 && ` · ${layout.pending.length} overlap waiting on you`}
+            {threads.length} active threads
           </p>
         </div>
         <BoardLegend />
@@ -69,33 +68,8 @@ export function BoardView() {
 
         <div className="relative min-w-0 flex-1 overflow-x-auto" onPointerLeave={() => setHovered(null)}>
           <svg width={layout.width} height={threads.length * ROW + LABEL_OVERHANG} className="block" role="img" aria-label="Metro map of active threads">
-            {layout.pending.map((p) => (
-              <g key={p.id} className="cursor-pointer" onClick={() => dispatch({ type: 'go', view: { kind: 'queue' } })}>
-                <path d={`M${p.x1} ${p.y1} C ${p.x1} ${(p.y1 + p.y2) / 2}, ${p.x2} ${(p.y1 + p.y2) / 2}, ${p.x2} ${p.y2}`} fill="none" stroke="var(--warning)" strokeWidth={2} strokeDasharray="4 4" />
-                <rect x={p.x1 - 84} y={p.y1 - 38} width={168} height={20} rx={6} fill="var(--popover)" stroke="var(--warning)" />
-                <text x={p.x1} y={p.y1 - 24} textAnchor="middle" className="fill-foreground text-xs font-medium">
-                  Overlap · decide in Queue
-                </text>
-              </g>
-            ))}
-
             {threads.map((t, row) => (
               <Line key={t.id} thread={t} row={row} cols={layout.cols} />
-            ))}
-
-            {layout.interchanges.map((ix) => (
-              <rect
-                key={ix.key}
-                x={ix.x - 13}
-                y={ix.y1 - 13}
-                width={26}
-                height={ix.y2 - ix.y1 + 26}
-                rx={13}
-                fill="var(--background)"
-                stroke="var(--foreground)"
-                strokeWidth={2}
-                strokeDasharray={ix.isRace ? '5 4' : undefined}
-              />
             ))}
 
             {threads.map((t, row) =>
@@ -106,7 +80,6 @@ export function BoardView() {
                   step={s}
                   x={X0 + layout.cols.get(s.id)! * COL}
                   y={row * ROW + ROW / 2}
-                  isFlagged={layout.flagged.has(s.id)}
                   onHover={setHovered}
                   onOpen={() => dispatch({ type: 'go', view: { kind: 'thread', id: t.id } })}
                 />
@@ -122,7 +95,7 @@ export function BoardView() {
 }
 
 function GoalStatus({ thread }: { thread: Thread }) {
-  if (!thread.goal) return null;
+  if (!hasGoal(thread)) return null;
   const progress = goalProgress(thread);
   return (
     <span className="flex min-w-0 items-center gap-1.5 tabular">
@@ -136,36 +109,10 @@ function visibleSteps(t: Thread) {
   return t.steps.filter((s) => s.status !== 'dropped');
 }
 
-function useBoardLayout(threads: Thread[], queue: QueueItem[]) {
-  const lines = threads.map(visibleSteps);
-  const cols = boardColumns(lines);
-  const rowOf = new Map(threads.map((t, i) => [t.id, i]));
-  const yOf = (threadId: string) => rowOf.get(threadId)! * ROW + ROW / 2;
-
-  const groups = new Map<string, { x: number; ys: number[]; isRace: boolean }>();
-  threads.forEach((t, row) =>
-    visibleSteps(t).forEach((s) => {
-      if (!s.sharedKey) return;
-      const g = groups.get(s.sharedKey) ?? { x: X0 + cols.get(s.id)! * COL, ys: [], isRace: false };
-      g.ys.push(row * ROW + ROW / 2);
-      g.isRace ||= s.link?.mode === 'race';
-      groups.set(s.sharedKey, g);
-    }),
-  );
-  const interchanges = [...groups.entries()].filter(([, g]) => g.ys.length > 1).map(([key, g]) => ({ key, x: g.x, y1: Math.min(...g.ys), y2: Math.max(...g.ys), isRace: g.isRace }));
-
-  const pending = queue
-    .filter((q) => q.overlap && rowOf.has(q.overlap.threadId) && rowOf.has(q.overlap.otherThreadId))
-    .map((q) => ({
-      id: q.id,
-      x1: X0 + (cols.get(q.overlap!.otherStepId) ?? 0) * COL,
-      y1: yOf(q.overlap!.otherThreadId),
-      x2: X0 + (cols.get(q.overlap!.stepId) ?? 0) * COL,
-      y2: yOf(q.overlap!.threadId),
-    }));
-  const flagged = new Set(queue.flatMap((q) => (q.overlap ? [q.overlap.stepId, q.overlap.otherStepId] : [])));
+function useBoardLayout(threads: Thread[]) {
+  const cols = boardColumns(threads.map(visibleSteps));
   const maxCol = Math.max(0, ...cols.values());
-  return { cols, interchanges, pending, flagged, width: X0 + maxCol * COL + 200 };
+  return { cols, width: X0 + maxCol * COL + 200 };
 }
 
 function Line({ thread, row, cols }: { thread: Thread; row: number; cols: Map<string, number> }) {
@@ -188,7 +135,7 @@ function Line({ thread, row, cols }: { thread: Thread; row: number; cols: Map<st
   );
 }
 
-function Station({ thread, step, x, y, isFlagged, onHover, onOpen }: { thread: Thread; step: Step; x: number; y: number; isFlagged: boolean; onHover: (h: Hovered | null) => void; onOpen: () => void }) {
+function Station({ thread, step, x, y, onHover, onOpen }: { thread: Thread; step: Step; x: number; y: number; onHover: (h: Hovered | null) => void; onOpen: () => void }) {
   const color = lineColor(thread.line);
   const s = step.status;
   const label = step.title.length > LABEL_CHARS ? `${step.title.slice(0, LABEL_CHARS - 1)}…` : step.title;
@@ -207,7 +154,6 @@ function Station({ thread, step, x, y, isFlagged, onHover, onOpen }: { thread: T
     >
       <circle cx={x} cy={y} r={18} fill="transparent" />
       {s === 'running' && <circle cx={x} cy={y} r={7} fill={color} className="station-pulse" />}
-      {isFlagged && <circle cx={x} cy={y} r={11} fill="none" stroke="var(--warning)" strokeWidth={2} />}
       <circle
         cx={x}
         cy={y}
@@ -215,7 +161,6 @@ function Station({ thread, step, x, y, isFlagged, onHover, onOpen }: { thread: T
         fill={s === 'done' ? color : 'var(--background)'}
         stroke={s === 'blocked' ? 'var(--warning)' : s === 'done' ? 'var(--background)' : color}
         strokeWidth={s === 'done' ? 2 : 3}
-        strokeDasharray={s === 'waiting' ? '3 2' : undefined}
       />
       <text x={x + 4} y={y + 18} transform={`rotate(${LABEL_ANGLE} ${x + 4} ${y + 18})`} className={s === 'done' ? 'fill-subtle-foreground text-xs' : 'fill-muted-foreground text-xs'}>
         {label}
@@ -233,15 +178,6 @@ function StationTooltip({ hovered }: { hovered: Hovered }) {
         {stepLabel(step.status)} · {thread.title}
       </div>
       {!!step.note && <div className="mt-1.5 text-xs text-muted-foreground">{step.note}</div>}
-      {step.footprint.length > 0 && (
-        <ul className="mt-1.5 flex flex-col gap-0.5">
-          {step.footprint.map((f) => (
-            <li key={f} className="truncate font-mono text-xs text-muted-foreground">
-              {f}
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
@@ -254,12 +190,6 @@ function BoardLegend() {
       </LegendItem>
       <LegendItem label="Running">
         <circle cx="8" cy="8" r="5" fill="var(--background)" stroke="var(--muted-foreground)" strokeWidth="2.5" />
-      </LegendItem>
-      <LegendItem label="Waiting on another line">
-        <circle cx="8" cy="8" r="5" fill="var(--background)" stroke="var(--muted-foreground)" strokeWidth="2" strokeDasharray="3 2" />
-      </LegendItem>
-      <LegendItem label="Shared step">
-        <rect x="3" y="1" width="10" height="14" rx="5" fill="var(--background)" stroke="var(--foreground)" strokeWidth="1.5" />
       </LegendItem>
     </ul>
   );

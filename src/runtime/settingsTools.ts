@@ -1,15 +1,19 @@
 import type { ProviderConfig } from '../host/types/settings.ts';
 import { authorName, settingRef, type Provider, type Space } from '../model.ts';
 import { linkedAccountId, profilesUsing } from '../settings/accounts.ts';
-import { REDACTED, redactSecrets, stripSecrets, type ConfigChange, type McpEntry, type McpServerDef } from '../settings/agentConfig.ts';
-import { findSetting, recordValue, settingsCatalog, valueLabel, type Setting, type SettingSources } from '../settings/catalog.ts';
+import { redactSecrets, stripSecrets, type ConfigChange, type McpEntry, type McpServerDef } from '../settings/agentConfig.ts';
+import { findSetting, settingsCatalog, valueLabel, type Setting, type SettingSources } from '../settings/catalog.ts';
 import { HARNESSES } from '../settings/harnesses.ts';
 import { bindingOf, checkBinding, chordText, COMMAND_IDS, COMMANDS, defaultKeys, FIXED_KEYS, isCommandId, isCustom, parseChord, type CommandId } from '../keymap.ts';
 import { IS_MAC } from '../keys.ts';
+import { appProviderFor, CONNECTORS, connectorFor, freeAlias, isSameServer } from '../library/connectors.ts';
+import { BUILT_IN_RECIPES, type SetupResult, type SetupTarget } from '../library/recipes.ts';
+import { openInNewTab, refView, tabView } from './browserTools.ts';
+import { ownAppSetup } from '../library/ownApps.ts';
 import { MOCHI_THEME_ID, slotOf } from '../themes/model.ts';
 import { card, cardId, open, type Approval, type Args, type ToolContext, type ToolSpec } from './tools.ts';
 
-type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'remove_mcp_server' | 'remove_profile';
+type SettingsToolName = 'get_settings' | 'update_settings' | 'get_keybindings' | 'set_keybinding' | 'list_profiles' | 'add_mcp_server' | 'list_connectors' | 'connect_account' | 'run_setup' | 'update_setup_step' | 'remove_mcp_server' | 'remove_profile';
 
 /**
  * Settings tools (RUNTIME.md › Mochi tools). Reads go through the settings catalog; a suggestion opens one live settings
@@ -57,7 +61,7 @@ export const SETTINGS_TOOLS = {
         const row = { key: change.key, value: change.value, ...(isProfileKey && { profileId: profile.id }) };
         if (changes.some((c) => settingRef(c) === settingRef(row))) throw new Error(`${change.key} appears twice; suggest one value`);
         changes.push(row);
-        before[settingRef(row)] = recordValue(setting, current);
+        before[settingRef(row)] = current;
         labels.push(isProfileKey && profile.id !== caller.spaceId ? `${setting.label} (${profile.name})` : setting.label);
       }
       const by = caller.providers[0];
@@ -139,6 +143,87 @@ export const SETTINGS_TOOLS = {
       return { result: { shown: [`MCP server ${args.name}`], note: SHOWN_NOTE } };
     },
   },
+  list_connectors: {
+    run: async (ctx) => {
+      const profile = profileNamed(ctx, ctx.args.profileId);
+      const [entries, apps, redirectUrl] = await Promise.all([ctx.env.library.list(profile.id), ctx.env.library.oauthApps(), ctx.env.library.ownAppRedirect()]);
+      const directory = CONNECTORS.map(({ id, name, description, serverUrl }) => {
+        const provider = appProviderFor(serverUrl);
+        const needsOwnApp = !!provider && !apps.includes(provider);
+        return { id, name, description, ...(needsOwnApp && { needsOwnApp, setup: ownAppSetup(id, redirectUrl) }) };
+      });
+      return {
+        result: {
+          accounts: entries.flatMap((e) => (e.kind === 'connector' ? [{ service: e.title, url: e.source, account: e.alias, isSignedIn: e.isLinked, isOnProfile: e.isEnabled }] : [])),
+          directory,
+        },
+      };
+    },
+  },
+  connect_account: {
+    run: async (ctx) => {
+      const { args, env } = ctx;
+      const profile = profileNamed(ctx, args.profileId);
+      const url = connectorUrl(args.connector);
+      const name = connectorFor(url)?.name ?? new URL(url).hostname;
+      const taken = (await env.library.list(profile.id)).flatMap((e) => (e.kind === 'connector' && !!e.alias && !!e.source && isSameServer(e.source, url) ? [e.alias] : []));
+      const alias = args.alias ?? freeAlias(taken);
+      if (taken.includes(alias)) throw new Error(`There is already a ${alias} account on ${name}; list_connectors lists them`);
+      if (args.clientId && looksLikeSecret(args.clientId)) throw new Error('That looks like a client secret, not a Client ID. Never pass the secret itself: pass secretRef and Mochi reads it');
+      if (args.configTokenRef && appProviderFor(url) !== 'slack') throw new Error('configTokenRef is for Slack only');
+      if (args.fromSetup && !['slack', 'google'].includes(appProviderFor(url) ?? '')) throw new Error('fromSetup is for Slack and Google Workspace only');
+      const needsSecret = !!args.clientId && appProviderFor(url) !== 'github';
+      if (needsSecret && !args.secretRef) throw new Error('Pass secretRef: the ref of the Client Secret on the page, from browser_snapshot (reveal it first if it is hidden). Mochi reads it itself; you never see it');
+      const secretFrom = args.secretRef ? { viewId: refView(ctx, args.secretRef, args.tabId), ref: args.secretRef } : undefined;
+      const account = `${name} (${alias})`;
+      const page = signInPage(env, url);
+      const slackTokenFrom = args.configTokenRef ? { viewId: refView(ctx, args.configTokenRef, args.tabId), ref: args.configTokenRef } : undefined;
+      const connecting = env.library.addConnector(profile.id, { url, alias, ...(args.clientId && { clientId: args.clientId }) }, { inPane: true, ...(secretFrom && { secretFrom }), ...(slackTokenFrom && { slackTokenFrom }), ...(args.fromSetup && { fromSetup: true }) });
+      // The sign-in goes on after this call returns, while the agent works the page; its end shows in the thread.
+      let isHandedOff = false;
+      void connecting.then(
+        () => isHandedOff && say(ctx, `Connected ${account}`),
+        (error: unknown) => isHandedOff && say(ctx, `Couldn't connect ${account}: ${error instanceof Error ? error.message : String(error)}`),
+      );
+      const slow = timeout(SIGN_IN_START_MS);
+      const first = await Promise.race([page.next, connecting.then(() => null), slow.done.then(() => 'slow' as const)]).finally(() => (page.stop(), slow.cancel()));
+      if (first === null) return { changed: `connected ${account}`, result: { account: alias, isSignedIn: true } };
+      isHandedOff = true;
+      if (first === 'slow') return { changed: `started connecting ${account}`, result: { account: alias, note: `${name} is still starting; call list_connectors in a minute` } };
+      const tab = await openInNewTab(ctx, first.url);
+      return {
+        changed: `opened ${name}'s sign-in page`,
+        result: { account: alias, ...tab, ...('userCode' in first && { userCode: first.userCode }), next: 'userCode' in first ? CODE_NEXT : SIGN_IN_NEXT },
+      };
+    },
+  },
+  run_setup: {
+    run: async (ctx) => {
+      const { args, env } = ctx;
+      const recipe = BUILT_IN_RECIPES[args.connector];
+      const start = recipe?.steps.find((s) => s.kind === 'goto');
+      if (!recipe || !start || start.kind !== 'goto') throw new Error(`Mochi has no setup recipe for ${args.connector}; list_connectors gives its manual steps`);
+      const viewId = await tabView(ctx, args.tabId, start.url);
+      let params = args.params ?? {};
+      let fromStep = args.fromStep;
+      // A value only the user knows (which workspace) is asked on Mochi's own card, and the run goes on from that step.
+      for (let asked = 0; ; asked++) {
+        const result = await env.library.runSetup(args.connector, viewId, { params, ...(fromStep && { fromStep }) });
+        // With nothing to pick from (which Google account), the agent asks in chat instead.
+        if (result.status !== 'needs' || !result.options.length || asked === MAX_QUESTIONS) return { changed: `ran ${args.connector}'s setup`, isFinal: true, result: { ...result, next: setupNext(args.connector, result) } };
+        params = { ...params, [result.param]: await ctx.choose({ title: result.question, options: result.options }) };
+        fromStep = result.stepId;
+      }
+    },
+  },
+  update_setup_step: {
+    run: async (ctx) => {
+      const { connector, stepId, target } = ctx.args;
+      const { before, after } = await ctx.env.library.updateSetupStep(connector, stepId, target);
+      const changed = `updated ${connector}'s setup step "${stepId}": ${describeTarget(before)} → ${describeTarget(after)}`;
+      return { changed, isFinal: true, result: { stepId, before, after } };
+    },
+  },
   remove_mcp_server: {
     ask: async (ctx) => {
       const { profile, provider, config } = await configTarget(ctx);
@@ -172,7 +257,60 @@ const RESERVED_NOTE = IS_MAC
 
 const SHOWN_NOTE = "The user sees these as live settings in your thread and changes them there if they want. You won't get their answer; get_settings reads the values later.";
 
+const SIGN_IN_NEXT = "Approve on this page in your tab: pick the account if asked and click Allow, Continue or Approve (for a Google project of the user's own, Advanced, then Go to Mochi, is expected: say so in chat). Then call list_connectors until the account isSignedIn. Ask the user in chat only to sign in to the site or choose between accounts.";
+const CODE_NEXT = 'Type userCode on this page in your tab and approve, then call list_connectors until the account isSignedIn.';
+// The local Google Workspace server's first start downloads Python and its packages.
+const SIGN_IN_START_MS = 3 * 60_000;
+function timeout(ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return { done: new Promise((resolve) => (timer = setTimeout(resolve, ms))), cancel: () => clearTimeout(timer) };
+}
+
+/** The first sign-in page (or one-time code) main sends for `url`'s connect; `stop` unsubscribes. */
+function signInPage(env: ToolContext<unknown>['env'], url: string) {
+  let resolve!: (page: { url: string } | { url: string; userCode: string }) => void;
+  const next = new Promise<{ url: string } | { url: string; userCode: string }>((r) => (resolve = r));
+  const offPage = env.library.onAuthorize((p) => p.url === url && resolve({ url: p.authorizationUrl }));
+  const offCode = env.library.onDeviceCode((c) => c.url === url && resolve({ url: c.verificationUri, userCode: c.userCode }));
+  return { next, stop: () => (offPage(), offCode()) };
+}
+
+const MAX_QUESTIONS = 3;
+
+/** What the agent does after a setup run, in its words. */
+function setupNext(connector: string, result: SetupResult) {
+  if (result.status === 'done') return `connect_account with connector "${connector}", an account name and fromSetup: true`;
+  if (result.status === 'needs') return `Ask the user in chat: ${result.question}${result.options.length ? ` (${result.options.join(', ')})` : ''}. Then run_setup again with params.${result.param} set to their answer`;
+  return `${stoppedNext(result)}. Pass params ${JSON.stringify(result.params)} each time, so the run keeps the same project instead of making another`;
+}
+
+function stoppedNext(result: Extract<SetupResult, { status: 'stopped' }>) {
+  if (result.isExpected) return `${result.reason} Tell the user in chat, ask for what it needs, then run_setup again with it`;
+  if (result.kind === 'goto' || /left .*sign in/.test(result.reason)) return `${result.reason}. Ask the user to sign in in this tab, then run_setup again`;
+  const fix = `update_setup_step with the role and name of the element that worked`;
+  if (result.kind === 'capture') return `Find the element for "${result.stepId}" (${result.note}) with browser_snapshot, ${fix}, then run_setup with fromStep "${result.stepId}"`;
+  const then = result.nextStepId ? `run_setup with fromStep "${result.nextStepId}"` : `connect_account with fromSetup: true`;
+  return `Do step "${result.stepId}" (${result.note}) yourself in this tab (browser_snapshot, then act), then ${fix}, then ${then}`;
+}
+
+const describeTarget = (t: SetupTarget): string => `${t.role} "${t.name}"${t.within ? ` in ${describeTarget(t.within)}` : ''}`;
+
+function say(ctx: ToolContext<unknown>, text: string) {
+  ctx.dispatch({ type: 'say', threadId: ctx.caller.id, entry: { who: ctx.caller.providers[0], kind: 'event', text } });
+}
+
 type Ctx<K extends SettingsToolName> = ToolContext<Args<K>>;
+
+// Google's secrets start GOCSPX-, Slack's are 32 hex digits; their client IDs look like neither.
+const looksLikeSecret = (value: string) => value.startsWith('GOCSPX-') || /^[0-9a-f]{32}$/i.test(value);
+
+/** A directory id's server, else an https URL as given. */
+function connectorUrl(connector: string) {
+  const known = CONNECTORS.find((c) => c.id === connector);
+  if (known) return known.serverUrl;
+  if (URL.canParse(connector) && new URL(connector).protocol === 'https:') return connector;
+  throw new Error(`${connector} is neither a directory id (list_connectors lists them) nor an https URL`);
+}
 
 /** Everything a setting's value can live in, read now. Host settings and accounts are main's; a profile's files only when asked. */
 async function sourcesFor(ctx: ToolContext<unknown>, profile: Space): Promise<SettingSources> {
@@ -216,8 +354,8 @@ async function settingView(ctx: ToolContext<unknown>, setting: Setting, sources:
     section: setting.section,
     ...(setting.group && { group: setting.group }),
     type: control.type,
-    value: value === undefined ? null : control.type === 'instructions' ? redactSecrets(value) : value,
-    ...((control.type === 'choice' || control.type === 'select') && { allowed: control.options.map((o) => o.value) }),
+    value: value ?? null,
+    ...('options' in control && { allowed: control.options.map((o) => o.value) }),
     ...(control.type === 'number' && { min: control.min, max: control.max }),
     ...(control.type === 'colorTheme' && { allowed: [MOCHI_THEME_ID, ...(sources.colorThemes ?? []).filter((t) => slotOf(t.kind) === control.slot).map((t) => t.id)] }),
     ...((control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') && { allowed: ['true', 'false'] }),
@@ -253,7 +391,7 @@ async function toolCount(ctx: ToolContext<unknown>, spaceId: string, provider: P
 
 const allowedHint = (setting: Setting) => {
   const { control } = setting;
-  if (control.type === 'choice' || control.type === 'select') return `; allowed: ${control.options.map((o) => o.value).join(', ')}`;
+  if ('options' in control) return `; allowed: ${control.options.map((o) => o.value).join(', ')}`;
   if (control.type === 'number') return `; a whole number from ${control.min} to ${control.max}`;
   if (control.type === 'switch' || control.type === 'mcp' || control.type === 'skill') return '; "true" or "false"';
   return '';
@@ -262,7 +400,6 @@ const allowedHint = (setting: Setting) => {
 /** Rules a valid value can still break: accounts are never switched under running threads, model ids come from the account. */
 async function checkSuggestion(ctx: ToolContext<unknown>, setting: Setting, value: string, profile: Space, sources: SettingSources) {
   const { control } = setting;
-  if (control.type === 'instructions' && value.includes(REDACTED)) throw new Error(`The text still holds ${REDACTED} from get_settings; send only text you wrote, and the user keeps the rest`);
   if (control.type === 'account') return checkAccount(ctx, profile, control.provider, sources);
   if (control.type === 'model' && value) {
     const [provider, model] = control.provider ? [control.provider, value] : [value.split(':')[0] as Provider, value.split(':').slice(1).join(':')];

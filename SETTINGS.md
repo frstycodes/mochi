@@ -10,6 +10,9 @@ Status: **now** = a value exists in code today (hardcoded or local state) and on
 
 ## Mochi
 
+### Ask Mochi
+The page Settings opens on (⌘, and every `openSettings()` without a section): the profile's settings chat. Before the first message, a title, one line on how it works, the composer (Settings › Models' side chat model, locked to its harness) and four starters; after it, the chat fills the column like a thread, with "New chat" in the title bar. Its agent is the only one with Mochi's settings tools and reads every request as about Mochi first ("default model" is Mochi's, not Claude Code's or Codex's own); suggestions show as the usual settings widgets in the chat (RUNTIME.md › Mochi tools › Settings chat). This computer only: no computer picker on this page.
+
 ### Account
 Not a settings section: it lives in the sidebar's account menu (`src/UserMenu.tsx`). Your Mochi account (Clerk), for linking computers (DEVICES.md); not a Claude or Codex login. Signed out: Sign in, which opens your browser (OAuth code + PKCE, loopback redirect, `electron/account/`). Signing in: Cancel sign-in. Signed in: avatar, name, email, Manage account (Clerk's hosted Account Portal `/user` in your browser: profile, email, password, connected accounts, delete), Sign out (revokes the refresh token, best effort). The refresh token lives only in main, encrypted with `safeStorage`; the renderer gets `{ status, user, isPersistent }`. Linux without a secret service keeps the session for this run only and says so. Builds without a Clerk app (and the web build) show no account items. Done.
 
@@ -28,6 +31,10 @@ Runs on (This computer / a paired computer) is chosen in the new-thread composer
 
 ### Appearance
 Mode: Theme (Light / Dark / System, with the user menu's sun, moon and monitor icons), Reduce motion (System / On / Off).
+
+App icon: Graphite (default), Paper, Sleepy, Pixel, Blueprint, Dango, Peek, Sticker, Riso, a grid of the icons themselves (`AppIconPicker`). Kept in main (`appIcon` in agent settings) so it applies at launch: the Dock icon on macOS, window and tray icons elsewhere (`electron/appIcon.ts`). Sources are `build/icons/<id>.svg`, each rendered to the 1024px `.png` that ships in `resources/icons`. GAP: Finder, Launchpad and the Dock while Mochi is closed keep the bundle icon.
+
+Animations: one switch for the sidebar and one for the side pane (on while any of theirs is; flipping it sets them all), each with Choose each animation folded under it: sidebar Show and hide, Peek; side pane First and last pane, Panes beside others, Moving and expanding. All off by default (`animations` pref, `ANIMATIONS` in `src/settings/settingOptions.ts`); CSS reads them from `data-animations` on <html>, Reduce motion still stops them all. The summary panel, sidebar folds and thread reordering always animate. Agents read and suggest them like any setting (`animations.sidebar`, `animation.pane-slide`, …).
 
 VS Code color themes, one per appearance like VS Code's preferred light and dark themes, so System keeps switching (`lightTheme` / `darkTheme` prefs; `mochi` is the built-in). `src/settings/sections/appearance.tsx`, picker in `src/settings/ThemePicker.tsx`. Done.
 
@@ -72,6 +79,8 @@ One tab per profile (its icon and name), opening on the profile you're in, or th
 
 Per profile, Instructions / MCP servers / Skills / Import rows (`src/settings/ProfileAgentConfig.tsx`) read and write the linked accounts' own files, so the tools load them natively: Claude `CLAUDE.md`, `.claude.json` `mcpServers` (`~/.claude.json` for the default account), `settings.json` `deniedMcpServers` / `skillOverrides`; Codex `AGENTS.md`, `config.toml` `[mcp_servers.*]` `enabled` and `[[skills.config]]` (formats in `src/settings/agentConfig.ts`). Every write is a diff to review, backed up to `~/.harness/backups/<time>/` and refused if the file changed since. Import copies from the other harness or another profile; secret-looking env, header, arg and URL values become `${VAR}` and the row shows "Needs VAR". An account shared by several profiles shares its config. GAP: project `.mcp.json` servers are listed read-only, Codex project config isn't read.
 
+Per profile, a **Skills, plugins and connectors** row says how many this profile has and opens Settings › Customize › Skills, Plugins or Connectors, where everything is installed once and handed to profiles (design in [LIBRARY.md](LIBRARY.md)). The library is Mochi's own, held in `userData/library.json` and loaded into each new thread of the profiles that turn items on, never written into the accounts' files.
+
 ## Agents
 
 ### Harnesses
@@ -108,7 +117,7 @@ Sections: Drift (Drift guard, Off-goal work branches from), Writing goals (Agent
 Style (Length, Put what needs you first, Your rules) and Automatic (Simplify long replies automatically, Long means more than). The model is Models › Background tasks.
 
 ### Mochi access
-What agents can do: the agent-control level as three cards (Read only / Changes / Everything, each saying what it allows; the in-thread widget keeps the select). Threads agents start: Models for threads agents start. Both the user's alone. Tools: a filter, then every tool in its group (Threads, Goals and progress, Background agents, Reading the browser, Using the browser, Your screen, Reaching you, Settings and profiles), each with a plain name, its id, what it lets an agent do (`src/settings/toolGuide.ts`), and its own choice: Default (what the level gives it), Allow, Ask first or Off. Deletes offer only Ask first or Off, settings only Suggest or Off. Each group shows how many tools differ from the level and has Set all (Allow / Ask first / Off, skipping what a tool doesn't offer, or Follow the level). Enforcement: RUNTIME.md › Mochi tools. `src/settings/sections/access.tsx`. Done.
+What agents can do: the agent-control level as three cards (Read only / Changes / Everything, each saying what it allows; the in-thread widget keeps the select). Only the user changes this level. Tools: a filter, then every tool in its group (Threads, Goals and progress, Background agents, Reading the browser, Using the browser, Your screen, Reaching you, Settings and profiles), each with a plain name, its id, what it lets an agent do (`src/settings/toolGuide.ts`), and its own choice: Default (what the level gives it), Allow, Ask first or Off. Deletes offer only Ask first or Off, settings only Suggest or Off. Each group shows how many tools differ from the level and has Set all (Allow / Ask first / Off, skipping what a tool doesn't offer, or Follow the level). Enforcement: RUNTIME.md › Mochi tools. `src/settings/sections/access.tsx`. Done.
 
 ### Schedules
 Empty: what a schedule is, where one starts, and New thread (the composer holds the clock). Every thread's trigger in one list (`src/settings/sections/schedules.tsx`): name, when it runs and the next run, the last run's outcome; Run now, Pause / Resume, Edit (the schedule dialog), Delete. Triggers live in main (`schedules.json` in userData, `electron/schedule/scheduler.ts`), so they fire with every window closed while Mochi runs. Done. Notifications for finished runs are the "Scheduled run finished" alert in Notifications.
@@ -121,7 +130,7 @@ Sections: Worktrees (New threads work in, Worktrees folder, Remove settled workt
 | Setting | Control | Default | Status | Today |
 |---|---|---|---|---|
 | Worktrees folder | path + Browse | `~/.harness/worktrees` | now | electron/git/run.ts:6 |
-| Branch prefix | text | `harness/` | now | — |
+| Branch prefix | text | `mochi/` | now | — |
 | Open pull requests as drafts | switch | off | now | electron/ipc/git.ts:74 |
 | Diffs | Unified / Split (Changes tab and work log) | Unified | now | src/pane/ChangesTab.tsx:36 |
 | Prepare worktrees before starting | switch | on | done | electron/git/setup.ts (RUNTIME.md › Worktree setup) |

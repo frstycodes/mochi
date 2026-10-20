@@ -1,11 +1,12 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import type { Provider } from '../model';
+import { setLibraryScope } from '../library/libraryScope';
 import type { SectionId } from './sections';
 
-/** `nonce` re-triggers the scroll-and-flash when the same setting is deep-linked twice. */
+/** `nonce` re-triggers the scroll-and-flash when the same setting is deep-linked twice. `subpage` is one item's own page inside the section (a connector). */
 export interface SettingsRoute {
   section: SectionId;
   settingId?: string;
+  subpage?: string;
   nonce: number;
 }
 
@@ -14,23 +15,19 @@ let nonce = 0;
 const listeners = new Set<() => void>();
 
 /** Opens the settings page (⌘, / Ctrl+,, the palette, the profile menu); `settingId` scrolls to that row and flashes it. */
-export function openSettings(section: SectionId = 'general', settingId?: string) {
+export function openSettings(section: SectionId = 'chat', settingId?: string) {
   set({ section, settingId, nonce: ++nonce });
 }
 
-let requestedHarness: Provider | null = null;
-
-/** A profile's MCP servers or skills, opened on one harness: the thread context panel links here for the thread's profile. */
-export function openProfileConfig(spaceId: string, part: 'mcp' | 'skills', provider: Provider) {
-  requestedHarness = provider;
-  openSettings('profiles', `${spaceId}-${part}`);
+/** One item's own page inside a section, like Settings › Connectors › Linear; Esc or its back link return to the section. */
+export function openSubpage(section: SectionId, subpage: string, settingId?: string) {
+  set({ section, subpage, settingId, nonce: ++nonce });
 }
 
-/** The harness the last `openProfileConfig` asked for, once. */
-export function takeRequestedHarness() {
-  const provider = requestedHarness;
-  requestedHarness = null;
-  return provider;
+/** A thread's skills or MCP servers: the thread context panel opens Skills or Connectors scoped to the thread's profile. */
+export function openProfileConfig(spaceId: string, part: 'mcp' | 'skills') {
+  setLibraryScope(spaceId);
+  openSettings(part === 'mcp' ? 'connectors' : 'skills');
 }
 
 /** Back to the app: the layout lives in the store, so the splits and views come back as they were. */

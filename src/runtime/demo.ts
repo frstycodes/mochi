@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentPlanItem } from '../host/types/agent.ts';
+import type { AgentEvent, AgentPlanItem, AgentTaskEvent } from '../host/types/agent.ts';
 import { DEMO_LINKS, FAKE_TOOLS, genericTools, NOW0, type Step, type Thread } from '../model.ts';
 
 /** The prototype's scripted agent: a pure function from a thread snapshot and the clock to what it would report this minute. */
@@ -11,9 +11,10 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
 
   const steps = thread.steps.map((s) => {
     if (s.status !== 'running') return s;
-    isChanged = true;
-    const progress = Math.min(1, s.progress + 1 / (s.size * SPEED));
-    if (progress >= 1) return { ...s, status: 'done' as const, progress };
+    if (now - (s.startedAt ?? now) >= STEP_MINUTES) {
+      isChanged = true;
+      return { ...s, status: 'done' as const };
+    }
     if (now % 4 === 0) {
       const tools = FAKE_TOOLS[s.id] ?? genericTools(s.title);
       const used = thread.activity.filter((a) => a.kind === 'tool' && a.at >= (s.startedAt ?? 0)).length;
@@ -28,7 +29,7 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
       // A word between bursts of calls, so a demo turn interleaves work groups with prose like a real agent's.
       if (used % CALLS_PER_NOTE === CALLS_PER_NOTE - 1) events.push({ threadId, type: 'message', text: NOTES[Math.floor(used / CALLS_PER_NOTE) % NOTES.length], isDelta: false });
     }
-    return { ...s, progress };
+    return s;
   });
 
   const isIdle = thread.status !== 'needs-you' && !steps.some((s) => s.status === 'running');
@@ -50,32 +51,18 @@ export function demoEvents(thread: Thread, now: number): AgentEvent[] {
       { threadId, type: 'approval', requestId: id, kind: 'tool', title: `Search the web for “${WEB_APPROVAL.query}” on ${WEB_APPROVAL.domains}`, detail: 'Looks this up before picking a CSV streaming approach.' },
     );
   }
-  if (next?.gate) {
-    const after = steps.filter((s) => s.status === 'ready').length;
-    events.push({ threadId, type: 'approval', requestId: `gate-${next.id}`, kind: 'tool', title: `Start "${next.title}"`, detail: `You asked to approve this step before it runs. Steps after it: ${after}.` });
-  }
-
-  events.push(...agentEvents(thread, now));
+  events.push(...agentEvents(thread, now), ...taskEvents(thread, now));
 
   const isFinished = isIdle && !next && thread.status !== 'review' && !steps.some((s) => s.status !== 'done' && s.status !== 'dropped');
   if (isFinished) events.push({ threadId, type: 'turn-end', status: 'done' });
   return events;
 }
 
-/** The scripted overlap on its own, for the prototype menu's "trigger overlap". */
-export function overlapEvents(thread: Thread): AgentEvent[] {
-  const items = thread.steps.filter((s) => s.status !== 'dropped').map(planItem);
-  items.splice(OVERLAP.at, 0, OVERLAP.item);
-  return [
-    { threadId: thread.id, type: 'message', text: OVERLAP.say, isDelta: false },
-    { threadId: thread.id, type: 'plan', items },
-  ];
-}
-
-export const SCRIPT = { overlapAt: NOW0 + 6, scopeAt: NOW0 + 40 };
+export const SCRIPT = { scopeAt: NOW0 + 40 };
 // A web search that asks first, so the demo's live turn shows an approval asked and answered inside its work log.
 const WEB_APPROVAL = { threadId: 'adm', at: NOW0 + 14, query: 'stream large CSV export node fastify backpressure', domains: 'github.com, nodejs.org +3 more' };
-const SPEED = 40;
+/** How long a demo step runs before it's done. */
+const STEP_MINUTES = 40;
 const CALLS_PER_NOTE = 3;
 const NOTES = [
   'Read through what is there. The change is smaller than it looked, so I will make it in place.',
@@ -85,24 +72,16 @@ const NOTES = [
 const TOKENS_PER_TOOL = 900;
 const CONTEXT_CEILING = 0.97;
 
-const OVERLAP = {
-  threadId: 'adm',
-  at: 2,
-  say: 'Usage queries take 1.8s at 10k keys. I will add a Redis client and cache them.',
-  item: { title: 'Add Redis client', status: 'pending', size: 2, files: ['packages/cache/redis.ts', 'apps/web/server/cache.ts'] },
-} satisfies { threadId: string; at: number; say: string; item: AgentPlanItem };
-
 const SCOPE = {
   threadId: 'rl',
   items: [
-    { title: 'Return RateLimit-* headers', status: 'pending', size: 1, files: ['apps/api/middleware/ratelimit.ts'] },
-    { title: 'Stricter limits for /search', status: 'pending', size: 2, files: ['apps/api/routes/search.ts'] },
+    { title: 'Return RateLimit-* headers', status: 'pending' },
+    { title: 'Stricter limits for /search', status: 'pending' },
   ],
 } satisfies { threadId: string; items: AgentPlanItem[] };
 
 function scriptAt(thread: Thread, now: number): { say: string[]; add: { at?: number; item: AgentPlanItem }[] } {
   const has = (title: string) => thread.steps.some((s) => s.title === title);
-  if (thread.id === OVERLAP.threadId && now === SCRIPT.overlapAt && !has(OVERLAP.item.title)) return { say: [OVERLAP.say], add: [{ at: OVERLAP.at, item: OVERLAP.item }] };
   if (thread.id === SCOPE.threadId && now === SCRIPT.scopeAt && !has(SCOPE.items[0].title)) return { say: [], add: SCOPE.items.map((item) => ({ item })) };
   return { say: [], add: [] };
 }
@@ -134,6 +113,18 @@ const AGENTS = [
     result: '**Drafted** `docs/api/limits.md`: tiers table, the three RateLimit-* headers with examples, and an [override request](https://example.com/overrides) section.',
   },
   {
+    threadId: 'rl',
+    id: 'demo-agent-redis',
+    name: 'Profile the Redis calls',
+    prompt: 'Measure how many Redis round trips one limited request makes.',
+    model: 'claude-haiku-5-5',
+    isBackground: true,
+    at: NOW0 + 4,
+    ticks: 4,
+    steps: ['Run redis-cli --latency'],
+    error: 'redis-cli: command not found',
+  },
+  {
     threadId: 'adm',
     id: 'demo-agent-callers',
     name: 'Find usage query callers',
@@ -156,7 +147,7 @@ function agentEvents(thread: Thread, now: number): AgentEvent[] {
     const base = { threadId: thread.id, type: 'subagent', id: a.id } as const;
     if (t === 0 && !subagent) return [{ ...base, phase: 'start', toolId: `${a.id}-call`, name: a.name, prompt: a.prompt, model: a.model, isBackground: a.isBackground }];
     if (subagent?.status !== 'running' || t <= 0) return [];
-    if (t >= a.ticks) return [{ ...base, phase: 'end', status: 'done', result: a.result, tokens: subagent.tokens + TOKENS_PER_AGENT_STEP }];
+    if (t >= a.ticks) return [{ ...base, phase: 'end', tokens: subagent.tokens + TOKENS_PER_AGENT_STEP, ...('error' in a ? { status: 'failed', error: a.error } : { status: 'done', result: a.result }) }];
     const n = Math.floor((t - 1) / 2);
     const text = a.steps[n % a.steps.length];
     const step = { id: `${a.id}-${n}`, phase: t % 2 ? 'start' : 'end', text, ...(t % 2 === 0 && text.startsWith('Run') && { exitCode: 0 }) } as const;
@@ -164,8 +155,26 @@ function agentEvents(thread: Thread, now: number): AgentEvent[] {
   });
 }
 
+/** Scripted background commands on Claude's thread: one that keeps running, one that passes, one that fails, and a workflow. */
+const TASKS = [
+  { id: 'demo-task-watch', kind: 'shell', title: 'Watch the limiter tests', command: 'pnpm --filter api test --watch ratelimit', at: NOW0 + 1, ticks: Infinity },
+  { id: 'demo-task-build', kind: 'shell', title: 'Build the API', command: 'pnpm --filter api build', at: NOW0 + 2, ticks: 6, exitCode: 0 },
+  { id: 'demo-task-lint', kind: 'shell', title: 'pnpm lint --max-warnings 0', command: 'pnpm lint --max-warnings 0', at: NOW0 + 4, ticks: 3, exitCode: 1 },
+  { id: 'demo-task-spec', kind: 'workflow', title: 'Check the spec against the routes', at: NOW0 + 5, ticks: Infinity },
+] satisfies (Pick<AgentTaskEvent, 'id' | 'kind' | 'title' | 'command' | 'exitCode'> & { at: number; ticks: number })[];
+
+function taskEvents(thread: Thread, now: number): AgentEvent[] {
+  if (thread.id !== 'rl') return [];
+  return TASKS.flatMap(({ at, ticks, exitCode, ...task }): AgentEvent[] => {
+    const base = { threadId: thread.id, type: 'task', id: task.id } as const;
+    if (now === at) return [{ ...base, ...task, phase: 'start' }];
+    if (now !== at + ticks) return [];
+    return [{ ...base, phase: 'end', status: exitCode ? 'failed' : 'done', ...(exitCode !== undefined && { exitCode }) }];
+  });
+}
+
 function planItem(s: Step): AgentPlanItem {
   if (s.status === 'done') return { title: s.title, status: 'done' };
-  if (s.status === 'running') return { title: s.title, status: 'running', progress: s.progress };
+  if (s.status === 'running') return { title: s.title, status: 'running' };
   return { title: s.title, status: 'pending' };
 }

@@ -1,5 +1,6 @@
 import { isMet, type Step, type StepStatus, type Thread } from './model.ts';
 import { summarize } from './summary.ts';
+import { getPrefs } from './settings/prefs.ts';
 
 export function statusAt(step: Step, t: number): StepStatus | null {
   if (step.addedAt > t) return null;
@@ -13,7 +14,7 @@ export function statusAt(step: Step, t: number): StepStatus | null {
 
 export type Phase = 'planning' | 'building' | 'verifying' | 'ready' | 'settled';
 
-export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Settled' } satisfies Record<Phase, string>;
+export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', verifying: 'Verifying', ready: 'Ready for review', settled: 'Archived' } satisfies Record<Phase, string>;
 
 /**
  * The ring: criteria met out of the goal's criteria (what done means); no criteria, no count. Steps never count: they aren't
@@ -21,13 +22,14 @@ export const GOAL_PHASE_LABELS = { planning: 'Planning', building: 'Building', v
  * checks), never from the agent's own percentage.
  */
 export function goalProgress(thread: Thread) {
-  const criteria = thread.criteria ?? [];
-  const met = criteria.filter(isMet).length;
+  const criteria = getPrefs().goals ? (thread.criteria ?? []) : [];
+  const met = criteria.filter((c) => isMet(c, thread.idle?.isConfirmed)).length;
   return { met, total: criteria.length, phase: phaseOf(thread, criteria.length > 0 && met === criteria.length) };
 }
 
 function phaseOf(thread: Thread, isAllMet: boolean): Phase {
   if (thread.status === 'settled') return 'settled';
+  // `review` is a status only threads saved before the verdict decided readiness still carry (and the demo's).
   if (isAllMet || thread.status === 'review') return 'ready';
   if (thread.criteria?.some((c) => c.claim || c.check)) return 'verifying';
   if (thread.steps.some((s) => s.status === 'done' || s.status === 'running') || summarize(thread.activity).files.length) return 'building';
@@ -39,33 +41,9 @@ export function progressLabel(p: ReturnType<typeof goalProgress>) {
   return p.total ? `${GOAL_PHASE_LABELS[p.phase]} · ${p.met}/${p.total}` : GOAL_PHASE_LABELS[p.phase];
 }
 
+/** Each step's column on the board: its place in its thread's plan. */
 export function boardColumns(lines: Step[][]): Map<string, number> {
-  const cols = new Map<string, number>();
-  for (const steps of lines) steps.forEach((s, i) => cols.set(s.id, i));
-
-  for (let pass = 0; pass < 8; pass++) {
-    let changed = false;
-    const byKey = new Map<string, Step[]>();
-    for (const steps of lines) for (const s of steps) if (s.sharedKey) byKey.set(s.sharedKey, [...(byKey.get(s.sharedKey) ?? []), s]);
-    for (const members of byKey.values()) {
-      const col = Math.max(...members.map((s) => cols.get(s.id)!));
-      for (const s of members) {
-        if (cols.get(s.id) === col) continue;
-        cols.set(s.id, col);
-        changed = true;
-      }
-    }
-    for (const steps of lines) {
-      for (let i = 1; i < steps.length; i++) {
-        const min = cols.get(steps[i - 1].id)! + 1;
-        if (cols.get(steps[i].id)! >= min) continue;
-        cols.set(steps[i].id, min);
-        changed = true;
-      }
-    }
-    if (!changed) break;
-  }
-  return cols;
+  return new Map(lines.flatMap((steps) => steps.map((s, i) => [s.id, i] as const)));
 }
 
 export function clock(minutes: number) {
@@ -79,6 +57,14 @@ export function duration(minutes: number) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+export function formatElapsed(ms: number) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
 const RELATIVE = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });

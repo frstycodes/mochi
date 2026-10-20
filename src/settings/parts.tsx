@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from '@/toast/store';
@@ -248,4 +249,27 @@ export function NumberInput({ id, value, min, max, step, onCommit }: { id: strin
       className="w-24 tabular"
     />
   );
+}
+
+/** A list row's 32px image (a package's icon from its marketplace); `fallback` (else a muted tile) when it has none or it fails to load. */
+export function ListIcon({ url, fallback }: { url?: string | null; fallback?: ReactNode }) {
+  const [isBroken, setBroken] = useState(false);
+  if (!url || isBroken) return fallback ?? <span aria-hidden className="size-8 shrink-0 rounded-lg bg-muted" />;
+  return <img src={url} alt="" loading="lazy" onError={() => setBroken(true)} className="size-8 shrink-0 rounded-lg object-contain" />;
+}
+
+const SKELETON_WIDTHS = ['w-40', 'w-28', 'w-48', 'w-32'];
+
+export function SkeletonRows({ count }: { count: number }) {
+  return Array.from({ length: count }, (_, i) => (
+    <SettingsRow
+      key={i}
+      label={
+        <span className="flex items-center gap-2.5">
+          <Skeleton className="size-8 rounded-lg" />
+          <Skeleton className={`h-3 ${SKELETON_WIDTHS[i % SKELETON_WIDTHS.length]}`} />
+        </span>
+      }
+    />
+  ));
 }

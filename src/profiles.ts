@@ -29,20 +29,22 @@ export function profileById(id: string): Space {
   return profiles.find((p) => p.id === id) ?? profiles[0];
 }
 
-export function addProfile(name: string): Space {
+/** A new profile, empty or with `from`'s own settings (GitHub login, what it turns off natively); a new id and icon either way. */
+export function addProfile(name: string, from?: Space): Space {
   if (profiles.length >= MAX_PROFILES) throw new Error(`Mochi holds up to ${MAX_PROFILES} profiles`);
   const profile: Space = {
+    plans: { claude: '', codex: '' },
+    github: '',
+    ...(from && { plans: from.plans, github: from.github, nativeOff: from.nativeOff, nativeNew: from.nativeNew }),
     id: newProfileId(name, profiles.map((p) => p.id)),
     name,
     icon: SPACE_ICON_NAMES.find((icon) => !profiles.some((p) => p.icon === icon)) ?? 'layers',
-    plans: { claude: '', codex: '' },
-    github: '',
   };
   write([...profiles, profile]);
   return profile;
 }
 
-export function updateProfile(id: string, patch: Partial<Pick<Space, 'name' | 'icon' | 'github' | 'syncInstructions'>>) {
+export function updateProfile(id: string, patch: Partial<Pick<Space, 'name' | 'icon' | 'github' | 'nativeOff' | 'nativeNew'>>) {
   write(profiles.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 }
 

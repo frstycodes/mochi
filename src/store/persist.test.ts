@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { applyAgentEvent } from '../runtime/apply.ts';
 import { agentCalls } from '../runtime/live.ts';
 import type { Action, State } from './index.tsx';
-import { parseSaved, toSaved } from './persist.ts';
+import { joinSaved, parseSaved, splitSaved, toSaved } from './persist.ts';
 import { initialQueue } from './queue.ts';
 import { initialThreads, threadsReducer } from './threads.ts';
 
@@ -26,7 +26,8 @@ test('a save keeps live threads only and comes back idle, detached and without d
   const restored = { ...initialThreads(back, false), ...initialQueue(back, false), spaceId: 'personal', views: {} } as unknown as State;
   const thread = restored.threads.find((t) => t.id === id)!;
   assert.equal(restored.threads.length, 1, 'no demo threads on desktop');
-  assert.deepEqual(thread.repo, { project: 'app', branch: id, path: '/Users/me/dev/app' });
+  const branch = s.threads.find((t) => t.id === id)!.repo!.branch;
+  assert.deepEqual(thread.repo, { project: 'app', branch, autoBranch: branch, path: '/Users/me/dev/app' });
   assert.equal(thread.session?.id, 'sess-1');
   assert.deepEqual([thread.live?.isWorking, thread.live?.isDetached], [false, true]);
   assert.equal(thread.activity.at(-1)?.text, 'Stopped when Mochi quit. Send a message to continue.');
@@ -63,3 +64,44 @@ test('after a window reload, a thread whose agent still runs in main stays attac
   assert.ok(back.queue.some((q) => q.requestId === 'req-1'), 'main still waits on the approval');
   assert.ok(!back.queue.some((q) => q.tool) && !thread.activity.some((e) => e.card), 'the reloaded page runs the Mochi call again and asks anew');
 });
+
+test('an overlap card or a step an overlap held, saved before overlaps were removed, comes back as nothing and up next', () => {
+  let s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const id = s.threads.at(-1)!.id;
+  s = applyAgentEvent(s, { threadId: id, type: 'session', provider: 'claude', sessionId: 'sess-1' });
+  const saved = toSaved(s);
+  const held = { id: 's1', title: 'Run tests', status: 'waiting', addedAt: 0, addedBy: 'claude', footprint: [], sharedKey: 'shared-x' };
+  const old = {
+    ...saved,
+    threads: saved.threads.map((t) => ({ ...t, steps: [held] })),
+    queue: [{ id: 'q-overlap-1', kind: 'overlap', threadId: id, title: 'Two threads want to run tests', detail: '', blocks: { steps: 1, threads: 2 }, createdAt: 0 }],
+  };
+  const back = parseSaved(JSON.stringify(old))!;
+  assert.deepEqual(initialQueue(back, false).queue, []);
+  assert.equal(initialThreads(back, false).threads.find((t) => t.id === id)!.steps[0].status, 'ready');
+});
+
+test('a save splits into an index and a file per thread, re-encodes only changed threads, and joins back whole', () => {
+  let s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  s = run(s, { type: 'create', title: 'fix the build', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const [a, b] = toSaved(s).threads.map((t) => t.id);
+  s = { ...s, forks: { [b]: { parentId: a, at: 1, label: 'Fork' } } };
+  const saved = toSaved(s);
+  const first = splitSaved(saved);
+  assert.deepEqual(Object.keys(first.threads), [a, b]);
+  assert.ok(!first.index.includes('"activity"'), 'the index holds no thread');
+  assert.deepEqual(joinSaved({ index: first.index, threads: Object.values(first.threads) }), { ...plain(saved), threadIds: [a, b] });
+
+  s = applyAgentEvent(s, { threadId: b, type: 'session', provider: 'claude', sessionId: 'sess-b' });
+  const second = splitSaved(toSaved(s));
+  assert.equal(second.threads[a], first.threads[a], 'the unchanged thread is the same string, not a re-encoding');
+  assert.notEqual(second.threads[b], first.threads[b]);
+});
+
+test('a one-document threads.json from before the split loads as the index', () => {
+  const s = run(demoState(), { type: 'create', title: 'add a readme', provider: 'claude', project: '/Users/me/dev/app', isLive: true });
+  const saved = toSaved(s);
+  assert.deepEqual(joinSaved({ index: JSON.stringify(saved), threads: [] }), plain(saved));
+});
+
+const plain = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;

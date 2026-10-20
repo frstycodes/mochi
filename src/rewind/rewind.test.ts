@@ -8,7 +8,9 @@ import { applyAgentEvent } from '../runtime/apply.ts';
 import { agentCalls, resumeAfterLostProcess } from '../runtime/live.ts';
 import { rewindBlockedReason, threadAt } from './checkpoints.ts';
 import { forkRelatives } from './fork.ts';
-import { handoffSummary } from './handoff.ts';
+import { failDrafts, handoffSummary } from './handoff.ts';
+import { draftHandoff } from './runHandoff.ts';
+import { host } from '../host/index.ts';
 
 const base = () => ({ ...initialThreads(), ...initialQueue(), spaceId: 'latitude', views: {} }) as unknown as State;
 const thread = (s: State, id: string) => s.threads.find((t) => t.id === id)!;
@@ -99,27 +101,81 @@ test('fork from a checkpoint names it for the worktree only once its files were 
   assert.equal(Object.values(s.forks)[0].checkpoint, cp.n);
 });
 
-test('handoff moves one step or the whole thread and logs an event and the summary, not a revision', () => {
+test('handoff moves the thread and logs one handoff row with its prompt, not a message or a revision', () => {
   let s = base();
   const rl = thread(s, 'rl');
-  const summary = handoffSummary(rl, 'codex', undefined, { files: 3, added: 40, removed: 6 });
+  const summary = handoffSummary(rl, 'codex', { files: 3, added: 40, removed: 6 });
   assert.match(summary, /Goal:\*\* Every public API key/);
   assert.match(summary, /Add Redis client \(running\)/);
   assert.match(summary, /3 files, \+40 −6/);
 
-  s = threadsReducer(s, { type: 'handoff', threadId: 'rl', stepId: 'rl6', to: 'codex', summary });
-  let t = thread(s, 'rl');
-  assert.equal(t.steps.find((x) => x.id === 'rl6')!.owner, 'codex');
-  assert.deepEqual(t.providers, ['claude', 'codex']);
-  assert.equal(t.revisions.length, rl.revisions.length, 'what done means is unchanged');
-  assert.equal(t.activity.at(-2)!.text, 'Handed "Token bucket middleware" from Claude to Codex with a context summary');
-  assert.equal(t.activity.at(-1)!.text, summary);
-
   s = threadsReducer(s, { type: 'handoff', threadId: 'rl', to: 'codex', summary });
-  t = thread(s, 'rl');
+  const t = thread(s, 'rl');
   assert.deepEqual(t.providers, ['codex', 'claude']);
-  assert.equal(t.steps.find((x) => x.id === 'rl1')!.owner, 'claude', 'finished steps keep who did them');
-  assert.equal(t.steps.find((x) => x.id === 'rl6')!.owner, undefined, 'open steps follow the thread');
+  assert.equal(t.revisions.length, rl.revisions.length, 'what done means is unchanged');
+  assert.equal(t.activity.length, rl.activity.length + 1, 'one row, no summary message beside it');
+  assert.deepEqual(t.activity.at(-1), { at: s.now, who: 'harness', kind: 'event', text: 'Handed off from Claude to Codex', handoff: { from: 'claude', to: 'codex', status: 'started', prompt: summary } });
+});
+
+test('a drafted handoff fills its drafting row; a second draft waits; a handoff to the same agent fails the row', () => {
+  let s = threadsReducer(base(), { type: 'handoff-draft', threadId: 'rl', to: 'codex' });
+  const drafting = thread(s, 'rl');
+  assert.deepEqual(drafting.providers[0], 'claude', 'the thread stays put while the prompt drafts');
+  assert.deepEqual(drafting.activity.at(-1)!.handoff, { from: 'claude', to: 'codex', status: 'drafting' });
+  assert.equal(thread(threadsReducer(s, { type: 'handoff-draft', threadId: 'rl', to: 'codex' }), 'rl').activity.length, drafting.activity.length, 'one draft at a time');
+
+  s = threadsReducer(s, { type: 'tick' });
+  s = threadsReducer(s, { type: 'handoff', threadId: 'rl', to: 'codex', summary: 'Pick up the Redis client', fallback: 'timeout' });
+  const handed = thread(s, 'rl');
+  const row = handed.activity.find((e) => e.handoff)!;
+  assert.equal(row.at, drafting.activity.at(-1)!.at, 'the row stays where the handoff began');
+  assert.equal(row.text, 'Handed off from Claude to Codex');
+  assert.deepEqual(row.handoff, { from: 'claude', to: 'codex', status: 'started', prompt: 'Pick up the Redis client', fallback: 'timeout' });
+  assert.equal(handed.activity.filter((e) => e.handoff).length, 1);
+
+  s = threadsReducer(s, { type: 'handoff-draft', threadId: 'rl', to: 'claude' });
+  s = threadsReducer(s, { type: 'handoff', threadId: 'rl', to: 'codex', summary: 'x' });
+  assert.deepEqual(thread(s, 'rl').activity.at(-1)!.handoff, { from: 'codex', to: 'claude', status: 'failed', error: 'Already on Codex' });
+  assert.deepEqual(thread(s, 'rl').providers[0], 'codex');
+});
+
+test('a thread settled while its handoff drafts stays settled on its agent, and the row fails', () => {
+  const create: Action = { type: 'create', title: 'reply with ok', provider: 'claude', project: 'harness', isLive: true };
+  let s = threadsReducer(base(), create);
+  const id = s.threads.at(-1)!.id;
+  s = threadsReducer(s, { type: 'handoff-draft', threadId: id, to: 'codex' });
+  s = threadsReducer(s, { type: 'settle', threadId: id });
+  const handoff: Action = { type: 'handoff', threadId: id, to: 'codex', summary: 'x' };
+  assert.deepEqual(calls(s, handoff), [], 'no agent stops or starts');
+  const t = thread(threadsReducer(s, handoff), id);
+  assert.deepEqual([t.status, t.providers[0]], ['settled', 'claude']);
+  assert.deepEqual(t.activity.findLast((e) => e.handoff)!.handoff, { from: 'claude', to: 'codex', status: 'failed', error: 'The thread was settled' });
+});
+
+test('a draft that throws or outlives the window fails its row', () => {
+  let s = threadsReducer(base(), { type: 'handoff-draft', threadId: 'rl', to: 'codex' });
+  s = threadsReducer(s, { type: 'handoff-fail', threadId: 'rl', error: 'boom' });
+  assert.deepEqual(thread(s, 'rl').activity.at(-1)!.handoff?.status, 'failed');
+  assert.equal(thread(s, 'rl').activity.at(-1)!.text, 'Could not hand off from Claude to Codex');
+
+  const open = threadsReducer(base(), { type: 'handoff-draft', threadId: 'rl', to: 'codex' });
+  const [failed] = failDrafts(thread(open, 'rl').activity.slice(-1), 'Stopped when Mochi quit');
+  assert.deepEqual(failed.handoff, { from: 'claude', to: 'codex', status: 'failed', error: 'Stopped when Mochi quit' });
+  const done = thread(base(), 'rl').activity;
+  assert.equal(failDrafts(done, 'x'), done, 'nothing open, same array');
+});
+
+test('draftHandoff uses the model draft, else the local summary on an error or past the timeout', async (t) => {
+  const rl = thread(base(), 'rl');
+  t.mock.method(host.git, 'diff', async () => ({ branch: '', base: '', files: [] }));
+  const utility = t.mock.method(host.agent, 'utility', async () => '```\nDrafted\n```');
+  assert.deepEqual(await draftHandoff(rl, 'codex'), { prompt: 'Drafted' });
+  utility.mock.mockImplementation(async () => null);
+  const failed = await draftHandoff(rl, 'codex');
+  assert.equal(failed.fallback, 'error');
+  assert.match(failed.prompt, /\*\*Handoff to Codex\*\*/);
+  utility.mock.mockImplementation(() => new Promise<string>(() => {}));
+  assert.equal((await draftHandoff(rl, 'codex', 5)).fallback, 'timeout');
 });
 
 test('rewinding to a message drops it and everything after, keeps what came before, and undoes in one step', () => {
