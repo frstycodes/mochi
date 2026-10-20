@@ -15,6 +15,7 @@ import { settings as desktopSettings } from './desktop/settings.ts';
 import { sim as desktopSim } from './desktop/sim.ts';
 import { themes as desktopThemes } from './desktop/themes.ts';
 import { windows as desktopWindows } from './desktop/windows.ts';
+import { usage as desktopUsage } from './desktop/usage.ts';
 import type { HostBridge, Namespace } from './types/index.ts';
 import { account as webAccount } from './web/account.ts';
 import { updates as webUpdates } from './web/updates.ts';
@@ -33,6 +34,7 @@ import { settings as webSettings } from './web/settings.ts';
 import { sim as webSim } from './web/sim.ts';
 import { themes as webThemes } from './web/themes.ts';
 import { windows as webWindows } from './web/windows.ts';
+import { usage as webUsage } from './web/usage.ts';
 
 export type { HostBridge, Namespace } from './types/index.ts';
 
@@ -58,6 +60,7 @@ export const registry: Registry = {
   account: { web: webAccount, desktop: desktopAccount },
   updates: { web: webUpdates, desktop: desktopUpdates },
   projects: { web: webProjects, desktop: desktopProjects },
+  usage: { web: webUsage, desktop: desktopUsage },
 };
 
 const isDesktop = typeof window !== 'undefined' && !!window.harnessHost;
@@ -83,4 +86,5 @@ export const host = {
   account: pick('account'),
   updates: pick('updates'),
   projects: pick('projects'),
+  usage: pick('usage'),
 } satisfies HostBridge & { isDesktop: boolean };

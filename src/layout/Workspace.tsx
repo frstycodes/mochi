@@ -2,12 +2,13 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode,
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import type { GroupImperativeHandle } from 'react-resizable-panels';
-import { Edit, Folder, Ban, Inbox, Route } from '@/icons';
+import { Edit, Folder, Ban, Inbox, Route, Chart } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { cn } from '@/lib/utils';
 import { BoardView } from '../BoardView';
+import { UsagePage } from '../usage/UsagePage';
 import { HANDOFF_TRANSITION, isHandingOff } from '../Composer';
 import { NewThreadView } from '../NewThreadView';
 import { PANE_TABS, tabTitle } from '../pane/tabs';
@@ -171,6 +172,7 @@ const PAGES = {
   queue: { icon: Inbox, title: 'Queue', component: QueueView },
   board: { icon: Route, title: 'Board', component: BoardView },
   projects: { icon: Folder, title: 'Projects', component: ProjectsView },
+  usage: { icon: Chart, title: 'Usage', component: UsagePage },
 } satisfies Record<Exclude<View['kind'], 'thread' | 'tab'>, unknown>;
 
 type PageKind = keyof typeof PAGES;

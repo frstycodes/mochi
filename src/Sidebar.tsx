@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, 
 import { limitStatus } from './chat/LimitCard';
 import { createPortal } from 'react-dom';
 import { motion, type MotionProps } from 'motion/react';
-import { Archive, Chat, Edit, Folder, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from '@/icons';
+import { Archive, Chart, Chat, Edit, Folder, Eye, Hierarchy, Inbox, Menu, Route, Search, TaskSquare, Undo } from '@/icons';
 import {
   Sidebar,
   SidebarContent,
@@ -236,6 +236,7 @@ function SpaceNav({ spaceId, onSearch }: { spaceId: string; onSearch: () => void
             <NotificationBell spaceId={spaceId} />
             <NavItem icon={<Route />} label="Board" isActive={view.kind === 'board'} onClick={() => go({ kind: 'board' })} />
             <NavItem icon={<Folder />} label="Projects" isActive={view.kind === 'projects'} onClick={() => go({ kind: 'projects' })} />
+            <NavItem icon={<Chart />} label="Usage" isActive={view.kind === 'usage'} onClick={() => go({ kind: 'usage' })} />
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>

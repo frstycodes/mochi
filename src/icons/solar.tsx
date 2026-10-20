@@ -43,6 +43,7 @@ export const Clock = solar(Linear.ClockCircleIcon, Bold.ClockCircleIcon);
 export const ClockCircle = solar(Linear.StopwatchIcon, Bold.StopwatchIcon);
 export const Code = solar(Linear.CodeIcon, Bold.CodeIcon);
 export const Coffee = solar(Linear.CupHotIcon, Bold.CupHotIcon);
+export const Coin = solar(Linear.DollarIcon, Bold.DollarIcon);
 export const Columns = solar(Linear.PanelLeftIcon, Bold.PanelLeftIcon);
 export const Command = solar(Linear.CommandIcon, Bold.CommandIcon);
 export const Compass = solar(Linear.CompassIcon, Bold.CompassIcon);
@@ -202,9 +203,10 @@ export const XCircle = solar(Linear.CloseCircleIcon, Bold.CloseCircleIcon);
 export const XSquare = solar(Linear.CloseSquareIcon, Bold.CloseSquareIcon);
 export const ZoomIn = solar(Linear.MagnifierZoomInIcon, Bold.MagnifierZoomInIcon);
 export const ZoomOut = solar(Linear.MagnifierZoomOutIcon, Bold.MagnifierZoomOutIcon);
-// Solar has no Shift or Option key glyph.
+// Solar has no Shift or Option key glyph, nor a git commit.
 export const Shift = customIcon('Shift', `<path d="M12 3.75 3.75 12.25h4.5v7.5h7.5v-7.5h4.5L12 3.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>`);
 export const Option = customIcon('Option', `<path d="M3.75 6.75h4.5l7.5 10.5h4.5M14.25 6.75h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`);
+export const Commit = customIcon('Commit', `<circle cx="12" cy="12" r="3.25" stroke="currentColor" stroke-width="1.5"/><path d="M2.75 12h6M15.25 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`);
 export const Control = solar(Linear.AltArrowUpIcon, Bold.AltArrowUpIcon);
 
 function solar(Outline: (props: SolarProps) => React.ReactNode, Filled: (props: SolarProps) => React.ReactNode): IconComponent {
