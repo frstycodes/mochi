@@ -50,6 +50,8 @@ export const isMet = (c: Criterion, isConfirmed = false) => c.check?.status === 
 /** What the agent said at the end of a turn of work (`report_turn`): the judgment the transcript buries. */
 export interface TurnReport {
   at: number;
+  /** The turn it was made in: one past the last idle record's `turn`. Unset on reports saved before turns were counted. */
+  turn?: number;
   by: Provider;
   decisions: string[];
   left: string[];
@@ -85,6 +87,8 @@ export interface GoalProposal {
 
 export interface IdleCheck {
   at: number;
+  /** Counts the thread's ended turns; a report stamped with the same number is this turn's. `at` can't tell: it ticks once a minute. */
+  turn?: number;
   /** Uncommitted files in the thread's folder; unset without one or until read. */
   uncommitted?: number;
   /** Checks, git status and the transcript audit are still coming in; the verdict reads Checking until they have. */

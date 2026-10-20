@@ -175,6 +175,7 @@ function asked(thread: Thread) {
 /** The agent's report_turn from the turn that just ended; an older one describes a turn your later message already answered. */
 export function turnReport(thread: Thread) {
   const { report, idle } = thread;
+  if (report?.turn !== undefined && idle?.turn !== undefined) return report.turn === idle.turn ? report : undefined;
   return report && report.at >= (idle?.at ?? 0) - TURN_SLACK ? report : undefined;
 }
 

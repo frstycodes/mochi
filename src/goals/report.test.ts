@@ -4,6 +4,7 @@ import type { Thread } from '../model.ts';
 import type { State } from '../store/index.tsx';
 import { threadsReducer } from '../store/threads.ts';
 import { nextStep, showsVerdictCard } from './report.ts';
+import { turnReport } from './verdict.ts';
 
 test('a met goal waits on opening a PR, then on its review, then on settling once merged', () => {
   assert.equal(nextStep([]), 'open-pr');
@@ -32,4 +33,15 @@ test('without a goal, a reported turn still ends in the next-move card, and the 
   const reported = { ...answered, report: { ...t.report!, at: 9 } };
   const [idle] = threadsReducer(at(10, reported), { type: 'idle-start', threadId: 't' }).threads;
   assert.equal(showsVerdictCard(idle), true);
+});
+
+test("a quick turn without its own report doesn't bring back the last turn's question", () => {
+  const t = { id: 't', goal: '', status: 'running', steps: [], activity: [], prs: [] } as unknown as Thread;
+  const at = (now: number, s: Thread) => ({ now, threads: [s], checkpoints: { t: [] }, checkpointSeq: 0 }) as unknown as State;
+  const report = { by: 'claude' as const, decisions: [], left: [], next: 'Wait for it?', options: [{ label: 'Wait', reply: 'Wait.' }] };
+  const [reported] = threadsReducer(at(5, t), { type: 'report', threadId: 't', report }).threads;
+  const [first] = threadsReducer(at(5, reported), { type: 'idle-start', threadId: 't' }).threads;
+  assert.equal(turnReport(first)?.next, 'Wait for it?');
+  const [second] = threadsReducer(at(5, first), { type: 'idle-start', threadId: 't' }).threads;
+  assert.equal(turnReport(second), undefined);
 });
