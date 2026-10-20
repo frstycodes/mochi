@@ -1,5 +1,5 @@
 import type { ScheduleEvent, ScheduleRun } from '../host/types/schedule.ts';
-import type { QueueItem } from '../model.ts';
+import type { PullRequest, QueueItem } from '../model.ts';
 import type { Action, State } from '../store/index.tsx';
 import { autofixBody, autofixPrompt, autofixTitle, type AutofixEvent } from '../git/autofix.ts';
 import { ciTitle } from '../notify/watch.ts';
@@ -10,13 +10,15 @@ export type ScheduleAction =
   | { type: 'ci-result'; event: Extract<ScheduleEvent, { type: 'ci' }> }
   | { type: 'autofix'; threadId: string; event: AutofixEvent }
   /** `since` unset turns Auto-fix off for the PR; set, on from then, and the agent hears so once. */
-  | { type: 'autofix-set'; threadId: string; pr: number; since?: number };
+  | { type: 'autofix-set'; threadId: string; pr: number; since?: number }
+  | { type: 'auto-archive-set'; threadId: string; pr: number; isOn: boolean };
 
 /** A run from main: its start wakes the thread like a message you sent; its end lands in the thread's history and the Queue. */
 export function scheduleReducer(state: State, action: Action): State {
   if (action.type === 'ci-result') return ciResult(state, action.event);
   if (action.type === 'autofix') return autofixEvent(state, action.threadId, action.event);
   if (action.type === 'autofix-set') return autofixSet(state, action);
+  if (action.type === 'auto-archive-set') return setPr(state, action.threadId, action.pr, { autoArchive: action.isOn || undefined });
   if (action.type !== 'schedule-run') return state;
   const { event } = action;
   const thread = state.threads.find((t) => t.id === event.run.threadId);
@@ -61,6 +63,10 @@ function ciResult(state: State, { threadId, result }: Extract<ScheduleEvent, { t
   return { ...state, threads, queue: [...state.queue.filter((q) => !(q.kind === 'ci' && q.threadId === threadId && q.ci?.pr === result.pr)), item] };
 }
 
+function setPr(state: State, threadId: string, pr: number, patch: Partial<PullRequest>): State {
+  return { ...state, threads: mapThread(state.threads, threadId, (t) => ({ ...t, prs: t.prs.map((p) => (p.number === pr ? { ...p, ...patch } : p)) })) };
+}
+
 /** Turning Auto-fix on tells the agent once, so it leaves CI to Mochi; off says nothing. */
 function autofixSet(state: State, { threadId, pr, since }: Extract<Action, { type: 'autofix-set' }>): State {
   const thread = state.threads.find((t) => t.id === threadId);
@@ -80,7 +86,9 @@ function autofixEvent(state: State, threadId: string, event: AutofixEvent): Stat
     const sent = autofixSend(state, threadId, event);
     return sent ? send(state, sent) : state;
   }
-  const off = mapThread(state.threads, threadId, (t) => log({ ...t, prs: t.prs.map((p) => (p.number === event.pr ? { ...p, autofixSince: undefined } : p)) }, { at: state.now, who: 'harness', kind: 'event', text: autofixTitle(event) }));
+  // Merged or closed is the PR's state too, which Auto-archive waits for.
+  const ended = event.reason === 'cap' ? {} : { state: event.reason };
+  const off = mapThread(state.threads, threadId, (t) => log({ ...t, prs: t.prs.map((p) => (p.number === event.pr ? { ...p, ...ended, autofixSince: undefined } : p)) }, { at: state.now, who: 'harness', kind: 'event', text: autofixTitle(event) }));
   if (event.reason !== 'cap') return { ...state, threads: off };
   // Out of attempts: the failure lands in the Queue for you, as a watched thread's CI failure does.
   const failed = (event.failed ?? []).map((c) => ({ name: c.name, state: 'fail' as const, link: c.link }));

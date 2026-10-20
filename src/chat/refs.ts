@@ -22,6 +22,8 @@ export interface RefState {
   url: string;
   /** Open PR that can't merge cleanly (`mergeable: CONFLICTING`). */
   hasConflicts: boolean;
+  /** GitHub auto-merge is on: it merges once required checks and reviews pass. */
+  isAutoMerge: boolean;
   /** Null when the PR has no checks, and for issues. */
   checks: ChecksState | null;
   /** Checks that passed (skipped and neutral count) out of all of them; null when unread or there are none. */
@@ -40,7 +42,7 @@ export interface RefState {
 
 /** A state with only what's known without GitHub: the thread's own record of a PR, demo fixtures. */
 export function bareState(kind: RefKind, status: RefState['status'], title: string, url: string): RefState {
-  return { kind, status, title, url, hasConflicts: false, checks: null, checkCounts: null, review: null, isNotPlanned: false, author: null, updatedAt: null, branch: null, diff: null };
+  return { kind, status, title, url, hasConflicts: false, isAutoMerge: false, checks: null, checkCounts: null, review: null, isNotPlanned: false, author: null, updatedAt: null, branch: null, diff: null };
 }
 
 /** The thread's own repository, for bare `#123` and for showing its refs without the `owner/repo` prefix. */

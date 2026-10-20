@@ -146,6 +146,7 @@ export const git: GitHost = {
   async worktreePrs() {
     return [];
   },
+  async setAutoMerge() {},
   async pr() {
     return {
       number: 490,

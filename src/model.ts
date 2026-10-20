@@ -330,12 +330,14 @@ export interface McpServer {
 
 export interface PullRequest {
   number: number;
-  state: 'open' | 'merged' | 'draft';
+  state: 'open' | 'merged' | 'draft' | 'closed';
   title: string;
   /** Live PRs from `gh`; the demo fixtures have none, so their rows don't open anything. */
   url?: string;
   /** Auto-fix is on (`src/git/autofix.ts`) since this epoch ms. */
   autofixSince?: number;
+  /** Archive the thread once this and every other PR of it merged or closed (`src/git/autoArchive.ts`). */
+  autoArchive?: boolean;
 }
 
 /**

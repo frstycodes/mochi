@@ -121,7 +121,7 @@ function watchConfig(state: State, { alertKinds, dockBadge }: { alertKinds: stri
     const cwd = threadCwd(t);
     if (!t.live || t.status === 'settled' || !cwd) return [];
     const githubUser = profiles.find((p) => p.id === t.spaceId)?.github || undefined;
-    return t.prs.flatMap((pr) => (pr.autofixSince && pr.state !== 'merged' ? [{ threadId: t.id, title: t.title, pr: pr.number, cwd, githubUser, since: pr.autofixSince }] : []));
+    return t.prs.flatMap((pr) => (pr.autofixSince && pr.state !== 'merged' && pr.state !== 'closed' ? [{ threadId: t.id, title: t.title, pr: pr.number, cwd, githubUser, since: pr.autofixSince }] : []));
   });
   const { muted, quiet } = state.notifications;
   // Another computer's threads count toward the badge too, keyed by machine so ids never collide with this one's.

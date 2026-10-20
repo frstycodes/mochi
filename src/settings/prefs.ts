@@ -59,6 +59,10 @@ export interface Prefs {
   /** VerdictKind values that notify when a thread you aren't looking at goes idle. */
   idleAlerts: string[];
   branchPrefix: string;
+  /** A PR a thread opens or picks up starts with Auto-fix on (`src/git/autofixToggle.ts`). */
+  autofixPrs: boolean;
+  /** A PR a thread opens or picks up starts with Auto-archive on (`src/git/autoArchive.ts`). */
+  autoArchivePrs: boolean;
   /** Where a new project thread works: its own worktree, or the project's checkout. */
   workspaceMode: 'worktree' | 'folder';
   diffStyle: 'unified' | 'split';
@@ -124,6 +128,8 @@ export const DEFAULT_PREFS: Prefs = {
   simplifyAutoWords: 150,
   branchFrom: 'current',
   branchPrefix: 'mochi/',
+  autofixPrs: true,
+  autoArchivePrs: false,
   workspaceMode: 'worktree',
   diffStyle: 'unified',
   worktreeCleanup: '7',

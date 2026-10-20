@@ -45,7 +45,7 @@ import { EDITOR_NAMES, openInEditor, useInstalledEditors } from './files/editors
 import { openFiles } from './files/viewer';
 import { RefIcon, ThreadPrHoverCard } from './chat/RefHoverCard';
 import { refDescription, type ChecksState } from './chat/refs';
-import { canAutofix, setAutofix } from './git/autofixToggle';
+import { usePrSwitches } from './git/prSwitches';
 import { useThreadPrs, type ThreadPr } from './git/useThreadPrs';
 import { BranchIcon, BranchName } from './git/BranchLabel';
 import type { McpServer, Source, Thread } from './model';
@@ -758,7 +758,7 @@ function CheckCount({ checks, counts }: { checks: ChecksState | null; counts: { 
 }
 
 function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
-  const { dispatch } = useHarness();
+  const switches = usePrSwitches(thread, item);
   const url = item.state.url;
   return (
     <DropdownMenu>
@@ -767,18 +767,16 @@ function PullRequestMenu({ thread, item }: { thread: Thread; item: ThreadPr }) {
           <OverflowIcon vertical />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-auto">
         {/* The main process sends a new window's http(s) URL to the system browser (electron/window.ts). */}
         <DropdownMenuItem onSelect={() => window.open(url, '_blank', 'noreferrer')}>Open on GitHub</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => copyText(url, 'Link copied')}>Copy link</DropdownMenuItem>
-        {canAutofix(thread, item.pr) && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem checked={!!item.pr.autofixSince} onCheckedChange={(isOn) => setAutofix(dispatch, thread, item.pr, isOn)}>
-              Auto-fix
-            </DropdownMenuCheckboxItem>
-          </>
-        )}
+        {switches.length > 0 && <DropdownMenuSeparator />}
+        {switches.map((s) => (
+          <DropdownMenuCheckboxItem key={s.id} checked={s.isOn} onCheckedChange={s.set}>
+            {s.label}
+          </DropdownMenuCheckboxItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
