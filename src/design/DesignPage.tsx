@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { EventLine, MochiWidget } from '../chat/MochiWidget';
-import { ArrowUp, CheckCircle, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
+import { ArrowUp, CheckCircle, Grid as WidgetGlyph, Info, Link, Monitor, Moon, Pin, Sun, TextBold, TextItalic, WarningAlt } from '@/icons';
 import { GitPullRequestIcon } from '@/icons/github';
 import { useTheme } from 'next-themes';
 import { toast } from '@/toast/store';
@@ -72,8 +72,10 @@ import { InputsSection } from './sections/inputs';
 import { NavigationSection } from './sections/navigation';
 import { OverlaysSection } from './sections/overlays';
 import { ImagesSection } from './sections/images';
+import { EmbedsSection } from './sections/embeds';
 import { NativeItemsSection } from './sections/native-items';
 import { McpAppFrame } from '../chat/McpAppCard';
+import { EmbedFrame } from '../viz/EmbedFrame';
 import { MOBBIN_RESOURCE, MOBBIN_WIDGET } from './mcpAppFixtures';
 import { PhotoViewer } from '../photo/PhotoViewer';
 import { StateMatrix, previewState } from './state-matrix';
@@ -92,6 +94,7 @@ const SECTIONS = [
   ['overlays', 'Overlays'],
   ['conversation', 'Conversation'],
   ['images', 'Images'],
+  ['embeds', 'Embeds'],
   ['recipes', 'Recipes'],
   ['profiles', 'Profiles'],
   ['rules', 'Do and don’t'],
@@ -116,6 +119,7 @@ export function DesignPage() {
               <OverlaysSection />
               <Conversation />
               <ImagesSection />
+              <EmbedsSection />
               <Recipes />
               <NativeItemsSection />
               <Rules />
@@ -665,7 +669,9 @@ function Conversation() {
       </div>
       <Grid>
         <Block title="MCP App view" use="A tool that declares a ui:// view (MCP Apps) gets it after its call's group: the server's own HTML in a sandboxed frame, sized by the view. Here Mobbin's search_screens on a recorded result.">
-          <McpAppFrame widget={MOBBIN_WIDGET} resource={MOBBIN_RESOURCE} />
+          <EmbedFrame icon={WidgetGlyph} title="Mobbin">
+            <McpAppFrame widget={MOBBIN_WIDGET} resource={MOBBIN_RESOURCE} />
+          </EmbedFrame>
         </Block>
         <Block title="Questionnaire" use="How agents ask you things: one choice, number keys, then send.">
           <Questionnaire

@@ -1,15 +1,16 @@
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import { toast } from '@/toast/store';
-import { Check, Copy, Download, Maximize, Pip, SidebarRight } from '@/icons';
+import { Chart, Check, Code, Copy, Download, Grid, Image, Maximize, Pip, Route, SidebarRight, type IconComponent } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 import type { PaneVisual } from '../model';
 import { useHarness } from '../store';
 import { IconSwap, TooltipIconButton } from '../ui';
 import { download, serializeSvg, svgToPng } from './exportVisual';
+import type { VizLanguage } from './fence';
+import { EmbedFrame } from './EmbedFrame';
 import { useVizThreadId } from './WidgetVisual';
 
 export interface VisualSource {
@@ -19,11 +20,11 @@ export interface VisualSource {
 }
 
 /**
- * Card chrome shared by every inline visual: caption, hover toolbar (copy, download, fullscreen).
+ * The embed frame for every inline visual, with its actions (side pane, pop out, copy, download, fullscreen).
  * `svg` returns the picture as an SVG document; omitted, the first `[data-visual-svg]` inside the body is serialized.
  */
 export function VisualFrame({ fence, title, source, svg, canPicture = true, children }: { fence: PaneVisual; title: string; source: VisualSource; svg?: () => string; canPicture?: boolean; children: ReactNode }) {
-  const body = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLElement>(null);
   const isInPane = useContext(InPaneContext);
   const [isFullscreen, setFullscreen] = useState(false);
   const name = fileName(title);
@@ -46,49 +47,51 @@ export function VisualFrame({ fence, title, source, svg, canPicture = true, chil
   };
 
   return (
-    <figure data-visual className="group/visual relative my-3 flex flex-col gap-2 rounded-xl bg-card p-3 ring-1 ring-border">
-      <figcaption className={cn('flex h-6 items-center gap-2 type-caption text-subtle-foreground', isInPane ? 'pr-24' : 'pr-40')}>
-        <span className="truncate">{title}</span>
-      </figcaption>
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/visual:opacity-100 group-focus-within/visual:opacity-100 has-data-[state=open]:opacity-100 pointer-coarse:opacity-100">
-        {!isInPane && <PaneButtons fence={fence} title={title} />}
-        <CopyButton text={source.text} />
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label="Download">
-                  <Download />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent>Download</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end" className="w-40">
-            {canPicture && <DropdownMenuItem onSelect={exportAs('png')}>PNG image</DropdownMenuItem>}
-            {canPicture && <DropdownMenuItem onSelect={exportAs('svg')}>SVG image</DropdownMenuItem>}
-            <DropdownMenuItem onSelect={exportAs('source')}>Source (.{source.ext})</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Fullscreen" onClick={() => setFullscreen(true)}>
-              <Maximize />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Fullscreen</TooltipContent>
-        </Tooltip>
-      </div>
-      <div ref={body} className="min-w-0">
+    <>
+      <EmbedFrame ref={body} icon={VISUAL_ICONS[fence.language]} title={title} isPadded={PADDED.has(fence.language)} className="my-3" actions={<VisualActions fence={fence} title={title} source={source} canPicture={canPicture} isInPane={isInPane} exportAs={exportAs} onFullscreen={() => setFullscreen(true)} />}>
         {children}
-      </div>
+      </EmbedFrame>
       <Dialog open={isFullscreen} onOpenChange={setFullscreen}>
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 overflow-auto sm:max-w-[min(calc(100vw-4rem),1100px)] [&_[data-slot=chart]]:h-[min(70dvh,640px)]">
           <DialogTitle className="type-title">{title}</DialogTitle>
           {isFullscreen && children}
         </DialogContent>
       </Dialog>
-    </figure>
+    </>
+  );
+}
+
+export const VISUAL_ICONS = { chart: Chart, svg: Image, html: Grid, 'harness-metro': Route, 'harness-diff': Code } satisfies Record<VizLanguage, IconComponent>;
+
+// Agent widgets and SVGs paint their own margins; the harness's own visuals need the frame to.
+const PADDED = new Set<VizLanguage>(['chart', 'harness-metro', 'harness-diff']);
+
+function VisualActions({ fence, title, source, canPicture, isInPane, exportAs, onFullscreen }: { fence: PaneVisual; title: string; source: VisualSource; canPicture: boolean; isInPane: boolean; exportAs: (what: 'png' | 'svg' | 'source') => () => void; onFullscreen: () => void }) {
+  return (
+    <>
+      {!isInPane && <PaneButtons fence={fence} title={title} />}
+      <CopyButton text={source.text} />
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Download">
+                <Download />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>Download</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end" className="w-40">
+          {canPicture && <DropdownMenuItem onSelect={exportAs('png')}>PNG image</DropdownMenuItem>}
+          {canPicture && <DropdownMenuItem onSelect={exportAs('svg')}>SVG image</DropdownMenuItem>}
+          <DropdownMenuItem onSelect={exportAs('source')}>Source (.{source.ext})</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <TooltipIconButton label="Fullscreen" onClick={onFullscreen}>
+        <Maximize />
+      </TooltipIconButton>
+    </>
   );
 }
 
