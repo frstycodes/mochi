@@ -133,7 +133,7 @@ export function SidebarPeek({ onSearch }: { onSearch: () => void }) {
         onClickCapture={dock}
         inert={(!isOpen && !isDocking) || undefined}
         className={cn(
-          'fixed z-40 w-(--sidebar-width) overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
+          'fixed z-40 w-(--sidebar-width) app-no-drag **:app-no-drag! overflow-hidden border-r bg-sidebar ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-opacity',
           isDocking
             ? 'inset-y-0 left-0 rounded-none border-sidebar-border shadow-none transition-[top,bottom,left,border-radius,border-color,box-shadow] duration-[160ms]'
             : 'inset-y-2 left-2 rounded-xl border-transparent shadow-float transition-[translate,opacity]',
