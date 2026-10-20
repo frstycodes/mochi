@@ -7,7 +7,7 @@ import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
 import { shownImage } from '../chat/images.ts';
 import { sourcePrompt } from '../sources.ts';
-import { KEEPS_TO_MUTE, type DriftKind } from '../drift.ts';
+import { hasGoal, KEEPS_TO_MUTE, type DriftKind } from '../drift.ts';
 import { applyDraft, draftFrom, type GoalDraft } from '../goals/edit.ts';
 import { goalProgress } from '../progress.ts';
 import { nestBlocker, pinAt, reorderThreads, subThreadsOf } from '../reorder.ts';
@@ -581,7 +581,7 @@ function driftNewThread(state: State, action: Extract<Action, { type: 'drift-new
   const source = state.threads.find((t) => t.id === action.threadId);
   if (!source) return state;
   const now = state.now;
-  const isGoalDone = goalProgress(source).phase === 'ready';
+  const isGoalDone = hasGoal(source) && goalProgress(source).phase === 'ready';
   const hasOpenPr = source.prs.some((p) => p.state === 'open');
   const short = action.prompt.length > 40 ? `${action.prompt.slice(0, 39)}…` : action.prompt;
   let next: State = state;

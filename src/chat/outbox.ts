@@ -79,6 +79,8 @@ export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'thre
 export interface DriftPending {
   text: string;
   verdict: DriftVerdict;
+  /** The agent called it new work (`update_plan` scope `new_task`) and stopped: it waits on your answer, so Do it here tells it to go on. */
+  isFromAgent?: boolean;
 }
 
 // Outside React: a queued message the store sends while its thread is closed still leaves its suggestion for when you open it.
@@ -97,6 +99,8 @@ export function useDriftPending(threadId: string) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    () => pendingDrift.get(threadId) ?? null,
+    () => driftPending(threadId),
   );
 }
+
+export const driftPending = (threadId: string) => pendingDrift.get(threadId) ?? null;
