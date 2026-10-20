@@ -57,4 +57,15 @@ export const fs = {
     const names = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.')).map((e) => e.name);
     return { path: dir, names: names.sort((a, b) => a.localeCompare(b)).slice(0, MAX_FOLDERS) };
   },
+  entries: async (_sender, at) => {
+    const dir = path.resolve(string(at, 'path').replace(/^~(?=\/|$)/, homedir()));
+    if (!(await stat(dir).catch(() => null))?.isDirectory()) return null;
+    const entries = (await readdir(dir, { withFileTypes: true }).catch(() => [])).sort((a, b) => a.name.localeCompare(b.name));
+    const names = (isDir: boolean) =>
+      entries
+        .filter((e) => e.isDirectory() === isDir)
+        .map((e) => e.name)
+        .slice(0, MAX_FOLDERS);
+    return { path: dir, dirs: names(true), files: names(false) };
+  },
 } satisfies Handlers<FsHost>;

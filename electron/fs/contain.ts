@@ -1,11 +1,13 @@
 import { realpath, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 
 // GAP: the renderer names the root. Until the worktree manager (session `git`) registers thread roots in main, any
 // directory the renderer asks for is accepted as a root; containment only stops escapes *from* that root.
 export async function resolveRoot(root: string) {
   if (root.includes('\0')) throw new Error('root contains a NUL byte');
-  const real = await realpath(path.resolve(root));
+  // `~` roots: the viewer opens a file mentioned from outside the worktree (`@~/notes.md`) by its folder.
+  const real = await realpath(path.resolve(root.replace(/^~(?=\/|$)/, homedir())));
   if (!(await stat(real)).isDirectory()) throw new Error(`${root} is not a directory`);
   return real;
 }
