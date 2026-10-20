@@ -58,7 +58,7 @@ export function SideChatTab({ thread, tab }: PaneTabProps) {
                 <ModelPicker value={side.model.model} provider={side.model.provider} onChange={(m) => side.setModel({ provider: m.harness, model: m.id })} />
               </PromptInputTools>
               <PromptInputTools>
-                <PromptInputSubmit aria-label="Ask" disabled={side.isStreaming}>
+                <PromptInputSubmit aria-label="Ask" disabled={side.isStreaming} className="rounded-full">
                   <ArrowUp className="size-4" />
                 </PromptInputSubmit>
               </PromptInputTools>

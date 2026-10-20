@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Brush, Clock, Connector, Cpu, Database, Devices, Globe, Hierarchy2, Info, Key, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
+import { Brush, Clock, Connector, Cpu, Database, Devices, Globe, Hierarchy2, Info, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -8,7 +8,7 @@ import { UTILITY_TASK_LABELS, UTILITY_TASKS } from '../../utility/prompts';
 import { IDLE_ALERTS } from '../settingOptions';
 import { AboutSection } from './about';
 import { ConnectorsView } from '../../library/ConnectorsView';
-import { ConnectorToolsView } from '../../library/ConnectorToolsView';
+import { ConnectorPage } from '../../library/ConnectorPage';
 import { PluginsView } from '../../library/PluginsView';
 import { SkillsView } from '../../library/SkillsView';
 import { AccessSection, toolRowId } from './access';
@@ -38,6 +38,8 @@ export interface SettingsSection {
   title: string;
   icon: IconComponent;
   component: ComponentType;
+  /** One item's own page in this section (`openSubpage`), shown instead of the section under its own header. */
+  subpage?: ComponentType<{ id: string }>;
   /** Every row's id and label, for search and deep links; the section renders the rows. Rows that need the desktop app say so in the section. */
   settings: { id: string; label: string; keywords?: string }[];
 }
@@ -221,15 +223,14 @@ export const SETTINGS_SECTIONS = [
     title: 'Connectors',
     icon: Connector,
     component: ConnectorsView,
-    settings: [{ id: 'connectorsLibrary', label: 'Connected accounts and their profiles', keywords: 'connector account mcp server sign in oauth custom gmail linear github discover library profile' }],
-  },
-  {
-    id: 'connectorTools',
-    group: 'Customize',
-    title: 'Connector tools',
-    icon: Key,
-    component: ConnectorToolsView,
-    settings: [{ id: 'connectorTools', label: 'Tools and their permissions per connector', keywords: 'connector tool permission allow ask deny off disable enable mcp approval read only destructive' }],
+    subpage: ConnectorPage,
+    settings: [
+      {
+        id: 'connectorsLibrary',
+        label: 'Connected accounts, their profiles, and each connector’s tools',
+        keywords: 'connector account mcp server sign in oauth custom gmail linear github discover library profile tool permission allow ask deny off disable enable approval read only destructive',
+      },
+    ],
   },
   {
     id: 'git',

@@ -1,7 +1,7 @@
 import { connectorFor } from './connectors.ts';
 
 /**
- * Per-tool settings for connectors (LIBRARY.md › Connector tools): each tool is Off, Ask or Allow, written into each
+ * Per-tool settings for connectors (LIBRARY.md › Connector names and tools): each tool is Off, Ask or Allow, written into each
  * harness's own per-session config. Off and Deny are one choice: both harnesses take a denied tool out of the model's
  * context (Claude's `disallowedTools`/deny rules, Codex's `disabled_tools`).
  */

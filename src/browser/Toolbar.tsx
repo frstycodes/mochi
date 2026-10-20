@@ -124,7 +124,7 @@ function ConsoleButton({ thread, pageId, page }: { thread: Thread; pageId: strin
           </ul>
         </ScrollArea>
         <div className="flex justify-end p-2">
-          <Button size="sm" onClick={send} className="gap-1.5">
+          <Button size="sm" onClick={send} className="gap-1.5 rounded-full">
             <ProviderMark provider={thread.providers[0]} size={14} />
             Send to {agent}
           </Button>
@@ -311,7 +311,7 @@ export function DriveBar({ thread, pageId, hasTakenOver, handoff }: { thread: Th
       <span className={cn('min-w-0 flex-1 truncate', !!handoff && 'text-foreground')} title={text}>
         {text}
       </span>
-      <Button size="xs" variant={hasTakenOver ? 'default' : 'outline'} onClick={() => updatePage(pageId, { hasTakenOver: !hasTakenOver })}>
+      <Button size="xs" variant={hasTakenOver ? 'default' : 'outline'} className="rounded-full" onClick={() => updatePage(pageId, { hasTakenOver: !hasTakenOver })}>
         {handoff ? 'Done' : hasTakenOver ? `Give back to ${agent}` : 'Take over'}
       </Button>
     </div>
