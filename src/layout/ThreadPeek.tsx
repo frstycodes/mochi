@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Eye, EyeOff, MagicStar } from '@/icons';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -14,8 +14,8 @@ import { isCommandId, pinnedCommand } from '../keymap';
 import { ThreadMessageIcon } from '../chat/ThreadMessage';
 import { useRenameSurface } from '../rename';
 
-const PEEK_OPEN_MS = 500;
-const PEEK_CLOSE_MS = 240;
+const PEEK_OPEN_MS = 700;
+const PEEK_CLOSE_MS = 150;
 const TAIL = 3;
 const THUMB_SCALE = 1 / 3;
 // A part of the row with its own hover card (the PR stack) keeps the peek shut, so the two cards never stack.
@@ -30,10 +30,22 @@ export function ThreadPeek({ thread, pinNumber, isDisabled, side = 'right', chil
   const [isOpen, setOpen] = useState(false);
   // The trigger opens on focus too, and renaming focuses the row's field.
   const isRenaming = useRenameSurface(thread.id) === 'row';
+  // Clicking the row shuts the peek until the pointer leaves, so Radix's pending open timer can't reopen it over the chat.
+  const isDismissedRef = useRef(false);
 
   return (
-    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={!isDisabled && !isRenaming && isOpen} onOpenChange={(open) => setOpen(open && !document.querySelector(NESTED_PREVIEW_ACTIVE))}>
-      <HoverCardTrigger asChild onPointerOver={(e) => e.target instanceof Element && e.target.closest(NESTED_PREVIEW) && setOpen(false)}>
+    <HoverCard openDelay={PEEK_OPEN_MS} closeDelay={PEEK_CLOSE_MS} open={!isDisabled && !isRenaming && isOpen} onOpenChange={(open) => setOpen(open && !isDismissedRef.current && !document.querySelector(NESTED_PREVIEW_ACTIVE))}>
+      <HoverCardTrigger
+        asChild
+        onPointerOver={(e) => e.target instanceof Element && e.target.closest(NESTED_PREVIEW) && setOpen(false)}
+        onPointerDown={() => {
+          isDismissedRef.current = true;
+          setOpen(false);
+        }}
+        onPointerLeave={() => (isDismissedRef.current = false)}
+        // Radix opens on any focus; a click, a window refocus or a menu handing focus back would open it with the pointer elsewhere. Only keyboard focus opens it.
+        onFocus={(e) => !(e.target as Element).matches(':focus-visible') && e.preventDefault()}
+      >
         {children}
       </HoverCardTrigger>
       <HoverCardContent side={side} align="start" sideOffset={side === 'right' ? 12 : 4} className="flex w-80 flex-col gap-2.5 p-3">
