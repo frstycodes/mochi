@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, XCircle, Hierarchy2, MessageText, CheckBadge, WarningAlt } from '@/icons';
+import { ChevronRight, XCircle, Hierarchy2, History, MessageText, CheckBadge, WarningAlt } from '@/icons';
 import { usePromptInputController } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { GitMergeIcon, GitPullRequestIcon, REF_CHIP_CLASS, REF_TONE_CLASS } from '@/icons/github';
@@ -33,16 +33,19 @@ export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isR
   const answers = useMoveAnswers(thread);
   const { textInput } = usePromptInputController();
   const isShown = !!next && showsVerdictCard(thread);
-  const choices = isShown && !isReadOnly ? choicesFor(thread, next, answers) : [];
+  // The agent wrote it before reading your message, so its answers may already be moot.
+  const isSuperseded = !!next?.report?.isSuperseded;
+  const choices = isShown && !isReadOnly && !isSuperseded ? choicesFor(thread, next, answers) : [];
   const card = useMoveShortcut(choices.length > 0 && !textInput.value.trim(), () => choices[0].run());
   if (!isShown) return null;
   const { verdict, prs, tiles, question, report } = next;
   const changes = openTurn(thread.activity);
   return (
     // A goal-less idle turn with no summary, changes or question leaves every section below empty; the children decide that, so CSS hides the shell.
-    <NextMoveCard ref={card} data-next-move={thread.id} className="has-[>[data-slot=card-content]:only-child:empty]:hidden">
+    <NextMoveCard ref={card} data-next-move={thread.id} className={cn('has-[>[data-slot=card-content]:only-child:empty]:hidden', isSuperseded && 'opacity-60')}>
       {verdict.kind !== 'idle' && <NextMoveHeader thread={thread} verdict={verdict} />}
       <NextMoveContent>
+        {isSuperseded && <SupersededNote />}
         <SubThreadLineage thread={thread} />
         {!!report?.summary && <NextMoveSummary>{report.summary}</NextMoveSummary>}
         <Evidence thread={thread} tiles={tiles} prs={prs} />
@@ -55,6 +58,16 @@ export function ReportCard({ thread, isReadOnly, onJump }: { thread: Thread; isR
         )}
       </NextMoveContent>
     </NextMoveCard>
+  );
+}
+
+/** Heads a report the agent wrote before it read a message you sent into its turn. */
+export function SupersededNote() {
+  return (
+    <span className="flex items-center gap-1.5 type-caption text-subtle-foreground">
+      <History aria-hidden className="size-3.5" />
+      Written before your message
+    </span>
   );
 }
 

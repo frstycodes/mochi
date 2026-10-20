@@ -63,6 +63,8 @@ export interface TurnReport {
   next?: string;
   /** The agent's answers to `next`, its pick first: the next-move card's buttons. */
   options?: NextOption[];
+  /** Written before the agent read a message you sent into its turn: the card keeps it, muted, without its answers. */
+  isSuperseded?: true;
 }
 
 /** One button on the next-move card: `reply` goes to the agent as your message, or into the message box when `isDraft`, for you to finish. */
@@ -163,6 +165,8 @@ export interface ActivityEntry {
   mcp?: McpCall;
   /** Your messages: it waited in the queue while the agent worked, and went out when its turn ended (or you sent it). */
   wasQueued?: boolean;
+  /** Your messages: sent into a running turn, and placed where the agent read it. */
+  isSeen?: true;
   /** Your messages: the images sent with it, as `shownImage` gives them. Tool entries: images the call returned, as absolute paths. */
   images?: string[];
   /** Tool entries: the image this call made, shown as its own card in the transcript. */
@@ -417,6 +421,8 @@ export interface Thread {
   queued?: QueuedMessage[];
   /** Why the queue stopped sending; cleared by your next send or Resume. */
   queuePause?: QueuePause;
+  /** Messages you sent into the running turn that the agent hasn't read yet, oldest first; each joins `activity` where it was read. */
+  steering?: PendingSteer[];
   /** The profile's settings chat (Settings › Ask Mochi): one per profile, never listed with the other threads (`isListed`). */
   isSettingsChat?: true;
   /** How many `activity` entries you had seen when you last had it open, on any device; more now is unread. */
@@ -424,6 +430,16 @@ export interface Thread {
 }
 
 /** A message as you wrote it; references, skills and the drift verdict resolve when it's sent, not when it's queued. */
+/** A message sent into a running turn, until the agent reads it: what Take back returns to the composer, and the entry it logs then. */
+export interface PendingSteer {
+  message: QueuedMessage;
+  entry: ActivityEntry;
+  /** The drift guard's why, for the off-goal line logged with the entry. */
+  reason: string;
+  /** The agent reported its turn while this waited: reading it makes that report one written before your message. */
+  hasReportBefore?: true;
+}
+
 export interface QueuedMessage {
   id: string;
   /** The text as typed: what the transcript shows, and what Edit puts back in the composer. */

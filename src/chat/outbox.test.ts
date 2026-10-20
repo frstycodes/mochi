@@ -97,7 +97,8 @@ test('Send now steers the turn in flight with that message instead of interrupti
 
 test('a message sent now steers a working turn; to an idle agent it starts a turn of its own', () => {
   const { s, id } = working();
-  assert.deepEqual(sendCollecting(s, id, message('use pnpm')).calls, [{ method: 'send', threadId: id, text: 'use pnpm', steer: true }]);
+  const steered = message('use pnpm');
+  assert.deepEqual(sendCollecting(s, id, steered).calls, [{ method: 'send', threadId: id, text: 'use pnpm', steer: true, steerId: steered.id }], 'named, so main can report when the agent reads it');
   const idle = event(s, { threadId: id, type: 'turn-end', status: 'done' });
   assert.deepEqual(sendCollecting(idle, id, message('next')).calls, [{ method: 'send', threadId: id, text: 'next' }]);
 });

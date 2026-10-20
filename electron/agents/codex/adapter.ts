@@ -23,6 +23,17 @@ interface Live {
   /** Turns this thread started on this Codex thread, oldest first, for `rewindPoint`. */
   turns: { id: string; text: string }[];
   options: AgentRunOptions;
+  /** Steered messages Mochi holds until the turn's next step ends: `turn/steer` can't be taken back, so the X works until then. */
+  held: Held[];
+  /** Ids of steered messages handed to Codex, until its `userMessage` item echoes one as `clientId`. */
+  steered: Set<string>;
+}
+
+interface Held {
+  id: string;
+  text: string;
+  images?: AgentImage[];
+  skills?: string[];
 }
 
 /** A Codex agent spawned by a thread's agent: its own Codex thread, reported as that thread's subagent. */
@@ -144,25 +155,51 @@ export class CodexAdapter {
 
   /**
    * `speed`: '' standard, a service tier id, unset keeps the thread's; it holds for this turn and the ones after. `steer`: the turn in
-   * flight takes the message (`turn/steer`); when it already ended, the message starts a turn of its own.
+   * flight takes the message (`turn/steer`); when it already ended, the message starts a turn of its own. With `steerId` it waits
+   * in `held` for the turn's next step, so `unsteer` can take it back until then.
    */
-  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean) {
+  async send(threadId: string, text: string, images?: AgentImage[], skills?: string[], speed?: string, steer?: boolean, steerId?: string) {
     const live = this.threads.get(threadId);
     if (!live) throw new Error('No live Codex session for this thread; resume it first');
     if (speed !== undefined) live.options = { ...live.options, speed: speed || undefined };
-    if (steer && (await this.steer(threadId, text, images, skills))) return;
-    await this.report(threadId, (aborted) => this.turn(threadId, text, images, skills, aborted));
+    if (steer && steerId && live.turnId) return void live.held.push({ id: steerId, text, images, skills });
+    await this.deliver(threadId, { id: steerId, text, images, skills }, !!steer);
+  }
+
+  /** False once the held message went to Codex, which has no way to take a steer back. */
+  async unsteer(threadId: string, steerId: string) {
+    const live = this.threads.get(threadId);
+    if (!live) return true;
+    const i = live.held.findIndex((m) => m.id === steerId);
+    if (i >= 0) live.held.splice(i, 1);
+    return i >= 0;
+  }
+
+  /** Into the turn in flight when `steer` and there is one, else as a turn of its own. */
+  private async deliver(threadId: string, message: Omit<Held, 'id'> & { id?: string }, steer: boolean) {
+    const { id, text, images, skills } = message;
+    if (steer && (await this.steer(threadId, text, images, skills, id))) return;
+    await this.report(threadId, (aborted) => this.turn(threadId, text, images, skills, aborted, id));
+  }
+
+  /** Hands the held messages to Codex at a step boundary: into the running turn, or as the next turn once it ended. */
+  private async release(threadId: string) {
+    const held = this.threads.get(threadId)?.held.splice(0) ?? [];
+    for (const m of held) await this.deliver(threadId, m, true);
   }
 
   /** False when there's no turn to steer, or it ended before the steer reached it (the turn id no longer matches). */
-  private async steer(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = []) {
+  private async steer(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = [], clientId?: string) {
     const live = this.threads.get(threadId)!;
     const rpc = live.server.rpc;
     if (!live.turnId || !rpc || live.gen !== live.server.gen) return false;
+    // Before the request: Codex can echo the message ahead of its reply.
+    if (clientId) live.steered.add(clientId);
     try {
-      await rpc.request('turn/steer', { threadId: live.codexId, input: (await this.input(rpc, live, text, images, skills)).input, expectedTurnId: live.turnId });
+      await rpc.request('turn/steer', { threadId: live.codexId, input: (await this.input(rpc, live, text, images, skills)).input, expectedTurnId: live.turnId, clientUserMessageId: clientId ?? null });
       return true;
     } catch {
+      if (clientId) live.steered.delete(clientId);
       return false;
     }
   }
@@ -369,6 +406,7 @@ export class CodexAdapter {
     // A reopen after a server crash keeps the turns it knew; a fork starts a new Codex thread whose turns it doesn't.
     const prior = this.threads.get(threadId);
     const turns = prior && prior.codexId === options.resume ? prior.turns : [];
+    const held = prior?.held ?? [];
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId, options) };
     // A settings chat gets Mochi's settings tools and nothing else: none of the profile's servers, nothing that writes or asks.
@@ -386,7 +424,7 @@ export class CodexAdapter {
     if (typeof codexId !== 'string') throw new Error(`codex ${options.resume ? 'thread/resume' : 'thread/start'} returned no thread id`);
     if (aborted?.aborted) return;
     const state = threadState(threadId, options.cwd, { isResumed: !!options.resume, account: server.account.id, limits: server.limits, saveImage });
-    const live: Live = { codexId, server, state, gen: server.gen, turns, options: { ...options, resume: codexId, forkAt: undefined } };
+    const live: Live = { codexId, server, state, gen: server.gen, turns, options: { ...options, resume: codexId, forkAt: undefined }, held, steered: new Set() };
     this.threads.set(threadId, live);
     server.byCodex.set(codexId, live);
     this.emit({ threadId, type: 'session', provider: 'codex', sessionId: codexId });
@@ -404,7 +442,7 @@ export class CodexAdapter {
     if (this.threads.get(threadId)?.codexId === codexId) this.emit({ threadId, type: 'info', info: infoFromLists(mcp, skills, plugins) });
   }
 
-  private async turn(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = [], aborted: AbortSignal) {
+  private async turn(threadId: string, text: string, images: AgentImage[] = [], skills: string[] = [], aborted: AbortSignal, clientId?: string) {
     let live = this.threads.get(threadId)!;
     const rpc = await until(live.server.client(), aborted);
     if (live.gen !== live.server.gen) {
@@ -412,7 +450,8 @@ export class CodexAdapter {
       live = this.threads.get(threadId)!;
     }
     const { input, attached } = await until(this.input(rpc, live, text, images, skills), aborted);
-    const starting = rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null });
+    if (clientId) live.steered.add(clientId);
+    const starting = rpc.request('turn/start', { threadId: live.codexId, input, effort: live.options.effort ?? null, serviceTier: live.options.speed ?? null, outputSchema: this.schemas.get(threadId) ?? null, clientUserMessageId: clientId ?? null });
     aborted.addEventListener('abort', () => void stopLateTurn(rpc, live.codexId, starting), { once: true });
     const result = await until(starting, aborted);
     const turnId = turnIdOf(result);
@@ -490,12 +529,25 @@ export class CodexAdapter {
     if (!live) return;
     if (method === 'turn/started' && typeof turnId === 'string') live.turnId = turnId;
     if (method === 'turn/completed') live.turnId = undefined;
-    for (const event of mapNotification(method, params, live.state)) {
+    const item = (params as { item?: { type?: unknown; clientId?: unknown } }).item;
+    if (method === 'item/started' && item?.type === 'userMessage' && typeof item.clientId === 'string' && live.steered.delete(item.clientId)) this.emit({ threadId: live.state.threadId, type: 'steer-read', id: item.clientId });
+    const events = mapNotification(method, params, live.state);
+    if (method === 'turn/completed') this.turnEnded(live);
+    else if (live.held.length && events.some((e) => e.type === 'tool' && e.phase === 'end')) void this.release(live.state.threadId);
+    for (const event of events) {
       if (event.type === 'resolved' && !this.requests.delete(event.requestId)) continue;
       // Verified on 0.155.1: a spawned agent's notifications arrive on this connection under its own thread id.
       if (event.type === 'subagent' && event.phase === 'start' && !server.children.has(event.id)) server.children.set(event.id, { parent: live, state: threadState(live.state.threadId, live.state.cwd, { account: server.account.id, limits: server.limits }) });
       this.emit(event);
     }
+  }
+
+  /** A turn's end is a step boundary too: what it held starts the next turn, after this one's `turn-end`. */
+  private turnEnded(live: Live) {
+    // GAP: not run against a live steer whether Codex echoes `clientId` on its userMessage item; one it didn't is read by the turn's end.
+    for (const id of live.steered) this.emit({ threadId: live.state.threadId, type: 'steer-read', id });
+    live.steered.clear();
+    if (live.held.length) setTimeout(() => void this.release(live.state.threadId));
   }
 
   private request(server: CodexServer, id: RpcId, method: string, params: unknown) {

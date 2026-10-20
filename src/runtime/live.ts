@@ -17,7 +17,7 @@ export const CONTINUE_PROMPT = 'Continue where you left off.';
 
 export type AgentCall =
   | { method: 'start'; threadId: string; options: AgentStartOptions }
-  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string; steer?: boolean }
+  | { method: 'send'; threadId: string; text: string; images?: AgentImage[]; skills?: string[]; speed?: string; steer?: boolean; steerId?: string }
   | { method: 'compact'; threadId: string; focus: string }
   | { method: 'interrupt' | 'stop' | 'settle' | 'keepTitle'; threadId: string }
   | { method: 'stopTask'; threadId: string; taskId: string };
@@ -49,7 +49,7 @@ export function agentCalls(state: State, action: Action, next: () => State): Age
       // Every message carries the thread's speed, so a change in the composer applies from the next one.
       const speed = thread.controls ? { speed: controlsOf(thread).speed } : {};
       if (thread.live.isDetached) return reattach(thread, text, undefined, images.images, skills.skills);
-      const steer = action.steers && thread.live.isWorking ? { steer: true } : {};
+      const steer = action.steers && thread.live.isWorking ? { steer: true, ...(action.typed && { steerId: action.typed.id }) } : {};
       return [{ method: 'send', threadId: thread.id, text, ...images, ...skills, ...speed, ...steer }];
     }
     case 'compact':

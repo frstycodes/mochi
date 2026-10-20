@@ -563,3 +563,46 @@ test("image generation runs on a model the account lists: the cheap one, else it
   assert.equal(imageModel([model('gpt-6-nova')]), 'gpt-6-nova');
   assert.equal(imageModel([]), null);
 });
+
+// A turn that runs one command 150ms in, then waits; a steer is echoed as a userMessage item carrying its clientId.
+const STEER_CODEX = `#!/usr/bin/env node
+const fs = require('node:fs');
+let buf = '', n = 0;
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n');
+process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+  const threadId = m.params?.threadId;
+  if (m.method === 'account/read') send({ id: m.id, result: { account: { type: 'apiKey' }, requiresOpenaiAuth: true } });
+  else if (m.method === 'thread/start') send({ id: m.id, result: { thread: { id: 'c' + ++n } } });
+  else if (m.method === 'turn/start') {
+    send({ id: m.id, result: { turn: { id: 'u1' } } });
+    const item = { type: 'commandExecution', id: 'x1', command: 'pnpm test', commandActions: [{ command: 'pnpm test' }] };
+    setTimeout(() => { send({ method: 'item/started', params: { threadId, item } }); send({ method: 'item/completed', params: { threadId, item: { ...item, exitCode: 0 } } }); }, 150);
+  } else if (m.method === 'turn/steer') {
+    fs.appendFileSync(process.env.STEER_LOG, m.params.input.at(-1).text + ' ' + m.params.clientUserMessageId + '\\n');
+    send({ id: m.id, result: { turnId: 'u1' } });
+    send({ method: 'item/started', params: { threadId, item: { type: 'userMessage', id: 'um', clientId: m.params.clientUserMessageId, content: m.params.input } } });
+  } else if (m.id !== undefined) send({ id: m.id, result: {} });
+} });
+`;
+
+test('a steer waits in Mochi until the turn finishes a step, can be taken back until then, and is read when Codex echoes it', async () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'codex-fake-'));
+  const fake = fakeCodex(home, STEER_CODEX);
+  const log = path.join(home, 'steers.log');
+  const events: AgentEvent[] = [];
+  const codex = new CodexAdapter((e) => events.push(e), async () => ({ id: 'default' }), async () => ({ path: fake, env: { ...process.env, STEER_LOG: log } }));
+  try {
+    await codex.start('t', { provider: 'codex', spaceId: 'home', cwd: home, prompt: 'run the tests' });
+    await codex.send('t', 'create a PR', undefined, undefined, undefined, true, 's1');
+    await codex.send('t', 'never mind', undefined, undefined, undefined, true, 's2');
+    assert.equal(existsSync(log), false, 'nothing reaches Codex before the step ends');
+    assert.equal(await codex.unsteer('t', 's2'), true);
+    await new Promise((r) => setTimeout(r, 400));
+    assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['create a PR s1'], 'the taken-back message never went');
+    const order = events.flatMap((e) => (e.type === 'tool' && e.phase === 'end' ? ['tool end'] : e.type === 'steer-read' ? [`read ${e.id}`] : []));
+    assert.deepEqual(order, ['tool end', 'read s1']);
+    assert.equal(await codex.unsteer('t', 's1'), false, 'handed over, it can no longer be taken back');
+  } finally {
+    codex.dispose();
+  }
+});

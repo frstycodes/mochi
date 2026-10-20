@@ -168,7 +168,9 @@ function asked(thread: Thread) {
     return { chip: blocked ? 'Approval' : 'Question', text: blocked ? `Paused before "${blocked.title}"` : 'Waiting on your answer' };
   }
   if (thread.proposal?.state === 'waiting') return { chip: 'Goal to accept', text: thread.proposal.goal };
-  const question = thread.idle?.audit?.question ?? turnReport(thread)?.question;
+  const report = turnReport(thread);
+  // A question written before the agent read your message isn't asked: your message may have answered it.
+  const question = thread.idle?.audit?.question ?? (report?.isSuperseded ? undefined : report?.question);
   return question ? { chip: 'Question', text: question } : null;
 }
 

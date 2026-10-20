@@ -3,7 +3,7 @@ import { CopyStack, Pushpin, RotateLeft, Stars, type IconProps } from '@/icons';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from '@/toast/store';
 import { cn } from '@/lib/utils';
-import type { Thread } from '../model';
+import { authorName, type Thread } from '../model';
 import { timeAgo } from '../progress';
 import { useHarness } from '../store';
 import { rewindBlockedReason, type RewindMode } from '../rewind/checkpoints';
@@ -13,6 +13,7 @@ import { useRewindActions } from '../rewind/useRewindActions';
 import { usePrefs } from '../settings/prefs';
 import { ForkIcon, TooltipIconButton } from '../ui';
 import { isMessagePinned, togglePin, useThreadPins } from './pins';
+import { ReadMark } from './SteerBubble';
 import { useIsSimplifying, useSimplify } from '../simplify/useSimplify';
 
 export interface MessageAction {
@@ -77,6 +78,7 @@ export function MessageActions({ thread, index, align }: { thread: Thread; index
   return (
     <div role="toolbar" aria-label="Message actions" className={cn('flex items-center gap-0.5', align === 'end' && 'justify-end')}>
       <time className="mr-1 type-caption text-subtle-foreground tabular opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">{timeAgo(now - (thread.activity[index]?.at ?? now))}</time>
+      {!!thread.activity[index]?.isSeen && <ReadMark agent={authorName(thread.providers[0])} isRead />}
       {actions.map((a) => {
         if (a.id.startsWith('rewind-')) return a === rewinds[0] && <RewindModeMenu key="rewind" actions={rewinds} />;
         return (

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { goalNudge } from './goalNudge.ts';
 import { saveImage } from '../images.ts';
 import { EventEmitter, once } from 'node:events';
-import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type CanUseTool, type EffortLevel, type HookCallbackMatcher, type HookEvent, type McpServerConfig, type PermissionMode, type PermissionResult, type Query, type SDKUserMessage, type SDKUserMessageReplay } from '@anthropic-ai/claude-agent-sdk';
 import { app } from 'electron';
 import type { AgentDecision, AgentImage, AgentRunOptions } from '../../../src/host/types/agent.ts';
 import type { McpWidgetResource } from '../../../src/model.ts';
@@ -33,7 +33,9 @@ import { FORK_MISSING_NOTICE, FORK_REFUSED_NOTICE, forkPoint, MISSING_FORK_POINT
 interface Session {
   threadId: string;
   options: AgentRunOptions;
-  inbox: { text: string; images?: AgentImage[]; priority?: 'next' }[];
+  inbox: { text: string; images?: AgentImage[]; priority?: 'next'; steerId?: string }[];
+  /** Messages sent into a running turn, by the renderer's id, until Claude Code echoes that it took them (`readSteer`). */
+  steered: Map<string, { uuid: string; text: string; after: string | null; hasSeenResult?: boolean }>;
   /** Every message handed to Claude Code, with the uuid `rewindFiles` takes and the chain entry before it (`rewindPoint`). */
   sent: { uuid: string; text: string; images?: AgentImage[]; after: string | null }[];
   /** The newest entry of the main conversation chain; undefined while a resumed session hasn't shown one yet. */
@@ -70,7 +72,7 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
   if (options.speed && options.speed !== 'fast') throw new TypeError('speed must be fast');
   const account = await accountFor(options.spaceId, 'claude');
   stopClaude(threadId);
-  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd, saveImage, options.effort), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
+  const session: Session = { threadId, options, account, inbox: [{ text: options.prompt, images: options.images }], sent: [], steered: new Map(), wake: new EventEmitter(), mapper: createMapper(threadId, options.cwd, saveImage, options.effort), sessionId: options.resume, lastUuid: options.resume ? undefined : null, isBusy: true };
   sessions.set(threadId, session);
   void warmClaude(options.spaceId).catch(() => {});
   await schedule(session);
@@ -78,17 +80,39 @@ export async function startClaude(threadId: string, options: AgentRunOptions) {
 
 /** `speed`: '' standard, 'fast' fast mode, unset keeps it; a live process switches before reading the message. */
 /** `steer`: the turn in flight folds the message in at its next step instead of answering it after (the queue's Send now). */
-export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string, steer?: boolean) {
+/** `steerId`: reported back as `steer-read` once Claude Code takes the message, and what `unsteerClaude` takes back before then. */
+export async function sendClaude(threadId: string, text: string, images?: AgentImage[], speed?: string, steer?: boolean, steerId?: string) {
   const session = sessions.get(threadId);
   if (!session) throw new Error('No Claude session for this thread in this run of Harness; start it again with resume');
   if (speed !== undefined && speed !== (session.options.speed ?? '')) {
     session.options = { ...session.options, speed: speed || undefined };
     await session.query?.applyFlagSettings({ fastMode: !!speed });
   }
-  session.inbox.push({ text, images, ...(steer && { priority: 'next' as const }) });
+  session.inbox.push({ text, images, ...(steer && { priority: 'next' as const }), ...(steerId && { steerId }) });
   session.isBusy = true;
   if (session.query) session.wake.emit('push');
   else if (!waiting.includes(session)) await schedule(session);
+}
+
+/**
+ * Takes back a message sent into the running turn before Claude Code reads it. False once it can't: Claude Code already took it
+ * (its `steer-read` follows), or it is being folded in right now.
+ */
+export async function unsteerClaude(threadId: string, steerId: string) {
+  const session = sessions.get(threadId);
+  if (!session) return true;
+  const queued = session.inbox.findIndex((m) => m.steerId === steerId);
+  if (queued >= 0) return (session.inbox.splice(queued, 1), true);
+  const steer = session.steered.get(steerId);
+  if (!steer || !session.query) return false;
+  // `cancelAsyncMessage` is in sdk.mjs 0.3.296 (control request `cancel_async_message`) but missing from the typed `Query`; a run on
+  // 0.3.296 confirmed a cancelled message never reaches the model.
+  const cancellable = session.query as Query & { cancelAsyncMessage(uuid: string): Promise<boolean> };
+  if (!(await cancellable.cancelAsyncMessage(steer.uuid).catch(() => false))) return false;
+  session.steered.delete(steerId);
+  session.sent = session.sent.filter((m) => m.uuid !== steer.uuid);
+  if (session.lastUuid === steer.uuid) session.lastUuid = steer.after;
+  return true;
 }
 
 /** `/compact` is Claude Code's own command, taken as a message; the PreCompact hook adds Mochi's instructions to `focus`. */
@@ -219,7 +243,8 @@ async function launch(session: Session) {
         // The profile's turned-off native items join the flag layer here; nothing is written to the account's own files.
         settings: { ...native, skillOverrides: { ...CLAUDE_SKILLS_OFF, ...native.skillOverrides }, permissions: connectorRules, ...(options.speed && { fastMode: true }) },
         // Claude in Chrome would otherwise wire itself when CLAUDE_CODE_ENABLE_CFC=1 is in the user's environment.
-        extraArgs: { 'no-chrome': null },
+        // `replay-user-messages` echoes each message as Claude Code takes it, which marks a steered message read (`readSteer`).
+        extraArgs: { 'no-chrome': null, 'replay-user-messages': null },
         cwd: options.cwd,
         model: options.model ?? defaultModel('claude') ?? DEFAULT_MODEL,
         ...(options.effort && { effort: options.effort as EffortLevel }),
@@ -250,6 +275,10 @@ async function launch(session: Session) {
         isForkRefused = true;
         break;
       }
+      if (message.type === 'user' && 'isReplay' in message && message.isReplay) {
+        readSteer(session, message);
+        continue;
+      }
       if ((message.type === 'assistant' || message.type === 'user') && !message.parent_tool_use_id && message.uuid) session.lastUuid = message.uuid;
       if (message.type === 'system' && message.subtype === 'init') {
         session.sessionId = message.session_id;
@@ -262,6 +291,7 @@ async function launch(session: Session) {
       if (session.mapper.needsWidgets(message)) session.mapper.learnWidgets(await session.query.mcpServerStatus().catch(() => []));
       session.mapper.map(message).forEach(emit);
       if (message.type !== 'result') continue;
+      unreadAfterTwoTurns(session);
       void session.query.mcpServerStatus().then((list) => emit({ threadId, type: 'info', info: { mcpServers: mcpServersFromStatus(list) } }), () => {});
       session.isBusy = session.inbox.length > 0;
       if (!session.isBusy && waiting.length) release(session);
@@ -324,6 +354,7 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
     const next = session.inbox.shift();
     if (next) {
       const uuid = randomUUID();
+      if (next.steerId) session.steered.set(next.steerId, { uuid, text: next.text, after: session.lastUuid ?? null });
       session.sent.push({ uuid, text: next.text, images: next.images, after: session.lastUuid ?? null });
       session.lastUuid = uuid;
       session.mapper.sent(next.text).forEach(emit);
@@ -336,6 +367,29 @@ async function* inbox(session: Session, signal: AbortSignal): AsyncGenerator<SDK
     } catch {
       return;
     }
+  }
+}
+
+/**
+ * Claude Code echoes each user message as it takes it (`--replay-user-messages`), a mid-turn fold right after the tool results it
+ * followed, under the uuid Mochi sent (run on 0.3.296). That echo is where the renderer places a steered message, marked read.
+ */
+function readSteer(session: Session, message: SDKUserMessageReplay) {
+  const hit = [...session.steered].find(([, s]) => s.uuid === message.uuid);
+  if (!hit) return;
+  session.steered.delete(hit[0]);
+  emit({ threadId: session.threadId, type: 'steer-read', id: hit[0] });
+}
+
+/** A steer still unread after two turn ends was taken without an echo Mochi saw: it counts as read, so it stops waiting. */
+function unreadAfterTwoTurns(session: Session) {
+  for (const [id, steer] of session.steered) {
+    if (!steer.hasSeenResult) {
+      steer.hasSeenResult = true;
+      continue;
+    }
+    session.steered.delete(id);
+    emit({ threadId: session.threadId, type: 'steer-read', id });
   }
 }
 

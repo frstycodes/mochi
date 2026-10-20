@@ -1,7 +1,7 @@
 import type { AgentImage, SeqAgentEvent } from '../host/types/agent.ts';
 import type { CheckRun, Head } from '../host/types/git.ts';
 import type { DraftedCriterion } from '../utility/prompts.ts';
-import { NOW0, seedThreads, type ActivityEntry, type Author, type Handoff, type IdleCheck, type LineSlot, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
+import { NOW0, seedThreads, type ActivityEntry, type Author, type Handoff, type IdleCheck, type LineSlot, type PendingSteer, type Provider, type PullRequest, type QueuedMessage, type SentImage, type Similar, type Source, type Step, type SubThreadLink, type Thread, type ThreadRef, type TurnReport } from '../model.ts';
 import { markSent } from '../chat/threadMessages.ts';
 import { orderQueue, pauseQueue } from '../chat/outbox.ts';
 import { compactionEntry } from '../chat/compact.ts';
@@ -76,10 +76,12 @@ export type ThreadsAction =
    * `prompt` and `images` are what the agent gets when they differ from the transcript's `text` (composer references). No `drift` while the classifier is still out; `drift-verdict` tags the message once it answers.
    * `queuedId`: the queued message this sends, which leaves the queue. `steers`: joins the turn in flight instead of waiting for it to end (every `sendMessage`).
    */
-  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** The images you attached, as the transcript shows them. */ shownImages?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef; /** An Auto-fix event; `prompt` is the event as the agent gets it. */ autofix?: ActivityEntry['autofix'] }
+  | { type: 'send'; threadId: string; text: string; drift?: DriftKind; reason: string; prompt?: string; images?: AgentImage[]; /** The images you attached, as the transcript shows them. */ shownImages?: string[]; skills?: string[]; queuedId?: string; steers?: boolean; /** The message as you typed it: sent into a turn in flight, it waits in `steering` until the agent reads it. */ typed?: QueuedMessage; /** Sent by another thread's agent (`send_to_thread`); `prompt` then names it for the agent. */ from?: ThreadRef; /** An Auto-fix event; `prompt` is the event as the agent gets it. */ autofix?: ActivityEntry['autofix'] }
   /** `/compact`: the harness compacts the live session now. `queuedId`: it waited in the queue as typed. */
   | { type: 'compact'; threadId: string; focus: string; queuedId?: string }
   | { type: 'queued-add'; threadId: string; message: QueuedMessage }
+  /** A message sent into the running turn, taken back before the agent read it; the composer has it again. */
+  | { type: 'steer-take-back'; threadId: string; id: string }
   /** Edit and remove both take a message out; Edit puts its text back in the composer itself. */
   | { type: 'queued-remove'; threadId: string; id: string }
   | { type: 'queued-order'; threadId: string; ids: string[] }
@@ -233,6 +235,8 @@ function reduce(state: State, action: Action): State {
       };
     case 'queued-add':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, queued: [...(t.queued ?? []), action.message] })) };
+    case 'steer-take-back':
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => withSteering(t, (t.steering ?? []).filter((s) => s.message.id !== action.id))) };
     case 'queued-remove':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => withQueue(t, (t.queued ?? []).filter((m) => m.id !== action.id))) };
     case 'queued-order':
@@ -287,7 +291,7 @@ function reduce(state: State, action: Action): State {
     case 'idle-update':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => (t.idle && (action.turn === undefined || t.idle.turn === action.turn) ? { ...t, idle: { ...t.idle, ...action.patch } } : t)) };
     case 'report':
-      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now, turn: (t.idle?.turn ?? 0) + 1 } })) };
+      return { ...state, threads: mapThread(state.threads, action.threadId, (t) => ({ ...t, report: { ...action.report, at: state.now, turn: (t.idle?.turn ?? 0) + 1 }, steering: t.steering?.map((s) => ({ ...s, hasReportBefore: true as const })) })) };
     case 'simplified':
       return { ...state, threads: mapThread(state.threads, action.threadId, (t) => mapEntry(t, action.index, (e) => ({ ...e, simplified: { text: action.text, rulesKey: action.rulesKey, isShown: true } }))) };
     case 'simplify-toggle':
@@ -371,6 +375,24 @@ function reduce(state: State, action: Action): State {
 }
 
 /** An emptied queue drops its pause with it. */
+/**
+ * The agent read a message you sent into its turn: it joins the transcript here, after the agent's latest step. Read after the turn
+ * ended, it started the next one; a report written while it waited answered a turn your message changed.
+ */
+export function readSteer(t: Thread, id: string, now: number): Thread {
+  const pending = t.steering?.find((s) => s.message.id === id);
+  if (!pending) return t;
+  const rest = withSteering(t, t.steering!.filter((s) => s !== pending));
+  const report = pending.hasReportBefore && rest.report ? { ...rest.report, isSuperseded: true as const } : rest.report;
+  const live = rest.live && { ...rest.live, isWorking: true };
+  const said = log({ ...rest, report, live, status: rest.live ? 'running' : rest.status }, pending.entry);
+  return pending.entry.drift ? applyDrift(said, pending.entry.drift, pending.reason, now) : said;
+}
+
+function withSteering(thread: Thread, steering: PendingSteer[]): Thread {
+  return { ...thread, steering: steering.length ? steering : undefined };
+}
+
 function withQueue(thread: Thread, queued: QueuedMessage[]): Thread {
   return { ...thread, queued, ...(queued.length === 0 && { queuePause: undefined }) };
 }
@@ -521,7 +543,11 @@ export function send(state: State, action: Extract<Action, { type: 'send' }>): S
       // Your message ends a Codex limit pause (and its Resume at reset); a turn Claude Code holds keeps waiting.
       const live = t.live && { ...t.live, isWorking: true, limit: t.live.limit?.isTurnHeld ? t.live.limit : undefined, isDetached: undefined, notes: undefined, restart: undefined };
       const sent = withQueue({ ...t, queuePause: undefined }, (t.queued ?? []).filter((m) => m.id !== action.queuedId));
-      const said = log(live ? { ...sent, status: 'running', live } : sent, { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }), ...(action.autofix && { autofix: action.autofix }) });
+      const entry: ActivityEntry = { at: now, who: 'you', kind: 'message', text: action.text, drift: action.drift, ...(action.queuedId && { wasQueued: true }), ...(action.shownImages?.length && { images: action.shownImages }), ...(from && { from }), ...(action.autofix && { autofix: action.autofix }) };
+      const going = live ? { ...sent, status: 'running' as const, live } : sent;
+      // Into a turn in flight, it joins the transcript where the agent reads it (`readSteer`), not where you sent it.
+      if (action.typed && t.live?.isWorking) return { ...going, steering: [...(t.steering ?? []), { message: action.typed, entry: { ...entry, isSeen: true }, reason: action.reason }] };
+      const said = log(going, entry);
       return action.drift ? applyDrift(said, action.drift, action.reason, now) : said;
     }),
   };
@@ -614,6 +640,8 @@ function keepHere(t: Thread, now: number): Thread {
 /** A late verdict for a message sent while the classifier was out: the newest untagged message with that text. */
 function tagSent(t: Thread, action: Extract<Action, { type: 'drift-verdict' }>, now: number): Thread {
   const i = t.activity.findLastIndex((e) => e.who === 'you' && e.kind === 'message' && !e.drift && e.text === action.text);
+  const waiting = t.steering?.find((s) => !s.entry.drift && s.entry.text === action.text);
+  if (i < 0 && waiting) return { ...t, steering: t.steering!.map((s) => (s === waiting ? { ...s, entry: { ...s.entry, drift: action.drift }, reason: action.reason } : s)) };
   if (i < 0) return t;
   const activity = t.activity.map((e, j) => (j === i ? { ...e, drift: action.drift } : e));
   return applyDrift({ ...t, activity }, action.drift, action.reason, now);

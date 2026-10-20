@@ -25,7 +25,8 @@ export function shouldQueue(thread: Thread, whileWorking: WhileWorking, isHeld: 
 export function dueQueued(state: Pick<State, 'threads' | 'queue'>): { thread: Thread; message: QueuedMessage }[] {
   return state.threads.flatMap((thread) => {
     const message = thread.queued?.[0];
-    if (!message || !thread.live || thread.queuePause || thread.live.isWorking || thread.live.starting || thread.status === 'settled') return [];
+    // A steer the agent hasn't read yet goes first: it will start the next turn if this one ended before reading it.
+    if (!message || !thread.live || thread.queuePause || thread.live.isWorking || thread.live.starting || thread.steering || thread.status === 'settled') return [];
     if (state.queue.some((q) => q.threadId === thread.id && (q.kind === 'approval' || q.kind === 'question'))) return [];
     return [{ thread, message }];
   });
@@ -69,7 +70,7 @@ export function sendMessage(dispatch: Dispatch<Action>, state: Pick<State, 'thre
   setDriftPending(thread.id, null);
   const verdict = judgeDrift(text, thread);
   const isSettled = !(verdict instanceof Promise);
-  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, images: [...references.images, ...images.map(agentImage)], shownImages: images.map(shownImage), steers: true, ...extra });
+  dispatch({ type: 'send', threadId: thread.id, text, drift: isSettled && verdict.kind !== 'off-goal' ? verdict.kind : undefined, reason: isSettled ? verdict.reason : 'Checking against the goal', ...references, images: [...references.images, ...images.map(agentImage)], shownImages: images.map(shownImage), steers: true, typed: message, ...extra });
   void Promise.resolve(verdict).then((v) => {
     if (v.kind === 'off-goal') return setDriftPending(thread.id, { text, verdict: v });
     if (!isSettled) dispatch({ type: 'drift-verdict', threadId: thread.id, text, drift: v.kind, reason: v.reason });
