@@ -89,7 +89,7 @@ export const TOOL_TABLE = {
   open_pr: {
     tier: 'change',
     description:
-      'Open the pull request for your branch: Mochi pushes it and writes the description from the goal, its criteria and your report, so give only a title and one line of why. Commit first.',
+      'Open the pull request for your branch: Mochi pushes it and writes the description from your report, so give only a title and one line of why. Commit first.',
     shape: {
       title: z.string().min(1).max(72).describe('Conventional Commits style, like "fix(auth): keep the session cookie"'),
       why: z.string().min(1).max(300).describe('One sentence: why this change'),
@@ -119,13 +119,13 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'At the end of a turn where you changed anything for a goal, report once so the user can skip reading your reply: what changed, decisions you made, what is left, at most one question that needs them, and the next move as a question with the answers you offer as buttons. Short lines, no prose.',
+      'At the end of a turn where you changed anything, report once so the user can skip reading your reply: what changed, decisions you made, what is left, at most one question that needs them, and the next move as a question with the answers you offer as buttons. Short lines, no prose.',
     shape: {
       summary: z.string().max(360).optional().describe('What changed, in the user\'s terms, 1 to 3 sentences'),
       decisions: z.array(z.string().max(160)).max(5).describe('Choices you made that the user should know about'),
       left: z.array(z.string().max(160)).max(5).describe('What is still not done'),
       question: z.string().max(240).optional().describe('The one thing you need from the user, if anything'),
-      next: z.string().max(160).optional().describe('The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi, like accepting the goal: that has its own card'),
+      next: z.string().max(160).optional().describe('The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi\'s own UI'),
       options: z
         .array(
           z.object({
@@ -435,8 +435,8 @@ export type ToolName = keyof typeof TOOL_TABLE;
 
 export const TOOL_NAMES = Object.keys(TOOL_TABLE) as ToolName[];
 
-/** Only served while goals are on (Settings › Goals and checks › Goals); off, agents never see them. */
-export const GOAL_TOOLS = ['get_goal', 'propose_goal', 'claim_criterion', 'report_turn', 'get_report', 'settle_goal'] as const satisfies ToolName[];
+/** Only served while goals are on, and goals are retired: agents never see them. */
+export const GOAL_TOOLS = ['get_goal', 'propose_goal', 'claim_criterion', 'get_report', 'settle_goal'] as const satisfies ToolName[];
 
 export const isGoalTool = (name: string) => (GOAL_TOOLS as readonly string[]).includes(name);
 

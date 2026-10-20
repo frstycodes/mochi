@@ -5,7 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { levelPolicy, POLICIES_BY_TIER, toolPolicy, type ToolPolicy } from '../../runtime/toolPolicy';
-import { tierOf, TOOL_NAMES, type Tier, type ToolName } from '../../runtime/toolTable';
+import { isGoalTool, tierOf, TOOL_NAMES, type Tier, type ToolName } from '../../runtime/toolTable';
 import { useSettingsRoute } from '../open';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsSelect } from '../parts';
 import { AGENT_CONTROLS, getPrefs, setPrefs, usePrefs, type AgentControl } from '../prefs';
@@ -77,7 +77,7 @@ function groupTools(query: string) {
     return `${label} ${name} ${description} ${group}`.toLowerCase().includes(q);
   };
   return TOOL_GROUPS.flatMap((group) => {
-    const tools = TOOL_NAMES.filter((name) => TOOL_GUIDE[name].group === group && (!q || matches(name)));
+    const tools = TOOL_NAMES.filter((name) => TOOL_GUIDE[name].group === group && !isGoalTool(name) && (!q || matches(name)));
     return tools.length ? [{ group, tools }] : [];
   });
 }

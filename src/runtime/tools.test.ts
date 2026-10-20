@@ -23,6 +23,9 @@ import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
 import { runDevTool } from './devTools.ts';
 
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
+
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidechatReducer];
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
 
@@ -52,7 +55,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const opened: string[] = [];
   const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
-  let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
+  let prefs: Prefs = { ...DEFAULT_PREFS, goals: true, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
   const settings = fakeSettings();
   const connects: { spaceId: string; account: unknown; options: unknown }[] = [];
@@ -887,7 +890,7 @@ test('get_settings reads every app setting and your profile’s, with values, al
   assert.equal(byKey(r, 'alert.needs-you').value, 'true');
   assert.equal(byKey(r, 'quietFrom').value, '22');
   assert.deepEqual([byKey(r, 'permissions').section, byKey(r, 'permissions').group], ['general', 'New threads'], 'the page and its titled section');
-  assert.deepEqual([byKey(r, 'idleAlert.gaps').section, byKey(r, 'idleAlert.gaps').group], ['notifications', 'Idle threads']);
+  assert.deepEqual([byKey(r, 'idleAlert.needs-you').section, byKey(r, 'idleAlert.needs-you').group], ['notifications', 'Idle threads']);
   for (const key of ['agentControl', 'permissions', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
   assert.equal(byKey(r, 'profile.name').value, 'Latitude');
   assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');

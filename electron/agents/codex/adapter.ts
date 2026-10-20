@@ -53,8 +53,8 @@ export const POLICIES: Record<string, { approvalPolicy: string; sandbox: string;
   /** Second opinions: nothing can write, and nothing asks; a command that needs more simply fails. */
   review: { approvalPolicy: 'never', sandbox: 'read-only' },
 };
-/** Codex's plan tool is off unless configured; Harness maps its plans onto goal steps, so its threads always get it. Verified against 0.155.1: without it `turn/plan/updated` never fires. */
-const PLAN_TOOL = { 'tools.update_plan.enabled': true };
+/** Mochi has no goals; Codex's own (`features.goals`, stable and on in 0.163.0) would bring them back under its name. */
+const GOALS_OFF = { 'features.goals': false };
 /**
  * Side chat's thread: nothing saved, nothing writable, nothing to approve, and the tool features the installed codex lists
  * (`codex features list`, 0.155.1) switched off, so it only answers from the context it is given.
@@ -349,7 +349,7 @@ export class CodexAdapter {
     this.forget(threadId);
     const tools = this.toolsUrl && { ...MOCHI_APPROVALS, 'mcp_servers.mochi.url': await this.toolsUrl(threadId, options.isGoalsOff) };
     const library = await this.libraryConfig?.(options.spaceId);
-    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: mochiInstructions(options.isGoalsOff), config: { ...PLAN_TOOL, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
+    const params = { cwd: options.cwd, model: options.model ?? null, serviceTier: options.speed ?? null, developerInstructions: mochiInstructions(options.isGoalsOff), config: { ...GOALS_OFF, ...CODEX_BROWSER_PLUGINS_OFF, ...library, ...tools }, ...POLICIES[options.permissionMode ?? ''] };
     const result = options.resume && options.forkAt
       ? await rpc.request('thread/fork', { ...params, threadId: options.resume, lastTurnId: options.forkAt, excludeTurns: true }, THREAD_TIMEOUT_MS)
       : options.resume

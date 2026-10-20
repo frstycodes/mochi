@@ -15,7 +15,7 @@ import { bindingOf, chordText, COMMAND_IDS, COMMANDS, parseChord, rebind, type C
 import { shortcutText } from '../keys.ts';
 import { DEFAULT_PREFS, type Prefs } from './prefs.ts';
 import type { SettingSection } from './settingSections.ts';
-import { AGENT_CONTROL, AGENTS, ANIMATIONS, APP_ICONS, type AnimationArea, BRANCH_FROM, DIFF_STYLES, ENGINES, IDLE_ALERTS, IDLE_CHECKS, MOTION, PR_GAPS, PROPOSED_GOALS, SPEEDS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
+import { AGENT_CONTROL, AGENTS, ANIMATIONS, APP_ICONS, type AnimationArea, DIFF_STYLES, ENGINES, IDLE_ALERTS, MOTION, SPEEDS, WHILE_WORKING, WORKSPACE_MODES, WORKTREE_CLEANUP } from './settingOptions.ts';
 
 /**
  * Every setting in Mochi, once: its label, its control, where its value lives, and how a value is read and written.
@@ -122,12 +122,6 @@ const SHARED_KEYS = new Set([
   'claude.secondOpinionModel',
   'codex.model',
   'codex.secondOpinionModel',
-  'goals',
-  'driftGuard',
-  'branchFrom',
-  'proposedGoals',
-  'idleChecks',
-  'prGaps',
   'prDrafts',
   'branchPrefix',
   'workspaceMode',
@@ -417,12 +411,6 @@ const APP_SETTINGS: Setting[] = [
       },
     }),
   ),
-  pref('goals', 'Goals', 'goals', SWITCH, { group: 'Goals', description: 'Agents propose goals with criteria, and Mochi checks them when a thread goes idle' }),
-  pref('driftGuard', 'Drift guard', 'goals', SWITCH, { group: 'Drift', description: 'Suggest a new thread when a message starts separate work' }),
-  pref('branchFrom', 'Off-goal work branches from', 'goals', choice(BRANCH_FROM), { group: 'Drift' }),
-  pref('proposedGoals', 'Agent-proposed goals', 'goals', select(PROPOSED_GOALS), { group: 'Writing goals', description: 'Written after the agent’s first look at the code' }),
-  pref('idleChecks', 'Run criterion checks', 'goals', select(IDLE_CHECKS), { group: 'When a thread goes idle', description: 'A criterion with a command counts as met only once its check passes; the agent saying so isn’t enough' }),
-  pref('prGaps', 'Gaps when opening a pull request', 'goals', select(PR_GAPS), { group: 'Before a pull request', description: 'Critical: failing checks, failing CI, merge conflicts' }),
   ...IDLE_ALERTS.map(
     ({ value, label }): Setting => ({
       key: `idleAlert.${value}`,

@@ -18,9 +18,17 @@ export function useIdleChecks(threads: Thread[], dispatch: Dispatch<Action>) {
       const isWorking = !!t.live?.isWorking;
       const was = wasWorking.get(t.id);
       wasWorking.set(t.id, isWorking);
-      if (was && !isWorking && t.live && getPrefs().goals) void gather(t, dispatch);
+      if (!was || isWorking || !t.live) continue;
+      if (getPrefs().goals) void gather(t, dispatch);
+      else markIdle(t, dispatch);
     }
   }, [threads, dispatch]);
+}
+
+/** Without goals there is nothing to gather, but each turn still needs its own idle record: the end-of-turn card reads it. */
+function markIdle(t: Thread, dispatch: Dispatch<Action>) {
+  dispatch({ type: 'idle-start', threadId: t.id });
+  dispatch({ type: 'idle-update', threadId: t.id, patch: { isGathering: false } });
 }
 
 async function gather(t: Thread, dispatch: Dispatch<Action>) {

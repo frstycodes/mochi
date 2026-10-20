@@ -75,12 +75,10 @@ export const PR_GAPS = [
   { value: 'warn', label: 'Warn only' },
 ] as const;
 
-/** Idle verdicts you can be notified about, in Settings' order. */
+/** Idle verdicts you can be notified about, in Settings' order. Gaps and Done came from goals, which are retired. */
 export const IDLE_ALERTS = [
-  { value: 'gaps', label: 'Gaps' },
   { value: 'needs-you', label: 'Something for you (a question)' },
   { value: 'stalled', label: 'Stalled' },
-  { value: 'done', label: 'Done' },
 ] as const;
 
 export const BRANCH_FROM = [

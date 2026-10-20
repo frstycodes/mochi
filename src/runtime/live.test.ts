@@ -24,7 +24,7 @@ test('a live new thread starts its agent, follow-ups send, stop interrupts; demo
   const id = start.threadId;
   const thread = s.threads.find((t) => t.id === id)!;
   const workspace = { mode: 'worktree', branch: thread.repo!.branch, isNew: true, titlePrompt: 'User: reply with ok' };
-  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', workspace, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default' });
+  assert.deepEqual(start.method === 'start' && start.options, { provider: 'claude', spaceId: 'latitude', cwd: '/Users/me/dev/harness', workspace, prompt: 'reply with ok', model: 'claude-sonnet-5-5', effort: 'low', permissionMode: 'default', isGoalsOff: true });
   assert.deepEqual(thread.steps, [], 'no demo placeholder steps on a live thread');
   assert.equal(thread.live?.isWorking, true);
   assert.equal(run(s, { type: 'tick' }).threads.find((t) => t.id === id)!.activity.length, thread.activity.length, 'the demo tick leaves live threads alone');

@@ -11,6 +11,7 @@ import { Shortcut } from '../Shortcut';
 import { ProgressRing } from '../ui';
 import { CallList } from '../WorkLog';
 import { useHarness } from '../store';
+import { hasGoal } from '../drift';
 import { agentAsk, moveContext, moveFor, questionFor } from './moves';
 import { useIdleVerdict, VerdictIcon } from './VerdictChip';
 import { turnReport, verdictHeading, verdictTiles, type Verdict } from './verdict';
@@ -36,7 +37,7 @@ export function useNextMove(thread: Thread) {
   const move = moveFor(thread, verdict, states.map((s) => s.status), context);
   const ask = agentAsk(report);
   const question = ask?.question ?? questionFor(verdict, move, report, authorName(thread.session?.provider ?? thread.providers[0]), context);
-  return { verdict, prs, report, tiles: verdictTiles(thread, states, verdict), move, ask, question, context };
+  return { verdict, prs, report, tiles: hasGoal(thread) ? verdictTiles(thread, states, verdict) : [], move, ask, question, context };
 }
 
 /** Mochi's verdict as the card's title, in the sidebar chip's icon and tone. */

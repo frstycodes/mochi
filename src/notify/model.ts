@@ -17,7 +17,7 @@ export interface Notice {
   queueId?: string;
   /** `pr-review`: the PR it's about, for its preview card. */
   prNumber?: number;
-  /** `idle`: Mochi's verdict, which Settings › Goals and checks picks alerts by. */
+  /** `idle`: Mochi's verdict, which Settings › Notifications picks alerts by. */
   verdict?: VerdictKind;
   title: string;
   body: string;

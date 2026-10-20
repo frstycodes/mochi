@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { Brush, Clock, Connector, Compass, Cpu, Database, Devices, Globe, Hierarchy2, Info, Key, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
+import { Brush, Clock, Connector, Cpu, Database, Devices, Globe, Hierarchy2, Info, Key, Keyboard, MagicStar, Notification, Plugin, Skill, Users, Settings, ShieldCheck, Stars, Terminal, type IconComponent } from '@/icons';
 import { getProfiles } from '../../profiles';
 import { ALERT_KINDS } from '../../notify/model';
 import { COMMANDS } from '../../keymap';
@@ -12,14 +12,13 @@ import { ConnectorToolsView } from '../../library/ConnectorToolsView';
 import { PluginsView } from '../../library/PluginsView';
 import { SkillsView } from '../../library/SkillsView';
 import { AccessSection, toolRowId } from './access';
-import { TOOL_NAMES } from '../../runtime/toolTable';
+import { isGoalTool, TOOL_NAMES } from '../../runtime/toolTable';
 import { TOOL_GUIDE } from '../toolGuide';
 import { AppearanceSection } from './appearance';
 import { BrowserSection } from './browser';
 import { DataSection } from './data';
 import { GeneralSection } from './general';
 import { GitSection } from './git';
-import { GoalsSection } from './goals';
 import { HarnessesSection } from './harnesses';
 import { KeyboardSection, shortcutRowId, shownCommands } from './keyboard';
 import { ModelsSection } from './models';
@@ -168,21 +167,6 @@ export const SETTINGS_SECTIONS = [
     ],
   },
   {
-    id: 'goals',
-    group: 'Agents',
-    title: 'Goals and checks',
-    icon: Compass,
-    component: GoalsSection,
-    settings: [
-      { id: 'goals', label: 'Goals', keywords: 'goals off disable turn off kill switch criteria verdict propose' },
-      { id: 'driftGuard', label: 'Drift guard', keywords: 'off-goal check classify turn off disable' },
-      { id: 'branchFrom', label: 'Off-goal work branches from', keywords: 'drift branch base current' },
-      { id: 'proposedGoals', label: 'Agent-proposed goals', keywords: 'propose goal accept apply undo agent writes criteria' },
-      { id: 'idleChecks', label: 'Run criterion checks', keywords: 'idle verdict check test turn end' },
-      { id: 'prGaps', label: 'Gaps when opening a pull request', keywords: 'open_pr gate block critical warn open anyway' },
-    ],
-  },
-  {
     id: 'simplify',
     group: 'Agents',
     title: 'Simplify',
@@ -204,7 +188,7 @@ export const SETTINGS_SECTIONS = [
     component: AccessSection,
     settings: [
       { id: 'agentControl', label: 'Agents can change Mochi', keywords: 'tools permissions read only changes settings confirm approve mcp control browser delete' },
-      ...TOOL_NAMES.map((name) => ({ id: toolRowId(name), label: TOOL_GUIDE[name].label, keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent` })),
+      ...TOOL_NAMES.filter((name) => !isGoalTool(name)).map((name) => ({ id: toolRowId(name), label: TOOL_GUIDE[name].label, keywords: `${name} ${TOOL_GUIDE[name].group} tool allow ask approval off agent` })),
     ],
   },
   {
