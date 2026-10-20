@@ -122,13 +122,13 @@ export const TOOL_TABLE = {
     tier: 'change',
     quiet: true,
     description:
-      'At the end of a turn where you changed anything, report once so the user can skip reading your reply: what changed, decisions you made, what is left, at most one question that needs them, and the next move as a question with the answers you offer as buttons. Short lines, no prose.',
+      'At the end of a turn where you changed anything, report once so the user can skip reading your reply: what changed, decisions you made, what is left, at most one question that needs them, and, when the user has a real choice to make, the next move as a question with the answers you offer as buttons. Short lines, no prose.',
     shape: {
       summary: z.string().max(360).optional().describe('What changed, in the user\'s terms, 1 to 3 sentences'),
       decisions: z.array(z.string().max(160)).max(5).describe('Choices you made that the user should know about'),
       left: z.array(z.string().max(160)).max(5).describe('What is still not done'),
       question: z.string().max(240).optional().describe('The one thing you need from the user, if anything'),
-      next: z.string().max(160).optional().describe('The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi\'s own UI'),
+      next: z.string().max(160).optional().describe('The next move as one question naming the exact thing, like "Commit the cookie fix and its test?". Never ask them to act in Mochi\'s own UI. Leave it out when nothing waits on them, like a running sub-thread: its notes come back without a message'),
       options: z
         .array(
           z.object({
