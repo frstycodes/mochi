@@ -42,6 +42,8 @@ export interface Prefs {
   driftGuard: boolean;
   /** What sending does while the agent works: wait for its turn to end, or steer it now. Holding mod flips it for one send. */
   whileWorking: 'queue' | 'steer';
+  /** After a turn, a model guesses your next message for the empty composer (`useIdleChecks`); off makes no call. */
+  promptSuggestions: boolean;
   simplifyLength: 'short' | 'detailed';
   simplifyNeedsFirst: boolean;
   simplifyRules: string;
@@ -114,6 +116,7 @@ export const DEFAULT_PREFS: Prefs = {
   sidebarItems: ['queue', 'board', 'projects'],
   driftGuard: true,
   whileWorking: 'steer',
+  promptSuggestions: true,
   simplifyLength: 'short',
   simplifyNeedsFirst: true,
   simplifyRules: '',

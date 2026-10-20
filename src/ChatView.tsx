@@ -356,7 +356,7 @@ function Composer({
   handoff: ReturnType<typeof useComposerHandoff>;
 }) {
   const { dispatch } = useHarness();
-  const { whileWorking } = usePrefs();
+  const { whileWorking, promptSuggestions } = usePrefs();
   const [isHeld, setIsHeld] = useState(false);
   const isQueueing = shouldQueue(thread, whileWorking, isHeld);
   const queued = thread.queued ?? [];
@@ -449,6 +449,7 @@ function Composer({
                 mention.clear();
               }}
               placeholder={placeholder(thread, decisions.length > 0, isQueueing)}
+              suggestion={promptSuggestions ? suggestionOf(thread, decisions.length > 0) : undefined}
               autoFocus={handoff.isHandoff}
               {...menuProps}
               onKeyDown={(e, view) => {
@@ -482,6 +483,9 @@ function placeholder(thread: Thread, isAsking: boolean, isQueueing: boolean) {
   if (isQueueing) return `Queue a message for when ${name} finishes`;
   return isWorking(thread) ? `Steer ${name} while it works` : `Message ${name}`;
 }
+
+/** Only for an idle thread with nothing to answer: while it works or asks, the placeholder says what a message would do. */
+const suggestionOf = (thread: Thread, isAsking: boolean) => (isWorking(thread) || isAsking ? undefined : thread.idle?.suggestion);
 
 /** What holding mod does to this send: the setting's other choice. */
 function WhileWorkingHint({ whileWorking, isHeld }: { whileWorking: Prefs['whileWorking']; isHeld: boolean }) {

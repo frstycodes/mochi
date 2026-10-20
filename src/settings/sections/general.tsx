@@ -17,6 +17,9 @@ export function GeneralSection() {
         <CatalogRow settingKey="permissions" />
         <CatalogRow settingKey="whileWorking" />
       </SettingsGroup>
+      <SettingsGroup title="Composer">
+        <CatalogRow settingKey="promptSuggestions" />
+      </SettingsGroup>
       <SettingsGroup title="Running agents">
         <CatalogRow settingKey="concurrency" />
         <SettingsRow id="usageLimit" label="When a usage limit hits" description="Continuing on an API key or another harness is your call, per thread" control={<span className="type-body text-muted-foreground">Pause until reset</span>} />
