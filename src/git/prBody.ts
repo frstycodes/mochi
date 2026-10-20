@@ -1,16 +1,18 @@
 import type { Gap } from '../goals/verdict.ts';
 import { isMet, type Criterion, type Thread } from '../model.ts';
+import { hasGoal } from '../drift.ts';
 
 /**
- * The PR description Mochi writes for `open_pr`: facts from the goal and its checks, the agent's one line of why, and `noted`, the
+ * The PR description Mochi writes for `open_pr`: the thread's title (its goal and checks while goals were on), the agent's one line of why, and `noted`, the
  * gaps it opens with (unverified, accepted, or critical ones you chose Open anyway on) under Not verified.
  */
 export function prBody(thread: Thread, why: string, noted: Gap[] = []) {
-  const criteria = thread.criteria ?? [];
+  const isGoal = hasGoal(thread);
+  const criteria = isGoal ? (thread.criteria ?? []) : [];
   const decided = thread.report?.decisions ?? [];
   return [
     '## What',
-    thread.goal || thread.title,
+    isGoal ? thread.goal : thread.title,
     ...(decided.length ? ['', ...decided.map((d) => `- ${d}`)] : []),
     '',
     '## Why',

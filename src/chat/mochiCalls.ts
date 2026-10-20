@@ -1,4 +1,5 @@
-import { MOCHI_SERVER, type ToolName } from '../runtime/toolTable.ts';
+import type { ActivityEntry } from '../model.ts';
+import { isTurnTool, MOCHI_SERVER, type ToolName } from '../runtime/toolTable.ts';
 
 /**
  * Each Mochi tool in words, like Claude's own tools: while it runs, then in its work-group row. What it changed is the
@@ -68,6 +69,9 @@ export const MOCHI_CALLS = {
   remove_mcp_server: ['Asking to remove an MCP server', 'Asked to remove an MCP server'],
   remove_profile: ['Asking to remove a profile', 'Asked to remove a profile'],
 } satisfies Record<ToolName, [live: string, done: string]>;
+
+/** A Mochi call whose result has its own surface (the plan list, the end-of-turn card), so it gets no work-log row or live title. */
+export const isTurnCall = (entry: Pick<ActivityEntry, 'mcp'>) => entry.mcp?.server === MOCHI_SERVER && isTurnTool(entry.mcp.tool);
 
 /** A call's target (`mochi: rename_thread`) is Mochi's own. */
 export const isMochiTarget = (target: string) => target.startsWith(`${MOCHI_SERVER}: `);

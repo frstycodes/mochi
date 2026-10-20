@@ -5,6 +5,9 @@ import { classifyWithModel, isConcrete, judgeDrift, judgeLocally, localClassifie
 import { seedThreads } from './model.ts';
 import { setPrefs } from './settings/prefs.ts';
 
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
+
 const rl = seedThreads().find((t) => t.id === 'rl')!;
 const kind = (prompt: string) => (judgeDrift(prompt, rl) as { kind: string }).kind;
 

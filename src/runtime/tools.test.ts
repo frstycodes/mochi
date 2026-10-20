@@ -10,6 +10,7 @@ import { DEFAULT_SETTINGS, type AccountsState, type ProviderConfig } from '../ho
 import { DEFAULT_SPACES, firstPrompt, type Provider, type Space } from '../model.ts';
 import { DEFAULT_ACCOUNTS, linkedAccountId } from '../settings/accounts.ts';
 import type { ConfigChange, McpEntry, SkillEntry } from '../settings/agentConfig.ts';
+import { driftPending } from '../chat/outbox.ts';
 import { DEFAULT_PREFS, setPrefs, type AgentControl, type Prefs } from '../settings/prefs.ts';
 import type { Action, State } from '../store/index.tsx';
 import { layoutReducer } from '../store/layout.ts';
@@ -22,6 +23,9 @@ import { decideTool, runTool, type ToolEnv } from './tools.ts';
 import { asks, TOOL_NAMES, tierOf, type ToolName } from './toolTable.ts';
 import { applyUndo } from './undo.ts';
 import { runDevTool } from './devTools.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 const SLICES = [threadsReducer, queueReducer, panesReducer, layoutReducer, sidechatReducer];
 const reduce = (s: State, a: Action): State => (a.type === 'tool-undo' ? applyUndo(s, a.undo).state : SLICES.reduce((x, r) => r(x, a), s));
@@ -52,7 +56,7 @@ function setup({ control = 'everything' as AgentControl, url = 'http://localhost
   const opened: string[] = [];
   const prs: { title: string; body: string }[] = [];
   const pages = new Map<string, Page>([['rl/tab-1', { hostId: `view-${++nextView}`, url, title: 'Dev', isLoading: false, canGoBack: true, canGoForward: false, error: null } as Page]]);
-  let prefs: Prefs = { ...DEFAULT_PREFS, agentControl: control };
+  let prefs: Prefs = { ...DEFAULT_PREFS, goals: true, agentControl: control };
   let profiles: Space[] = [...DEFAULT_SPACES, { id: 'scratch', name: 'Scratch', icon: 'star', plans: { claude: '', codex: '' }, github: 'octo' }];
   const settings = fakeSettings();
   const connects: { spaceId: string; account: unknown; options: unknown }[] = [];
@@ -887,7 +891,7 @@ test('get_settings reads every app setting and your profile’s, with values, al
   assert.equal(byKey(r, 'alert.needs-you').value, 'true');
   assert.equal(byKey(r, 'quietFrom').value, '22');
   assert.deepEqual([byKey(r, 'permissions').section, byKey(r, 'permissions').group], ['general', 'New threads'], 'the page and its titled section');
-  assert.deepEqual([byKey(r, 'idleAlert.gaps').section, byKey(r, 'idleAlert.gaps').group], ['notifications', 'Idle threads']);
+  assert.deepEqual([byKey(r, 'idleAlert.needs-you').section, byKey(r, 'idleAlert.needs-you').group], ['notifications', 'Idle threads']);
   for (const key of ['agentControl', 'permissions', 'claude.path']) assert.ok(byKey(r, key).locked, `${key} is locked`);
   assert.equal(byKey(r, 'profile.name').value, 'Latitude');
   assert.equal(byKey(r, 'profile.claudeAccount').value, 'claude-default');
@@ -1169,18 +1173,29 @@ test('Read only and Changes block every settings suggestion and delete with no w
 test("update_plan is the thread's plan, even read-only: resent lists move steps on and drop what's left out", async () => {
   const t = setup({ control: 'read' });
   const plan = () => t.thread('rl').steps.filter((s) => s.status !== 'dropped').map((s) => [s.title, s.status]);
-  await t.ok('update_plan', { items: [{ title: 'Read the limiter', status: 'in_progress' }, { title: 'Add Retry-After', status: 'pending' }, { title: 'Run the tests', status: 'pending' }] });
+  await t.ok('update_plan', { scope: 'continuation', items: [{ title: 'Read the limiter', status: 'in_progress' }, { title: 'Add Retry-After', status: 'pending' }, { title: 'Run the tests', status: 'pending' }] });
   assert.deepEqual(plan().slice(0, 3), [['Read the limiter', 'running'], ['Add Retry-After', 'ready'], ['Run the tests', 'ready']]);
-  await t.ok('update_plan', { items: [{ title: 'Read the limiter', status: 'completed' }, { title: 'Add Retry-After', status: 'in_progress' }] });
+  await t.ok('update_plan', { scope: 'continuation', items: [{ title: 'Read the limiter', status: 'completed' }, { title: 'Add Retry-After', status: 'in_progress' }] });
   assert.deepEqual(plan().slice(0, 2), [['Read the limiter', 'done'], ['Add Retry-After', 'running']]);
   assert.equal(t.thread('rl').steps.find((s) => s.title === 'Run the tests')?.status, 'dropped');
-  await t.ok('update_plan', { items: [{ title: 'Add Retry-After', status: 'in_progress' }, { title: 'Run the tests', status: 'pending' }] });
+  await t.ok('update_plan', { scope: 'continuation', items: [{ title: 'Add Retry-After', status: 'in_progress' }, { title: 'Run the tests', status: 'pending' }] });
   const status = (title: string) => t.thread('rl').steps.find((s) => s.title === title && s.status !== 'dropped')?.status;
   await t.ok('update_plan', { advance: true });
   assert.deepEqual([status('Add Retry-After'), status('Run the tests')], ['done', 'running']);
   await t.ok('update_plan', { advance: true });
   assert.deepEqual([status('Add Retry-After'), status('Run the tests')], ['done', 'done'], 'advance after the last step finishes the plan');
   assert.match(await t.err('update_plan', {}), /advance/);
+});
+
+test('update_plan needs a scope with items; new_task shows no plan and offers your message for a new thread', async () => {
+  const t = setup({ control: 'read' });
+  const steps = t.thread('rl').steps.length;
+  assert.match(await t.err('update_plan', { items: [{ title: 'Read the limiter', status: 'in_progress' }] }), /scope/);
+  const result = await t.call('update_plan', { scope: 'new_task', items: [{ title: 'Write the billing page', status: 'in_progress' }] });
+  assert.match(result.text, /Don't start it/);
+  assert.equal(t.thread('rl').steps.length, steps, 'no plan for work that may move');
+  const asked = t.thread('rl').activity.findLast((e) => e.who === 'you' && e.kind === 'message');
+  assert.deepEqual([driftPending('rl')?.text, driftPending('rl')?.isFromAgent], [asked?.text, true]);
 });
 
 test('claim_criterion records evidence; report and get_report give the turn as data', async () => {

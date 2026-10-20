@@ -12,7 +12,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ImageGenHarness } from '../../src/host/types/settings.ts';
 import type { GeneratedImage } from '../../src/model.ts';
 import { IMAGE_SIZES, IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, imageResultText, type ImageSize } from '../../src/runtime/imageTool.ts';
-import { isGoalTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
+import { isGoalTool, isTurnTool, MOCHI_SERVER, MOCHI_TIMEOUT_MS, TOOL_NAMES, TOOL_TABLE } from '../../src/runtime/toolTable.ts';
 import { agentSettings } from '../agents/config.ts';
 import { mainWindow } from '../window.ts';
 import { toolCalls } from './calls.ts';
@@ -30,7 +30,7 @@ const NO_GOAL_TOOLS = TOOLS.filter((t) => !isGoalTool(t.name));
 const INSTRUCTIONS =
   "Mochi runs this thread and shows the user its goal. Call get_goal at the start. Mochi does not draft a goal from the first prompt: for a task with a checkable outcome, research the code and the user's request, then call propose_goal with the concrete outcome and checkable criteria before finishing the work. A goal is optional: a question, a chat, or a small one-step change needs none. Older threads may have a draft (isDraft): replace it after research. Propose again only if what done means has to change. While a proposal awaits acceptance, keep working and report progress; claim criteria once accepted. With a goal: call claim_criterion with one line of evidence as soon as each criterion is met; at the end of a turn where you changed anything, call report_turn once (what changed in the user's terms, decisions, what's left, at most one question for the user, and the next move as one yes/no question). To split a goal, start one sub-thread per independent piece with create_thread and that piece's criterionId (pieces that touch different files); a sub-thread works only on its piece and opens its PR into its parent's branch with open_pr, and its result comes back to the parent.";
 
-/** With goals off (Settings › Goals and checks), nothing about goals: the main instructions say the rest. */
+/** With goals off (always, now goals are retired), nothing about goals: the main instructions say the rest. */
 const NO_GOAL_INSTRUCTIONS = 'Mochi runs this thread and shows the user what its tools do.';
 
 /** Mochi asks with its own widget for deletes and settings (`src/runtime/tools.ts`), so the harness never asks too. */
@@ -42,7 +42,7 @@ export const AUTO_ALLOWED = [...TOOL_NAMES, IMAGE_TOOL].map((name) => `mcp__${SE
  * off in Settings doesn't get it.
  */
 export function claudeServer(thread: string, spaceId: string, cwd: string, isGoalsOff?: boolean) {
-  const tools = (isGoalsOff ? NO_GOAL_TOOLS : TOOLS).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args)));
+  const tools = (isGoalsOff ? NO_GOAL_TOOLS : TOOLS).map((t) => tool(t.name, t.description, t.shape, (args) => callMochi(thread, t.name, args), { alwaysLoad: isTurnTool(t.name) }));
   const image = tool(IMAGE_TOOL, IMAGE_TOOL_DESCRIPTION, IMAGE_TOOL_SHAPE, (args, extra) => generateImage(spaceId, cwd, args, (extra as { signal?: AbortSignal } | undefined)?.signal ?? new AbortController().signal));
   return createSdkMcpServer({ name: SERVER, instructions: isGoalsOff ? NO_GOAL_INSTRUCTIONS : INSTRUCTIONS, tools: agentSettings().imageGen === 'off' ? tools : [...tools, image] });
 }

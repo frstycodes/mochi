@@ -3,6 +3,10 @@ import { test } from 'node:test';
 import type { Thread } from './model.ts';
 import { summarize } from './summary.ts';
 import { connectorStatus, orderCards, savedOrder, summaryCards } from './summarySections.ts';
+import { setPrefs } from './settings/prefs.ts';
+
+// Goals are retired and default off; their code is kept, so these tests turn them on to keep it honest.
+setPrefs({ goals: true });
 
 const thread = (patch: Partial<Thread>) =>
   ({
