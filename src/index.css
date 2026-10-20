@@ -620,8 +620,8 @@
 
 /* Under an overlaid header: a progressive blur (layers stack, each starting higher, so the blur compounds toward the top, like iOS) under a wash of the page colour. Shown only once the `--chat` scroller has moved, so a resting thread has no edge. */
 @keyframes header-edge-in {
-  from {
-    opacity: 0;
+  to {
+    opacity: 1;
   }
 }
 @utility header-edge {
@@ -631,6 +631,8 @@
   &::after {
     position: absolute;
     inset: 0;
+    /* Hidden at rest: a transcript that doesn't overflow has an inactive timeline, which leaves the base value in place. */
+    opacity: 0;
     /* Shorthand first: `animation` resets animation-timeline. */
     animation: header-edge-in linear both;
     animation-timeline: --chat;
