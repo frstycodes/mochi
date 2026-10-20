@@ -7,6 +7,7 @@ import { ConnectAccountDialog } from './ConnectDialog';
 import { CONNECTORS, connectorIcon, connectorKey, isSameServer, type Connector } from './connectors';
 import { serviceName } from './names';
 import type { LibraryEntry } from './library';
+import { NativeSections } from './NativeSections';
 import { LibraryPage, type PagePart } from './LibraryPage';
 import { ALL, CategoryChips, countOf, EmptyRow, filterBy, InstalledList, LibraryIcon, LibraryRow, LIST } from './LibraryParts';
 import type { Library } from './useLibrary';
@@ -55,7 +56,7 @@ function Connected({ library, query, showDiscover }: Parameters<PagePart>[0]) {
   const isEmpty = !!services && !services.length && !shownServers.length;
   return (
     <>
-      <SettingsSection>
+      <SettingsSection title="In Mochi">
         <SettingsCard>
           {!services && <SkeletonRows count={2} />}
           {isEmpty && (query ? <EmptyRow text={`Nothing in your library matches “${query}”`} /> : <NothingConnected onDiscover={showDiscover} />)}
@@ -69,6 +70,7 @@ function Connected({ library, query, showDiscover }: Parameters<PagePart>[0]) {
           <InstalledList entries={shownServers} library={library} query="" empty={null} />
         </SettingsSection>
       )}
+      <NativeSections kind="server" query={query} />
     </>
   );
 }

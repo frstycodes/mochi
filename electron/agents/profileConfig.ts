@@ -233,7 +233,7 @@ async function enabledPlugins(dir: string, settings: string) {
 async function claudePlugins(dir: string): Promise<string[]> {
   try {
     const { plugins } = JSON.parse(await readText(join(dir, 'plugins', 'installed_plugins.json'))) as { plugins?: Record<string, unknown> };
-    return Object.keys(plugins ?? {}).map((id) => id.split('@')[0]);
+    return Object.keys(plugins ?? {});
   } catch {
     return [];
   }
@@ -242,7 +242,7 @@ async function claudePlugins(dir: string): Promise<string[]> {
 function codexPlugins(configToml: string): string[] {
   const plugins = parseToml(configToml).doc.plugins;
   if (typeof plugins !== 'object' || plugins === null) return [];
-  return Object.entries(plugins).flatMap(([id, p]) => ((p as { enabled?: unknown })?.enabled === false ? [] : [id.split('@')[0]]));
+  return Object.entries(plugins).flatMap(([id, p]) => ((p as { enabled?: unknown })?.enabled === false ? [] : [id]));
 }
 
 // {PLAN}

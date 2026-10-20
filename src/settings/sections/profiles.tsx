@@ -16,13 +16,16 @@ import { keyName } from '../../keys';
 import { SPACE_ICON_NAMES, type Provider, type Space, type SpaceIconName } from '../../model';
 import { addProfile, getProfiles, MAX_PROFILES, removeProfile, updateProfile, useProfiles } from '../../profiles';
 import { useHarness } from '../../store';
-import { SPACE_ICONS, SpaceIcon } from '../../ui';
+import { ProviderMark, SPACE_ICONS, SpaceIcon } from '../../ui';
 import { AgentConfigRows } from '../ProfileAgentConfig';
 import { useAgentSettings } from '../AgentSettings';
-import { HARNESS_IDS } from '../harnesses';
+import { HARNESS_IDS, HARNESSES } from '../harnesses';
 import { CatalogRow } from '../CatalogRow';
 import { openSettings, useLinkedTab } from '../open';
 import { useLibrary } from '../../library/useLibrary';
+import { countOf } from '../../library/LibraryParts';
+import { setAllOff } from '../../library/nativeOff';
+import { useNativeItems } from '../../library/useNativeItems';
 import { DesktopOnlyNotice, SettingsGroup, SettingsRow, SettingsSelect, settingControlId, UNDO_MS } from '../parts';
 
 /** One profile at a time behind a tab per profile: what it's called, how it looks in the sidebar, and what it signs in with. */
@@ -45,8 +48,9 @@ export function ProfilesSection() {
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value={shown.id}>
+        <TabsContent value={shown.id} className="flex flex-col gap-10">
           <ProfileGroup key={shown.id} profile={shown} isLast={profiles.length === 1} gh={gh} confirm={confirm} />
+          <NativeGroup profile={shown} />
         </TabsContent>
       </Tabs>
       <AddProfileGroup isFull={profiles.length >= MAX_PROFILES} onAdded={setShownId} />
@@ -73,6 +77,61 @@ function ProfileGroup({ profile, isLast, gh, confirm }: { profile: Space; isLast
       <LibraryRow profile={profile} />
       {host.isDesktop && <ClearBrowsingRow profile={profile} confirm={confirm} />}
       <RemoveProfileRow profile={profile} isLast={isLast} />
+    </SettingsGroup>
+  );
+}
+
+const NEW_ITEM_OPTIONS = [
+  { value: 'on', label: 'Load them' },
+  { value: 'off', label: 'Only what I add' },
+] as const;
+
+/** What this profile takes from its own Claude Code and Codex accounts: everything on or off at once, and what new items do. */
+function NativeGroup({ profile }: { profile: Space }) {
+  const accounts = useNativeItems()?.filter((a) => a.profileIds.includes(profile.id));
+  if (!accounts?.length) return null;
+  return (
+    <SettingsGroup title="Claude Code and Codex" footer={`Mochi never changes Claude Code’s or Codex’s own files. What you turn off here only leaves Mochi threads in ${profile.name}.`}>
+      {accounts.map(({ account, items }) => {
+        const { provider } = account;
+        const harness = HARNESSES[provider].name;
+        const switchable = items.filter((i) => !i.isOffNatively);
+        const off = switchable.filter((i) => profile.nativeOff?.includes(i.id));
+        const isAllOff = !!switchable.length && off.length === switchable.length;
+        const mode = profile.nativeNew?.[provider] ?? 'on';
+        return [
+          <SettingsRow
+            key={`${provider}-all`}
+            id={`${profile.id}-native-${provider}`}
+            label={
+              <span className="flex items-center gap-2">
+                <ProviderMark provider={provider} size={14} />
+                Everything from {harness}
+              </span>
+            }
+            description={`${account.name} account · ${countOf(items.length, 'item')}${off.length ? `, ${off.length} off in Mochi` : ''}`}
+            control={
+              <Button variant="outline" size="sm" disabled={!switchable.length} onClick={() => setAllOff(profile, switchable, !isAllOff, harness)}>
+                {isAllOff ? 'Turn all on' : 'Turn all off'}
+              </Button>
+            }
+          />,
+          <SettingsRow
+            key={`${provider}-new`}
+            id={`${profile.id}-native-new-${provider}`}
+            label={`New in ${harness}`}
+            description={mode === 'on' ? `What you add to ${harness} later loads here too` : `What you add to ${harness} later arrives off; turn it on in Skills, Plugins or Connectors`}
+            control={
+              <SettingsSelect
+                id={`${profile.id}-native-new-${provider}`}
+                value={mode}
+                options={NEW_ITEM_OPTIONS}
+                onChange={(next) => updateProfile(profile.id, { nativeNew: { ...profile.nativeNew, [provider]: next } })}
+              />
+            }
+          />,
+        ];
+      })}
     </SettingsGroup>
   );
 }

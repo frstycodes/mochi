@@ -637,6 +637,10 @@ export interface Space {
   github: string;
   /** Saving instructions writes the same text to the Claude account's CLAUDE.md and the Codex account's AGENTS.md. */
   syncInstructions?: boolean;
+  /** Claude Code's and Codex's own items this profile leaves out of Mochi threads, by `NativeItem.id`; the tools themselves keep loading them (PROFILES-UX.md). */
+  nativeOff?: string[];
+  /** What items that appear in a harness later do in this profile: load (the default) or arrive off ("Only what I add"). */
+  nativeNew?: Partial<Record<Provider, 'on' | 'off'>>;
 }
 
 // Orbit's outer ring keeps slots 0, 4 and 6 for Queue, Board and New thread; pinned threads take the rest, in order.
