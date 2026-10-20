@@ -1350,3 +1350,12 @@ test('new tasks await a researched working-agent goal and can report while accep
   await t.ok('claim_criterion', { criterionId: criterion.id, evidence: 'Transport retry check passed' }, id);
   assert.equal(t.thread(id).goal, 'Reconnect the transport without duplicate retries');
 });
+
+test('report_turn works with goals off, on a thread with no goal', async () => {
+  const t = setup();
+  t.env.prefs.set({ goals: false });
+  // Every demo thread has a goal; a thread started since goals retired has none.
+  Object.assign(t.thread('rl'), { goal: undefined, proposal: undefined });
+  await t.ok('report_turn', { summary: 'Built the wheel', decisions: [], left: [] });
+  assert.equal(t.thread('rl').report?.summary, 'Built the wheel');
+});
